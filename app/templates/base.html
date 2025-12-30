@@ -5,9 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dice-Driven Comic Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    {% block content %}{% endblock %}
+<body class="bg-gray-100 min-h-screen pb-16">
+    <main class="container mx-auto px-4 py-6 max-w-lg">
+        {% block content %}{% endblock %}
+    </main>
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
+        <div class="flex justify-around">
+            <a href="/" class="flex flex-col items-center justify-center h-16 min-w-16 hover:bg-gray-100 transition-colors">
+                <span class="text-2xl">🎲</span>
+                <span class="text-xs text-gray-600">Roll</span>
+            </a>
+            <a href="/rate" class="flex flex-col items-center justify-center h-16 min-w-16 hover:bg-gray-100 transition-colors">
+                <span class="text-2xl">📝</span>
+                <span class="text-xs text-gray-600">Rate</span>
+            </a>
+            <a href="/queue" class="flex flex-col items-center justify-center h-16 min-w-16 hover:bg-gray-100 transition-colors">
+                <span class="text-2xl">📚</span>
+                <span class="text-xs text-gray-600">Queue</span>
+            </a>
+            <a href="/history" class="flex flex-col items-center justify-center h-16 min-w-16 hover:bg-gray-100 transition-colors">
+                <span class="text-2xl">📜</span>
+                <span class="text-xs text-gray-600">History</span>
+            </a>
+        </div>
+    </nav>
 </body>
 </html>
