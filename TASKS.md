@@ -96,8 +96,8 @@
 | 4.34 | Create queue screen (list threads, highlight roll pool, staleness) | 🔴 | - | - | - | - | Drag/drop ready |
 | 4.35 | Create session history (narrative summaries, expandable details) | 🔴 | - | - | - | - | Session list with ladder path |
 | 4.36 | Create add thread modal (title, format, issues remaining) | 🔴 | - | - | - | - | HTMX form submission |
-| 4.37 | Create reactivation modal (select completed thread, issues to add) | 🔴 | - | - | - | - | Must add > 0 issues |
-| 4.38 | Create override modal (select thread to read instead of roll) | 🔴 | - | - | - | - | |
+| 4.37 | Create reactivation modal (select completed thread, issues to add) | ✅ | - | ✅ | ✅ | 117bd40 | Must add > 0 issues |
+| 4.38 | Create override modal (select thread to read instead of roll) | ✅ | - | ✅ | ✅ | 117bd40 | |
 
 ---
 
