@@ -69,8 +69,8 @@
 |----|-------|---------|----------|----------|----------|------------|--------|
 | 3.19 | Thread CRUD API (GET /threads/, POST /threads/, etc.) | 🔴 | - | - | - | - | |
 | 3.20 | Roll API (POST /roll/, POST /roll/override/) | 🔴 | - | - | - | - | |
-| 3.21 | Rate API (POST /rate/) | 🔴 | - | - | - | - | Decrement issues, move queue, update die |
-| 3.22 | Queue API (PUT /threads/{id}/position/) | 🔴 | - | - | - | - | For drag/drop |
+| 3.21 | Rate API (POST /rate/) | ✅ | - | - | ✅ | ✅ | e99f70c | Decrement issues, move queue, update die |
+| 3.22 | Queue API (PUT /threads/{id}/position/) | ✅ | - | - | ✅ | ✅ | e99f70c | For drag/drop |
 | 3.23 | Session API (GET /session/current/, GET /sessions/) | 🔴 | - | - | - | - | With narrative summaries |
 | 3.24 | Admin API (import CSV, export JSON/CSV) | 🔴 | - | - | - | - | Google Sheets compatibility |
 | 3.25 | Setup CORS (allow local network access) | 🔴 | - | - | - | - | origins=["*"] for dev |
