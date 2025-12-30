@@ -2,7 +2,7 @@
 
 import argparse
 
-from comic-pile.core import ExampleData, process_data
+from comic_pile.core import ExampleData, process_data
 
 
 def main() -> None:

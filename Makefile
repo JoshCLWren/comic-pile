@@ -1,4 +1,8 @@
 .PHONY: help init lint pytest sync venv run smoke clean-build build build-onedir install install-bin install-desktop mime-query redo ci-test-debian ci-test-local ci-build-image githook install-githook
+.PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
+.PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
+.PHONY: cleanup-phase1 cleanup-phase2 cleanup-phase3 cleanup-phase4 cleanup-phase5 cleanup-phase6 cleanup-phase7 cleanup-phase8 cleanup-phase9
+.PHONY: dev seed migrate worktrees status update-tasks
 
 # Configuration
 PREFIX ?= /usr/local
@@ -164,3 +168,121 @@ ci-check:  ## Check if CI prerequisites are installed
 	@echo "xvfb: $$(command -v xvfb-run && echo 'INSTALLED' || echo 'NOT FOUND')"
 	@echo "python3-tk: $$(dpkg -l | grep -q python3-tk && echo 'INSTALLED' || echo 'NOT FOUND')"
 	@echo "docker: $$(command -v docker && echo 'INSTALLED' || echo 'NOT FOUND')"
+
+create-phase1:  ## Create Phase 1 branch
+	@git checkout main && git pull && git checkout -b phase/1-cleanup-fastapi-setup
+
+create-phase2:  ## Create Phase 2 branch
+	@git checkout main && git pull && git checkout -b phase/2-database-models
+
+create-phase3:  ## Create Phase 3 branch
+	@git checkout main && git pull && git checkout -b phase/3-rest-api
+
+create-phase4:  ## Create Phase 4 branch
+	@git checkout main && git pull && git checkout -b phase/4-templates-views
+
+create-phase5:  ## Create Phase 5 branch
+	@git checkout main && git pull && git checkout -b phase/5-interactive-features
+
+create-phase6:  ## Create Phase 6 branch
+	@git checkout main && git pull && git checkout -b phase/6-testing
+
+create-phase7:  ## Create Phase 7 branch
+	@git checkout main && git pull && git checkout -b phase/7-data-import
+
+create-phase8:  ## Create Phase 8 branch
+	@git checkout main && git pull && git checkout -b phase/8-polish
+
+create-phase9:  ## Create Phase 9 branch
+	@git checkout main && git pull && git checkout -b phase/9-documentation
+
+merge-phase1:  ## Merge Phase 1 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/1-cleanup-fastapi-setup && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+merge-phase2:  ## Merge Phase 2 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/2-database-models && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+merge-phase3:  ## Merge Phase 3 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/3-rest-api && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+merge-phase4:  ## Merge Phase 4 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/4-templates-views && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+merge-phase5:  ## Merge Phase 5 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/5-interactive-features && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+merge-phase6:  ## Merge Phase 6 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/6-testing && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+merge-phase7:  ## Merge Phase 7 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/7-data-import && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+merge-phase8:  ## Merge Phase 8 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/8-polish && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+merge-phase9:  ## Merge Phase 9 to main
+	@git checkout main && git pull && \
+	git merge --no-ff phase/9-documentation && \
+	$(MAKE) pytest && \
+	$(MAKE) lint && \
+	pyright . && \
+	git push origin main
+
+dev:  ## Run development server with hot reload
+	@echo "Starting FastAPI development server on http://0.0.0.0:8000"
+	@uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+seed:  ## Seed database with sample data
+	@echo "Seeding database with Faker data..."
+	@python -m scripts.seed_data
+
+migrate:  ## Run database migrations
+	@echo "Running database migrations..."
+	@alembic upgrade head
+
+worktrees:  ## List all git worktrees
+	@echo "Git worktrees:"
+	@git worktree list
+
+status:  ## Show current task status
+	@cat TASKS.md | head -100

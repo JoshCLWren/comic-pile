@@ -1,6 +1,6 @@
 """Example tests demonstrating pytest patterns."""
 
-from comic-pile.core import ExampleData, process_data
+from comic_pile.core import ExampleData, process_data
 
 
 def test_process_data_basic():
