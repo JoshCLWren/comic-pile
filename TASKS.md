@@ -1,9 +1,9 @@
 # Task Tracking - Dice-Driven Comic Tracker
 # FastAPI + HTMX + Tailwind CSS + SQLite
 
-**Last Updated**: 2025-12-30 (initial)
+**Last Updated**: 2025-12-30
 **Current Phase**: 1
-**Overall Progress**: 0/64 tasks (0%)
+**Overall Progress**: 10/64 tasks (16%)
 
 ---
 
@@ -19,7 +19,7 @@
 
 ## Phase 1: Cleanup & FastAPI Setup
 **Branch**: `phase/1-cleanup-fastapi-setup`
-**Status**: In Progress
+**Status**: Complete ✅
 **Dependencies**: None
 **Worktrees Created**: 0/5
 
@@ -29,12 +29,12 @@
 | 1.2 | Update imports across all files | ✅ | p1-wt1 | - | - | abc123 | main.py, test_example.py updated, __init__.py fixed |
 | 1.3 | Update pyproject.toml package name | ✅ | - | ✅ | ✅ | 1114170 | Package name updated to comic_pile |
 | 1.4 | Add FastAPI dependencies | ✅ | - | ✅ | ✅ | 1114170 | All deps installed, imports verified, tests + lint pass |
-| 1.5 | Remove old template code | 🟢 | - | - | - | - | Delete main.py, comic_pile/core.py |
-| 1.6 | Update Makefile for FastAPI | 🟢 | - | - | - | - | Remove cdisplayagain targets, add FastAPI targets |
-| 1.7 | Update CI workflow | 🟢 | - | - | - | - | Remove Tkinter/unnar deps, update coverage package |
-| 1.8 | Rewrite AGENTS.md | 🟢 | - | - | - | - | FastAPI + HTMX context, remove comic viewer references |
-| 1.9 | Rewrite CONTRIBUTING.md | 🟢 | - | - | - | - | FastAPI development workflow, remove comic viewer references |
-| 1.10 | Update README.md | 🟢 | - | - | - | - | New app description, FastAPI setup instructions |
+| 1.5 | Remove old template code | ✅ | - | - | - | - | a4b99b3 | Delete main.py, comic_pile/core.py |
+| 1.6 | Update Makefile for FastAPI | ✅ | - | - | - | - | 70d77b7 | Remove cdisplayagain targets, add FastAPI targets |
+| 1.7 | Update CI workflow | ✅ | - | - | - | - | 5b70d53 | Remove Tkinter/unnar deps, update coverage package |
+| 1.8 | Rewrite AGENTS.md | ✅ | - | - | - | - | 4b7260e | FastAPI + HTMX context, remove comic viewer references |
+| 1.9 | Rewrite CONTRIBUTING.md | ✅ | - | - | - | - | 23318c4 | FastAPI development workflow, remove comic viewer references |
+| 1.10 | Update README.md | ✅ | - | - | - | - | a1b11f5 | New app description, FastAPI setup instructions |
 
 **Phase Complete When**: All 10 tasks ✅, phase branch linted & tested, merged to main
 
