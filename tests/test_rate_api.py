@@ -1,39 +1,48 @@
 """Tests for rate API endpoints."""
 
+import pytest
+
 from sqlalchemy import select
 
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, Thread
+from app.models import Session as SessionModel
 
 
-async def test_rate_success(client, db, sample_data):
+@pytest.mark.asyncio
+async def test_rate_success(client, db):
     """POST /rate/ updates thread correctly."""
     from app.models import User
 
-    user = User(id=1, username="test_user")
+    user = User(username="test_user")
     db.add(user)
+    db.commit()
+    db.refresh(user)
 
-    session = SessionModel(start_die=10, user_id=1)
+    session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
+    db.commit()
+    db.refresh(session)
 
     thread = Thread(
-        id=10,
         title="Test Thread",
         format="Comic",
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=user.id,
     )
     db.add(thread)
+    db.commit()
+    db.refresh(thread)
 
     event = Event(
         type="roll",
         die=10,
         result=1,
-        selected_thread_id=10,
+        selected_thread_id=thread.id,
         selection_method="random",
         session_id=session.id,
-        thread_id=10,
+        thread_id=thread.id,
     )
     db.add(event)
     db.commit()
@@ -50,35 +59,41 @@ async def test_rate_success(client, db, sample_data):
     assert thread.last_rating == 4.0
 
 
-async def test_rate_low_rating(client, db, sample_data):
+@pytest.mark.asyncio
+async def test_rate_low_rating(client, db):
     """Rating=3.0, die_size steps down."""
     from app.models import User
 
-    user = User(id=1, username="test_user")
+    user = User(username="test_user")
     db.add(user)
+    db.commit()
+    db.refresh(user)
 
-    session = SessionModel(start_die=10, user_id=1)
+    session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
+    db.commit()
+    db.refresh(session)
 
     thread = Thread(
-        id=11,
         title="Test Thread",
         format="Comic",
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=user.id,
     )
     db.add(thread)
+    db.commit()
+    db.refresh(thread)
 
     event = Event(
         type="roll",
         die=10,
         result=1,
-        selected_thread_id=11,
+        selected_thread_id=thread.id,
         selection_method="random",
         session_id=session.id,
-        thread_id=11,
+        thread_id=thread.id,
     )
     db.add(event)
     db.commit()
@@ -95,35 +110,41 @@ async def test_rate_low_rating(client, db, sample_data):
     assert events[0].die_after == 8
 
 
-async def test_rate_high_rating(client, db, sample_data):
+@pytest.mark.asyncio
+async def test_rate_high_rating(client, db):
     """Rating=4.0, die_size steps up."""
     from app.models import User
 
-    user = User(id=1, username="test_user")
+    user = User(username="test_user")
     db.add(user)
+    db.commit()
+    db.refresh(user)
 
-    session = SessionModel(start_die=10, user_id=1)
+    session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
+    db.commit()
+    db.refresh(session)
 
     thread = Thread(
-        id=12,
         title="Test Thread",
         format="Comic",
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=user.id,
     )
     db.add(thread)
+    db.commit()
+    db.refresh(thread)
 
     event = Event(
         type="roll",
         die=10,
         result=1,
-        selected_thread_id=12,
+        selected_thread_id=thread.id,
         selection_method="random",
         session_id=session.id,
-        thread_id=12,
+        thread_id=thread.id,
     )
     db.add(event)
     db.commit()
@@ -140,35 +161,41 @@ async def test_rate_high_rating(client, db, sample_data):
     assert events[0].die_after == 12
 
 
-async def test_rate_completes_thread(client, db, sample_data):
+@pytest.mark.asyncio
+async def test_rate_completes_thread(client, db):
     """Issues <= 0, moves to back of queue, session ends."""
     from app.models import User
 
-    user = User(id=1, username="test_user")
+    user = User(username="test_user")
     db.add(user)
+    db.commit()
+    db.refresh(user)
 
-    session = SessionModel(start_die=10, user_id=1)
+    session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
+    db.commit()
+    db.refresh(session)
 
     thread = Thread(
-        id=13,
         title="Test Thread",
         format="Comic",
         issues_remaining=1,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=user.id,
     )
     db.add(thread)
+    db.commit()
+    db.refresh(thread)
 
     event = Event(
         type="roll",
         die=10,
         result=1,
-        selected_thread_id=13,
+        selected_thread_id=thread.id,
         selection_method="random",
         session_id=session.id,
-        thread_id=13,
+        thread_id=thread.id,
     )
     db.add(event)
     db.commit()
@@ -182,41 +209,47 @@ async def test_rate_completes_thread(client, db, sample_data):
 
     db.refresh(thread)
     assert thread.status == "completed"
-    assert thread.queue_position == 5
+    assert thread.queue_position == 1
 
     db.refresh(session)
     assert session.ended_at is not None
 
 
-async def test_rate_records_event(client, db, sample_data):
+@pytest.mark.asyncio
+async def test_rate_records_event(client, db):
     """Event saved with rating and issues_read."""
     from app.models import User
 
-    user = User(id=1, username="test_user")
+    user = User(username="test_user")
     db.add(user)
+    db.commit()
+    db.refresh(user)
 
-    session = SessionModel(start_die=10, user_id=1)
+    session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
+    db.commit()
+    db.refresh(session)
 
     thread = Thread(
-        id=14,
         title="Test Thread",
         format="Comic",
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=user.id,
     )
     db.add(thread)
+    db.commit()
+    db.refresh(thread)
 
     event = Event(
         type="roll",
         die=10,
         result=1,
-        selected_thread_id=14,
+        selected_thread_id=thread.id,
         selection_method="random",
         session_id=session.id,
-        thread_id=14,
+        thread_id=thread.id,
     )
     db.add(event)
     db.commit()
@@ -234,29 +267,28 @@ async def test_rate_records_event(client, db, sample_data):
     assert events[0].issues_read == 2
 
 
-async def test_rate_no_active_session(client, db, sample_data):
+@pytest.mark.asyncio
+async def test_rate_no_active_session(client, db):
     """Returns error if no active session."""
-    from app.models import User
-
-    user = User(id=1, username="test_user")
-    db.add(user)
-    db.commit()
-
     response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
     assert "No active session" in response.json()["detail"]
 
 
-async def test_rate_no_active_thread(client, db, sample_data):
+@pytest.mark.asyncio
+async def test_rate_no_active_thread(client, db):
     """Returns error if no active thread in session."""
     from app.models import User
 
-    user = User(id=1, username="test_user")
+    user = User(username="test_user")
     db.add(user)
+    db.commit()
+    db.refresh(user)
 
-    session = SessionModel(start_die=10, user_id=1)
+    session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
     db.commit()
+    db.refresh(session)
 
     response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400

@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import sqlalchemy as sa
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,7 +31,7 @@ class Thread(Base):
     )
     review_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default="CURRENT_TIMESTAMP"
+        DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 

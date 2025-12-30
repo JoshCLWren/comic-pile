@@ -1,6 +1,9 @@
 """Tests for roll API endpoints."""
 
+import pytest
 
+
+@pytest.mark.asyncio
 async def test_roll_success(client, sample_data):
     """POST /roll/ returns valid thread."""
     response = await client.post("/roll/")
@@ -18,6 +21,7 @@ async def test_roll_success(client, sample_data):
     assert data["thread_id"] in thread_ids
 
 
+@pytest.mark.asyncio
 async def test_roll_override(client, sample_data):
     """POST /roll/override/ sets specific thread."""
     thread_id = 1
@@ -31,6 +35,7 @@ async def test_roll_override(client, sample_data):
     assert data["result"] == 0
 
 
+@pytest.mark.asyncio
 async def test_roll_no_pool(client, db):
     """Returns error if no active threads."""
     from app.models import User
@@ -44,6 +49,7 @@ async def test_roll_no_pool(client, db):
     assert "No active threads" in response.json()["detail"]
 
 
+@pytest.mark.asyncio
 async def test_roll_overflow(client, db):
     """Roll works correctly when thread count < die size."""
     from app.models import Thread, User
@@ -70,6 +76,7 @@ async def test_roll_overflow(client, db):
     assert 1 <= data["result"] <= 1
 
 
+@pytest.mark.asyncio
 async def test_roll_override_nonexistent(client, sample_data):
     """Override returns 404 for non-existent thread."""
     response = await client.post("/roll/override", json={"thread_id": 999})

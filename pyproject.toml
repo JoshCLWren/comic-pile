@@ -71,3 +71,8 @@ include = ["app", "comic_pile", "tests"]
 exclude = ["**/node_modules", "**/__pycache__", ".venv"]
 venvPath = "."
 venv = ".venv"
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.3.0",
+]

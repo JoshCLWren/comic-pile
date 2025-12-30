@@ -1,6 +1,5 @@
 """API endpoint integration tests."""
 
-
 import pytest
 from sqlalchemy import select
 
@@ -201,22 +200,22 @@ async def test_delete_thread_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_get_session_current(client, sample_data):
+async def test_get_session_current(client, db):
     """Test GET /session/current/ returns active session."""
     from app.models import Session as SessionModel
 
     session = SessionModel(id=1, start_die=6, user_id=1)
-    sample_data["db"].add(session)
-    sample_data["db"].commit()
+    db.add(session)
+    db.commit()
 
     response = await client.get("/sessions/current/")
     assert response.status_code == 200
 
-    session = response.json()
-    assert session["id"] == 1
-    assert session["start_die"] == 6
-    assert session["user_id"] == 1
-    assert "ladder_path" in session
+    session_data = response.json()
+    assert session_data["id"] == 1
+    assert session_data["start_die"] == 6
+    assert session_data["user_id"] == 1
+    assert "ladder_path" in session_data
 
 
 @pytest.mark.asyncio
