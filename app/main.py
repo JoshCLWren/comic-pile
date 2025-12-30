@@ -39,7 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(rate.router, prefix="/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/queue", tags=["queue"])
     app.include_router(session.router, tags=["session"])
-    app.include_router(admin.router, prefix="/admin", tags=["admin"])
+    app.include_router(admin.router, tags=["admin"])
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
 

@@ -18,7 +18,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.post("/import/csv/")
 async def import_csv(
     file: UploadFile = File(...), db: Session = Depends(get_db)
-) -> dict[str, list[dict[str, str]] | int]:
+) -> dict[str, int | list[str]]:
     """Import threads from CSV file.
 
     CSV format: title, format, issues_remaining
@@ -36,6 +36,7 @@ async def import_csv(
 
     imported = 0
     errors = []
+    imported_threads = []
 
     for row_num, row in enumerate(csv_reader, start=2):
         try:
@@ -64,17 +65,6 @@ async def import_csv(
                 errors.append(f"Row {row_num}: issues_remaining must be an integer")
                 continue
 
-            existing_threads = (
-                db.execute(
-                    select(Thread).where(Thread.queue_position >= 1).order_by(Thread.queue_position)
-                )
-                .scalars()
-                .all()
-            )
-
-            for thread in existing_threads:
-                thread.queue_position += 1
-
             new_thread = Thread(
                 title=title,
                 format=format_val,
@@ -84,10 +74,17 @@ async def import_csv(
                 user_id=1,
             )
             db.add(new_thread)
+            imported_threads.append(new_thread)
             imported += 1
 
         except Exception as e:
             errors.append(f"Row {row_num}: {str(e)}")
+
+    db.commit()
+
+    for i, thread in enumerate(reversed(imported_threads)):
+        thread.queue_position = i + 1
+        db.flush()
 
     db.commit()
     return {"imported": imported, "errors": errors}
