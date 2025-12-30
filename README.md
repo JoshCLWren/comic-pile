@@ -1,115 +1,108 @@
-# Python Starter Template
+# Comic Pile
 
-[![CI Status](https://github.com/JoshCLWren/python-starter-template/workflows/CI/badge.svg)](https://github.com/JoshCLWren/python-starter-template/actions)
-
-A modern Python 3.13 project template with best practices, tooling, and CI/CD preconfigured.
+A dice-driven comic reading tracker built with FastAPI, HTMX, and Tailwind CSS.
 
 ## Features
 
-- **Python 3.13** with type hints throughout
-- **uv** for fast dependency management
-- **pytest** with 96% minimum test coverage
-- **ruff** for linting and formatting
-- **pyright** for static type checking
-- **Pre-commit hooks** to enforce code quality
-- **GitHub Actions CI** for automated testing
-- **Project initialization** via `make init`
+- **Dice-driven reading**: Roll for your next comic using a ladder system (d4 → d20)
+- **Queue management**: Drag and drop to prioritize comics
+- **Session tracking**: Automatically groups reading sessions with narrative summaries
+- **Mobile-first**: Touch-friendly interface designed for tablets and phones
+- **Local network access**: Use on any device in your home network
+
+## Tech Stack
+
+- **Backend**: FastAPI (Python 3.13)
+- **Database**: SQLite with SQLAlchemy ORM
+- **Migrations**: Alembic
+- **Frontend**: HTMX + Jinja2 templates
+- **Styling**: Tailwind CSS
+- **Testing**: pytest with httpx.AsyncClient for API tests
+- **Code Quality**: ruff linting, pyright type checking, 96% coverage requirement
 
 ## Quick Start
 
 ```bash
 # Clone the repository
-git clone https://github.com/JoshCLWren/python-starter-template.git
-cd python-starter-template
-
-# Initialize with your project name
-make init NAME=my-awesome-project
+git clone https://github.com/JoshCLWren/comic-pile.git
+cd comic-pile
 
 # Install dependencies
 uv sync --all-extras
 
-# Activate the virtual environment (do this once per session)
+# Activate the virtual environment
 source .venv/bin/activate
 
-# Run tests
-pytest
+# Set up the database
+make migrate
 
-# Run your application
-python main.py --name World --value 42
+# Seed sample data (optional)
+make seed
+
+# Run the development server
+make dev
 ```
+
+Open http://localhost:8000 to view the app, or http://localhost:8000/docs for API documentation.
 
 ## Development Workflow
 
-### First Time Setup
-
-1. **Rename the project**:
-   ```bash
-   make init NAME=your-project-name
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   uv sync --all-extras
-   ```
-
-3. **Activate the virtual environment**:
-   ```bash
-   source .venv/bin/activate
-   ```
-
 ### Daily Development
 
-Once the virtual environment is activated:
-
 ```bash
-# Run the application
-python main.py --name World --value 42
+# Run the development server
+make dev
 
 # Run tests
 pytest
+make pytest
 
-# Run tests with coverage report
-pytest --cov-report=term-missing
+# Run tests with coverage
+pytest --cov=comic_pile --cov-report=term-missing
 
 # Run linting
 make lint
 
-# Format code with ruff
-ruff format .
+# Seed database with sample data
+make seed
+
+# Run database migrations
+make migrate
 ```
 
 ### Make Commands
 
-- `make init NAME=your-project` - Initialize with new project name
-- `make lint` - Run all linting checks (ruff + pyright)
-- `make pytest` - Run the test suite
-- `make venv` - Create virtual environment
-- `make sync` - Install/update dependencies
+- `make dev` - Run FastAPI development server with hot reload
+- `make seed` - Populate database with Faker sample data
+- `make migrate` - Run Alembic migrations
+- `make pytest` - Run test suite with coverage
+- `make lint` - Run ruff and pyright
+- `make worktrees` - List git worktrees
+- `make status` - Show current task status
 
 ## Project Structure
 
 ```
 .
-├── example_module/          # Main package (rename via make init)
+├── app/                    # FastAPI application
 │   ├── __init__.py
-│   └── core.py             # Core business logic
-├── tests/                   # Test suite
-│   ├── conftest.py         # pytest fixtures
-│   └── test_example.py     # Example tests
-├── .github/
-│   ├── actions/setup/       # CI setup action
-│   └── workflows/ci.yml    # CI pipeline
-├── scripts/
-│   └── lint.sh            # Linting script
-├── main.py                # Application entrypoint
-├── pyproject.toml        # Project configuration
-├── uv.lock               # Dependency lockfile
-└── .gitignore           # Git ignore rules
+│   ├── main.py            # FastAPI app factory
+│   ├── api/               # API route handlers
+│   ├── models/            # SQLAlchemy database models
+│   ├── schemas/           # Pydantic request/response schemas
+│   └── templates/         # Jinja2 templates
+├── comic_pile/            # Core package (dice ladder, queue, session logic)
+├── migrations/            # Alembic migration files
+├── scripts/               # Utility scripts (seed data, etc.)
+├── static/                # Static assets (CSS, JS)
+├── tests/                 # pytest test suite
+├── pyproject.toml         # Project configuration
+└── uv.lock                # Dependency lockfile
 ```
 
 ## Testing
 
-The template uses pytest with coverage reporting:
+The project uses pytest with coverage reporting:
 
 ```bash
 # Run all tests
@@ -118,11 +111,8 @@ pytest
 # Run with verbose output
 pytest -v
 
-# Run specific test file
-pytest tests/test_example.py
-
 # Run with coverage
-pytest --cov=example_module --cov-report=html
+pytest --cov=comic_pile --cov-report=term-missing
 ```
 
 **Coverage requirement**: Minimum 96% (configured in pyproject.toml)
@@ -130,8 +120,6 @@ pytest --cov=example_module --cov-report=html
 ## Code Quality
 
 ### Linting
-
-The project uses ruff for fast Python linting:
 
 ```bash
 # Run linter
@@ -145,8 +133,6 @@ ruff format .
 ```
 
 ### Type Checking
-
-Pyright provides static type checking:
 
 ```bash
 # Run type checker
@@ -167,72 +153,24 @@ The hook will block commits with issues. To test manually:
 make githook
 ```
 
-## Configuration
+## API Documentation
 
-### Python Version
+FastAPI automatically generates interactive API documentation:
 
-Default is Python 3.13. To change:
-
-1. Update `requires-python` in `pyproject.toml`
-2. Update `target-version` in `pyproject.toml`
-3. Update `.python-version` file
-4. Recreate venv: `rm -rf .venv && uv venv`
-
-### Coverage Threshold
-
-Set in `pyproject.toml`:
-
-```toml
-[tool.pytest.ini_options]
-addopts = ["--cov-fail-under=96"]
-```
-
-### Lint Rules
-
-Configure in `pyproject.toml` under `[tool.ruff]`:
-
-```toml
-[tool.ruff]
-line-length = 100
-target-version = "py313"
-```
-
-## CI/CD
-
-GitHub Actions runs on every push to main and on pull requests:
-
-- **Lint job**: Runs ruff and pyright
-- **Tests job**: Runs pytest with coverage
-
-View pipeline status in the Actions tab of the repository.
-
-## Dependency Management
-
-The project uses uv for fast dependency management:
-
-```bash
-# Add a new dependency
-uv add package-name
-
-# Add dev dependency
-uv add --dev package-name
-
-# Remove dependency
-uv remove package-name
-
-# Update dependencies
-uv sync
-```
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
+2. Create a phase branch: `git checkout main && git checkout -b phase/2-database-models`
 3. Make your changes
 4. Run tests: `pytest`
 5. Run linting: `make lint`
 6. Commit with conventional commits
 7. Push and create a pull request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ## License
 
@@ -240,11 +178,4 @@ MIT License - see LICENSE file for details
 
 ## Credits
 
-Template created by Josh Wren
-
-## Related
-
-- [uv Documentation](https://docs.astral.sh/uv/)
-- [pytest Documentation](https://docs.pytest.org/)
-- [ruff Documentation](https://docs.astral.sh/ruff/)
-- [pyright Documentation](https://microsoft.github.io/pyright/)
+Created by Josh Wren
