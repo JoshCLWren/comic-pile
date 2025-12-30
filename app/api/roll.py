@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Thread
-from app.schemas import OverrideRequest, RollResponse
+from app.schemas.thread import OverrideRequest, RollResponse
 from comic_pile.queue import get_roll_pool
 
 router = APIRouter(tags=["roll"])

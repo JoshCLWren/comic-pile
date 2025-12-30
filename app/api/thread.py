@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Thread
-from app.schemas import ThreadCreate, ThreadResponse, ThreadUpdate
+from app.schemas.thread import ThreadCreate, ThreadResponse, ThreadUpdate
 
 router = APIRouter(tags=["threads"])
 
