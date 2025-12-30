@@ -35,3 +35,26 @@
         {% endfor %}
     </div>
 </div>
+
+<script>
+function toggleDetails(button, detailsId) {
+    const details = document.getElementById(detailsId);
+    if (details.classList.contains('hidden')) {
+        details.classList.remove('hidden');
+        button.textContent = 'Hide';
+    } else {
+        details.classList.add('hidden');
+        button.textContent = 'Details';
+    }
+}
+
+document.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.target.id.startsWith('details-')) {
+        const button = evt.detail.requestConfig.trigger;
+        if (button) {
+            button.textContent = 'Hide';
+        }
+    }
+});
+</script>
+{% endblock %}

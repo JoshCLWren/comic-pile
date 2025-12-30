@@ -155,11 +155,13 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
     )
 
 
-@router.get("/{session_id}/details")
-def get_session_details(session_id: int, db: Session = Depends(get_db)) -> dict[str, Any]:
+@router.get("/{session_id}/details", response_class=HTMLResponse)
+def get_session_details(
+    session_id: int, request: Request, db: Session = Depends(get_db)
+) -> HTMLResponse:
     """Get session details with all events for expanded view."""
-    session = db.get(SessionModel, session_id)
-    if not session:
+    session_obj = db.get(SessionModel, session_id)
+    if not session_obj:
         raise HTTPException(status_code=404, detail="Session not found")
 
     events = (
@@ -203,11 +205,15 @@ def get_session_details(session_id: int, db: Session = Depends(get_db)) -> dict[
 
         formatted_events.append(event_data)
 
-    return {
-        "session_id": session.id,
-        "started_at": session.started_at,
-        "ended_at": session.ended_at,
-        "start_die": session.start_die,
-        "ladder_path": build_ladder_path(session, db),
-        "events": formatted_events,
-    }
+    return templates.TemplateResponse(
+        "session_details.html",
+        {
+            "request": request,
+            "session_id": session_obj.id,
+            "started_at": session_obj.started_at,
+            "ended_at": session_obj.ended_at,
+            "start_die": session_obj.start_die,
+            "ladder_path": build_ladder_path(session_obj, db),
+            "events": formatted_events,
+        },
+    )
