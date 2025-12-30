@@ -1,5 +1,5 @@
 [project]
-name = "python-starter-template"
+name = "comic-pile"
 version = "0.1.0"
 description = "Python starter template with best practices"
 readme = "README.md"
@@ -20,14 +20,14 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "--cov=example_module",
+    "--cov=comic-pile",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=96",
 ]
 
 [tool.coverage.run]
-source = ["example_module"]
+source = ["comic-pile"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
@@ -57,7 +57,7 @@ ignore = ["D203", "D213", "E501"]
 convention = "google"
 
 [tool.pyright]
-include = ["example_module", "tests"]
+include = ["comic-pile", "tests"]
 exclude = ["**/node_modules", "**/__pycache__", ".venv"]
 venvPath = "."
 venv = ".venv"
