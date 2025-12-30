@@ -2,38 +2,40 @@
 
 {% block content %}
 <div class="w-full max-w-4xl mx-auto px-4 py-4 pb-20">
-    <h1 class="text-xl sm:text-2xl font-bold mb-6">Session History</h1>
+    <h1 class="text-xl sm:text-2xl font-bold mb-6 text-gray-900">Session History</h1>
 
-    <div id="sessions-list" class="space-y-4">
+    <div id="sessions-list" class="space-y-4" role="list" aria-label="Session history">
         {% for session in sessions %}
         <div class="bg-white rounded-lg shadow p-3 sm:p-4">
             <div class="flex flex-col sm:flex-row justify-between items-start gap-3">
                 <div class="flex-1 w-full">
-                    <p class="text-xs sm:text-sm text-gray-500">
+                    <p class="text-xs sm:text-sm text-gray-600">
                         {{ session.started_at.strftime('%b %d, %Y at %I:%M %p') }}
                     </p>
-                    <p class="text-base sm:text-lg font-medium">Ladder: {{ session.ladder_path }}</p>
+                    <p class="text-base sm:text-lg font-medium text-gray-900">Ladder: {{ session.ladder_path }}</p>
                     {% if session.active_thread %}
-                    <p class="text-sm text-gray-600">
+                    <p class="text-sm text-gray-700">
                         Active: {{ session.active_thread.title }}
                         ({{ session.active_thread.issues_remaining }} issues left)
                     </p>
                     {% endif %}
                 </div>
                 <button
-                    class="px-4 py-3 bg-blue-500 text-white rounded-lg min-h-12 min-w-[100px] text-base sm:text-lg relative"
+                    class="px-4 py-3 bg-blue-500 text-white rounded-lg min-h-12 min-w-[100px] text-base sm:text-lg relative hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     hx-get="/sessions/{{ session.id }}/details"
                     hx-target="#details-{{ session.id }}"
                     hx-swap="innerHTML"
+                    aria-expanded="false"
+                    aria-controls="details-{{ session.id }}"
                 >
                     <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-lg">
-                        <span class="spinner"></span>
+                        <span class="spinner" aria-hidden="true"></span>
                         <span>Loading...</span>
                     </span>
                     <span class="htmx-request:opacity-30">Details</span>
                 </button>
             </div>
-            <div id="details-{{ session.id }}" class="mt-4 hidden">
+            <div id="details-{{ session.id }}" class="mt-4 hidden" role="region" aria-live="polite">
             </div>
         </div>
         {% endfor %}
@@ -46,9 +48,11 @@ function toggleDetails(button, detailsId) {
     if (details.classList.contains('hidden')) {
         details.classList.remove('hidden');
         button.textContent = 'Hide';
+        button.setAttribute('aria-expanded', 'true');
     } else {
         details.classList.add('hidden');
         button.textContent = 'Details';
+        button.setAttribute('aria-expanded', 'false');
     }
 }
 
@@ -57,6 +61,7 @@ document.addEventListener('htmx:afterSwap', function(evt) {
         const button = evt.detail.requestConfig.trigger;
         if (button) {
             button.textContent = 'Hide';
+            button.setAttribute('aria-expanded', 'true');
         }
     }
 });

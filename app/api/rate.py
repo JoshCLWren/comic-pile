@@ -21,7 +21,7 @@ except ImportError:
     clear_cache = None
 
 
-@router.post("/rate/", response_model=ThreadResponse)
+@router.post("/", response_model=ThreadResponse)
 def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadResponse:
     """Rate current reading and update thread."""
     current_session = (
