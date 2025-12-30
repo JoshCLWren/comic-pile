@@ -84,20 +84,20 @@
 
 ## Phase 4: Frontend - Templates & Views
 **Branch**: `phase/4-templates-views`
-**Status**: Blocked
+**Status**: Complete ✅
 **Dependencies**: Phase 3 merged to main
 **Worktrees Created**: 0/4
 
 | ID | Task | Status | Agent | Worktree | Tested | Linted | Committed | Notes |
 |----|-------|---------|----------|----------|----------|------------|--------|
-| 4.31 | Create base template (Tailwind, HTMX, SortableJS, mobile meta) | 🔴 | - | - | - | - | Bottom navigation toolbar |
-| 4.32 | Create roll screen (die display, ROLL button, result area) | 🔴 | - | - | - | - | Flat dice faces |
-| 4.33 | Create rate screen (rating slider, issues input, queue effect preview) | 🔴 | - | - | - | - | 0.5-5.0 rating |
-| 4.34 | Create queue screen (list threads, highlight roll pool, staleness) | 🔴 | - | - | - | - | Drag/drop ready |
-| 4.35 | Create session history (narrative summaries, expandable details) | 🔴 | - | - | - | - | Session list with ladder path |
-| 4.36 | Create add thread modal (title, format, issues remaining) | 🔴 | - | - | - | - | HTMX form submission |
-| 4.37 | Create reactivation modal (select completed thread, issues to add) | 🔴 | - | - | - | - | Must add > 0 issues |
-| 4.38 | Create override modal (select thread to read instead of roll) | 🔴 | - | - | - | - | |
+| 4.31 | Create base template (Tailwind, HTMX, SortableJS, mobile meta) | ✅ | p4-w1 | - | - | - | 6a74bc5 | Bottom navigation toolbar |
+| 4.32 | Create roll screen (die display, ROLL button, result area) | ✅ | p4-w1 | - | - | - | 81012ed | Flat dice faces |
+| 4.33 | Create rate screen (rating slider, issues input, queue effect preview) | ✅ | p4-w2 | - | - | - | f9e644a | 0.5-5.0 rating |
+| 4.34 | Create queue screen (list threads, highlight roll pool, staleness) | ✅ | p4-w2 | - | - | - | 117bd40 | Drag/drop ready |
+| 4.35 | Create session history (narrative summaries, expandable details) | ✅ | p4-w3 | - | - | - | d5e1df5 | Session list with ladder path |
+| 4.36 | Create add thread modal (title, format, issues remaining) | ✅ | p4-w3 | - | - | - | a1e8d0e | HTMX form submission |
+| 4.37 | Create reactivation modal (select completed thread, issues to add) | ✅ | p4-w4 | - | - | - | 117bd40 | Must add > 0 issues |
+| 4.38 | Create override modal (select thread to read instead of roll) | ✅ | p4-w4 | - | - | - | 117bd40 | |
 
 ---
 

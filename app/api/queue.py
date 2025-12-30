@@ -36,6 +36,9 @@ def move_thread_position(
         format=thread.format,
         issues_remaining=thread.issues_remaining,
         position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
         created_at=thread.created_at,
     )
 
@@ -56,6 +59,9 @@ def move_thread_front(thread_id: int, db: Session = Depends(get_db)) -> ThreadRe
         format=thread.format,
         issues_remaining=thread.issues_remaining,
         position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
         created_at=thread.created_at,
     )
 
@@ -76,5 +82,8 @@ def move_thread_back(thread_id: int, db: Session = Depends(get_db)) -> ThreadRes
         format=thread.format,
         issues_remaining=thread.issues_remaining,
         position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
         created_at=thread.created_at,
     )

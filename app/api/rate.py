@@ -100,5 +100,8 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
         format=thread.format,
         issues_remaining=thread.issues_remaining,
         position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
         created_at=thread.created_at,
     )

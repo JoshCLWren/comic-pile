@@ -2,7 +2,9 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,8 @@ from app.models import Event, Thread
 from app.models import Session as SessionModel
 from app.schemas.thread import SessionResponse
 from comic_pile.session import is_active
+
+templates = Jinja2Templates(directory="app/templates")
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -148,4 +152,68 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
         user_id=session.user_id,
         ladder_path=build_ladder_path(session, db),
         active_thread=get_active_thread(session, db),
+    )
+
+
+@router.get("/{session_id}/details", response_class=HTMLResponse)
+def get_session_details(
+    session_id: int, request: Request, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    """Get session details with all events for expanded view."""
+    session_obj = db.get(SessionModel, session_id)
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    events = (
+        db.execute(select(Event).where(Event.session_id == session_id).order_by(Event.timestamp))
+        .scalars()
+        .all()
+    )
+
+    formatted_events = []
+    for event in events:
+        thread_title = None
+        if event.thread_id:
+            thread = db.get(Thread, event.thread_id)
+            if thread:
+                thread_title = thread.title
+
+        event_data = {
+            "id": event.id,
+            "type": event.type,
+            "timestamp": event.timestamp,
+            "thread_title": thread_title,
+        }
+
+        if event.type == "roll":
+            event_data.update(
+                {
+                    "die": event.die,
+                    "result": event.result,
+                    "selection_method": event.selection_method,
+                }
+            )
+        elif event.type == "rate":
+            event_data.update(
+                {
+                    "rating": event.rating,
+                    "issues_read": event.issues_read,
+                    "queue_move": event.queue_move,
+                    "die_after": event.die_after,
+                }
+            )
+
+        formatted_events.append(event_data)
+
+    return templates.TemplateResponse(
+        "session_details.html",
+        {
+            "request": request,
+            "session_id": session_obj.id,
+            "started_at": session_obj.started_at,
+            "ended_at": session_obj.ended_at,
+            "start_die": session_obj.start_die,
+            "ladder_path": build_ladder_path(session_obj, db),
+            "events": formatted_events,
+        },
     )

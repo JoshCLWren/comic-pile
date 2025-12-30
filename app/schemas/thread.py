@@ -30,6 +30,9 @@ class ThreadResponse(BaseModel):
     format: str
     issues_remaining: int
     position: int
+    status: str
+    last_rating: float | None
+    last_activity_at: datetime | None
     created_at: datetime
 
 
@@ -46,6 +49,13 @@ class OverrideRequest(BaseModel):
     """Schema for manual thread override."""
 
     thread_id: int
+
+
+class ReactivateRequest(BaseModel):
+    """Schema for reactivating a completed thread."""
+
+    thread_id: int
+    issues_to_add: int = Field(..., gt=0)
 
 
 class RateRequest(BaseModel):
