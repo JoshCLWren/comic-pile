@@ -13,6 +13,10 @@
         <div id="queue-container">
             <div id="queue-list" class="space-y-3">
                 <div class="text-center text-gray-500 py-8">Loading threads...</div>
+                <div class="htmx-indicator hidden flex items-center justify-center gap-2 py-8">
+                    <span class="spinner"></span>
+                    <span>Updating...</span>
+                </div>
             </div>
         </div>
     </div>
@@ -31,11 +35,11 @@
 
         let badge;
         if (diffDays < 7) {
-            badge = `<span class="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">✅ ${diffDays}d</span>`;
+            badge = `<span class="inline-flex items-center px-2 py-1 bg-green-500 text-white rounded-full text-xs font-medium shadow-sm">✅ ${diffDays}d</span>`;
         } else if (diffDays <= 14) {
-            badge = `<span class="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium">⚠️ ${diffDays}d</span>`;
+            badge = `<span class="inline-flex items-center px-2 py-1 bg-yellow-500 text-white rounded-full text-xs font-medium shadow-sm">⚠️ ${diffDays}d</span>`;
         } else {
-            badge = `<span class="inline-flex items-center px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">❌ ${diffDays}d</span>`;
+            badge = `<span class="inline-flex items-center px-2 py-1 bg-red-500 text-white rounded-full text-xs font-medium shadow-sm">❌ ${diffDays}d</span>`;
         }
 
         return { days: diffDays, badge };
@@ -142,6 +146,11 @@
     }
 
     function updateThreadPosition(threadId, newPosition) {
+        const indicator = document.querySelector('#queue-list .htmx-indicator');
+        if (indicator) {
+            indicator.classList.remove('hidden');
+        }
+
         fetch(`/threads/${threadId}/position/`, {
             method: 'PUT',
             headers: {
@@ -156,6 +165,9 @@
         })
         .catch(error => {
             console.error('Error updating position:', error);
+            if (indicator) {
+                indicator.classList.add('hidden');
+            }
             loadQueue();
         });
     }
