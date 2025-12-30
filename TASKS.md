@@ -25,9 +25,10 @@
 
 | ID | Task | Status | Agent | Worktree | Tested | Linted | Committed | Notes |
 |----|-------|---------|----------|----------|----------|------------|--------|
-| 1.1 | Rename package `comic-pile/` → `comic_pile/` | ✅ | - | - | - | abc123 | Directory renamed, import works |
-| 1.2 | Update imports across all files | ✅ | - | - | - | abc123 | main.py, test_example.py updated, __init__.py fixed |
-| 1.4 | Add FastAPI dependencies | 🟢 | - | - | - | - | fastapi, uvicorn, sqlalchemy, alembic, jinja2, faker |
+| 1.1 | Rename package `comic-pile/` → `comic_pile/` | ✅ | p1-wt1 | - | - | abc | Directory renamed, import works |
+| 1.2 | Update imports across all files | ✅ | p1-wt1 | - | - | abc123 | main.py, test_example.py updated, __init__.py fixed |
+| 1.3 | Update pyproject.toml package name | ✅ | - | ✅ | ✅ | 1114170 | Package name updated to comic_pile |
+| 1.4 | Add FastAPI dependencies | ✅ | - | ✅ | ✅ | 1114170 | All deps installed, imports verified, tests + lint pass |
 | 1.5 | Remove old template code | 🟢 | - | - | - | - | Delete main.py, comic_pile/core.py |
 | 1.6 | Update Makefile for FastAPI | 🟢 | - | - | - | - | Remove cdisplayagain targets, add FastAPI targets |
 | 1.7 | Update CI workflow | 🟢 | - | - | - | - | Remove Tkinter/unnar deps, update coverage package |
@@ -185,7 +186,11 @@
 
 | Worktree Name | Branch | Assigned Tasks | Status | Last Updated |
 |--------------|----------|----------------|----------|--------------|
-| - | - | - | Not Created | - |
+| (current dir) | phase/1-cleanup-fastapi-setup | 1.1-1.4 | All Complete | 2025-12-30 |
+| comic-pile-p1-wt2 | phase/1-cleanup-fastapi-setup | 1.3, 1.4 | Not Created | - |
+| comic-pile-p1-wt3 | phase/1-cleanup-fastapi-setup | 1.5, 1.6 | Not Created | - |
+| comic-pile-p1-wt4 | phase/1-cleanup-fastapi-setup | 1.7, 1.8 | Not Created | - |
+| comic-pile-p1-wt5 | phase/1-cleanup-fastapi-setup | 1.9, 1.10 | Not Created | - |
 
 ---
 
