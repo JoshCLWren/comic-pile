@@ -81,7 +81,13 @@
                 </div>
                 <div class="flex justify-end gap-2">
                     <button type="button" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md" onclick="document.getElementById('reactivate-modal').classList.add('hidden');">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md">Reactivate</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md relative">
+                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-md">
+                            <span class="spinner"></span>
+                            <span>Reactivating...</span>
+                        </span>
+                        <span class="htmx-request:opacity-30">Reactivate</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -95,7 +101,13 @@
                 </div>
                 <div class="flex justify-end gap-2">
                     <button type="button" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md" onclick="document.getElementById('override-modal').classList.add('hidden');">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md">Override</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md relative">
+                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-md">
+                            <span class="spinner"></span>
+                            <span>Overriding...</span>
+                        </span>
+                        <span class="htmx-request:opacity-30">Override</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -161,9 +173,13 @@
                     </button>
                     <button
                         type="submit"
-                        class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg min-h-[44px] text-lg font-medium"
+                        class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg min-h-[44px] text-lg font-medium relative"
                     >
-                        Add Thread
+                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-lg">
+                            <span class="spinner"></span>
+                            <span>Adding...</span>
+                        </span>
+                        <span class="htmx-request:opacity-30">Add Thread</span>
                     </button>
                 </div>
             </form>
