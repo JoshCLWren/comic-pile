@@ -32,5 +32,45 @@
             </a>
         </div>
     </nav>
+
+    <div id="reactivate-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h2 class="text-xl font-bold mb-4">Reactivate Thread</h2>
+            <form id="reactivate-form" hx-post="/threads/reactivate" hx-swap="none" hx-on::after-request="document.getElementById('reactivate-modal').classList.add('hidden'); htmx.trigger(window, 'refreshQueue');">
+                <div class="mb-4">
+                    <label for="reactivate-thread-id" class="block text-sm font-medium text-gray-700 mb-1">Thread</label>
+                    <select id="reactivate-thread-id" name="thread_id" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" hx-get="/threads/completed" hx-target="#reactivate-thread-id" hx-trigger="load" required>
+                        <option value="">Select a completed thread...</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="issues_to_add" class="block text-sm font-medium text-gray-700 mb-1">Issues to Add</label>
+                    <input type="number" id="issues_to_add" name="issues_to_add" min="1" required class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">Must add at least 1 issue</p>
+                </div>
+                <div class="mb-4">
+                    <p id="reactivate-preview" class="text-sm text-gray-600"></p>
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md" onclick="document.getElementById('reactivate-modal').classList.add('hidden');">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md">Reactivate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="override-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h2 class="text-xl font-bold mb-4">Override Roll</h2>
+            <form hx-post="/roll/override" hx-swap="none" hx-on::after-request="document.getElementById('override-modal').classList.add('hidden'); htmx.trigger(window, 'refreshRoll');">
+                <div id="override-thread-list" class="mb-4 max-h-64 overflow-y-auto border border-gray-200 rounded-md" hx-get="/threads/active" hx-trigger="load">
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md" onclick="document.getElementById('override-modal').classList.add('hidden');">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md">Override</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </body>
 </html>

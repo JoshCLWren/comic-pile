@@ -1,0 +1,38 @@
+<div class="bg-gray-50 rounded-lg p-4 space-y-3">
+    <h3 class="font-semibold text-gray-700">Session Events</h3>
+    {% if events %}
+    <div class="space-y-2">
+        {% for event in events %}
+        <div class="border-l-2 border-blue-300 pl-3 py-1">
+            <p class="text-sm text-gray-500">
+                {{ event.timestamp.strftime('%I:%M %p') }}
+            </p>
+            {% if event.type == "roll" %}
+            <p class="font-medium">
+                Rolled d{{ event.die }} → {{ event.result }}
+                {% if event.thread_title %}
+                → Selected: {{ event.thread_title }}
+                {% endif %}
+                {% if event.selection_method %}
+                <span class="text-sm text-gray-500">({{ event.selection_method }})</span>
+                {% endif %}
+            </p>
+            {% elif event.type == "rate" %}
+            <p class="font-medium">
+                {% if event.thread_title %}{{ event.thread_title }}{% endif %}
+                Rated {{ event.rating }}/5.0
+                {% if event.issues_read %}
+                ({{ event.issues_read }} issue{% if event.issues_read > 1 %}s{% endif %})
+                {% endif %}
+            </p>
+            <p class="text-sm text-gray-600">
+                Queue: {{ event.queue_move }} → d{{ event.die_after }}
+            </p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-500 text-sm">No events recorded</p>
+    {% endif %}
+</div>

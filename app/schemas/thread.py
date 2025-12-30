@@ -48,6 +48,13 @@ class OverrideRequest(BaseModel):
     thread_id: int
 
 
+class ReactivateRequest(BaseModel):
+    """Schema for reactivating a completed thread."""
+
+    thread_id: int
+    issues_to_add: int = Field(..., gt=0)
+
+
 class RateRequest(BaseModel):
     """Schema for rating request."""
 

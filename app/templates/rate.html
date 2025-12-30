@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-lg mx-auto p-4">
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">Rate Reading</h1>
+
+        <div id="thread-info" class="mb-6">
+            <div class="text-gray-600 mb-2">Current thread loading...</div>
+        </div>
+
+        <form hx-post="/rate/" hx-target="#result-message" hx-indicator="#loading-indicator">
+            <div class="mb-6">
+                <label class="block text-gray-700 font-semibold mb-2">
+                    Rating (0.5 - 5.0)
+                </label>
+                <input
+                    type="range"
+                    id="rating"
+                    name="rating"
+                    min="0.5"
+                    max="5.0"
+                    step="0.5"
+                    value="3.5"
+                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    hx-get="#rating-value"
+                    oninput="document.getElementById('rating-value').textContent = this.value"
+                >
+                <div class="flex justify-between text-sm text-gray-500 mt-1">
+                    <span>0.5</span>
+                    <span id="rating-value" class="text-lg font-bold text-gray-800">3.5</span>
+                    <span>5.0</span>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-gray-700 font-semibold mb-2">
+                    Issues Read
+                </label>
+                <div class="flex items-center space-x-4">
+                    <button
+                        type="button"
+                        class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                        onclick="adjustIssues(-1)"
+                    >
+                        -
+                    </button>
+                    <input
+                        type="number"
+                        id="issues-read"
+                        name="issues_read"
+                        min="1"
+                        value="1"
+                        class="w-20 text-center border-2 border-gray-300 rounded-lg p-2 text-lg font-bold"
+                    >
+                    <button
+                        type="button"
+                        class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                        onclick="adjustIssues(1)"
+                    >
+                        +
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h3 class="font-semibold text-gray-700 mb-2">Queue Effect Preview</h3>
+                <div id="queue-effect" class="text-sm text-gray-600">
+                    <p id="rating-effect">Rating ≥ 3.5 → Die steps up (d10 → d12)</p>
+                    <p id="completion-effect" class="mt-2"></p>
+                </div>
+            </div>
+
+            <button
+                type="submit"
+                id="submit-btn"
+                class="w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400"
+            >
+                Submit Rating
+            </button>
+
+            <div id="loading-indicator" class="htmx-indicator mt-4 text-center text-gray-600 hidden">
+                <div class="flex items-center justify-center space-x-2">
+                    <svg class="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Submitting...</span>
+                </div>
+            </div>
+        </form>
+
+        <div id="result-message" class="mt-4"></div>
+    </div>
+</div>
+
+<script>
+    function adjustIssues(delta) {
+        const input = document.getElementById('issues-read');
+        const value = parseInt(input.value) + delta;
+        if (value >= 1) {
+            input.value = value;
+        }
+    }
+
+    function loadActiveThread() {
+        fetch('/sessions/current/')
+            .then(response => response.json())
+            .then(data => {
+                const threadInfo = document.getElementById('thread-info');
+                if (data.active_thread) {
+                    threadInfo.innerHTML = `
+                        <div class="bg-indigo-50 rounded-lg p-4">
+                            <h2 class="text-xl font-bold text-indigo-800">${data.active_thread.title}</h2>
+                            <p class="text-gray-600">${data.active_thread.format}</p>
+                            <p class="text-gray-600">Issues remaining: ${data.active_thread.issues_remaining}</p>
+                        </div>
+                    `;
+                    updateQueueEffect(data.active_thread.issues_remaining);
+                } else {
+                    threadInfo.innerHTML = `
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <p class="text-yellow-800">No active thread found. Please roll first.</p>
+                        </div>
+                    `;
+                    document.getElementById('submit-btn').disabled = true;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading thread:', error);
+            });
+    }
+
+    function updateQueueEffect(issuesRemaining) {
+        const rating = parseFloat(document.getElementById('rating').value);
+        const issuesRead = parseInt(document.getElementById('issues-read').value);
+
+        const ratingEffect = document.getElementById('rating-effect');
+        const completionEffect = document.getElementById('completion-effect');
+
+        if (rating >= 3.5) {
+            ratingEffect.innerHTML = 'Rating ≥ 3.5 → Die steps up (d10 → d12)';
+            ratingEffect.classList.remove('text-red-600');
+            ratingEffect.classList.add('text-green-600');
+        } else {
+            ratingEffect.innerHTML = 'Rating < 3.5 → Die steps down (d10 → d8)';
+            ratingEffect.classList.remove('text-green-600');
+            ratingEffect.classList.add('text-red-600');
+        }
+
+        if (issuesRemaining <= issuesRead) {
+            completionEffect.innerHTML = '⚠️ Thread completes, moves to back of queue';
+            completionEffect.classList.add('text-orange-600', 'font-semibold');
+        } else {
+            completionEffect.innerHTML = '';
+            completionEffect.classList.remove('text-orange-600', 'font-semibold');
+        }
+    }
+
+    document.getElementById('rating').addEventListener('input', function() {
+        const issuesRemaining = parseInt(document.querySelector('#thread-info .text-gray-600:last-child')?.textContent.split(': ')[1] || '0');
+        updateQueueEffect(issuesRemaining);
+    });
+
+    document.getElementById('issues-read').addEventListener('input', function() {
+        const issuesRemaining = parseInt(document.querySelector('#thread-info .text-gray-600:last-child')?.textContent.split(': ')[1] || '0');
+        updateQueueEffect(issuesRemaining);
+    });
+
+    document.addEventListener('DOMContentLoaded', loadActiveThread);
+</script>
+{% endblock %}
