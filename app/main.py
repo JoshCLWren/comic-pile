@@ -106,15 +106,10 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
-    @app.get("/")
-    async def root() -> dict[str, str]:
-        """Root endpoint with basic API information."""
-        return {
-            "name": "Dice-Driven Comic Tracker API",
-            "version": "0.1.0",
-            "docs": "/docs",
-            "redoc": "/redoc",
-        }
+    @app.get("/", response_class=HTMLResponse)
+    async def root(request: Request):
+        """Render roll page as the default home page."""
+        return templates.TemplateResponse("roll.html", {"request": request})
 
     @app.get("/history", response_class=HTMLResponse)
     async def history_page(request: Request, db: Session = Depends(get_db)):
