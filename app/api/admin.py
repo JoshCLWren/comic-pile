@@ -2,6 +2,7 @@
 
 import csv
 import io
+import json
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -126,7 +127,7 @@ def export_csv(db: Session = Depends(get_db)) -> StreamingResponse:
 
 
 @router.get("/export/json/")
-def export_json(db: Session = Depends(get_db)) -> dict[str, list[dict]]:
+def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
     """Export full database as JSON for backups.
 
     Includes all data: users, threads, sessions, events
@@ -136,7 +137,7 @@ def export_json(db: Session = Depends(get_db)) -> dict[str, list[dict]]:
     sessions = db.execute(select(SessionModel)).scalars().all()
     events = db.execute(select(Event)).scalars().all()
 
-    return {
+    data = {
         "users": [
             {
                 "id": user.id,
@@ -193,3 +194,10 @@ def export_json(db: Session = Depends(get_db)) -> dict[str, list[dict]]:
             for event in events
         ],
     }
+
+    json_output = json.dumps(data, indent=2)
+    return StreamingResponse(
+        io.BytesIO(json_output.encode()),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=database_backup.json"},
+    )
