@@ -138,14 +138,14 @@
 
 ## Phase 7: Data Import & Seeding
 **Branch**: `phase/7-data-import`
-**Status**: Blocked
+**Status**: In Progress
 **Dependencies**: Phase 2 merged to main
 **Worktrees Created**: 0/2
 
 | ID | Task | Status | Agent | Worktree | Tested | Linted | Committed | Notes |
 |----|-------|---------|----------|----------|----------|------------|--------|
-| 7.52 | Create seed command (Faker, 20-30 sample threads) | 🔴 | - | - | - | - | `python -m scripts.seed_data` |
-| 7.53 | Create CSV importer (parse, validate, insert at position 1) | 🔴 | - | - | - | - | Match Google Sheets format |
+| 7.52 | Create seed command (Faker, 20-30 sample threads) | ✅ | - | - | ✅ | ✅ | 1ad600d | 25 threads, 7 sessions, events |
+| 7.53 | Create CSV importer (parse, validate, insert at position 1) | ✅ | - | - | ✅ | - | - | Already implemented, all tests pass |
 | 7.54 | Create CSV exporter (active threads, download) | 🔴 | - | - | - | - | `threads_export.csv` |
 | 7.55 | Create JSON exporter (full database backup) | 🔴 | - | - | - | - | All data + relationships |
 
