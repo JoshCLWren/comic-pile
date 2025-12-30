@@ -61,24 +61,24 @@
 
 ## Phase 3: REST API Endpoints
 **Branch**: `phase/3-rest-api`
-**Status**: Blocked
+**Status**: Complete ✅
 **Dependencies**: Phase 2 merged to main
 **Worktrees Created**: 0/6
 
 | ID | Task | Status | Agent | Worktree | Tested | Linted | Committed | Notes |
 |----|-------|---------|----------|----------|----------|------------|--------|
-| 3.19 | Thread CRUD API (GET /threads/, POST /threads/, etc.) | 🔴 | - | - | - | - | |
-| 3.20 | Roll API (POST /roll/, POST /roll/override/) | 🔴 | - | - | - | - | |
-| 3.21 | Rate API (POST /rate/) | ✅ | - | - | ✅ | ✅ | e99f70c | Decrement issues, move queue, update die |
-| 3.22 | Queue API (PUT /threads/{id}/position/) | ✅ | - | - | ✅ | ✅ | e99f70c | For drag/drop - move_to_position, front, back |
-| 3.23 | Session API (GET /session/current/, GET /sessions/) | 🔴 | - | - | - | - | With narrative summaries |
-| 3.24 | Admin API (import CSV, export JSON/CSV) | 🔴 | - | - | - | - | Google Sheets compatibility |
-| 3.25 | Setup CORS (allow local network access) | 🔴 | - | - | - | - | origins=["*"] for dev |
-| 3.26 | Set up Jinja2Templates (configure template directory) | 🔴 | - | - | - | - | |
-| 3.27 | Mount static files (/static route) | 🔴 | - | - | - | - | CSS/JS/images |
-| 3.28 | Create main FastAPI app (wire up all routes) | 🔴 | - | - | - | - | |
-| 3.29 | Auto-generate API docs (FastAPI /docs endpoint) | 🔴 | - | - | - | - | Automatic via FastAPI |
-| 3.30 | Add startup event (initialize database on app startup) | 🔴 | - | - | - | - | |
+| 3.19 | Thread CRUD API (GET /threads/, POST /threads/, etc.) | ✅ | p3-w1 | - | - | - | e99f70c | All CRUD endpoints |
+| 3.20 | Roll API (POST /roll/, POST /roll/override/) | ✅ | p3-w1 | - | - | - | e99f70c | Dice roll + override |
+| 3.21 | Rate API (POST /rate/) | ✅ | p3-w2 | - | ✅ | ✅ | 9bace14 | Decrement issues, move queue, update die |
+| 3.22 | Queue API (PUT /threads/{id}/position/) | ✅ | p3-w2 | - | ✅ | ✅ | 4f6c6a3 | For drag/drop - move_to_position, front, back |
+| 3.23 | Session API (GET /session/current/, GET /sessions/) | ✅ | p3-w3 | - | - | - | e99f70c | With narrative summaries |
+| 3.24 | Admin API (import CSV, export JSON/CSV) | ✅ | p3-w3 | - | - | - | e05ebbc | Google Sheets compatibility |
+| 3.25 | Setup CORS (allow local network access) | ✅ | p3-w4 | - | - | - | 0b61592 | origins=["*"] for dev |
+| 3.26 | Set up Jinja2Templates (configure template directory) | ✅ | p3-w4 | - | - | - | 876670e | Base template created |
+| 3.27 | Mount static files (/static route) | ✅ | p3-w4 | - | - | - | 19626a5 | CSS/JS/images |
+| 3.28 | Create main FastAPI app (wire up all routes) | ✅ | p3-w5 | - | - | - | 57f64f6 | All routers wired up |
+| 3.29 | Auto-generate API docs (FastAPI /docs endpoint) | ✅ | p3-w5 | - | - | - | 57f64f6 | Automatic via FastAPI |
+| 3.30 | Add startup event (initialize database on app startup) | ✅ | p3-w5 | - | - | - | 57f64f6 | Tables created on startup |
 
 ---
 
