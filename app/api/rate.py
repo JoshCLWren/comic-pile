@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,11 @@ from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back
 
 router = APIRouter()
+
+try:
+    from app.main import clear_cache
+except ImportError:
+    clear_cache = None
 
 
 @router.post("/rate/", response_model=ThreadResponse)
@@ -30,7 +35,10 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
     )
 
     if not current_session:
-        raise HTTPException(status_code=400, detail="No active session")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active session. Please roll the dice first.",
+        )
 
     last_roll_event = (
         db.execute(
@@ -45,11 +53,17 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
     )
 
     if not last_roll_event:
-        raise HTTPException(status_code=400, detail="No active thread")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active thread. Please roll the dice first.",
+        )
 
     thread = db.get(Thread, last_roll_event.selected_thread_id)
     if not thread:
-        raise HTTPException(status_code=404, detail="Thread not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {last_roll_event.selected_thread_id} not found",
+        )
 
     current_die = current_session.start_die
     last_rate_event = (
@@ -93,6 +107,9 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
 
     db.commit()
     db.refresh(thread)
+
+    if clear_cache:
+        clear_cache()
 
     return ThreadResponse(
         id=thread.id,

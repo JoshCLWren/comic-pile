@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,6 +33,12 @@ class Thread(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+    __table_args__ = (
+        Index("ix_thread_position", "queue_position"),
+        Index("ix_thread_status", "status"),
+        Index("ix_thread_last_activity", "last_activity_at"),
+    )
 
     user: Mapped["User"] = relationship("User", back_populates="threads")
     events: Mapped[list["Event"]] = relationship(

@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-lg mx-auto p-4">
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <h1 class="text-2xl font-bold text-gray-800 mb-4">Reading Queue</h1>
+<div class="w-full max-w-lg mx-auto px-4 py-4">
+    <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Reading Queue</h1>
 
-        <div id="roll-pool-info" class="mb-4 p-3 bg-indigo-50 rounded-lg">
-            <p class="text-indigo-800 font-semibold">Active die: <span id="current-die">Loading...</span></p>
-            <p class="text-indigo-600 text-sm">Roll pool: threads 1-<span id="pool-size">...</span> are highlighted</p>
+        <div id="roll-pool-info" class="mb-4 p-3 sm:p-4 bg-indigo-50 rounded-lg">
+            <p class="text-indigo-800 font-semibold text-sm sm:text-base">Active die: <span id="current-die">Loading...</span></p>
+            <p class="text-indigo-600 text-xs sm:text-sm">Roll pool: threads 1-<span id="pool-size">...</span> are highlighted</p>
         </div>
 
         <div id="queue-container">

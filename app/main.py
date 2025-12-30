@@ -1,6 +1,7 @@
 """FastAPI application factory and configuration."""
 
 import logging
+import time
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,68 @@ from app.database import Base, engine, get_db
 from app.models import Session as SessionModel
 
 logger = logging.getLogger(__name__)
+
+
+_thread_cache: dict[str, tuple[list, float]] = {}
+_session_cache: dict[str, tuple[dict, float]] = {}
+
+
+def get_threads_cached(db: Session) -> list:
+    """Get threads from cache (30 second TTL)."""
+    cache_key = "all_threads"
+    now = time.time()
+    if cache_key in _thread_cache and now - _thread_cache[cache_key][1] < 30:
+        return _thread_cache[cache_key][0]
+    from app.models import Thread
+
+    threads = list(db.execute(select(Thread).order_by(Thread.queue_position)).scalars().all())
+    _thread_cache[cache_key] = (threads, now)
+    return threads
+
+
+def get_current_session_cached(db: Session) -> dict | None:
+    """Get current session from cache (10 second TTL)."""
+    cache_key = "current_session"
+    now = time.time()
+    if cache_key in _session_cache and now - _session_cache[cache_key][1] < 10:
+        return _session_cache[cache_key][0]
+    from comic_pile.session import is_active
+
+    active_sessions = (
+        db.execute(
+            select(SessionModel)
+            .where(SessionModel.ended_at.is_(None))
+            .order_by(SessionModel.started_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    active_session = None
+    for s in active_sessions:
+        if is_active(s):
+            active_session = s
+            break
+    if active_session:
+        from app.schemas.thread import SessionResponse
+
+        response = SessionResponse(
+            id=active_session.id,
+            started_at=active_session.started_at,
+            ended_at=active_session.ended_at,
+            start_die=active_session.start_die,
+            user_id=active_session.user_id,
+            ladder_path=session.build_ladder_path(active_session, db),
+            active_thread=session.get_active_thread(active_session, db),
+        )
+        _session_cache[cache_key] = (response.model_dump(), now)
+        return response.model_dump()
+    return None
+
+
+def clear_cache() -> None:
+    """Clear all caches on POST/PUT/DELETE operations."""
+    _thread_cache.clear()
+    _session_cache.clear()
 
 
 def create_app() -> FastAPI:

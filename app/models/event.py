@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -34,6 +34,11 @@ class Event(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=True)
     thread_id: Mapped[int | None] = mapped_column(ForeignKey("threads.id"), nullable=True)
+
+    __table_args__ = (
+        Index("ix_event_session_id", "session_id"),
+        Index("ix_event_timestamp", "timestamp"),
+    )
 
     session: Mapped["Session"] = relationship("Session", back_populates="events")
     thread: Mapped["Thread"] = relationship("Thread", back_populates="events")
