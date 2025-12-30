@@ -42,20 +42,20 @@
 
 ## Phase 2: Database & Models
 **Branch**: `phase/2-database-models`
-**Status**: Blocked (Phase 1 required)
+**Status**: Complete ✅
 **Dependencies**: Phase 1 merged to main
 **Worktrees Created**: 0/4
 
 | ID | Task | Status | Agent | Worktree | Tested | Linted | Committed | Notes |
 |----|-------|---------|----------|----------|----------|------------|--------|
-| 2.11 | Create FastAPI app structure (app/, templates/, static/) | 🔴 | - | - | - | - | See spec for directory tree |
-| 2.12 | Create SQLAlchemy models (User, Thread, Session, Event, etc.) | 🔴 | - | - | - | - | All models with relationships |
-| 2.13 | Create database connection | 🔴 | - | - | - | - | SQLAlchemy session factory, engine config |
-| 2.14 | Set up Alembic (migrations) | 🔴 | - | - | - | - | Initialize alembic, create initial migration |
-| 2.15 | Create Pydantic schemas (ThreadCreate, RollResponse, etc.) | 🔴 | - | - | - | - | Request/response validation |
-| 2.16 | Implement dice ladder logic (step_down, step_up, bounds) | 🔴 | - | - | - | - | DICE_LADDER = [4, 6, 8, 10, 12, 20] |
-| 2.17 | Implement queue logic (move_to_front, move_to_back, get_roll_pool) | 🔴 | - | - | - | - | Queue position management |
-| 2.18 | Implement session logic (is_active, should_start_new, get_or_create) | 🔴 | - | - | - | - | 6-hour gap detection |
+| 2.11 | Create FastAPI app structure (app/, templates/, static/) | ✅ | p2-w1 | - | - | - | 0b61592 | App structure with CORS |
+| 2.12 | Create SQLAlchemy models (User, Thread, Session, Event, etc.) | ✅ | p2-w1 | - | - | - | aec8f81 | All models with relationships |
+| 2.13 | Create database connection | ✅ | p2-w4 | - | - | - | 831e36a | SQLAlchemy session factory, engine config |
+| 2.14 | Set up Alembic (migrations) | ✅ | p2-w4 | - | - | - | 831e36a | Alembic initialized, initial migration created |
+| 2.15 | Create Pydantic schemas (ThreadCreate, RollResponse, etc.) | ✅ | p2-w2 | - | - | - | 7d317ed | Request/response validation |
+| 2.16 | Implement dice ladder logic (step_down, step_up, bounds) | ✅ | p2-w2 | - | - | - | 898ec5c | DICE_LADDER = [4, 6, 8, 10, 12, 20] |
+| 2.17 | Implement queue logic (move_to_front, move_to_back, get_roll_pool) | ✅ | p2-w3 | - | - | - | 17aed9c | Queue position management |
+| 2.18 | Implement session logic (is_active, should_start_new, get_or_create) | ✅ | p2-w3 | - | - | - | d7cb956 | 6-hour gap detection |
 
 ---
 
