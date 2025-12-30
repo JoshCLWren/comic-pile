@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+import sqlalchemy as sa
 from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,7 +22,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default="CURRENT_TIMESTAMP"
+        DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
     )
 
     sessions: Mapped[list["Session"]] = relationship(

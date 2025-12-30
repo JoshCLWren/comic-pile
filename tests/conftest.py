@@ -1,11 +1,175 @@
 """Shared pytest fixtures."""
 
-from pathlib import Path
+import tempfile
+from collections.abc import AsyncGenerator, Generator
 
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.database import Base, get_db
+from app.main import app
+from app.models import Event, Thread, User
+from app.models import Session as SessionModel
+
+test_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
+test_db_file.close()
+TEST_DATABASE_URL = f"sqlite:///{test_db_file.name}"
+
+test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
-@pytest.fixture
-def tmp_file(tmp_path: Path):
-    """Provide a temporary file path."""
-    return tmp_path / "test.txt"
+@pytest.fixture(scope="function")
+def db() -> Generator[Session]:
+    """Create in-memory SQLite database for tests."""
+    Base.metadata.create_all(bind=test_engine)
+    session = TestSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(bind=test_engine)
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(db: Session) -> AsyncGenerator[AsyncClient]:
+    """httpx.AsyncClient for API tests."""
+
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def session(db: Session) -> Generator[Session]:
+    """Get database session for tests."""
+    yield db
+
+
+@pytest.fixture(scope="function")
+def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User | list]:
+    """Create sample threads, sessions for testing."""
+    from datetime import datetime
+
+    user = User(username="test_user", created_at=datetime.now())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    threads = [
+        Thread(
+            title="Superman",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=user.id,
+            created_at=datetime.now(),
+        ),
+        Thread(
+            title="Batman",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=user.id,
+            created_at=datetime.now(),
+        ),
+        Thread(
+            title="Wonder Woman",
+            format="Comic",
+            issues_remaining=0,
+            queue_position=3,
+            status="completed",
+            user_id=user.id,
+            created_at=datetime.now(),
+        ),
+        Thread(
+            title="Flash",
+            format="Comic",
+            issues_remaining=15,
+            queue_position=4,
+            status="active",
+            user_id=user.id,
+            created_at=datetime.now(),
+        ),
+        Thread(
+            title="Aquaman",
+            format="Comic",
+            issues_remaining=8,
+            queue_position=5,
+            status="active",
+            user_id=user.id,
+            created_at=datetime.now(),
+        ),
+    ]
+
+    for thread in threads:
+        db.add(thread)
+    db.commit()
+
+    for thread in threads:
+        db.refresh(thread)
+
+    sessions = [
+        SessionModel(
+            start_die=6,
+            user_id=user.id,
+            started_at=datetime.now(),
+        ),
+        SessionModel(
+            start_die=8,
+            user_id=user.id,
+            started_at=datetime.now(),
+        ),
+    ]
+
+    for sess in sessions:
+        db.add(sess)
+    db.commit()
+
+    for sess in sessions:
+        db.refresh(sess)
+
+    events = [
+        Event(
+            type="roll",
+            die=6,
+            result=4,
+            selected_thread_id=threads[0].id,
+            selection_method="random",
+            session_id=sessions[0].id,
+            thread_id=threads[0].id,
+            timestamp=datetime.now(),
+        ),
+        Event(
+            type="rate",
+            rating=4.5,
+            issues_read=1,
+            queue_move="back",
+            die_after=8,
+            session_id=sessions[0].id,
+            thread_id=threads[0].id,
+            timestamp=datetime.now(),
+        ),
+    ]
+
+    for event in events:
+        db.add(event)
+    db.commit()
+
+    for event in events:
+        db.refresh(event)
+
+    return {"threads": threads, "sessions": sessions, "events": events, "user": user}

@@ -119,20 +119,20 @@
 
 ## Phase 6: Testing
 **Branch**: `phase/6-testing`
-**Status**: Blocked
+**Status**: Complete ✅
 **Dependencies**: Phase 3 & 5 merged to main
 **Worktrees Created**: 0/3
 
 | ID | Task | Status | Agent | Worktree | Tested | Linted | Committed | Notes |
 |----|-------|---------|----------|----------|----------|------------|--------|
-| 6.44 | Create test fixtures (in-memory SQLite, sample data) | 🔴 | - | - | - | - | Override user_id=1 |
-| 6.45 | Test dice ladder logic (step up/down, bounds) | 🔴 | - | - | - | - | Full ladder traversal |
-| 6.46 | Test session logic (6-hour gap, auto-new) | 🔴 | - | - | - | - | |
-| 6.47 | Test roll mechanism (valid selection, overflow) | 🔴 | - | - | - | - | |
-| 6.48 | Test rating flow (decrement, queue move, die update) | 🔴 | - | - | - | - | Thread completion |
-| 6.49 | Test queue reordering (position updates) | 🔴 | - | - | - | - | |
-| 6.50 | Test API endpoints (httpx.AsyncClient, all CRUD) | 🔴 | - | - | - | - | Integration tests |
-| 6.51 | Test CSV import (valid format, invalid data, duplicates) | 🔴 | - | - | - | - | Google Sheets format |
+| 6.44 | Create test fixtures (in-memory SQLite, sample data) | ✅ | p6-w1 | - | - | - | ba29d7a | Override user_id=1 |
+| 6.45 | Test dice ladder logic (step up/down, bounds) | ✅ | p6-w1 | - | - | - | 2455824 | Full ladder traversal |
+| 6.46 | Test session logic (6-hour gap, auto-new) | ✅ | p6-w1 | - | - | - | cc557d4 | |
+| 6.47 | Test roll mechanism (valid selection, overflow) | ✅ | p6-w2 | - | - | - | 3c6267c | |
+| 6.48 | Test rating flow (decrement, queue move, die update) | ✅ | p6-w2 | - | - | - | 3c6267c | Thread completion |
+| 6.49 | Test queue reordering (position updates) | ✅ | p6-w2 | - | - | - | 3c6267c | |
+| 6.50 | Test API endpoints (httpx.AsyncClient, all CRUD) | ✅ | p6-w3 | - | - | - | e5553a2 | Integration tests |
+| 6.51 | Test CSV import (valid format, invalid data, duplicates) | ✅ | p6-w3 | - | - | - | ff64836 | Google Sheets format |
 
 ---
 
