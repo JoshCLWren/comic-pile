@@ -23,6 +23,9 @@ def list_threads(db: Session = Depends(get_db)) -> list[ThreadResponse]:
             format=thread.format,
             issues_remaining=thread.issues_remaining,
             position=thread.queue_position,
+            status=thread.status,
+            last_rating=thread.last_rating,
+            last_activity_at=thread.last_activity_at,
             created_at=thread.created_at,
         )
         for thread in threads
@@ -89,6 +92,9 @@ def create_thread(thread_data: ThreadCreate, db: Session = Depends(get_db)) -> T
         format=new_thread.format,
         issues_remaining=new_thread.issues_remaining,
         position=new_thread.queue_position,
+        status=new_thread.status,
+        last_rating=new_thread.last_rating,
+        last_activity_at=new_thread.last_activity_at,
         created_at=new_thread.created_at,
     )
 
@@ -108,6 +114,9 @@ def get_thread(thread_id: int, db: Session = Depends(get_db)) -> ThreadResponse:
         format=thread.format,
         issues_remaining=thread.issues_remaining,
         position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
         created_at=thread.created_at,
     )
 
@@ -141,6 +150,9 @@ def update_thread(
         format=thread.format,
         issues_remaining=thread.issues_remaining,
         position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
         created_at=thread.created_at,
     )
 
@@ -191,5 +203,8 @@ def reactivate_thread(request: ReactivateRequest, db: Session = Depends(get_db))
         format=thread.format,
         issues_remaining=thread.issues_remaining,
         position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
         created_at=thread.created_at,
     )

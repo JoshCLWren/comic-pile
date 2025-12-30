@@ -30,6 +30,9 @@ class ThreadResponse(BaseModel):
     format: str
     issues_remaining: int
     position: int
+    status: str
+    last_rating: float | None
+    last_activity_at: datetime | None
     created_at: datetime
 
 

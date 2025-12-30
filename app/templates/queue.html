@@ -57,7 +57,7 @@
                         queueList.innerHTML = threads.map((thread, index) => {
                             const position = index + 1;
                             const inRollPool = position <= currentDie;
-                            const staleness = calculateStaleness(thread.created_at);
+                            const staleness = calculateStaleness(thread.last_activity_at || thread.created_at);
 
                             const bgClass = inRollPool ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-200';
                             const highlightClass = inRollPool ? 'border-l-4 border-l-indigo-500' : '';
