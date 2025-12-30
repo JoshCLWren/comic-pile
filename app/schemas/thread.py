@@ -47,6 +47,7 @@ class SessionResponse(BaseModel):
     id: int
     started_at: datetime
     ended_at: datetime | None
-    thread: dict[str, Any]
-    die_size: int
-    ladder_path: list[int]
+    start_die: int
+    user_id: int
+    ladder_path: str
+    active_thread: dict[str, Any] | None
