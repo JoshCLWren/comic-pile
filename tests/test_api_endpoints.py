@@ -276,6 +276,6 @@ async def test_get_session_details(client, sample_data):
     assert response.status_code == 200
 
     content = response.text
-    assert "roll" in content
-    assert "rate" in content
+    assert "Rolled" in content
+    assert "Rated" in content
     assert "Superman" in content

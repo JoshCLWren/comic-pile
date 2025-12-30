@@ -44,7 +44,6 @@ async def client(db: Session) -> AsyncGenerator[AsyncClient]:
         finally:
             pass
 
-    Base.metadata.create_all(bind=test_engine)
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

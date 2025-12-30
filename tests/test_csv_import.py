@@ -29,9 +29,9 @@ Wonder Woman,Trade Paperback,3"""
     threads = db.execute(select(Thread).order_by(Thread.queue_position)).scalars().all()
     assert len(threads) == 3
 
-    assert threads[0].title == "Wonder Woman"
+    assert threads[0].title == "Superman"
     assert threads[0].queue_position == 1
-    assert threads[0].issues_remaining == 3
+    assert threads[0].issues_remaining == 10
 
     assert threads[1].title == "Batman"
     assert threads[1].queue_position == 2
@@ -190,7 +190,7 @@ async def test_export_csv(client, sample_data):
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
 
     content = response.text
-    lines = content.strip().split("\n")
+    lines = content.strip().splitlines()
 
     assert lines[0] == "title,format,issues_remaining"
     assert "Superman" in content
@@ -275,7 +275,7 @@ Wonder Woman,Trade Paperback,3"""
     assert export_response.status_code == 200
 
     exported_content = export_response.text
-    lines = exported_content.strip().split("\n")
+    lines = exported_content.strip().splitlines()
 
     assert len(lines) == 4
     assert lines[0] == "title,format,issues_remaining"

@@ -1,7 +1,6 @@
 """Tests for rate API endpoints."""
 
 import pytest
-
 from sqlalchemy import select
 
 from app.models import Event, Thread
