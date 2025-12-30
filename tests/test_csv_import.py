@@ -29,9 +29,9 @@ Wonder Woman,Trade Paperback,3"""
     threads = db.execute(select(Thread).order_by(Thread.queue_position)).scalars().all()
     assert len(threads) == 3
 
-    assert threads[0].title == "Superman"
+    assert threads[0].title == "Wonder Woman"
     assert threads[0].queue_position == 1
-    assert threads[0].issues_remaining == 10
+    assert threads[0].issues_remaining == 3
 
     assert threads[1].title == "Batman"
     assert threads[1].queue_position == 2
