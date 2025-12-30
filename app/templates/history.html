@@ -21,12 +21,16 @@
                     {% endif %}
                 </div>
                 <button
-                    class="px-4 py-2 bg-blue-500 text-white rounded-lg min-h-[44px] min-w-[100px] text-lg"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-lg min-h-[44px] min-w-[100px] text-lg relative"
                     hx-get="/sessions/{{ session.id }}/details"
                     hx-target="#details-{{ session.id }}"
                     hx-swap="innerHTML"
                 >
-                    Details
+                    <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-lg">
+                        <span class="spinner"></span>
+                        <span>Loading...</span>
+                    </span>
+                    <span class="htmx-request:opacity-30">Details</span>
                 </button>
             </div>
             <div id="details-{{ session.id }}" class="mt-4 hidden">
