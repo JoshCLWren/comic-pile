@@ -1,3 +1,5 @@
+"""Event model for database."""
+
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -11,6 +13,8 @@ if TYPE_CHECKING:
 
 
 class Event(Base):
+    """Event model."""
+
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

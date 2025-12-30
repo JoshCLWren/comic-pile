@@ -1,3 +1,5 @@
+"""Queue management functions."""
+
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
@@ -7,6 +9,7 @@ from app.models import Thread
 
 
 def move_to_front(thread_id: int, db: Session) -> None:
+    """Move thread to front of queue."""
     threads = (
         db.execute(select(Thread).where(Thread.queue_position >= 1).order_by(Thread.queue_position))
         .scalars()
@@ -27,6 +30,7 @@ def move_to_front(thread_id: int, db: Session) -> None:
 
 
 def move_to_back(thread_id: int, db: Session) -> None:
+    """Move thread to back of queue."""
     threads = (
         db.execute(select(Thread).where(Thread.queue_position >= 1).order_by(Thread.queue_position))
         .scalars()
@@ -49,6 +53,7 @@ def move_to_back(thread_id: int, db: Session) -> None:
 
 
 def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
+    """Move thread to specific position."""
     threads = (
         db.execute(select(Thread).where(Thread.queue_position >= 1).order_by(Thread.queue_position))
         .scalars()
@@ -88,6 +93,7 @@ def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
 
 
 def get_roll_pool(db: Session) -> list[Thread]:
+    """Get all active threads ordered by position."""
     threads = (
         db.execute(
             select(Thread)
@@ -103,6 +109,7 @@ def get_roll_pool(db: Session) -> list[Thread]:
 
 
 def get_stale_threads(db: Session, days: int = 7) -> list[Thread]:
+    """Get threads not read in specified days."""
     cutoff_date = datetime.now() - timedelta(days=days)
 
     threads = (

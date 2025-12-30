@@ -1,3 +1,5 @@
+"""User model for database."""
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, Integer
@@ -7,6 +9,8 @@ from app.database import Base
 
 
 class User(Base):
+    """User model."""
+
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
