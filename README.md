@@ -153,6 +153,24 @@ The hook will block commits with issues. To test manually:
 make githook
 ```
 
+## Mobile Access
+
+The app is configured with CORS enabled for local network access. To use the app on other devices:
+
+1. Find your machine's local IP address:
+   - Linux/Mac: `ip addr show` or `ifconfig`
+   - Windows: `ipconfig`
+
+2. Access from any device on your local network:
+   - App: http://YOUR_IP:8000 (e.g., http://192.168.1.5:8000)
+   - API docs: http://YOUR_IP:8000/docs
+
+3. If firewall blocks connections, allow port 8000:
+   ```bash
+   # Linux (ufw)
+   sudo ufw allow 8000
+   ```
+
 ## API Documentation
 
 FastAPI automatically generates interactive API documentation:
