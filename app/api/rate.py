@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, Thread
+from app.models import Session as SessionModel
 from app.schemas import RateRequest, ThreadResponse
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back

@@ -7,7 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, Thread
+from app.models import Session as SessionModel
 from app.schemas.thread import SessionResponse
 from comic_pile.session import is_active
 
@@ -70,8 +71,6 @@ def get_active_thread(session: SessionModel, db: Session) -> dict[str, Any] | No
 @router.get("/current/")
 def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
     """Get current active session."""
-    cutoff_time = SessionModel.started_at >= None
-
     active_sessions = (
         db.execute(
             select(SessionModel)
