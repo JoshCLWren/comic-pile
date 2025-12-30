@@ -1,10 +1,17 @@
 [project]
-name = "comic-pile"
+name = "comic_pile"
 version = "0.1.0"
-description = "Python starter template with best practices"
+description = "Dice-Driven Comic Reading Tracker - FastAPI + HTMX + Tailwind CSS"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "jinja2>=3.1.0",
+    "pydantic>=2.0.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -12,6 +19,8 @@ dev = [
     "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
     "pyright>=1.1.0",
+    "faker>=20.0.0",
+    "httpx>=0.24.0",
 ]
 
 [tool.pytest.ini_options]
@@ -20,14 +29,14 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "--cov=comic-pile",
+    "--cov=comic_pile",
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=96",
 ]
 
 [tool.coverage.run]
-source = ["comic-pile"]
+source = ["comic_pile"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
@@ -57,7 +66,7 @@ ignore = ["D203", "D213", "E501"]
 convention = "google"
 
 [tool.pyright]
-include = ["comic-pile", "tests"]
+include = ["comic_pile", "tests"]
 exclude = ["**/node_modules", "**/__pycache__", ".venv"]
 venvPath = "."
 venv = ".venv"
