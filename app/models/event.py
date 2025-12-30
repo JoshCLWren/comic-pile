@@ -1,6 +1,6 @@
 """Event model for database."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
@@ -21,7 +21,7 @@ class Event(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default="CURRENT_TIMESTAMP"
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     die: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result: Mapped[int | None] = mapped_column(Integer, nullable=True)

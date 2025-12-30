@@ -1,9 +1,8 @@
 """Session model for database."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-import sqlalchemy as sa
 from sqlalchemy import DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,7 +20,7 @@ class Session(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     start_die: Mapped[int] = mapped_column(Integer, default=6)
