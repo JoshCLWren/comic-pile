@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 
@@ -13,8 +14,6 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
 
-    templates = Jinja2Templates(directory="app/templates")
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -22,6 +21,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+    templates = Jinja2Templates(directory="app/templates")
 
     @app.on_event("startup")
     async def startup_event():
