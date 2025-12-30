@@ -11,11 +11,20 @@ from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, 
 
 router = APIRouter(tags=["threads"])
 
+try:
+    from app.main import clear_cache, get_threads_cached
+except ImportError:
+    clear_cache = None
+    get_threads_cached = None
+
 
 @router.get("/", response_model=list[ThreadResponse])
 def list_threads(db: Session = Depends(get_db)) -> list[ThreadResponse]:
     """List all threads ordered by position."""
-    threads = db.execute(select(Thread).order_by(Thread.queue_position)).scalars().all()
+    if get_threads_cached:
+        threads = get_threads_cached(db)
+    else:
+        threads = db.execute(select(Thread).order_by(Thread.queue_position)).scalars().all()
     return [
         ThreadResponse(
             id=thread.id,
@@ -86,6 +95,8 @@ def create_thread(thread_data: ThreadCreate, db: Session = Depends(get_db)) -> T
     db.add(new_thread)
     db.commit()
     db.refresh(new_thread)
+    if clear_cache:
+        clear_cache()
     return ThreadResponse(
         id=new_thread.id,
         title=new_thread.title,
@@ -144,6 +155,8 @@ def update_thread(
             thread.status = "active"
     db.commit()
     db.refresh(thread)
+    if clear_cache:
+        clear_cache()
     return ThreadResponse(
         id=thread.id,
         title=thread.title,
@@ -168,6 +181,8 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
         )
     db.delete(thread)
     db.commit()
+    if clear_cache:
+        clear_cache()
 
 
 @router.post("/reactivate", response_model=ThreadResponse)
@@ -197,6 +212,8 @@ def reactivate_thread(request: ReactivateRequest, db: Session = Depends(get_db))
     thread.queue_position = 1
     db.commit()
     db.refresh(thread)
+    if clear_cache:
+        clear_cache()
     return ThreadResponse(
         id=thread.id,
         title=thread.title,

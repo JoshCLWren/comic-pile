@@ -18,6 +18,12 @@ templates = Jinja2Templates(directory="app/templates")
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
+try:
+    from app.main import clear_cache, get_current_session_cached
+except ImportError:
+    clear_cache = None
+    get_current_session_cached = None
+
 
 def build_ladder_path(session: SessionModel, db: Session) -> str:
     """Build narrative summary of dice ladder from session events."""
@@ -75,6 +81,11 @@ def get_active_thread(session: SessionModel, db: Session) -> dict[str, Any] | No
 @router.get("/current/")
 def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
     """Get current active session."""
+    if get_current_session_cached:
+        cached = get_current_session_cached(db)
+        if cached:
+            return SessionResponse(**cached)
+
     active_sessions = (
         db.execute(
             select(SessionModel)
@@ -92,7 +103,10 @@ def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
             break
 
     if not active_session:
-        raise HTTPException(status_code=404, detail="No active session found")
+        raise HTTPException(
+            status_code=404,
+            detail="No active session found",
+        )
 
     return SessionResponse(
         id=active_session.id,

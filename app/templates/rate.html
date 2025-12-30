@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="max-w-lg mx-auto p-4">
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <h1 class="text-2xl font-bold text-gray-800 mb-4">Rate Reading</h1>
+<div class="w-full max-w-lg mx-auto px-4 py-4">
+    <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Rate Reading</h1>
 
-        <div id="thread-info" class="mb-6">
-            <div class="text-gray-600 mb-2">Current thread loading...</div>
+        <div id="thread-info" class="mb-6" role="status" aria-live="polite">
+            <div class="text-gray-700 mb-2">Current thread loading...</div>
         </div>
 
-        <form hx-post="/rate/" hx-target="#result-message" hx-indicator="#loading-indicator">
+        <form hx-post="/rate/" hx-target="#result-message" hx-indicator="#loading-indicator" onsubmit="return validateRateForm()">
             <div class="mb-6">
-                <label class="block text-gray-700 font-semibold mb-2">
+                <label for="rating" class="block text-gray-900 font-semibold mb-2">
                     Rating (0.5 - 5.0)
                 </label>
                 <input
@@ -22,25 +22,32 @@
                     max="5.0"
                     step="0.5"
                     value="3.5"
-                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    oninput="document.getElementById('rating-value').textContent = this.value"
+                    class="w-full h-3 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    oninput="document.getElementById('rating-value').textContent = this.value; validateForm()"
+                    aria-describedby="rating-help rating-error"
+                    aria-valuemin="0.5"
+                    aria-valuemax="5.0"
+                    aria-valuenow="3.5"
+                    aria-valuetext="3.5"
                 >
-                <div class="flex justify-between text-sm text-gray-500 mt-1">
+                <div class="flex justify-between text-sm text-gray-700 mt-1" id="rating-help">
                     <span>0.5</span>
-                    <span id="rating-value" class="text-lg font-bold text-gray-800">3.5</span>
+                    <span id="rating-value" class="text-lg font-bold text-gray-900">3.5</span>
                     <span>5.0</span>
                 </div>
+                <p id="rating-error" class="text-red-700 text-sm mt-1 hidden" role="alert">Rating must be between 0.5 and 5.0</p>
             </div>
 
             <div class="mb-6">
-                <label class="block text-gray-700 font-semibold mb-2">
+                <label for="issues-read" class="block text-gray-900 font-semibold mb-2">
                     Issues Read
                 </label>
                 <div class="flex items-center space-x-4">
                     <button
                         type="button"
-                        class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                        class="px-4 py-3 bg-gray-200 rounded-lg hover:bg-gray-300 min-h-12 min-w-12 text-2xl font-bold focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         onclick="adjustIssues(-1)"
+                        aria-label="Decrease issues read"
                     >
                         -
                     </button>
@@ -50,21 +57,25 @@
                         name="issues_read"
                         min="1"
                         value="1"
-                        class="w-20 text-center border-2 border-gray-300 rounded-lg p-2 text-lg font-bold"
+                        class="w-20 text-center border-2 border-gray-300 rounded-lg py-3 px-2 text-lg font-bold min-h-12 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        oninput="validateForm()"
+                        aria-describedby="issues-error"
                     >
                     <button
                         type="button"
-                        class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                        class="px-4 py-3 bg-gray-200 rounded-lg hover:bg-gray-300 min-h-12 min-w-12 text-2xl font-bold focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         onclick="adjustIssues(1)"
+                        aria-label="Increase issues read"
                     >
                         +
                     </button>
                 </div>
+                <p id="issues-error" class="text-red-700 text-sm mt-1 hidden" role="alert">Issues read must be greater than 0</p>
             </div>
 
-            <div class="mb-6 p-4 bg-gray-50 rounded-lg">
-                <h3 class="font-semibold text-gray-700 mb-2">Queue Effect Preview</h3>
-                <div id="queue-effect" class="text-sm text-gray-600">
+            <div class="mb-6 p-4 bg-gray-50 rounded-lg" role="region" aria-live="polite" aria-label="Queue effect preview">
+                <h3 class="font-semibold text-gray-900 mb-2">Queue Effect Preview</h3>
+                <div id="queue-effect" class="text-sm text-gray-700">
                     <p id="rating-effect">Rating ≥ 3.5 → Die steps up (d10 → d12)</p>
                     <p id="completion-effect" class="mt-2"></p>
                 </div>
@@ -73,18 +84,19 @@
             <button
                 type="submit"
                 id="submit-btn"
-                class="w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 relative"
+                class="w-full bg-indigo-600 text-white font-bold py-4 px-6 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed min-h-14 relative text-lg focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                disabled
+                aria-label="Submit rating"
             >
                 <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-indigo-600 rounded-lg">
-                    <span class="spinner"></span>
+                    <span class="spinner" aria-hidden="true"></span>
                     <span>Submitting...</span>
                 </span>
                 <span class="htmx-request:opacity-30">Submit Rating</span>
             </button>
         </form>
-        </form>
 
-        <div id="result-message" class="mt-4"></div>
+        <div id="result-message" class="mt-4" role="status" aria-live="polite"></div>
     </div>
 </div>
 
@@ -95,6 +107,45 @@
         if (value >= 1) {
             input.value = value;
         }
+        validateForm();
+    }
+
+    function validateForm() {
+        const rating = parseFloat(document.getElementById('rating').value);
+        const issuesRead = parseInt(document.getElementById('issues-read').value);
+        const ratingError = document.getElementById('rating-error');
+        const issuesError = document.getElementById('issues-error');
+        const submitBtn = document.getElementById('submit-btn');
+        const issuesInput = document.getElementById('issues-read');
+
+        let isValid = true;
+
+        if (rating < 0.5 || rating > 5.0) {
+            ratingError.classList.remove('hidden');
+            isValid = false;
+        } else {
+            ratingError.classList.add('hidden');
+        }
+
+        if (isNaN(issuesRead) || issuesRead < 1) {
+            issuesError.classList.remove('hidden');
+            issuesInput.classList.add('border-red-500');
+            isValid = false;
+        } else {
+            issuesError.classList.add('hidden');
+            issuesInput.classList.remove('border-red-500');
+        }
+
+        submitBtn.disabled = !isValid;
+
+        const issuesRemaining = parseInt(document.querySelector('#thread-info .text-gray-600:last-child')?.textContent.split(': ')[1] || '0');
+        updateQueueEffect(issuesRemaining);
+
+        return isValid;
+    }
+
+    function validateRateForm() {
+        return validateForm();
     }
 
     function loadActiveThread() {
@@ -150,16 +201,6 @@
             completionEffect.classList.remove('text-orange-600', 'font-semibold');
         }
     }
-
-    document.getElementById('rating').addEventListener('input', function() {
-        const issuesRemaining = parseInt(document.querySelector('#thread-info .text-gray-600:last-child')?.textContent.split(': ')[1] || '0');
-        updateQueueEffect(issuesRemaining);
-    });
-
-    document.getElementById('issues-read').addEventListener('input', function() {
-        const issuesRemaining = parseInt(document.querySelector('#thread-info .text-gray-600:last-child')?.textContent.split(': ')[1] || '0');
-        updateQueueEffect(issuesRemaining);
-    });
 
     document.addEventListener('DOMContentLoaded', loadActiveThread);
 </script>

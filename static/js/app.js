@@ -43,33 +43,33 @@ function loadQueue() {
 
                         return `
                             <div
-                                class="thread-item ${bgClass} ${highlightClass} border rounded-lg p-4 transition-all"
+                                class="thread-item ${bgClass} ${highlightClass} border rounded-lg p-3 sm:p-4 transition-all"
                                 data-thread-id="${thread.id}"
                                 data-position="${position}"
                             >
                                 <div class="flex items-start space-x-3">
-                                    <div class="cursor-move text-gray-400 hover:text-gray-600 touch-manipulation">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <div class="cursor-move text-gray-400 hover:text-gray-600 touch-manipulation flex items-center justify-center min-h-12 min-w-12">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 sm:h-8 sm:w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
                                         </svg>
                                     </div>
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-start justify-between">
-                                            <div>
-                                                <h3 class="text-lg font-semibold text-gray-800 truncate">
+                                            <div class="min-w-0">
+                                                <h3 class="text-base sm:text-lg font-semibold text-gray-800 truncate">
                                                     ${thread.title}
                                                 </h3>
                                                 <div class="flex flex-wrap items-center gap-2 mt-1">
                                                     <span class="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-medium">
                                                         ${thread.format}
                                                     </span>
-                                                    <span class="text-sm text-gray-600">
+                                                    <span class="text-xs sm:text-sm text-gray-600">
                                                         Issues: ${thread.issues_remaining}
                                                     </span>
                                                     ${inRollPool ? '<span class="inline-flex items-center px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">In Roll Pool</span>' : ''}
                                                 </div>
                                             </div>
-                                            <div class="flex flex-col items-end gap-1 ml-2">
+                                            <div class="flex flex-col items-end gap-1 ml-2 flex-shrink-0">
                                                 <span class="text-xs text-gray-400">#${position}</span>
                                                 ${staleness.badge || ''}
                                             </div>

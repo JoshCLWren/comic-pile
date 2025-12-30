@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer
+from sqlalchemy import DateTime, ForeignKey, Index, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -25,6 +25,11 @@ class Session(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     start_die: Mapped[int] = mapped_column(Integer, default=6)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+    __table_args__ = (
+        Index("ix_session_started_at", "started_at"),
+        Index("ix_session_ended_at", "ended_at"),
+    )
 
     user: Mapped["User"] = relationship("User", back_populates="sessions")
     events: Mapped[list["Event"]] = relationship(

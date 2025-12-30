@@ -1,35 +1,37 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="space-y-6">
-    <div class="bg-white rounded-lg shadow p-6">
-        <h1 class="text-2xl font-bold text-gray-800 mb-2">Roll</h1>
-        <p class="text-gray-600">Session: Active</p>
+<div class="w-full max-w-lg mx-auto space-y-4 px-4 py-4">
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Roll</h1>
+        <p class="text-gray-700">Session: Active</p>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-6 text-center">
-        <div id="die-display" class="die-base die-6 mx-auto mb-4">6</div>
-        <p class="text-gray-600">Rolling among top 6 threads</p>
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6 text-center">
+        <div id="die-display" class="die-base die-6 mx-auto mb-4" aria-live="polite" aria-label="Current die: 6">6</div>
+        <p class="text-sm sm:text-base text-gray-700">Rolling among top 6 threads</p>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-6">
+    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
         <button
-            hx-post="/roll/"
+            hx-post="/roll/html"
             hx-target="#result"
             hx-swap="innerHTML"
             hx-disabled-elt="this"
-            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-lg text-xl min-h-16 transition-colors disabled:opacity-50 disabled:cursor-not-allowed relative"
+            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-lg text-lg sm:text-xl min-h-16 transition-colors disabled:opacity-50 disabled:cursor-not-allowed relative focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            aria-label="Roll dice to select a thread"
+            role="button"
         >
             <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-indigo-600 rounded-lg">
-                <span class="spinner"></span>
+                <span class="spinner" aria-hidden="true"></span>
                 <span>Rolling...</span>
             </span>
             <span class="htmx-request:opacity-30">ROLL d6</span>
         </button>
     </div>
 
-    <div id="result" class="bg-white rounded-lg shadow p-6">
-        <p class="text-gray-500 text-center">Roll to select a thread</p>
+    <div id="result" class="bg-white rounded-lg shadow p-4 sm:p-6" role="region" aria-live="polite" aria-label="Roll result">
+        <p class="text-gray-600 text-center text-sm sm:text-base">Roll to select a thread</p>
     </div>
 </div>
 
