@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    container: debian:13
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Run linting
+        shell: bash
+        run: bash scripts/lint.sh
+
+  tests:
+    runs-on: ubuntu-latest
+    container: debian:13
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Run pytest
+        shell: bash
+        run: source .venv/bin/activate && pytest --cov=example_module --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

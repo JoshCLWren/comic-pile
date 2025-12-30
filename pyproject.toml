@@ -1,0 +1,63 @@
+[project]
+name = "python-starter-template"
+version = "0.1.0"
+description = "Python starter template with best practices"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "pyright>=1.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--cov=example_module",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=96",
+]
+
+[tool.coverage.run]
+source = ["example_module"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "D", "ANN401"]
+ignore = ["D203", "D213", "E501"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pyright]
+include = ["example_module", "tests"]
+exclude = ["**/node_modules", "**/__pycache__", ".venv"]
+venvPath = "."
+venv = ".venv"

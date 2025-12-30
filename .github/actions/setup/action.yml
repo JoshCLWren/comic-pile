@@ -1,0 +1,22 @@
+name: 'Setup Environment'
+description: 'Install system dependencies, set up uv, Python 3.13, and sync project dependencies'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        apt-get update -qq
+        apt-get install -y -qq ca-certificates curl git libvips python3 python3-tk python3-venv xvfb unar
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+
+    - name: Install Python 3.13 and create venv
+      shell: bash
+      run: uv python install 3.13 && uv venv
+
+    - name: Sync dependencies
+      shell: bash
+      run: source .venv/bin/activate && uv sync --all-extras
