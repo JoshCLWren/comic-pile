@@ -177,6 +177,7 @@ FastAPI automatically generates interactive API documentation:
 
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+- Full API Documentation: [docs/API.md](docs/API.md)
 
 ## Contributing
 
