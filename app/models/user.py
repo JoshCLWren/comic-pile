@@ -1,9 +1,8 @@
 """User model for database."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-import sqlalchemy as sa
 from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,7 +21,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
     sessions: Mapped[list["Session"]] = relationship(
