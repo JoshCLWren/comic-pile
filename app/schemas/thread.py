@@ -14,6 +14,14 @@ class ThreadCreate(BaseModel):
     issues_remaining: int = Field(..., ge=0)
 
 
+class ThreadUpdate(BaseModel):
+    """Schema for updating a thread."""
+
+    title: str | None = Field(None, min_length=1)
+    format: str | None = Field(None, min_length=1)
+    issues_remaining: int | None = Field(None, ge=0)
+
+
 class ThreadResponse(BaseModel):
     """Schema for thread response."""
 
@@ -34,6 +42,12 @@ class RollResponse(BaseModel):
     result: int
 
 
+class OverrideRequest(BaseModel):
+    """Schema for manual thread override."""
+
+    thread_id: int
+
+
 class RateRequest(BaseModel):
     """Schema for rating request."""
 
@@ -47,6 +61,7 @@ class SessionResponse(BaseModel):
     id: int
     started_at: datetime
     ended_at: datetime | None
-    thread: dict[str, Any]
-    die_size: int
-    ladder_path: list[int]
+    start_die: int
+    user_id: int
+    ladder_path: str
+    active_thread: dict[str, Any] | None
