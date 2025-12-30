@@ -153,6 +153,11 @@ def create_app() -> FastAPI:
         """Render queue page."""
         return templates.TemplateResponse("queue.html", {"request": request})
 
+    @app.get("/roll", response_class=HTMLResponse)
+    async def roll_page(request: Request):
+        """Render roll page."""
+        return templates.TemplateResponse("roll.html", {"request": request})
+
     @app.on_event("startup")
     async def startup_event():
         """Initialize database on application startup."""
