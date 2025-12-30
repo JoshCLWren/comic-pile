@@ -101,6 +101,7 @@ def export_csv(db: Session = Depends(get_db)) -> StreamingResponse:
             select(Thread)
             .where(Thread.status == "active")
             .where(Thread.queue_position >= 1)
+            .where(Thread.issues_remaining > 0)
             .order_by(Thread.queue_position)
         )
         .scalars()
