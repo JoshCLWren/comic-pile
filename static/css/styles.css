@@ -1,1 +1,121 @@
-/* Main styles for Dice-Driven Comic Tracker */
+.die-base {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    font-weight: bold;
+    color: white;
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.die-4 {
+    width: 4rem;
+    height: 4rem;
+    font-size: 1.5rem;
+}
+
+.die-6 {
+    width: 5rem;
+    height: 5rem;
+    font-size: 2rem;
+}
+
+.die-8 {
+    width: 6rem;
+    height: 6rem;
+    font-size: 2.5rem;
+}
+
+.die-10 {
+    width: 6.5rem;
+    height: 6.5rem;
+    font-size: 2.75rem;
+}
+
+.die-12 {
+    width: 7rem;
+    height: 7rem;
+    font-size: 3rem;
+}
+
+.die-20 {
+    width: 8rem;
+    height: 8rem;
+    font-size: 3.5rem;
+}
+
+.die-rolling {
+    animation: roll-animation 0.5s ease-in-out;
+}
+
+@keyframes roll-animation {
+    0% {
+        transform: scale(1) rotate(0deg);
+    }
+    25% {
+        transform: scale(1.2) rotate(90deg);
+    }
+    50% {
+        transform: scale(0.9) rotate(180deg);
+    }
+    75% {
+        transform: scale(1.1) rotate(270deg);
+    }
+    100% {
+        transform: scale(1) rotate(360deg);
+    }
+}
+
+.htmx-indicator {
+    display: none;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+
+.htmx-request.htmx-indicator {
+    display: inline;
+}
+
+.htmx-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.htmx-loading::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 10;
+}
+
+.spinner {
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top: 3px solid #4F46E5;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+body.htmx-request #die-display {
+    animation: roll-animation 0.5s ease-in-out;
+}
+

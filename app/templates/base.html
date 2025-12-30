@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body class="bg-gray-100 min-h-screen pb-16">
     <main class="container mx-auto px-4 py-6 max-w-lg">
@@ -14,24 +15,51 @@
     </main>
     <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
         <div class="flex justify-around">
-            <a href="/" class="flex flex-col items-center justify-center h-16 min-w-16 hover:bg-gray-100 transition-colors">
+            <a href="/" class="nav-link flex flex-col items-center justify-center h-16 min-w-16 hover:bg-blue-50 transition-all duration-200 border-t-4 border-transparent" data-path="/">
                 <span class="text-2xl">🎲</span>
-                <span class="text-xs text-gray-600">Roll</span>
+                <span class="text-xs text-gray-600 nav-label">Roll</span>
             </a>
-            <a href="/rate" class="flex flex-col items-center justify-center h-16 min-w-16 hover:bg-gray-100 transition-colors">
+            <a href="/rate" class="nav-link flex flex-col items-center justify-center h-16 min-w-16 hover:bg-blue-50 transition-all duration-200 border-t-4 border-transparent" data-path="/rate">
                 <span class="text-2xl">📝</span>
-                <span class="text-xs text-gray-600">Rate</span>
+                <span class="text-xs text-gray-600 nav-label">Rate</span>
             </a>
-            <a href="/queue" class="flex flex-col items-center justify-center h-16 min-w-16 hover:bg-gray-100 transition-colors">
+            <a href="/queue" class="nav-link flex flex-col items-center justify-center h-16 min-w-16 hover:bg-blue-50 transition-all duration-200 border-t-4 border-transparent" data-path="/queue">
                 <span class="text-2xl">📚</span>
-                <span class="text-xs text-gray-600">Queue</span>
+                <span class="text-xs text-gray-600 nav-label">Queue</span>
             </a>
-            <a href="/history" class="flex flex-col items-center justify-center h-16 min-w-16 hover:bg-gray-100 transition-colors">
+            <a href="/history" class="nav-link flex flex-col items-center justify-center h-16 min-w-16 hover:bg-blue-50 transition-all duration-200 border-t-4 border-transparent" data-path="/history">
                 <span class="text-2xl">📜</span>
-                <span class="text-xs text-gray-600">History</span>
+                <span class="text-xs text-gray-600 nav-label">History</span>
             </a>
         </div>
     </nav>
+
+    <script>
+        function updateActiveNav() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.nav-link');
+
+            navLinks.forEach(link => {
+                const linkPath = link.getAttribute('data-path');
+                const label = link.querySelector('.nav-label');
+
+                if (currentPath === linkPath) {
+                    link.classList.remove('border-transparent');
+                    link.classList.add('border-blue-500', 'bg-blue-50');
+                    label.classList.remove('text-gray-600');
+                    label.classList.add('text-blue-600', 'font-semibold');
+                } else {
+                    link.classList.remove('border-blue-500', 'bg-blue-50');
+                    link.classList.add('border-transparent');
+                    label.classList.remove('text-blue-600', 'font-semibold');
+                    label.classList.add('text-gray-600');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', updateActiveNav);
+        document.addEventListener('htmx:afterSwap', updateActiveNav);
+    </script>
 
     <div id="reactivate-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
@@ -53,7 +81,13 @@
                 </div>
                 <div class="flex justify-end gap-2">
                     <button type="button" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md" onclick="document.getElementById('reactivate-modal').classList.add('hidden');">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md">Reactivate</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md relative">
+                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-md">
+                            <span class="spinner"></span>
+                            <span>Reactivating...</span>
+                        </span>
+                        <span class="htmx-request:opacity-30">Reactivate</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -67,7 +101,13 @@
                 </div>
                 <div class="flex justify-end gap-2">
                     <button type="button" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md" onclick="document.getElementById('override-modal').classList.add('hidden');">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md">Override</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md relative">
+                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-md">
+                            <span class="spinner"></span>
+                            <span>Overriding...</span>
+                        </span>
+                        <span class="htmx-request:opacity-30">Override</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -133,9 +173,13 @@
                     </button>
                     <button
                         type="submit"
-                        class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg min-h-[44px] text-lg font-medium"
+                        class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg min-h-[44px] text-lg font-medium relative"
                     >
-                        Add Thread
+                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-lg">
+                            <span class="spinner"></span>
+                            <span>Adding...</span>
+                        </span>
+                        <span class="htmx-request:opacity-30">Add Thread</span>
                     </button>
                 </div>
             </form>

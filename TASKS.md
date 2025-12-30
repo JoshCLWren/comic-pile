@@ -103,17 +103,17 @@
 
 ## Phase 5: Frontend - Interactive Features
 **Branch**: `phase/5-interactive-features`
-**Status**: Blocked
+**Status**: Complete ✅
 **Dependencies**: Phase 4 merged to main
 **Worktrees Created**: 0/2
 
 | ID | Task | Status | Agent | Worktree | Tested | Linted | Committed | Notes |
 |----|-------|---------|----------|----------|----------|------------|--------|
-| 5.39 | Implement flat dice visualization (CSS classes, roll animation) | 🔴 | - | - | - | - | Simple faces with numbers |
-| 5.40 | Implement drag/drop queue (SortableJS, mobile polyfill) | 🔴 | - | - | - | - | AJAX PUT to position API |
-| 5.41 | Implement bottom navigation (active states, transitions) | 🔴 | - | - | - | - | Touch-friendly buttons (44px+) |
-| 5.42 | Add stale thread indicators (color-coded badges) | 🔴 | - | - | - | - | Green/yellow/red based on days |
-| 5.43 | Add loading states (htmx-request class, spinners) | 🔴 | - | - | - | - | Disable buttons during request |
+| 5.39 | Implement flat dice visualization (CSS classes, roll animation) | ✅ | p5-w1 | - | - | - | 891ebb9 | Simple faces with numbers |
+| 5.40 | Implement drag/drop queue (SortableJS, mobile polyfill) | ✅ | p5-w1 | - | - | - | a2dfdfd | AJAX PUT to position API |
+| 5.41 | Implement bottom navigation (active states, transitions) | ✅ | p5-w2 | - | - | - | f95a0e9 | Touch-friendly buttons (44px+) |
+| 5.42 | Add stale thread indicators (color-coded badges) | ✅ | p5-w2 | - | - | - | af1fed7 | Green/yellow/red based on days |
+| 5.43 | Add loading states (htmx-request class, spinners) | ✅ | p5-w3 | - | - | - | a2dfdfd | Disable buttons during request |
 
 ---
 
