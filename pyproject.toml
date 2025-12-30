@@ -36,7 +36,7 @@ addopts = [
 ]
 
 [tool.coverage.run]
-source = ["comic_pile"]
+source = ["app", "comic_pile"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
@@ -66,7 +66,7 @@ ignore = ["D203", "D213", "E501"]
 convention = "google"
 
 [tool.pyright]
-include = ["comic_pile", "tests"]
+include = ["app", "comic_pile", "tests"]
 exclude = ["**/node_modules", "**/__pycache__", ".venv"]
 venvPath = "."
 venv = ".venv"

@@ -49,6 +49,7 @@ class Session(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     start_die: Mapped[int] = mapped_column(Integer, default=6)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
