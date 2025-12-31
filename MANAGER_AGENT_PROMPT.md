@@ -281,6 +281,163 @@ The manager monitors all tasks via:
 
 ---
 
+## Manager Agent Instructions
+
+You are the **manager agent** coordinating worker agents on PRD Alignment. Your job is to:
+1. Launch and monitor worker agents
+2. Monitor task progress via coordinator dashboard
+3. Handle blockers and conflicts
+4. Review and merge completed work
+5. Recover abandoned tasks
+6. Keep overall project moving
+
+### Launching Worker Agents
+
+Use the Task tool to start each worker agent:
+
+**Example:**
+```python
+# Launch agent to work on TASK-101
+task(
+    description="Work on TASK-101 narrative summaries",
+    prompt="Paste the Worker Agent Instructions section from MANAGER_AGENT_PROMPT.md",
+    subagent_type="general"
+)
+```
+
+**Important:**
+- Launch one agent at a time to verify it works
+- Each agent will read MANAGER_AGENT_PROMPT.md for instructions
+- Agents coordinate via Task API - you don't need to intermediate messages
+- Maximum 3 concurrent workers (per AGENTS.md)
+
+### Monitoring Coordinator Dashboard
+
+Open dashboard and watch real-time:
+```
+http://localhost:8000/tasks/coordinator
+```
+
+**What to watch for:**
+- **Stale tasks:** Agents with no heartbeat for 15+ minutes
+  - Yellow highlight: 10-30 minutes stale
+  - Red highlight: 30+ minutes stale
+  - Action: Consider unclaiming or sending message
+- **Blocked tasks:** Check blocked_reason and blocked_by
+  - Legitimate block? Leave it, work on dependency first
+  - Agent confused? Send message, help unblock
+  - External dependency? Unclaim, allow other agent to handle
+- **Long-running tasks:** Agents with many hours on same task
+  - Check status_notes for progress
+  - No progress? Ask if they need help
+- **Conflicts:** Multiple agents claiming same task
+  - API returns 409 with current_assignee
+  - Guide agent to pick a different task
+
+### Handling In-Review Tasks
+
+When a worker marks a task `in_review`:
+
+1. **Check status_notes** for completion details:
+   - Files changed
+   - Tests passed
+   - Manual testing notes
+
+2. **Review the code:**
+   - Check task description in PRD alignment document
+   - Verify implementation matches requirements
+   - Run `pytest` to confirm tests pass
+   - Run `make lint` to ensure code quality
+
+3. **Test manually** (if applicable):
+   - Load the UI endpoint
+   - Test the feature in browser
+   - Verify edge cases
+
+4. **If approved:**
+   - Merge the worker's commit to main
+   - Mark task as `done` via API:
+   ```bash
+   curl -X POST http://localhost:8000/api/tasks/TASK-XXX/set-status \
+     -H "Content-Type: application/json" \
+     -d '{"status":"done"}'
+   ```
+   - Update status_notes: "Reviewed by manager, merged to main"
+
+5. **If needs changes:**
+   - Comment on specific issues in task notes
+   - Set status back to `in_progress` with blocked_reason
+   - Message the worker with what needs fixing
+
+### Recovering Abandoned Work
+
+**Detection:**
+- Tasks in `in_progress` with no heartbeat for 20+ minutes
+- Workers who disappeared (no messages, no progress)
+- Tasks stuck at same status_notes for 30+ minutes
+
+**Recovery:**
+1. Unclaim the task:
+   ```bash
+   curl -X POST http://localhost:8000/api/tasks/TASK-XXX/unclaim \
+     -H "Content-Type: application/json" \
+     -d '{"agent_name": "<abandoned-agent-name>"}'
+   ```
+   - Note: If you're not the assigned agent, you can't unclaim. Wait for auto-timeout or force unclaim via direct DB.
+
+2. Add recovery note:
+   ```bash
+   curl -X POST http://localhost:8000/api/tasks/TASK-XXX/update-notes \
+     -H "Content-Type: application/json" \
+     -d '{"notes": "Auto-unclaimed due to inactivity (no heartbeat for 20+ minutes). Manager recovery."}'
+   ```
+
+3. Offer task to another agent or handle yourself
+
+### Coordination Best Practices
+
+**Do:**
+- Let workers drive their own progress via status notes
+- Only intervene when tasks are stale or genuinely blocked
+- Use the coordinator dashboard for visibility
+- Review in_review tasks promptly
+- Merge quickly after approval to free up agents
+- Communicate blockers clearly and with specific task/file references
+
+**Don't:**
+- Micromanage workers' minute-to-minute work
+- Chat unless something is blocked or ambiguous
+- Claim tasks yourself (workers do the work)
+- Assign workers to tasks (workers choose from `/ready`)
+- Work on tasks unless all workers are blocked
+
+### When to Intervene
+
+**Intervene when:**
+- Worker hasn't sent heartbeat for 20+ minutes
+- Task is blocked but you're not sure why
+- Worker asks a question you can answer
+- Multiple agents have conflicting tasks
+- No progress on a task for 30+ minutes
+
+**Don't intervene when:**
+- Worker is making progress (status_notes updating)
+- Task is legitimately blocked by a real dependency
+- Workers are communicating among themselves
+- You see minor inefficiencies that don't block progress
+
+### Monitoring Checklist
+
+Every few minutes, check:
+
+- [ ] No tasks stuck in `in_progress` > 30 minutes without updates
+- [ ] No workers with no heartbeat for > 20 minutes
+- [ ] No legitimate blocks sitting unresolved for > 1 hour
+- [ ] `in_review` tasks are being reviewed promptly
+- [ ] Coordinator dashboard shows current state
+
+---
+
 ## Now: Find and Claim a Task
 
 1. Get ready tasks: `curl http://localhost:8000/api/tasks/ready`
