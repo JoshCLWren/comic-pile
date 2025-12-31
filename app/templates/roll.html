@@ -2,37 +2,215 @@
 
 {% block content %}
 <div class="w-full max-w-lg mx-auto space-y-4 px-4 py-4">
-    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
-        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Roll</h1>
-        <p class="text-gray-700">Session: Active</p>
+    <div class="bg-white rounded-lg shadow p-4">
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Roll & Rate</h1>
     </div>
 
-    <div class="bg-white rounded-lg shadow p-4 sm:p-6 text-center">
-        <div id="die-display" class="die-base die-6 mx-auto mb-4" aria-live="polite" aria-label="Current die: 6">6</div>
-        <p class="text-sm sm:text-base text-gray-700">Rolling among top 6 threads</p>
-    </div>
-
-    <div class="bg-white rounded-lg shadow p-4 sm:p-6">
-        <button
-            hx-post="/roll/html"
-            hx-target="#result"
-            hx-swap="innerHTML"
-            hx-disabled-elt="this"
-            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-lg text-lg sm:text-xl min-h-16 transition-colors disabled:opacity-50 disabled:cursor-not-allowed relative focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-            aria-label="Roll dice to select a thread"
-            role="button"
-        >
-            <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-indigo-600 rounded-lg">
-                <span class="spinner" aria-hidden="true"></span>
-                <span>Rolling...</span>
-            </span>
-            <span class="htmx-request:opacity-30">ROLL d6</span>
-        </button>
-    </div>
-
-    <div id="result" class="bg-white rounded-lg shadow p-4 sm:p-6" role="region" aria-live="polite" aria-label="Roll result">
-        <p class="text-gray-600 text-center text-sm sm:text-base">Roll to select a thread</p>
+    <div id="result" class="bg-white rounded-lg shadow p-4" role="region" aria-live="polite">
+        <div id="roll-container">
+            <div class="flex items-center justify-center mb-4">
+                <button
+                    id="dice-btn"
+                    hx-post="/roll/html"
+                    hx-target="#result"
+                    hx-swap="innerHTML"
+                    hx-disabled-elt="this"
+                    class="die-base die-{{ current_die }} mx-auto cursor-pointer hover:scale-110 transition-transform focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    aria-label="Tap dice to roll"
+                >{{ current_die }}</button>
+            </div>
+            <p class="text-center text-sm text-gray-600">Tap the dice to roll</p>
+            <div id="pool-display" class="mt-4 p-3 bg-gray-50 rounded-lg">
+                <p class="text-xs text-gray-500 mb-2">Rolling from top {{ current_die }} threads:</p>
+                <div id="pool-threads" class="space-y-1 text-sm">Loading...</div>
+            </div>
+        </div>
     </div>
 </div>
 
+<script>
+    async function loadRollPool() {
+        try {
+            const threadsRes = await fetch('/threads/');
+            const threads = await threadsRes.json();
+            const sessionRes = await fetch('/sessions/current/');
+            const sessionData = await sessionRes.json();
+            
+            const poolContainer = document.getElementById('pool-threads');
+            const currentDie = sessionData.current_die || 6;
+            const threadsToShow = threads.slice(0, currentDie);
+
+            if (threadsToShow.length === 0) {
+                poolContainer.innerHTML = '<p class="text-gray-600">No active threads</p>';
+                return;
+            }
+
+            poolContainer.innerHTML = threadsToShow.map((thread, i) => `
+                <div class="flex items-center justify-between py-1 px-2 bg-white rounded">
+                    <span class="text-gray-700">
+                        <span class="text-gray-400 text-xs mr-2">${i + 1}.</span>
+                        ${thread.title}
+                    </span>
+                    <span class="text-xs text-gray-500">${thread.format}</span>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Error in loadRollPool:', error);
+            const poolContainer = document.getElementById('pool-threads');
+            if (poolContainer) {
+                poolContainer.innerHTML = '<p class="text-red-600">Failed to load threads</p>';
+            }
+        }
+    }
+
+    document.body.addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.xhr.status === 200 && evt.detail.target.id === 'result') {
+            const result = evt.detail.target;
+            const threadTitle = result.querySelector('.thread-selected');
+            if (threadTitle) {
+                showRatingForm(result);
+            }
+        }
+    });
+
+    function showRatingForm(resultContainer) {
+        const resultReveal = resultContainer.querySelector('.result-reveal');
+        if (!resultReveal) return;
+
+        const threadId = resultReveal.dataset.threadId;
+        const existingForm = resultContainer.querySelector('#rating-form-container');
+        if (existingForm) existingForm.remove();
+
+        const formHtml = `
+            <div id="rating-form-container" class="mt-6 pt-6 border-t-2 border-gray-200">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">Rate your reading</h3>
+
+                <div class="mb-4">
+                    <label for="rating" class="block text-gray-900 font-semibold mb-2">
+                        Rating (0.5 - 5.0)
+                    </label>
+                    <input
+                        type="range"
+                        id="rating"
+                        name="rating"
+                        min="0.5"
+                        max="5.0"
+                        step="0.5"
+                        value="3.5"
+                        class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
+                        oninput="document.getElementById('rating-value').textContent = this.value; updateRatingPreview()"
+                        aria-valuemin="0.5"
+                        aria-valuemax="5.0"
+                        aria-valuenow="3.5"
+                    >
+                    <div class="flex justify-between text-sm text-gray-700 mt-1">
+                        <span>0.5</span>
+                        <span id="rating-value" class="text-lg font-bold text-gray-900">3.5</span>
+                        <span>5.0</span>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="issues-read" class="block text-gray-900 font-semibold mb-2">
+                        Issues Read
+                    </label>
+                    <div class="flex items-center space-x-4">
+                        <button
+                            type="button"
+                            class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-xl font-bold focus:ring-2 focus:ring-indigo-500"
+                            onclick="adjustIssues(-1)"
+                            aria-label="Decrease issues read"
+                        >
+                            -
+                        </button>
+                        <input
+                            type="number"
+                            id="issues-read"
+                            name="issues_read"
+                            min="1"
+                            value="1"
+                            class="w-16 text-center border-2 border-gray-300 rounded-lg py-2 text-lg font-bold focus:ring-2 focus:ring-indigo-500"
+                            oninput="updateRatingPreview()"
+                        >
+                        <button
+                            type="button"
+                            class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-xl font-bold focus:ring-2 focus:ring-indigo-500"
+                            onclick="adjustIssues(1)"
+                            aria-label="Increase issues read"
+                        >
+                            +
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <p id="rating-preview" class="text-sm text-gray-700">
+                        Rating < 4.0 → Die steps up (d6 → d8), thread moves to back
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    id="submit-rating-btn"
+                    onclick="submitRating(${threadId})"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition-colors focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                >
+                    Submit Rating
+                </button>
+            </div>
+        `;
+
+        resultContainer.insertAdjacentHTML('beforeend', formHtml);
+    }
+
+    function adjustIssues(delta) {
+        const input = document.getElementById('issues-read');
+        const value = parseInt(input.value) + delta;
+        if (value >= 1) {
+            input.value = value;
+        }
+        updateRatingPreview();
+    }
+
+    function updateRatingPreview() {
+        const rating = parseFloat(document.getElementById('rating').value);
+        const preview = document.getElementById('rating-preview');
+        if (!preview) return;
+
+        if (rating >= 4.0) {
+            preview.textContent = 'Rating ≥ 4.0 → Die steps down (d6 → d4), thread moves to front';
+        } else {
+            preview.textContent = 'Rating < 4.0 → Die steps up (d6 → d8), thread moves to back';
+        }
+    }
+
+    function submitRating(threadId) {
+        const rating = parseFloat(document.getElementById('rating').value);
+        const issuesRead = parseInt(document.getElementById('issues-read').value);
+        const btn = document.getElementById('submit-rating-btn');
+
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+
+        fetch('/rate/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rating, issues_read: issuesRead })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to submit rating');
+            return response.json();
+        })
+        .then(data => {
+            location.reload();
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+            btn.disabled = false;
+            btn.textContent = 'Submit Rating';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', loadRollPool);
+</script>
 {% endblock %}

@@ -76,7 +76,7 @@
             <div class="mb-6 p-4 bg-gray-50 rounded-lg" role="region" aria-live="polite" aria-label="Queue effect preview">
                 <h3 class="font-semibold text-gray-900 mb-2">Queue Effect Preview</h3>
                 <div id="queue-effect" class="text-sm text-gray-700">
-                    <p id="rating-effect">Rating ≥ 3.5 → Die steps up (d10 → d12)</p>
+                    <p id="rating-effect">Rating ≥ 4.0 → Die steps down (d6 → d4), thread moves to front</p>
                     <p id="completion-effect" class="mt-2"></p>
                 </div>
             </div>
@@ -183,12 +183,12 @@
         const ratingEffect = document.getElementById('rating-effect');
         const completionEffect = document.getElementById('completion-effect');
 
-        if (rating >= 3.5) {
-            ratingEffect.innerHTML = 'Rating ≥ 3.5 → Die steps up (d10 → d12)';
+        if (rating >= 4.0) {
+            ratingEffect.innerHTML = 'Rating ≥ 4.0 → Die steps down (d6 → d4), thread moves to front';
             ratingEffect.classList.remove('text-red-600');
             ratingEffect.classList.add('text-green-600');
         } else {
-            ratingEffect.innerHTML = 'Rating < 3.5 → Die steps down (d10 → d8)';
+            ratingEffect.innerHTML = 'Rating < 4.0 → Die steps up (d6 → d8), thread moves to back';
             ratingEffect.classList.remove('text-green-600');
             ratingEffect.classList.add('text-red-600');
         }

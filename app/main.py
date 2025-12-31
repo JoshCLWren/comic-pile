@@ -59,6 +59,7 @@ def get_current_session_cached(db: Session) -> dict | None:
             break
     if active_session:
         from app.schemas.thread import SessionResponse
+        from comic_pile.session import get_current_die
 
         response = SessionResponse(
             id=active_session.id,
@@ -68,6 +69,7 @@ def get_current_session_cached(db: Session) -> dict | None:
             user_id=active_session.user_id,
             ladder_path=session.build_ladder_path(active_session, db),
             active_thread=session.get_active_thread(active_session, db),
+            current_die=get_current_die(active_session.id, db),
         )
         _session_cache[cache_key] = (response.model_dump(), now)
         return response.model_dump()
@@ -107,9 +109,18 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
     @app.get("/", response_class=HTMLResponse)
-    async def root(request: Request):
-        """Render roll page as the default home page."""
-        return templates.TemplateResponse("roll.html", {"request": request})
+    async def root(request: Request, db: Session = Depends(get_db)):
+        """Render roll page as default home page."""
+        from comic_pile.dice_ladder import DICE_LADDER
+        from comic_pile.session import get_current_die, get_or_create
+
+        current_session = get_or_create(db, user_id=1)
+        current_die = get_current_die(current_session.id, db) if current_session else 6
+        if current_die not in DICE_LADDER:
+            current_die = 6
+        return templates.TemplateResponse(
+            "roll.html", {"request": request, "current_die": current_die}
+        )
 
     @app.get("/history", response_class=HTMLResponse)
     async def history_page(request: Request, db: Session = Depends(get_db)):
@@ -149,9 +160,18 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse("queue.html", {"request": request})
 
     @app.get("/roll", response_class=HTMLResponse)
-    async def roll_page(request: Request):
+    async def roll_page(request: Request, db: Session = Depends(get_db)):
         """Render roll page."""
-        return templates.TemplateResponse("roll.html", {"request": request})
+        from comic_pile.dice_ladder import DICE_LADDER
+        from comic_pile.session import get_current_die, get_or_create
+
+        current_session = get_or_create(db, user_id=1)
+        current_die = get_current_die(current_session.id, db) if current_session else 6
+        if current_die not in DICE_LADDER:
+            current_die = 6
+        return templates.TemplateResponse(
+            "roll.html", {"request": request, "current_die": current_die}
+        )
 
     @app.on_event("startup")
     async def startup_event():

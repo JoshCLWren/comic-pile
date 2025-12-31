@@ -20,7 +20,7 @@ except ImportError:
 class PositionRequest(BaseModel):
     """Schema for position update request."""
 
-    new_position: int = Field(..., ge=1)
+    new_position: int = Field(..., ge=0)
 
 
 @router.put("/threads/{thread_id}/position/", response_model=ThreadResponse)

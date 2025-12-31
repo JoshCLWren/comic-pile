@@ -12,7 +12,7 @@ from app.database import get_db
 from app.models import Event, Thread
 from app.models import Session as SessionModel
 from app.schemas.thread import SessionResponse
-from comic_pile.session import is_active
+from comic_pile.session import get_current_die, is_active
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -50,12 +50,13 @@ def build_ladder_path(session: SessionModel, db: Session) -> str:
 
 
 def get_active_thread(session: SessionModel, db: Session) -> dict[str, Any] | None:
-    """Get the most recently read thread for the session."""
+    """Get the most recently rolled thread for the session."""
     event = (
         db.execute(
             select(Event)
             .where(Event.session_id == session.id)
-            .where(Event.type == "rate")
+            .where(Event.type == "roll")
+            .where(Event.selected_thread_id.is_not(None))
             .order_by(Event.timestamp.desc())
         )
         .scalars()
@@ -116,6 +117,7 @@ def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
         user_id=active_session.user_id,
         ladder_path=build_ladder_path(active_session, db),
         active_thread=get_active_thread(active_session, db),
+        current_die=get_current_die(active_session.id, db),
     )
 
 
@@ -146,6 +148,7 @@ def list_sessions(
             user_id=session.user_id,
             ladder_path=build_ladder_path(session, db),
             active_thread=get_active_thread(session, db),
+            current_die=get_current_die(session.id, db),
         )
         for session in sessions
     ]
@@ -166,6 +169,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
         user_id=session.user_id,
         ladder_path=build_ladder_path(session, db),
         active_thread=get_active_thread(session, db),
+        current_die=get_current_die(session.id, db),
     )
 
 
@@ -228,6 +232,7 @@ def get_session_details(
             "ended_at": session_obj.ended_at,
             "start_die": session_obj.start_die,
             "ladder_path": build_ladder_path(session_obj, db),
+            "current_die": get_current_die(session_obj.id, db),
             "events": formatted_events,
         },
     )

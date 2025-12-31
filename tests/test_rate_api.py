@@ -60,7 +60,7 @@ async def test_rate_success(client, db):
 
 @pytest.mark.asyncio
 async def test_rate_low_rating(client, db):
-    """Rating=3.0, die_size steps down."""
+    """Rating=3.0, die_size steps up."""
     from app.models import User
 
     user = User(username="test_user")
@@ -106,12 +106,12 @@ async def test_rate_low_rating(client, db):
         .all()
     )
     assert len(events) == 1
-    assert events[0].die_after == 8
+    assert events[0].die_after == 12
 
 
 @pytest.mark.asyncio
 async def test_rate_high_rating(client, db):
-    """Rating=4.0, die_size steps up."""
+    """Rating=4.0, die_size steps down."""
     from app.models import User
 
     user = User(username="test_user")
@@ -157,7 +157,7 @@ async def test_rate_high_rating(client, db):
         .all()
     )
     assert len(events) == 1
-    assert events[0].die_after == 12
+    assert events[0].die_after == 8
 
 
 @pytest.mark.asyncio

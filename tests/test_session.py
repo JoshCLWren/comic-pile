@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta
 
-import pytest
 from sqlalchemy import select
 
 from app.models import Session as SessionModel
@@ -87,20 +86,19 @@ def test_get_or_create_existing(db, sample_data):
     sessions = (
         db.execute(select(SessionModel).order_by(SessionModel.started_at.desc())).scalars().all()
     )
-    result = get_or_create(db, thread_id=1)
+    result = get_or_create(db, user_id=1)
     assert result.id == sessions[0].id
 
 
-@pytest.mark.xfail(
-    reason="get_or_create has bug: uses non-existent Session attributes thread_id, die_size, ladder_path"
-)
 def test_get_or_create_new(db, sample_data):
     """Creates new session when none active."""
     for session in sample_data["sessions"]:
         session.ended_at = datetime.now()
     db.commit()
 
-    get_or_create(db, thread_id=1)
+    new_session = get_or_create(db, user_id=1)
+    assert new_session.start_die == 6
+    assert new_session.user_id == 1
 
 
 def test_end_session(db, sample_data):
@@ -179,6 +177,6 @@ def test_get_or_create_returns_most_recent(db):
     db.add(older_session)
     db.commit()
 
-    result = get_or_create(db, thread_id=1)
+    result = get_or_create(db, user_id=1)
     assert result.id == recent_session.id
     assert result.start_die == 10

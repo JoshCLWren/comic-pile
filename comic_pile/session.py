@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models import Event
 from app.models import Session as SessionModel
 
 
@@ -30,7 +31,7 @@ def should_start_new(db: Session) -> bool:
     return len(recent_sessions) == 0
 
 
-def get_or_create(db: Session, thread_id: int) -> SessionModel:
+def get_or_create(db: Session, user_id: int) -> SessionModel:
     """Get active session or create new one."""
     active_session = (
         db.execute(
@@ -45,7 +46,7 @@ def get_or_create(db: Session, thread_id: int) -> SessionModel:
     if active_session:
         return active_session
 
-    new_session = SessionModel(thread_id=thread_id, die_size=6, ladder_path="[6]")
+    new_session = SessionModel(start_die=6, user_id=user_id)
     db.add(new_session)
     db.commit()
     db.refresh(new_session)
@@ -59,3 +60,25 @@ def end_session(session_id: int, db: Session) -> None:
     if session:
         session.ended_at = datetime.now()
         db.commit()
+
+
+def get_current_die(session_id: int, db: Session) -> int:
+    """Get current die size based on last rating event in session."""
+    last_rate_event = (
+        db.execute(
+            select(Event)
+            .where(Event.session_id == session_id)
+            .where(Event.type == "rate")
+            .where(Event.die_after.is_not(None))
+            .order_by(Event.timestamp.desc())
+        )
+        .scalars()
+        .first()
+    )
+
+    if last_rate_event:
+        die_after = last_rate_event.die_after
+        return die_after if die_after is not None else 6
+
+    session = db.get(SessionModel, session_id)
+    return session.start_die if session else 6

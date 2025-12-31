@@ -14,8 +14,8 @@ async def test_roll_success(client, sample_data):
     assert "title" in data
     assert "die_size" in data
     assert "result" in data
-    assert data["die_size"] == 6
-    assert 1 <= data["result"] <= 6
+    assert data["die_size"] == 8
+    assert 1 <= data["result"] <= 8
 
     thread_ids = [t.id for t in sample_data["threads"] if t.status == "active"]
     assert data["thread_id"] in thread_ids
@@ -31,7 +31,7 @@ async def test_roll_override(client, sample_data):
     data = response.json()
     assert data["thread_id"] == thread_id
     assert data["title"] == "Superman"
-    assert data["die_size"] == 6
+    assert data["die_size"] == 8
     assert data["result"] == 0
 
 

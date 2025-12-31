@@ -11,7 +11,7 @@ from app.models import Event, Thread
 from app.models import Session as SessionModel
 from app.schemas import RateRequest, ThreadResponse
 from comic_pile.dice_ladder import step_down, step_up
-from comic_pile.queue import move_to_back
+from comic_pile.queue import move_to_back, move_to_front
 
 router = APIRouter()
 
@@ -84,10 +84,10 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
     thread.last_rating = request.rating
     thread.last_activity_at = datetime.now()
 
-    if request.rating >= 3.5:
-        new_die = step_up(current_die)
-    else:
+    if request.rating >= 4.0:
         new_die = step_down(current_die)
+    else:
+        new_die = step_up(current_die)
 
     event = Event(
         type="rate",
@@ -100,16 +100,24 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
     )
     db.add(event)
 
+    if request.rating >= 4.0:
+        move_to_front(thread.id, db)
+    else:
+        move_to_back(thread.id, db)
+
     if thread.issues_remaining <= 0:
         thread.status = "completed"
         move_to_back(thread.id, db)
         current_session.ended_at = datetime.now()
 
-    db.commit()
-    db.refresh(thread)
-
     if clear_cache:
         clear_cache()
+
+    current_session.pending_thread_id = None
+    current_session.pending_thread_updated_at = None
+
+    db.commit()
+    db.refresh(thread)
 
     return ThreadResponse(
         id=thread.id,

@@ -26,10 +26,10 @@ function loadQueue() {
         .then(threads => {
             const threadList = document.getElementById('thread-list');
 
-            fetch('/sessions/current/')
+                fetch('/sessions/current/')
                 .then(response => response.json())
                 .then(sessionData => {
-                    currentDie = sessionData.start_die || 6;
+                    currentDie = sessionData.current_die || 6;
                     document.getElementById('current-die').textContent = `d${currentDie}`;
                     document.getElementById('pool-size').textContent = currentDie;
 

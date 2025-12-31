@@ -42,11 +42,12 @@ def move_to_back(thread_id: int, db: Session) -> None:
         return
 
     max_position = len(threads)
+    original_position = target_thread.queue_position
 
     for thread in threads:
         if thread.id == thread_id:
             thread.queue_position = max_position
-        elif thread.queue_position > target_thread.queue_position:
+        elif thread.queue_position > original_position:
             thread.queue_position -= 1
 
     db.commit()
@@ -86,6 +87,8 @@ def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
         for thread in threads:
             if thread.id == thread_id:
                 thread.queue_position = new_position
+            elif thread.queue_position >= old_position and thread.id != thread_id:
+                thread.queue_position -= 1
             elif new_position <= thread.queue_position < old_position:
                 thread.queue_position += 1
 

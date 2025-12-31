@@ -75,3 +75,4 @@ class SessionResponse(BaseModel):
     user_id: int
     ladder_path: str
     active_thread: dict[str, Any] | None
+    current_die: int

@@ -10,6 +10,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.event import Event
+    from app.models.thread import Thread
     from app.models.user import User
 
 
@@ -25,6 +26,10 @@ class Session(Base):
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     start_die: Mapped[int] = mapped_column(Integer, default=6)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    pending_thread_id: Mapped[int | None] = mapped_column(ForeignKey("threads.id"), nullable=True)
+    pending_thread_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),
@@ -32,6 +37,7 @@ class Session(Base):
     )
 
     user: Mapped["User"] = relationship("User", back_populates="sessions")
+    pending_thread: Mapped["Thread"] = relationship("Thread", foreign_keys=[pending_thread_id])
     events: Mapped[list["Event"]] = relationship(
         "Event", back_populates="session", cascade="all, delete-orphan"
     )
