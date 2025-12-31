@@ -1,26 +1,71 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="w-full max-w-lg mx-auto px-4 py-4">
-    <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Reading Queue</h1>
-
-        <div id="roll-pool-info" class="mb-4 p-3 sm:p-4 bg-indigo-50 rounded-lg" role="region" aria-live="polite" aria-label="Roll pool information">
-            <p class="text-indigo-900 font-semibold text-sm sm:text-base">Active die: <span id="current-die">Loading...</span></p>
-            <p class="text-indigo-700 text-xs sm:text-sm">Roll pool: threads 1-<span id="pool-size">...</span> are highlighted</p>
+<div class="space-y-8 pb-10">
+    <header class="flex justify-between items-center px-2">
+        <div>
+            <h1 class="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Your upcoming threads</p>
         </div>
+        <button onclick="document.getElementById('add-thread-modal').classList.remove('hidden')"
+            class="px-5 py-2.5 bg-teal-500/10 border border-teal-500/20 text-teal-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-500/20 transition-all active:scale-95 shadow-xl">
+            Add New
+        </button>
+    </header>
 
-        <div id="queue-container" role="list" aria-label="Thread queue">
-            <div id="thread-list" class="space-y-3">
-                <div class="text-center text-gray-600 py-8">Loading threads...</div>
-                <div class="htmx-indicator hidden flex items-center justify-center gap-2 py-8" aria-live="polite">
-                    <span class="spinner" aria-hidden="true"></span>
-                    <span>Updating...</span>
-                </div>
+    <div id="roll-pool-info"
+        class="glass-card p-6 flex items-center justify-between border-teal-500/10 bg-teal-500/5 shadow-2xl"
+        role="region" aria-live="polite">
+        <div class="flex items-center gap-4">
+            <div id="pool-die-container" class="dice-perspective">
+                <!-- Die icon injected by JS -->
+            </div>
+            <div>
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1">Active Ladder</p>
+                <p id="current-die-label" class="text-xl font-black text-slate-100 uppercase">d6</p>
             </div>
         </div>
+        <div class="text-right">
+            <p class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1">Roll Pool</p>
+            <p class="text-sm font-black text-teal-400 uppercase tracking-widest">Top <span id="pool-size">6</span>
+                Threads</p>
+        </div>
+    </div>
+
+    <div id="queue-container" role="list" aria-label="Thread queue" class="space-y-4">
+        <div id="thread-list" class="space-y-3" hx-get="/threads/html" hx-trigger="load, refreshQueue from:window">
+            <!-- Skeleton items -->
+            <div class="glass-card h-20 animate-pulse bg-white/5 border-white/5"></div>
+            <div class="glass-card h-20 animate-pulse bg-white/5 border-white/5"></div>
+        </div>
+    </div>
+
+    <div class="flex flex-col gap-4 mt-12 px-2">
+        <button onclick="document.getElementById('reactivate-modal').classList.remove('hidden')"
+            class="w-full py-5 bg-white/5 border border-white/10 rounded-2xl text-slate-500 font-bold hover:bg-white/10 transition-all uppercase tracking-[0.3em] text-[10px] shadow-lg">
+            Reactivate Completed Thread
+        </button>
     </div>
 </div>
 
 <script src="/static/js/app.js"></script>
+<script>
+    async function updateDieInfo() {
+        try {
+            const res = await fetch('/sessions/current/');
+            const data = await res.json();
+            const die = data.current_die || 6;
+
+            document.getElementById('current-die-label').textContent = `d${die}`;
+            document.getElementById('pool-size').textContent = die;
+
+            const container = document.getElementById('pool-die-container');
+            container.innerHTML = `<div class="die-base die-mini die-${die}">${die}</div>`;
+        } catch (e) {
+            console.error(e);
+        }
+    }
+    document.addEventListener('DOMContentLoaded', updateDieInfo);
+    window.addEventListener('refreshQueue', updateDieInfo);
+</script>
 {% endblock %}

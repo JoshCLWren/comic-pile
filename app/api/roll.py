@@ -68,13 +68,14 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
     pool_size = min(current_die, len(threads))
     selected_index = random.randint(0, pool_size - 1)
     selected_thread = threads[selected_index]
+    result_val = selected_index + 1
 
     event = Event(
         type="roll",
         session_id=current_session.id if current_session else None,
         selected_thread_id=selected_thread.id,
         die=current_die,
-        result=selected_index + 1,
+        result=result_val,
         selection_method="random",
     )
     db.add(event)
@@ -84,24 +85,49 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
         current_session.pending_thread_updated_at = datetime.now()
         db.commit()
 
+    # SERVER SIDE RATING FORM (RELIABLE)
     return (
         pending_html
         + f"""
-        <div class="result-reveal" data-thread-id="{selected_thread.id}">
-            <div class="text-center mb-4">
-                <div class="inline-block bg-indigo-50 border-2 border-indigo-200 rounded-xl px-6 py-4 shadow-lg">
-                    <p class="text-sm text-gray-600 mb-2">Rolled d{current_die}:</p>
-                    <p class="text-4xl sm:text-5xl font-bold text-indigo-600">{selected_index + 1}</p>
+        <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
+            <div class="flex flex-col items-center gap-8 mb-10 animate-[bounce-in_0.8s_ease-out]">
+                <div class="dice-perspective">
+                    <div id="die-result" class="die-3d"></div>
+                </div>
+                <div class="text-center">
+                    <p class="text-[10px] font-black text-slate-600 uppercase tracking-[0.5em] mb-4">You rolled</p>
+                    <h2 class="text-3xl font-black text-slate-100 px-8 leading-tight tracking-tight">{selected_thread.title}</h2>
                 </div>
             </div>
-            <div class="text-center mt-4">
-                <h3 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Selected Thread</h3>
-                <div class="bg-white border-2 border-indigo-200 rounded-lg p-4 shadow-md thread-selected">
-                    <p class="text-lg sm:text-xl font-semibold text-indigo-800">{selected_thread.title}</p>
-                    <p class="text-sm sm:text-base text-gray-600 mt-1">{selected_thread.format}</p>
+
+            <div id="rating-form-container" class="glass-card p-10 space-y-12 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10">
+                <div class="text-center space-y-4">
+                    <p class="text-[10px] font-black uppercase tracking-[0.5em] text-slate-600">Rate your journey</p>
+                    <div id="rating-value" class="text-teal-400">4.0</div>
+                    <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-4" oninput="updateRatingDisplay(this.value)">
                 </div>
+                <div class="p-6 bg-teal-500/5 rounded-[2.5rem] border border-teal-500/20 shadow-xl">
+                    <p id="rating-preview" class="text-[11px] font-black text-slate-200 text-center uppercase tracking-[0.25em] leading-relaxed">
+                        Excellent! Die steps down 🎲 Move to front
+                    </p>
+                </div>
+                <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-8 glass-button text-xl font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
+                    Finish Session
+                </button>
+                <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
             </div>
         </div>
+        <script>
+            // Initialize the 3D die after swap
+            (function() {{
+                const target = document.getElementById('die-result');
+                if (target && typeof renderDieFaces === 'function') {{
+                    renderDieFaces(target, {current_die}, {result_val});
+                    rolledResult = {result_val};
+                    threadId = "{selected_thread.id}";
+                }}
+            }})();
+        </script>
     """
     )
 

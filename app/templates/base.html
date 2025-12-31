@@ -2,34 +2,35 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Dice-Driven Comic Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
-<body class="bg-gray-100 min-h-screen pb-20">
-    <main class="container mx-auto px-4 py-4 sm:py-6 max-w-lg">
+<body class="pb-24">
+    <main class="container mx-auto px-4 py-6 max-w-lg">
         {% block content %}{% endblock %}
     </main>
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg" role="navigation" aria-label="Main navigation">
-        <div class="flex justify-around">
-            <a href="/" class="nav-link flex flex-col items-center justify-center h-16 sm:h-20 min-w-20 hover:bg-blue-50 transition-all duration-200 border-t-4 border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none" data-path="/" aria-label="Roll page">
-                <span class="text-2xl sm:text-3xl" aria-hidden="true">🎲</span>
-                <span class="text-xs sm:text-sm text-gray-600 nav-label">Roll</span>
+
+    <nav class="fixed bottom-0 left-0 right-0 nav-container z-40" role="navigation" aria-label="Main navigation">
+        <div class="flex justify-around items-center h-20 px-2 max-w-lg mx-auto">
+            <a href="/" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/" aria-label="Roll page">
+                <span class="text-2xl mb-1" aria-hidden="true">🎲</span>
+                <span class="text-[10px] uppercase tracking-widest font-bold nav-label">Roll</span>
             </a>
-            <a href="/rate" class="nav-link flex flex-col items-center justify-center h-16 sm:h-20 min-w-20 hover:bg-blue-50 transition-all duration-200 border-t-4 border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none" data-path="/rate" aria-label="Rate page">
-                <span class="text-2xl sm:text-3xl" aria-hidden="true">📝</span>
-                <span class="text-xs sm:text-sm text-gray-600 nav-label">Rate</span>
+            <a href="/rate" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/rate" aria-label="Rate page">
+                <span class="text-2xl mb-1" aria-hidden="true">📝</span>
+                <span class="text-[10px] uppercase tracking-widest font-bold nav-label">Rate</span>
             </a>
-            <a href="/queue" class="nav-link flex flex-col items-center justify-center h-16 sm:h-20 min-w-20 hover:bg-blue-50 transition-all duration-200 border-t-4 border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none" data-path="/queue" aria-label="Queue page">
-                <span class="text-2xl sm:text-3xl" aria-hidden="true">📚</span>
-                <span class="text-xs sm:text-sm text-gray-600 nav-label">Queue</span>
+            <a href="/queue" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/queue" aria-label="Queue page">
+                <span class="text-2xl mb-1" aria-hidden="true">📚</span>
+                <span class="text-[10px] uppercase tracking-widest font-bold nav-label">Queue</span>
             </a>
-            <a href="/history" class="nav-link flex flex-col items-center justify-center h-16 sm:h-20 min-w-20 hover:bg-blue-50 transition-all duration-200 border-t-4 border-transparent focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none" data-path="/history" aria-label="History page">
-                <span class="text-2xl sm:text-3xl" aria-hidden="true">📜</span>
-                <span class="text-xs sm:text-sm text-gray-600 nav-label">History</span>
+            <a href="/history" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/history" aria-label="History page">
+                <span class="text-2xl mb-1" aria-hidden="true">📜</span>
+                <span class="text-[10px] uppercase tracking-widest font-bold nav-label">History</span>
             </a>
         </div>
     </nav>
@@ -37,22 +38,14 @@
     <script>
         function updateActiveNav() {
             const currentPath = window.location.pathname;
-            const navLinks = document.querySelectorAll('.nav-link');
+            const navLinks = document.querySelectorAll('.nav-item');
 
             navLinks.forEach(link => {
                 const linkPath = link.getAttribute('data-path');
-                const label = link.querySelector('.nav-label');
-
                 if (currentPath === linkPath) {
-                    link.classList.remove('border-transparent');
-                    link.classList.add('border-blue-500', 'bg-blue-50');
-                    label.classList.remove('text-gray-600');
-                    label.classList.add('text-blue-600', 'font-semibold');
+                    link.classList.add('active');
                 } else {
-                    link.classList.remove('border-blue-500', 'bg-blue-50');
-                    link.classList.add('border-transparent');
-                    label.classList.remove('text-blue-600', 'font-semibold');
-                    label.classList.add('text-gray-600');
+                    link.classList.remove('active');
                 }
             });
         }
@@ -61,136 +54,78 @@
         document.addEventListener('htmx:afterSwap', updateActiveNav);
     </script>
 
-    <div id="reactivate-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <h2 class="text-xl font-bold mb-4">Reactivate Thread</h2>
+    <!-- Modal Base Styling applies to all below -->
+    <div id="reactivate-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-sm p-6 overflow-hidden">
+            <h2 class="text-2xl font-bold mb-6 text-glow">Reactivate Thread</h2>
             <form id="reactivate-form" hx-post="/threads/reactivate" hx-swap="none" hx-on::after-request="document.getElementById('reactivate-modal').classList.add('hidden'); htmx.trigger(window, 'refreshQueue');" onsubmit="return validateReactivateForm()">
                 <div class="mb-4">
-                    <label for="reactivate-thread-id" class="block text-sm font-medium text-gray-700 mb-1">Thread</label>
-                    <select id="reactivate-thread-id" name="thread_id" class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" hx-get="/threads/completed" hx-target="#reactivate-thread-id" hx-trigger="load" required onchange="validateReactivateForm()">
-                        <option value="">Select a completed thread...</option>
+                    <label for="reactivate-thread-id" class="block text-sm font-medium text-slate-300 mb-2">Thread</label>
+                    <select id="reactivate-thread-id" name="thread_id" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" hx-get="/threads/completed" hx-target="#reactivate-thread-id" hx-trigger="load" required onchange="validateReactivateForm()">
+                        <option value="">Select a thread...</option>
                     </select>
-                    <p id="thread-error" class="text-red-600 text-sm mt-1 hidden">Please select a thread</p>
+                    <p id="thread-error" class="text-rose-500 text-xs mt-2 hidden">Please select a thread</p>
                 </div>
-                <div class="mb-4">
-                    <label for="issues_to_add" class="block text-sm font-medium text-gray-700 mb-1">Issues to Add</label>
-                    <input type="number" id="issues_to_add" name="issues_to_add" min="1" required class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" oninput="validateReactivateForm()">
-                    <p id="issues-to-add-error" class="text-red-600 text-sm mt-1 hidden">Must add at least 1 issue</p>
-                </div>
-                <div class="mb-4">
-                    <p id="reactivate-preview" class="text-sm text-gray-600"></p>
-                </div>
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md" onclick="document.getElementById('reactivate-modal').classList.add('hidden');">Cancel</button>
-                    <button type="submit" id="reactivate-submit-btn" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md relative disabled:bg-gray-400" disabled>
-                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-md">
-                            <span class="spinner"></span>
-                            <span>Reactivating...</span>
-                        </span>
-                        <span class="htmx-request:opacity-30">Reactivate</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="override-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <h2 class="text-xl font-bold mb-4">Override Roll</h2>
-            <form hx-post="/roll/override" hx-swap="none" hx-on::after-request="document.getElementById('override-modal').classList.add('hidden'); htmx.trigger(window, 'refreshRoll');">
-                <div id="override-thread-list" class="mb-4 max-h-64 overflow-y-auto border border-gray-200 rounded-md" hx-get="/threads/active" hx-trigger="load">
-                </div>
-                <div class="flex justify-end gap-2">
-                    <button type="button" class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md" onclick="document.getElementById('override-modal').classList.add('hidden');">Cancel</button>
-                    <button type="submit" class="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md relative">
-                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-md">
-                            <span class="spinner"></span>
-                            <span>Overriding...</span>
-                        </span>
-                        <span class="htmx-request:opacity-30">Override</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="add-thread-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
-            <h2 class="text-xl font-bold mb-4">Add New Thread</h2>
-            <form
-                hx-post="/threads/"
-                hx-target="#queue-list"
-                hx-swap="innerHTML"
-                hx-on::after-request="this.closest('#add-thread-modal').classList.add('hidden'); htmx.trigger(window, 'refreshQueue');"
-                onsubmit="return validateAddThreadForm()"
-            >
-                <div class="mb-4">
-                    <label for="title" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                    <input
-                        type="text"
-                        name="title"
-                        id="title"
-                        required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
-                        placeholder="e.g., Hellboy Omnibus Vol 2"
-                        oninput="validateAddThreadForm()"
-                    >
-                    <p id="title-error" class="text-red-600 text-sm mt-1 hidden">Title is required</p>
-                </div>
-
-                <div class="mb-4">
-                    <label for="format" class="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                    <select
-                        name="format"
-                        id="format"
-                        required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
-                        onchange="validateAddThreadForm()"
-                    >
-                        <option value="">Select format...</option>
-                        <option value="TPB">TPB (Trade Paperback)</option>
-                        <option value="Issue">Issue</option>
-                        <option value="Graphic Novel">Graphic Novel</option>
-                        <option value="OGN">OGN (Original Graphic Novel)</option>
-                    </select>
-                    <p id="format-error" class="text-red-600 text-sm mt-1 hidden">Format is required</p>
-                </div>
-
                 <div class="mb-6">
-                    <label for="issues_remaining" class="block text-sm font-medium text-gray-700 mb-1">Issues Remaining</label>
-                    <input
-                        type="number"
-                        name="issues_remaining"
-                        id="issues_remaining"
-                        min="1"
-                        required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
-                        placeholder="e.g., 6"
-                        oninput="validateAddThreadForm()"
-                    >
-                    <p id="issues-remaining-error" class="text-red-600 text-sm mt-1 hidden">Issues remaining must be greater than 0</p>
+                    <label for="issues_to_add" class="block text-sm font-medium text-slate-300 mb-2">Issues to Add</label>
+                    <input type="number" id="issues_to_add" name="issues_to_add" min="1" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" oninput="validateReactivateForm()">
+                    <p id="issues-to-add-error" class="text-rose-500 text-xs mt-2 hidden">Must add at least 1 issue</p>
                 </div>
-
-                <div class="flex space-x-3">
-                    <button
-                        type="button"
-                        onclick="document.getElementById('add-thread-modal').classList.add('hidden')"
-                        class="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg min-h-[44px] text-lg font-medium"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        id="add-thread-submit-btn"
-                        class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg min-h-[44px] text-lg font-medium relative disabled:bg-gray-400"
-                        disabled
-                    >
-                        <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-lg">
+                <div class="flex gap-3">
+                    <button type="button" class="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all" onclick="document.getElementById('reactivate-modal').classList.add('hidden');">Cancel</button>
+                    <button type="submit" id="reactivate-submit-btn" class="flex-1 glass-button disabled:opacity-50" disabled>
+                        <span class="htmx-indicator flex items-center justify-center gap-2">
                             <span class="spinner"></span>
-                            <span>Adding...</span>
                         </span>
-                        <span class="htmx-request:opacity-30">Add Thread</span>
+                        <span class="htmx-request:hidden">Reactivate</span>
                     </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Similar pattern for other modals -->
+    <div id="add-thread-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-sm p-6">
+            <h2 class="text-2xl font-bold mb-6 text-glow">New Thread</h2>
+            <form hx-post="/threads/" hx-target="#queue-list" hx-swap="innerHTML" hx-on::after-request="this.closest('#add-thread-modal').classList.add('hidden'); htmx.trigger(window, 'refreshQueue');" onsubmit="return validateAddThreadForm()">
+                <div class="space-y-4 mb-8">
+                    <div>
+                        <label for="title" class="block text-sm font-medium text-slate-300 mb-1">Title</label>
+                        <input type="text" name="title" id="title" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g., Hellboy Vol 2" oninput="validateAddThreadForm()">
+                    </div>
+                    <div>
+                        <label for="format" class="block text-sm font-medium text-slate-300 mb-1">Format</label>
+                        <select name="format" id="format" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" onchange="validateAddThreadForm()">
+                            <option value="">Select format...</option>
+                            <option value="TPB">TPB</option>
+                            <option value="Issue">Issue</option>
+                            <option value="Graphic Novel">Graphic Novel</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="issues_remaining" class="block text-sm font-medium text-slate-300 mb-1">Issues Remaining</label>
+                        <input type="number" name="issues_remaining" id="issues_remaining" min="1" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g., 6" oninput="validateAddThreadForm()">
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" onclick="document.getElementById('add-thread-modal').classList.add('hidden')" class="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all">Cancel</button>
+                    <button type="submit" id="add-thread-submit-btn" class="flex-1 glass-button" disabled>Add</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Override Modal -->
+    <div id="override-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-sm p-6">
+            <h2 class="text-2xl font-bold mb-6 text-glow">Override</h2>
+            <form hx-post="/roll/override" hx-swap="none" hx-on::after-request="document.getElementById('override-modal').classList.add('hidden'); htmx.trigger(window, 'refreshRoll');">
+                <div id="override-thread-list" class="mb-6 max-h-60 overflow-y-auto space-y-2 pr-2" hx-get="/threads/active" hx-trigger="load">
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" class="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all" onclick="document.getElementById('override-modal').classList.add('hidden');">Cancel</button>
+                    <button type="submit" class="flex-1 glass-button">Override</button>
                 </div>
             </form>
         </div>
@@ -201,44 +136,8 @@
             const title = document.getElementById('title').value.trim();
             const format = document.getElementById('format').value;
             const issuesRemaining = parseInt(document.getElementById('issues_remaining').value);
-
-            const titleError = document.getElementById('title-error');
-            const formatError = document.getElementById('format-error');
-            const issuesRemainingError = document.getElementById('issues-remaining-error');
-            const titleInput = document.getElementById('title');
-            const formatInput = document.getElementById('format');
-            const issuesInput = document.getElementById('issues_remaining');
             const submitBtn = document.getElementById('add-thread-submit-btn');
-
-            let isValid = true;
-
-            if (!title) {
-                titleError.classList.remove('hidden');
-                titleInput.classList.add('border-red-500');
-                isValid = false;
-            } else {
-                titleError.classList.add('hidden');
-                titleInput.classList.remove('border-red-500');
-            }
-
-            if (!format) {
-                formatError.classList.remove('hidden');
-                formatInput.classList.add('border-red-500');
-                isValid = false;
-            } else {
-                formatError.classList.add('hidden');
-                formatInput.classList.remove('border-red-500');
-            }
-
-            if (isNaN(issuesRemaining) || issuesRemaining < 1) {
-                issuesRemainingError.classList.remove('hidden');
-                issuesInput.classList.add('border-red-500');
-                isValid = false;
-            } else {
-                issuesRemainingError.classList.add('hidden');
-                issuesInput.classList.remove('border-red-500');
-            }
-
+            const isValid = title && format && !isNaN(issuesRemaining) && issuesRemaining >= 1;
             submitBtn.disabled = !isValid;
             return isValid;
         }
@@ -246,33 +145,8 @@
         function validateReactivateForm() {
             const threadId = document.getElementById('reactivate-thread-id').value;
             const issuesToAdd = parseInt(document.getElementById('issues_to_add').value);
-
-            const threadError = document.getElementById('thread-error');
-            const issuesToAddError = document.getElementById('issues-to-add-error');
-            const threadSelect = document.getElementById('reactivate-thread-id');
-            const issuesInput = document.getElementById('issues_to_add');
             const submitBtn = document.getElementById('reactivate-submit-btn');
-
-            let isValid = true;
-
-            if (!threadId) {
-                threadError.classList.remove('hidden');
-                threadSelect.classList.add('border-red-500');
-                isValid = false;
-            } else {
-                threadError.classList.add('hidden');
-                threadSelect.classList.remove('border-red-500');
-            }
-
-            if (isNaN(issuesToAdd) || issuesToAdd < 1) {
-                issuesToAddError.classList.remove('hidden');
-                issuesInput.classList.add('border-red-500');
-                isValid = false;
-            } else {
-                issuesToAddError.classList.add('hidden');
-                issuesInput.classList.remove('border-red-500');
-            }
-
+            const isValid = threadId && !isNaN(issuesToAdd) && issuesToAdd >= 1;
             submitBtn.disabled = !isValid;
             return isValid;
         }

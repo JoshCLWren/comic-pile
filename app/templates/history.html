@@ -1,41 +1,66 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="w-full max-w-4xl mx-auto px-4 py-4 pb-20">
-    <h1 class="text-xl sm:text-2xl font-bold mb-6 text-gray-900">Session History</h1>
+<div class="space-y-8 pb-20">
+    <header class="px-2">
+        <h1 class="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">History</h1>
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Chronicle of your journey</p>
+    </header>
 
     <div id="sessions-list" class="space-y-4" role="list" aria-label="Session history">
         {% for session in sessions %}
-        <div class="bg-white rounded-lg shadow p-3 sm:p-4">
-            <div class="flex flex-col sm:flex-row justify-between items-start gap-3">
-                <div class="flex-1 w-full">
-                    <p class="text-xs sm:text-sm text-gray-600">
-                        {{ session.started_at.strftime('%b %d, %Y at %I:%M %p') }}
-                    </p>
-                    <p class="text-base sm:text-lg font-medium text-gray-900">Ladder: {{ session.ladder_path }}</p>
-                    {% if session.active_thread %}
-                    <p class="text-sm text-gray-700">
-                        Active: {{ session.active_thread.title }}
-                        ({{ session.active_thread.issues_remaining }} issues left)
-                    </p>
-                    {% endif %}
+        <div class="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
+            <!-- Session Content -->
+            <div class="flex justify-between items-start gap-6 relative z-10">
+                <div class="space-y-4 flex-1 min-w-0">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            {{ session.started_at.strftime('%b %d') }}
+                        </div>
+                        <span class="text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                            {{ session.started_at.strftime('%I:%M %p') }}
+                        </span>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="die-base die-mini die-{{ session.ladder_path.split(',')[0].replace('d', '') if ',' in session.ladder_path else '6' }} shadow-xl">
+                                {{ session.ladder_path.split(',')[0].replace('d', '') if ',' in session.ladder_path else
+                                '6' }}
+                            </div>
+                            <p class="text-lg font-black text-slate-200 leading-tight truncate">Ladder: {{
+                                session.ladder_path }}</p>
+                        </div>
+
+                        {% if session.active_thread %}
+                        <div
+                            class="flex items-center gap-3 px-3 py-2 bg-indigo-500/5 rounded-xl border border-indigo-500/10">
+                            <div class="w-1 h-1 rounded-full bg-indigo-400 shadow-[0_0_8px_var(--accent-indigo)]"></div>
+                            <p class="text-xs text-indigo-300 font-black uppercase tracking-wider truncate">
+                                {{ session.active_thread.title }}
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
+
                 <button
-                    class="px-4 py-3 bg-blue-500 text-white rounded-lg min-h-12 min-w-[100px] text-base sm:text-lg relative hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    hx-get="/sessions/{{ session.id }}/details"
-                    hx-target="#details-{{ session.id }}"
-                    hx-swap="innerHTML"
-                    aria-expanded="false"
-                    aria-controls="details-{{ session.id }}"
-                >
-                    <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-blue-500 rounded-lg">
-                        <span class="spinner" aria-hidden="true"></span>
-                        <span>Loading...</span>
+                    class="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+                    hx-get="/sessions/{{ session.id }}/details" hx-target="#details-{{ session.id }}"
+                    hx-swap="innerHTML" aria-expanded="false" aria-controls="details-{{ session.id }}">
+                    <span class="htmx-indicator flex items-center justify-center">
+                        <span class="spinner"></span>
                     </span>
-                    <span class="htmx-request:opacity-30">Details</span>
+                    <span class="htmx-request:hidden">Details</span>
                 </button>
             </div>
-            <div id="details-{{ session.id }}" class="mt-4 hidden" role="region" aria-live="polite">
+
+            <div id="details-{{ session.id }}"
+                class="mt-8 border-t border-white/5 pt-8 hidden transition-all animate-[slide-down_0.3s_ease-out]"
+                role="region" aria-live="polite">
+                <!-- HTMX injected content -->
             </div>
         </div>
         {% endfor %}
@@ -43,27 +68,32 @@
 </div>
 
 <script>
-function toggleDetails(button, detailsId) {
-    const details = document.getElementById(detailsId);
-    if (details.classList.contains('hidden')) {
-        details.classList.remove('hidden');
-        button.textContent = 'Hide';
-        button.setAttribute('aria-expanded', 'true');
-    } else {
-        details.classList.add('hidden');
-        button.textContent = 'Details';
-        button.setAttribute('aria-expanded', 'false');
-    }
-}
+    document.addEventListener('htmx:afterSwap', function (evt) {
+        if (evt.target.id.startsWith('details-')) {
+            const details = evt.target;
+            const button = evt.detail.requestConfig.trigger;
 
-document.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.target.id.startsWith('details-')) {
-        const button = evt.detail.requestConfig.trigger;
-        if (button) {
-            button.textContent = 'Hide';
-            button.setAttribute('aria-expanded', 'true');
+            if (details.innerHTML.trim()) {
+                details.classList.remove('hidden');
+                if (button) {
+                    button.textContent = 'Hide';
+                    button.setAttribute('aria-expanded', 'true');
+                }
+            }
         }
-    }
-});
+    });
+
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('button[hx-get*="/details"]');
+        if (btn && btn.getAttribute('aria-expanded') === 'true') {
+            const detailsId = btn.getAttribute('aria-controls');
+            const details = document.getElementById(detailsId);
+            if (details) {
+                details.classList.add('hidden');
+                btn.textContent = 'Details';
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        }
+    });
 </script>
 {% endblock %}

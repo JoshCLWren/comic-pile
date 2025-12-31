@@ -1,207 +1,193 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="w-full max-w-lg mx-auto px-4 py-4">
-    <div class="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h1 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Rate Reading</h1>
+<div class="space-y-8 pb-10">
+    <header class="flex justify-between items-center px-2">
+        <div>
+            <h1 class="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Rate Session</h1>
+            <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mark your progress</p>
+        </div>
+        <div id="header-die-container" class="dice-perspective"
+            style="width: 50px; height: 50px; transform: scale(0.4);">
+            <!-- Die injected by JS -->
+        </div>
+    </header>
 
-        <div id="thread-info" class="mb-6" role="status" aria-live="polite">
-            <div class="text-gray-700 mb-2">Current thread loading...</div>
+    <div class="glass-card p-10 space-y-12 relative overflow-hidden">
+        <div id="glow-bg"
+            class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-teal-600/10 rounded-full blur-[100px] transition-colors duration-500">
         </div>
 
-        <form hx-post="/rate/" hx-target="#result-message" hx-indicator="#loading-indicator" onsubmit="return validateRateForm()">
-            <div class="mb-6">
-                <label for="rating" class="block text-gray-900 font-semibold mb-2">
-                    Rating (0.5 - 5.0)
-                </label>
-                <input
-                    type="range"
-                    id="rating"
-                    name="rating"
-                    min="0.5"
-                    max="5.0"
-                    step="0.5"
-                    value="3.5"
-                    class="w-full h-3 sm:h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    oninput="document.getElementById('rating-value').textContent = this.value; validateForm()"
-                    aria-describedby="rating-help rating-error"
-                    aria-valuemin="0.5"
-                    aria-valuemax="5.0"
-                    aria-valuenow="3.5"
-                    aria-valuetext="3.5"
-                >
-                <div class="flex justify-between text-sm text-gray-700 mt-1" id="rating-help">
-                    <span>0.5</span>
-                    <span id="rating-value" class="text-lg font-bold text-gray-900">3.5</span>
-                    <span>5.0</span>
-                </div>
-                <p id="rating-error" class="text-red-700 text-sm mt-1 hidden" role="alert">Rating must be between 0.5 and 5.0</p>
+        <div id="thread-info" role="status" aria-live="polite">
+            <div class="h-24 bg-white/5 rounded-3xl animate-pulse"></div>
+        </div>
+
+        <div class="space-y-12 relative z-10">
+            <div id="rating-preview-dice" class="dice-perspective mb-4">
+                <div id="die-preview" class="die-3d"></div>
             </div>
 
-            <div class="mb-6">
-                <label for="issues-read" class="block text-gray-900 font-semibold mb-2">
-                    Issues Read
-                </label>
-                <div class="flex items-center space-x-4">
-                    <button
-                        type="button"
-                        class="px-4 py-3 bg-gray-200 rounded-lg hover:bg-gray-300 min-h-12 min-w-12 text-2xl font-bold focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                        onclick="adjustIssues(-1)"
-                        aria-label="Decrease issues read"
-                    >
-                        -
-                    </button>
-                    <input
-                        type="number"
-                        id="issues-read"
-                        name="issues_read"
-                        min="1"
-                        value="1"
-                        class="w-20 text-center border-2 border-gray-300 rounded-lg py-3 px-2 text-lg font-bold min-h-12 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                        oninput="validateForm()"
-                        aria-describedby="issues-error"
-                    >
-                    <button
-                        type="button"
-                        class="px-4 py-3 bg-gray-200 rounded-lg hover:bg-gray-300 min-h-12 min-w-12 text-2xl font-bold focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                        onclick="adjustIssues(1)"
-                        aria-label="Increase issues read"
-                    >
-                        +
-                    </button>
-                </div>
-                <p id="issues-error" class="text-red-700 text-sm mt-1 hidden" role="alert">Issues read must be greater than 0</p>
+            <div class="text-center space-y-6">
+                <p class="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">How was it?</p>
+                <div id="rating-value" class="text-teal-400">4.0</div>
+                <input type="range" id="rating-input" name="rating" min="0.5" max="5.0" step="0.5" value="4.0"
+                    class="w-full h-4" oninput="updateUI(this.value)">
             </div>
 
-            <div class="mb-6 p-4 bg-gray-50 rounded-lg" role="region" aria-live="polite" aria-label="Queue effect preview">
-                <h3 class="font-semibold text-gray-900 mb-2">Queue Effect Preview</h3>
-                <div id="queue-effect" class="text-sm text-gray-700">
-                    <p id="rating-effect">Rating ≥ 4.0 → Die steps down (d6 → d4), thread moves to front</p>
-                    <p id="completion-effect" class="mt-2"></p>
-                </div>
+            <div class="p-6 bg-teal-500/5 rounded-3xl border border-teal-500/20 shadow-xl">
+                <p id="queue-effect"
+                    class="text-xs font-black text-slate-200 text-center uppercase tracking-[0.15em] leading-relaxed">
+                </p>
             </div>
 
-            <button
-                type="submit"
-                id="submit-btn"
-                class="w-full bg-indigo-600 text-white font-bold py-4 px-6 rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed min-h-14 relative text-lg focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                disabled
-                aria-label="Submit rating"
-            >
-                <span class="htmx-indicator absolute inset-0 flex items-center justify-center gap-2 bg-indigo-600 rounded-lg">
-                    <span class="spinner" aria-hidden="true"></span>
-                    <span>Submitting...</span>
-                </span>
-                <span class="htmx-request:opacity-30">Submit Rating</span>
+            <button type="button" id="submit-btn" onclick="submitRating()"
+                class="w-full py-6 glass-button text-xl font-black uppercase tracking-[0.2em] relative shadow-[0_15px_40px_rgba(20,184,166,0.3)]">
+                Finish Session
             </button>
-        </form>
+            <div id="error-message" class="text-xs text-rose-500 text-center font-bold hidden"></div>
+        </div>
 
-        <div id="result-message" class="mt-4" role="status" aria-live="polite"></div>
+        <div id="result-message" class="text-center" role="status" aria-live="polite"></div>
     </div>
 </div>
 
+<div id="explosion-layer" class="explosion-wrap top-0 left-0 w-full h-full"></div>
+
 <script>
-    function adjustIssues(delta) {
-        const input = document.getElementById('issues-read');
-        const value = parseInt(input.value) + delta;
-        if (value >= 1) {
-            input.value = value;
+    const DICE_LADDER = [4, 6, 8, 10, 12, 20];
+    let currentDenom = 6;
+
+    function renderDieFaces(container, dieType, result = null) {
+        if (!container) return;
+        const sides = parseInt(dieType);
+        let html = '<div class="die-core"></div>';
+        for (let i = 1; i <= sides; i++) {
+            const val = (result && i === 1) ? result : i;
+            html += `<div class="die-face face-${i}">${val}</div>`;
         }
-        validateForm();
+        container.innerHTML = html;
+        container.className = `die-3d d${dieType}`;
     }
 
-    function validateForm() {
-        const rating = parseFloat(document.getElementById('rating').value);
-        const issuesRead = parseInt(document.getElementById('issues-read').value);
-        const ratingError = document.getElementById('rating-error');
-        const issuesError = document.getElementById('issues-error');
-        const submitBtn = document.getElementById('submit-btn');
-        const issuesInput = document.getElementById('issues-read');
+    function updateUI(val) {
+        const num = parseFloat(val);
+        const display = document.getElementById('rating-value');
+        const effect = document.getElementById('queue-effect');
+        const diePreview = document.getElementById('die-preview');
 
-        let isValid = true;
+        display.textContent = num.toFixed(1);
+        let predictedDie = currentDenom;
 
-        if (rating < 0.5 || rating > 5.0) {
-            ratingError.classList.remove('hidden');
-            isValid = false;
+        if (num >= 4.0) {
+            display.className = 'text-teal-400';
+            display.style.textShadow = '0 0 40px rgba(20, 184, 166, 1)';
+            effect.innerHTML = 'Excellent! Die steps down 🎲 Move to front';
+            effect.parentElement.className = 'p-6 bg-teal-500/5 rounded-3xl border border-teal-500/20 shadow-xl';
+
+            const idx = DICE_LADDER.indexOf(currentDenom);
+            predictedDie = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[idx];
         } else {
-            ratingError.classList.add('hidden');
+            display.className = 'text-indigo-400';
+            display.style.textShadow = '0 0 40px rgba(79, 70, 229, 1)';
+            effect.innerHTML = 'Okay. Die steps up 🎲 Move to back';
+            effect.parentElement.className = 'p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/20 shadow-xl';
+
+            const idx = DICE_LADDER.indexOf(currentDenom);
+            predictedDie = idx < DICE_LADDER.length - 1 ? DICE_LADDER[idx + 1] : DICE_LADDER[idx];
         }
 
-        if (isNaN(issuesRead) || issuesRead < 1) {
-            issuesError.classList.remove('hidden');
-            issuesInput.classList.add('border-red-500');
-            isValid = false;
-        } else {
-            issuesError.classList.add('hidden');
-            issuesInput.classList.remove('border-red-500');
+        if (diePreview && diePreview.dataset.type != predictedDie) {
+            renderDieFaces(diePreview, predictedDie);
+            diePreview.dataset.type = predictedDie;
         }
-
-        submitBtn.disabled = !isValid;
-
-        const issuesRemaining = parseInt(document.querySelector('#thread-info .text-gray-600:last-child')?.textContent.split(': ')[1] || '0');
-        updateQueueEffect(issuesRemaining);
-
-        return isValid;
     }
 
-    function validateRateForm() {
-        return validateForm();
-    }
+    async function submitRating() {
+        const ratingInput = document.getElementById('rating-input');
+        const rating = ratingInput ? parseFloat(ratingInput.value) : 4.0;
+        const btn = document.getElementById('submit-btn');
+        const err = document.getElementById('error-message');
 
-    function loadActiveThread() {
-        fetch('/sessions/current/')
-            .then(response => response.json())
-            .then(data => {
-                const threadInfo = document.getElementById('thread-info');
-                if (data.active_thread) {
-                    threadInfo.innerHTML = `
-                        <div class="bg-indigo-50 rounded-lg p-4">
-                            <h2 class="text-xl font-bold text-indigo-800">${data.active_thread.title}</h2>
-                            <p class="text-gray-600">${data.active_thread.format}</p>
-                            <p class="text-gray-600">Issues remaining: ${data.active_thread.issues_remaining}</p>
-                        </div>
-                    `;
-                    updateQueueEffect(data.active_thread.issues_remaining);
-                } else {
-                    threadInfo.innerHTML = `
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                            <p class="text-yellow-800">No active thread found. Please roll first.</p>
-                        </div>
-                    `;
-                    document.getElementById('submit-btn').disabled = true;
-                }
-            })
-            .catch(error => {
-                console.error('Error loading thread:', error);
-            });
-    }
-
-    function updateQueueEffect(issuesRemaining) {
-        const rating = parseFloat(document.getElementById('rating').value);
-        const issuesRead = parseInt(document.getElementById('issues-read').value);
-
-        const ratingEffect = document.getElementById('rating-effect');
-        const completionEffect = document.getElementById('completion-effect');
+        console.log('[RatePage] Submitting rating:', rating);
+        if (err) err.classList.add('hidden');
 
         if (rating >= 4.0) {
-            ratingEffect.innerHTML = 'Rating ≥ 4.0 → Die steps down (d6 → d4), thread moves to front';
-            ratingEffect.classList.remove('text-red-600');
-            ratingEffect.classList.add('text-green-600');
-        } else {
-            ratingEffect.innerHTML = 'Rating < 4.0 → Die steps up (d6 → d8), thread moves to back';
-            ratingEffect.classList.remove('text-green-600');
-            ratingEffect.classList.add('text-red-600');
+            console.log('[RatePage] Triggering explosion');
+            const layer = document.getElementById('explosion-layer');
+            const count = 50;
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 150 + Math.random() * 250;
+                p.style.left = '50%'; p.style.top = '50%';
+                p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+                p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+                p.style.background = i % 2 ? 'var(--accent-teal)' : 'var(--accent-violet)';
+                layer.appendChild(p);
+                setTimeout(() => p.remove(), 1000);
+            }
         }
 
-        if (issuesRemaining <= issuesRead) {
-            completionEffect.innerHTML = '⚠️ Thread completes, moves to back of queue';
-            completionEffect.classList.add('text-orange-600', 'font-semibold');
-        } else {
-            completionEffect.innerHTML = '';
-            completionEffect.classList.remove('text-orange-600', 'font-semibold');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner mx-auto"></span>';
+
+        try {
+            console.log('[RatePage] Fetching /rate/...');
+            const res = await fetch('/rate/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rating, issues_read: 1 })
+            });
+            console.log('[RatePage] Response status:', res.status);
+            if (res.ok) {
+                console.log('[RatePage] Success! Redirecting...');
+                setTimeout(() => window.location.href = '/', 1200);
+            } else {
+                const data = await res.json();
+                console.error('[RatePage] Failure:', data);
+                if (err) {
+                    err.textContent = data.detail || 'Failed to save';
+                    err.classList.remove('hidden');
+                }
+                btn.disabled = false;
+                btn.textContent = 'Retry';
+            }
+        } catch (e) {
+            console.error('[RatePage] Error:', e);
+            btn.disabled = false;
+            btn.textContent = 'Network Error';
         }
     }
 
-    document.addEventListener('DOMContentLoaded', loadActiveThread);
+    document.addEventListener('DOMContentLoaded', () => {
+        fetch('/sessions/current/')
+            .then(res => res.json())
+            .then(data => {
+                const info = document.getElementById('thread-info');
+                const headerDie = document.getElementById('header-die-container');
+                const diePreview = document.getElementById('die-preview');
+
+                if (data.active_thread) {
+                    currentDenom = data.current_die || 6;
+                    renderDieFaces(diePreview, currentDenom);
+                    renderDieFaces(headerDie, currentDenom);
+
+                    info.innerHTML = `
+                        <div class="space-y-2 text-center">
+                            <h2 class="text-3xl font-black text-slate-100">${data.active_thread.title}</h2>
+                            <div class="flex items-center justify-center gap-3">
+                                <span class="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/20">${data.active_thread.format}</span>
+                                <span class="text-slate-500 text-xs font-bold">${data.active_thread.issues_remaining} Issues left</span>
+                            </div>
+                        </div>
+                    `;
+                    updateUI(4.0);
+                } else {
+                    info.innerHTML = '<div class="text-center p-10 text-slate-500 font-black">Session Inactive</div>';
+                    document.getElementById('submit-btn').disabled = true;
+                }
+            });
+    });
 </script>
 {% endblock %}
