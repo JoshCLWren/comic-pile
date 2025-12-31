@@ -46,6 +46,22 @@
                     <div class="h-14 bg-white/5 rounded-2xl animate-pulse"></div>
                 </div>
             </div>
+
+            <!-- Stale Suggestion -->
+            <div id="stale-suggestion" class="w-full mt-8 hidden transition-all animate-[fade-in_0.5s_ease-out]">
+                <div class="px-5 py-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl flex items-center gap-4">
+                    <div class="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center">
+                        <span class="text-lg">⏳</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p id="stale-text"
+                            class="text-[11px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
+                            You haven't touched <span class="text-amber-400 font-black">Title</span> in <span
+                                class="text-amber-400 font-black">X</span> days
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -142,6 +158,30 @@
         }
     }
 
+    async function loadStaleSuggestion() {
+        try {
+            console.log('[RollPage] Checking for stale threads');
+            const res = await fetch('/threads/stale?days=7');
+            const staleThreads = await res.json();
+            const container = document.getElementById('stale-suggestion');
+            const textSpan = document.getElementById('stale-text');
+
+            if (staleThreads && staleThreads.length > 0) {
+                const thread = staleThreads[0]; // Get the most stale
+                const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at);
+                const diffMs = new Date() - lastActivity;
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                if (diffDays >= 7) {
+                    textSpan.innerHTML = `You haven't touched <span class="text-amber-400 font-black">${thread.title}</span> in <span class="text-amber-400 font-black">${diffDays}</span> days`;
+                    container.classList.remove('hidden');
+                }
+            }
+        } catch (e) {
+            console.error('[RollPage] Failed to load stale suggestion:', e);
+        }
+    }
+
     // HTMX Logging & Global Handlers
     document.body.addEventListener('htmx:afterRequest', (evt) => {
         console.log('[RollPage] HTMX afterRequest target:', evt.detail.target.id, 'Status:', evt.detail.xhr.status);
@@ -221,6 +261,7 @@
             headerContainer.appendChild(mini);
         }
         loadRollPool();
+        loadStaleSuggestion();
     });
 </script>
 {% endblock %}

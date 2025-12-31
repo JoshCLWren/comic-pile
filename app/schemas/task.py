@@ -22,6 +22,7 @@ class TaskResponse(BaseModel):
     blocked_reason: str | None
     blocked_by: str | None
     last_heartbeat: datetime | None
+    instructions: str | None
     created_at: datetime
     updated_at: datetime
 
