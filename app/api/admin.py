@@ -3,12 +3,14 @@
 import csv
 import io
 import json
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.session import build_narrative_summary
 from app.database import get_db
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
@@ -190,7 +192,6 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
                 "issues_read": event.issues_read,
                 "queue_move": event.queue_move,
                 "die_after": event.die_after,
-                "notes": event.notes,
                 "session_id": event.session_id,
                 "thread_id": event.thread_id,
             }
@@ -203,4 +204,55 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
         io.BytesIO(json_output.encode()),
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=database_backup.json"},
+    )
+
+
+@router.get("/export/summary/")
+def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
+    """Export narrative session summaries as markdown file.
+
+    Formats all sessions with read, skipped, and completed lists per PRD Section 11.
+    """
+    sessions = (
+        db.execute(select(SessionModel).order_by(SessionModel.started_at.desc())).scalars().all()
+    )
+
+    output = io.StringIO()
+
+    for session in sessions:
+        started_at = session.started_at.astimezone(UTC)
+        ended_at = session.ended_at.astimezone(UTC) if session.ended_at else None
+
+        output.write(f"**Session:** {started_at.strftime('%b %d, %I:%M %p')}")
+        if ended_at:
+            output.write(f" – {ended_at.strftime('%I:%M %p')}")
+        output.write("\n")
+        output.write(f"Started at d{session.start_die}\n")
+
+        summary = build_narrative_summary(session.id, db)
+
+        if summary["read"]:
+            output.write("\nRead:\n\n")
+            for entry in summary["read"]:
+                output.write(f"* {entry}\n")
+
+        if summary["skipped"]:
+            output.write("\nSkipped:\n\n")
+            for title in summary["skipped"]:
+                output.write(f"* {title}\n")
+
+        if summary["completed"]:
+            output.write("\nCompleted:\n\n")
+            for title in summary["completed"]:
+                output.write(f"* {title}\n")
+
+        output.write("\n---\n\n")
+
+    output.seek(0)
+
+    filename = f"session_summaries_{datetime.now(UTC).strftime('%Y%m%d')}.md"
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/markdown",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

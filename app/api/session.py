@@ -28,11 +28,7 @@ except ImportError:
 def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]]:
     """Build narrative summary categorizing session events."""
     events = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .order_by(Event.timestamp)
-        )
+        db.execute(select(Event).where(Event.session_id == session_id).order_by(Event.timestamp))
         .scalars()
         .all()
     )
@@ -60,8 +56,8 @@ def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]
 
     # Consolidate (optional, but following PRD example)
     summary["read"] = read_entries
-    summary["skipped"] = sorted(list(skipped_titles))
-    summary["completed"] = sorted(list(completed_titles))
+    summary["skipped"] = sorted(skipped_titles)
+    summary["completed"] = sorted(completed_titles)
 
     return summary
 

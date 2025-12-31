@@ -291,3 +291,26 @@ Wonder Woman,Trade Paperback,3"""
     assert "Superman" in exported_threads
     assert "Batman" in exported_threads
     assert "Wonder Woman" in exported_threads
+
+
+@pytest.mark.asyncio
+async def test_export_summary(client, sample_data):
+    """Test GET /admin/export/summary/ returns markdown with narrative summaries."""
+    response = await client.get("/admin/export/summary/")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/markdown; charset=utf-8"
+    assert "attachment; filename=session_summaries_" in response.headers["content-disposition"]
+
+    content = response.text
+    assert "**Session:**" in content
+    assert "Started at d" in content
+    assert "Read:" in content
+    assert "Skipped:" in content or "Completed:" in content or "Superman" in content
+
+
+@pytest.mark.asyncio
+async def test_export_summary_empty(client, db):
+    """Test GET /admin/export/summary/ works with no sessions."""
+    response = await client.get("/admin/export/summary/")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/markdown; charset=utf-8"

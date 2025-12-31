@@ -3,7 +3,14 @@
 {% block content %}
 <div class="space-y-8 pb-20">
     <header class="px-2">
-        <h1 class="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">History</h1>
+        <div class="flex items-center gap-4">
+            <h1 class="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">History</h1>
+            <a href="/admin/export/summary/"
+               class="h-10 px-4 glass-button text-[10px] font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+               download>
+                Export Summary
+            </a>
+        </div>
         <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Chronicle of your journey</p>
     </header>
 
