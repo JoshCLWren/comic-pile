@@ -290,7 +290,7 @@ def claim_task(
     if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-    if task.status == "in_progress" and task.assigned_agent:
+    if task.assigned_agent:
         raise HTTPException(
             status_code=409,
             detail={
@@ -298,6 +298,7 @@ def claim_task(
                 "task_id": task.task_id,
                 "current_assignee": task.assigned_agent,
                 "worktree": task.worktree,
+                "current_status": task.status,
                 "claimed_at": task.updated_at.isoformat(),
             },
         )
