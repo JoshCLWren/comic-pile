@@ -11,7 +11,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api import admin, queue, rate, roll, session, thread
+from app.api import admin, queue, rate, roll, session, tasks, thread
+from app.api.tasks import get_coordinator_data
 from app.database import Base, engine, get_db
 from app.models import Session as SessionModel
 
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(queue.router, prefix="/queue", tags=["queue"])
     app.include_router(session.router, tags=["session"])
     app.include_router(admin.router, tags=["admin"])
+    app.include_router(tasks.router, prefix="/api", tags=["tasks"])
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -171,6 +173,14 @@ def create_app() -> FastAPI:
             current_die = 6
         return templates.TemplateResponse(
             "roll.html", {"request": request, "current_die": current_die}
+        )
+
+    @app.get("/tasks/coordinator", response_class=HTMLResponse)
+    async def coordinator_page(request: Request, db: Session = Depends(get_db)):
+        """Render task coordinator dashboard."""
+        coordinator_data = get_coordinator_data(db)
+        return templates.TemplateResponse(
+            "coordinator.html", {"request": request, **coordinator_data.model_dump()}
         )
 
     @app.on_event("startup")

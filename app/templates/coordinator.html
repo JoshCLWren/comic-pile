@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-6">
+    <h1 class="text-3xl font-bold text-glow">Task Coordinator</h1>
+
+    <div class="flex items-center justify-between">
+        <p class="text-slate-400">Track task progress and assignments</p>
+        <button hx-get="/tasks/coordinator-data" hx-target="#coordinator-content" class="px-4 py-2 bg-teal-600/20 text-teal-400 rounded-lg hover:bg-teal-600/30 transition-all">
+            Refresh
+        </button>
+    </div>
+
+    <div id="coordinator-content" class="space-y-6">
+        <div class="grid gap-4">
+            <div class="glass-card">
+                <h2 class="text-lg font-semibold text-teal-400 mb-3">Pending ({{ pending|length }})</h2>
+                <div class="space-y-2">
+                    {% for task in pending %}
+                    <div class="bg-white/5 rounded-lg p-3 flex items-center justify-between">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono text-teal-400">{{ task.task_id }}</span>
+                                <span class="text-xs px-2 py-0.5 rounded bg-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-500/20 text-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-400">{{ task.priority }}</span>
+                            </div>
+                            <p class="text-sm font-medium text-slate-200 truncate mt-1">{{ task.title }}</p>
+                            {% if task.dependencies %}
+                            <p class="text-xs text-slate-500 mt-1">Depends on: {{ task.dependencies }}</p>
+                            {% endif %}
+                        </div>
+                        <button hx-post="/api/tasks/{{ task.task_id }}/claim" hx-vals='{"agent_name": "opencode", "worktree": "comic-pile"}' hx-target="#coordinator-content" class="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 transition-all">
+                            Claim
+                        </button>
+                    </div>
+                    {% else %}
+                    <p class="text-slate-500 text-sm">No pending tasks</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h2 class="text-lg font-semibold text-amber-400 mb-3">In Progress ({{ in_progress|length }})</h2>
+                <div class="space-y-2">
+                    {% for task in in_progress %}
+                    <div class="bg-white/5 rounded-lg p-3 flex items-center justify-between">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono text-amber-400">{{ task.task_id }}</span>
+                                <span class="text-xs px-2 py-0.5 rounded bg-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-500/20 text-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-400">{{ task.priority }}</span>
+                            </div>
+                            <p class="text-sm font-medium text-slate-200 truncate mt-1">{{ task.title }}</p>
+                            <div class="flex items-center gap-4 mt-1">
+                                <p class="text-xs text-slate-400">
+                                    <span class="font-medium">Agent:</span> {{ task.assigned_agent }}
+                                </p>
+                                {% if task.worktree %}
+                                <p class="text-xs text-slate-400">
+                                    <span class="font-medium">Worktree:</span> {{ task.worktree }}
+                                </p>
+                                {% endif %}
+                                <p class="text-xs text-slate-400">
+                                    <span class="font-medium">Updated:</span> {{ task.updated_at.strftime('%H:%M') }}
+                                </p>
+                            </div>
+                        </div>
+                        <button hx-post="/api/tasks/{{ task.task_id }}/unclaim" hx-vals='{"agent_name": "opencode"}' hx-target="#coordinator-content" class="px-3 py-1.5 bg-rose-600/20 text-rose-400 rounded-lg text-sm hover:bg-rose-600/30 transition-all">
+                            Unclaim
+                        </button>
+                    </div>
+                    {% else %}
+                    <p class="text-slate-500 text-sm">No tasks in progress</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h2 class="text-lg font-semibold text-rose-400 mb-3">Blocked ({{ blocked|length }})</h2>
+                <div class="space-y-2">
+                    {% for task in blocked %}
+                    <div class="bg-white/5 rounded-lg p-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-mono text-rose-400">{{ task.task_id }}</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-rose-500/20 text-rose-400">{{ task.priority }}</span>
+                        </div>
+                        <p class="text-sm font-medium text-slate-200 mt-1">{{ task.title }}</p>
+                        {% if task.assigned_agent %}
+                        <p class="text-xs text-slate-400 mt-1">Assigned to: {{ task.assigned_agent }}</p>
+                        {% endif %}
+                        {% if task.blocked_reason %}
+                        <p class="text-xs text-rose-400 mt-1">Reason: {{ task.blocked_reason }}</p>
+                        {% endif %}
+                        {% if task.blocked_by %}
+                        <p class="text-xs text-slate-400 mt-1">Blocked by: {{ task.blocked_by }}</p>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-slate-500 text-sm">No blocked tasks</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h2 class="text-lg font-semibold text-sky-400 mb-3">In Review ({{ in_review|length }})</h2>
+                <div class="space-y-2">
+                    {% for task in in_review %}
+                    <div class="bg-white/5 rounded-lg p-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-mono text-sky-400">{{ task.task_id }}</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-500/20 text-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-400">{{ task.priority }}</span>
+                        </div>
+                        <p class="text-sm font-medium text-slate-200 mt-1">{{ task.title }}</p>
+                        {% if task.assigned_agent %}
+                        <p class="text-xs text-slate-400 mt-1">Assigned to: {{ task.assigned_agent }}</p>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-slate-500 text-sm">No tasks in review</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h2 class="text-lg font-semibold text-emerald-400 mb-3">Done ({{ done|length }})</h2>
+                <div class="space-y-2">
+                    {% for task in done %}
+                    <div class="bg-white/5 rounded-lg p-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-mono text-emerald-400">{{ task.task_id }}</span>
+                            <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">DONE</span>
+                        </div>
+                        <p class="text-sm font-medium text-slate-200 mt-1">{{ task.title }}</p>
+                        {% if task.assigned_agent %}
+                        <p class="text-xs text-slate-400 mt-1">Completed by: {{ task.assigned_agent }}</p>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <p class="text-slate-500 text-sm">No completed tasks</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    setInterval(function() {
+        htmx.trigger(document.body, 'refresh-coordinator');
+    }, 10000);
+
+    document.body.addEventListener('refresh-coordinator', function() {
+        htmx.ajax('GET', '/tasks/coordinator-data', {target: '#coordinator-content'});
+    });
+</script>
+{% endblock %}

@@ -8,6 +8,13 @@ PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
 
+# Port configuration - Port allocation rules:
+# - Main repo (task API source of truth): 8000
+# - Agent worktree 1: 8001
+# - Agent worktree 2: 8002
+# - Agent worktree 3: 8003
+PORT ?= 8000
+
 help:  ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
@@ -149,8 +156,8 @@ merge-phase9:  ## Merge Phase 9 to main
 	git push origin main
 
 dev:  ## Run development server with hot reload (uvicorn app.main:app --reload)
-	@echo "Starting FastAPI development server on http://0.0.0.0:8000"
-	@uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	@echo "Starting FastAPI development server on http://0.0.0.0:${PORT}"
+	@uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --reload
 
 seed:  ## Seed database with sample data (python -m scripts.seed_data)
 	@echo "Seeding database with Faker data..."

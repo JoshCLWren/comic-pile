@@ -1,8 +1,16 @@
 """Pydantic schemas for request/response validation."""
 
-from .thread import (
+from app.schemas.task import (
+    ClaimTaskRequest,
+    InitializeTasksResponse,
+    SetStatusRequest,
+    TaskResponse,
+    UpdateNotesRequest,
+)
+from app.schemas.thread import (
     OverrideRequest,
     RateRequest,
+    ReactivateRequest,
     RollResponse,
     SessionResponse,
     ThreadCreate,
@@ -12,10 +20,16 @@ from .thread import (
 
 __all__ = [
     "ThreadCreate",
-    "ThreadResponse",
     "ThreadUpdate",
+    "ThreadResponse",
     "RollResponse",
     "OverrideRequest",
+    "ReactivateRequest",
     "RateRequest",
     "SessionResponse",
+    "ClaimTaskRequest",
+    "InitializeTasksResponse",
+    "SetStatusRequest",
+    "TaskResponse",
+    "UpdateNotesRequest",
 ]
