@@ -279,3 +279,99 @@ async def test_get_session_details(client, sample_data):
     assert "Rolled" in content
     assert "Rated" in content
     assert "Superman" in content
+
+
+@pytest.mark.asyncio
+async def test_get_stale_threads(client, db):
+    """Test GET /threads/stale returns threads inactive for specified days."""
+    from datetime import datetime, timedelta
+
+    from app.models import Thread, User
+
+    now = datetime.now()
+
+    user = User(username="stale_test_user", created_at=datetime.now())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    stale_thread = Thread(
+        title="Old Thread",
+        format="Comic",
+        status="active",
+        queue_position=1,
+        last_activity_at=now - timedelta(days=10),
+        user_id=user.id,
+    )
+    recent_thread = Thread(
+        title="Recent Thread",
+        format="Comic",
+        status="active",
+        queue_position=2,
+        last_activity_at=now - timedelta(days=3),
+        user_id=user.id,
+    )
+    no_activity_thread = Thread(
+        title="No Activity Thread",
+        format="Comic",
+        status="active",
+        queue_position=3,
+        last_activity_at=None,
+        user_id=user.id,
+    )
+
+    db.add_all([stale_thread, recent_thread, no_activity_thread])
+    db.commit()
+
+    response = await client.get("/threads/stale?days=7")
+    assert response.status_code == 200
+
+    stale = response.json()
+    assert len(stale) == 2
+    stale_ids = [t["id"] for t in stale]
+    assert stale_thread.id in stale_ids
+    assert no_activity_thread.id in stale_ids
+    assert recent_thread.id not in stale_ids
+
+
+@pytest.mark.asyncio
+async def test_get_stale_threads_custom_threshold(client, db):
+    """Test GET /threads/stale with custom days parameter."""
+    from datetime import datetime, timedelta
+
+    from app.models import Thread, User
+
+    now = datetime.now()
+
+    user = User(username="custom_stale_user", created_at=datetime.now())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    thread_5_days = Thread(
+        title="5 Days Old",
+        format="Comic",
+        status="active",
+        queue_position=1,
+        last_activity_at=now - timedelta(days=5),
+        user_id=user.id,
+    )
+    thread_15_days = Thread(
+        title="15 Days Old",
+        format="Comic",
+        status="active",
+        queue_position=2,
+        last_activity_at=now - timedelta(days=15),
+        user_id=user.id,
+    )
+
+    db.add_all([thread_5_days, thread_15_days])
+    db.commit()
+
+    response = await client.get("/threads/stale?days=10")
+    assert response.status_code == 200
+
+    stale = response.json()
+    assert len(stale) == 1
+    assert stale[0]["id"] == thread_15_days.id
+    assert stale[0]["title"] == "15 Days Old"
