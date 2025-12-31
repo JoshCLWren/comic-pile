@@ -159,6 +159,9 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
                 if thread.last_activity_at
                 else None,
                 "review_url": thread.review_url,
+                "last_review_at": thread.last_review_at.isoformat()
+                if thread.last_review_at
+                else None,
                 "created_at": thread.created_at.isoformat() if thread.created_at else None,
                 "user_id": thread.user_id,
             }
@@ -187,6 +190,7 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
                 "issues_read": event.issues_read,
                 "queue_move": event.queue_move,
                 "die_after": event.die_after,
+                "notes": event.notes,
                 "session_id": event.session_id,
                 "thread_id": event.thread_id,
             }
