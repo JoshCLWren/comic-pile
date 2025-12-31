@@ -111,6 +111,15 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                         Excellent! Die steps down 🎲 Move to front
                     </p>
                 </div>
+                <div class="flex items-center justify-center gap-4">
+                    <button onclick="decrementIssues()" class="w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-2xl font-bold text-slate-300 transition-all active:scale-95">−</button>
+                    <div class="text-center flex-1">
+                        <p class="text-[10px] font-black uppercase tracking-[0.5em] text-slate-600 mb-2">Issues read</p>
+                        <p id="issues-read-value" class="text-3xl font-black text-slate-100">1</p>
+                    </div>
+                    <button onclick="incrementIssues()" class="w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-2xl font-bold text-slate-300 transition-all active:scale-95">+</button>
+                </div>
+                <input type="hidden" id="issues-read-input" value="1">
                 <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-8 glass-button text-xl font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
                     Finish Session
                 </button>

@@ -213,13 +213,33 @@
         }
     }
 
+    function incrementIssues() {
+        const input = document.getElementById('issues-read-input');
+        const display = document.getElementById('issues-read-value');
+        const current = parseInt(input.value);
+        input.value = current + 1;
+        display.textContent = current + 1;
+    }
+
+    function decrementIssues() {
+        const input = document.getElementById('issues-read-input');
+        const display = document.getElementById('issues-read-value');
+        const current = parseInt(input.value);
+        if (current > 1) {
+            input.value = current - 1;
+            display.textContent = current - 1;
+        }
+    }
+
     async function submitRating() {
         const ratingInput = document.getElementById('rating-input');
+        const issuesReadInput = document.getElementById('issues-read-input');
         const rating = ratingInput ? parseFloat(ratingInput.value) : 4.0;
+        const issuesRead = issuesReadInput ? parseInt(issuesReadInput.value) : 1;
         const btn = document.getElementById('submit-rating-btn');
         const errorDisplay = document.getElementById('error-message');
 
-        console.log('[RollPage] submitRating START:', rating);
+        console.log('[RollPage] submitRating START:', rating, 'issues:', issuesRead);
         if (rating >= 4.0) createExplosion();
 
         btn.disabled = true;
@@ -230,7 +250,7 @@
             const res = await fetch('/rate/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rating, issues_read: 1 })
+                body: JSON.stringify({ rating, issues_read: issuesRead })
             });
             console.log('[RollPage] Response status:', res.status);
             if (res.ok) {
