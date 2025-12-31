@@ -3,9 +3,7 @@
 from comic_pile.dice_ladder import (
     DICE_LADDER,
     step_down,
-    step_down_to_min,
     step_up,
-    step_up_to_max,
 )
 from comic_pile.queue import (
     get_roll_pool,
@@ -25,8 +23,6 @@ __all__ = [
     "DICE_LADDER",
     "step_down",
     "step_up",
-    "step_up_to_max",
-    "step_down_to_min",
     "get_roll_pool",
     "get_stale_threads",
     "move_to_back",
