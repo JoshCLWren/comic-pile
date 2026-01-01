@@ -183,6 +183,11 @@ def create_app() -> FastAPI:
             "coordinator.html", {"request": request, **coordinator_data.model_dump()}
         )
 
+    @app.get("/health")
+    async def health_check():
+        """Health check endpoint for Docker container health checks."""
+        return {"status": "healthy"}
+
     @app.on_event("startup")
     async def startup_event():
         """Initialize database on application startup."""
