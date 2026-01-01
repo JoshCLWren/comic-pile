@@ -300,7 +300,6 @@ body {
 
 .result-reveal {
     padding: 1rem;
-    overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
@@ -318,16 +317,7 @@ body {
     border-radius: 3px;
 }
 
-#rating-form-container {
-    max-height: 50vh;
-    overflow-y: auto;
-}
 
-@media (max-width: 640px) {
-    #rating-form-container {
-        max-height: 60vh;
-    }
-}
 
 #rating-value {
     font-size: 3.5rem;
