@@ -1,6 +1,50 @@
 (function () {
     const instances = new WeakMap();
 
+    function createDecahedronGeometry(radius) {
+        const geometry = new THREE.BufferGeometry();
+        const vertices = new Float32Array([
+            0.6495190528, 0.5590169944, 0.2,
+            0.6495190528, -0.5590169944, 0.2,
+            0.2, 0.5590169944, 0.6495190528,
+            0.2, -0.5590169944, 0.6495190528,
+            -0.2, 0.5590169944, 0.6495190528,
+            -0.2, -0.5590169944, 0.6495190528,
+            -0.6495190528, 0.5590169944, 0.2,
+            -0.6495190528, -0.5590169944, 0.2,
+            0.2, 0.5590169944, -0.6495190528,
+            0.2, -0.5590169944, -0.6495190528,
+            -0.2, 0.5590169944, -0.6495190528,
+            -0.2, -0.5590169944, -0.6495190528,
+            0.6495190528, 0.5590169944, -0.2,
+            0.6495190528, -0.5590169944, -0.2,
+            -0.6495190528, 0.5590169944, -0.2,
+            -0.6495190528, -0.5590169944, -0.2,
+        ]);
+        const indices = new Uint16Array([
+            0, 1, 2, 1, 3, 2,
+            2, 3, 4, 3, 5, 4,
+            4, 5, 6, 5, 7, 6,
+            6, 7, 0, 7, 1, 0,
+            8, 9, 10, 9, 11, 10,
+            10, 11, 12, 11, 13, 12,
+            12, 13, 14, 13, 15, 14,
+            14, 15, 8, 15, 9, 8,
+            0, 2, 10, 2, 4, 10,
+            2, 4, 8, 4, 6, 8,
+            4, 6, 12, 6, 14, 12,
+            6, 0, 12, 0, 10, 12,
+            1, 3, 11, 3, 5, 11,
+            3, 5, 13, 5, 7, 13,
+            5, 7, 15, 7, 9, 15,
+            7, 1, 15, 1, 11, 15,
+        ]);
+        geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+        return geometry;
+    }
+
     function buildGeometry(sides) {
         switch (sides) {
             case 4:
@@ -10,7 +54,7 @@
             case 8:
                 return new THREE.OctahedronGeometry(0.9);
             case 10:
-                return new THREE.DecahedronGeometry(0.9);
+                return createDecahedronGeometry(0.9);
             case 12:
                 return new THREE.DodecahedronGeometry(0.95);
             case 20:
