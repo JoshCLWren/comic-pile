@@ -207,6 +207,76 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
     )
 
 
+@router.post("/import/reviews/")
+async def import_reviews(
+    file: UploadFile = File(...), db: Session = Depends(get_db)
+) -> dict[str, int | list[str]]:
+    """Import review timestamps from CSV file.
+
+    CSV format: thread_id, review_url, review_timestamp
+    - thread_id: Thread ID (required, must exist)
+    - review_url: Review URL (required)
+    - review_timestamp: ISO format datetime (required)
+
+    Updates thread's last_review_at and review_url fields.
+    """
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+
+    content = await file.read()
+    csv_reader = csv.DictReader(content.decode("utf-8").splitlines())
+
+    imported = 0
+    errors = []
+
+    for row_num, row in enumerate(csv_reader, start=2):
+        try:
+            thread_id_str = row.get("thread_id", "").strip()
+            review_url = row.get("review_url", "").strip()
+            review_timestamp_str = row.get("review_timestamp", "").strip()
+
+            if not thread_id_str:
+                errors.append(f"Row {row_num}: Missing thread_id")
+                continue
+
+            if not review_url:
+                errors.append(f"Row {row_num}: Missing review_url")
+                continue
+
+            if not review_timestamp_str:
+                errors.append(f"Row {row_num}: Missing review_timestamp")
+                continue
+
+            try:
+                thread_id = int(thread_id_str)
+            except ValueError:
+                errors.append(f"Row {row_num}: thread_id must be an integer")
+                continue
+
+            thread = db.execute(select(Thread).where(Thread.id == thread_id)).scalar_one_or_none()
+
+            if not thread:
+                errors.append(f"Row {row_num}: Thread {thread_id} not found")
+                continue
+
+            try:
+                review_timestamp = datetime.fromisoformat(review_timestamp_str)
+            except ValueError:
+                errors.append(f"Row {row_num}: review_timestamp must be ISO format datetime")
+                continue
+
+            thread.review_url = review_url
+            thread.last_review_at = review_timestamp
+            db.flush()
+            imported += 1
+
+        except Exception as e:
+            errors.append(f"Row {row_num}: {str(e)}")
+
+    db.commit()
+    return {"imported": imported, "errors": errors}
+
+
 @router.get("/export/summary/")
 def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
     """Export narrative session summaries as markdown file.

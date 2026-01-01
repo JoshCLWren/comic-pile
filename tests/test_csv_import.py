@@ -3,6 +3,9 @@
 import io
 
 import pytest
+from sqlalchemy import select
+
+from app.models import Thread
 
 
 @pytest.mark.asyncio
@@ -314,3 +317,162 @@ async def test_export_summary_empty(client, db):
     response = await client.get("/admin/export/summary/")
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/markdown; charset=utf-8"
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_valid_csv(client, sample_data, db):
+    """Test POST /admin/import/reviews/ succeeds with valid data."""
+    threads = db.execute(select(Thread)).scalars().all()
+    assert len(threads) >= 2
+
+    csv_content = f"""thread_id,review_url,review_timestamp
+{threads[0].id},https://example.com/review1,2024-01-15T10:30:00
+{threads[1].id},https://example.com/review2,2024-02-20T14:45:00"""
+    csv_file = io.BytesIO(csv_content.encode())
+    files = {"file": ("reviews.csv", csv_file, "text/csv")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["imported"] == 2
+    assert len(data["errors"]) == 0
+
+    db.refresh(threads[0])
+    db.refresh(threads[1])
+
+    assert threads[0].review_url == "https://example.com/review1"
+    assert threads[0].last_review_at.isoformat().startswith("2024-01-15T10:30:00")
+    assert threads[1].review_url == "https://example.com/review2"
+    assert threads[1].last_review_at.isoformat().startswith("2024-02-20T14:45:00")
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_missing_thread_id(client):
+    """Test POST /admin/import/reviews/ returns error for missing thread_id."""
+    csv_content = """thread_id,review_url,review_timestamp
+,https://example.com/review,2024-01-15T10:30:00"""
+    csv_file = io.BytesIO(csv_content.encode())
+    files = {"file": ("reviews.csv", csv_file, "text/csv")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["imported"] == 0
+    assert len(data["errors"]) == 1
+    assert "Missing thread_id" in data["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_missing_review_url(client):
+    """Test POST /admin/import/reviews/ returns error for missing review_url."""
+    csv_content = """thread_id,review_url,review_timestamp
+1,,2024-01-15T10:30:00"""
+    csv_file = io.BytesIO(csv_content.encode())
+    files = {"file": ("reviews.csv", csv_file, "text/csv")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["imported"] == 0
+    assert len(data["errors"]) == 1
+    assert "Missing review_url" in data["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_missing_timestamp(client):
+    """Test POST /admin/import/reviews/ returns error for missing review_timestamp."""
+    csv_content = """thread_id,review_url,review_timestamp
+1,https://example.com/review,"""
+    csv_file = io.BytesIO(csv_content.encode())
+    files = {"file": ("reviews.csv", csv_file, "text/csv")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["imported"] == 0
+    assert len(data["errors"]) == 1
+    assert "Missing review_timestamp" in data["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_invalid_thread_id(client):
+    """Test POST /admin/import/reviews/ returns error for non-integer thread_id."""
+    csv_content = """thread_id,review_url,review_timestamp
+abc,https://example.com/review,2024-01-15T10:30:00"""
+    csv_file = io.BytesIO(csv_content.encode())
+    files = {"file": ("reviews.csv", csv_file, "text/csv")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["imported"] == 0
+    assert len(data["errors"]) == 1
+    assert "must be an integer" in data["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_thread_not_found(client):
+    """Test POST /admin/import/reviews/ returns error for non-existent thread."""
+    csv_content = """thread_id,review_url,review_timestamp
+99999,https://example.com/review,2024-01-15T10:30:00"""
+    csv_file = io.BytesIO(csv_content.encode())
+    files = {"file": ("reviews.csv", csv_file, "text/csv")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["imported"] == 0
+    assert len(data["errors"]) == 1
+    assert "Thread 99999 not found" in data["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_invalid_timestamp(client, sample_data, db):
+    """Test POST /admin/import/reviews/ returns error for invalid datetime format."""
+    threads = db.execute(select(Thread)).scalars().all()
+    assert len(threads) >= 1
+
+    csv_content = f"""thread_id,review_url,review_timestamp
+{threads[0].id},https://example.com/review,invalid-date"""
+    csv_file = io.BytesIO(csv_content.encode())
+    files = {"file": ("reviews.csv", csv_file, "text/csv")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["imported"] == 0
+    assert len(data["errors"]) == 1
+    assert "must be ISO format datetime" in data["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_non_csv_file(client):
+    """Test POST /admin/import/reviews/ returns error for non-CSV file."""
+    txt_content = "This is not a CSV file"
+    txt_file = io.BytesIO(txt_content.encode())
+    files = {"file": ("test.txt", txt_file, "text/plain")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_import_reviews_empty_file(client, db):
+    """Test POST /admin/import/reviews/ handles empty CSV gracefully."""
+    csv_content = """thread_id,review_url,review_timestamp"""
+    csv_file = io.BytesIO(csv_content.encode())
+    files = {"file": ("reviews.csv", csv_file, "text/csv")}
+
+    response = await client.post("/admin/import/reviews/", files=files)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["imported"] == 0
+    assert len(data["errors"]) == 0
