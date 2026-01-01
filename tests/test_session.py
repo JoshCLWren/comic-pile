@@ -17,7 +17,7 @@ def test_is_active_true(db):
     db.add(session)
     db.commit()
 
-    result = is_active(session)
+    result = is_active(session, db)
     assert result is True
 
 
@@ -31,7 +31,7 @@ def test_is_active_false_old(db):
     db.add(session)
     db.commit()
 
-    result = is_active(session)
+    result = is_active(session, db)
     assert result is False
 
 
@@ -46,7 +46,7 @@ def test_is_active_false_ended(db):
     db.add(session)
     db.commit()
 
-    result = is_active(session)
+    result = is_active(session, db)
     assert result is False
 
 
@@ -150,7 +150,7 @@ def test_is_active_exactly_6_hours(db):
     db.add(session)
     db.commit()
 
-    result = is_active(session)
+    result = is_active(session, db)
     assert result is True
 
 
