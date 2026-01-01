@@ -50,6 +50,7 @@
 
 <script src="/static/js/app.js"></script>
 <script>
+    let poolDie = null;
     async function updateDieInfo() {
         try {
             const res = await fetch('/sessions/current/');
@@ -60,7 +61,13 @@
             document.getElementById('pool-size').textContent = die;
 
             const container = document.getElementById('pool-die-container');
-            container.innerHTML = `<div class="die-base die-mini die-${die}">${die}</div>`;
+            if (window.Dice3D) {
+                if (!poolDie) {
+                    poolDie = Dice3D.create(container, die, { color: 0x14b8a6, showValue: false });
+                } else {
+                    poolDie.setSides(die);
+                }
+            }
         } catch (e) {
             console.error(e);
         }

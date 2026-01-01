@@ -99,10 +99,10 @@ def get_active_thread(session: SessionModel, db: Session) -> dict[str, Any] | No
         .first()
     )
 
-    if not event or not event.thread_id:
+    if not event or not event.selected_thread_id:
         return None
 
-    thread = db.get(Thread, event.thread_id)
+    thread = db.get(Thread, event.selected_thread_id)
     if not thread:
         return None
 

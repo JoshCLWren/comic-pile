@@ -227,6 +227,57 @@ async def test_get_session_current_not_found(client):
 
 
 @pytest.mark.asyncio
+async def test_get_session_current_uses_selected_thread_id(client, db):
+    """Test GET /sessions/current/ returns active thread from selected_thread_id."""
+    from datetime import UTC, datetime
+
+    from app.models import Event, Session as SessionModel, Thread, User
+
+    user = User(username="roll_user", created_at=datetime.now(UTC))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    thread = Thread(
+        title="Saga",
+        format="TPB",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(UTC),
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    session = SessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    event = Event(
+        type="roll",
+        die=6,
+        result=2,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=None,
+        timestamp=datetime.now(UTC),
+    )
+    db.add(event)
+    db.commit()
+
+    response = await client.get("/sessions/current/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["active_thread"]["id"] == thread.id
+    assert data["active_thread"]["title"] == "Saga"
+
+
+@pytest.mark.asyncio
 async def test_get_sessions(client, sample_data):
     """Test GET /sessions/ lists all sessions."""
     response = await client.get("/sessions/")

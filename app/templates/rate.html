@@ -56,18 +56,9 @@
 <script>
     const DICE_LADDER = [4, 6, 8, 10, 12, 20];
     let currentDenom = 6;
-
-    function renderDieFaces(container, dieType, result = null) {
-        if (!container) return;
-        const sides = parseInt(dieType);
-        let html = '<div class="die-core"></div>';
-        for (let i = 1; i <= sides; i++) {
-            const val = (result && i === 1) ? result : i;
-            html += `<div class="die-face face-${i}">${val}</div>`;
-        }
-        container.innerHTML = html;
-        container.className = `die-3d d${dieType}`;
-    }
+    let headerDie = null;
+    let previewDie = null;
+    let previewSides = null;
 
     function updateUI(val) {
         const num = parseFloat(val);
@@ -96,9 +87,9 @@
             predictedDie = idx < DICE_LADDER.length - 1 ? DICE_LADDER[idx + 1] : DICE_LADDER[idx];
         }
 
-        if (diePreview && diePreview.dataset.type != predictedDie) {
-            renderDieFaces(diePreview, predictedDie);
-            diePreview.dataset.type = predictedDie;
+        if (previewDie && previewSides !== predictedDie) {
+            previewDie.setSides(predictedDie);
+            previewSides = predictedDie;
         }
     }
 
@@ -165,13 +156,17 @@
             .then(res => res.json())
             .then(data => {
                 const info = document.getElementById('thread-info');
-                const headerDie = document.getElementById('header-die-container');
+                const headerDieContainer = document.getElementById('header-die-container');
                 const diePreview = document.getElementById('die-preview');
 
                 if (data.active_thread) {
                     currentDenom = data.current_die || 6;
-                    renderDieFaces(diePreview, currentDenom);
-                    renderDieFaces(headerDie, currentDenom);
+                    if (window.Dice3D) {
+                        headerDie = Dice3D.create(headerDieContainer, currentDenom, { color: 0x14b8a6, showValue: false });
+                        previewDie = Dice3D.create(diePreview, currentDenom, { color: 0x4f46e5 });
+                        previewSides = currentDenom;
+                        if (previewDie) previewDie.setValue(1);
+                    }
 
                     info.innerHTML = `
                         <div class="space-y-2 text-center">

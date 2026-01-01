@@ -65,6 +65,39 @@ body {
     height: 100%;
 }
 
+.dice3d-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.dice3d-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.dice3d-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 1.5rem;
+    color: #f8fafc;
+    text-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+
+.dice3d-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    color: #f8fafc;
+}
+
 /* Celebration */
 .explosion-wrap {
     position: fixed;

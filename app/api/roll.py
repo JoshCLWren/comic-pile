@@ -92,7 +92,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
             <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
                 <div class="threejs-die-container relative z-10" style="width: 100px; height: 100px; margin: 0 auto;">
-                    <canvas id="result-dice-canvas" class="result-dice-canvas"></canvas>
+                    <div id="result-die-3d" class="w-full h-full"></div>
                 </div>
                 <div class="text-center px-4">
                     <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">You rolled</p>
@@ -132,65 +132,10 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 if (instruction) instruction.textContent = "Tap Die to Roll";
 
                 setTimeout(function() {{
-                    const resultCanvas = document.getElementById('result-dice-canvas');
-                    if (resultCanvas && window.DiceManager) {{
-                        dieResultContainer = resultCanvas;
-                        const resultScene = new THREE.Scene();
-                        const resultCamera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-                        resultCamera.position.set(0, 2, 5);
-                        resultCamera.lookAt(0, 0, 0);
-
-                        const resultRenderer = new THREE.WebGLRenderer({{
-                            canvas: resultCanvas,
-                            antialias: true,
-                            alpha: true
-                        }});
-                        resultRenderer.setSize(100, 100);
-
-                        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-                        resultScene.add(ambientLight);
-
-                        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-                        directionalLight.position.set(5, 10, 7);
-                        resultScene.add(directionalLight);
-
-                        const resultWorld = new CANNON.World();
-                        resultWorld.gravity.set(0, -20, 0);
-                        resultWorld.broadphase = new CANNON.NaiveBroadphase();
-                        resultWorld.solver.iterations = 16;
-
-                        const floorBody = new CANNON.Body({{
-                            mass: 0,
-                            shape: new CANNON.Plane(),
-                            material: DiceManager.floorBodyMaterial
-                        }});
-                        floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-                        resultWorld.add(floorBody);
-
-                        const dieClassMap = {{
-                            4: DiceD4, 6: DiceD6, 8: DiceD8, 10: DiceD10, 12: DiceD12, 20: DiceD20
-                        }};
-                        const dieClass = dieClassMap[{current_die}] || DiceD6;
-
-                        const resultDie = new dieClass({{
-                            size: 30,
-                            fontColor: '#ffffff',
-                            backColor: '#4f46e5'
-                        }});
-                        resultScene.add(resultDie.getObject());
-                        resultDie.getObject().position.y = 2;
-                        resultDie.updateBodyFromMesh();
-
-                        DiceManager.setWorld(resultWorld);
-                        DiceManager.prepareValues([{{dice: resultDie, value: {result_val}}}]);
-
-                        const resultAnimate = function() {{
-                            resultWorld.step(1.0 / 60.0);
-                            resultDie.updateMeshFromBody();
-                            resultRenderer.render(resultScene, resultCamera);
-                            requestAnimationFrame(resultAnimate);
-                        }};
-                        resultAnimate();
+                    const resultContainer = document.getElementById('result-die-3d');
+                    if (resultContainer && window.Dice3D) {{
+                        const die = Dice3D.create(resultContainer, {current_die}, {{ color: 0x4f46e5 }});
+                        if (die) die.rollTo({result_val});
                     }}
                 }}, 100);
             }})();
