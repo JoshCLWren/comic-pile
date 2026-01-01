@@ -255,8 +255,7 @@
         const headerContainer = document.getElementById('header-die-container');
         if (headerContainer) {
             const mini = document.createElement('div');
-            mini.className = 'die-3d';
-            mini.style.cssText = 'width: 30px; height: 30px; --die-size: 30px; --die-radius: 15px;';
+            mini.className = 'die-3d mini-die';
             renderDieFaces(mini, initialDenom);
             headerContainer.appendChild(mini);
         }
