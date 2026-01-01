@@ -1,5 +1,6 @@
 """FastAPI application factory and configuration."""
 
+import json
 import logging
 import time
 import traceback
@@ -108,6 +109,29 @@ def create_app() -> FastAPI:
     async def log_errors_middleware(request: Request, call_next):
         """Log all requests with status codes >= 400."""
         start_time = time.time()
+
+        try:
+            if request.method in ("POST", "PUT", "PATCH"):
+                body = await request.body()
+                if body:
+                    try:
+                        body_str = body.decode("utf-8")
+                        if len(body_str) <= 1000:
+                            body_json = json.loads(body_str)
+                            if "password" in body_json or "secret" in body_json:
+                                request.state.request_body = "[REDACTED: contains sensitive data]"
+                            else:
+                                request.state.request_body = body_json
+                        else:
+                            request.state.request_body = f"[TRUNCATED: {len(body_str)} bytes]"
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        if len(body) <= 1000:
+                            request.state.request_body = body.decode("utf-8", errors="replace")
+                        else:
+                            request.state.request_body = f"[BINARY DATA: {len(body)} bytes]"
+        except Exception:
+            pass
+
         response = await call_next(request)
         process_time = time.time() - start_time
         status_code = response.status_code
@@ -123,6 +147,13 @@ def create_app() -> FastAPI:
                 "client_host": request.client.host if request.client else None,
                 "user_agent": request.headers.get("user-agent"),
             }
+
+            if hasattr(request.state, "request_body"):
+                log_data["request_body"] = request.state.request_body
+            if hasattr(request.state, "user_id"):
+                log_data["user_id"] = request.state.user_id
+            if hasattr(request.state, "session_id"):
+                log_data["session_id"] = request.state.session_id
 
             if status_code >= 500:
                 logger.error(
@@ -140,20 +171,49 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """Handle all unhandled exceptions with full stacktrace logging."""
+        error_data = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "method": request.method,
+            "path": request.url.path,
+            "query_params": str(request.url.query) if request.url.query else None,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "stacktrace": traceback.format_exc(),
+            "client_host": request.client.host if request.client else None,
+            "user_agent": request.headers.get("user-agent"),
+            "level": "ERROR",
+        }
+
+        try:
+            if request.method in ("POST", "PUT", "PATCH"):
+                body = await request.body()
+                if body:
+                    try:
+                        body_str = body.decode("utf-8")
+                        if len(body_str) <= 1000:
+                            body_json = json.loads(body_str)
+                            if "password" in body_json or "secret" in body_json:
+                                error_data["request_body"] = "[REDACTED: contains sensitive data]"
+                            else:
+                                error_data["request_body"] = body_json
+                        else:
+                            error_data["request_body"] = f"[TRUNCATED: {len(body_str)} bytes]"
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        if len(body) <= 1000:
+                            error_data["request_body"] = body.decode("utf-8", errors="replace")
+                        else:
+                            error_data["request_body"] = f"[BINARY DATA: {len(body)} bytes]"
+        except Exception:
+            pass
+
+        if hasattr(request.state, "user_id"):
+            error_data["user_id"] = request.state.user_id
+        if hasattr(request.state, "session_id"):
+            error_data["session_id"] = request.state.session_id
+
         logger.error(
             f"Unhandled Exception: {type(exc).__name__}",
-            extra={
-                "timestamp": datetime.now(UTC).isoformat(),
-                "method": request.method,
-                "path": request.url.path,
-                "query_params": str(request.url.query) if request.url.query else None,
-                "error_type": type(exc).__name__,
-                "error_message": str(exc),
-                "stacktrace": traceback.format_exc(),
-                "client_host": request.client.host if request.client else None,
-                "user_agent": request.headers.get("user-agent"),
-                "level": "ERROR",
-            },
+            extra=error_data,
             exc_info=True,
         )
         return JSONResponse(
@@ -164,34 +224,35 @@ def create_app() -> FastAPI:
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         """Handle HTTP exceptions with contextual logging."""
+        error_data = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "method": request.method,
+            "path": request.url.path,
+            "query_params": str(request.url.query) if request.url.query else None,
+            "status_code": exc.status_code,
+            "detail": exc.detail,
+            "client_host": request.client.host if request.client else None,
+            "user_agent": request.headers.get("user-agent"),
+        }
+
+        if hasattr(request.state, "request_body"):
+            error_data["request_body"] = request.state.request_body
+        if hasattr(request.state, "user_id"):
+            error_data["user_id"] = request.state.user_id
+        if hasattr(request.state, "session_id"):
+            error_data["session_id"] = request.state.session_id
+
         if exc.status_code >= 500:
+            error_data["level"] = "ERROR"
             logger.error(
                 f"HTTP Exception: {exc.status_code} - {exc.detail}",
-                extra={
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "method": request.method,
-                    "path": request.url.path,
-                    "query_params": str(request.url.query) if request.url.query else None,
-                    "status_code": exc.status_code,
-                    "detail": exc.detail,
-                    "client_host": request.client.host if request.client else None,
-                    "user_agent": request.headers.get("user-agent"),
-                    "level": "ERROR",
-                },
+                extra=error_data,
             )
         elif exc.status_code >= 400:
+            error_data["level"] = "WARNING"
             logger.warning(
                 f"HTTP Exception: {exc.status_code} - {exc.detail}",
-                extra={
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "method": request.method,
-                    "path": request.url.path,
-                    "query_params": str(request.url.query) if request.url.query else None,
-                    "status_code": exc.status_code,
-                    "detail": exc.detail,
-                    "client_host": request.client.host if request.client else None,
-                    "level": "WARNING",
-                },
+                extra=error_data,
             )
         return JSONResponse(
             status_code=exc.status_code,
@@ -201,19 +262,28 @@ def create_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle validation errors with detailed logging."""
+        error_data = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "method": request.method,
+            "path": request.url.path,
+            "query_params": str(request.url.query) if request.url.query else None,
+            "status_code": 422,
+            "validation_errors": exc.errors(),
+            "body": exc.body,
+            "client_host": request.client.host if request.client else None,
+            "level": "WARNING",
+        }
+
+        if hasattr(request.state, "request_body"):
+            error_data["request_body"] = request.state.request_body
+        if hasattr(request.state, "user_id"):
+            error_data["user_id"] = request.state.user_id
+        if hasattr(request.state, "session_id"):
+            error_data["session_id"] = request.state.session_id
+
         logger.warning(
             f"Validation Error: {exc.errors()}",
-            extra={
-                "timestamp": datetime.now(UTC).isoformat(),
-                "method": request.method,
-                "path": request.url.path,
-                "query_params": str(request.url.query) if request.url.query else None,
-                "status_code": 422,
-                "validation_errors": exc.errors(),
-                "body": await request.body() if await request.body() else None,
-                "client_host": request.client.host if request.client else None,
-                "level": "WARNING",
-            },
+            extra=error_data,
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
