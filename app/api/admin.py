@@ -3,12 +3,14 @@
 import csv
 import io
 import json
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.session import build_narrative_summary
 from app.database import get_db
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
@@ -202,4 +204,125 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
         io.BytesIO(json_output.encode()),
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=database_backup.json"},
+    )
+
+
+@router.post("/import/reviews/")
+async def import_reviews(
+    file: UploadFile = File(...), db: Session = Depends(get_db)
+) -> dict[str, int | list[str]]:
+    """Import review timestamps from CSV file.
+
+    CSV format: thread_id, review_url, review_timestamp
+    - thread_id: Thread ID (required, must exist)
+    - review_url: Review URL (required)
+    - review_timestamp: ISO format datetime (required)
+
+    Updates thread's last_review_at and review_url fields.
+    """
+    if not file.filename or not file.filename.endswith(".csv"):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+
+    content = await file.read()
+    csv_reader = csv.DictReader(content.decode("utf-8").splitlines())
+
+    imported = 0
+    errors = []
+
+    for row_num, row in enumerate(csv_reader, start=2):
+        try:
+            thread_id_str = row.get("thread_id", "").strip()
+            review_url = row.get("review_url", "").strip()
+            review_timestamp_str = row.get("review_timestamp", "").strip()
+
+            if not thread_id_str:
+                errors.append(f"Row {row_num}: Missing thread_id")
+                continue
+
+            if not review_url:
+                errors.append(f"Row {row_num}: Missing review_url")
+                continue
+
+            if not review_timestamp_str:
+                errors.append(f"Row {row_num}: Missing review_timestamp")
+                continue
+
+            try:
+                thread_id = int(thread_id_str)
+            except ValueError:
+                errors.append(f"Row {row_num}: thread_id must be an integer")
+                continue
+
+            thread = db.execute(select(Thread).where(Thread.id == thread_id)).scalar_one_or_none()
+
+            if not thread:
+                errors.append(f"Row {row_num}: Thread {thread_id} not found")
+                continue
+
+            try:
+                review_timestamp = datetime.fromisoformat(review_timestamp_str)
+            except ValueError:
+                errors.append(f"Row {row_num}: review_timestamp must be ISO format datetime")
+                continue
+
+            thread.review_url = review_url
+            thread.last_review_at = review_timestamp
+            db.flush()
+            imported += 1
+
+        except Exception as e:
+            errors.append(f"Row {row_num}: {str(e)}")
+
+    db.commit()
+    return {"imported": imported, "errors": errors}
+
+
+@router.get("/export/summary/")
+def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
+    """Export narrative session summaries as markdown file.
+
+    Formats all sessions with read, skipped, and completed lists per PRD Section 11.
+    """
+    sessions = (
+        db.execute(select(SessionModel).order_by(SessionModel.started_at.desc())).scalars().all()
+    )
+
+    output = io.StringIO()
+
+    for session in sessions:
+        started_at = session.started_at.astimezone(UTC)
+        ended_at = session.ended_at.astimezone(UTC) if session.ended_at else None
+
+        output.write(f"**Session:** {started_at.strftime('%b %d, %I:%M %p')}")
+        if ended_at:
+            output.write(f" – {ended_at.strftime('%I:%M %p')}")
+        output.write("\n")
+        output.write(f"Started at d{session.start_die}\n")
+
+        summary = build_narrative_summary(session.id, db)
+
+        if summary["read"]:
+            output.write("\nRead:\n\n")
+            for entry in summary["read"]:
+                output.write(f"* {entry}\n")
+
+        if summary["skipped"]:
+            output.write("\nSkipped:\n\n")
+            for title in summary["skipped"]:
+                output.write(f"* {title}\n")
+
+        if summary["completed"]:
+            output.write("\nCompleted:\n\n")
+            for title in summary["completed"]:
+                output.write(f"* {title}\n")
+
+        output.write("\n---\n\n")
+
+    output.seek(0)
+
+    filename = f"session_summaries_{datetime.now(UTC).strftime('%Y%m%d')}.md"
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/markdown",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
