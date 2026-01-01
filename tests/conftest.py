@@ -1,5 +1,6 @@
 """Shared pytest fixtures."""
 
+import os
 import tempfile
 from collections.abc import AsyncGenerator, Generator
 
@@ -20,6 +21,18 @@ TEST_DATABASE_URL = f"sqlite:///{test_db_file.name}"
 
 test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+
+@pytest.fixture(scope="function", autouse=True)
+def set_skip_worktree_check():
+    """Skip worktree validation in tests."""
+    original_value = os.getenv("SKIP_WORKTREE_CHECK")
+    os.environ["SKIP_WORKTREE_CHECK"] = "true"
+    yield
+    if original_value is None:
+        os.environ.pop("SKIP_WORKTREE_CHECK", None)
+    else:
+        os.environ["SKIP_WORKTREE_CHECK"] = original_value
 
 
 @pytest.fixture(scope="function")

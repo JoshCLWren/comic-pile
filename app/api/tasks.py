@@ -1,6 +1,7 @@
 """Task API endpoints."""
 
-from datetime import UTC, datetime
+import subprocess
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -10,6 +11,7 @@ from app.database import get_db
 from app.models import Task
 from app.schemas.task import (
     ClaimTaskRequest,
+    CreateTaskRequest,
     HeartbeatRequest,
     InitializeTasksResponse,
     SetStatusRequest,
@@ -21,6 +23,7 @@ from app.schemas.task import (
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
+# TODO: Load from database instead of hardcoded dict
 TASK_DATA = {
     "TASK-101": {
         "title": "Complete Narrative Session Summaries",
@@ -149,6 +152,106 @@ def list_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
     ]
 
 
+@router.post("/", response_model=TaskResponse, status_code=201)
+def create_task(request: CreateTaskRequest, db: Session = Depends(get_db)) -> TaskResponse:
+    """Create a new task."""
+    existing_task = db.execute(
+        select(Task).where(Task.task_id == request.task_id)
+    ).scalar_one_or_none()
+    if existing_task:
+        raise HTTPException(status_code=400, detail=f"Task {request.task_id} already exists")
+
+    new_task = Task(
+        task_id=request.task_id,
+        title=request.title,
+        description=request.description,
+        instructions=request.instructions,
+        priority=request.priority,
+        dependencies=request.dependencies,
+        estimated_effort=request.estimated_effort,
+        status="pending",
+        completed=False,
+    )
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return TaskResponse(
+        id=new_task.id,
+        task_id=new_task.task_id,
+        title=new_task.title,
+        priority=new_task.priority,
+        status=new_task.status,
+        dependencies=new_task.dependencies,
+        assigned_agent=new_task.assigned_agent,
+        worktree=new_task.worktree,
+        status_notes=new_task.status_notes,
+        estimated_effort=new_task.estimated_effort,
+        completed=new_task.completed,
+        blocked_reason=new_task.blocked_reason,
+        blocked_by=new_task.blocked_by,
+        last_heartbeat=new_task.last_heartbeat,
+        instructions=new_task.instructions,
+        created_at=new_task.created_at,
+        updated_at=new_task.updated_at,
+    )
+
+
+@router.post("/bulk", response_model=list[TaskResponse])
+def create_tasks_bulk(
+    requests: list[CreateTaskRequest], db: Session = Depends(get_db)
+) -> list[TaskResponse]:
+    """Create multiple tasks in one transaction."""
+    created_tasks = []
+    for request in requests:
+        existing_task = db.execute(
+            select(Task).where(Task.task_id == request.task_id)
+        ).scalar_one_or_none()
+        if existing_task:
+            raise HTTPException(status_code=400, detail=f"Task {request.task_id} already exists")
+
+        new_task = Task(
+            task_id=request.task_id,
+            title=request.title,
+            description=request.description,
+            instructions=request.instructions,
+            priority=request.priority,
+            dependencies=request.dependencies,
+            estimated_effort=request.estimated_effort,
+            status="pending",
+            completed=False,
+        )
+        db.add(new_task)
+        created_tasks.append(new_task)
+
+    db.commit()
+
+    for task in created_tasks:
+        db.refresh(task)
+
+    return [
+        TaskResponse(
+            id=task.id,
+            task_id=task.task_id,
+            title=task.title,
+            priority=task.priority,
+            status=task.status,
+            dependencies=task.dependencies,
+            assigned_agent=task.assigned_agent,
+            worktree=task.worktree,
+            status_notes=task.status_notes,
+            estimated_effort=task.estimated_effort,
+            completed=task.completed,
+            blocked_reason=task.blocked_reason,
+            blocked_by=task.blocked_by,
+            last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+        for task in created_tasks
+    ]
+
+
 @router.get("/ready", response_model=list[TaskResponse])
 def get_ready_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
     """Get tasks ready for claiming.
@@ -251,6 +354,43 @@ def get_coordinator_data(db: Session = Depends(get_db)) -> TaskCoordinatorRespon
     )
 
 
+@router.get("/stale", response_model=list[TaskResponse])
+def get_stale_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
+    """Get tasks with last heartbeat > 20 minutes ago and status in_progress."""
+    threshold = datetime.now(UTC) - timedelta(minutes=20)
+    tasks = (
+        db.execute(
+            select(Task)
+            .where(Task.status == "in_progress", Task.last_heartbeat < threshold)
+            .order_by(Task.last_heartbeat.asc())
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        TaskResponse(
+            id=task.id,
+            task_id=task.task_id,
+            title=task.title,
+            priority=task.priority,
+            status=task.status,
+            dependencies=task.dependencies,
+            assigned_agent=task.assigned_agent,
+            worktree=task.worktree,
+            status_notes=task.status_notes,
+            estimated_effort=task.estimated_effort,
+            completed=task.completed,
+            blocked_reason=task.blocked_reason,
+            blocked_by=task.blocked_by,
+            last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+        for task in tasks
+    ]
+
+
 @router.get("/{task_id}", response_model=TaskResponse)
 def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskResponse:
     """Get a single task by ID."""
@@ -278,6 +418,33 @@ def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskResponse:
     )
 
 
+@router.get("/{task_id}/history", response_model=list[dict])
+def get_task_history(task_id: str, db: Session = Depends(get_db)) -> list[dict]:
+    """Get audit trail of task status changes."""
+    task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    history = []
+    if task.status_notes:
+        lines = task.status_notes.split("\n")
+        for line in lines:
+            if not line.strip():
+                continue
+            if line.startswith("[") and "] " in line:
+                try:
+                    timestamp_end = line.index("]")
+                    timestamp = line[1:timestamp_end]
+                    event = line[timestamp_end + 2 :]
+                    history.append({"timestamp": timestamp, "event": event})
+                except (ValueError, IndexError):
+                    history.append({"timestamp": None, "event": line})
+            else:
+                history.append({"timestamp": None, "event": line})
+
+    return history
+
+
 @router.post("/{task_id}/claim", response_model=TaskResponse)
 def claim_task(
     task_id: str, request: ClaimTaskRequest, db: Session = Depends(get_db)
@@ -302,6 +469,23 @@ def claim_task(
                 "claimed_at": task.updated_at.isoformat(),
             },
         )
+
+    import os
+
+    skip_worktree_check = os.getenv("SKIP_WORKTREE_CHECK", "false").lower() == "true"
+    if not skip_worktree_check:
+        result = subprocess.run(
+            ["git", "worktree", "list"],
+            capture_output=True,
+            text=True,
+        )
+        if request.worktree not in result.stdout:
+            worktree_path = os.path.join(os.path.dirname(os.getcwd()), request.worktree)
+            if not os.path.exists(worktree_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Worktree {request.worktree} does not exist. Please create it first with: git worktree add ../{request.worktree} <branch>",
+                )
 
     task.status = "in_progress"
     task.assigned_agent = request.agent_name
@@ -339,7 +523,7 @@ def update_notes(
     if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-    timestamp = task.updated_at
+    timestamp = datetime.now(UTC).isoformat()
     new_note = f"\n[{timestamp}] {request.notes}"
     if task.status_notes:
         task.status_notes += new_note
@@ -459,6 +643,100 @@ def get_tasks_by_agent(agent_name: str, db: Session = Depends(get_db)) -> list[T
         .scalars()
         .all()
     )
+    return [
+        TaskResponse(
+            id=task.id,
+            task_id=task.task_id,
+            title=task.title,
+            priority=task.priority,
+            status=task.status,
+            dependencies=task.dependencies,
+            assigned_agent=task.assigned_agent,
+            worktree=task.worktree,
+            status_notes=task.status_notes,
+            estimated_effort=task.estimated_effort,
+            completed=task.completed,
+            blocked_reason=task.blocked_reason,
+            blocked_by=task.blocked_by,
+            last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+        for task in tasks
+    ]
+
+
+@router.get("/by-priority/{priority}", response_model=list[TaskResponse])
+def get_tasks_by_priority(priority: str, db: Session = Depends(get_db)) -> list[TaskResponse]:
+    """Get all tasks with a specific priority."""
+    valid_priorities = ["HIGH", "MEDIUM", "LOW"]
+    if priority not in valid_priorities:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid priority. Must be one of: {', '.join(valid_priorities)}",
+        )
+    tasks = (
+        db.execute(select(Task).where(Task.priority == priority).order_by(Task.task_id))
+        .scalars()
+        .all()
+    )
+    return [
+        TaskResponse(
+            id=task.id,
+            task_id=task.task_id,
+            title=task.title,
+            priority=task.priority,
+            status=task.status,
+            dependencies=task.dependencies,
+            assigned_agent=task.assigned_agent,
+            worktree=task.worktree,
+            status_notes=task.status_notes,
+            estimated_effort=task.estimated_effort,
+            completed=task.completed,
+            blocked_reason=task.blocked_reason,
+            blocked_by=task.blocked_by,
+            last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+        for task in tasks
+    ]
+
+
+@router.get("/completed", response_model=list[TaskResponse])
+def get_completed_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
+    """Get all completed tasks."""
+    tasks = db.execute(select(Task).where(Task.completed).order_by(Task.task_id)).scalars().all()
+    return [
+        TaskResponse(
+            id=task.id,
+            task_id=task.task_id,
+            title=task.title,
+            priority=task.priority,
+            status=task.status,
+            dependencies=task.dependencies,
+            assigned_agent=task.assigned_agent,
+            worktree=task.worktree,
+            status_notes=task.status_notes,
+            estimated_effort=task.estimated_effort,
+            completed=task.completed,
+            blocked_reason=task.blocked_reason,
+            blocked_by=task.blocked_by,
+            last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+        for task in tasks
+    ]
+
+
+@router.get("/not-completed", response_model=list[TaskResponse])
+def get_not_completed_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
+    """Get all tasks that are not completed."""
+    tasks = db.execute(select(Task).where(~Task.completed).order_by(Task.task_id)).scalars().all()
     return [
         TaskResponse(
             id=task.id,

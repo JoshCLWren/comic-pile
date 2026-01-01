@@ -77,3 +77,15 @@ class InitializeTasksResponse(BaseModel):
     tasks_created: int
     tasks_updated: int
     tasks: list[TaskResponse]
+
+
+class CreateTaskRequest(BaseModel):
+    """Schema for creating a new task."""
+
+    task_id: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1)
+    description: str | None = None
+    instructions: str | None = None
+    priority: str = Field(default="MEDIUM")
+    dependencies: str | None = None
+    estimated_effort: str | None = None
