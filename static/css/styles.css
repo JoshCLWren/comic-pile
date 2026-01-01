@@ -202,6 +202,246 @@ body {
     /* Base should be solid */
 }
 
+/* D8 - Octahedron (8 triangular faces) */
+.d8 .die-face {
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+    width: calc(var(--die-size) * 0.707 + 4px);
+    height: calc(var(--die-size) * 0.612 + 4px);
+    top: calc(50% - (var(--die-size) * 0.306));
+    left: calc(50% - (var(--die-size) * 0.354));
+    transform-origin: 50% 100%;
+}
+
+.d8 .face-1 {
+    transform: rotateY(0deg) rotateX(35.26deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d8 .face-2 {
+    transform: rotateY(90deg) rotateX(35.26deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d8 .face-3 {
+    transform: rotateY(180deg) rotateX(35.26deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d8 .face-4 {
+    transform: rotateY(270deg) rotateX(35.26deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d8 .face-5 {
+    transform: rotateY(45deg) rotateX(-35.26deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d8 .face-6 {
+    transform: rotateY(135deg) rotateX(-35.26deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d8 .face-7 {
+    transform: rotateY(225deg) rotateX(-35.26deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d8 .face-8 {
+    transform: rotateY(315deg) rotateX(-35.26deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+/* D10 - Pentagonal Trapezohedron (10 faces) */
+.d10 .die-face {
+    clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+    width: calc(var(--die-size) * 0.6 + 4px);
+    height: calc(var(--die-size) * 0.5 + 4px);
+    top: calc(50% - (var(--die-size) * 0.25));
+    left: calc(50% - (var(--die-size) * 0.3));
+    transform-origin: 50% 100%;
+}
+
+.d10 .face-1 {
+    transform: rotateY(0deg) rotateX(18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-2 {
+    transform: rotateY(72deg) rotateX(18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-3 {
+    transform: rotateY(144deg) rotateX(18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-4 {
+    transform: rotateY(216deg) rotateX(18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-5 {
+    transform: rotateY(288deg) rotateX(18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-6 {
+    transform: rotateY(36deg) rotateX(-18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-7 {
+    transform: rotateY(108deg) rotateX(-18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-8 {
+    transform: rotateY(180deg) rotateX(-18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-9 {
+    transform: rotateY(252deg) rotateX(-18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d10 .face-10 {
+    transform: rotateY(324deg) rotateX(-18deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+/* D12 - Dodecahedron (12 pentagonal faces) */
+.d12 .die-face {
+    clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+    width: calc(var(--die-size) * 0.55 + 4px);
+    height: calc(var(--die-size) * 0.55 + 4px);
+    top: calc(50% - (var(--die-size) * 0.275));
+    left: calc(50% - (var(--die-size) * 0.275));
+    transform-origin: 50% 50%;
+}
+
+.d12 .face-1 {
+    transform: rotateY(0deg) rotateX(0deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-2 {
+    transform: rotateY(72deg) rotateX(0deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-3 {
+    transform: rotateY(144deg) rotateX(0deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-4 {
+    transform: rotateY(216deg) rotateX(0deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-5 {
+    transform: rotateY(288deg) rotateX(0deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-6 {
+    transform: rotateY(36deg) rotateX(26.57deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-7 {
+    transform: rotateY(108deg) rotateX(26.57deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-8 {
+    transform: rotateY(180deg) rotateX(26.57deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-9 {
+    transform: rotateY(252deg) rotateX(26.57deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-10 {
+    transform: rotateY(324deg) rotateX(26.57deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-11 {
+    transform: rotateX(90deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+.d12 .face-12 {
+    transform: rotateX(-90deg) translateZ(calc(var(--die-size) * 0.5));
+}
+
+/* D20 - Icosahedron (20 triangular faces) */
+.d20 .die-face {
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+    width: calc(var(--die-size) * 0.52 + 4px);
+    height: calc(var(--die-size) * 0.45 + 4px);
+    top: calc(50% - (var(--die-size) * 0.225));
+    left: calc(50% - (var(--die-size) * 0.26));
+    transform-origin: 50% 100%;
+}
+
+.d20 .face-1 {
+    transform: rotateY(0deg) rotateX(10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-2 {
+    transform: rotateY(72deg) rotateX(10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-3 {
+    transform: rotateY(144deg) rotateX(10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-4 {
+    transform: rotateY(216deg) rotateX(10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-5 {
+    transform: rotateY(288deg) rotateX(10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-6 {
+    transform: rotateY(36deg) rotateX(-10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-7 {
+    transform: rotateY(108deg) rotateX(-10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-8 {
+    transform: rotateY(180deg) rotateX(-10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-9 {
+    transform: rotateY(252deg) rotateX(-10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-10 {
+    transform: rotateY(324deg) rotateX(-10.81deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-11 {
+    transform: rotateY(0deg) rotateX(52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-12 {
+    transform: rotateY(72deg) rotateX(52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-13 {
+    transform: rotateY(144deg) rotateX(52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-14 {
+    transform: rotateY(216deg) rotateX(52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-15 {
+    transform: rotateY(288deg) rotateX(52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-16 {
+    transform: rotateY(36deg) rotateX(-52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-17 {
+    transform: rotateY(108deg) rotateX(-52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-18 {
+    transform: rotateY(180deg) rotateX(-52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-19 {
+    transform: rotateY(252deg) rotateX(-52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
+.d20 .face-20 {
+    transform: rotateY(324deg) rotateX(-52.62deg) translateZ(calc(var(--die-size) * 0.45));
+}
+
 /* Tumble Animation */
 .die-spinning {
     animation: solid-tumble 1.4s infinite linear;
