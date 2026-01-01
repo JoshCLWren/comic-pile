@@ -37,6 +37,7 @@ body {
     align-items: center;
     justify-content: center;
     margin: 0 auto;
+    position: relative;
 }
 
 /* Mobile-responsive die size adjustments */
@@ -82,9 +83,24 @@ body {
 .die-3d {
     width: var(--die-size);
     height: var(--die-size);
-    position: relative;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     transform-style: preserve-3d;
     transition: transform 1s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.mini-die {
+    --die-size: 30px;
+    --die-radius: 15px;
+    --d4-face-h: 26px;
+    --d4-offset-z: 6px;
+    --d4-base-y: 7px;
+}
+
+.mini-die .die-face {
+    font-size: calc(var(--die-size) * 0.25);
 }
 
 /* Interior Core - Blocks "seeing inside" the die */
@@ -150,6 +166,11 @@ body {
 }
 
 /* D4 - Watertight Tetrahedron */
+.d4 {
+    width: var(--die-size);
+    height: var(--die-size);
+}
+
 .d4 .die-face {
     clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
     width: calc(var(--die-size) + 4px);
