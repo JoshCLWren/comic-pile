@@ -309,9 +309,9 @@ body {
 }
 
 #rating-value {
-    font-size: 8.5rem;
-    font-weight: 950;
-    text-shadow: 0 0 50px var(--accent-teal);
+    font-size: 3.5rem;
+    font-weight: 900;
+    text-shadow: 0 0 30px var(--accent-teal);
     transition: all 0.2s;
 }
 
