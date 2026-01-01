@@ -9,7 +9,23 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/threejs-dice@1.1.0/lib/dice.min.js"></script>
+    <script>
+        if (typeof THREE !== 'undefined' && typeof CANNON !== 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/threejs-dice@1.1.0/lib/dice.min.js"><\/script>');
+        } else {
+            setTimeout(function() {
+                if (typeof THREE !== 'undefined' && typeof CANNON !== 'undefined') {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/threejs-dice@1.1.0/lib/dice.min.js';
+                    script.onload = function() { console.log('[DiceLib] threejs-dice loaded'); };
+                    script.onerror = function() { console.error('[DiceLib] threejs-dice failed to load'); };
+                    document.head.appendChild(script);
+                } else {
+                    console.error('[DiceLib] Three.js or Cannon.js not loaded');
+                }
+            }, 100);
+        }
+    </script>
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body class="pb-24">
