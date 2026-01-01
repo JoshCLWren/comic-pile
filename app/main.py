@@ -2,14 +2,18 @@
 
 import logging
 import time
+import traceback
+from datetime import UTC, datetime
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import admin, queue, rate, roll, session, tasks, thread
 from app.api.tasks import get_coordinator_data
@@ -99,6 +103,122 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def log_errors_middleware(request: Request, call_next):
+        """Log all requests with status codes >= 400."""
+        start_time = time.time()
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        status_code = response.status_code
+
+        if status_code >= 400:
+            log_data = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "method": request.method,
+                "path": request.url.path,
+                "query_params": str(request.url.query) if request.url.query else None,
+                "status_code": status_code,
+                "process_time_ms": round(process_time * 1000, 2),
+                "client_host": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+            }
+
+            if status_code >= 500:
+                logger.error(
+                    f"API Error: {request.method} {request.url.path} - {status_code}",
+                    extra={**log_data, "level": "ERROR"},
+                )
+            else:
+                logger.warning(
+                    f"Client Error: {request.method} {request.url.path} - {status_code}",
+                    extra={**log_data, "level": "WARNING"},
+                )
+
+        return response
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        """Handle all unhandled exceptions with full stacktrace logging."""
+        logger.error(
+            f"Unhandled Exception: {type(exc).__name__}",
+            extra={
+                "timestamp": datetime.now(UTC).isoformat(),
+                "method": request.method,
+                "path": request.url.path,
+                "query_params": str(request.url.query) if request.url.query else None,
+                "error_type": type(exc).__name__,
+                "error_message": str(exc),
+                "stacktrace": traceback.format_exc(),
+                "client_host": request.client.host if request.client else None,
+                "user_agent": request.headers.get("user-agent"),
+                "level": "ERROR",
+            },
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error"},
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        """Handle HTTP exceptions with contextual logging."""
+        if exc.status_code >= 500:
+            logger.error(
+                f"HTTP Exception: {exc.status_code} - {exc.detail}",
+                extra={
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "method": request.method,
+                    "path": request.url.path,
+                    "query_params": str(request.url.query) if request.url.query else None,
+                    "status_code": exc.status_code,
+                    "detail": exc.detail,
+                    "client_host": request.client.host if request.client else None,
+                    "user_agent": request.headers.get("user-agent"),
+                    "level": "ERROR",
+                },
+            )
+        elif exc.status_code >= 400:
+            logger.warning(
+                f"HTTP Exception: {exc.status_code} - {exc.detail}",
+                extra={
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "method": request.method,
+                    "path": request.url.path,
+                    "query_params": str(request.url.query) if request.url.query else None,
+                    "status_code": exc.status_code,
+                    "detail": exc.detail,
+                    "client_host": request.client.host if request.client else None,
+                    "level": "WARNING",
+                },
+            )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        """Handle validation errors with detailed logging."""
+        logger.warning(
+            f"Validation Error: {exc.errors()}",
+            extra={
+                "timestamp": datetime.now(UTC).isoformat(),
+                "method": request.method,
+                "path": request.url.path,
+                "query_params": str(request.url.query) if request.url.query else None,
+                "status_code": 422,
+                "validation_errors": exc.errors(),
+                "body": await request.body() if await request.body() else None,
+                "client_host": request.client.host if request.client else None,
+                "level": "WARNING",
+            },
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"detail": exc.errors(), "body": exc.body},
+        )
 
     app.include_router(thread.router, prefix="/threads", tags=["threads"])
     app.include_router(roll.router, prefix="/roll", tags=["roll"])
