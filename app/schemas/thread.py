@@ -33,6 +33,8 @@ class ThreadResponse(BaseModel):
     status: str
     last_rating: float | None
     last_activity_at: datetime | None
+    review_url: str | None
+    last_review_at: datetime | None
     created_at: datetime
 
 
