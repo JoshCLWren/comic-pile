@@ -100,7 +100,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 </div>
             </div>
 
-            <div id="rating-form-container" class="glass-card p-6 space-y-8 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-24">
+            <div id="rating-form-container" class="glass-card p-6 space-y-6 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">
                 <div class="flex flex-col gap-5">
                     <div class="flex items-center justify-between gap-8">
                         <div class="flex-1 min-w-0">
