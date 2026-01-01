@@ -11,6 +11,7 @@ class TaskResponse(BaseModel):
     id: int
     task_id: str
     title: str
+    description: str | None
     priority: str
     status: str
     dependencies: str | None

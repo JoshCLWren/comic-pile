@@ -20,6 +20,7 @@ class Task(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     priority: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending", index=True)
     dependencies: Mapped[str] = mapped_column(String(500), nullable=True)
