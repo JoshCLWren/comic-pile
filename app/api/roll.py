@@ -90,23 +90,27 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
         pending_html
         + f"""
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
-            <div class="flex flex-col items-center gap-6 mb-6 animate-[bounce-in_0.8s_ease-out]">
-                <div class="dice-perspective">
+            <div class="flex flex-col gap-8 mb-8 animate-[bounce-in_0.8s_ease-out]">
+                <div class="dice-perspective relative z-10">
                     <div id="die-result" class="die-3d"></div>
                 </div>
-                <div class="text-center">
+                <div class="text-center px-6 mt-4">
                     <p class="text-[9px] font-black text-slate-600 uppercase tracking-[0.5em] mb-2">You rolled</p>
-                    <h2 class="text-2xl font-black text-slate-100 px-6 leading-tight tracking-tight">{selected_thread.title}</h2>
+                    <h2 class="text-2xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
                 </div>
             </div>
 
-            <div id="rating-form-container" class="glass-card p-6 space-y-6 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10">
-                <div class="text-center space-y-3">
-                    <p class="text-[9px] font-black uppercase tracking-[0.5em] text-slate-600">Rate your journey</p>
-                    <div id="rating-value" class="text-teal-400 text-2xl">4.0</div>
-                    <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-3" oninput="updateRatingDisplay(this.value)">
+            <div id="rating-form-container" class="glass-card p-6 space-y-6 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-24">
+                <div class="flex items-center justify-between gap-6">
+                    <div class="flex-1">
+                        <p class="text-[9px] font-black uppercase tracking-[0.5em] text-slate-600 mb-3">Rate your journey</p>
+                        <div id="rating-value" class="text-teal-400 text-4xl font-black">4.0</div>
+                    </div>
+                    <div class="flex-1">
+                        <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-3" oninput="updateRatingDisplay(this.value)">
+                    </div>
                 </div>
-                <div class="p-4 bg-teal-500/5 rounded-xl border border-teal-500/20 shadow-xl">
+                <div class="p-3 bg-teal-500/5 rounded-xl border border-teal-500/20 shadow-xl">
                     <p id="rating-preview" class="text-[10px] font-black text-slate-200 text-center uppercase tracking-[0.25em] leading-relaxed">
                         Excellent! Die steps down 🎲 Move to front
                     </p>

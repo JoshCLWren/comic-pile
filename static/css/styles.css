@@ -39,6 +39,46 @@ body {
     margin: 0 auto;
 }
 
+/* Mobile-responsive die size adjustments */
+@media (max-width: 640px) {
+    .dice-perspective {
+        perspective: 1200px;
+        width: 200px;
+        height: 200px;
+    }
+
+    :root {
+        --die-size: 80px;
+        --die-radius: 40px;
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --die-size: 70px;
+        --die-radius: 35px;
+    }
+}
+
+/* Custom scrollbar for pool */
+.scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
 .die-3d {
     width: var(--die-size);
     height: var(--die-size);
@@ -66,7 +106,7 @@ body {
     background: linear-gradient(135deg, var(--accent-indigo) 0%, var(--accent-violet) 100%);
     box-sizing: border-box;
 
-    /* PHYSICALLY CLOSING THE GAPS: 
+    /* PHYSICALLY CLOSING THE GAPS:
        We use slightly oversized faces and hidden backfaces to prevent interior rendering leaks. */
     margin: -2px;
     width: calc(var(--die-size) + 4px);
@@ -78,7 +118,7 @@ body {
     justify-content: center;
     font-weight: 950;
     color: white;
-    font-size: 2.8rem;
+    font-size: calc(var(--die-size) * 0.28);
     user-select: none;
     box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5);
     border: 0.5px solid rgba(255, 255, 255, 0.1);
@@ -209,6 +249,65 @@ body {
     }
 }
 
+@keyframes bounce-in {
+    0% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+
+    50% {
+        transform: scale(1.02);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes fade-in {
+    0% {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.result-reveal {
+    padding: 1rem;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.result-reveal::-webkit-scrollbar {
+    width: 6px;
+}
+
+.result-reveal::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.result-reveal::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+#rating-form-container {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+    #rating-form-container {
+        max-height: 60vh;
+    }
+}
+
 #rating-value {
     font-size: 8.5rem;
     font-weight: 950;
@@ -227,4 +326,10 @@ body {
     backdrop-filter: blur(20px);
     border-top: 1px solid var(--glass-border);
     padding-bottom: env(safe-area-inset-bottom);
+}
+
+.glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
 }

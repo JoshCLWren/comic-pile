@@ -3,19 +3,17 @@
 {% block content %}
 <style>
     body { padding-bottom: 0 !important; }
-    main { padding-top: 0 !important; padding-bottom: 0 !important; }
+    main { padding: 0 !important; height: 100dvh; max-width: 100%; }
 </style>
 
-<div class="h-screen flex flex-col">
-    <header class="flex justify-between items-center px-3 py-2 shrink-0">
+<div class="h-full flex flex-col overflow-hidden">
+    <header class="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
             <h1 class="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
             <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active session</p>
         </div>
-        <div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10">
-            <div id="header-die-container" class="dice-perspective"
-                style="width: 30px; height: 30px; transform: scale(0.3);">
-            </div>
+        <div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
+            <div id="header-die-container" class="dice-perspective" style="width: 40px; height: 40px;"></div>
             <div class="text-right">
                 <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">Ladder</span>
                 <span id="header-die-label" class="text-[10px] font-black text-teal-400">d{{ current_die }}</span>
@@ -23,38 +21,34 @@
         </div>
     </header>
 
-    <div id="result" class="flex-1 overflow-auto" role="region" aria-live="polite">
-        <div id="roll-container" class="glass-card p-6 flex flex-col items-center relative overflow-hidden mb-4">
-            <div
-                class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px]">
-            </div>
+    <div id="result" class="flex-1 overflow-hidden flex flex-col" role="region" aria-live="polite">
+        <div id="roll-container" class="glass-card flex-1 flex flex-col relative overflow-hidden">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-            <div id="main-die-wrapper" class="dice-perspective relative z-10 cursor-pointer" onclick="rollTheDie()">
+            <div id="main-die-wrapper" class="dice-perspective relative z-10 cursor-pointer shrink-0" style="width: 200px; height: 200px;" onclick="rollTheDie()">
                 <div id="die-3d" class="die-3d d{{ current_die }}" hx-post="/roll/html" hx-trigger="triggerRoll"
                     hx-target="#result" hx-swap="innerHTML">
                 </div>
             </div>
 
             <p id="tap-instruction"
-                class="mt-8 text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse">Tap Die to
+                class="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0">Tap Die to
                 Roll</p>
 
-            <div id="pool-display" class="w-full mt-8 space-y-3">
-                <div class="flex items-center justify-between px-2">
-                    <div class="flex items-center gap-2">
-                        <div class="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_15px_var(--accent-teal)]"></div>
-                        <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Roll Pool</span>
-                    </div>
+            <div id="pool-display" class="flex-1 min-h-0 mt-4 px-4 pb-4 overflow-hidden flex flex-col">
+                <div class="flex items-center gap-2 shrink-0">
+                    <div class="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_15px_var(--accent-teal)]"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Roll Pool</span>
                 </div>
-                <div id="pool-threads" class="space-y-2">
+                <div id="pool-threads" class="flex-1 overflow-y-auto mt-2 space-y-2 scrollbar-thin">
                     <div class="h-10 bg-white/5 rounded-xl animate-pulse"></div>
                     <div class="h-10 bg-white/5 rounded-xl animate-pulse"></div>
                 </div>
             </div>
 
-            <div id="stale-suggestion" class="w-full mt-4 hidden transition-all animate-[fade-in_0.5s_ease-out]">
+            <div id="stale-suggestion" class="px-4 pb-4 shrink-0 hidden transition-all animate-[fade-in_0.5s_ease-out]">
                 <div class="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
-                    <div class="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center">
+                    <div class="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
                         <span class="text-sm">⏳</span>
                     </div>
                     <div class="flex-1 min-w-0">
@@ -261,6 +255,8 @@
         const headerContainer = document.getElementById('header-die-container');
         if (headerContainer) {
             const mini = document.createElement('div');
+            mini.className = 'die-3d';
+            mini.style.cssText = 'width: 30px; height: 30px; --die-size: 30px; --die-radius: 15px;';
             renderDieFaces(mini, initialDenom);
             headerContainer.appendChild(mini);
         }
