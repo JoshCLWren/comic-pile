@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
- {% block content %}
+{% block content %}
 <style>
     body { padding-bottom: 0 !important; }
     main { padding: 0 !important; height: calc(100dvh - 5rem); max-width: 100%; }
@@ -13,7 +13,7 @@
             <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active session</p>
         </div>
         <div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
-            <div id="header-die-container" class="dice-perspective" style="width: 40px; height: 40px;"></div>
+            <div id="header-die-container" class="threejs-dice-container" style="width: 40px; height: 40px;"></div>
             <div class="text-right">
                 <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">Ladder</span>
                 <span id="header-die-label" class="text-[10px] font-black text-teal-400">d{{ current_die }}</span>
@@ -25,10 +25,8 @@
         <div id="roll-container" class="glass-card flex-1 flex flex-col relative overflow-hidden">
             <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-            <div id="main-die-wrapper" class="dice-perspective relative z-10 cursor-pointer shrink-0" style="width: 200px; height: 200px;" onclick="rollTheDie()">
-                <div id="die-3d" class="die-3d d{{ current_die }}" hx-post="/roll/html" hx-trigger="triggerRoll"
-                    hx-target="#result" hx-swap="innerHTML">
-                </div>
+            <div id="main-die-wrapper" class="threejs-die-wrapper relative z-10 cursor-pointer shrink-0" style="width: 200px; height: 200px;" onclick="rollTheDie()">
+                <canvas id="dice-canvas" class="dice-canvas"></canvas>
             </div>
 
             <p id="tap-instruction"
@@ -69,38 +67,129 @@
 <script>
     console.log('[RollPage] Script Initialization Started');
 
-    // Global State
     const DICE_LADDER = [4, 6, 8, 10, 12, 20];
     const initialDenom = {{ current_die }};
     let rolledResult = null;
     let threadId = null;
 
-    function renderDieFaces(container, dieType, result = null) {
-        if (!container) return;
-        const sides = parseInt(dieType);
-        let html = '<div class="die-core"></div>';
-        for (let i = 1; i <= sides; i++) {
-            html += `<div class="die-face face-${i}">${i}</div>`;
+    let scene, camera, renderer, world, currentDie;
+    let isRolling = false;
+    let canvasInitialized = false;
+
+    function initDice(container, dieType, size = 50) {
+        if (!window.THREE || !window.CANNON || !window.DiceManager) {
+            console.error('[RollPage] Dice libraries not loaded');
+            return null;
         }
-        container.innerHTML = html;
-        container.className = `die-3d d${dieType}`;
-        container.className = container.className.replace(/\bshow-\d+\b/g, '');
-        if (result && result <= sides) container.classList.add(`show-${result}`);
+
+        const width = container.clientWidth || 200;
+        const height = container.clientHeight || 200;
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+        camera.position.set(0, 2, 5);
+        camera.lookAt(0, 0, 0);
+
+        renderer = new THREE.WebGLRenderer({ 
+            canvas: container, 
+            antialias: true, 
+            alpha: true 
+        });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        world = new CANNON.World();
+        world.gravity.set(0, -20, 0);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 16;
+
+        DiceManager.setWorld(world);
+
+        const floorBody = new CANNON.Body({ 
+            mass: 0, 
+            shape: new CANNON.Plane(), 
+            material: DiceManager.floorBodyMaterial 
+        });
+        floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        world.add(floorBody);
+
+        const dieClass = getDieClass(dieType);
+        currentDie = new dieClass({ 
+            size: size,
+            fontColor: '#ffffff',
+            backColor: '#4f46e5'
+        });
+        scene.add(currentDie.getObject());
+        currentDie.getObject().position.y = 2;
+        currentDie.updateBodyFromMesh();
+
+        canvasInitialized = true;
+        return currentDie;
+    }
+
+    function getDieClass(dieType) {
+        const dieMap = {
+            4: DiceD4,
+            6: DiceD6,
+            8: DiceD8,
+            10: DiceD10,
+            12: DiceD12,
+            20: DiceD20
+        };
+        return dieMap[dieType] || DiceD6;
     }
 
     function rollTheDie() {
         console.log('[RollPage] rollTheDie called');
-        const die = document.getElementById('die-3d');
-        const instruction = document.getElementById('tap-instruction');
-        if (die.classList.contains('die-spinning')) return;
+        if (isRolling) return;
 
-        die.classList.add('die-spinning');
+        isRolling = true;
+        const instruction = document.getElementById('tap-instruction');
         if (instruction) instruction.textContent = "Rolling...";
 
-        setTimeout(() => {
-            console.log('[RollPage] Triggering HTMX roll event');
-            htmx.trigger('#die-3d', 'triggerRoll');
-        }, 1200);
+        if (currentDie && canvasInitialized) {
+            currentDie.resetBody();
+            currentDie.getObject().position.set(0, 3, 0);
+            currentDie.getObject().quaternion.set(
+                (Math.random() * 2 - 1),
+                (Math.random() * 2 - 1),
+                (Math.random() * 2 - 1),
+                (Math.random() * 2 - 1)
+            ).normalize();
+            currentDie.updateBodyFromMesh();
+            currentDie.getObject().body.velocity.set(
+                (Math.random() - 0.5) * 10,
+                10 + Math.random() * 10,
+                (Math.random() - 0.5) * 10
+            );
+            currentDie.getObject().body.angularVelocity.set(
+                (Math.random() - 0.5) * 20,
+                (Math.random() - 0.5) * 20,
+                (Math.random() - 0.5) * 20
+            );
+
+            setTimeout(() => {
+                console.log('[RollPage] Triggering HTMX roll event');
+                htmx.trigger('#main-die-wrapper', 'triggerRoll');
+            }, 1200);
+        }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        if (canvasInitialized && world && currentDie) {
+            world.step(1.0 / 60.0);
+            currentDie.updateMeshFromBody();
+            renderer.render(scene, camera);
+        }
     }
 
     function createExplosion() {
@@ -115,7 +204,8 @@
             p.className = 'particle';
             const angle = Math.random() * Math.PI * 2;
             const dist = 100 + Math.random() * 400;
-            p.style.left = x + 'px'; p.style.top = y + 'px';
+            p.style.left = x + 'px';
+            p.style.top = y + 'px';
             p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
             p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
             p.style.background = i % 2 ? 'var(--accent-teal)' : 'var(--accent-violet)';
@@ -156,7 +246,6 @@
         }
     }
 
-    // HTMX Logging & Global Handlers
     document.body.addEventListener('htmx:afterRequest', (evt) => {
         console.log('[RollPage] HTMX afterRequest target:', evt.detail.target.id, 'Status:', evt.detail.xhr.status);
     });
@@ -164,7 +253,6 @@
     function updateRatingDisplay(val) {
         const display = document.getElementById('rating-value');
         const preview = document.getElementById('rating-preview');
-        const dieResult = document.getElementById('die-result');
         const num = parseFloat(val);
         display.textContent = num.toFixed(1);
 
@@ -181,9 +269,8 @@
             preview.innerHTML = 'Okay. Die steps up 🎲 Move to back';
         }
 
-        if (dieResult && dieResult.dataset.currentType != predictedDie) {
-            renderDieFaces(dieResult, predictedDie, rolledResult);
-            dieResult.dataset.currentType = predictedDie;
+        if (currentDie && canvasInitialized && dieResultContainer) {
+            initDice(dieResultContainer, predictedDie, 40);
         }
     }
 
@@ -249,16 +336,25 @@
         }
     }
 
+    let dieResultContainer = null;
+
     document.addEventListener('DOMContentLoaded', () => {
         console.log('[RollPage] DOMContentLoaded');
-        renderDieFaces(document.getElementById('die-3d'), initialDenom);
-        const headerContainer = document.getElementById('header-die-container');
-        if (headerContainer) {
-            const mini = document.createElement('div');
-            mini.className = 'die-3d mini-die';
-            renderDieFaces(mini, initialDenom);
-            headerContainer.appendChild(mini);
+        
+        const mainCanvas = document.getElementById('dice-canvas');
+        if (mainCanvas) {
+            initDice(mainCanvas, initialDenom, 50);
+            animate();
         }
+
+        const headerContainer = document.getElementById('header-die-container');
+        if (headerContainer && window.DiceManager) {
+            const canvas = document.createElement('canvas');
+            canvas.className = 'mini-dice-canvas';
+            headerContainer.appendChild(canvas);
+            initDice(canvas, initialDenom, 15);
+        }
+
         loadRollPool();
         loadStaleSuggestion();
     });
