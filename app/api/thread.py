@@ -27,6 +27,8 @@ def list_stale_threads(days: int = 30, db: Session = Depends(get_db)) -> list[Th
             status=thread.status,
             last_rating=thread.last_rating,
             last_activity_at=thread.last_activity_at,
+            review_url=thread.review_url,
+            last_review_at=thread.last_review_at,
             created_at=thread.created_at,
         )
         for thread in threads
@@ -57,6 +59,8 @@ def list_threads(db: Session = Depends(get_db)) -> list[ThreadResponse]:
             status=thread.status,
             last_rating=thread.last_rating,
             last_activity_at=thread.last_activity_at,
+            review_url=thread.review_url,
+            last_review_at=thread.last_review_at,
             created_at=thread.created_at,
         )
         for thread in threads
@@ -128,6 +132,8 @@ def create_thread(thread_data: ThreadCreate, db: Session = Depends(get_db)) -> T
         status=new_thread.status,
         last_rating=new_thread.last_rating,
         last_activity_at=new_thread.last_activity_at,
+        review_url=new_thread.review_url,
+        last_review_at=new_thread.last_review_at,
         created_at=new_thread.created_at,
     )
 
@@ -150,6 +156,8 @@ def get_thread(thread_id: int, db: Session = Depends(get_db)) -> ThreadResponse:
         status=thread.status,
         last_rating=thread.last_rating,
         last_activity_at=thread.last_activity_at,
+        review_url=thread.review_url,
+        last_review_at=thread.last_review_at,
         created_at=thread.created_at,
     )
 
@@ -188,6 +196,8 @@ def update_thread(
         status=thread.status,
         last_rating=thread.last_rating,
         last_activity_at=thread.last_activity_at,
+        review_url=thread.review_url,
+        last_review_at=thread.last_review_at,
         created_at=thread.created_at,
     )
 
@@ -245,5 +255,7 @@ def reactivate_thread(request: ReactivateRequest, db: Session = Depends(get_db))
         status=thread.status,
         last_rating=thread.last_rating,
         last_activity_at=thread.last_activity_at,
+        review_url=thread.review_url,
+        last_review_at=thread.last_review_at,
         created_at=thread.created_at,
     )
