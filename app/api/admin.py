@@ -190,7 +190,6 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
                 "issues_read": event.issues_read,
                 "queue_move": event.queue_move,
                 "die_after": event.die_after,
-                "notes": event.notes,
                 "session_id": event.session_id,
                 "thread_id": event.thread_id,
             }

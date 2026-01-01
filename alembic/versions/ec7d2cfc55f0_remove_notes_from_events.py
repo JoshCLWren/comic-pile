@@ -59,7 +59,7 @@ def downgrade() -> None:
         batch_op.create_index(batch_op.f("ix_tasks_task_id"), ["task_id"], unique=False)
 
     with op.batch_alter_table("sessions", schema=None) as batch_op:
-        batch_op.drop_constraint(None, type_="foreignkey")
+        batch_op.drop_constraint("fk_sessions_pending_thread_id_threads", type_="foreignkey")
         batch_op.drop_index("ix_session_started_at")
         batch_op.drop_index("ix_session_ended_at")
 
