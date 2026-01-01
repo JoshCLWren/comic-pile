@@ -2,8 +2,6 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
-
 from app.models import Session as SessionModel
 from app.models import Thread
 from comic_pile.session import end_session, get_or_create, is_active, should_start_new
@@ -82,12 +80,23 @@ def test_should_start_new_false(db):
 
 
 def test_get_or_create_existing(db, sample_data):
-    """Returns existing active session."""
-    sessions = (
-        db.execute(select(SessionModel).order_by(SessionModel.started_at.desc())).scalars().all()
+    """Returns existing active session (< 6 hours old)."""
+    # End all sample sessions first
+    for session in sample_data["sessions"]:
+        session.ended_at = datetime.now()
+    db.commit()
+
+    # Create a fresh active session within last 6 hours
+    active_session = SessionModel(
+        started_at=datetime.now() - timedelta(hours=1),
+        start_die=6,
+        user_id=1,
     )
+    db.add(active_session)
+    db.commit()
+
     result = get_or_create(db, user_id=1)
-    assert result.id == sessions[0].id
+    assert result.id == active_session.id
 
 
 def test_get_or_create_new(db, sample_data):

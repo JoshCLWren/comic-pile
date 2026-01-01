@@ -231,7 +231,8 @@ async def test_get_session_current_uses_selected_thread_id(client, db):
     """Test GET /sessions/current/ returns active thread from selected_thread_id."""
     from datetime import UTC, datetime
 
-    from app.models import Event, Session as SessionModel, Thread, User
+    from app.models import Event, Thread, User
+    from app.models import Session as SessionModel
 
     user = User(username="roll_user", created_at=datetime.now(UTC))
     db.add(user)

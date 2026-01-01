@@ -33,10 +33,12 @@ def should_start_new(db: Session) -> bool:
 
 def get_or_create(db: Session, user_id: int) -> SessionModel:
     """Get active session or create new one."""
+    cutoff_time = datetime.now() - timedelta(hours=6)
     active_session = (
         db.execute(
             select(SessionModel)
             .where(SessionModel.ended_at.is_(None))
+            .where(SessionModel.started_at >= cutoff_time)
             .order_by(SessionModel.started_at.desc())
         )
         .scalars()
