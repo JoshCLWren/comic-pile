@@ -94,26 +94,28 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 <div class="dice-perspective relative z-10">
                     <div id="die-result" class="die-3d"></div>
                 </div>
-                <div class="text-center px-6 mt-4">
+                <div class="text-center px-6">
                     <p class="text-[9px] font-black text-slate-600 uppercase tracking-[0.5em] mb-2">You rolled</p>
                     <h2 class="text-2xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
                 </div>
             </div>
 
-            <div id="rating-form-container" class="glass-card p-6 space-y-6 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-24">
-                <div class="flex items-center justify-between gap-6">
-                    <div class="flex-1">
-                        <p class="text-[9px] font-black uppercase tracking-[0.5em] text-slate-600 mb-3">Rate your journey</p>
-                        <div id="rating-value" class="text-teal-400 text-4xl font-black">4.0</div>
+            <div id="rating-form-container" class="glass-card p-6 space-y-8 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-24">
+                <div class="flex flex-col gap-5">
+                    <div class="flex items-center justify-between gap-8">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[9px] font-black uppercase tracking-[0.5em] text-slate-600 mb-2">Rate your journey</p>
+                            <div id="rating-value" class="text-teal-400 text-5xl font-black leading-none">4.0</div>
+                        </div>
+                        <div class="flex-1 min-w-0 pt-6">
+                            <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-3" oninput="updateRatingDisplay(this.value)">
+                        </div>
                     </div>
-                    <div class="flex-1">
-                        <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-3" oninput="updateRatingDisplay(this.value)">
+                    <div class="p-4 bg-teal-500/5 rounded-xl border border-teal-500/20 shadow-xl mt-2">
+                        <p id="rating-preview" class="text-[10px] font-black text-slate-200 text-center uppercase tracking-[0.25em] leading-relaxed">
+                            Excellent! Die steps down 🎲 Move to front
+                        </p>
                     </div>
-                </div>
-                <div class="p-3 bg-teal-500/5 rounded-xl border border-teal-500/20 shadow-xl">
-                    <p id="rating-preview" class="text-[10px] font-black text-slate-200 text-center uppercase tracking-[0.25em] leading-relaxed">
-                        Excellent! Die steps down 🎲 Move to front
-                    </p>
                 </div>
                 <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-6 glass-button text-base font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
                     Save & Continue
