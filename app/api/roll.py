@@ -90,38 +90,29 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
         pending_html
         + f"""
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
-            <div class="flex flex-col items-center gap-8 mb-10 animate-[bounce-in_0.8s_ease-out]">
+            <div class="flex flex-col items-center gap-6 mb-6 animate-[bounce-in_0.8s_ease-out]">
                 <div class="dice-perspective">
                     <div id="die-result" class="die-3d"></div>
                 </div>
                 <div class="text-center">
-                    <p class="text-[10px] font-black text-slate-600 uppercase tracking-[0.5em] mb-4">You rolled</p>
-                    <h2 class="text-3xl font-black text-slate-100 px-8 leading-tight tracking-tight">{selected_thread.title}</h2>
+                    <p class="text-[9px] font-black text-slate-600 uppercase tracking-[0.5em] mb-2">You rolled</p>
+                    <h2 class="text-2xl font-black text-slate-100 px-6 leading-tight tracking-tight">{selected_thread.title}</h2>
                 </div>
             </div>
 
-            <div id="rating-form-container" class="glass-card p-10 space-y-12 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10">
-                <div class="text-center space-y-4">
-                    <p class="text-[10px] font-black uppercase tracking-[0.5em] text-slate-600">Rate your journey</p>
-                    <div id="rating-value" class="text-teal-400">4.0</div>
-                    <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-4" oninput="updateRatingDisplay(this.value)">
+            <div id="rating-form-container" class="glass-card p-6 space-y-6 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10">
+                <div class="text-center space-y-3">
+                    <p class="text-[9px] font-black uppercase tracking-[0.5em] text-slate-600">Rate your journey</p>
+                    <div id="rating-value" class="text-teal-400 text-2xl">4.0</div>
+                    <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-3" oninput="updateRatingDisplay(this.value)">
                 </div>
-                <div class="p-6 bg-teal-500/5 rounded-[2.5rem] border border-teal-500/20 shadow-xl">
-                    <p id="rating-preview" class="text-[11px] font-black text-slate-200 text-center uppercase tracking-[0.25em] leading-relaxed">
+                <div class="p-4 bg-teal-500/5 rounded-xl border border-teal-500/20 shadow-xl">
+                    <p id="rating-preview" class="text-[10px] font-black text-slate-200 text-center uppercase tracking-[0.25em] leading-relaxed">
                         Excellent! Die steps down 🎲 Move to front
                     </p>
                 </div>
-                <div class="flex items-center justify-center gap-4">
-                    <button onclick="decrementIssues()" class="w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-2xl font-bold text-slate-300 transition-all active:scale-95">−</button>
-                    <div class="text-center flex-1">
-                        <p class="text-[10px] font-black uppercase tracking-[0.5em] text-slate-600 mb-2">Issues read</p>
-                        <p id="issues-read-value" class="text-3xl font-black text-slate-100">1</p>
-                    </div>
-                    <button onclick="incrementIssues()" class="w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-2xl font-bold text-slate-300 transition-all active:scale-95">+</button>
-                </div>
-                <input type="hidden" id="issues-read-input" value="1">
-                <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-8 glass-button text-xl font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
-                    Finish Session
+                <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-6 glass-button text-base font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
+                    Save & Continue
                 </button>
                 <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
             </div>
