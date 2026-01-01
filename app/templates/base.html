@@ -11,13 +11,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/threejs-dice@1.1.0/lib/dice.min.js"></script>
     <script>
-        window.addEventListener('load', function() {
+        function checkDiceLibrary() {
             if (typeof window.Dice !== 'undefined') {
                 console.log('[DiceLib] threejs-dice loaded successfully');
+                window.dispatchEvent(new CustomEvent('diceLibraryLoaded'));
             } else {
-                console.error('[DiceLib] threejs-dice not loaded');
+                console.error('[DiceLib] threejs-dice not loaded, retrying...');
+                setTimeout(checkDiceLibrary, 100);
             }
-        });
+        }
+        if (document.readyState === 'complete') {
+            checkDiceLibrary();
+        } else {
+            window.addEventListener('load', checkDiceLibrary);
+        }
     </script>
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
