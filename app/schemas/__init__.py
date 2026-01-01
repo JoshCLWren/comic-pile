@@ -1,5 +1,6 @@
 """Pydantic schemas for request/response validation."""
 
+from app.schemas.settings import SettingsResponse, UpdateSettingsRequest
 from app.schemas.task import (
     ClaimTaskRequest,
     InitializeTasksResponse,
@@ -32,4 +33,6 @@ __all__ = [
     "SetStatusRequest",
     "TaskResponse",
     "UpdateNotesRequest",
+    "SettingsResponse",
+    "UpdateSettingsRequest",
 ]

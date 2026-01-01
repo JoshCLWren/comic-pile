@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Event, Thread
+from app.models import Event, Settings, Thread
 from app.models import Session as SessionModel
 from app.schemas import RateRequest, ThreadResponse
 from comic_pile.dice_ladder import step_down, step_up
@@ -19,6 +19,17 @@ try:
     from app.main import clear_cache
 except ImportError:
     clear_cache = None
+
+
+def _get_settings(db: Session) -> Settings:
+    """Get settings record, creating with defaults if needed."""
+    settings = db.execute(select(Settings)).scalars().first()
+    if not settings:
+        settings = Settings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
 
 
 @router.post("/", response_model=ThreadResponse)
@@ -80,11 +91,19 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
     if last_rate_event and last_rate_event.die_after:
         current_die = last_rate_event.die_after
 
+    settings = _get_settings(db)
+
+    if request.rating < settings.rating_min or request.rating > settings.rating_max:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Rating must be between {settings.rating_min} and {settings.rating_max}",
+        )
+
     thread.issues_remaining -= request.issues_read
     thread.last_rating = request.rating
     thread.last_activity_at = datetime.now()
 
-    if request.rating >= 4.0:
+    if request.rating >= settings.rating_threshold:
         new_die = step_down(current_die)
     else:
         new_die = step_up(current_die)
@@ -100,7 +119,7 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
     )
     db.add(event)
 
-    if request.rating >= 4.0:
+    if request.rating >= settings.rating_threshold:
         move_to_front(thread.id, db)
     else:
         move_to_back(thread.id, db)

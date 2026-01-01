@@ -5,19 +5,32 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Event
+from app.models import Event, Settings
 from app.models import Session as SessionModel
 
 
-def is_active(session: SessionModel) -> bool:
-    """Check if session was within last 6 hours."""
-    cutoff_time = datetime.now() - timedelta(hours=6)
+def _get_settings(db: Session) -> Settings:
+    """Get settings record, creating with defaults if needed."""
+    settings = db.execute(select(Settings)).scalars().first()
+    if not settings:
+        settings = Settings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
+def is_active(session: SessionModel, db: Session) -> bool:
+    """Check if session was within configured gap hours."""
+    settings = _get_settings(db)
+    cutoff_time = datetime.now() - timedelta(hours=settings.session_gap_hours)
     return session.started_at >= cutoff_time and session.ended_at is None
 
 
 def should_start_new(db: Session) -> bool:
-    """Check if no active session in last 6 hours."""
-    cutoff_time = datetime.now() - timedelta(hours=6)
+    """Check if no active session in configured gap hours."""
+    settings = _get_settings(db)
+    cutoff_time = datetime.now() - timedelta(hours=settings.session_gap_hours)
     recent_sessions = (
         db.execute(
             select(SessionModel)
@@ -33,7 +46,8 @@ def should_start_new(db: Session) -> bool:
 
 def get_or_create(db: Session, user_id: int) -> SessionModel:
     """Get active session or create new one."""
-    cutoff_time = datetime.now() - timedelta(hours=6)
+    settings = _get_settings(db)
+    cutoff_time = datetime.now() - timedelta(hours=settings.session_gap_hours)
     active_session = (
         db.execute(
             select(SessionModel)
@@ -48,7 +62,7 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
     if active_session:
         return active_session
 
-    new_session = SessionModel(start_die=6, user_id=user_id)
+    new_session = SessionModel(start_die=settings.start_die, user_id=user_id)
     db.add(new_session)
     db.commit()
     db.refresh(new_session)
@@ -66,6 +80,7 @@ def end_session(session_id: int, db: Session) -> None:
 
 def get_current_die(session_id: int, db: Session) -> int:
     """Get current die size based on last rating event in session."""
+    settings = _get_settings(db)
     last_rate_event = (
         db.execute(
             select(Event)
@@ -80,7 +95,7 @@ def get_current_die(session_id: int, db: Session) -> int:
 
     if last_rate_event:
         die_after = last_rate_event.die_after
-        return die_after if die_after is not None else 6
+        return die_after if die_after is not None else settings.start_die
 
     session = db.get(SessionModel, session_id)
-    return session.start_die if session else 6
+    return session.start_die if session else settings.start_die
