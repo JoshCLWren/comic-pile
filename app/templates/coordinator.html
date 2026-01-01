@@ -6,7 +6,7 @@
 
     <div class="flex items-center justify-between">
         <p class="text-slate-400">Track task progress and assignments</p>
-        <button hx-get="/tasks/coordinator-data" hx-target="#coordinator-content" class="px-4 py-2 bg-teal-600/20 text-teal-400 rounded-lg hover:bg-teal-600/30 transition-all">
+        <button hx-get="/api/tasks/coordinator-data" hx-target="#coordinator-content" class="px-4 py-2 bg-teal-600/20 text-teal-400 rounded-lg hover:bg-teal-600/30 transition-all">
             Refresh
         </button>
     </div>
@@ -155,7 +155,7 @@
     }, 10000);
 
     document.body.addEventListener('refresh-coordinator', function() {
-        htmx.ajax('GET', '/tasks/coordinator-data', {target: '#coordinator-content'});
+        htmx.ajax('GET', '/api/tasks/coordinator-data', {target: '#coordinator-content'});
     });
 </script>
 {% endblock %}
