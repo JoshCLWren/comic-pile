@@ -10,7 +10,7 @@
             case 8:
                 return new THREE.OctahedronGeometry(0.9);
             case 10:
-                return new THREE.CylinderGeometry(0.75, 0.75, 1, 10, 1);
+                return new THREE.DecahedronGeometry(0.9);
             case 12:
                 return new THREE.DodecahedronGeometry(0.95);
             case 20:
