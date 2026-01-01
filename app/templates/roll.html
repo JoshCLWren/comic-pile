@@ -80,8 +80,7 @@
         const sides = parseInt(dieType);
         let html = '<div class="die-core"></div>';
         for (let i = 1; i <= sides; i++) {
-            const val = (result && i === 1) ? result : i;
-            html += `<div class="die-face face-${i}">${val}</div>`;
+            html += `<div class="die-face face-${i}">${i}</div>`;
         }
         container.innerHTML = html;
         container.className = `die-3d d${dieType}`;

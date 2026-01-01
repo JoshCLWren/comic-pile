@@ -459,227 +459,227 @@ body {
 
 /* Landing Pos */
 .show-1 {
-    transform: rotateY(0deg) rotateX(0deg);
+    transform: translate(-50%, -50%) rotateY(0deg) rotateX(0deg);
 }
 
 .show-2 {
-    transform: rotateY(-90deg);
+    transform: translate(-50%, -50%) rotateY(-90deg);
 }
 
 .show-3 {
-    transform: rotateY(-180deg);
+    transform: translate(-50%, -50%) rotateY(-180deg);
 }
 
 .show-4 {
-    transform: rotateY(90deg);
+    transform: translate(-50%, -50%) rotateY(90deg);
 }
 
 .show-5 {
-    transform: rotateX(-90deg);
+    transform: translate(-50%, -50%) rotateX(-90deg);
 }
 
 .show-6 {
-    transform: rotateX(90deg);
+    transform: translate(-50%, -50%) rotateX(90deg);
 }
 
 .d8.show-1 {
-    transform: rotateY(0deg) rotateX(-35.26deg);
+    transform: translate(-50%, -50%) rotateY(0deg) rotateX(-35.26deg);
 }
 
 .d8.show-2 {
-    transform: rotateY(-90deg) rotateX(-35.26deg);
+    transform: translate(-50%, -50%) rotateY(-90deg) rotateX(-35.26deg);
 }
 
 .d8.show-3 {
-    transform: rotateY(-180deg) rotateX(-35.26deg);
+    transform: translate(-50%, -50%) rotateY(-180deg) rotateX(-35.26deg);
 }
 
 .d8.show-4 {
-    transform: rotateY(-270deg) rotateX(-35.26deg);
+    transform: translate(-50%, -50%) rotateY(-270deg) rotateX(-35.26deg);
 }
 
 .d8.show-5 {
-    transform: rotateY(-45deg) rotateX(35.26deg);
+    transform: translate(-50%, -50%) rotateY(-45deg) rotateX(35.26deg);
 }
 
 .d8.show-6 {
-    transform: rotateY(-135deg) rotateX(35.26deg);
+    transform: translate(-50%, -50%) rotateY(-135deg) rotateX(35.26deg);
 }
 
 .d8.show-7 {
-    transform: rotateY(-225deg) rotateX(35.26deg);
+    transform: translate(-50%, -50%) rotateY(-225deg) rotateX(35.26deg);
 }
 
 .d8.show-8 {
-    transform: rotateY(-315deg) rotateX(35.26deg);
+    transform: translate(-50%, -50%) rotateY(-315deg) rotateX(35.26deg);
 }
 
 .d10.show-1 {
-    transform: rotateY(0deg) rotateX(-18deg);
+    transform: translate(-50%, -50%) rotateY(0deg) rotateX(-18deg);
 }
 
 .d10.show-2 {
-    transform: rotateY(-72deg) rotateX(-18deg);
+    transform: translate(-50%, -50%) rotateY(-72deg) rotateX(-18deg);
 }
 
 .d10.show-3 {
-    transform: rotateY(-144deg) rotateX(-18deg);
+    transform: translate(-50%, -50%) rotateY(-144deg) rotateX(-18deg);
 }
 
 .d10.show-4 {
-    transform: rotateY(-216deg) rotateX(-18deg);
+    transform: translate(-50%, -50%) rotateY(-216deg) rotateX(-18deg);
 }
 
 .d10.show-5 {
-    transform: rotateY(-288deg) rotateX(-18deg);
+    transform: translate(-50%, -50%) rotateY(-288deg) rotateX(-18deg);
 }
 
 .d10.show-6 {
-    transform: rotateY(-36deg) rotateX(18deg);
+    transform: translate(-50%, -50%) rotateY(-36deg) rotateX(18deg);
 }
 
 .d10.show-7 {
-    transform: rotateY(-108deg) rotateX(18deg);
+    transform: translate(-50%, -50%) rotateY(-108deg) rotateX(18deg);
 }
 
 .d10.show-8 {
-    transform: rotateY(-180deg) rotateX(18deg);
+    transform: translate(-50%, -50%) rotateY(-180deg) rotateX(18deg);
 }
 
 .d10.show-9 {
-    transform: rotateY(-252deg) rotateX(18deg);
+    transform: translate(-50%, -50%) rotateY(-252deg) rotateX(18deg);
 }
 
 .d10.show-10 {
-    transform: rotateY(-324deg) rotateX(18deg);
+    transform: translate(-50%, -50%) rotateY(-324deg) rotateX(18deg);
 }
 
 .d12.show-1 {
-    transform: rotateY(0deg) rotateX(0deg);
+    transform: translate(-50%, -50%) rotateY(0deg) rotateX(0deg);
 }
 
 .d12.show-2 {
-    transform: rotateY(-72deg) rotateX(0deg);
+    transform: translate(-50%, -50%) rotateY(-72deg) rotateX(0deg);
 }
 
 .d12.show-3 {
-    transform: rotateY(-144deg) rotateX(0deg);
+    transform: translate(-50%, -50%) rotateY(-144deg) rotateX(0deg);
 }
 
 .d12.show-4 {
-    transform: rotateY(-216deg) rotateX(0deg);
+    transform: translate(-50%, -50%) rotateY(-216deg) rotateX(0deg);
 }
 
 .d12.show-5 {
-    transform: rotateY(-288deg) rotateX(0deg);
+    transform: translate(-50%, -50%) rotateY(-288deg) rotateX(0deg);
 }
 
 .d12.show-6 {
-    transform: rotateY(-36deg) rotateX(-26.57deg);
+    transform: translate(-50%, -50%) rotateY(-36deg) rotateX(-26.57deg);
 }
 
 .d12.show-7 {
-    transform: rotateY(-108deg) rotateX(-26.57deg);
+    transform: translate(-50%, -50%) rotateY(-108deg) rotateX(-26.57deg);
 }
 
 .d12.show-8 {
-    transform: rotateY(-180deg) rotateX(-26.57deg);
+    transform: translate(-50%, -50%) rotateY(-180deg) rotateX(-26.57deg);
 }
 
 .d12.show-9 {
-    transform: rotateY(-252deg) rotateX(-26.57deg);
+    transform: translate(-50%, -50%) rotateY(-252deg) rotateX(-26.57deg);
 }
 
 .d12.show-10 {
-    transform: rotateY(-324deg) rotateX(-26.57deg);
+    transform: translate(-50%, -50%) rotateY(-324deg) rotateX(-26.57deg);
 }
 
 .d12.show-11 {
-    transform: rotateX(-90deg) rotateY(0deg);
+    transform: translate(-50%, -50%) rotateX(-90deg) rotateY(0deg);
 }
 
 .d12.show-12 {
-    transform: rotateX(90deg) rotateY(0deg);
+    transform: translate(-50%, -50%) rotateX(90deg) rotateY(0deg);
 }
 
 .d20.show-1 {
-    transform: rotateY(0deg) rotateX(-10.81deg);
+    transform: translate(-50%, -50%) rotateY(0deg) rotateX(-10.81deg);
 }
 
 .d20.show-2 {
-    transform: rotateY(-72deg) rotateX(-10.81deg);
+    transform: translate(-50%, -50%) rotateY(-72deg) rotateX(-10.81deg);
 }
 
 .d20.show-3 {
-    transform: rotateY(-144deg) rotateX(-10.81deg);
+    transform: translate(-50%, -50%) rotateY(-144deg) rotateX(-10.81deg);
 }
 
 .d20.show-4 {
-    transform: rotateY(-216deg) rotateX(-10.81deg);
+    transform: translate(-50%, -50%) rotateY(-216deg) rotateX(-10.81deg);
 }
 
 .d20.show-5 {
-    transform: rotateY(-288deg) rotateX(-10.81deg);
+    transform: translate(-50%, -50%) rotateY(-288deg) rotateX(-10.81deg);
 }
 
 .d20.show-6 {
-    transform: rotateY(-36deg) rotateX(10.81deg);
+    transform: translate(-50%, -50%) rotateY(-36deg) rotateX(10.81deg);
 }
 
 .d20.show-7 {
-    transform: rotateY(-108deg) rotateX(10.81deg);
+    transform: translate(-50%, -50%) rotateY(-108deg) rotateX(10.81deg);
 }
 
 .d20.show-8 {
-    transform: rotateY(-180deg) rotateX(10.81deg);
+    transform: translate(-50%, -50%) rotateY(-180deg) rotateX(10.81deg);
 }
 
 .d20.show-9 {
-    transform: rotateY(-252deg) rotateX(10.81deg);
+    transform: translate(-50%, -50%) rotateY(-252deg) rotateX(10.81deg);
 }
 
 .d20.show-10 {
-    transform: rotateY(-324deg) rotateX(10.81deg);
+    transform: translate(-50%, -50%) rotateY(-324deg) rotateX(10.81deg);
 }
 
 .d20.show-11 {
-    transform: rotateY(0deg) rotateX(-52.62deg);
+    transform: translate(-50%, -50%) rotateY(0deg) rotateX(-52.62deg);
 }
 
 .d20.show-12 {
-    transform: rotateY(-72deg) rotateX(-52.62deg);
+    transform: translate(-50%, -50%) rotateY(-72deg) rotateX(-52.62deg);
 }
 
 .d20.show-13 {
-    transform: rotateY(-144deg) rotateX(-52.62deg);
+    transform: translate(-50%, -50%) rotateY(-144deg) rotateX(-52.62deg);
 }
 
 .d20.show-14 {
-    transform: rotateY(-216deg) rotateX(-52.62deg);
+    transform: translate(-50%, -50%) rotateY(-216deg) rotateX(-52.62deg);
 }
 
 .d20.show-15 {
-    transform: rotateY(-288deg) rotateX(-52.62deg);
+    transform: translate(-50%, -50%) rotateY(-288deg) rotateX(-52.62deg);
 }
 
 .d20.show-16 {
-    transform: rotateY(-36deg) rotateX(52.62deg);
+    transform: translate(-50%, -50%) rotateY(-36deg) rotateX(52.62deg);
 }
 
 .d20.show-17 {
-    transform: rotateY(-108deg) rotateX(52.62deg);
+    transform: translate(-50%, -50%) rotateY(-108deg) rotateX(52.62deg);
 }
 
 .d20.show-18 {
-    transform: rotateY(-180deg) rotateX(52.62deg);
+    transform: translate(-50%, -50%) rotateY(-180deg) rotateX(52.62deg);
 }
 
 .d20.show-19 {
-    transform: rotateY(-252deg) rotateX(52.62deg);
+    transform: translate(-50%, -50%) rotateY(-252deg) rotateX(52.62deg);
 }
 
 .d20.show-20 {
-    transform: rotateY(-324deg) rotateX(52.62deg);
+    transform: translate(-50%, -50%) rotateY(-324deg) rotateX(52.62deg);
 }
 
 /* Celebration */
