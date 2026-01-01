@@ -85,7 +85,8 @@
         }
         container.innerHTML = html;
         container.className = `die-3d d${dieType}`;
-        if (result && dieType == 6) container.classList.add('show-1');
+        container.className = container.className.replace(/\bshow-\d+\b/g, '');
+        if (result && result <= sides) container.classList.add(`show-${result}`);
     }
 
     function rollTheDie() {
