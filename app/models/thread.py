@@ -29,6 +29,9 @@ class Thread(Base):
         DateTime(timezone=True), nullable=True
     )
     review_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_review_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

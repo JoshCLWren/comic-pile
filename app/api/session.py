@@ -25,6 +25,47 @@ except ImportError:
     get_current_session_cached = None
 
 
+def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]]:
+    """Build narrative summary categorizing session events."""
+    events = (
+        db.execute(
+            select(Event)
+            .where(Event.session_id == session_id)
+            .order_by(Event.timestamp)
+        )
+        .scalars()
+        .all()
+    )
+
+    summary = {
+        "read": [],
+        "skipped": [],
+        "completed": [],
+    }
+
+    read_entries = []
+    skipped_titles = set()
+    completed_titles = set()
+
+    for event in events:
+        thread = db.get(Thread, event.thread_id) if event.thread_id else None
+        title = thread.title if thread else f"Thread #{event.thread_id}"
+
+        if event.type == "rate":
+            read_entries.append(f"{title} ({event.rating}/5.0)")
+            if thread and thread.status == "completed":
+                completed_titles.add(title)
+        elif event.type == "rolled_but_skipped":
+            skipped_titles.add(title)
+
+    # Consolidate (optional, but following PRD example)
+    summary["read"] = read_entries
+    summary["skipped"] = sorted(list(skipped_titles))
+    summary["completed"] = sorted(list(completed_titles))
+
+    return summary
+
+
 def build_ladder_path(session: SessionModel, db: Session) -> str:
     """Build narrative summary of dice ladder from session events."""
     events = (
@@ -232,6 +273,7 @@ def get_session_details(
             "ended_at": session_obj.ended_at,
             "start_die": session_obj.start_die,
             "ladder_path": build_ladder_path(session_obj, db),
+            "narrative_summary": build_narrative_summary(session_id, db),
             "current_die": get_current_die(session_obj.id, db),
             "events": formatted_events,
         },

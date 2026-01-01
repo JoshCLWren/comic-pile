@@ -1,4 +1,43 @@
 <div class="bg-gray-50 rounded-lg p-4 space-y-3">
+    {% if narrative_summary.read or narrative_summary.skipped or narrative_summary.completed %}
+    <div class="space-y-4 mb-6 p-4 bg-white rounded-md border border-gray-200 shadow-sm">
+        <h3 class="font-bold text-lg text-gray-800 border-b pb-2">Narrative Summary</h3>
+
+        {% if narrative_summary.read %}
+        <div>
+            <h4 class="font-bold text-sm text-gray-700 uppercase tracking-wider">Read:</h4>
+            <ul class="list-disc list-inside text-gray-600 ml-2">
+                {% for item in narrative_summary.read %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if narrative_summary.skipped %}
+        <div>
+            <h4 class="font-bold text-sm text-gray-700 uppercase tracking-wider">Skipped:</h4>
+            <ul class="list-disc list-inside text-gray-600 ml-2">
+                {% for item in narrative_summary.skipped %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if narrative_summary.completed %}
+        <div>
+            <h4 class="font-bold text-sm text-gray-700 uppercase tracking-wider text-green-700">Completed:</h4>
+            <ul class="list-disc list-inside text-green-600 ml-2">
+                {% for item in narrative_summary.completed %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <h3 class="font-semibold text-gray-700">Session Events</h3>
     {% if events %}
     <div class="space-y-2">

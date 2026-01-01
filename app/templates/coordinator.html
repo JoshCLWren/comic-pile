@@ -17,20 +17,27 @@
                 <h2 class="text-lg font-semibold text-teal-400 mb-3">Pending ({{ pending|length }})</h2>
                 <div class="space-y-2">
                     {% for task in pending %}
-                    <div class="bg-white/5 rounded-lg p-3 flex items-center justify-between">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2">
-                                <span class="text-xs font-mono text-teal-400">{{ task.task_id }}</span>
-                                <span class="text-xs px-2 py-0.5 rounded bg-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-500/20 text-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-400">{{ task.priority }}</span>
+                    <div class="bg-white/5 rounded-lg p-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-mono text-teal-400">{{ task.task_id }}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded bg-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-500/20 text-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-400">{{ task.priority }}</span>
+                                </div>
+                                <p class="text-sm font-medium text-slate-200 truncate mt-1">{{ task.title }}</p>
+                                {% if task.dependencies %}
+                                <p class="text-xs text-slate-500 mt-1">Depends on: {{ task.dependencies }}</p>
+                                {% endif %}
                             </div>
-                            <p class="text-sm font-medium text-slate-200 truncate mt-1">{{ task.title }}</p>
-                            {% if task.dependencies %}
-                            <p class="text-xs text-slate-500 mt-1">Depends on: {{ task.dependencies }}</p>
-                            {% endif %}
+                            <button hx-post="/api/tasks/{{ task.task_id }}/claim" hx-vals='{"agent_name": "opencode", "worktree": "comic-pile"}' hx-target="#coordinator-content" class="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 transition-all">
+                                Claim
+                            </button>
                         </div>
-                        <button hx-post="/api/tasks/{{ task.task_id }}/claim" hx-vals='{"agent_name": "opencode", "worktree": "comic-pile"}' hx-target="#coordinator-content" class="px-3 py-1.5 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 transition-all">
-                            Claim
-                        </button>
+                        {% if task.instructions %}
+                        <div class="mt-2 p-2 bg-slate-800/50 rounded-lg text-xs text-slate-400 font-mono whitespace-pre-wrap">
+                            {{ task.instructions|replace('\n', '<br>')|safe }}
+                        </div>
+                        {% endif %}
                     </div>
                     {% else %}
                     <p class="text-slate-500 text-sm">No pending tasks</p>

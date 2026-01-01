@@ -39,25 +39,4 @@ def step_up(die_size: int) -> int:
         return die_size
 
 
-def step_up_to_max(die_size: int) -> int:
-    """Step up all the way to d20.
 
-    Args:
-        die_size: Current die size.
-
-    Returns:
-        d20 always.
-    """
-    return DICE_LADDER[-1]
-
-
-def step_down_to_min(die_size: int) -> int:
-    """Step down all the way to d4.
-
-    Args:
-        die_size: Current die size.
-
-    Returns:
-        d4 always.
-    """
-    return DICE_LADDER[0]

@@ -28,6 +28,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "4 hours",
         "description": "Implement narrative session summaries that show consolidated 'Read:', 'Skipped:', and 'Completed:' lists per Section 11 of PRD.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-101 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-101\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
     "TASK-102": {
         "title": "Add Staleness Awareness UI",
@@ -35,6 +36,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "3 hours",
         "description": "Display stale thread suggestions on roll screen per Section 7 of PRD: 'You haven't touched X in 51 days'.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-102 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-102\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
     "TASK-103": {
         "title": "Queue UI Enhancements - Roll Pool Highlighting",
@@ -42,6 +44,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "2 hours",
         "description": "Add visual highlighting to roll pool threads (top N) in queue screen per Section 13 wireframe.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-103 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-103\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
     "TASK-104": {
         "title": "Queue UI Enhancements - Completed Threads Toggle",
@@ -49,6 +52,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "2 hours",
         "description": "Add 'Show Completed' toggle button to queue screen to show/hide completed threads.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-104 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-104\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
     "TASK-105": {
         "title": "Queue UI Enhancements - Star Ratings Display",
@@ -56,6 +60,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "2 hours",
         "description": "Display star ratings (★★★★☆) in queue list based on `last_rating` field per wireframe.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-105 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-105\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
     "TASK-106": {
         "title": "Remove Unused Dice Ladder Functions",
@@ -63,6 +68,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "1 hour",
         "description": "Remove `step_up_to_max()` and `step_down_to_min()` functions from dice_ladder.py as they violate PRD Section 2.3.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-106 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-106\n3. Claim task from your worktree\n4. Search codebase for function references\n5. Remove functions and tests if unused\n6. Run pytest and make lint\n7. Set status to done when complete",
     },
     "TASK-107": {
         "title": "Remove Notes Field from Events",
@@ -70,6 +76,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "2 hours",
         "description": "Remove `notes` field from Event model and database as PRD Section 5.2 states 'No notes system exists'.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-107 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-107\n3. Claim task from your worktree\n4. Create migration to drop notes column\n5. Remove references in code\n6. Run migrate, pytest, make lint\n7. Set status to done when complete",
     },
     "TASK-108": {
         "title": "Issues Read Adjustment UI",
@@ -77,6 +84,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "2 hours",
         "description": "Add increment/decrement controls to rating form to adjust issues read (currently hardcoded to 1).",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-108 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-108\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
     "TASK-109": {
         "title": "Queue Effect Preview Enhancement",
@@ -84,6 +92,7 @@ TASK_DATA = {
         "dependencies": "TASK-108",
         "estimated_effort": "1 hour",
         "description": "Add explicit queue movement preview text to rating form per PRD Section 13.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-109 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-109\n3. Claim task from your worktree only if TASK-108 is done\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
     "TASK-110": {
         "title": "Add last_review_at Field to Threads",
@@ -91,6 +100,7 @@ TASK_DATA = {
         "dependencies": None,
         "estimated_effort": "1 hour",
         "description": "Add `last_review_at` timestamp field to Thread model for storing imported review timestamps.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-110 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-110\n3. Claim task from your worktree\n4. Create migration for new field\n5. Update JSON export\n6. Run migrate, pytest, make lint\n7. Set status to done when complete",
     },
     "TASK-111": {
         "title": "Review Timestamp Import API",
@@ -98,6 +108,7 @@ TASK_DATA = {
         "dependencies": "TASK-110",
         "estimated_effort": "3 hours",
         "description": "Add API endpoint to import review timestamps from League of Comic Geeks.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-111 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-111\n3. Claim task from your worktree only if TASK-110 is done\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
     "TASK-112": {
         "title": "Narrative Summary Export",
@@ -105,6 +116,7 @@ TASK_DATA = {
         "dependencies": "TASK-101",
         "estimated_effort": "3 hours",
         "description": "Add export endpoint to generate narrative session summaries in readable text/markdown format.",
+        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-112 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-112\n3. Claim task from your worktree only if TASK-101 is done\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
     },
 }
 
@@ -129,6 +141,7 @@ def list_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
             blocked_reason=task.blocked_reason,
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -186,6 +199,7 @@ def get_ready_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
             blocked_reason=task.blocked_reason,
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -222,6 +236,7 @@ def get_coordinator_data(db: Session = Depends(get_db)) -> TaskCoordinatorRespon
             blocked_reason=task.blocked_reason,
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -257,6 +272,7 @@ def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskResponse:
         blocked_reason=task.blocked_reason,
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
+        instructions=task.instructions,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -274,7 +290,7 @@ def claim_task(
     if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-    if task.status == "in_progress" and task.assigned_agent:
+    if task.assigned_agent:
         raise HTTPException(
             status_code=409,
             detail={
@@ -282,6 +298,7 @@ def claim_task(
                 "task_id": task.task_id,
                 "current_assignee": task.assigned_agent,
                 "worktree": task.worktree,
+                "current_status": task.status,
                 "claimed_at": task.updated_at.isoformat(),
             },
         )
@@ -307,6 +324,7 @@ def claim_task(
         blocked_reason=task.blocked_reason,
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
+        instructions=task.instructions,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -345,6 +363,7 @@ def update_notes(
         blocked_reason=task.blocked_reason,
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
+        instructions=task.instructions,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -396,6 +415,7 @@ def set_status(
         blocked_reason=task.blocked_reason,
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
+        instructions=task.instructions,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -423,6 +443,7 @@ def get_tasks_by_status(status: str, db: Session = Depends(get_db)) -> list[Task
             blocked_reason=task.blocked_reason,
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -454,6 +475,7 @@ def get_tasks_by_agent(agent_name: str, db: Session = Depends(get_db)) -> list[T
             blocked_reason=task.blocked_reason,
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -498,6 +520,7 @@ def heartbeat(
         blocked_reason=task.blocked_reason,
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
+        instructions=task.instructions,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -546,6 +569,7 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
         blocked_reason=task.blocked_reason,
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
+        instructions=task.instructions,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -565,6 +589,7 @@ def initialize_tasks(db: Session = Depends(get_db)) -> InitializeTasksResponse:
             existing_task.title = data["title"]
             existing_task.priority = data["priority"]
             existing_task.dependencies = data["dependencies"]
+            existing_task.instructions = data.get("instructions")
             existing_task.estimated_effort = data["estimated_effort"]
             tasks_updated += 1
             created_tasks.append(existing_task)
@@ -577,6 +602,7 @@ def initialize_tasks(db: Session = Depends(get_db)) -> InitializeTasksResponse:
                 dependencies=data["dependencies"],
                 estimated_effort=data["estimated_effort"],
                 completed=False,
+                instructions=data.get("instructions"),
             )
             db.add(new_task)
             tasks_created += 1
@@ -607,6 +633,7 @@ def initialize_tasks(db: Session = Depends(get_db)) -> InitializeTasksResponse:
                 blocked_reason=task.blocked_reason,
                 blocked_by=task.blocked_by,
                 last_heartbeat=task.last_heartbeat,
+                instructions=task.instructions,
                 created_at=task.created_at,
                 updated_at=task.updated_at,
             )

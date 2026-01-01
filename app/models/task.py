@@ -31,6 +31,7 @@ class Task(Base):
     blocked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     blocked_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
     last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
