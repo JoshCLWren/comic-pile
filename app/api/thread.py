@@ -32,31 +32,12 @@ def list_stale_threads(days: int = 30, db: Session = Depends(get_db)) -> list[Th
         for thread in threads
     ]
 
+
 try:
     from app.main import clear_cache, get_threads_cached
 except ImportError:
     clear_cache = None
     get_threads_cached = None
-
-
-@router.get("/stale", response_model=list[ThreadResponse])
-def list_stale_threads(days: int = 30, db: Session = Depends(get_db)) -> list[ThreadResponse]:
-    """List threads not read in specified days (default 30)."""
-    threads = get_stale_threads(db, days)
-    return [
-        ThreadResponse(
-            id=thread.id,
-            title=thread.title,
-            format=thread.format,
-            issues_remaining=thread.issues_remaining,
-            position=thread.queue_position,
-            status=thread.status,
-            last_rating=thread.last_rating,
-            last_activity_at=thread.last_activity_at,
-            created_at=thread.created_at,
-        )
-        for thread in threads
-    ]
 
 
 @router.get("/", response_model=list[ThreadResponse])

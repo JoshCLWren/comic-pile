@@ -7,42 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/threejs-dice@1.1.0/lib/dice.min.js"></script>
-    <script>
-        let retryCount = 0;
-        const MAX_RETRIES = 10;
-
-        function checkDiceLibrary() {
-            console.log('[DiceLib] Check attempt', retryCount + 1);
-            console.log('[DiceLib] THREE exists:', typeof window.THREE !== 'undefined');
-            console.log('[DiceLib] CANNON exists:', typeof window.CANNON !== 'undefined');
-            console.log('[DiceLib] Dice exists:', typeof window.Dice !== 'undefined');
-
-            if (typeof window.Dice !== 'undefined') {
-                console.log('[DiceLib] threejs-dice loaded successfully');
-                window.dispatchEvent(new CustomEvent('diceLibraryLoaded'));
-            } else if (retryCount < MAX_RETRIES) {
-                retryCount++;
-                console.error('[DiceLib] threejs-dice not loaded, retrying...', '(' + retryCount + '/' + MAX_RETRIES + ')');
-                setTimeout(checkDiceLibrary, 100);
-            } else {
-                console.error('[DiceLib] Failed to load threejs-dice after', MAX_RETRIES, 'attempts');
-                console.error('[DiceLib] Dependencies:', {
-                    THREE: typeof window.THREE !== 'undefined',
-                    CANNON: typeof window.CANNON !== 'undefined',
-                    Dice: typeof window.Dice !== 'undefined'
-                });
-                console.error('[DiceLib] The dice library may have failed to initialize. Check browser console for library errors.');
-            }
-        }
-        if (document.readyState === 'complete') {
-            checkDiceLibrary();
-        } else {
-            window.addEventListener('load', checkDiceLibrary);
-        }
-    </script>
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body class="pb-24">
