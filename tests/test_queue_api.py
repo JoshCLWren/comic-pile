@@ -23,10 +23,12 @@ async def test_move_to_position(client, db, sample_data):
     thread = db.get(Thread, thread_id)
     assert thread.queue_position == 1
 
-    thread2 = db.get(Thread, sample_data["threads"][0].id)
+    thread1 = db.get(Thread, sample_data["threads"][0].id)
+    thread2 = db.get(Thread, sample_data["threads"][1].id)
     thread4 = db.get(Thread, sample_data["threads"][3].id)
-    assert thread2.queue_position == 2
-    assert thread4.queue_position == 3
+    assert thread1.queue_position == 2
+    assert thread2.queue_position == 3
+    assert thread4.queue_position == 4
 
 
 @pytest.mark.asyncio

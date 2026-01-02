@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models import Thread
@@ -10,87 +10,98 @@ from app.models import Thread
 
 def move_to_front(thread_id: int, db: Session) -> None:
     """Move thread to front of queue."""
-    threads = (
-        db.execute(select(Thread).where(Thread.queue_position >= 1).order_by(Thread.queue_position))
-        .scalars()
-        .all()
-    )
-
-    target_thread = next((t for t in threads if t.id == thread_id), None)
+    target_thread = db.get(Thread, thread_id)
     if not target_thread:
         return
 
-    for thread in threads:
-        if thread.id == thread_id:
-            thread.queue_position = 1
-        elif thread.queue_position < target_thread.queue_position:
-            thread.queue_position += 1
+    original_position = target_thread.queue_position
+    if original_position == 1:
+        return
 
+    db.execute(
+        update(Thread)
+        .where(Thread.queue_position >= 1)
+        .where(Thread.queue_position < original_position)
+        .values(queue_position=Thread.queue_position + 1)
+    )
+    target_thread.queue_position = 1
     db.commit()
 
 
 def move_to_back(thread_id: int, db: Session) -> None:
     """Move thread to back of queue."""
-    threads = (
-        db.execute(select(Thread).where(Thread.queue_position >= 1).order_by(Thread.queue_position))
-        .scalars()
-        .all()
-    )
-
-    target_thread = next((t for t in threads if t.id == thread_id), None)
+    target_thread = db.get(Thread, thread_id)
     if not target_thread:
         return
 
-    max_position = len(threads)
     original_position = target_thread.queue_position
 
-    for thread in threads:
-        if thread.id == thread_id:
-            thread.queue_position = max_position
-        elif thread.queue_position > original_position:
-            thread.queue_position -= 1
+    max_position = db.execute(
+        select(Thread.queue_position)
+        .where(Thread.queue_position >= 1)
+        .order_by(Thread.queue_position.desc())
+        .limit(1)
+    ).scalar()
 
+    if max_position is None:
+        return
+
+    if original_position == max_position:
+        return
+
+    db.execute(
+        update(Thread)
+        .where(Thread.queue_position > original_position)
+        .values(queue_position=Thread.queue_position - 1)
+    )
+    target_thread.queue_position = max_position
     db.commit()
 
 
 def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
     """Move thread to specific position."""
-    threads = (
-        db.execute(select(Thread).where(Thread.queue_position >= 1).order_by(Thread.queue_position))
-        .scalars()
-        .all()
-    )
-
-    target_thread = next((t for t in threads if t.id == thread_id), None)
+    target_thread = db.get(Thread, thread_id)
     if not target_thread:
         return
+
+    old_position = target_thread.queue_position
 
     if new_position < 1:
         new_position = 1
 
-    max_position = len(threads)
+    max_position = db.execute(
+        select(Thread.queue_position)
+        .where(Thread.queue_position >= 1)
+        .order_by(Thread.queue_position.desc())
+        .limit(1)
+    ).scalar()
+
+    if max_position is None:
+        max_position = 0
+
     if new_position > max_position:
         new_position = max_position
-
-    old_position = target_thread.queue_position
 
     if old_position == new_position:
         return
 
     if old_position < new_position:
-        for thread in threads:
-            if thread.id == thread_id:
-                thread.queue_position = new_position
-            elif old_position < thread.queue_position <= new_position:
-                thread.queue_position -= 1
+        db.execute(
+            update(Thread)
+            .where(Thread.queue_position > old_position)
+            .where(Thread.queue_position <= new_position)
+            .values(queue_position=Thread.queue_position - 1)
+        )
+        target_thread.queue_position = new_position
     else:
-        for thread in threads:
-            if thread.id == thread_id:
-                thread.queue_position = new_position
-            elif thread.queue_position >= old_position and thread.id != thread_id:
-                thread.queue_position -= 1
-            elif new_position <= thread.queue_position < old_position:
-                thread.queue_position += 1
+        db.execute(
+            update(Thread)
+            .where(Thread.queue_position >= new_position)
+            .where(Thread.queue_position < old_position)
+            .where(Thread.id != thread_id)
+            .values(queue_position=Thread.queue_position + 1)
+        )
+        target_thread.queue_position = new_position
 
     db.commit()
 
