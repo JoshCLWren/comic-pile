@@ -24,53 +24,35 @@
         const vertices = [];
         const indices = [];
         const radius = 0.85;
-        const goldenRatio = (1 + Math.sqrt(5)) / 2;
 
         const pentagonAngles = [];
         for (let i = 0; i < 5; i++) {
             pentagonAngles.push((i * 2 * Math.PI) / 5);
         }
 
-        const topPentagon = pentagonAngles.map(angle => [
-            radius * Math.cos(angle) * 0.4,
-            radius * 0.8,
-            radius * Math.sin(angle) * 0.4
+        const middlePentagon = pentagonAngles.map(angle => [
+            radius * Math.cos(angle) * 0.5,
+            0,
+            radius * Math.sin(angle) * 0.5
         ]);
 
-        const bottomPentagon = pentagonAngles.map(angle => [
-            radius * Math.cos(angle + Math.PI / 5) * 0.4,
-            -radius * 0.8,
-            radius * Math.sin(angle + Math.PI / 5) * 0.4
-        ]);
-
-        vertices.push(
-            [0, radius * 0.35, 0],
-            [0, -radius * 0.35, 0]
-        );
+        vertices.push([0, radius, 0]);
 
         for (let i = 0; i < 5; i++) {
-            vertices.push(topPentagon[i]);
+            vertices.push(middlePentagon[i]);
         }
 
-        for (let i = 0; i < 5; i++) {
-            vertices.push(bottomPentagon[i]);
-        }
+        vertices.push([0, -radius, 0]);
 
         for (let i = 0; i < 5; i++) {
             const next = (i + 1) % 5;
             indices.push(
                 0,
-                i + 2,
-                next + 2,
-                1,
-                next + 7,
-                i + 7,
-                0,
-                i + 2,
-                i + 7,
-                0,
-                next + 2,
-                next + 7
+                i + 1,
+                next + 1,
+                6,
+                next + 1,
+                i + 1
             );
         }
 
