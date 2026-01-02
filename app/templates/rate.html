@@ -72,19 +72,29 @@
         if (num >= 4.0) {
             display.className = 'text-teal-400';
             display.style.textShadow = '0 0 40px rgba(20, 184, 166, 1)';
-            effect.innerHTML = 'Excellent! Die steps down 🎲 Move to front';
             effect.parentElement.className = 'p-6 bg-teal-500/5 rounded-3xl border border-teal-500/20 shadow-xl';
 
             const idx = DICE_LADDER.indexOf(currentDenom);
-            predictedDie = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[idx];
+            if (idx > 0) {
+                effect.innerHTML = 'Excellent! Die steps down 🎲 Move to front';
+                predictedDie = DICE_LADDER[idx - 1];
+            } else {
+                effect.innerHTML = 'Already at minimum 🎲 Die stays at d4';
+                predictedDie = DICE_LADDER[idx];
+            }
         } else {
             display.className = 'text-indigo-400';
             display.style.textShadow = '0 0 40px rgba(79, 70, 229, 1)';
-            effect.innerHTML = 'Okay. Die steps up 🎲 Move to back';
             effect.parentElement.className = 'p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/20 shadow-xl';
 
             const idx = DICE_LADDER.indexOf(currentDenom);
-            predictedDie = idx < DICE_LADDER.length - 1 ? DICE_LADDER[idx + 1] : DICE_LADDER[idx];
+            if (idx < DICE_LADDER.length - 1) {
+                effect.innerHTML = 'Okay. Die steps up 🎲 Move to back';
+                predictedDie = DICE_LADDER[idx + 1];
+            } else {
+                effect.innerHTML = 'Already at maximum 🎲 Die stays at d20';
+                predictedDie = DICE_LADDER[idx];
+            }
         }
 
         if (previewDie && previewSides !== predictedDie) {

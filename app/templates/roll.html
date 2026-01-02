@@ -193,13 +193,23 @@
         if (num >= 4.0) {
             display.className = 'text-teal-400';
             const idx = DICE_LADDER.indexOf(initialDenom);
-            predictedDie = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0];
-            preview.innerHTML = 'Excellent! Die steps down 🎲 Move to front';
+            if (idx > 0) {
+                predictedDie = DICE_LADDER[idx - 1];
+                preview.innerHTML = 'Excellent! Die steps down 🎲 Move to front';
+            } else {
+                predictedDie = DICE_LADDER[0];
+                preview.innerHTML = 'Already at minimum 🎲 Die stays at d4';
+            }
         } else {
             display.className = 'text-indigo-400';
             const idx = DICE_LADDER.indexOf(initialDenom);
-            predictedDie = idx < DICE_LADDER.length - 1 ? DICE_LADDER[idx + 1] : DICE_LADDER[DICE_LADDER.length - 1];
-            preview.innerHTML = 'Okay. Die steps up 🎲 Move to back';
+            if (idx < DICE_LADDER.length - 1) {
+                predictedDie = DICE_LADDER[idx + 1];
+                preview.innerHTML = 'Okay. Die steps up 🎲 Move to back';
+            } else {
+                predictedDie = DICE_LADDER[DICE_LADDER.length - 1];
+                preview.innerHTML = 'Already at maximum 🎲 Die stays at d20';
+            }
         }
 
         const headerDieLabel = document.getElementById('header-die-label');
