@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: comic-pile-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: comicpile
+      POSTGRES_PASSWORD: comicpile_password
+      POSTGRES_DB: comicpile
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comicpile"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: comic-pile-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://comicpile:comicpile_password@db:5432/comicpile
+      ENVIRONMENT: development
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./app:/app/app
+      - ./comic_pile:/app/comic_pile
+      - ./alembic:/app/alembic
+      - ./scripts:/app/scripts
+    command: [".venv/bin/python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: comic-pile-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@comicpile.local
+      PGADMIN_DEFAULT_PASSWORD: pgadmin_password
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
