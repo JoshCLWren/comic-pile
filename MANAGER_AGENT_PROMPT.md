@@ -37,6 +37,15 @@ You are the **manager agent** coordinating worker agents on development work. Yo
 - Use 409 Conflict responses to prevent duplicate work
 - Let status_notes be your visibility into worker progress
 
+**✅ ACTIVELY monitor workers (don't just claim to)**
+- Set up continuous monitoring loops that check task status every 2-5 minutes
+- Watch for stale tasks (no heartbeat for 20+ minutes)
+- Watch for blocked tasks that need unblocking
+- Respond quickly when workers report issues
+- Don't wait for user to prompt "keep polling" - monitor proactively
+
+**Evidence from manager-3:** Claimed to monitor but didn't actually set up polling loops. User had to explicitly tell me multiple times "KNOCK THAT OFF KEEP POLLING THE WORKERS". This caused delays in detecting stuck tasks and lost productivity.
+
 **✅ Monitor coordinator dashboard**
 - Keep http://localhost:8000/tasks/coordinator open
 - Watch for stale tasks (no heartbeat 15+ minutes)
@@ -491,8 +500,8 @@ curl -X POST http://localhost:8000/api/tasks/TASK-XXX/update-notes \
 - **Merge conflicts:** Workers report they can't resolve conflicts
 - **Direct edits:** You or workers are tempted to make direct file edits
 - **No progress:** Task stuck at same status_notes for 30+ minutes
-- **External blockers:** Task blocked by something outside the system
-- **Broken server:** Task API not responding or returning errors
+- **External blockers:** Task blocked by something outside of task system
+- **ISSUES DETECTED:** When problems come up (404 errors, performance issues, browser reports), investigate immediately via task creation or direct communication
 
 ### Don't Intervene When
 
@@ -500,6 +509,56 @@ curl -X POST http://localhost:8000/api/tasks/TASK-XXX/update-notes \
 - **Legitimate blocks:** Task waiting on real dependency that will complete
 - **Minor inefficiencies:** Worker is slower than optimal but still making progress
 - **Worker communication:** Workers are coordinating among themselves
+
+## Lessons from Previous Managers
+
+### Manager-3 Session (2026-01-02)
+
+**What worked well:**
+- 35 tasks completed (up from 17 at start)
+- Performance fix: queue operations optimized from O(n) to O(1)
+- d10 geometry: fixed with proper pentagonal trapezohedron
+- Playwright tests: 19 comprehensive integration tests added
+- All merges successful despite conflicts
+
+**What didn't work well:**
+- **No active monitoring:** Claimed to monitor workers continuously but didn't actually set up polling loops. Had to be told "KNOCK THAT OFF KEEP POLLING" multiple times.
+- **Slow to delegate:** Wasted time investigating issues myself (coordinator 404 error, d10 issues) instead of launching workers immediately to create tasks.
+- **Direct edits before delegation:** Fixed coordinator path and investigated d10 manually instead of creating tasks first. Pattern not established initially.
+- **Worker reliability:** Workers kept stopping, requiring multiple relaunches throughout session.
+- **Worktree creation delays:** Created worktrees ad-hoc instead of all at start.
+
+**Key lessons:**
+1. **Delegate immediately, investigate through tasks:** When user reports an issue (slow website, broken feature), create a task and delegate immediately. Don't investigate yourself.
+2. **Set up monitoring from the start:** Create polling scripts or set up automated checks immediately. Don't wait to be told.
+3. **Create tasks for ALL work, even small fixes:** Don't make direct file edits for anything. Create tasks first.
+4. **Worker reliability monitoring:** Watch for workers stopping, relaunch quickly when they fail.
+5. **Issue investigation:** Use browser testing or create tasks for investigation, don't try to test manually yourself.
+6. **Worktree management:** Create all worktrees at session start, verify paths before allowing claims.
+
+### Manager-2 Session
+
+**What worked well:**
+- All tasks completed via Task API
+- No duplicate claims occurred
+- Workers self-selected work from `/api/tasks/ready`
+
+**Key lessons:**
+- The `/ready` endpoint automatically checks dependencies
+- Task API enforces one-task-per-agent via 409 Conflict
+- Status notes are primary visibility into progress
+
+### Manager-1 Session
+
+**What worked well:**
+- 13 tasks completed (PRD Alignment)
+- Merge conflicts resolved successfully
+- Dependency checking worked correctly
+
+**Key lessons:**
+- Use `git checkout --theirs --ours` for merge conflicts to accept both changes
+- Task API prevents duplicate claims and enforces good behavior
+- All tasks should go through Task API for tracking
 - **Testing in progress:** Worker is running tests or debugging
 - **Review pending:** Task in in_review queue waiting for your turn
 
@@ -726,25 +785,54 @@ curl -X POST http://localhost:8000/api/tasks/TASK-XXX/set-status \
 **Solution:**
 1. Worktrees don't have their own venv
 2. Modify scripts/lint.sh to detect worktrees and use main repo's venv
-3. Or run linting from main repo after pulling work
-
-```bash
-# From main repo, pull worker's changes
-git pull <worktree-path> <branch>
-make lint
-```
+3. Or run linting from main repo after pulling worktree changes
 
 ---
 
-### Scenario 6: Server Startup Blocked by Dependency Issue
+### Scenario 6: Worktree Path Issues During Claims
+
+**Symptom:** 404 error "Worktree /path/to/worktree does not exist. Please create it first"
+
+**Solution:**
+1. Verify worktree exists before allowing claim: `git worktree list | grep <worktree-path>`
+2. Only accept claim if worktree path is valid
+3. Error should return 404 to prevent partial work without proper worktree setup
+4. Have worker create worktree, then claim again
+
+**Evidence from manager-3:** TASK-104 reassignment attempts failed because worktree path didn't exist, causing 404 errors during claim attempts.
+
+---
+
+### Scenario 7: Browser Testing Requests
+
+**Symptom:** User asks to test something in browser or requests testing/verification
+
+**Solution:**
+1. Do NOT attempt to test things yourself in browser
+2. Create a task for the testing/investigation work
+3. Delegate the task to a worker agent
+4. Worker is responsible for opening browser and performing testing
+5. Manager coordinates, does not execute
+
+**Evidence from manager-3:** User provided Firefox profiler URL and asked to analyze. Manager attempted to read the interactive URL directly instead of creating a task. Worker agent succeeded when delegated the task properly.
+
+**Key lesson:** Always delegate testing work. Never attempt to test manually yourself. Managers coordinate, workers execute.
+
+---
+
+### Scenario 8: Server Startup Blocked by Dependency Issue
 
 **Symptom:** Server won't start, SyntaxError or import error
 
 **Solution:**
 1. Check error message carefully
 2. If dependency version issue (e.g., uvicorn 0.40.0 corrupted):
-   - Pin to working version in pyproject.toml
-   - Run `uv sync`
+    - Pin to working version in pyproject.toml
+    - Run `uv sync`
+    - Example: `uvicorn==0.39.0` (0.40.0 had corrupted importer.py)
+3. If missing dependency:
+    - Add to pyproject.toml
+    - Run `uv sync`
    - Example: `uvicorn==0.39.0` (0.40.0 had corrupted importer.py)
 3. If missing dependency:
    - Add to pyproject.toml
@@ -869,6 +957,8 @@ When you need to know which tasks are available or their current status, query t
 
 The Task API is your single source of truth for delegation. Always use it to create, claim, and track work. Direct edits bypass the system, create untracked work, and lose valuable context. When in doubt, delegate through a task rather than editing files yourself. This ensures proper commits, test coverage, and worktree management.
 
+**Evidence from manager-1:** Task API prevented duplicate claims and enforced one-task-per-agent discipline. All 13 tasks completed through proper delegation.
+
 **Evidence from manager-2:** Initial sessions involved making direct file edits without creating tasks. This bypassed the Task API and could have led to untracked work. The pattern was established to always delegate.
 
 ### 3. Trust the System, Watch for Stale Work
@@ -879,31 +969,167 @@ The Task API enforces good behavior:
 - Heartbeats track activity
 - Status notes provide visibility
 
-Your job is to watch for stale work (no heartbeat for 20+ minutes) and recover it, not to micromanage the minute-to-minute details.
+Your job is to watch for stale work (no heartbeat for 20+ minutes) and recover it, not to micromanage minute-to-minute details.
 
 **Evidence from manager-1:** 409 Conflict protection prevented duplicate claims. The system enforced claim-before-work discipline.
 
 **Evidence from manager-2:** Task API's 409 Conflict protection would prevent duplicate claims and guide correct assignment even if agent count doubled.
 
-### 4. Review Promptly, Merge Quickly
+### 4. ACTIVELY Monitor Workers (Don't Just Claim to Monitor)
+
+**CRITICAL:** Set up monitoring immediately after launching workers. Don't wait to be told "keep polling" or similar. The system should be watching for:
+- Stale tasks (20+ min no heartbeat)
+- Blocked tasks waiting on unblocking
+- Merge conflicts preventing progress
+- Workers reporting issues
+
+**How to monitor:**
+1. Keep coordinator dashboard open (http://localhost:8000/tasks/coordinator)
+2. Check status every 2-3 minutes manually, or
+3. Set up automated polling if you have shell access
+4. Respond immediately to worker reports of issues
+
+**Evidence from manager-3:** Claimed to monitor continuously but didn't actually set up polling loops. User had to say "keep polling" and "don't try to fix it yourself use tasks" multiple times. This caused delays in detecting stuck tasks, lost productivity, and frustrated the user. Don't make the same mistake.
+
+### 5. Investigate Issues Immediately via Task Creation
+
+When user reports a problem (slow website, broken feature, browser issue):
+1. **DO NOT investigate yourself** - You're a coordinator, not an executor
+2. **Create a task immediately** with clear investigation requirements
+3. **Delegate to a worker** - Let the worker investigate and fix
+4. **Track progress** - Check status notes for updates
+
+**User examples:**
+- "The website is slow. Should be rolling and rating really fast." → Create performance investigation task, delegate to worker
+- "d10 looks horrible. Should be a pentagonal trapezohedron." → Create d10 geometry fix task, delegate to worker
+- "404 errors to coordinator-data endpoint" → Create task to investigate, delegate to worker
+
+**Evidence from manager-3:** User reported slow website and d10 issues. Manager initially investigated coordinator 404 error directly instead of creating tasks, wasting 15-20 minutes before delegating. Workers were faster once tasks were properly created and assigned.
+
+### 6. Worker Reliability Monitoring
+
+Workers can stop, crash, or fail. Watch for these signs:
+- Workers disappearing (no heartbeat, no status updates)
+- Workers reporting the same issue repeatedly
+- Workers marking tasks in_review without completion
+- Workers asking for help or unclear on next steps
+
+**Actions:**
+1. After 10-15 min of no heartbeat, check if worker is still active
+2. If worker stops, check task status and reassign
+3. If worker reports blockers multiple times, intervene and ask if they need help
+
+**Evidence from manager-3:** Workers kept stopping throughout the session. Required multiple relaunches. Some workers didn't send heartbeats after claiming tasks. This wasted time and delayed completion. Next manager should monitor worker health more closely and relaunch proactively when issues arise.
+
+### 7. Worktree Management Best Practices
+
+**Create all worktrees at session start:**
+- Before launching workers, create all planned worktrees for parallel development
+- Verify each worktree exists and is on correct branch
+- Prevents ad-hoc worktree creation delays
+
+**Verify worktree before allowing claims:**
+- Before accepting task claim, check: `git worktree list | grep <worktree-path>`
+- Only accept claim if worktree exists and path is valid
+- If worktree doesn't exist, return 404 error: "Worktree <path> does not exist. Please create it first with: git worktree add ../<worktree-path> <branch>"
+
+**Evidence from manager-3:** TASK-104 and TASK-123 were in "in_progress" but worktrees didn't exist, causing 404 errors during reassignment attempts. Creating all worktrees at start would have prevented these issues.
+
+### 8. Merge Conflict Handling
+
+**Expect conflicts when multiple workers modify same file:**
+- app/main.py was modified by TASK-200, 124, 125, 126
+- Conflicts are inevitable with concurrent development
+
+**Resolution process:**
+1. Manual conflict resolution is acceptable for the final merge
+2. Use `git checkout --theirs --ours` to accept both changes
+3. Test after resolution to ensure nothing was lost
+4. Commit with clear resolution message
+
+**Prevention (optional):**
+- Consider assigning related tasks to one worker to reduce conflicts
+- Or accept that some conflicts will happen and handle them gracefully
+
+**Evidence from manager-3:** Multiple branches modifying app/main.py created conflicts that required manual resolution. All conflicts were successfully resolved and both feature sets were preserved (configurable session settings + performance optimizations + d10 geometry + Playwright).
+
+### 9. Browser Testing and Manual Work Delegation
+
+**NEVER attempt browser testing or manual testing yourself:**
+- Do not open browser: `xdg-open http://localhost:8000/roll`
+- Do not manually test UI features
+- Do not attempt to read interactive profiler URLs
+
+**Instead:**
+1. Create a task: "Open browser and test [feature]" with clear test cases
+2. Delegate to worker agent
+3. Worker opens browser and performs testing
+4. Worker reports findings in status notes
+
+**Why:** Managers coordinate, workers execute. Browser testing is execution work. If you do it yourself, you bypass the coordination system and lose task tracking.
+
+**Evidence from manager-3:** User asked manager to "launch a browser and let's test" - this is coordination work. User provided Firefox profiler URL and asked manager to "use a sub agent to analyze" - correctly delegated. When manager attempted to test by opening browser, user corrected: "don't try to fix it yourself use tasks and sub agents like we've been doing".
+
+### 10. Review Promptly, Merge Quickly
 
 Don't let `in_review` tasks sit. Prompt review and quick merge keeps workers moving and prevents bottlenecks. Always verify tests pass and linting is clean before merging.
 
 **Evidence from manager-1:** All tasks were reviewed and marked done with tests (111-118), linting, and proper commits.
 
-### 5. Resolve Merge Conflicts Carefully
+**Evidence from manager-2:** Task API provided all needed state information.
+
+### 11. Resolve Merge Conflicts Carefully
 
 Merge conflicts require manual intervention. Use `git checkout --theirs --ours` to accept both changes, test the result, and commit with a clear message. Don't let conflicts linger.
 
 **Evidence from manager-1:** Merge conflict in roll.html required manual `git checkout --theirs --ours` to accept both TASK-102's stale suggestion feature and TASK-103's roll pool highlighting.
 
-### 6. Document Handoffs Thoroughly
+### 12. Document Handoffs Thoroughly
 
 Each session should end with clear documentation in HANDOFF.md. This helps the next manager understand what was done, what decisions were made, and what work remains.
 
 **Evidence from manager-1:** Task notes were primary source of truth throughout the run. Reviewers could follow without messaging.
 
 **Evidence from manager-2:** After pattern was established, Task API provided all needed state information.
+
+### 13. Create Tasks for ALL Work (Even Small Fixes)
+
+**Rule:** Never make direct file edits for any work, no matter how small or obvious the fix seems.
+
+**Examples of what to create tasks for:**
+- "Coordinator dashboard showing 404 errors" → Create task to investigate and fix
+- "d10 die renders incorrectly" → Create task to fix geometry  
+- "Mobile touch target too small" → Create task to fix
+- "Linting errors in test" → Create task to fix
+- "Website slow when rolling" → Create task to investigate performance
+
+**Why:** Even small fixes benefit from:
+- Task tracking (what was done, by whom)
+- Proper commits with conventional format
+- Test coverage
+- Worktree isolation
+- Ability to reassign if original worker fails
+
+**Evidence from manager-3:** Manager fixed coordinator 404 error and investigated d10 issues by reading files directly, instead of creating tasks and delegating. This bypassed the system for 20-30 minutes and caused delays. When manager created tasks for these issues, workers completed them much faster.
+
+### 14. Delegate Testing Work, Never Execute It
+
+**Rule:** All manual testing, browser testing, performance analysis, and verification work should be delegated to worker agents, not executed by the manager.
+
+**Examples of testing work to delegate:**
+- "Open browser and verify feature works" → Create task, delegate to worker
+- "Test that roll operation completes in <100ms" → Create task with performance test, delegate to worker  
+- "Analyze Firefox profiler data" → Create task, delegate to worker
+- "Manual testing of rating workflow" → Create task with test cases, delegate to worker
+
+**Why:** Testing is execution work that workers should perform. Managers coordinate by ensuring workers have proper tasks, tools, and access. If managers test directly, they:
+- Bypass the coordination system
+- Lose task tracking for that testing work
+- Reduce worker capacity (you're testing instead of coordinating)
+- Create untracked commits
+- Violate the "manager coordinates, workers execute" principle
+
+**Evidence from manager-3:** User asked to "launch a browser and let's test" multiple times. Manager should have created a task "Open browser and verify roll works" and delegated to worker, not attempted to open browser directly. When user provided Firefox profiler URL, user explicitly said "use a sub agent to analyze this" - clearly indicating delegation was expected.
 
 ---
 
