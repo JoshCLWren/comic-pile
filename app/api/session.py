@@ -112,6 +112,7 @@ def get_active_thread(session: SessionModel, db: Session) -> dict[str, Any] | No
         "format": thread.format,
         "issues_remaining": thread.issues_remaining,
         "position": thread.queue_position,
+        "last_rolled_result": event.result,
     }
 
 
@@ -145,6 +146,20 @@ def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
             detail="No active session found",
         )
 
+    active_thread = get_active_thread(active_session, db)
+
+    return SessionResponse(
+        id=active_session.id,
+        started_at=active_session.started_at,
+        ended_at=active_session.ended_at,
+        start_die=active_session.start_die,
+        user_id=active_session.user_id,
+        ladder_path=build_ladder_path(active_session, db),
+        active_thread=active_thread,
+        current_die=get_current_die(active_session.id, db),
+        last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
+    )
+
     return SessionResponse(
         id=active_session.id,
         started_at=active_session.started_at,
@@ -154,6 +169,9 @@ def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
         ladder_path=build_ladder_path(active_session, db),
         active_thread=get_active_thread(active_session, db),
         current_die=get_current_die(active_session.id, db),
+        last_rolled_result=get_active_thread(active_session, db).get("last_rolled_result")
+        if get_active_thread(active_session, db)
+        else None,
     )
 
 
@@ -175,19 +193,25 @@ def list_sessions(
         .all()
     )
 
-    return [
-        SessionResponse(
-            id=session.id,
-            started_at=session.started_at,
-            ended_at=session.ended_at,
-            start_die=session.start_die,
-            user_id=session.user_id,
-            ladder_path=build_ladder_path(session, db),
-            active_thread=get_active_thread(session, db),
-            current_die=get_current_die(session.id, db),
+    responses = []
+    for session in sessions:
+        active_thread = get_active_thread(session, db)
+        responses.append(
+            SessionResponse(
+                id=session.id,
+                started_at=session.started_at,
+                ended_at=session.ended_at,
+                start_die=session.start_die,
+                user_id=session.user_id,
+                ladder_path=build_ladder_path(session, db),
+                active_thread=active_thread,
+                current_die=get_current_die(session.id, db),
+                last_rolled_result=active_thread.get("last_rolled_result")
+                if active_thread
+                else None,
+            )
         )
-        for session in sessions
-    ]
+    return responses
 
 
 @router.get("/{session_id}")
@@ -197,6 +221,8 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    active_thread = get_active_thread(session, db)
+
     return SessionResponse(
         id=session.id,
         started_at=session.started_at,
@@ -204,8 +230,9 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
         start_die=session.start_die,
         user_id=session.user_id,
         ladder_path=build_ladder_path(session, db),
-        active_thread=get_active_thread(session, db),
+        active_thread=active_thread,
         current_die=get_current_die(session.id, db),
+        last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
     )
 
 

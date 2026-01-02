@@ -78,3 +78,4 @@ class SessionResponse(BaseModel):
     ladder_path: str
     active_thread: dict[str, Any] | None
     current_die: int
+    last_rolled_result: int | None
