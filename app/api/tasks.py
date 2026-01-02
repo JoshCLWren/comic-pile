@@ -13,7 +13,6 @@ from app.schemas.task import (
     ClaimTaskRequest,
     CreateTaskRequest,
     HeartbeatRequest,
-    InitializeTasksResponse,
     SetStatusRequest,
     TaskCoordinatorResponse,
     TaskResponse,
@@ -22,106 +21,6 @@ from app.schemas.task import (
 )
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
-
-# TODO: Load from database instead of hardcoded dict
-TASK_DATA = {
-    "TASK-101": {
-        "title": "Complete Narrative Session Summaries",
-        "priority": "HIGH",
-        "dependencies": None,
-        "estimated_effort": "4 hours",
-        "description": "Implement narrative session summaries that show consolidated 'Read:', 'Skipped:', and 'Completed:' lists per Section 11 of PRD.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-101 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-101\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-    "TASK-102": {
-        "title": "Add Staleness Awareness UI",
-        "priority": "MEDIUM",
-        "dependencies": None,
-        "estimated_effort": "3 hours",
-        "description": "Display stale thread suggestions on roll screen per Section 7 of PRD: 'You haven't touched X in 51 days'.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-102 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-102\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-    "TASK-103": {
-        "title": "Queue UI Enhancements - Roll Pool Highlighting",
-        "priority": "MEDIUM",
-        "dependencies": None,
-        "estimated_effort": "2 hours",
-        "description": "Add visual highlighting to roll pool threads (top N) in queue screen per Section 13 wireframe.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-103 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-103\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-    "TASK-104": {
-        "title": "Queue UI Enhancements - Completed Threads Toggle",
-        "priority": "MEDIUM",
-        "dependencies": None,
-        "estimated_effort": "2 hours",
-        "description": "Add 'Show Completed' toggle button to queue screen to show/hide completed threads.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-104 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-104\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-    "TASK-105": {
-        "title": "Queue UI Enhancements - Star Ratings Display",
-        "priority": "MEDIUM",
-        "dependencies": None,
-        "estimated_effort": "2 hours",
-        "description": "Display star ratings (★★★★☆) in queue list based on `last_rating` field per wireframe.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-105 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-105\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-    "TASK-106": {
-        "title": "Remove Unused Dice Ladder Functions",
-        "priority": "MEDIUM",
-        "dependencies": None,
-        "estimated_effort": "1 hour",
-        "description": "Remove `step_up_to_max()` and `step_down_to_min()` functions from dice_ladder.py as they violate PRD Section 2.3.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-106 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-106\n3. Claim task from your worktree\n4. Search codebase for function references\n5. Remove functions and tests if unused\n6. Run pytest and make lint\n7. Set status to done when complete",
-    },
-    "TASK-107": {
-        "title": "Remove Notes Field from Events",
-        "priority": "MEDIUM",
-        "dependencies": None,
-        "estimated_effort": "2 hours",
-        "description": "Remove `notes` field from Event model and database as PRD Section 5.2 states 'No notes system exists'.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-107 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-107\n3. Claim task from your worktree\n4. Create migration to drop notes column\n5. Remove references in code\n6. Run migrate, pytest, make lint\n7. Set status to done when complete",
-    },
-    "TASK-108": {
-        "title": "Issues Read Adjustment UI",
-        "priority": "LOW",
-        "dependencies": None,
-        "estimated_effort": "2 hours",
-        "description": "Add increment/decrement controls to rating form to adjust issues read (currently hardcoded to 1).",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-108 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-108\n3. Claim task from your worktree\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-    "TASK-109": {
-        "title": "Queue Effect Preview Enhancement",
-        "priority": "LOW",
-        "dependencies": "TASK-108",
-        "estimated_effort": "1 hour",
-        "description": "Add explicit queue movement preview text to rating form per PRD Section 13.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-109 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-109\n3. Claim task from your worktree only if TASK-108 is done\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-    "TASK-110": {
-        "title": "Add last_review_at Field to Threads",
-        "priority": "LOW",
-        "dependencies": None,
-        "estimated_effort": "1 hour",
-        "description": "Add `last_review_at` timestamp field to Thread model for storing imported review timestamps.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-110 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-110\n3. Claim task from your worktree\n4. Create migration for new field\n5. Update JSON export\n6. Run migrate, pytest, make lint\n7. Set status to done when complete",
-    },
-    "TASK-111": {
-        "title": "Review Timestamp Import API",
-        "priority": "LOW",
-        "dependencies": "TASK-110",
-        "estimated_effort": "3 hours",
-        "description": "Add API endpoint to import review timestamps from League of Comic Geeks.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-111 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-111\n3. Claim task from your worktree only if TASK-110 is done\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-    "TASK-112": {
-        "title": "Narrative Summary Export",
-        "priority": "LOW",
-        "dependencies": "TASK-101",
-        "estimated_effort": "3 hours",
-        "description": "Add export endpoint to generate narrative session summaries in readable text/markdown format.",
-        "instructions": "1. Create worktree: git worktree add ../comic-pile-task-112 phase/10-prd-alignment\n2. Work there: cd ../comic-pile-task-112\n3. Claim task from your worktree only if TASK-101 is done\n4. Send heartbeat every 5-10 minutes\n5. Update notes when making progress",
-    },
-}
 
 
 @router.get("/", response_model=list[TaskResponse])
@@ -867,74 +766,4 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
         instructions=task.instructions,
         created_at=task.created_at,
         updated_at=task.updated_at,
-    )
-
-
-@router.post("/initialize", response_model=InitializeTasksResponse)
-def initialize_tasks(db: Session = Depends(get_db)) -> InitializeTasksResponse:
-    """Initialize all 12 PRD tasks in database from TASK_DATA (idempotent)."""
-    tasks_created = 0
-    tasks_updated = 0
-    created_tasks = []
-
-    for task_id, data in TASK_DATA.items():
-        existing_task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
-
-        if existing_task:
-            existing_task.title = data["title"]
-            existing_task.description = data.get("description")
-            existing_task.priority = data["priority"]
-            existing_task.dependencies = data["dependencies"]
-            existing_task.instructions = data.get("instructions")
-            existing_task.estimated_effort = data["estimated_effort"]
-            tasks_updated += 1
-            created_tasks.append(existing_task)
-        else:
-            new_task = Task(
-                task_id=task_id,
-                title=data["title"],
-                description=data.get("description"),
-                priority=data["priority"],
-                status="pending",
-                dependencies=data["dependencies"],
-                estimated_effort=data["estimated_effort"],
-                completed=False,
-                instructions=data.get("instructions"),
-            )
-            db.add(new_task)
-            tasks_created += 1
-            created_tasks.append(new_task)
-
-    db.commit()
-
-    for task in created_tasks:
-        db.refresh(task)
-
-    return InitializeTasksResponse(
-        message=f"Initialized {tasks_created} new tasks and updated {tasks_updated} existing tasks",
-        tasks_created=tasks_created,
-        tasks_updated=tasks_updated,
-        tasks=[
-            TaskResponse(
-                id=task.id,
-                task_id=task.task_id,
-                title=task.title,
-                description=task.description,
-                priority=task.priority,
-                status=task.status,
-                dependencies=task.dependencies,
-                assigned_agent=task.assigned_agent,
-                worktree=task.worktree,
-                status_notes=task.status_notes,
-                estimated_effort=task.estimated_effort,
-                completed=task.completed,
-                blocked_reason=task.blocked_reason,
-                blocked_by=task.blocked_by,
-                last_heartbeat=task.last_heartbeat,
-                instructions=task.instructions,
-                created_at=task.created_at,
-                updated_at=task.updated_at,
-            )
-            for task in created_tasks
-        ],
     )
