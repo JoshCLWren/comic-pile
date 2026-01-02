@@ -374,9 +374,17 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/health")
-    async def health_check():
-        """Health check endpoint for Docker container health checks."""
-        return {"status": "healthy"}
+    async def health_check(db: Session = Depends(get_db)):
+        """Health check endpoint that verifies database connectivity."""
+        try:
+            db.execute(select(SessionModel).limit(1))
+            return {"status": "healthy", "database": "connected"}
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
+            )
 
     @app.on_event("startup")
     async def startup_event():
