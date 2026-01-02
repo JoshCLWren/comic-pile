@@ -1,19 +1,12 @@
 """Session management functions."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import Event, Settings
 from app.models import Session as SessionModel
-
-
-def _ensure_utc(dt: datetime) -> datetime:
-    """Ensure datetime is timezone-aware and in UTC."""
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt.astimezone(UTC)
 
 
 def _get_settings(db: Session) -> Settings:
@@ -30,20 +23,18 @@ def _get_settings(db: Session) -> Settings:
 def is_active(session: SessionModel, db: Session) -> bool:
     """Check if session was within configured gap hours."""
     settings = _get_settings(db)
-    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
-    started_at = _ensure_utc(session.started_at)
-    return started_at >= cutoff_time and session.ended_at is None
+    cutoff_time = datetime.now() - timedelta(hours=settings.session_gap_hours)
+    return session.started_at >= cutoff_time and session.ended_at is None
 
 
 def should_start_new(db: Session) -> bool:
     """Check if no active session in configured gap hours."""
     settings = _get_settings(db)
-    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
-    cutoff_time_naive = cutoff_time.replace(tzinfo=None)
+    cutoff_time = datetime.now() - timedelta(hours=settings.session_gap_hours)
     recent_sessions = (
         db.execute(
             select(SessionModel)
-            .where(SessionModel.started_at >= cutoff_time_naive)
+            .where(SessionModel.started_at >= cutoff_time)
             .where(SessionModel.ended_at.is_(None))
         )
         .scalars()
@@ -56,13 +47,12 @@ def should_start_new(db: Session) -> bool:
 def get_or_create(db: Session, user_id: int) -> SessionModel:
     """Get active session or create new one."""
     settings = _get_settings(db)
-    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
-    cutoff_time_naive = cutoff_time.replace(tzinfo=None)
+    cutoff_time = datetime.now() - timedelta(hours=settings.session_gap_hours)
     active_session = (
         db.execute(
             select(SessionModel)
             .where(SessionModel.ended_at.is_(None))
-            .where(SessionModel.started_at >= cutoff_time_naive)
+            .where(SessionModel.started_at >= cutoff_time)
             .order_by(SessionModel.started_at.desc())
         )
         .scalars()
@@ -84,7 +74,7 @@ def end_session(session_id: int, db: Session) -> None:
     """Mark session as ended."""
     session = db.get(SessionModel, session_id)
     if session:
-        session.ended_at = datetime.now(UTC)
+        session.ended_at = datetime.now()
         db.commit()
 
 
