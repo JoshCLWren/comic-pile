@@ -10,7 +10,7 @@
             case 8:
                 return new THREE.OctahedronGeometry(0.9);
             case 10:
-                return new THREE.CylinderGeometry(0.75, 0.75, 1, 10, 1);
+                return buildDecahedron();
             case 12:
                 return new THREE.DodecahedronGeometry(0.95);
             case 20:
@@ -18,6 +18,70 @@
             default:
                 return new THREE.BoxGeometry(1, 1, 1);
         }
+    }
+
+    function buildDecahedron() {
+        const vertices = [];
+        const indices = [];
+        const radius = 0.85;
+        const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
+        const pentagonAngles = [];
+        for (let i = 0; i < 5; i++) {
+            pentagonAngles.push((i * 2 * Math.PI) / 5);
+        }
+
+        const topPentagon = pentagonAngles.map(angle => [
+            radius * Math.cos(angle) * 0.4,
+            radius * 0.8,
+            radius * Math.sin(angle) * 0.4
+        ]);
+
+        const bottomPentagon = pentagonAngles.map(angle => [
+            radius * Math.cos(angle + Math.PI / 5) * 0.4,
+            -radius * 0.8,
+            radius * Math.sin(angle + Math.PI / 5) * 0.4
+        ]);
+
+        vertices.push(
+            [0, radius * 0.35, 0],
+            [0, -radius * 0.35, 0]
+        );
+
+        for (let i = 0; i < 5; i++) {
+            vertices.push(topPentagon[i]);
+        }
+
+        for (let i = 0; i < 5; i++) {
+            vertices.push(bottomPentagon[i]);
+        }
+
+        for (let i = 0; i < 5; i++) {
+            const next = (i + 1) % 5;
+            indices.push(
+                0,
+                i + 2,
+                next + 2,
+                1,
+                next + 7,
+                i + 7,
+                0,
+                i + 2,
+                i + 7,
+                0,
+                next + 2,
+                next + 7
+            );
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(vertices.flat());
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setIndex(indices);
+        geometry.computeVertexNormals();
+
+        return geometry;
     }
 
     function createContainer(container, showValue) {
