@@ -2,8 +2,9 @@
 
 from datetime import datetime, timedelta
 
+from app.api.session import get_active_thread
+from app.models import Event, Thread
 from app.models import Session as SessionModel
-from app.models import Thread
 from comic_pile.session import end_session, get_or_create, is_active, should_start_new
 
 
@@ -193,9 +194,6 @@ def test_get_or_create_returns_most_recent(db):
 
 def test_get_active_thread_includes_last_rolled_result(db, sample_data):
     """Get active thread includes last rolled result value."""
-    from app.models import Event
-    from app.api.session import get_active_thread
-
     session = sample_data["sessions"][0]
     thread = sample_data["threads"][0]
 
