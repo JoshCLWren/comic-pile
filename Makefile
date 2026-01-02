@@ -1,7 +1,7 @@
 .PHONY: help init lint pytest sync venv githook install-githook
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
-.PHONY: dev test seed migrate worktrees status
+.PHONY: dev test seed migrate worktrees status test-integration
 
 # Configuration
 PREFIX ?= /usr/local
@@ -173,3 +173,7 @@ worktrees:  ## List all git worktrees
 
 status:  ## Show current task status
 	@cat TASKS.md | head -100
+
+test-integration:  ## Run Playwright integration tests
+	@echo "Running Playwright integration tests..."
+	@pytest tests/integration/ -m integration --headed=false --video=retain-on-failure
