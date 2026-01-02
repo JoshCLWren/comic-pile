@@ -3,7 +3,6 @@
 from app.schemas.settings import SettingsResponse, UpdateSettingsRequest
 from app.schemas.task import (
     ClaimTaskRequest,
-    InitializeTasksResponse,
     SetStatusRequest,
     TaskResponse,
     UpdateNotesRequest,
@@ -29,7 +28,6 @@ __all__ = [
     "RateRequest",
     "SessionResponse",
     "ClaimTaskRequest",
-    "InitializeTasksResponse",
     "SetStatusRequest",
     "TaskResponse",
     "UpdateNotesRequest",

@@ -71,15 +71,6 @@ class TaskCoordinatorResponse(BaseModel):
     done: list[TaskResponse]
 
 
-class InitializeTasksResponse(BaseModel):
-    """Schema for task initialization response."""
-
-    message: str
-    tasks_created: int
-    tasks_updated: int
-    tasks: list[TaskResponse]
-
-
 class CreateTaskRequest(BaseModel):
     """Schema for creating a new task."""
 
