@@ -2,8 +2,9 @@
 
 from datetime import datetime, timedelta
 
+from app.api.session import get_active_thread
+from app.models import Event, Thread
 from app.models import Session as SessionModel
-from app.models import Thread
 from comic_pile.session import end_session, get_or_create, is_active, should_start_new
 
 
@@ -189,3 +190,26 @@ def test_get_or_create_returns_most_recent(db):
     result = get_or_create(db, user_id=1)
     assert result.id == recent_session.id
     assert result.start_die == 10
+
+
+def test_get_active_thread_includes_last_rolled_result(db, sample_data):
+    """Get active thread includes last rolled result value."""
+    session = sample_data["sessions"][0]
+    thread = sample_data["threads"][0]
+
+    event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=thread.id,
+        die=6,
+        result=4,
+        selection_method="random",
+    )
+    db.add(event)
+    db.commit()
+
+    active_thread = get_active_thread(session, db)
+
+    assert active_thread is not None
+    assert active_thread["id"] == thread.id
+    assert active_thread["last_rolled_result"] == 4

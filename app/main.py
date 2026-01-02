@@ -67,6 +67,7 @@ def get_current_session_cached(db: Session) -> dict | None:
         from app.schemas.thread import SessionResponse
         from comic_pile.session import get_current_die
 
+        active_thread_data = session.get_active_thread(active_session, db)
         response = SessionResponse(
             id=active_session.id,
             started_at=active_session.started_at,
@@ -74,8 +75,11 @@ def get_current_session_cached(db: Session) -> dict | None:
             start_die=active_session.start_die,
             user_id=active_session.user_id,
             ladder_path=session.build_ladder_path(active_session, db),
-            active_thread=session.get_active_thread(active_session, db),
+            active_thread=active_thread_data,
             current_die=get_current_die(active_session.id, db),
+            last_rolled_result=active_thread_data.get("last_rolled_result")
+            if active_thread_data
+            else None,
         )
         _session_cache[cache_key] = (response.model_dump(), now)
         return response.model_dump()
