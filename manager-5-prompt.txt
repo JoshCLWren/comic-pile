@@ -35,7 +35,17 @@ python3 agents/manager_daemon.py > logs/manager-5-daemon-$(date +%Y%m%d).log 2>&
 
 **Step 2 - Launch Worker Pool Manager (OPCODE Agent via Task Tool):**
 
+Copy prompt from `worker-pool-manager-prompt.txt` and use it:
+
 ```
+Launch agent as Worker Pool Manager
+Prompt: [Copy entire contents of worker-pool-manager-prompt.txt]
+```
+
+The Worker Pool Manager agent will:
+- Monitor worker pool every 60 seconds
+- Spawn workers via Task tool when needed
+- Stop automatically when all work done
 Launch agent to manage worker pool
 Prompt: "You are the Worker Pool Manager. Your only job is to monitor worker pool capacity and spawn new worker agents when needed.
 
