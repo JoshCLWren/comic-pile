@@ -1,6 +1,9 @@
 """Tests for roll API endpoints."""
 
 import pytest
+from sqlalchemy import select
+
+from app.models import Event
 
 
 @pytest.mark.asyncio
@@ -82,3 +85,35 @@ async def test_roll_override_nonexistent(client, sample_data):
     response = await client.post("/roll/override", json={"thread_id": 999})
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_reroll_success(client, sample_data, db):
+    """POST /roll/reroll returns new roll with reroll selection method."""
+    response = await client.post("/roll/reroll")
+    assert response.status_code == 200
+    html = response.text
+    assert "Rerolled" in html
+    assert "result-reveal" in html
+    assert "rating-form-container" in html
+
+    new_events = db.execute(select(Event).where(Event.selection_method == "reroll")).scalars().all()
+    assert len(new_events) == 1
+    reroll_event = new_events[0]
+    assert reroll_event.type == "roll"
+    assert reroll_event.selection_method == "reroll"
+    assert reroll_event.session_id is not None
+
+
+@pytest.mark.asyncio
+async def test_reroll_no_pool(client, db):
+    """Returns error if no active threads."""
+    from app.models import User
+
+    user = User(id=1, username="test_user")
+    db.add(user)
+    db.commit()
+
+    response = await client.post("/roll/reroll")
+    assert response.status_code == 200
+    assert "No active threads" in response.text

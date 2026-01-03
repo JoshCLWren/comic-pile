@@ -5,12 +5,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+<<<<<<< HEAD
+=======
+from sqlalchemy import select
+
+>>>>>>> feature/task-feat-005
 from app.database import SessionLocal
 from app.models import Task
 
-
-def create_tasks() -> None:
-    """Create tasks from user notes."""
+def create_tasks():
+    """Create tasks from predefined task data."""
     db = SessionLocal()
     try:
         tasks_data = [
@@ -107,8 +111,6 @@ def create_tasks() -> None:
         created_count = 0
 
         for data in tasks_data:
-            from sqlalchemy import select
-
             existing_task = db.execute(
                 select(Task).where(Task.task_id == data["task_id"])
             ).scalar_one_or_none()
