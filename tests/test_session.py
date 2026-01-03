@@ -1,6 +1,6 @@
 """Tests for session logic."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app.api.session import get_active_thread
 from app.models import Event, Thread
@@ -11,7 +11,7 @@ from comic_pile.session import end_session, get_or_create, is_active, should_sta
 def test_is_active_true(db):
     """Session created < 6 hours ago is active."""
     session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=1),
+        started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
         user_id=1,
     )
@@ -25,7 +25,7 @@ def test_is_active_true(db):
 def test_is_active_false_old(db):
     """Session created > 6 hours ago is inactive."""
     session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=7),
+        started_at=datetime.now(UTC) - timedelta(hours=7),
         start_die=6,
         user_id=1,
     )
@@ -39,8 +39,8 @@ def test_is_active_false_old(db):
 def test_is_active_false_ended(db):
     """Session that has ended is inactive."""
     session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=1),
-        ended_at=datetime.now(),
+        started_at=datetime.now(UTC) - timedelta(hours=1),
+        ended_at=datetime.now(UTC),
         start_die=6,
         user_id=1,
     )
@@ -54,8 +54,8 @@ def test_is_active_false_ended(db):
 def test_should_start_new_true(db):
     """No active session in last 6 hours."""
     old_session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=7),
-        ended_at=datetime.now(),
+        started_at=datetime.now(UTC) - timedelta(hours=7),
+        ended_at=datetime.now(UTC),
         start_die=6,
         user_id=1,
     )
@@ -69,7 +69,7 @@ def test_should_start_new_true(db):
 def test_should_start_new_false(db):
     """Active session exists."""
     active_session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=1),
+        started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
         user_id=1,
     )
@@ -84,12 +84,12 @@ def test_get_or_create_existing(db, sample_data):
     """Returns existing active session (< 6 hours old)."""
     # End all sample sessions first
     for session in sample_data["sessions"]:
-        session.ended_at = datetime.now()
+        session.ended_at = datetime.now(UTC)
     db.commit()
 
     # Create a fresh active session within last 6 hours
     active_session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=1),
+        started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
         user_id=1,
     )
@@ -103,7 +103,7 @@ def test_get_or_create_existing(db, sample_data):
 def test_get_or_create_new(db, sample_data):
     """Creates new session when none active."""
     for session in sample_data["sessions"]:
-        session.ended_at = datetime.now()
+        session.ended_at = datetime.now(UTC)
     db.commit()
 
     new_session = get_or_create(db, user_id=1)
@@ -131,7 +131,7 @@ def test_end_session_nonexistent(db, sample_data):
         queue_position=1,
         status="active",
         user_id=1,
-        created_at=datetime.now(),
+        created_at=datetime.now(UTC),
     )
     db.add(thread)
     db.commit()
@@ -144,7 +144,7 @@ def test_end_session_nonexistent(db, sample_data):
 def test_is_active_exactly_6_hours(db):
     """Session created exactly 6 hours ago is considered active."""
     session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=5, minutes=59),
+        started_at=datetime.now(UTC) - timedelta(hours=5, minutes=59),
         start_die=6,
         user_id=1,
     )
@@ -159,8 +159,8 @@ def test_should_start_new_multiple_old_sessions(db):
     """Multiple old sessions still return true."""
     for i in range(3):
         old_session = SessionModel(
-            started_at=datetime.now() - timedelta(hours=7 + i),
-            ended_at=datetime.now(),
+            started_at=datetime.now(UTC) - timedelta(hours=7 + i),
+            ended_at=datetime.now(UTC),
             start_die=6,
             user_id=1,
         )
@@ -174,12 +174,12 @@ def test_should_start_new_multiple_old_sessions(db):
 def test_get_or_create_returns_most_recent(db):
     """Returns most recent active session when multiple exist."""
     recent_session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=1),
+        started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=10,
         user_id=1,
     )
     older_session = SessionModel(
-        started_at=datetime.now() - timedelta(hours=2),
+        started_at=datetime.now(UTC) - timedelta(hours=2),
         start_die=6,
         user_id=1,
     )
