@@ -134,7 +134,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 setTimeout(function() {{
                     const resultContainer = document.getElementById('result-die-3d');
                     if (resultContainer && window.Dice3D) {{
-                        const die = Dice3D.create(resultContainer, {current_die}, {{ color: 0x4f46e5 }});
+                        const die = Dice3D.create(resultContainer, {current_die}, {{ color: 0x4f46e5, showValue: false }});
                         if (die) die.rollTo({result_val});
                     }}
                 }}, 100);
@@ -350,7 +350,7 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                 setTimeout(function() {{
                     const resultContainer = document.getElementById('result-die-3d');
                     if (resultContainer && window.Dice3D) {{
-                        const die = Dice3D.create(resultContainer, {current_die}, {{ color: 0x4f46e5 }});
+                        const die = Dice3D.create(resultContainer, {current_die}, {{ color: 0x4f46e5, showValue: false }});
                         if (die) die.rollTo({result_val});
                     }}
                 }}, 100);

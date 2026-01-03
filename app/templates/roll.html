@@ -129,7 +129,7 @@
         const mainContainer = document.getElementById('main-die-3d');
         const headerContainer = document.getElementById('header-die-3d');
 
-        mainDie = window.Dice3D ? Dice3D.create(mainContainer, initialDenom, { color: 0x4f46e5 }) : null;
+        mainDie = window.Dice3D ? Dice3D.create(mainContainer, initialDenom, { color: 0x4f46e5, showValue: false }) : null;
         headerDie = window.Dice3D ? Dice3D.create(headerContainer, initialDenom, { color: 0x14b8a6, showValue: false }) : null;
 
         if (mainDie) mainDie.setValue(1);
@@ -161,23 +161,18 @@
         let rollCount = 0;
         const maxRolls = 10;
         const rollInterval = setInterval(() => {
-            const randomValue = Math.floor(Math.random() * initialDenom) + 1;
-            if (mainDie) mainDie.setValue(randomValue);
+            const visualValue = Math.floor(Math.random() * initialDenom) + 1;
+            if (mainDie) mainDie.setValue(visualValue);
             rollCount++;
 
             if (rollCount >= maxRolls) {
                 clearInterval(rollInterval);
-                const finalValue = Math.floor(Math.random() * initialDenom) + 1;
-                if (mainDie) mainDie.rollTo(finalValue);
-                currentDieValue = finalValue;
-                rolledResult = finalValue;
-
                 setTimeout(() => {
                     console.log('[RollPage] Triggering HTMX roll event');
                     htmx.trigger('#main-die-wrapper', 'triggerRoll');
-                }, 500);
+                }, 400);
             }
-        }, 100);
+        }, 80);
     }
 
     function createExplosion() {
