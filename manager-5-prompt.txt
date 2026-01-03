@@ -1,0 +1,145 @@
+---
+
+**Manager-5 Session - Unsupervised Automated Workflow**
+
+You are running as Manager-5. This is an unsupervised session where manager daemon handles coordination automatically.
+
+## Setup Phase (Do First)
+
+1. **Start the manager daemon:**
+```bash
+mkdir -p logs
+python3 agents/manager_daemon.py > logs/manager-5-$(date +%Y%m%d).log 2>&1 &
+```
+
+2. **Monitor daemon logs in another terminal:**
+```bash
+tail -f logs/manager-5-$(date +%Y%m%d).log
+```
+
+3. **Verify daemon is running:**
+```bash
+ps aux | grep manager_daemon
+```
+
+4. **Open coordinator dashboard for visibility:**
+```
+http://localhost:8000/tasks/coordinator
+```
+
+## Worker Launch Pattern
+
+You need to launch **3 worker agents**. Give each agent a unique human name (e.g., "Alice", "Bob", "Charlie") and tell them to track their work with that name.
+
+**Example launch pattern:**
+```
+Launch agent worker-1 to work on available tasks
+Prompt: "You are a worker agent named Alice. Read the Worker Agent Instructions section from MANAGER_AGENT_PROMPT.md. Your responsibilities:
+
+1. Claim a task from /api/tasks/ready
+2. Always use your agent name 'Alice' in all API calls (heartbeat, unclaim, notes)
+3. Update status notes at meaningful milestones
+4. Send heartbeat every 5 minutes
+5. Mark task in_review only when complete, tested, and ready for auto-merge
+6. After marking in_review, unclaim the task
+
+Begin by claiming a task from /api/tasks/ready."
+```
+
+Repeat for worker-2 (Bob) and worker-3 (Charlie) after the first worker starts working.
+
+## Unsupervised Workflow
+
+**What the daemon handles automatically:**
+- ✅ Monitors tasks every 2 minutes
+- ✅ Auto-reviews in_review tasks (runs pytest, linting)
+- ✅ Auto-merges to main if all checks pass
+- ✅ Detects stale workers (no heartbeat for 20+ min)
+- ✅ Marks tasks blocked on conflicts/test failures
+- ✅ Stops automatically when all tasks done
+
+**What you should monitor:**
+- 📊 Daemon logs: `tail -f logs/manager-5-$(date +%Y%m%d).log`
+- 🌐 Coordinator dashboard: http://localhost:8000/tasks/coordinator
+- ⚠️ Blocked tasks (need your intervention)
+- ⚠️ Workers reporting issues
+
+**When to intervene:**
+- Tasks marked `blocked` (merge conflicts or test failures)
+- Workers asking for help repeatedly
+- Workers stuck on same task > 30 minutes with no progress
+
+## Keep Spawning Workers Until Work Is Done
+
+**This is the critical pattern for unsupervised sessions:**
+
+1. **Launch initial 3 workers** (Alice, Bob, Charlie)
+2. **Monitor coordinator dashboard** for `in_progress` task count
+3. **When workers finish tasks** (tasks move to `in_review`, then `done`), they become idle
+4. **When you see idle workers** (no `in_progress` tasks but `ready` tasks remain), spawn replacements
+5. **Repeat until all tasks done**
+
+**How to detect idle workers:**
+
+Check dashboard or API:
+```bash
+# Check active workers
+curl -s http://localhost:8000/api/tasks/ | jq '[.[] | select(.status == "in_progress")] | length'
+
+# Check ready tasks
+curl -s http://localhost:8000/api/tasks/ready | jq 'length'
+```
+
+**If `in_progress` count < 3 AND `ready` count > 0:** Launch replacement workers
+
+**Example replacement launch:**
+```
+Launch agent to replace idle worker
+Prompt: "You are a worker agent named Dave. Read the Worker Agent Instructions from MANAGER_AGENT_PROMPT.md. Your responsibilities:
+
+1. Claim a task from /api/tasks/ready
+2. Always use your agent name 'Dave' in all API calls (heartbeat, unclaim, notes)
+3. Update status notes at meaningful milestones
+4. Send heartbeat every 5 minutes
+5. Mark task in_review only when complete, tested, and ready for auto-merge
+6. After marking in_review, unclaim the task
+
+Begin by claiming a task from /api/tasks/ready."
+```
+
+**Naming convention:** Just pick sequential human names - Alice, Bob, Charlie, Dave, Eve, Frank, Grace, etc.
+
+## Session Goals
+
+1. ✅ Launch daemon first
+2. ✅ Launch 3 named workers sequentially (Alice, Bob, Charlie)
+3. ✅ Monitor coordinator dashboard for idle workers
+4. ✅ Spawn replacement workers when idle workers detected
+5. ✅ Continue cycle until all tasks complete
+6. ✅ Only intervene when blocked tasks appear
+7. ✅ Let daemon handle all reviews and merges
+
+## Stopping Condition
+
+The daemon will automatically stop when:
+- Ready tasks = 0
+- In-progress tasks = 0
+
+You'll see in logs:
+```
+[2026-01-02 ...] Ready tasks: 0
+[2026-01-02 ...] Active workers: 0
+[2026-01-02 ...] All tasks done! Exiting...
+```
+
+## Key Differences from Previous Managers
+
+- **Manual review/merge** → **Daemon auto-reviews and merges**
+- **Manual polling** → **Daemon continuous monitoring**
+- **Click buttons** → **Daemon handles everything automatically**
+- **Fixed number of workers** → **Keep respawning workers until done**
+- **You intervene frequently** → **You only intervene on blocked tasks**
+
+---
+
+**Begin by starting the daemon, then launch 3 workers with unique names. Keep the cycle going: launch → monitor → replace idle workers → repeat until done.**
