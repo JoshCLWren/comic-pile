@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""Export database to JSON file."""
+
+import json
+from datetime import datetime
+
+from app.database import SessionLocal
+from app.models import Event, Session, Settings, Task, Thread, User
+
+
+def datetime_converter(obj):
+    """Convert datetime objects to ISO format strings."""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+
+def export_database():
+    """Export all database tables to JSON file."""
+    db = SessionLocal()
+    try:
+        data = {}
+
+        users = db.query(User).all()
+        data["users"] = [
+            {
+                "id": u.id,
+                "username": u.username,
+                "created_at": u.created_at,
+            }
+            for u in users
+        ]
+
+        threads = db.query(Thread).all()
+        data["threads"] = [
+            {
+                "id": t.id,
+                "title": t.title,
+                "format": t.format,
+                "issues_remaining": t.issues_remaining,
+                "queue_position": t.queue_position,
+                "status": t.status,
+                "last_rating": t.last_rating,
+                "last_activity_at": t.last_activity_at,
+                "review_url": t.review_url,
+                "last_review_at": t.last_review_at,
+                "created_at": t.created_at,
+                "user_id": t.user_id,
+            }
+            for t in threads
+        ]
+
+        sessions = db.query(Session).all()
+        data["sessions"] = [
+            {
+                "id": s.id,
+                "started_at": s.started_at,
+                "ended_at": s.ended_at,
+                "start_die": s.start_die,
+                "user_id": s.user_id,
+                "pending_thread_id": s.pending_thread_id,
+                "pending_thread_updated_at": s.pending_thread_updated_at,
+            }
+            for s in sessions
+        ]
+
+        events = db.query(Event).all()
+        data["events"] = [
+            {
+                "id": e.id,
+                "type": e.type,
+                "timestamp": e.timestamp,
+                "die": e.die,
+                "result": e.result,
+                "selected_thread_id": e.selected_thread_id,
+                "selection_method": e.selection_method,
+                "rating": e.rating,
+                "issues_read": e.issues_read,
+                "queue_move": e.queue_move,
+                "die_after": e.die_after,
+                "session_id": e.session_id,
+                "thread_id": e.thread_id,
+            }
+            for e in events
+        ]
+
+        tasks = db.query(Task).all()
+        data["tasks"] = [
+            {
+                "id": t.id,
+                "task_id": t.task_id,
+                "title": t.title,
+                "description": t.description,
+                "priority": t.priority,
+                "status": t.status,
+                "dependencies": t.dependencies,
+                "assigned_agent": t.assigned_agent,
+                "worktree": t.worktree,
+                "status_notes": t.status_notes,
+                "estimated_effort": t.estimated_effort,
+                "completed": t.completed,
+                "blocked_reason": t.blocked_reason,
+                "blocked_by": t.blocked_by,
+                "last_heartbeat": t.last_heartbeat,
+                "instructions": t.instructions,
+                "created_at": t.created_at,
+                "updated_at": t.updated_at,
+            }
+            for t in tasks
+        ]
+
+        settings = db.query(Settings).all()
+        data["settings"] = [
+            {
+                "id": s.id,
+                "session_gap_hours": s.session_gap_hours,
+                "start_die": s.start_die,
+                "rating_min": s.rating_min,
+                "rating_max": s.rating_max,
+                "rating_step": s.rating_step,
+                "rating_threshold": s.rating_threshold,
+                "created_at": s.created_at,
+                "updated_at": s.updated_at,
+            }
+            for s in settings
+        ]
+
+        filename = "db_export.json"
+        with open(filename, "w") as f:
+            json.dump(data, f, default=datetime_converter, indent=2)
+
+        print(f"Exported database to {filename}")
+        print(f"Users: {len(data['users'])}")
+        print(f"Threads: {len(data['threads'])}")
+        print(f"Sessions: {len(data['sessions'])}")
+        print(f"Events: {len(data['events'])}")
+        print(f"Tasks: {len(data['tasks'])}")
+        print(f"Settings: {len(data['settings'])}")
+
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    export_database()

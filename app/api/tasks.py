@@ -23,6 +23,164 @@ from app.schemas.task import (
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
+INITIAL_TASKS = [
+    {
+        "task_id": "TASK-101",
+        "title": "Complete Narrative Session Summaries",
+        "description": "Review and document all session summaries for narrative continuity",
+        "instructions": "Read through all session notes and create comprehensive summaries",
+        "priority": "HIGH",
+        "dependencies": None,
+        "estimated_effort": "4 hours",
+    },
+    {
+        "task_id": "TASK-102",
+        "title": "Set Up Automated Testing Pipeline",
+        "description": "Configure CI/CD pipeline with automated tests",
+        "instructions": "Set up GitHub Actions with pytest and coverage reporting",
+        "priority": "HIGH",
+        "dependencies": None,
+        "estimated_effort": "3 hours",
+    },
+    {
+        "task_id": "TASK-103",
+        "title": "Migrate Database Schema",
+        "description": "Update database schema and create migration scripts",
+        "instructions": "Use Alembic to create and apply migration",
+        "priority": "HIGH",
+        "dependencies": "TASK-102",
+        "estimated_effort": "2 hours",
+    },
+    {
+        "task_id": "TASK-104",
+        "title": "Implement Worker Pool Manager",
+        "description": "Create agent pool management system",
+        "instructions": "Build worker pool with dynamic spawning capability",
+        "priority": "HIGH",
+        "dependencies": "TASK-101",
+        "estimated_effort": "8 hours",
+    },
+    {
+        "task_id": "TASK-105",
+        "title": "Design Task Dependency Graph",
+        "description": "Create visual representation of task dependencies",
+        "instructions": "Design and implement dependency tracking",
+        "priority": "MEDIUM",
+        "dependencies": "TASK-103",
+        "estimated_effort": "3 hours",
+    },
+    {
+        "task_id": "TASK-106",
+        "title": "Add Authentication Middleware",
+        "description": "Implement user authentication for API endpoints",
+        "instructions": "Add JWT-based authentication",
+        "priority": "MEDIUM",
+        "dependencies": None,
+        "estimated_effort": "4 hours",
+    },
+    {
+        "task_id": "TASK-107",
+        "title": "Optimize Database Queries",
+        "description": "Identify and optimize slow database queries",
+        "instructions": "Profile queries and add indexes",
+        "priority": "MEDIUM",
+        "dependencies": "TASK-103",
+        "estimated_effort": "2 hours",
+    },
+    {
+        "task_id": "TASK-108",
+        "title": "Create API Documentation",
+        "description": "Document all REST API endpoints",
+        "instructions": "Generate OpenAPI documentation",
+        "priority": "MEDIUM",
+        "dependencies": None,
+        "estimated_effort": "3 hours",
+    },
+    {
+        "task_id": "TASK-109",
+        "title": "Implement Error Logging",
+        "description": "Add centralized error logging and monitoring",
+        "instructions": "Set up structured logging with error tracking",
+        "priority": "LOW",
+        "dependencies": "TASK-106",
+        "estimated_effort": "2 hours",
+    },
+    {
+        "task_id": "TASK-110",
+        "title": "Add Performance Metrics",
+        "description": "Track application performance metrics",
+        "instructions": "Implement metrics collection and dashboard",
+        "priority": "LOW",
+        "dependencies": "TASK-109",
+        "estimated_effort": "3 hours",
+    },
+    {
+        "task_id": "TASK-111",
+        "title": "Create User Guide",
+        "description": "Write comprehensive user documentation",
+        "instructions": "Document all features and use cases",
+        "priority": "LOW",
+        "dependencies": "TASK-108",
+        "estimated_effort": "4 hours",
+    },
+    {
+        "task_id": "TASK-112",
+        "title": "Set Up Production Deployment",
+        "description": "Configure production environment and deployment",
+        "instructions": "Set up Docker and production database",
+        "priority": "LOW",
+        "dependencies": "TASK-103, TASK-107",
+        "estimated_effort": "4 hours",
+    },
+]
+
+
+@router.post("/initialize")
+async def initialize_tasks(db: Session = Depends(get_db)):
+    """Initialize database with sample tasks."""
+    tasks_created = 0
+    tasks_updated = 0
+
+    for task_data in INITIAL_TASKS:
+        existing_task = db.execute(
+            select(Task).where(Task.task_id == task_data["task_id"])
+        ).scalar_one_or_none()
+
+        if existing_task:
+            existing_task.title = task_data["title"]
+            existing_task.description = task_data["description"]
+            existing_task.instructions = task_data["instructions"]
+            existing_task.priority = task_data["priority"]
+            existing_task.dependencies = task_data["dependencies"]
+            existing_task.estimated_effort = task_data["estimated_effort"]
+            tasks_updated += 1
+        else:
+            task = Task(
+                task_id=task_data["task_id"],
+                title=task_data["title"],
+                description=task_data["description"],
+                instructions=task_data["instructions"],
+                priority=task_data["priority"],
+                dependencies=task_data["dependencies"],
+                estimated_effort=task_data["estimated_effort"],
+                status="pending",
+                completed=False,
+            )
+            db.add(task)
+            tasks_created += 1
+
+    db.commit()
+
+    tasks = db.execute(select(Task).order_by(Task.id)).scalars().all()
+
+    return {
+        "message": "Tasks initialized successfully",
+        "tasks_created": tasks_created,
+        "tasks_updated": tasks_updated,
+        "tasks": [TaskResponse.model_validate(t) for t in tasks],
+    }
+
+
 @router.get("/", response_model=list[TaskResponse])
 def list_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
     """List all tasks with their current state."""
@@ -721,10 +879,11 @@ def heartbeat(
 
 @router.post("/{task_id}/unclaim", response_model=TaskResponse)
 def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)) -> TaskResponse:
-    """Unclaim a task - resets to pending status and clears assignment.
+    """Unclaim a task - clears assignment, but preserves in_review status.
 
     Only allowed by the current assigned agent (or admin).
     Returns 403 if not assigned to the requesting agent.
+    in_review tasks remain in_review; in_progress tasks are reset to pending.
     """
     task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
     if not task:
@@ -736,7 +895,8 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
             detail=f"Task not assigned to {request.agent_name}. Assigned to {task.assigned_agent}",
         )
 
-    task.status = "pending"
+    if task.status != "in_review":
+        task.status = "pending"
     task.assigned_agent = None
     task.worktree = None
     timestamp = datetime.now(UTC).isoformat()
@@ -767,3 +927,86 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
+
+
+@router.post("/{task_id}/merge-to-main")
+async def merge_task_to_main(task_id: str, db: Session = Depends(get_db)) -> dict:
+    """Merge a task's worktree to main automatically."""
+    task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(404, "Task not found")
+
+    if task.status != "in_review":
+        raise HTTPException(
+            400,
+            f"Task must be in_review, current status: {task.status}",
+        )
+
+    if not task.worktree:
+        raise HTTPException(400, "No worktree assigned to task")
+
+    worktree_path = task.worktree
+    import os
+
+    full_worktree_path = os.path.join(os.path.dirname(os.getcwd()), worktree_path)
+
+    if not os.path.exists(full_worktree_path):
+        raise HTTPException(400, f"Worktree not found: {worktree_path}")
+
+    os.chdir(full_worktree_path)
+
+    result = subprocess.run(
+        ["git", "fetch", "origin", "main"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise HTTPException(500, f"Failed to fetch main: {result.stderr}")
+
+    result = subprocess.run(
+        ["git", "merge", "origin/main", "--no-ff"],
+        capture_output=True,
+        text=True,
+    )
+
+    if "CONFLICT" in result.stdout or result.returncode != 0:
+        task.status = "blocked"
+        task.blocked_reason = "Merge conflict detected"
+        merge_note = f"\n[{datetime.now(UTC).isoformat()}] Auto-merge failed: git merge conflict\n{result.stdout}"
+        if task.status_notes:
+            task.status_notes += merge_note
+        else:
+            task.status_notes = merge_note
+        db.commit()
+
+        return {
+            "success": False,
+            "reason": "merge_conflict",
+            "output": result.stdout[:500],
+        }
+
+    result = subprocess.run(
+        ["git", "push", "origin", "HEAD:main"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise HTTPException(500, f"Failed to push: {result.stderr}")
+
+    task.status = "done"
+    task.completed = True
+    timestamp = datetime.now(UTC).isoformat()
+    merge_note = f"\n[{timestamp}] Merged to main by auto-merge"
+    if task.status_notes:
+        task.status_notes += merge_note
+    else:
+        task.status_notes = merge_note
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Merged to main successfully",
+    }

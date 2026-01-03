@@ -56,6 +56,7 @@ Use git worktrees to work on multiple phases in parallel without branch conflict
 - Add a worktree: `git worktree add ../comic-pile-p2 phase/2-database-models`
 - Work only in that worktree for the phase; run tests there.
 - Keep the branch updated: `git fetch` then `git rebase origin/main` (or merge).
+- **CRITICAL timing for agent worktrees:** Create worktrees at session start, keep until task is merged to main (status becomes 'done'), not just when marked in_review. Manager daemon needs worktree to review and merge.
 - When merged, remove it: `git worktree remove ../comic-pile-p2`
 - Clean stale refs: `git worktree prune`
 - WIP limit: 3 phases total in progress across all worktrees.
@@ -141,3 +142,26 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 - Use fixtures from `conftest.py` for shared test setup
 - Test both success and error paths for all API endpoints
 - Test business logic (dice ladder, queue management, session detection) independently
+
+## Agent System Documentation
+
+For detailed agent workflow documentation, see:
+- **WORKFLOW_PATTERNS.md** - Proven successful patterns and critical failures to avoid from manager sessions
+- **MANAGER_DAEMON.md** - Manager daemon responsibilities, setup, and integration with Worker Pool Manager
+- **MANAGER-7-PROMPT.md** - Manager agent coordination prompt with active monitoring and task handling
+- **worker-pool-manager-prompt.txt** - Worker Pool Manager agent prompt for automated worker spawning
+
+## Agent Workflow Patterns
+
+For detailed workflow patterns and evidence from previous manager sessions, see **WORKFLOW_PATTERNS.md**. This includes proven successful patterns and critical failures to avoid.
+
+Key principles:
+- Always use Task API for all work
+- Trust the Task API state
+- Active monitoring (not passive claims)
+- Delegate immediately, never investigate yourself
+- Worker reliability management
+- Worktree management
+- Manager daemon integration
+- Merge conflict handling
+- Browser testing delegation
