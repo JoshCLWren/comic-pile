@@ -24,10 +24,14 @@ async def review_and_merge_task(client, task):
         print(f"[{datetime.now()}] {task_id}: No worktree, skipping")
         return False
 
-    worktree_path = os.path.join(os.path.dirname(MAIN_REPO), worktree)
+    if os.path.isabs(worktree):
+        worktree_path = worktree
+    else:
+        worktree_path = os.path.join(os.path.dirname(MAIN_REPO), worktree)
 
     if not os.path.exists(worktree_path):
-        print(f"[{datetime.now()}] {task_id}: Worktree not found, skipping")
+        print(f"[{datetime.now()}] {task_id}: Worktree not found: {worktree_path}")
+        print(f"[{datetime.now()}] {task_id}: Skipping review")
         return False
 
     print(f"[{datetime.now()}] {task_id}: Reviewing...")
