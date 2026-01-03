@@ -189,40 +189,23 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
 
 
 @pytest.fixture(scope="function")
-def sample_tasks(db: Session) -> list[Task]:
+def task_data(db: Session) -> list:
     """Create sample tasks for testing."""
-    tasks = [
-        Task(
-            task_id="TASK-101",
-            title="Complete Narrative Session Summaries",
-            description="First test task",
-            priority="HIGH",
-            status="pending",
-            instructions="Test instructions",
-            estimated_effort="2 hours",
-        ),
-        Task(
-            task_id="TASK-102",
-            title="Add Staleness Awareness UI",
-            description="Second test task",
-            priority="MEDIUM",
+    tasks = []
+    for i in range(1, 13):
+        task = Task(
+            task_id=f"TASK-10{i}",
+            title=f"Test Task {i}",
+            description=f"Description for test task {i}",
+            priority="HIGH" if i < 5 else "MEDIUM" if i < 9 else "LOW",
             status="pending",
             instructions="Test instructions",
             estimated_effort="1 hour",
-        ),
-        Task(
-            task_id="TASK-103",
-            title="Queue UI Enhancements",
-            description="Third test task",
-            priority="LOW",
-            status="pending",
-            instructions="Test instructions",
-            estimated_effort="3 hours",
-        ),
-    ]
-
-    for task in tasks:
+            completed=False,
+        )
         db.add(task)
+        tasks.append(task)
+
     db.commit()
 
     for task in tasks:
