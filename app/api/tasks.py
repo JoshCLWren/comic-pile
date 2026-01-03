@@ -22,6 +22,185 @@ from app.schemas.task import (
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
+INITIAL_TASKS = [
+    {
+        "task_id": "TASK-101",
+        "title": "Complete Narrative Session Summaries",
+        "description": "Review and document all session summaries for narrative continuity",
+        "instructions": "Read through all session notes and create comprehensive summaries",
+        "priority": "HIGH",
+        "dependencies": None,
+        "estimated_effort": "4 hours",
+    },
+    {
+        "task_id": "TASK-102",
+        "title": "Set Up Automated Testing Pipeline",
+        "description": "Configure CI/CD pipeline with automated tests",
+        "instructions": "Set up GitHub Actions with pytest and coverage reporting",
+        "priority": "HIGH",
+        "dependencies": None,
+        "estimated_effort": "3 hours",
+    },
+    {
+        "task_id": "TASK-103",
+        "title": "Migrate Database Schema",
+        "description": "Update database schema and create migration scripts",
+        "instructions": "Use Alembic to create and apply migration",
+        "priority": "HIGH",
+        "dependencies": "TASK-102",
+        "estimated_effort": "2 hours",
+    },
+    {
+        "task_id": "TASK-104",
+        "title": "Implement Worker Pool Manager",
+        "description": "Create agent pool management system",
+        "instructions": "Build worker pool with dynamic spawning capability",
+        "priority": "HIGH",
+        "dependencies": "TASK-101",
+        "estimated_effort": "8 hours",
+    },
+    {
+        "task_id": "TASK-105",
+        "title": "Design Task Dependency Graph",
+        "description": "Create visual representation of task dependencies",
+        "instructions": "Design and implement dependency tracking",
+        "priority": "MEDIUM",
+        "dependencies": "TASK-103",
+        "estimated_effort": "3 hours",
+    },
+    {
+        "task_id": "TASK-106",
+        "title": "Add Authentication Middleware",
+        "description": "Implement user authentication for API endpoints",
+        "instructions": "Add JWT-based authentication",
+        "priority": "MEDIUM",
+        "dependencies": None,
+        "estimated_effort": "4 hours",
+    },
+    {
+        "task_id": "TASK-107",
+        "title": "Optimize Database Queries",
+        "description": "Identify and optimize slow database queries",
+        "instructions": "Profile queries and add indexes",
+        "priority": "MEDIUM",
+        "dependencies": "TASK-103",
+        "estimated_effort": "2 hours",
+    },
+    {
+        "task_id": "TASK-108",
+        "title": "Create API Documentation",
+        "description": "Document all REST API endpoints",
+        "instructions": "Generate OpenAPI documentation",
+        "priority": "MEDIUM",
+        "dependencies": None,
+        "estimated_effort": "3 hours",
+    },
+    {
+        "task_id": "TASK-109",
+        "title": "Implement Error Logging",
+        "description": "Add centralized error logging and monitoring",
+        "instructions": "Set up structured logging with error tracking",
+        "priority": "LOW",
+        "dependencies": "TASK-106",
+        "estimated_effort": "2 hours",
+    },
+    {
+        "task_id": "TASK-110",
+        "title": "Add Performance Metrics",
+        "description": "Track application performance metrics",
+        "instructions": "Implement metrics collection and dashboard",
+        "priority": "LOW",
+        "dependencies": "TASK-109",
+        "estimated_effort": "3 hours",
+    },
+    {
+        "task_id": "TASK-111",
+        "title": "Create User Guide",
+        "description": "Write comprehensive user documentation",
+        "instructions": "Document all features and use cases",
+        "priority": "LOW",
+        "dependencies": "TASK-108",
+        "estimated_effort": "4 hours",
+    },
+    {
+        "task_id": "TASK-112",
+        "title": "Set Up Production Deployment",
+        "description": "Configure production environment and deployment",
+        "instructions": "Set up Docker and production database",
+        "priority": "LOW",
+        "dependencies": "TASK-103, TASK-107",
+        "estimated_effort": "4 hours",
+    },
+]
+
+
+@router.post("/initialize")
+async def initialize_tasks(db: Session = Depends(get_db)) -> dict:
+    """Initialize database with sample tasks."""
+    tasks_created = 0
+    tasks_updated = 0
+
+    for task_data in INITIAL_TASKS:
+        existing_task = db.execute(
+            select(Task).where(Task.task_id == task_data["task_id"])
+        ).scalar_one_or_none()
+
+        if existing_task:
+            existing_task.title = task_data["title"]
+            existing_task.description = task_data["description"]
+            existing_task.instructions = task_data["instructions"]
+            existing_task.priority = task_data["priority"]
+            existing_task.dependencies = task_data["dependencies"]
+            existing_task.estimated_effort = task_data["estimated_effort"]
+            tasks_updated += 1
+        else:
+            task = Task(
+                task_id=task_data["task_id"],
+                title=task_data["title"],
+                description=task_data["description"],
+                instructions=task_data["instructions"],
+                priority=task_data["priority"],
+                dependencies=task_data["dependencies"],
+                estimated_effort=task_data["estimated_effort"],
+                status="pending",
+                completed=False,
+            )
+            db.add(task)
+            tasks_created += 1
+
+    db.commit()
+
+    tasks = db.execute(select(Task).order_by(Task.id)).scalars().all()
+
+    return {
+        "message": "Tasks initialized successfully",
+        "tasks_created": tasks_created,
+        "tasks_updated": tasks_updated,
+        "tasks": [
+            TaskResponse(
+                id=task.id,
+                task_id=task.task_id,
+                title=task.title,
+                description=task.description,
+                priority=task.priority,
+                status=task.status,
+                dependencies=task.dependencies,
+                assigned_agent=task.assigned_agent,
+                worktree=task.worktree,
+                status_notes=task.status_notes,
+                estimated_effort=task.estimated_effort,
+                completed=task.completed,
+                blocked_reason=task.blocked_reason,
+                blocked_by=task.blocked_by,
+                last_heartbeat=task.last_heartbeat,
+                instructions=task.instructions,
+                created_at=task.created_at,
+                updated_at=task.updated_at,
+            )
+            for task in tasks
+        ],
+    }
+
 
 @router.get("/", response_model=list[TaskResponse])
 def list_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
