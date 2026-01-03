@@ -12,9 +12,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import Event, Thread, User
+from app.models import Event, Task, Thread, User
 from app.models import Session as SessionModel
-from app.models import Task
 
 test_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
 test_db_file.close()
@@ -192,8 +191,6 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
 @pytest.fixture(scope="function")
 def task_data(db: Session) -> list:
     """Create sample tasks for testing."""
-    from datetime import datetime
-
     tasks = []
     for i in range(1, 13):
         task = Task(

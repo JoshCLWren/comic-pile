@@ -1,17 +1,16 @@
 """Script to create tasks from user notes."""
 
-import asyncio
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sqlalchemy.orm import Session
-from app.database import SessionLocal, engine
+from app.database import SessionLocal
 from app.models import Task
 
 
-def create_tasks():
+def create_tasks() -> None:
+    """Create tasks from user notes."""
     db = SessionLocal()
     try:
         tasks_data = [
@@ -106,7 +105,6 @@ def create_tasks():
         ]
 
         created_count = 0
-        updated_count = 0
 
         for data in tasks_data:
             from sqlalchemy import select
