@@ -12,13 +12,53 @@
             <h1 class="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
             <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active session</p>
         </div>
-        <div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
-            <div id="header-die-container" class="flex items-center justify-center" style="width: 40px; height: 40px;">
-                <div id="header-die-3d" class="w-full h-full"></div>
+        <div class="flex items-center gap-2">
+            <div class="relative" id="die-selector">
+                <button
+                    hx-post="/roll/set-die?die=4"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="4">d4</button>
+                <button
+                    hx-post="/roll/set-die?die=6"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="6">d6</button>
+                <button
+                    hx-post="/roll/set-die?die=8"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="8">d8</button>
+                <button
+                    hx-post="/roll/set-die?die=10"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="10">d10</button>
+                <button
+                    hx-post="/roll/set-die?die=12"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="12">d12</button>
+                <button
+                    hx-post="/roll/set-die?die=20"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="20">d20</button>
             </div>
-            <div class="text-right">
-                <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">Ladder</span>
-                <span id="header-die-label" class="text-[10px] font-black text-teal-400">d{{ current_die }}</span>
+            <div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
+                <div id="header-die-container" class="flex items-center justify-center" style="width: 40px; height: 40px;">
+                    <div id="header-die-3d" class="w-full h-full"></div>
+                </div>
+                <div class="text-right">
+                    <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">Ladder</span>
+                    <span id="header-die-label" class="text-[10px] font-black text-teal-400">d{{ current_die }}</span>
+                </div>
             </div>
         </div>
     </header>
@@ -93,6 +133,21 @@
         headerDie = window.Dice3D ? Dice3D.create(headerContainer, initialDenom, { color: 0x14b8a6, showValue: false }) : null;
 
         if (mainDie) mainDie.setValue(1);
+        updateDieButtonState(initialDenom);
+    }
+
+    function updateDieButtonState(die) {
+        const buttons = document.querySelectorAll('.die-btn');
+        buttons.forEach(btn => {
+            const btnDie = parseInt(btn.getAttribute('data-die'));
+            if (btnDie === die) {
+                btn.classList.remove('bg-white/5');
+                btn.classList.add('bg-teal-500/20', 'border-teal-500', 'text-teal-400');
+            } else {
+                btn.classList.remove('bg-teal-500/20', 'border-teal-500', 'text-teal-400');
+                btn.classList.add('bg-white/5');
+            }
+        });
     }
 
     function rollTheDie() {
@@ -181,6 +236,14 @@
 
     document.body.addEventListener('htmx:afterRequest', (evt) => {
         console.log('[RollPage] HTMX afterRequest target:', evt.detail.target.id, 'Status:', evt.detail.xhr.status);
+        const target = evt.detail.target.id;
+
+        if (target === 'header-die-label' && evt.detail.xhr.status === 200) {
+            const newDie = parseInt(evt.detail.target.innerText.replace('d', ''));
+            if (headerDie) headerDie.setSides(newDie);
+            updateDieButtonState(newDie);
+            loadRollPool();
+        }
     });
 
     function updateRatingDisplay(val) {
