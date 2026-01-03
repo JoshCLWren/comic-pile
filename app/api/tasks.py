@@ -900,10 +900,11 @@ def heartbeat(
 
 @router.post("/{task_id}/unclaim", response_model=TaskResponse)
 def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)) -> TaskResponse:
-    """Unclaim a task - resets to pending status and clears assignment.
+    """Unclaim a task - clears assignment, but preserves in_review status.
 
     Only allowed by the current assigned agent (or admin).
     Returns 403 if not assigned to the requesting agent.
+    in_review tasks remain in_review; in_progress tasks are reset to pending.
     """
     task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
     if not task:
@@ -915,7 +916,8 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
             detail=f"Task not assigned to {request.agent_name}. Assigned to {task.assigned_agent}",
         )
 
-    task.status = "pending"
+    if task.status != "in_review":
+        task.status = "pending"
     task.assigned_agent = None
     task.worktree = None
     timestamp = datetime.now(UTC).isoformat()
@@ -946,3 +948,86 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
+
+
+@router.post("/{task_id}/merge-to-main")
+async def merge_task_to_main(task_id: str, db: Session = Depends(get_db)) -> dict:
+    """Merge a task's worktree to main automatically."""
+    task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(404, "Task not found")
+
+    if task.status != "in_review":
+        raise HTTPException(
+            400,
+            f"Task must be in_review, current status: {task.status}",
+        )
+
+    if not task.worktree:
+        raise HTTPException(400, "No worktree assigned to task")
+
+    worktree_path = task.worktree
+    import os
+
+    full_worktree_path = os.path.join(os.path.dirname(os.getcwd()), worktree_path)
+
+    if not os.path.exists(full_worktree_path):
+        raise HTTPException(400, f"Worktree not found: {worktree_path}")
+
+    os.chdir(full_worktree_path)
+
+    result = subprocess.run(
+        ["git", "fetch", "origin", "main"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise HTTPException(500, f"Failed to fetch main: {result.stderr}")
+
+    result = subprocess.run(
+        ["git", "merge", "origin/main", "--no-ff"],
+        capture_output=True,
+        text=True,
+    )
+
+    if "CONFLICT" in result.stdout or result.returncode != 0:
+        task.status = "blocked"
+        task.blocked_reason = "Merge conflict detected"
+        merge_note = f"\n[{datetime.now(UTC).isoformat()}] Auto-merge failed: git merge conflict\n{result.stdout}"
+        if task.status_notes:
+            task.status_notes += merge_note
+        else:
+            task.status_notes = merge_note
+        db.commit()
+
+        return {
+            "success": False,
+            "reason": "merge_conflict",
+            "output": result.stdout[:500],
+        }
+
+    result = subprocess.run(
+        ["git", "push", "origin", "HEAD:main"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise HTTPException(500, f"Failed to push: {result.stderr}")
+
+    task.status = "done"
+    task.completed = True
+    timestamp = datetime.now(UTC).isoformat()
+    merge_note = f"\n[{timestamp}] Merged to main by auto-merge"
+    if task.status_notes:
+        task.status_notes += merge_note
+    else:
+        task.status_notes = merge_note
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Merged to main successfully",
+    }

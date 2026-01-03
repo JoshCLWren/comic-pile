@@ -247,3 +247,23 @@ def dismiss_pending(db: Session = Depends(get_db)) -> str:
         db.commit()
 
     return ""
+
+
+@router.post("/set-die")
+def set_manual_die(die: int, db: Session = Depends(get_db)) -> dict:
+    """Set manual die size for current session."""
+    current_session = get_or_create(db, user_id=1)
+
+    if die not in [4, 6, 8, 10, 12, 20]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid die size. Must be one of: 4, 6, 8, 10, 12, 20",
+        )
+
+    current_session.manual_die = die
+    db.commit()
+
+    if clear_cache:
+        clear_cache()
+
+    return {"success": True, "die": die}
