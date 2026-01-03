@@ -27,6 +27,8 @@ Prompt: "You are a worker agent named {AGENT_NAME}. Read the Worker Agent Instru
 4. Send heartbeat every 5 minutes
 5. Mark task in_review only when complete, tested, and ready for auto-merge
 6. After marking in_review, unclaim the task
+7. CRITICAL: DO NOT remove worktree after marking in_review - manager daemon needs worktree to review and merge
+8. Only remove worktree after manager daemon successfully merges to main (task status becomes 'done')
 
 Begin by claiming a task from /api/tasks/ready."
 ```
