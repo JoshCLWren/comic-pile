@@ -14,53 +14,6 @@
   // TEXTURE & MATERIAL CREATION
   // ============================================================================
 
-  function createNumberTexture(number) {
-    var canvas = document.createElement('canvas');
-    var size = 256;
-    canvas.width = size;
-    canvas.height = size;
-    var ctx = canvas.getContext('2d');
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, size, size);
-
-    ctx.strokeStyle = '#dddddd';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(0, 0, size, size);
-
-    if (number >= 1 && number <= 6) {
-      drawPips(ctx, number, size);
-    }
-
-    var texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    return texture;
-  }
-
-  function drawPips(ctx, number, size) {
-    var pipRadius = size * 0.08;
-    var offset = size * 0.25;
-    var center = size / 2;
-
-    ctx.fillStyle = '#000000';
-
-    var positions = {
-      1: [[center, center]],
-      2: [[offset, offset], [size - offset, size - offset]],
-      3: [[offset, offset], [center, center], [size - offset, size - offset]],
-      4: [[offset, offset], [size - offset, offset], [offset, size - offset], [size - offset, size - offset]],
-      5: [[offset, offset], [size - offset, offset], [center, center], [offset, size - offset], [size - offset, size - offset]],
-      6: [[offset, offset], [size - offset, offset], [offset, center], [size - offset, center], [offset, size - offset], [size - offset, size - offset]]
-    };
-
-    var pips = positions[number] || [];
-    for (var i = 0; i < pips.length; i++) {
-      ctx.beginPath();
-      ctx.arc(pips[i][0], pips[i][1], pipRadius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
   function createTextureAtlas(maxNumber) {
     var canvas = document.createElement('canvas');
     var tileSize = 256;
@@ -83,15 +36,18 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(x, y, tileSize, tileSize);
 
-      ctx.strokeStyle = '#dddddd';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, tileSize, tileSize);
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
 
-      ctx.fillStyle = '#000000';
-      ctx.font = 'bold ' + (tileSize * 0.6) + 'px Arial';
+      ctx.fillStyle = '#1a1a2e';
+      ctx.font = 'bold ' + (tileSize * 0.55) + 'px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(i.toString(), x + tileSize / 2, y + tileSize / 2);
+      
+      var text = i.toString();
+      if (i === 6 || i === 9) text += '.';
+      ctx.fillText(text, x + tileSize / 2, y + tileSize / 2);
     }
 
     var texture = new THREE.CanvasTexture(canvas);
@@ -104,229 +60,375 @@
     var row = Math.floor((number - 1) / cols);
     return {
       u0: col / cols,
-      v0: row / rows,
+      v0: 1 - (row + 1) / rows,
       u1: (col + 1) / cols,
-      v1: (row + 1) / rows
+      v1: 1 - row / rows
     };
   }
 
   // ============================================================================
-  // CUSTOM GEOMETRY FUNCTIONS
+  // GEOMETRY HELPERS
+  // ============================================================================
+
+  function normalize(v) {
+    var len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+    return [v[0]/len, v[1]/len, v[2]/len];
+  }
+
+  function addTriangle(verts, uvs, inds, v0, v1, v2, uv0, uv1, uv2) {
+    var idx = verts.length / 3;
+    verts.push(v0[0], v0[1], v0[2]);
+    verts.push(v1[0], v1[1], v1[2]);
+    verts.push(v2[0], v2[1], v2[2]);
+    uvs.push(uv0[0], uv0[1]);
+    uvs.push(uv1[0], uv1[1]);
+    uvs.push(uv2[0], uv2[1]);
+    inds.push(idx, idx+1, idx+2);
+  }
+
+  // ============================================================================
+  // D4 - Tetrahedron
   // ============================================================================
 
   function createD4Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
-    var a = 1.0;
-    var vertices = new Float32Array([
-      0, a, 0, -a, -a, a, a, -a, a,
-      0, a, 0, a, -a, a, a, -a, -a,
-      0, a, 0, a, -a, -a, -a, -a, -a,
-      0, a, 0, -a, -a, -a, -a, -a, a
-    ]);
-    var indices = new Uint16Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-    var uvs = new Float32Array(12 * 2);
+    var verts = [], uvs = [], inds = [];
     
-    for (var face = 0; face < 4; face++) {
-      var uv = getUVForNumber(face + 1, cols, rows);
-      var offset = face * 6;
-      uvs[offset + 0] = (uv.u0 + uv.u1) / 2; uvs[offset + 1] = uv.v0;
-      uvs[offset + 2] = uv.u0; uvs[offset + 3] = uv.v1;
-      uvs[offset + 4] = uv.u1; uvs[offset + 5] = uv.v1;
+    var a = 1.0;
+    var h = a * Math.sqrt(2/3);
+    var r = a / Math.sqrt(3);
+    
+    var v = [
+      [0, h, 0],
+      [-a/2, -h/3, r],
+      [a/2, -h/3, r],
+      [0, -h/3, -r * 2]
+    ];
+
+    var faces = [
+      [0, 1, 2, 1],
+      [0, 2, 3, 2],
+      [0, 3, 1, 3],
+      [1, 3, 2, 4]
+    ];
+
+    for (var i = 0; i < faces.length; i++) {
+      var f = faces[i];
+      var uv = getUVForNumber(f[3], cols, rows);
+      var cx = (uv.u0 + uv.u1) / 2;
+      var cy = (uv.v0 + uv.v1) / 2;
+      var rx = (uv.u1 - uv.u0) * 0.4;
+      var ry = (uv.v1 - uv.v0) * 0.4;
+      
+      addTriangle(verts, uvs, inds,
+        v[f[0]], v[f[1]], v[f[2]],
+        [cx, cy + ry],
+        [cx - rx, cy - ry],
+        [cx + rx, cy - ry]
+      );
     }
 
     var geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
     geometry.computeVertexNormals();
     return geometry;
   }
+
+  // ============================================================================
+  // D6 - Cube
+  // ============================================================================
 
   function createD6Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
-    var s = 1;
-    var vertices = new Float32Array([
-      -s, -s, s, s, -s, s, s, s, s, -s, s, s,
-      -s, -s, -s, -s, s, -s, s, s, -s, s, -s, -s,
-      -s, s, -s, -s, s, s, s, s, s, s, s, -s,
-      -s, -s, -s, s, -s, -s, s, -s, s, -s, -s, s,
-      s, -s, -s, s, s, -s, s, s, s, s, -s, s,
-      -s, -s, -s, -s, -s, s, -s, s, s, -s, s, -s
-    ]);
-    var indices = new Uint16Array([
-      0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11,
-      12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23
-    ]);
-    var faceNumbers = [1, 6, 2, 5, 3, 4];
-    var uvs = new Float32Array(24 * 2);
+    var verts = [], uvs = [], inds = [];
+    var s = 0.9;
 
-    for (var face = 0; face < 6; face++) {
-      var uv = getUVForNumber(faceNumbers[face], cols, rows);
-      var offset = face * 8;
-      uvs[offset + 0] = uv.u0; uvs[offset + 1] = uv.v1;
-      uvs[offset + 2] = uv.u1; uvs[offset + 3] = uv.v1;
-      uvs[offset + 4] = uv.u1; uvs[offset + 5] = uv.v0;
-      uvs[offset + 6] = uv.u0; uvs[offset + 7] = uv.v0;
+    var corners = [
+      [-s, -s, -s], [s, -s, -s], [s, s, -s], [-s, s, -s],
+      [-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]
+    ];
+
+    var faces = [
+      [4, 5, 6, 7, 1],
+      [1, 0, 3, 2, 6],
+      [5, 1, 2, 6, 3],
+      [0, 4, 7, 3, 4],
+      [7, 6, 2, 3, 2],
+      [0, 1, 5, 4, 5]
+    ];
+
+    for (var i = 0; i < faces.length; i++) {
+      var f = faces[i];
+      var uv = getUVForNumber(f[4], cols, rows);
+      var idx = verts.length / 3;
+      
+      verts.push(corners[f[0]][0], corners[f[0]][1], corners[f[0]][2]);
+      verts.push(corners[f[1]][0], corners[f[1]][1], corners[f[1]][2]);
+      verts.push(corners[f[2]][0], corners[f[2]][1], corners[f[2]][2]);
+      verts.push(corners[f[3]][0], corners[f[3]][1], corners[f[3]][2]);
+      
+      uvs.push(uv.u0, uv.v0);
+      uvs.push(uv.u1, uv.v0);
+      uvs.push(uv.u1, uv.v1);
+      uvs.push(uv.u0, uv.v1);
+      
+      inds.push(idx, idx+1, idx+2, idx, idx+2, idx+3);
     }
 
     var geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
     geometry.computeVertexNormals();
     return geometry;
   }
+
+  // ============================================================================
+  // D8 - Octahedron
+  // ============================================================================
 
   function createD8Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
-    var a = 1 / Math.sqrt(2);
-    var vertices = new Float32Array([
-      0, a, 0, -a, 0, 0, 0, 0, a, 0, a, 0, 0, 0, a, a, 0, 0,
-      0, a, 0, a, 0, 0, 0, 0, -a, 0, a, 0, 0, 0, -a, -a, 0, 0,
-      0, -a, 0, 0, 0, a, -a, 0, 0, 0, -a, 0, a, 0, 0, 0, 0, a,
-      0, -a, 0, 0, 0, -a, a, 0, 0, 0, -a, 0, -a, 0, 0, 0, 0, -a
-    ]);
-    var indices = new Uint16Array([
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-      12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
-    ]);
-    var uvs = new Float32Array(24 * 2);
-    
-    for (var face = 0; face < 8; face++) {
-      var uv = getUVForNumber(face + 1, cols, rows);
-      var offset = face * 6;
-      uvs[offset + 0] = (uv.u0 + uv.u1) / 2; uvs[offset + 1] = uv.v0;
-      uvs[offset + 2] = uv.u0; uvs[offset + 3] = uv.v1;
-      uvs[offset + 4] = uv.u1; uvs[offset + 5] = uv.v1;
+    var verts = [], uvs = [], inds = [];
+    var a = 1.0;
+
+    var v = [
+      [0, a, 0], [0, -a, 0],
+      [a, 0, 0], [-a, 0, 0],
+      [0, 0, a], [0, 0, -a]
+    ];
+
+    var faces = [
+      [0, 4, 2, 1], [0, 2, 5, 2],
+      [0, 5, 3, 3], [0, 3, 4, 4],
+      [1, 2, 4, 5], [1, 5, 2, 6],
+      [1, 3, 5, 7], [1, 4, 3, 8]
+    ];
+
+    for (var i = 0; i < faces.length; i++) {
+      var f = faces[i];
+      var uv = getUVForNumber(f[3], cols, rows);
+      var cx = (uv.u0 + uv.u1) / 2;
+      var cy = (uv.v0 + uv.v1) / 2;
+      var rx = (uv.u1 - uv.u0) * 0.4;
+      var ry = (uv.v1 - uv.v0) * 0.4;
+      
+      addTriangle(verts, uvs, inds,
+        v[f[0]], v[f[1]], v[f[2]],
+        [cx, cy + ry],
+        [cx - rx, cy - ry],
+        [cx + rx, cy - ry]
+      );
     }
 
     var geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
     geometry.computeVertexNormals();
     return geometry;
   }
+
+  // ============================================================================
+  // D10 - Pentagonal Trapezohedron (proper geometry)
+  // ============================================================================
 
   function createD10Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
-    var h = 1.2, r = 0.7;
-    var vertices = [], uvs = [], indices = [];
-    var top = [0, h / 2, 0], bottom = [0, -h / 2, 0];
-    var middle = [];
+    var verts = [], uvs = [], inds = [];
     
-    for (var i = 0; i < 10; i++) {
-      var angle = (i * Math.PI * 2) / 10;
-      middle.push([Math.cos(angle) * r, 0, Math.sin(angle) * r]);
+    var n = 5;
+    var h = 0.6;
+    var r = 1.0;
+    var twist = Math.PI / n;
+
+    var top = [0, h * 1.5, 0];
+    var bottom = [0, -h * 1.5, 0];
+    
+    var topRing = [];
+    var bottomRing = [];
+    
+    for (var i = 0; i < n; i++) {
+      var angle = (i * 2 * Math.PI) / n;
+      topRing.push([Math.cos(angle) * r, h * 0.5, Math.sin(angle) * r]);
+      bottomRing.push([Math.cos(angle + twist) * r, -h * 0.5, Math.sin(angle + twist) * r]);
     }
 
-    for (var i = 0; i < 5; i++) {
-      var uv = getUVForNumber(i + 1, cols, rows);
-      var startIdx = vertices.length / 3;
-      vertices.push(top[0], top[1], top[2], middle[i * 2][0], middle[i * 2][1], middle[i * 2][2],
-        middle[(i * 2 + 1) % 10][0], middle[(i * 2 + 1) % 10][1], middle[(i * 2 + 1) % 10][2]);
-      uvs.push((uv.u0 + uv.u1) / 2, uv.v0, uv.u0, uv.v1, uv.u1, uv.v1);
-      indices.push(startIdx, startIdx + 1, startIdx + 2);
+    for (var i = 0; i < n; i++) {
+      var next = (i + 1) % n;
+      
+      var uv = getUVForNumber(i * 2 + 1, cols, rows);
+      var cx = (uv.u0 + uv.u1) / 2;
+      var cy = (uv.v0 + uv.v1) / 2;
+      var rx = (uv.u1 - uv.u0) * 0.35;
+      var ry = (uv.v1 - uv.v0) * 0.35;
+      
+      var idx = verts.length / 3;
+      verts.push(top[0], top[1], top[2]);
+      verts.push(topRing[next][0], topRing[next][1], topRing[next][2]);
+      verts.push(topRing[i][0], topRing[i][1], topRing[i][2]);
+      verts.push(bottomRing[i][0], bottomRing[i][1], bottomRing[i][2]);
+      
+      uvs.push(cx, cy + ry * 1.2);
+      uvs.push(cx + rx, cy + ry * 0.3);
+      uvs.push(cx - rx, cy + ry * 0.3);
+      uvs.push(cx, cy - ry * 1.2);
+      
+      inds.push(idx, idx+1, idx+2, idx+1, idx+3, idx+2);
     }
 
-    for (var i = 0; i < 5; i++) {
-      var uv = getUVForNumber(i + 6, cols, rows);
-      var startIdx = vertices.length / 3;
-      vertices.push(bottom[0], bottom[1], bottom[2], middle[(i * 2 + 1) % 10][0], middle[(i * 2 + 1) % 10][1],
-        middle[(i * 2 + 1) % 10][2], middle[i * 2][0], middle[i * 2][1], middle[i * 2][2]);
-      uvs.push((uv.u0 + uv.u1) / 2, uv.v0, uv.u0, uv.v1, uv.u1, uv.v1);
-      indices.push(startIdx, startIdx + 1, startIdx + 2);
+    for (var i = 0; i < n; i++) {
+      var next = (i + 1) % n;
+      
+      var uv = getUVForNumber(i * 2 + 2, cols, rows);
+      var cx = (uv.u0 + uv.u1) / 2;
+      var cy = (uv.v0 + uv.v1) / 2;
+      var rx = (uv.u1 - uv.u0) * 0.35;
+      var ry = (uv.v1 - uv.v0) * 0.35;
+      
+      var idx = verts.length / 3;
+      verts.push(bottom[0], bottom[1], bottom[2]);
+      verts.push(bottomRing[i][0], bottomRing[i][1], bottomRing[i][2]);
+      verts.push(bottomRing[next][0], bottomRing[next][1], bottomRing[next][2]);
+      verts.push(topRing[next][0], topRing[next][1], topRing[next][2]);
+      
+      uvs.push(cx, cy - ry * 1.2);
+      uvs.push(cx - rx, cy - ry * 0.3);
+      uvs.push(cx + rx, cy - ry * 0.3);
+      uvs.push(cx, cy + ry * 1.2);
+      
+      inds.push(idx, idx+1, idx+2, idx+1, idx+3, idx+2);
     }
 
     var geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
     geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
-    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1));
+    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
     geometry.computeVertexNormals();
     return geometry;
   }
+
+  // ============================================================================
+  // D12 - Dodecahedron (proper geometry)
+  // ============================================================================
 
   function createD12Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
-    var phi = (1 + Math.sqrt(5)) / 2, a = 1 / Math.sqrt(3), b = a / phi, c = a * phi;
-    var v = [
-      [-a, -a, -a], [-a, -a, a], [-a, a, -a], [-a, a, a], [a, -a, -a], [a, -a, a], [a, a, -a], [a, a, a],
-      [0, -b, -c], [0, -b, c], [0, b, -c], [0, b, c], [-b, -c, 0], [-b, c, 0], [b, -c, 0], [b, c, 0],
-      [-c, 0, -b], [-c, 0, b], [c, 0, -b], [c, 0, b]
-    ];
-    var faces = [
-      [0, 8, 4, 14, 12], [0, 12, 17, 1, 9], [0, 9, 5, 19, 14], [4, 8, 10, 6, 18],
-      [4, 18, 19, 5, 14], [1, 17, 16, 2, 3], [1, 3, 11, 9, 5], [2, 16, 17, 12, 13],
-      [2, 13, 15, 6, 10], [3, 2, 10, 8, 0], [7, 11, 3, 13, 15], [7, 15, 6, 18, 19]
-    ];
-    var vertices = [], uvs = [], indices = [];
+    var verts = [], uvs = [], inds = [];
+    
+    var phi = (1 + Math.sqrt(5)) / 2;
+    var a = 1 / Math.sqrt(3);
+    var b = a / phi;
+    var c = a * phi;
 
-    for (var faceIdx = 0; faceIdx < faces.length; faceIdx++) {
-      var face = faces[faceIdx];
-      var uv = getUVForNumber(faceIdx + 1, cols, rows);
-      var startIdx = vertices.length / 3;
+    var v = [
+      [a, a, a], [a, a, -a], [a, -a, a], [a, -a, -a],
+      [-a, a, a], [-a, a, -a], [-a, -a, a], [-a, -a, -a],
+      [0, b, c], [0, b, -c], [0, -b, c], [0, -b, -c],
+      [b, c, 0], [b, -c, 0], [-b, c, 0], [-b, -c, 0],
+      [c, 0, b], [c, 0, -b], [-c, 0, b], [-c, 0, -b]
+    ];
+
+    var faces = [
+      [0, 8, 4, 14, 12, 1], [0, 16, 2, 10, 8, 2],
+      [0, 12, 1, 17, 16, 3], [8, 10, 6, 18, 4, 4],
+      [2, 16, 17, 3, 13, 5], [1, 12, 14, 5, 9, 6],
+      [4, 18, 19, 5, 14, 7], [1, 9, 11, 3, 17, 8],
+      [2, 13, 15, 6, 10, 9], [6, 15, 7, 19, 18, 10],
+      [3, 11, 7, 15, 13, 11], [5, 19, 7, 11, 9, 12]
+    ];
+
+    for (var fi = 0; fi < faces.length; fi++) {
+      var f = faces[fi];
+      var uv = getUVForNumber(f[5], cols, rows);
+      var cx = (uv.u0 + uv.u1) / 2;
+      var cy = (uv.v0 + uv.v1) / 2;
+      var rx = (uv.u1 - uv.u0) * 0.42;
+      var ry = (uv.v1 - uv.v0) * 0.42;
+
       var center = [0, 0, 0];
-      
-      for (var j = 0; j < face.length; j++) {
-        center[0] += v[face[j]][0];
-        center[1] += v[face[j]][1];
-        center[2] += v[face[j]][2];
+      for (var j = 0; j < 5; j++) {
+        center[0] += v[f[j]][0];
+        center[1] += v[f[j]][1];
+        center[2] += v[f[j]][2];
       }
       center[0] /= 5; center[1] /= 5; center[2] /= 5;
 
-      vertices.push(center[0], center[1], center[2]);
-      uvs.push((uv.u0 + uv.u1) / 2, (uv.v0 + uv.v1) / 2);
-
-      for (var j = 0; j < face.length; j++) {
-        vertices.push(v[face[j]][0], v[face[j]][1], v[face[j]][2]);
-        uvs.push(uv.u0 + (uv.u1 - uv.u0) * Math.random(), uv.v0 + (uv.v1 - uv.v0) * Math.random());
+      var baseIdx = verts.length / 3;
+      
+      for (var j = 0; j < 5; j++) {
+        verts.push(v[f[j]][0], v[f[j]][1], v[f[j]][2]);
+        var angle = (j * 2 * Math.PI / 5) - Math.PI / 2;
+        uvs.push(cx + Math.cos(angle) * rx, cy + Math.sin(angle) * ry);
       }
+      
+      verts.push(center[0], center[1], center[2]);
+      uvs.push(cx, cy);
+      var centerIdx = baseIdx + 5;
 
       for (var j = 0; j < 5; j++) {
-        indices.push(startIdx, startIdx + 1 + j, startIdx + 1 + ((j + 1) % 5));
+        var next = (j + 1) % 5;
+        inds.push(centerIdx, baseIdx + j, baseIdx + next);
       }
     }
 
     var geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
     geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
-    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1));
+    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
     geometry.computeVertexNormals();
     return geometry;
   }
 
+  // ============================================================================
+  // D20 - Icosahedron
+  // ============================================================================
+
   function createD20Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
+    var verts = [], uvs = [], inds = [];
+    
     var t = (1 + Math.sqrt(5)) / 2;
-    var vBase = [
-      [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
-      [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]
+    var s = 1.0;
+
+    var v = [
+      normalize([-s, t*s, 0]), normalize([s, t*s, 0]),
+      normalize([-s, -t*s, 0]), normalize([s, -t*s, 0]),
+      normalize([0, -s, t*s]), normalize([0, s, t*s]),
+      normalize([0, -s, -t*s]), normalize([0, s, -t*s]),
+      normalize([t*s, 0, -s]), normalize([t*s, 0, s]),
+      normalize([-t*s, 0, -s]), normalize([-t*s, 0, s])
     ];
+
     var faces = [
-      [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2],
-      [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
-      [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
+      [0, 11, 5, 1], [0, 5, 1, 2], [0, 1, 7, 3], [0, 7, 10, 4], [0, 10, 11, 5],
+      [1, 5, 9, 6], [5, 11, 4, 7], [11, 10, 2, 8], [10, 7, 6, 9], [7, 1, 8, 10],
+      [3, 9, 4, 11], [3, 4, 2, 12], [3, 2, 6, 13], [3, 6, 8, 14], [3, 8, 9, 15],
+      [4, 9, 5, 16], [2, 4, 11, 17], [6, 2, 10, 18], [8, 6, 7, 19], [9, 8, 1, 20]
     ];
-    var vertices = [], uvs = [], indices = [];
 
-    for (var faceIdx = 0; faceIdx < faces.length; faceIdx++) {
-      var face = faces[faceIdx];
-      var uv = getUVForNumber(faceIdx + 1, cols, rows);
-      var startIdx = vertices.length / 3;
-
-      for (var j = 0; j < face.length; j++) {
-        vertices.push(vBase[face[j]][0], vBase[face[j]][1], vBase[face[j]][2]);
-        if (j === 0) uvs.push((uv.u0 + uv.u1) / 2, uv.v0);
-        else if (j === 1) uvs.push(uv.u0, uv.v1);
-        else uvs.push(uv.u1, uv.v1);
-      }
-      indices.push(startIdx, startIdx + 1, startIdx + 2);
+    for (var i = 0; i < faces.length; i++) {
+      var f = faces[i];
+      var uv = getUVForNumber(f[3], cols, rows);
+      var cx = (uv.u0 + uv.u1) / 2;
+      var cy = (uv.v0 + uv.v1) / 2;
+      var rx = (uv.u1 - uv.u0) * 0.4;
+      var ry = (uv.v1 - uv.v0) * 0.4;
+      
+      addTriangle(verts, uvs, inds,
+        v[f[0]], v[f[1]], v[f[2]],
+        [cx, cy + ry],
+        [cx - rx, cy - ry],
+        [cx + rx, cy - ry]
+      );
     }
 
     var geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
     geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
-    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(indices), 1));
+    geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
     geometry.computeVertexNormals();
     return geometry;
   }
@@ -350,7 +452,7 @@
   function Die(container, sides, opts) {
     this.container = container;
     this.sides = sides || 6;
-    this.color = (opts && opts.color !== undefined) ? opts.color : 0xffffff;
+    this.color = (opts && opts.color !== undefined) ? opts.color : 0x4f46e5;
     this.showValue = (opts && opts.showValue !== undefined) ? opts.showValue : true;
     this.currentValue = 1;
     this.isRolling = false;
@@ -368,15 +470,20 @@
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x000000, 0);
     this.container.appendChild(this.renderer.domElement);
 
-    var ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    var ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     this.scene.add(ambientLight);
 
     var directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(3, 5, 3);
+    directionalLight.position.set(5, 5, 5);
     this.scene.add(directionalLight);
+
+    var fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-3, -3, 3);
+    this.scene.add(fillLight);
 
     this.buildMesh();
 
@@ -407,8 +514,8 @@
     var material = new THREE.MeshStandardMaterial({
       map: atlasInfo.texture,
       color: this.color,
-      metalness: 0.1,
-      roughness: 0.5
+      metalness: 0.15,
+      roughness: 0.4
     });
 
     this.mesh = new THREE.Mesh(geometry, material);
@@ -422,23 +529,23 @@
 
     if (self.isRolling) {
       self.mesh.rotation.x += 0.2;
-      self.mesh.rotation.y += 0.2;
-      self.mesh.rotation.z += 0.1;
+      self.mesh.rotation.y += 0.25;
+      self.mesh.rotation.z += 0.15;
     } else if (self.targetRotation) {
       var dx = self.targetRotation.x - self.mesh.rotation.x;
       var dy = self.targetRotation.y - self.mesh.rotation.y;
       var dz = self.targetRotation.z - self.mesh.rotation.z;
 
-      self.mesh.rotation.x += dx * 0.1;
-      self.mesh.rotation.y += dy * 0.1;
-      self.mesh.rotation.z += dz * 0.1;
+      self.mesh.rotation.x += dx * 0.12;
+      self.mesh.rotation.y += dy * 0.12;
+      self.mesh.rotation.z += dz * 0.12;
 
       if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01 && Math.abs(dz) < 0.01) {
         self.mesh.rotation.set(self.targetRotation.x, self.targetRotation.y, self.targetRotation.z);
         self.targetRotation = null;
       }
     } else {
-      self.mesh.rotation.y += 0.005;
+      self.mesh.rotation.y += 0.008;
     }
 
     self.renderer.render(self.scene, self.camera);
@@ -474,9 +581,12 @@
   Die.prototype.getFaceRotation = function (sides, value) {
     if (sides === 6) {
       var rotations = {
-        1: { x: 0, y: 0, z: 0 }, 2: { x: 0, y: 0, z: Math.PI / 2 },
-        3: { x: 0, y: 0, z: Math.PI }, 4: { x: 0, y: 0, z: -Math.PI / 2 },
-        5: { x: Math.PI / 2, y: 0, z: 0 }, 6: { x: -Math.PI / 2, y: 0, z: 0 }
+        1: { x: 0, y: 0, z: 0 },
+        2: { x: 0, y: -Math.PI/2, z: 0 },
+        3: { x: Math.PI/2, y: 0, z: 0 },
+        4: { x: -Math.PI/2, y: 0, z: 0 },
+        5: { x: 0, y: Math.PI/2, z: 0 },
+        6: { x: Math.PI, y: 0, z: 0 }
       };
       return rotations[value] || { x: 0, y: 0, z: 0 };
     }
