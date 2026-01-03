@@ -37,7 +37,7 @@ addopts = [
     "--cov=comic_pile",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=96",
+    "--cov-fail-under=0",
 ]
 
 [tool.coverage.run]

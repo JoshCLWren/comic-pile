@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from uvicorn import Config, Server
 
+from app.database import Base
 from app.main import app
 
 test_engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -35,8 +36,10 @@ def test_server():
 @pytest.fixture(scope="function")
 def db_session():
     """Create a fresh database session for each test."""
+    Base.metadata.create_all(bind=test_engine)
     test_session = TestSessionLocal()
     try:
         yield test_session
     finally:
         test_session.close()
+        Base.metadata.drop_all(bind=test_engine)
