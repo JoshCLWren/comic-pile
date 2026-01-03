@@ -1,4 +1,4 @@
-"""add_manual_die_to_sessions.
+"""add_manual_die_to_sessions
 
 Revision ID: 905ae65bc881
 Revises: 7eb7bf28b8f3
