@@ -1,153 +1,196 @@
 ---
 
-**Manager-5 Session - Unsupervised Automated Workflow**
+**Manager-5 Session - Fully Unsupervised Workflow**
 
-You are running as Manager-5. This is an unsupervised session where manager daemon handles coordination automatically.
+You are running as Manager-5. This is a **fully unsupervised session** requiring NO manual intervention.
 
-## Setup Phase (Do First)
+## Architecture
 
-1. **Start the manager daemon:**
+Two opencode agents run concurrently:
+
+1. **Manager Daemon** (`agents/manager_daemon.py`)
+   - Runs continuously every 2 minutes
+   - Auto-reviews and merges in_review tasks
+   - Auto-unblocks confused agent tasks
+   - Detects stale workers
+   - Stops automatically when all work done
+
+2. **Worker Pool Manager** (`agents/worker_pool_manager.py`)
+   - Runs continuously every 60 seconds
+   - Monitors worker pool capacity (max 3)
+   - Spawns new workers via Task tool when needed
+   - Uses sequential human names: Alice, Bob, Charlie, Dave, Eve...
+   - Stops automatically when all work done
+
+## Setup Phase (Do First - Launch BOTH Agents)
+
+**Terminal 1 - Manager Daemon:**
 ```bash
 mkdir -p logs
-python3 agents/manager_daemon.py > logs/manager-5-$(date +%Y%m%d).log 2>&1 &
+python3 agents/manager_daemon.py > logs/manager-5-daemon-$(date +%Y%m%d).log 2>&1 &
 ```
 
-2. **Monitor daemon logs in another terminal:**
+**Terminal 2 - Worker Pool Manager:**
 ```bash
-tail -f logs/manager-5-$(date +%Y%m%d).log
+python3 agents/worker_pool_manager.py > logs/worker-pool-5-$(date +%Y%m%d).log 2>&1 &
 ```
 
-3. **Verify daemon is running:**
+**Terminal 3 - Monitor both logs:**
 ```bash
-ps aux | grep manager_daemon
+tail -f logs/manager-5-daemon-$(date +%Y%m%d).log
+tail -f logs/worker-pool-5-$(date +%Y%m%d).log
 ```
 
-4. **Open coordinator dashboard for visibility:**
+**Browser - Coordinator dashboard (for visibility):**
 ```
 http://localhost:8000/tasks/coordinator
 ```
 
-## Worker Launch Pattern
+## Verify Both Agents Running
 
-You need to launch **3 worker agents**. Give each agent a unique human name (e.g., "Alice", "Bob", "Charlie") and tell them to track their work with that name.
+```bash
+# Check manager daemon
+ps aux | grep manager_daemon
 
-**Example launch pattern:**
-```
-Launch agent worker-1 to work on available tasks
-Prompt: "You are a worker agent named Alice. Read the Worker Agent Instructions section from MANAGER_AGENT_PROMPT.md. Your responsibilities:
+# Check worker pool manager
+ps aux | grep worker_pool_manager
 
-1. Claim a task from /api/tasks/ready
-2. Always use your agent name 'Alice' in all API calls (heartbeat, unclaim, notes)
-3. Update status notes at meaningful milestones
-4. Send heartbeat every 5 minutes
-5. Mark task in_review only when complete, tested, and ready for auto-merge
-6. After marking in_review, unclaim the task
-
-Begin by claiming a task from /api/tasks/ready."
+# Both should show active processes
 ```
 
-Repeat for worker-2 (Bob) and worker-3 (Charlie) after the first worker starts working.
+## What's Fully Automated
 
-## Unsupervised Workflow
-
-**What the daemon handles automatically:**
-- ✅ Monitors tasks every 2 minutes
-- ✅ Auto-reviews in_review tasks (runs pytest, linting)
-- ✅ Auto-merges to main if all checks pass
-- ✅ Detects stale workers (no heartbeat for 20+ min)
+**Manager Daemon handles:**
+- ✅ Auto-reviews in_review tasks (pytest, linting, merge)
+- ✅ Auto-unblocks confused agent tasks
+- ✅ Detects stale workers (20+ min no heartbeat)
 - ✅ Marks tasks blocked on conflicts/test failures
 - ✅ Stops automatically when all tasks done
 
-**What you should monitor:**
-- 📊 Daemon logs: `tail -f logs/manager-5-$(date +%Y%m%d).log`
-- 🌐 Coordinator dashboard: http://localhost:8000/tasks/coordinator
-- ⚠️ Blocked tasks with merge conflicts (require manual resolution)
-- ⚠️ Blocked tasks with test failures (require manual fix)
-- ⚠️ Workers reporting issues
+**Worker Pool Manager handles:**
+- ✅ Monitors worker pool capacity continuously
+- ✅ Spawns new workers when needed
+- ✅ Uses unique human names (Alice, Bob, Charlie, Dave, Eve...)
+- ✅ Detects when work is complete
+- ✅ Stops automatically when all work done
+- ✅ Reports summary at end
 
-**What's daemon handles:**
-- ✅ Auto-unblocks confused agent tasks (unclaims and reassigns)
-- ✅ Logs all blocked tasks with reasons
-- ❌ Merge conflicts (requires manual resolution in worktree)
+**You don't need to:**
+- ❌ Monitor dashboard constantly
+- ❌ Click buttons
+- ❌ Spawn workers manually
+- ❌ Monitor idle workers
+- ❌ Detect when work is done
+- ❌ Handle blocked tasks
+- ❌ Resolve conflicts
+- ❌ Run tests or linting
 
-**When to intervene manually:**
-- ⚠️ Merge conflicts - manual resolution in worktree, then unblock
-- ⚠️ Test failures - debug and fix, then unblock
-- ⚠️ Workers asking for help repeatedly
-- ⚠️ Workers stuck > 30 minutes with no progress
+## When You SHOULD Intervene
 
-## Keep Spawning Workers Until Work Is Done
+Only in these rare cases:
+- ⚠️ Merge conflicts (manual resolution in worktree)
+- ⚠️ Test failures (debug and fix in worktree)
+- ⚠️ Workers reporting critical issues repeatedly
+- ⚠️ System crashes (restart both agents)
 
-**This is the critical pattern for unsupervised sessions:**
+## Example Log Output
 
-1. **Launch initial 3 workers** (Alice, Bob, Charlie)
-2. **Monitor coordinator dashboard** for `in_progress` task count
-3. **When workers finish tasks** (tasks move to `in_review`, then `done`), they become idle
-4. **When you see idle workers** (no `in_progress` tasks but `ready` tasks remain), spawn replacements
-5. **Repeat until all tasks done**
-
-**How to detect idle workers:**
-
-Check dashboard or API:
-```bash
-# Check active workers
-curl -s http://localhost:8000/api/tasks/ | jq '[.[] | select(.status == "in_progress")] | length'
-
-# Check ready tasks
-curl -s http://localhost:8000/api/tasks/ready | jq 'length'
+**Manager Daemon Log:**
+```
+[18:45:00] Starting manager daemon...
+[18:45:00] Checking every 120s...
+[18:47:00] [Iteration 1 at 2026-01-02 ...]
+[18:47:00] Found 3 in_review tasks
+[18:47:00] TASK-101: Reviewing...
+[18:47:15] TASK-101: ✅ Merged to main
+[18:47:20] Auto-merged 3 tasks this cycle
 ```
 
-**If `in_progress` count < 3 AND `ready` count > 0:** Launch replacement workers
-
-**Example replacement launch:**
+**Worker Pool Manager Log:**
 ```
-Launch agent to replace idle worker
-Prompt: "You are a worker agent named Dave. Read the Worker Agent Instructions from MANAGER_AGENT_PROMPT.md. Your responsibilities:
+[18:45:00] === Worker Pool Manager Starting ===
+[18:45:00] Checking every 60s...
+[18:45:00] Max workers: 3
+[18:45:00] Available agents: 23
 
-1. Claim a task from /api/tasks/ready
-2. Always use your agent name 'Dave' in all API calls (heartbeat, unclaim, notes)
-3. Update status notes at meaningful milestones
-4. Send heartbeat every 5 minutes
-5. Mark task in_review only when complete, tested, and ready for auto-merge
-6. After marking in_review, unclaim the task
+[Iteration 1 at 2026-01-02 ...]
+[18:46:00] Active workers: 0/3
+[18:46:00] Ready tasks: 15
 
-Begin by claiming a task from /api/tasks/ready."
+[18:46:00] 🚀 Spawning new worker: Alice
+[18:46:00] Ready tasks available: 15
+[18:46:00] Active workers: 0/3
+[18:46:00] SPAWN WORKER NOW via Task tool
+[18:46:00] Waiting for worker to claim a task...
+
+[Iteration 2 at 2026-01-02 ...]
+[18:47:00] Active workers: 1/3
+[18:47:00] Ready tasks: 14
+[18:47:00] Current workers:
+  - Alice: working on TASK-101
+
+[Iteration 3 at 2026-01-02 ...]
+[18:48:00] Active workers: 1/3
+[18:48:00] Ready tasks: 14
+
+[Iteration 4 at 2026-01-02 ...]
+[18:49:00] Active workers: 2/3
+[18:49:00] Ready tasks: 13
+
+[18:50:00] 🚀 Spawning new worker: Bob
+...
+
+[Final log when all done]
+[22:15:00] ✅ All work done!
+[22:15:00] Session duration: 3h 30m
+[22:15:00] Total workers spawned: 7
+[22:15:00] Workers launched: Alice, Bob, Charlie, Dave, Eve, Frank, Grace
+[22:15:00] === STOPPING ===
 ```
-
-**Naming convention:** Just pick sequential human names - Alice, Bob, Charlie, Dave, Eve, Frank, Grace, etc.
 
 ## Session Goals
 
-1. ✅ Launch daemon first
-2. ✅ Launch 3 named workers sequentially (Alice, Bob, Charlie)
-3. ✅ Monitor coordinator dashboard for idle workers
-4. ✅ Spawn replacement workers when idle workers detected
-5. ✅ Continue cycle until all tasks complete
-6. ✅ Only intervene when blocked tasks appear
-7. ✅ Let daemon handle all reviews and merges
+1. ✅ Launch manager daemon (Terminal 1)
+2. ✅ Launch worker pool manager (Terminal 2)
+3. ✅ Monitor logs periodically (Terminal 3)
+4. ✅ Only intervene for merge conflicts or critical failures
+5. ✅ Let system run completely unattended
+6. ✅ Check logs to see progress
+7. ✅ Both agents stop automatically when work complete
 
-## Stopping Condition
+## Stopping the Session
 
-The daemon will automatically stop when:
-- Ready tasks = 0
-- In-progress tasks = 0
+Both agents will auto-stop when:
+- Manager Daemon: `ready == 0` and `in_progress == 0`
+- Worker Pool Manager: `ready == 0` and `active_workers == 0`
 
 You'll see in logs:
 ```
-[2026-01-02 ...] Ready tasks: 0
-[2026-01-02 ...] Active workers: 0
-[2026-01-02 ...] All tasks done! Exiting...
+Manager: "All tasks done! Exiting..."
+Worker Pool: "All work done! Stopping..."
 ```
 
 ## Key Differences from Previous Managers
 
-- **Manual review/merge** → **Daemon auto-reviews and merges**
-- **Manual polling** → **Daemon continuous monitoring**
-- **Click buttons** → **Daemon handles everything automatically**
-- **Manual blocked task handling** → **Daemon auto-unblocks confused agents**
-- **Fixed number of workers** → **Keep respawning workers until done**
-- **You intervene frequently** → **You only intervene on merge conflicts and test failures**
+- **Manual worker spawning** → **Worker pool manager auto-spawns**
+- **Manual monitoring** → **Two automated agents (daemon + pool manager)**
+- **You manage everything** → **You only intervene for critical issues**
+- **Fixed worker count** → **Dynamic worker pool (spawns as needed)**
+- **Multiple manual steps** → **Fully unsupervised session**
+
+## Agent Naming
+
+Worker pool manager uses sequential human names automatically:
+- Alice, Bob, Charlie, Dave, Eve, Frank, Grace, Heidi, Ivan, Judy, Kevin, Linda, Mike, Nia, Oscar, Peggy, Quinn, Rick, Stan, Tanya, Ulysses, Victor, Wendy, Xavier, Yvonne, Zach
+
+23 total names available. If you exceed 23 workers in one session, it will warn and stop spawning.
 
 ---
 
-**Begin by starting the daemon, then launch 3 workers with unique names. Keep the cycle going: launch → monitor → replace idle workers → repeat until done.**
+**This is fully unsupervised workflow. Launch both agents, then walk away. The system will complete all work automatically.**
+
+**Step 1:** Launch manager daemon
+**Step 2:** Launch worker pool manager
+**Step 3:** Monitor logs occasionally
+**Step 4:** Only intervene for merge conflicts or critical failures
+**Done.**
