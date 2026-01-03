@@ -14,6 +14,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
+from app.models import Task
 
 test_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
 test_db_file.close()
@@ -186,3 +187,31 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
         db.refresh(event)
 
     return {"threads": threads, "sessions": sessions, "events": events, "user": user}
+
+
+@pytest.fixture(scope="function")
+def task_data(db: Session) -> list:
+    """Create sample tasks for testing."""
+    from datetime import datetime
+
+    tasks = []
+    for i in range(1, 13):
+        task = Task(
+            task_id=f"TASK-10{i}",
+            title=f"Test Task {i}",
+            description=f"Description for test task {i}",
+            priority="HIGH" if i < 5 else "MEDIUM" if i < 9 else "LOW",
+            status="pending",
+            instructions="Test instructions",
+            estimated_effort="1 hour",
+            completed=False,
+        )
+        db.add(task)
+        tasks.append(task)
+
+    db.commit()
+
+    for task in tasks:
+        db.refresh(task)
+
+    return tasks

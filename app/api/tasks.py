@@ -135,15 +135,10 @@ INITIAL_TASKS = [
 
 
 @router.post("/initialize")
-def initialize_tasks(db: Session = Depends(get_db)) -> dict:
-    """Initialize tasks with sample data.
-
-    Creates or updates tasks defined in INITIAL_TASKS.
-    Returns counts of tasks created and updated.
-    """
+async def initialize_tasks(db: Session = Depends(get_db)):
+    """Initialize database with sample tasks."""
     tasks_created = 0
     tasks_updated = 0
-    tasks = []
 
     for task_data in INITIAL_TASKS:
         existing_task = db.execute(
@@ -158,9 +153,8 @@ def initialize_tasks(db: Session = Depends(get_db)) -> dict:
             existing_task.dependencies = task_data["dependencies"]
             existing_task.estimated_effort = task_data["estimated_effort"]
             tasks_updated += 1
-            tasks.append(existing_task)
         else:
-            new_task = Task(
+            task = Task(
                 task_id=task_data["task_id"],
                 title=task_data["title"],
                 description=task_data["description"],
@@ -171,26 +165,38 @@ def initialize_tasks(db: Session = Depends(get_db)) -> dict:
                 status="pending",
                 completed=False,
             )
-            db.add(new_task)
+            db.add(task)
             tasks_created += 1
-            tasks.append(new_task)
 
     db.commit()
 
-    for task in tasks:
-        db.refresh(task)
+    tasks = db.execute(select(Task).order_by(Task.id)).scalars().all()
 
     return {
         "message": "Tasks initialized successfully",
         "tasks_created": tasks_created,
         "tasks_updated": tasks_updated,
         "tasks": [
-            {
-                "task_id": task.task_id,
-                "title": task.title,
-                "priority": task.priority,
-                "status": task.status,
-            }
+            TaskResponse(
+                id=task.id,
+                task_id=task.task_id,
+                title=task.title,
+                description=task.description,
+                priority=task.priority,
+                status=task.status,
+                dependencies=task.dependencies,
+                assigned_agent=task.assigned_agent,
+                worktree=task.worktree,
+                status_notes=task.status_notes,
+                estimated_effort=task.estimated_effort,
+                completed=task.completed,
+                blocked_reason=task.blocked_reason,
+                blocked_by=task.blocked_by,
+                last_heartbeat=task.last_heartbeat,
+                instructions=task.instructions,
+                created_at=task.created_at,
+                updated_at=task.updated_at,
+            )
             for task in tasks
         ],
     }
