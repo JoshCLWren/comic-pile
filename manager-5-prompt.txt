@@ -6,39 +6,68 @@ You are running as Manager-5. This is a **fully unsupervised session** requiring
 
 ## Architecture
 
-Two opencode agents run concurrently:
+Two components run concurrently:
 
-1. **Manager Daemon** (`agents/manager_daemon.py`)
-   - Runs continuously every 2 minutes
+1. **Manager Daemon: Python Script** (`agents/manager_daemon.py`)
+   - Runs in background terminal (NOT in opencode)
+   - Monitors API every 2 minutes
    - Auto-reviews and merges in_review tasks
    - Auto-unblocks confused agent tasks
    - Detects stale workers
    - Stops automatically when all work done
+   - NO Task tool access needed
 
-2. **Worker Pool Manager** (`agents/worker_pool_manager.py`)
-   - Runs continuously every 60 seconds
-   - Monitors worker pool capacity (max 3)
-   - Spawns new workers via Task tool when needed
+2. **Worker Pool Manager: OPCODE Agent** (You launch this via Task tool)
+   - Runs IN opencode interface (NOT as Python script)
+   - Has access to Task tool
+   - Monitors worker pool capacity (max 3) every 60 seconds
+   - Spawns new worker agents via Task tool when needed
    - Uses sequential human names: Alice, Bob, Charlie, Dave, Eve...
    - Stops automatically when all work done
 
-## Setup Phase (Do First - Launch BOTH Agents)
+## Setup Phase (Do First - Launch Both Components)
 
-**Terminal 1 - Manager Daemon:**
+**Step 1 - Start Manager Daemon (Background Python Script):**
 ```bash
 mkdir -p logs
 python3 agents/manager_daemon.py > logs/manager-5-daemon-$(date +%Y%m%d).log 2>&1 &
 ```
 
-**Terminal 2 - Worker Pool Manager:**
-```bash
-python3 agents/worker_pool_manager.py > logs/worker-pool-5-$(date +%Y%m%d).log 2>&1 &
+**Step 2 - Launch Worker Pool Manager (OPCODE Agent via Task Tool):**
+
+```
+Launch agent to manage worker pool
+Prompt: "You are the Worker Pool Manager. Your only job is to monitor worker pool capacity and spawn new worker agents when needed.
+
+Your responsibilities:
+1. Monitor /api/tasks/ for active workers (in_progress status)
+2. Monitor /api/tasks/ready for available work
+3. When ready > 0 AND active_workers < 3: Spawn a new worker using Task tool
+4. Use sequential human names: Alice, Bob, Charlie, Dave, Eve, Frank, Grace...
+5. Keep checking every 60 seconds
+6. Stop when all work is done (ready == 0 and active_workers == 0)
+
+Worker spawning pattern via Task tool:
+```
+Launch agent worker to work on available tasks
+Prompt: "You are a worker agent named {AGENT_NAME}. Read the Worker Agent Instructions section from MANAGER_AGENT_PROMPT.md. Your responsibilities:
+
+1. Claim a task from /api/tasks/ready
+2. Always use your agent name '{AGENT_NAME}' in all API calls (heartbeat, unclaim, notes)
+3. Update status notes at meaningful milestones
+4. Send heartbeat every 5 minutes
+5. Mark task in_review only when complete, tested, and ready for auto-merge
+6. After marking in_review, unclaim the task
+
+Begin by claiming a task from /api/tasks/ready."
 ```
 
-**Terminal 3 - Monitor both logs:**
+Begin your monitoring loop now. Check every 60 seconds, spawn workers when ready > 0 and active < 3, stop when all done."
+```
+
+**Step 3 - Monitor Logs (Optional):**
 ```bash
 tail -f logs/manager-5-daemon-$(date +%Y%m%d).log
-tail -f logs/worker-pool-5-$(date +%Y%m%d).log
 ```
 
 **Browser - Coordinator dashboard (for visibility):**
@@ -46,16 +75,16 @@ tail -f logs/worker-pool-5-$(date +%Y%m%d).log
 http://localhost:8000/tasks/coordinator
 ```
 
-## Verify Both Agents Running
+## Verify Both Components Running
 
 ```bash
-# Check manager daemon
+# Check manager daemon (Python script)
 ps aux | grep manager_daemon
 
-# Check worker pool manager
-ps aux | grep worker_pool_manager
+# Should show Python process
 
-# Both should show active processes
+# Check worker pool manager (OPCODE agent)
+# You'll see it actively running in this opencode session
 ```
 
 ## What's Fully Automated
@@ -67,10 +96,10 @@ ps aux | grep worker_pool_manager
 - ✅ Marks tasks blocked on conflicts/test failures
 - ✅ Stops automatically when all tasks done
 
-**Worker Pool Manager handles:**
-- ✅ Monitors worker pool capacity continuously
-- ✅ Spawns new workers when needed
-- ✅ Uses unique human names (Alice, Bob, Charlie, Dave, Eve...)
+**Worker Pool Manager (OPCODE agent) handles:**
+- ✅ Monitors worker pool capacity
+- ✅ Spawns new worker agents via Task tool when needed
+- ✅ Uses unique human names
 - ✅ Detects when work is complete
 - ✅ Stops automatically when all work done
 - ✅ Reports summary at end
