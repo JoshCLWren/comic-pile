@@ -1,7 +1,5 @@
 """Test file created by worker agent Charlie to demonstrate workflow."""
 
-import pytest
-
 
 def test_worker_agent_can_create_tests():
     """Verify worker agent can create and run test files."""
