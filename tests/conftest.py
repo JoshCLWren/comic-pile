@@ -113,9 +113,10 @@ def sample_tasks(db: Session) -> list[Task]:
 @pytest.fixture(scope="function")
 def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User | list]:
     """Create sample threads, sessions for testing."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
-    user = User(username="test_user", created_at=datetime.now())
+    now = datetime.now(UTC)
+    user = User(username="test_user", created_at=now)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -128,7 +129,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
             queue_position=1,
             status="active",
             user_id=user.id,
-            created_at=datetime.now(),
+            created_at=now,
         ),
         Thread(
             title="Batman",
@@ -137,7 +138,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
             queue_position=2,
             status="active",
             user_id=user.id,
-            created_at=datetime.now(),
+            created_at=now,
         ),
         Thread(
             title="Wonder Woman",
@@ -146,7 +147,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
             queue_position=3,
             status="completed",
             user_id=user.id,
-            created_at=datetime.now(),
+            created_at=now,
         ),
         Thread(
             title="Flash",
@@ -155,7 +156,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
             queue_position=4,
             status="active",
             user_id=user.id,
-            created_at=datetime.now(),
+            created_at=now,
         ),
         Thread(
             title="Aquaman",
@@ -164,7 +165,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
             queue_position=5,
             status="active",
             user_id=user.id,
-            created_at=datetime.now(),
+            created_at=now,
         ),
     ]
 
@@ -179,12 +180,12 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
         SessionModel(
             start_die=6,
             user_id=user.id,
-            started_at=datetime.now(),
+            started_at=now,
         ),
         SessionModel(
             start_die=8,
             user_id=user.id,
-            started_at=datetime.now(),
+            started_at=now,
         ),
     ]
 
@@ -204,7 +205,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
             selection_method="random",
             session_id=sessions[0].id,
             thread_id=threads[0].id,
-            timestamp=datetime.now(),
+            timestamp=now,
         ),
         Event(
             type="rate",
@@ -214,7 +215,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
             die_after=8,
             session_id=sessions[0].id,
             thread_id=threads[0].id,
-            timestamp=datetime.now(),
+            timestamp=now,
         ),
     ]
 

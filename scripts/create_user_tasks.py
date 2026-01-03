@@ -5,13 +5,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-<<<<<<< HEAD
-=======
 from sqlalchemy import select
 
->>>>>>> feature/task-feat-005
 from app.database import SessionLocal
 from app.models import Task
+
 
 def create_tasks():
     """Create tasks from predefined task data."""
