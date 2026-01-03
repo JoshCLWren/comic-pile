@@ -79,8 +79,13 @@ def end_session(session_id: int, db: Session) -> None:
 
 
 def get_current_die(session_id: int, db: Session) -> int:
-    """Get current die size based on last rating event in session."""
+    """Get current die size based on manual selection or last rating event."""
     settings = _get_settings(db)
+    session = db.get(SessionModel, session_id)
+
+    if session and session.manual_die:
+        return session.manual_die
+
     last_rate_event = (
         db.execute(
             select(Event)
@@ -97,5 +102,4 @@ def get_current_die(session_id: int, db: Session) -> int:
         die_after = last_rate_event.die_after
         return die_after if die_after is not None else settings.start_die
 
-    session = db.get(SessionModel, session_id)
     return session.start_die if session else settings.start_die
