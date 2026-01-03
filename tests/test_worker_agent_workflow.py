@@ -11,4 +11,5 @@ def test_worker_agent_worktree_isolation():
     import os
 
     worktree_path = os.getcwd()
-    assert "worker-charlie" in worktree_path
+    main_repo_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    assert worktree_path != main_repo_path

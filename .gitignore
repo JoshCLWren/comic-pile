@@ -144,3 +144,4 @@ logs/
 # Temporary files
 *.tmp
 *.bak
+.env.production

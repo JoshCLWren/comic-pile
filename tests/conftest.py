@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import Event, Thread, User
+from app.models import Event, Task, Thread, User
 from app.models import Session as SessionModel
 
 test_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
@@ -186,3 +186,46 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
         db.refresh(event)
 
     return {"threads": threads, "sessions": sessions, "events": events, "user": user}
+
+
+@pytest.fixture(scope="function")
+def sample_tasks(db: Session) -> list[Task]:
+    """Create sample tasks for testing."""
+    tasks = [
+        Task(
+            task_id="TASK-101",
+            title="Complete Narrative Session Summaries",
+            description="First test task",
+            priority="HIGH",
+            status="pending",
+            instructions="Test instructions",
+            estimated_effort="2 hours",
+        ),
+        Task(
+            task_id="TASK-102",
+            title="Add Staleness Awareness UI",
+            description="Second test task",
+            priority="MEDIUM",
+            status="pending",
+            instructions="Test instructions",
+            estimated_effort="1 hour",
+        ),
+        Task(
+            task_id="TASK-103",
+            title="Queue UI Enhancements",
+            description="Third test task",
+            priority="LOW",
+            status="pending",
+            instructions="Test instructions",
+            estimated_effort="3 hours",
+        ),
+    ]
+
+    for task in tasks:
+        db.add(task)
+    db.commit()
+
+    for task in tasks:
+        db.refresh(task)
+
+    return tasks
