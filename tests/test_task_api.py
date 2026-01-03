@@ -360,3 +360,100 @@ async def test_coordinator_data(client: AsyncClient) -> None:
     assert data["in_progress"][0]["task_id"] == "TASK-101"
     assert len(data["done"]) == 1
     assert data["done"][0]["task_id"] == "TASK-102"
+
+
+@pytest.mark.asyncio
+async def test_unclaim_in_review_preserves_status(client: AsyncClient) -> None:
+    """Test that in_review tasks stay in_review when unclaimed."""
+    # Create a task
+    create_response = await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TEST-1",
+            "title": "Test Task",
+            "priority": "MEDIUM",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "1 hour",
+        },
+    )
+    assert create_response.status_code == 201
+    task = create_response.json()
+    assert task["status"] == "pending"
+
+    # Claim the task
+    claim_response = await client.post(
+        "/api/tasks/TEST-1/claim",
+        json={"agent_name": "agent-1", "worktree": "test-worktree"},
+    )
+    assert claim_response.status_code == 200
+    task = claim_response.json()
+    assert task["status"] == "in_progress"
+    assert task["assigned_agent"] == "agent-1"
+
+    # Set to in_review
+    status_response = await client.post(
+        "/api/tasks/TEST-1/set-status",
+        json={"status": "in_review", "agent_name": "agent-1"},
+    )
+    assert status_response.status_code == 200
+    task = status_response.json()
+    assert task["status"] == "in_review"
+
+    # Unclaim the task
+    unclaim_response = await client.post(
+        "/api/tasks/TEST-1/unclaim",
+        json={"agent_name": "agent-1"},
+    )
+    assert unclaim_response.status_code == 200
+    task = unclaim_response.json()
+
+    # Verify status is still in_review
+    assert task["status"] == "in_review"
+    assert task["assigned_agent"] is None
+    assert task["worktree"] is None
+    assert "Unclaimed by agent-1" in task["status_notes"]
+
+
+@pytest.mark.asyncio
+async def test_unclaim_in_progress_resets_to_pending(client: AsyncClient) -> None:
+    """Test that in_progress tasks are reset to pending when unclaimed."""
+    # Create a task
+    create_response = await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TEST-2",
+            "title": "Test Task 2",
+            "priority": "MEDIUM",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "1 hour",
+        },
+    )
+    assert create_response.status_code == 201
+    task = create_response.json()
+    assert task["status"] == "pending"
+
+    # Claim the task
+    claim_response = await client.post(
+        "/api/tasks/TEST-2/claim",
+        json={"agent_name": "agent-1", "worktree": "test-worktree"},
+    )
+    assert claim_response.status_code == 200
+    task = claim_response.json()
+    assert task["status"] == "in_progress"
+    assert task["assigned_agent"] == "agent-1"
+
+    # Unclaim the task (still in_progress)
+    unclaim_response = await client.post(
+        "/api/tasks/TEST-2/unclaim",
+        json={"agent_name": "agent-1"},
+    )
+    assert unclaim_response.status_code == 200
+    task = unclaim_response.json()
+
+    # Verify status is reset to pending
+    assert task["status"] == "pending"
+    assert task["assigned_agent"] is None
+    assert task["worktree"] is None
+    assert "Unclaimed by agent-1" in task["status_notes"]

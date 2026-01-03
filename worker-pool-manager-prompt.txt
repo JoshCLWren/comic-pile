@@ -139,3 +139,17 @@ Worker Pool Manager complete
 ---
 
 **Begin your monitoring loop now. Check every 60 seconds, spawn workers via Task tool when ready > 0 and active < 3, stop when all done.**
+
+## Known Issues & Advice for Future Managers
+
+Based on previous Worker Pool Manager runs:
+
+1. **Placeholder Test Task Recycling**: Tasks like TEST-NEW, MANUAL-TEST, TEST-POST-FINAL may recycle after unclaim (status resets to pending instead of staying in_review). This creates an infinite loop blocking your exit condition. If you see these tasks repeatedly appearing in `/ready`, they are already complete and should be ignored.
+
+2. **Worker Output Verification**: Occasionally workers may spawn but provide no actual completion summary (e.g., empty task IDs or no work documented). If this happens, verify the worker agent output before marking the session complete.
+
+3. **Manager Daemon Integration**: Worker Pool Manager is only half the system - you need manager-daemon.py running in parallel to handle merging, cleanup, and blocked tasks. The Task API is your single source of truth for task state.
+
+4. **Concurrency Limit**: Never spawn more than 3 workers simultaneously. This is a hard limit to prevent resource contention.
+
+5. **Task API Reliability**: The `/api/tasks/ready` endpoint is reliable for dependency checking. Trust it over manual task tracking.
