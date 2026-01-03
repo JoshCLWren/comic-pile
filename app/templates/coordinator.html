@@ -11,6 +11,20 @@
         </button>
     </div>
 
+    <div class="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+        <div class="flex items-center justify-between">
+            <h3 class="font-bold text-yellow-600">Quick Actions</h3>
+            <button
+                onclick="autoMergeAll()"
+                class="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg font-bold transition-colors">
+                Auto-Merge All In-Review Tasks
+            </button>
+        </div>
+        <p class="text-sm text-slate-500 mt-2">
+            Quickly merge all review-ready tasks. Tasks with merge conflicts will be marked as blocked.
+        </p>
+    </div>
+
     <div id="coordinator-content" class="space-y-6">
         <div class="grid gap-4">
             <div class="glass-card">
@@ -157,5 +171,45 @@
     document.body.addEventListener('refresh-coordinator', function() {
         htmx.ajax('GET', '/api/tasks/coordinator-data', {target: '#coordinator-content'});
     });
+
+    async function autoMergeAll() {
+        const response = await fetch('/api/tasks/');
+        const tasks = await response.json();
+        const inReview = tasks.filter(t => t.status === 'in_review');
+
+        if (inReview.length === 0) {
+            alert('No tasks in review');
+            return;
+        }
+
+        if (!confirm(`Merge ${inReview.length} in-review tasks?`)) {
+            return;
+        }
+
+        let success = 0;
+        let skipped = 0;
+
+        for (const task of inReview) {
+            try {
+                const mergeResponse = await fetch(`/api/tasks/${task.task_id}/merge-to-main`, {
+                    method: 'POST'
+                });
+
+                if (mergeResponse.ok) {
+                    success++;
+                    console.log(`Merged: ${task.task_id}`);
+                } else {
+                    skipped++;
+                    console.error(`Failed to merge: ${task.task_id}`);
+                }
+            } catch (error) {
+                skipped++;
+                console.error(`Error merging ${task.task_id}:`, error);
+            }
+        }
+
+        alert(`Merged ${success} tasks, ${skipped} failed/skipped`);
+        location.reload();
+    }
 </script>
 {% endblock %}

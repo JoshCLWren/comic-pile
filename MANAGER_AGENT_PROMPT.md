@@ -20,6 +20,84 @@ You are the **manager agent** coordinating worker agents on development work. Yo
 
 ---
 
+## AUTOMATED COORDINATION SETUP
+
+You now have a **manager daemon** that automates the continuous monitoring and merging workflow. This solves the problem of having to manually monitor workers and click buttons during long sessions.
+
+### Manager Daemon Features
+
+**File:** `agents/manager_daemon.py`
+
+The daemon runs continuously and automatically:
+
+1. **Auto-review and merge in_review tasks**
+   - Fetches latest main from origin
+   - Rebases worker's worktree to detect conflicts
+   - Runs `pytest` to verify tests pass
+   - Runs `make lint` to verify code quality
+   - Calls `/api/tasks/{task_id}/merge-to-main` to merge
+   - Marks tasks as `blocked` if conflicts occur
+   - Skips merge if tests or linting fail
+
+2. **Continuous worker monitoring**
+   - Checks every 2 minutes (configurable via `SLEEP_INTERVAL`)
+   - Detects stale workers (no heartbeat for 20+ minutes)
+   - Reports stale worker status to log
+
+3. **Task availability tracking**
+   - Counts ready tasks (pending, no dependencies blocking)
+   - Counts active workers (in_progress tasks)
+   - Auto-stops when all tasks done and no active workers
+
+4. **Detailed logging**
+   - Timestamped logs for all actions
+   - Clear success/failure messages
+   - Works with background execution and log rotation
+
+### Auto-Merge Endpoint
+
+**Endpoint:** `POST /api/tasks/{task_id}/merge-to-main`
+
+The API handles the actual merge operation:
+- Validates task is `in_review`
+- Checks worktree exists
+- Fetches and merges `origin/main` with `--no-ff`
+- Detects conflicts (marks task `blocked` with reason)
+- Pushes merged changes to origin
+- Marks task `done` on success
+
+### Usage Pattern
+
+**Start the daemon at session beginning:**
+```bash
+# Run in background with daily log rotation
+python3 agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
+
+# Monitor progress
+tail -f logs/manager-$(date +%Y%m%d).log
+
+# Stop when done
+pkill -f manager_daemon.py
+```
+
+**What this means for you:**
+- NO need to manually click "Auto-Merge All In-Review Tasks" button
+- NO need to manually review tasks every few minutes
+- NO need to manually run `pytest` and `make lint`
+- Daemon handles everything automatically
+- You only intervene when:
+  - Tasks are marked `blocked` (conflicts or test failures)
+  - Workers report issues
+  - You need to launch/reassign workers
+
+**Dashboard still useful for:**
+- Visual overview of task state
+- Manual unclaim of stuck tasks
+- Manual intervention when needed
+- Quick refresh to see daemon progress
+
+---
+
 ## CRITICAL RULES (Learned Hard Way)
 
 ### DO
@@ -53,10 +131,11 @@ You are the **manager agent** coordinating worker agents on development work. Yo
 - Watch for merge conflicts and intervene when needed
 
 **✅ Review in_review tasks promptly**
-- Verify tests pass: `pytest`
-- Verify linting clean: `make lint`
-- Verify implementation matches task requirements
-- Merge to main after approval
+- **AUTOMATED:** Manager daemon now reviews and merges automatically
+- Daemon runs pytest, linting, and merges if all pass
+- You only need to intervene if tasks are marked `blocked`
+- Manual review process still available via coordinator dashboard if needed
+- For manual review: Verify tests pass, linting clean, implementation matches requirements
 
 **✅ Recover abandoned work**
 - Unclaim tasks with no heartbeat for 20+ minutes
@@ -121,9 +200,33 @@ cd /home/josh/code/comic-pile
 make dev
 ```
 
-### 2. Open Coordinator Dashboard
+### 2. Start Manager Daemon (NEW!)
 
-Keep this open in your browser throughout the session:
+Before launching workers, start the automated manager daemon:
+
+```bash
+# Create logs directory if needed
+mkdir -p logs
+
+# Start daemon in background with logging
+python3 agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
+
+# Verify it's running
+ps aux | grep manager_daemon
+
+# Watch logs in another terminal
+tail -f logs/manager-$(date +%Y%m%d).log
+```
+
+The daemon will now automatically:
+- Review and merge in_review tasks
+- Detect stale workers
+- Monitor task availability
+- Stop when all work is complete
+
+### 3. Open Coordinator Dashboard (Optional but Recommended)
+
+Keep this open in your browser throughout the session for visibility:
 
 **http://localhost:8000/tasks/coordinator**
 
@@ -132,9 +235,12 @@ This dashboard shows:
 - Agent assignments and worktrees
 - Last heartbeat time (stale highlighting)
 - One-click claim and unclaim buttons
+- "Auto-Merge All In-Review Tasks" button (manual override)
 - Auto-refresh every 10 seconds
 
-### 3. Verify Tasks in Database
+**Note:** The manager daemon handles auto-merge automatically. The dashboard button is available for manual intervention if needed.
+
+### 4. Verify Tasks in Database
 
 ```bash
 # List all tasks
@@ -144,7 +250,7 @@ curl http://localhost:8000/api/tasks/ | jq
 curl http://localhost:8000/api/tasks/TASK-XXX | jq '.dependencies'
 ```
 
-### 4. Check for Existing Worktrees
+### 5. Check for Existing Worktrees
 
 ```bash
 # List existing worktrees
