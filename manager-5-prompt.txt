@@ -35,45 +35,12 @@ python3 agents/manager_daemon.py > logs/manager-5-daemon-$(date +%Y%m%d).log 2>&
 
 **Step 2 - Launch Worker Pool Manager (OPCODE Agent via Task Tool):**
 
-Copy prompt from `worker-pool-manager-prompt.txt` and use it:
-
-```
-Launch agent as Worker Pool Manager
-Prompt: [Copy entire contents of worker-pool-manager-prompt.txt]
-```
+Copy the entire `worker-pool-manager-prompt.txt` file and use it to launch as Worker Pool Manager agent:
 
 The Worker Pool Manager agent will:
 - Monitor worker pool every 60 seconds
 - Spawn workers via Task tool when needed
 - Stop automatically when all work done
-Launch agent to manage worker pool
-Prompt: "You are the Worker Pool Manager. Your only job is to monitor worker pool capacity and spawn new worker agents when needed.
-
-Your responsibilities:
-1. Monitor /api/tasks/ for active workers (in_progress status)
-2. Monitor /api/tasks/ready for available work
-3. When ready > 0 AND active_workers < 3: Spawn a new worker using Task tool
-4. Use sequential human names: Alice, Bob, Charlie, Dave, Eve, Frank, Grace...
-5. Keep checking every 60 seconds
-6. Stop when all work is done (ready == 0 and active_workers == 0)
-
-Worker spawning pattern via Task tool:
-```
-Launch agent worker to work on available tasks
-Prompt: "You are a worker agent named {AGENT_NAME}. Read the Worker Agent Instructions section from MANAGER_AGENT_PROMPT.md. Your responsibilities:
-
-1. Claim a task from /api/tasks/ready
-2. Always use your agent name '{AGENT_NAME}' in all API calls (heartbeat, unclaim, notes)
-3. Update status notes at meaningful milestones
-4. Send heartbeat every 5 minutes
-5. Mark task in_review only when complete, tested, and ready for auto-merge
-6. After marking in_review, unclaim the task
-
-Begin by claiming a task from /api/tasks/ready."
-```
-
-Begin your monitoring loop now. Check every 60 seconds, spawn workers when ready > 0 and active < 3, stop when all done."
-```
 
 **Step 3 - Monitor Logs (Optional):**
 ```bash

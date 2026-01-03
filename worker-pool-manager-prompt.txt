@@ -73,7 +73,7 @@ Active workers: 2/3
 Ready tasks: 15
 
 Spawning new worker: Alice...
-[Using Task tool to launch Alice...]
+(Using Task tool to launch Alice...)
 
 Checking worker pool status...
 Active workers: 3/3
@@ -85,7 +85,7 @@ Active workers: 2/3
 Ready tasks: 8
 
 Spawning new worker: Bob...
-[Using Task tool to launch Bob...]
+(Using Task tool to launch Bob...)
 
 Checking worker pool status...
 Active workers: 0/3
