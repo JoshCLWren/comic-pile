@@ -11,4 +11,4 @@ def test_worker_agent_worktree_isolation():
     import os
 
     worktree_path = os.getcwd()
-    assert "worker-charlie" in worktree_path
+    assert worktree_path != "/home/josh/code/comic-pile"

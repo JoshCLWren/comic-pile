@@ -177,7 +177,29 @@ async def initialize_tasks(db: Session = Depends(get_db)):
         "message": "Tasks initialized successfully",
         "tasks_created": tasks_created,
         "tasks_updated": tasks_updated,
-        "tasks": [TaskResponse.model_validate(t) for t in tasks],
+        "tasks": [
+            {
+                "id": task.id,
+                "task_id": task.task_id,
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+                "status": task.status,
+                "dependencies": task.dependencies,
+                "assigned_agent": task.assigned_agent,
+                "worktree": task.worktree,
+                "status_notes": task.status_notes,
+                "estimated_effort": task.estimated_effort,
+                "completed": task.completed,
+                "blocked_reason": task.blocked_reason,
+                "blocked_by": task.blocked_by,
+                "last_heartbeat": task.last_heartbeat,
+                "instructions": task.instructions,
+                "created_at": task.created_at,
+                "updated_at": task.updated_at,
+            }
+            for task in tasks
+        ],
     }
 
 
