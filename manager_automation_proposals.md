@@ -486,7 +486,7 @@ if __name__ == "__main__":
 
 ```bash
 chmod +x agents/manager_daemon.py
-python3 agents/manager_daemon.py &
+python3 -u agents/manager_daemon.py &
 # Runs in background, continuous monitoring
 ```
 
@@ -524,7 +524,7 @@ python3 agents/manager_daemon.py &
 
 ```bash
 # Start manager daemon when you leave
-python3 agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
+python3 -u agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
 
 # When you return, check log file
 tail -f logs/manager-$(date +%Y%m%d).log
