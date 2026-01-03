@@ -128,9 +128,9 @@
     function initDice() {
         const mainContainer = document.getElementById('main-die-3d');
         const headerContainer = document.getElementById('header-die-3d');
-
-        mainDie = window.Dice3D ? Dice3D.create(mainContainer, initialDenom, { color: 0x4f46e5, showValue: false }) : null;
-        headerDie = window.Dice3D ? Dice3D.create(headerContainer, initialDenom, { color: 0x14b8a6, showValue: false }) : null;
+        
+        mainDie = window.Dice3D ? Dice3D.create(mainContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
+        headerDie = window.Dice3D ? Dice3D.create(headerContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
 
         if (mainDie) mainDie.setValue(1);
         updateDieButtonState(initialDenom);

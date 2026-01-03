@@ -350,7 +350,7 @@
   function Die(container, sides, opts) {
     this.container = container;
     this.sides = sides || 6;
-    this.color = (opts && opts.color !== undefined) ? opts.color : 0x4f46e5;
+    this.color = (opts && opts.color !== undefined) ? opts.color : 0xffffff;
     this.showValue = (opts && opts.showValue !== undefined) ? opts.showValue : true;
     this.currentValue = 1;
     this.isRolling = false;

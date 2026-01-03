@@ -173,8 +173,8 @@
                     currentDenom = data.current_die || 6;
                     const rolledValue = data.last_rolled_result || 1;
                     if (window.Dice3D) {
-                        headerDie = Dice3D.create(headerDieContainer, currentDenom, { color: 0x14b8a6, showValue: false });
-                        previewDie = Dice3D.create(diePreview, currentDenom, { color: 0x4f46e5, showValue: false });
+                        headerDie = Dice3D.create(headerDieContainer, currentDenom, { color: 0xffffff, showValue: false });
+                        previewDie = Dice3D.create(diePreview, currentDenom, { color: 0xffffff, showValue: false });
                         previewSides = currentDenom;
                         if (previewDie) previewDie.rollTo(rolledValue);
                     }
