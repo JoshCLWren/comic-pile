@@ -61,13 +61,20 @@ Repeat for worker-2 (Bob) and worker-3 (Charlie) after the first worker starts w
 **What you should monitor:**
 - 📊 Daemon logs: `tail -f logs/manager-5-$(date +%Y%m%d).log`
 - 🌐 Coordinator dashboard: http://localhost:8000/tasks/coordinator
-- ⚠️ Blocked tasks (need your intervention)
+- ⚠️ Blocked tasks with merge conflicts (require manual resolution)
+- ⚠️ Blocked tasks with test failures (require manual fix)
 - ⚠️ Workers reporting issues
 
-**When to intervene:**
-- Tasks marked `blocked` (merge conflicts or test failures)
-- Workers asking for help repeatedly
-- Workers stuck on same task > 30 minutes with no progress
+**What's daemon handles:**
+- ✅ Auto-unblocks confused agent tasks (unclaims and reassigns)
+- ✅ Logs all blocked tasks with reasons
+- ❌ Merge conflicts (requires manual resolution in worktree)
+
+**When to intervene manually:**
+- ⚠️ Merge conflicts - manual resolution in worktree, then unblock
+- ⚠️ Test failures - debug and fix, then unblock
+- ⚠️ Workers asking for help repeatedly
+- ⚠️ Workers stuck > 30 minutes with no progress
 
 ## Keep Spawning Workers Until Work Is Done
 
@@ -137,8 +144,9 @@ You'll see in logs:
 - **Manual review/merge** → **Daemon auto-reviews and merges**
 - **Manual polling** → **Daemon continuous monitoring**
 - **Click buttons** → **Daemon handles everything automatically**
+- **Manual blocked task handling** → **Daemon auto-unblocks confused agents**
 - **Fixed number of workers** → **Keep respawning workers until done**
-- **You intervene frequently** → **You only intervene on blocked tasks**
+- **You intervene frequently** → **You only intervene on merge conflicts and test failures**
 
 ---
 

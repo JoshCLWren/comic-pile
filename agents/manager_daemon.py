@@ -146,6 +146,45 @@ async def check_ready_tasks(client):
     return ready_tasks
 
 
+async def check_and_handle_blocked_tasks(client):
+    """Check for blocked tasks and attempt auto-recovery."""
+    response = await client.get(f"{SERVER_URL}/api/tasks/")
+    tasks = response.json()
+    blocked = [t for t in tasks if t.get("status") == "blocked"]
+
+    if not blocked:
+        return 0
+
+    print(f"[{datetime.now()}] Found {len(blocked)} blocked tasks")
+
+    handled_count = 0
+    for task in blocked:
+        task_id = task["task_id"]
+        blocked_reason = task.get("blocked_reason", "Unknown")
+
+        print(f"[{datetime.now()}] {task_id}: {blocked_reason}")
+
+        if "Merge conflict" in blocked_reason or "CONFLICT" in blocked_reason:
+            print(
+                f"[{datetime.now()}] {task_id}: Merge conflict detected, cannot auto-resolve. Requires manual intervention."
+            )
+            print(f"[{datetime.now()}] {task_id}: Worktree: {task.get('worktree')}")
+        elif "agent" in blocked_reason.lower() or "confused" in blocked_reason.lower():
+            print(f"[{datetime.now()}] {task_id}: Agent confusion, unblocking for reassignment")
+            await client.post(
+                f"{SERVER_URL}/api/tasks/{task_id}/unclaim",
+                json={"agent_name": task.get("assigned_agent", "admin")},
+            )
+            print(f"[{datetime.now()}] {task_id}: ✅ Unblocked and ready for reassignment")
+            handled_count += 1
+        else:
+            print(
+                f"[{datetime.now()}] {task_id}: Manual intervention needed - requires human review"
+            )
+
+    return handled_count
+
+
 async def check_active_workers(client):
     """Check for active workers."""
     response = await client.get(f"{SERVER_URL}/api/tasks/")
@@ -197,6 +236,11 @@ async def main():
 
                 if merged > 0:
                     print(f"[{datetime.now()}] Auto-merged {merged} tasks this cycle")
+
+                unblocked = await check_and_handle_blocked_tasks(client)
+
+                if unblocked > 0:
+                    print(f"[{datetime.now()}] Auto-unblocked {unblocked} tasks this cycle")
 
                 await check_ready_tasks(client)
                 await check_active_workers(client)
