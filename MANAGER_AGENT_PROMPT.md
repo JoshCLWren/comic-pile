@@ -71,7 +71,7 @@ The API handles the actual merge operation:
 **Start the daemon at session beginning:**
 ```bash
 # Run in background with daily log rotation
-python3 agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
+python3 -u agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
 
 # Monitor progress
 tail -f logs/manager-$(date +%Y%m%d).log
@@ -279,7 +279,7 @@ Before launching workers, start the automated manager daemon:
 mkdir -p logs
 
 # Start daemon in background with logging
-python3 agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
+python3 -u agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
 
 # Verify it's running
 ps aux | grep manager_daemon
