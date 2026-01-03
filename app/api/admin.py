@@ -5,8 +5,9 @@ import io
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,7 @@ from app.models import Session as SessionModel
 from app.schemas import SettingsResponse, UpdateSettingsRequest
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+templates = Jinja2Templates(directory="app/templates")
 
 
 @router.post("/import/csv/")
@@ -325,8 +327,10 @@ def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode()),
         media_type="text/markdown",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
 @router.get("/settings", response_model=SettingsResponse)
 def get_settings(db: Session = Depends(get_db)) -> SettingsResponse:
     """Get current application settings.
@@ -354,13 +358,39 @@ def get_settings(db: Session = Depends(get_db)) -> SettingsResponse:
     )
 
 
-@router.put("/settings", response_model=SettingsResponse)
+@router.get("/settings/form", response_class=HTMLResponse)
+def settings_form(request: Request, db: Session = Depends(get_db)):
+    """Render settings form HTML fragment."""
+    settings = db.execute(select(Settings)).scalars().first()
+
+    if not settings:
+        settings = Settings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+
+    die_options = [4, 6, 8, 10, 12, 20]
+
+    return templates.TemplateResponse(
+        "settings_form.html",
+        {
+            "request": request,
+            "settings": settings,
+            "die_options": die_options,
+        },
+    )
+
+
+@router.put("/settings", response_class=HTMLResponse)
 def update_settings(
-    request: UpdateSettingsRequest, db: Session = Depends(get_db)
-) -> SettingsResponse:
+    request_data: UpdateSettingsRequest,
+    req: Request,
+    db: Session = Depends(get_db),
+):
     """Update application settings.
 
     Only updates fields that are provided in the request.
+    Returns HTML form fragment for HTMX.
     """
     settings = db.execute(select(Settings)).scalars().first()
 
@@ -368,30 +398,29 @@ def update_settings(
         settings = Settings()
         db.add(settings)
 
-    if request.session_gap_hours is not None:
-        settings.session_gap_hours = request.session_gap_hours
-    if request.start_die is not None:
-        settings.start_die = request.start_die
-    if request.rating_min is not None:
-        settings.rating_min = request.rating_min
-    if request.rating_max is not None:
-        settings.rating_max = request.rating_max
-    if request.rating_step is not None:
-        settings.rating_step = request.rating_step
-    if request.rating_threshold is not None:
-        settings.rating_threshold = request.rating_threshold
+    if request_data.session_gap_hours is not None:
+        settings.session_gap_hours = request_data.session_gap_hours
+    if request_data.start_die is not None:
+        settings.start_die = request_data.start_die
+    if request_data.rating_min is not None:
+        settings.rating_min = request_data.rating_min
+    if request_data.rating_max is not None:
+        settings.rating_max = request_data.rating_max
+    if request_data.rating_step is not None:
+        settings.rating_step = request_data.rating_step
+    if request_data.rating_threshold is not None:
+        settings.rating_threshold = request_data.rating_threshold
 
     db.commit()
     db.refresh(settings)
 
-    return SettingsResponse(
-        id=settings.id,
-        session_gap_hours=settings.session_gap_hours,
-        start_die=settings.start_die,
-        rating_min=settings.rating_min,
-        rating_max=settings.rating_max,
-        rating_step=settings.rating_step,
-        rating_threshold=settings.rating_threshold,
-        created_at=settings.created_at,
-        updated_at=settings.updated_at,
+    die_options = [4, 6, 8, 10, 12, 20]
+
+    return templates.TemplateResponse(
+        "settings_form.html",
+        {
+            "request": req,
+            "settings": settings,
+            "die_options": die_options,
+        },
     )

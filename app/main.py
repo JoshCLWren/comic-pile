@@ -369,6 +369,11 @@ def create_app() -> FastAPI:
             "roll.html", {"request": request, "current_die": current_die}
         )
 
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request):
+        """Render settings page."""
+        return templates.TemplateResponse("settings.html", {"request": request})
+
     @app.get("/tasks/coordinator", response_class=HTMLResponse)
     async def coordinator_page(request: Request, db: Session = Depends(get_db)):
         """Render task coordinator dashboard."""
