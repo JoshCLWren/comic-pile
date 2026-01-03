@@ -14,36 +14,19 @@ async def test_list_tasks(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_initialize_tasks(client: AsyncClient) -> None:
-    """Test initializing all tasks."""
-    response = await client.post("/api/tasks/initialize")
-    assert response.status_code == 200
-    data = response.json()
-    assert "message" in data
-    assert "tasks_created" in data
-    assert "tasks_updated" in data
-    assert "tasks" in data
-    assert len(data["tasks"]) == 12
-    assert data["tasks_created"] == 12
-    assert data["tasks_updated"] == 0
-
-
-@pytest.mark.asyncio
-async def test_initialize_tasks_idempotent(client: AsyncClient) -> None:
-    """Test that initializing tasks is idempotent."""
-    await client.post("/api/tasks/initialize")
-
-    response = await client.post("/api/tasks/initialize")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["tasks_created"] == 0
-    assert data["tasks_updated"] == 12
-
-
-@pytest.mark.asyncio
 async def test_get_task(client: AsyncClient) -> None:
     """Test getting a single task."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.get("/api/tasks/TASK-101")
     assert response.status_code == 200
@@ -64,7 +47,17 @@ async def test_get_task_not_found(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_claim_task(client: AsyncClient) -> None:
     """Test claiming a task."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.post(
         "/api/tasks/TASK-101/claim",
@@ -91,7 +84,17 @@ async def test_claim_task_not_found(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_update_notes(client: AsyncClient) -> None:
     """Test updating task status notes."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.post(
         "/api/tasks/TASK-101/update-notes",
@@ -105,7 +108,17 @@ async def test_update_notes(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_update_notes_appends(client: AsyncClient) -> None:
     """Test that updating notes appends to existing notes."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     await client.post(
         "/api/tasks/TASK-101/update-notes",
@@ -135,7 +148,17 @@ async def test_update_notes_not_found(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_set_status(client: AsyncClient) -> None:
     """Test setting task status."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.post(
         "/api/tasks/TASK-101/set-status",
@@ -149,7 +172,17 @@ async def test_set_status(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_set_status_to_done(client: AsyncClient) -> None:
     """Test setting task status to done marks completed."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.post(
         "/api/tasks/TASK-101/set-status",
@@ -164,7 +197,17 @@ async def test_set_status_to_done(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_set_status_invalid(client: AsyncClient) -> None:
     """Test setting invalid task status."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.post(
         "/api/tasks/TASK-101/set-status",
@@ -186,7 +229,17 @@ async def test_set_status_not_found(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_get_tasks_by_status(client: AsyncClient) -> None:
     """Test filtering tasks by status."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.get("/api/tasks/by-status/pending")
     assert response.status_code == 200
@@ -198,7 +251,17 @@ async def test_get_tasks_by_status(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_get_tasks_by_agent(client: AsyncClient) -> None:
     """Test getting tasks assigned to a specific agent."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     await client.post(
         "/api/tasks/TASK-101/claim",
@@ -217,7 +280,17 @@ async def test_get_tasks_by_agent(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_claim_task_conflict(client: AsyncClient) -> None:
     """Test atomic claim with conflict response."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.post(
         "/api/tasks/TASK-101/claim",
@@ -240,7 +313,17 @@ async def test_claim_task_conflict(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_heartbeat_endpoint(client: AsyncClient) -> None:
     """Test heartbeat endpoint by owner and non-owner."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     await client.post(
         "/api/tasks/TASK-101/claim",
@@ -265,7 +348,28 @@ async def test_heartbeat_endpoint(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_unclaim_endpoint(client: AsyncClient) -> None:
     """Test unclaim endpoint by owner and non-owner."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-102",
+            "title": "Add Staleness Awareness UI",
+            "priority": "MEDIUM",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "3 hours",
+        },
+    )
 
     await client.post(
         "/api/tasks/TASK-101/claim",
@@ -293,7 +397,17 @@ async def test_unclaim_endpoint(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_blocked_fields(client: AsyncClient) -> None:
     """Test setting blocked_reason and blocked_by."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.post(
         "/api/tasks/TASK-101/set-status",
@@ -313,7 +427,17 @@ async def test_blocked_fields(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_ready_tasks(client: AsyncClient) -> None:
     """Test ready tasks filtering with various dependency states."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
 
     response = await client.post(
         "/api/tasks/TASK-101/set-status",
@@ -339,7 +463,28 @@ async def test_ready_tasks(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_coordinator_data(client: AsyncClient) -> None:
     """Test coordinator data endpoint."""
-    await client.post("/api/tasks/initialize")
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-101",
+            "title": "Complete Narrative Session Summaries",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "4 hours",
+        },
+    )
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TASK-102",
+            "title": "Add Staleness Awareness UI",
+            "priority": "MEDIUM",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "3 hours",
+        },
+    )
 
     await client.post(
         "/api/tasks/TASK-101/claim",
