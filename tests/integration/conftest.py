@@ -20,15 +20,15 @@ def test_server():
     """Start a test server for Playwright tests."""
 
     def override_get_db():
-        test_session = TestSessionLocal()
         try:
-            yield test_session
+            session = TestSessionLocal()
+            yield session
         finally:
-            test_session.close()
+            pass
 
     app.dependency_overrides[get_db] = override_get_db
 
-    config = Config(app=app, host="127.0.0.1", port=9876, log_level="error")
+    config = Config(app=app, host="127.0.0.1", port=8766, log_level="error")
     server = Server(config)
 
     thread = threading.Thread(target=server.run)
@@ -37,7 +37,7 @@ def test_server():
 
     time.sleep(3)
 
-    yield "http://127.0.0.1:9876"
+    yield "http://127.0.0.1:8766"
 
     server.should_exit = True
     time.sleep(1)

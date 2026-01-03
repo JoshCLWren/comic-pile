@@ -9,8 +9,8 @@ from app.database import SessionLocal
 from app.models import Task
 
 
-def create_tasks():
-    """Create tasks from the tasks_data list in the database."""
+def create_tasks() -> None:
+    """Create tasks from user notes."""
     db = SessionLocal()
     try:
         tasks_data = [

@@ -135,7 +135,7 @@ INITIAL_TASKS = [
 
 
 @router.post("/initialize")
-async def initialize_tasks(db: Session = Depends(get_db)) -> dict:
+async def initialize_tasks(db: Session = Depends(get_db)):
     """Initialize database with sample tasks."""
     tasks_created = 0
     tasks_updated = 0

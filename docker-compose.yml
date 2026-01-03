@@ -4,7 +4,7 @@ services:
 # and strong secrets. Never commit production secrets to version control.
   db:
     image: postgres:16-alpine
-    container_name: comic-pile-db
+    container_name: comic-pile-test-001-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: comicpile
@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5434:5432"
+      - "5435:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U comicpile"]
       interval: 10s
@@ -22,7 +22,7 @@ services:
 
   app:
     build: .
-    container_name: comic-pile-app
+    container_name: comic-pile-test-001-app
     restart: unless-stopped
     depends_on:
       db:
@@ -31,7 +31,7 @@ services:
       DATABASE_URL: postgresql+psycopg://comicpile:comicpile_password@db:5432/comicpile
       ENVIRONMENT: development
     ports:
-      - "8001:8000"
+      - "8003:8000"
     volumes:
       - ./app:/app/app
       - ./comic_pile:/app/comic_pile
@@ -41,13 +41,13 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: comic-pile-pgadmin
+    container_name: comic-pile-test-001-pgadmin
     restart: unless-stopped
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@comicpile.local
       PGADMIN_DEFAULT_PASSWORD: pgadmin_password
     ports:
-      - "5050:80"
+      - "5051:80"
     depends_on:
       - db
 
