@@ -721,10 +721,11 @@ def heartbeat(
 
 @router.post("/{task_id}/unclaim", response_model=TaskResponse)
 def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)) -> TaskResponse:
-    """Unclaim a task - resets to pending status and clears assignment.
+    """Unclaim a task - clears assignment, but preserves in_review status.
 
     Only allowed by the current assigned agent (or admin).
     Returns 403 if not assigned to the requesting agent.
+    in_review tasks remain in_review; in_progress tasks are reset to pending.
     """
     task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
     if not task:
@@ -736,7 +737,8 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
             detail=f"Task not assigned to {request.agent_name}. Assigned to {task.assigned_agent}",
         )
 
-    task.status = "pending"
+    if task.status != "in_review":
+        task.status = "pending"
     task.assigned_agent = None
     task.worktree = None
     timestamp = datetime.now(UTC).isoformat()
