@@ -1,4 +1,4 @@
-"""merge heads
+"""merge heads.
 
 Revision ID: 7eb7bf28b8f3
 Revises: 13f7ed263206, add_settings_table
