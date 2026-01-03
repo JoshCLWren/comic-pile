@@ -247,3 +247,93 @@ def dismiss_pending(db: Session = Depends(get_db)) -> str:
         db.commit()
 
     return ""
+
+
+@router.post("/reroll", response_class=HTMLResponse)
+def reroll_dice(db: Session = Depends(get_db)) -> str:
+    """Reroll dice, clearing pending thread."""
+    current_session = get_or_create(db, user_id=1)
+
+    threads = get_roll_pool(db)
+    if not threads:
+        return (
+            '<div class="text-center text-red-500 py-4">No active threads available to roll</div>'
+        )
+
+    current_die = get_current_die(current_session.id, db)
+    pool_size = min(current_die, len(threads))
+    selected_index = random.randint(0, pool_size - 1)
+    selected_thread = threads[selected_index]
+    result_val = selected_index + 1
+
+    event = Event(
+        type="roll",
+        session_id=current_session.id if current_session else None,
+        selected_thread_id=selected_thread.id,
+        die=current_die,
+        result=result_val,
+        selection_method="reroll",
+    )
+    db.add(event)
+
+    if current_session:
+        current_session.pending_thread_id = selected_thread.id
+        current_session.pending_thread_updated_at = datetime.now()
+        db.commit()
+
+    return f"""
+        <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
+            <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
+                <div class="threejs-die-container relative z-10" style="width: 100px; height: 100px; margin: 0 auto;">
+                    <div id="result-die-3d" class="w-full h-full"></div>
+                </div>
+                <div class="text-center px-4">
+                    <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">Rerolled</p>
+                    <h2 class="text-xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
+                </div>
+            </div>
+
+            <div id="rating-form-container" class="glass-card p-4 space-y-4 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">
+                <div class="flex flex-col gap-3">
+                    <div class="flex items-center justify-between gap-6">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">Rate your journey</p>
+                            <div id="rating-value" class="text-teal-400 text-4xl font-black leading-none">4.0</div>
+                        </div>
+                        <div class="flex-1 min-w-0 pt-4">
+                            <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-2" oninput="updateRatingDisplay(this.value)">
+                        </div>
+                    </div>
+                    <div class="px-3 py-2 bg-teal-500/5 rounded-lg border border-teal-500/20">
+                        <p id="rating-preview" class="text-[9px] font-black text-slate-200 text-center uppercase tracking-[0.2em] leading-tight">
+                            Excellent! Die steps down 🎲 Move to front
+                        </p>
+                    </div>
+                </div>
+                <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
+                    Save & Continue
+                </button>
+                <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300">
+                    Reroll Die 🎲
+                </button>
+                <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
+            </div>
+        </div>
+        <script>
+            (function() {{
+                rolledResult = {result_val};
+                threadId = "{selected_thread.id}";
+                isRolling = false;
+                const instruction = document.getElementById('tap-instruction');
+                if (instruction) instruction.textContent = "Tap Die to Roll";
+
+                setTimeout(function() {{
+                    const resultContainer = document.getElementById('result-die-3d');
+                    if (resultContainer && window.Dice3D) {{
+                        const die = Dice3D.create(resultContainer, {current_die}, {{ color: 0x4f46e5 }});
+                        if (die) die.rollTo({result_val});
+                    }}
+                }}, 100);
+            }})();
+        </script>
+    """

@@ -279,6 +279,36 @@
         }
     }
 
+    async function triggerReroll() {
+        const btn = document.getElementById('reroll-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner mx-auto"></span> Rerolling...';
+        }
+
+        try {
+            const res = await fetch('/roll/reroll', {
+                method: 'POST'
+            });
+            console.log('[RollPage] Reroll response status:', res.status);
+            if (res.ok) {
+                const html = await res.text();
+                document.getElementById('result').innerHTML = html;
+            } else {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Reroll Failed. Retry?';
+                }
+            }
+        } catch (e) {
+            console.error('[RollPage] triggerReroll FATAL:', e);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'Network Error! Retry?';
+            }
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         console.log('[RollPage] DOMContentLoaded');
 
