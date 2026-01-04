@@ -14,6 +14,7 @@ from app.schemas.task import (
     CreateTaskRequest,
     HeartbeatRequest,
     SetStatusRequest,
+    SetWorktreeRequest,
     TaskCoordinatorResponse,
     TaskResponse,
     UnclaimRequest,
@@ -805,6 +806,47 @@ def set_status(
     )
 
 
+@router.post("/{task_id}/set-worktree", response_model=TaskResponse)
+def set_worktree(
+    task_id: str, request: SetWorktreeRequest, db: Session = Depends(get_db)
+) -> TaskResponse:
+    """Set task worktree (admin endpoint for in_review tasks with missing worktree)."""
+    task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    task.worktree = request.worktree
+    timestamp = datetime.now(UTC).isoformat()
+    new_note = f"\n[{timestamp}] Worktree set to {request.worktree}"
+    if task.status_notes:
+        task.status_notes += new_note
+    else:
+        task.status_notes = new_note
+
+    db.commit()
+    db.refresh(task)
+    return TaskResponse(
+        id=task.id,
+        task_id=task.task_id,
+        title=task.title,
+        description=task.description,
+        priority=task.priority,
+        status=task.status,
+        dependencies=task.dependencies,
+        assigned_agent=task.assigned_agent,
+        worktree=task.worktree,
+        status_notes=task.status_notes,
+        estimated_effort=task.estimated_effort,
+        completed=task.completed,
+        blocked_reason=task.blocked_reason,
+        blocked_by=task.blocked_by,
+        last_heartbeat=task.last_heartbeat,
+        instructions=task.instructions,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )
+
+
 @router.get("/by-status/{status}", response_model=list[TaskResponse])
 def get_tasks_by_status(status: str, db: Session = Depends(get_db)) -> list[TaskResponse]:
     """Get all tasks with a specific status."""
@@ -1031,7 +1073,8 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
     if task.status != "in_review":
         task.status = "pending"
     task.assigned_agent = None
-    task.worktree = None
+    if task.status != "in_review":
+        task.worktree = None
     timestamp = datetime.now(UTC).isoformat()
     new_note = f"\n[{timestamp}] Unclaimed by {request.agent_name}"
     if task.status_notes:

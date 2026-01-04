@@ -81,3 +81,9 @@ class CreateTaskRequest(BaseModel):
     priority: str = Field(default="MEDIUM")
     dependencies: str | None = None
     estimated_effort: str | None = None
+
+
+class SetWorktreeRequest(BaseModel):
+    """Schema for setting task worktree (admin only)."""
+
+    worktree: str = Field(..., min_length=1)
