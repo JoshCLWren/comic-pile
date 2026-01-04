@@ -1,6 +1,7 @@
 """Tests for roll API endpoints."""
 
 import re
+
 import pytest
 from sqlalchemy import select
 
@@ -122,8 +123,7 @@ async def test_reroll_no_pool(client, db):
 
 @pytest.mark.asyncio
 async def test_roll_result_consistency_regression(client, sample_data):
-    """
-    Regression test for bug where roll screen shows different number than rate screen.
+    """Regression test for bug where roll screen shows different number than rate screen.
 
     Bug: Client-side JavaScript generated random roll value for animation,
     which could differ from server-generated value in Event.result.
@@ -153,8 +153,7 @@ async def test_roll_result_consistency_regression(client, sample_data):
 
 @pytest.mark.asyncio
 async def test_reroll_result_consistency_regression(client, sample_data):
-    """
-    Regression test for reroll bug similar to initial roll.
+    """Regression test for reroll bug similar to initial roll.
 
     Ensures reroll endpoint also maintains consistency between HTML and API.
     """

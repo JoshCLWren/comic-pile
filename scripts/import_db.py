@@ -15,7 +15,7 @@ def import_database():
     db = SessionLocal()
 
     try:
-        with open("db_export.json", "r") as f:
+        with open("db_export.json") as f:
             data = json.load(f)
 
         print("=== Wiping database ===")
