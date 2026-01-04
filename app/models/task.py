@@ -33,6 +33,11 @@ class Task(Base):
     blocked_by: Mapped[str | None] = mapped_column(String(50), nullable=True)
     last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    task_type: Mapped[str] = mapped_column(String(50), nullable=False, default="feature")
+    session_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    session_start_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

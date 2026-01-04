@@ -1,5 +1,6 @@
 """Pydantic schemas for request/response validation."""
 
+from app.api.retros import GenerateRetroRequest, RetroResponse, RetroTaskItem
 from app.schemas.settings import SettingsResponse, UpdateSettingsRequest
 from app.schemas.task import (
     ClaimTaskRequest,
@@ -33,4 +34,7 @@ __all__ = [
     "UpdateNotesRequest",
     "SettingsResponse",
     "UpdateSettingsRequest",
+    "GenerateRetroRequest",
+    "RetroResponse",
+    "RetroTaskItem",
 ]

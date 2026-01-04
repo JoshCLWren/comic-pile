@@ -196,6 +196,9 @@ async def initialize_tasks(db: Session = Depends(get_db)):
                 blocked_by=task.blocked_by,
                 last_heartbeat=task.last_heartbeat,
                 instructions=task.instructions,
+                task_type=task.task_type,
+                session_id=task.session_id,
+                session_start_time=task.session_start_time,
                 created_at=task.created_at,
                 updated_at=task.updated_at,
             )
@@ -338,6 +341,9 @@ def list_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -346,7 +352,11 @@ def list_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
 
 
 @router.post("/", response_model=TaskResponse, status_code=201)
-def create_task(request: CreateTaskRequest, db: Session = Depends(get_db)) -> TaskResponse:
+def create_task(
+    request: CreateTaskRequest,
+    db: Session = Depends(get_db),
+    session_id: str | None = None,
+) -> TaskResponse:
     """Create a new task."""
     existing_task = db.execute(
         select(Task).where(Task.task_id == request.task_id)
@@ -362,8 +372,11 @@ def create_task(request: CreateTaskRequest, db: Session = Depends(get_db)) -> Ta
         priority=request.priority,
         dependencies=request.dependencies,
         estimated_effort=request.estimated_effort,
+        task_type=request.task_type,
         status="pending",
         completed=False,
+        session_id=session_id,
+        session_start_time=datetime.now(UTC) if session_id else None,
     )
     db.add(new_task)
     db.commit()
@@ -385,6 +398,9 @@ def create_task(request: CreateTaskRequest, db: Session = Depends(get_db)) -> Ta
         blocked_by=new_task.blocked_by,
         last_heartbeat=new_task.last_heartbeat,
         instructions=new_task.instructions,
+        task_type=new_task.task_type,
+        session_id=new_task.session_id,
+        session_start_time=new_task.session_start_time,
         created_at=new_task.created_at,
         updated_at=new_task.updated_at,
     )
@@ -411,6 +427,7 @@ def create_tasks_bulk(
             priority=request.priority,
             dependencies=request.dependencies,
             estimated_effort=request.estimated_effort,
+            task_type=request.task_type,
             status="pending",
             completed=False,
         )
@@ -440,6 +457,9 @@ def create_tasks_bulk(
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -499,6 +519,9 @@ def get_ready_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -537,6 +560,9 @@ def get_coordinator_data(db: Session = Depends(get_db)) -> TaskCoordinatorRespon
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -582,6 +608,9 @@ def get_stale_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -612,6 +641,9 @@ def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskResponse:
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
+        task_type=task.task_type,
+        session_id=task.session_id,
+        session_start_time=task.session_start_time,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -664,6 +696,9 @@ def patch_task(
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
+        task_type=task.task_type,
+        session_id=task.session_id,
+        session_start_time=task.session_start_time,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -703,6 +738,7 @@ def claim_task(
     """Claim a task - sets status to in_progress and assigns agent.
 
     Returns 409 Conflict if task is already claimed by another agent.
+    Returns 403 Forbidden if worker_type cannot claim this task_type.
     """
     task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
     if not task:
@@ -720,6 +756,21 @@ def claim_task(
                 "claimed_at": task.updated_at.isoformat(),
             },
         )
+
+    allowed_types = {
+        "test-fixer": ["test_failure"],
+        "conflict-resolver": ["conflict"],
+        "browser-tester": ["browser_test"],
+        "docs-writer": ["documentation"],
+        "general-worker": ["feature", "bug_fix"],
+    }
+
+    if request.worker_type and request.worker_type in allowed_types:
+        if task.task_type not in allowed_types[request.worker_type]:
+            raise HTTPException(
+                status_code=403,
+                detail=f"{request.worker_type} cannot claim {task.task_type} tasks. Allowed types: {allowed_types[request.worker_type]}",
+            )
 
     import os
 
@@ -761,6 +812,9 @@ def claim_task(
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
+        task_type=task.task_type,
+        session_id=task.session_id,
+        session_start_time=task.session_start_time,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -801,6 +855,9 @@ def update_notes(
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
+        task_type=task.task_type,
+        session_id=task.session_id,
+        session_start_time=task.session_start_time,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -824,6 +881,27 @@ def set_status(
     task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    if request.status == "in_review":
+        if not task.worktree:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot set status to in_review without a valid worktree",
+            )
+        import os
+
+        result = subprocess.run(
+            ["git", "worktree", "list"],
+            capture_output=True,
+            text=True,
+        )
+        if task.worktree not in result.stdout:
+            worktree_path = os.path.join(os.path.dirname(os.getcwd()), task.worktree)
+            if not os.path.exists(worktree_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Worktree {task.worktree} does not exist or is not a valid git worktree",
+                )
 
     task.status = request.status
     if request.status == "done":
@@ -854,6 +932,7 @@ def set_status(
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
+        task_type=task.task_type,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -895,6 +974,7 @@ def set_worktree(
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
+        task_type=task.task_type,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -924,6 +1004,9 @@ def get_tasks_by_status(status: str, db: Session = Depends(get_db)) -> list[Task
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -957,6 +1040,9 @@ def get_tasks_by_agent(agent_name: str, db: Session = Depends(get_db)) -> list[T
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -996,6 +1082,9 @@ def get_tasks_by_priority(priority: str, db: Session = Depends(get_db)) -> list[
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -1025,6 +1114,9 @@ def get_completed_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -1054,6 +1146,9 @@ def get_not_completed_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]
             blocked_by=task.blocked_by,
             last_heartbeat=task.last_heartbeat,
             instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
             created_at=task.created_at,
             updated_at=task.updated_at,
         )
@@ -1100,6 +1195,7 @@ def heartbeat(
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
+        task_type=task.task_type,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -1125,8 +1221,8 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
 
     if task.status != "in_review":
         task.status = "pending"
-    task.worktree = None
-    task.assigned_agent = None
+        task.worktree = None
+        task.assigned_agent = None
     timestamp = datetime.now(UTC).isoformat()
     new_note = f"\n[{timestamp}] Unclaimed by {request.agent_name}"
     if task.status_notes:
@@ -1152,6 +1248,7 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
         blocked_by=task.blocked_by,
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
+        task_type=task.task_type,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -1238,3 +1335,31 @@ async def merge_task_to_main(task_id: str, db: Session = Depends(get_db)) -> dic
         "success": True,
         "message": "Merged to main successfully",
     }
+
+
+@router.delete("/{task_id}", status_code=204)
+def delete_task(task_id: str, admin_override: bool = False, db: Session = Depends(get_db)) -> None:
+    """Delete a task by ID.
+
+    Requires that the task exists and has no dependent tasks.
+    Admin override allows deletion even with dependencies.
+    """
+    task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    if not admin_override:
+        all_tasks = db.execute(select(Task)).scalars().all()
+        dependent_tasks = []
+        for t in all_tasks:
+            if t.dependencies and task_id in [d.strip() for d in t.dependencies.split(",")]:
+                dependent_tasks.append(t.task_id)
+
+        if dependent_tasks:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete task with dependencies. Dependent tasks: {', '.join(dependent_tasks)}",
+            )
+
+    db.delete(task)
+    db.commit()

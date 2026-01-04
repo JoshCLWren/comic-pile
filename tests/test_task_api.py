@@ -309,15 +309,14 @@ async def test_coordinator_data(client: AsyncClient, sample_tasks: list[Task]) -
 
 @pytest.mark.asyncio
 async def test_unclaim_in_review_preserves_status(client: AsyncClient) -> None:
-    """Test that in_review tasks stay in_review when unclaimed."""
+    """Test that unclaiming in_review tasks preserves their status and worktree."""
     # Create a task
     create_response = await client.post(
         "/api/tasks/",
         json={
             "task_id": "TEST-1",
-            "title": "Test Task",
-            "priority": "MEDIUM",
-            "description": "Test description",
+            "title": "Test Task 1",
+            "priority": "HIGH",
             "instructions": "Test instructions",
             "estimated_effort": "1 hour",
         },
@@ -326,38 +325,49 @@ async def test_unclaim_in_review_preserves_status(client: AsyncClient) -> None:
     task = create_response.json()
     assert task["status"] == "pending"
 
-    # Claim the task
-    claim_response = await client.post(
-        "/api/tasks/TEST-1/claim",
-        json={"agent_name": "agent-1", "worktree": "test-worktree"},
-    )
-    assert claim_response.status_code == 200
-    task = claim_response.json()
-    assert task["status"] == "in_progress"
-    assert task["assigned_agent"] == "agent-1"
+    # Claim task with SKIP_WORKTREE_CHECK to bypass worktree validation in tests
+    import os
 
-    # Set to in_review
-    status_response = await client.post(
-        "/api/tasks/TEST-1/set-status",
-        json={"status": "in_review", "agent_name": "agent-1"},
-    )
-    assert status_response.status_code == 200
-    task = status_response.json()
-    assert task["status"] == "in_review"
+    original_skip = os.environ.get("SKIP_WORKTREE_CHECK")
+    os.environ["SKIP_WORKTREE_CHECK"] = "true"
 
-    # Unclaim the task
-    unclaim_response = await client.post(
-        "/api/tasks/TEST-1/unclaim",
-        json={"agent_name": "agent-1"},
-    )
-    assert unclaim_response.status_code == 200
-    task = unclaim_response.json()
+    try:
+        claim_response = await client.post(
+            "/api/tasks/TEST-1/claim",
+            json={"agent_name": "agent-1", "worktree": "test-worktree"},
+        )
+        assert claim_response.status_code == 200
+        task = claim_response.json()
+        assert task["status"] == "in_progress"
+        assert task["assigned_agent"] == "agent-1"
 
-    # Verify status is still in_review
-    assert task["status"] == "in_review"
-    assert task["assigned_agent"] is None
-    assert task["worktree"] is None
-    assert "Unclaimed by agent-1" in task["status_notes"]
+        # Set to in_review
+        status_response = await client.post(
+            "/api/tasks/TEST-1/set-status",
+            json={"status": "in_review", "agent_name": "agent-1"},
+        )
+        assert status_response.status_code == 200
+        task = status_response.json()
+        assert task["status"] == "in_review"
+
+        # Unclaim task
+        unclaim_response = await client.post(
+            "/api/tasks/TEST-1/unclaim",
+            json={"agent_name": "agent-1"},
+        )
+        assert unclaim_response.status_code == 200
+        task = unclaim_response.json()
+
+        # Verify status is still in_review and worktree is preserved
+        assert task["status"] == "in_review"
+        assert task["assigned_agent"] is None
+        assert task["worktree"] == "test-worktree"
+        assert "Unclaimed by agent-1" in task["status_notes"]
+    finally:
+        if original_skip is None:
+            os.environ.pop("SKIP_WORKTREE_CHECK", None)
+        else:
+            os.environ["SKIP_WORKTREE_CHECK"] = original_skip
 
 
 @pytest.mark.asyncio
@@ -566,4 +576,75 @@ async def test_delete_claimed_task(client: AsyncClient, sample_tasks: list[Task]
 
     # Verify task no longer exists
     verify_response = await client.get("/api/tasks/TASK-101")
+    assert verify_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_task_with_dependencies(client: AsyncClient) -> None:
+    """Test that deleting a task with dependencies is rejected."""
+    # Create two tasks, one dependent on the other
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TEST-DEP-1",
+            "title": "Task 1",
+            "priority": "HIGH",
+            "instructions": "Test instructions",
+            "estimated_effort": "1 hour",
+        },
+    )
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TEST-DEP-2",
+            "title": "Task 2 depends on 1",
+            "priority": "HIGH",
+            "dependencies": "TEST-DEP-1",
+            "instructions": "Test instructions",
+            "estimated_effort": "1 hour",
+        },
+    )
+
+    # Try to delete task that has dependencies
+    delete_response = await client.delete("/api/tasks/TEST-DEP-1")
+    assert delete_response.status_code == 400
+    data = delete_response.json()
+    assert "Cannot delete task with dependencies" in data["detail"]
+    assert "TEST-DEP-2" in data["detail"]
+
+
+@pytest.mark.asyncio
+async def test_delete_task_with_dependencies_admin_override(
+    client: AsyncClient,
+) -> None:
+    """Test that admin override allows deletion of tasks with dependencies."""
+    # Create two tasks, one dependent on the other
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TEST-DEP-OVERRIDE-1",
+            "title": "Task 1",
+            "priority": "HIGH",
+            "instructions": "Test instructions",
+            "estimated_effort": "1 hour",
+        },
+    )
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TEST-DEP-OVERRIDE-2",
+            "title": "Task 2 depends on 1",
+            "priority": "HIGH",
+            "dependencies": "TEST-DEP-OVERRIDE-1",
+            "instructions": "Test instructions",
+            "estimated_effort": "1 hour",
+        },
+    )
+
+    # Delete task with admin override
+    delete_response = await client.delete("/api/tasks/TEST-DEP-OVERRIDE-1?admin_override=true")
+    assert delete_response.status_code == 204
+
+    # Verify task no longer exists
+    verify_response = await client.get("/api/tasks/TEST-DEP-OVERRIDE-1")
     assert verify_response.status_code == 404
