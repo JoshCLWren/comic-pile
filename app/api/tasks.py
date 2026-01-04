@@ -13,6 +13,7 @@ from app.schemas.task import (
     ClaimTaskRequest,
     CreateTaskRequest,
     HeartbeatRequest,
+    PatchTaskRequest,
     SetStatusRequest,
     SetWorktreeRequest,
     TaskCoordinatorResponse,
@@ -616,6 +617,58 @@ def get_task(task_id: str, db: Session = Depends(get_db)) -> TaskResponse:
     )
 
 
+@router.patch("/{task_id}", response_model=TaskResponse)
+def patch_task(
+    task_id: str, request: PatchTaskRequest, db: Session = Depends(get_db)
+) -> TaskResponse:
+    """Partially update a task by ID."""
+    task = db.execute(select(Task).where(Task.task_id == task_id)).scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+    if request.title is not None:
+        task.title = request.title
+    if request.description is not None:
+        task.description = request.description
+    if request.priority is not None:
+        valid_priorities = ["HIGH", "MEDIUM", "LOW"]
+        if request.priority not in valid_priorities:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid priority. Must be one of: {', '.join(valid_priorities)}",
+            )
+        task.priority = request.priority
+    if request.instructions is not None:
+        task.instructions = request.instructions
+    if request.dependencies is not None:
+        task.dependencies = request.dependencies
+    if request.estimated_effort is not None:
+        task.estimated_effort = request.estimated_effort
+
+    db.commit()
+    db.refresh(task)
+    return TaskResponse(
+        id=task.id,
+        task_id=task.task_id,
+        title=task.title,
+        description=task.description,
+        priority=task.priority,
+        status=task.status,
+        dependencies=task.dependencies,
+        assigned_agent=task.assigned_agent,
+        worktree=task.worktree,
+        status_notes=task.status_notes,
+        estimated_effort=task.estimated_effort,
+        completed=task.completed,
+        blocked_reason=task.blocked_reason,
+        blocked_by=task.blocked_by,
+        last_heartbeat=task.last_heartbeat,
+        instructions=task.instructions,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+    )
+
+
 @router.get("/{task_id}/history", response_model=list[dict])
 def get_task_history(task_id: str, db: Session = Depends(get_db)) -> list[dict]:
     """Get audit trail of task status changes."""
@@ -1072,9 +1125,8 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
 
     if task.status != "in_review":
         task.status = "pending"
+    task.worktree = None
     task.assigned_agent = None
-    if task.status != "in_review":
-        task.worktree = None
     timestamp = datetime.now(UTC).isoformat()
     new_note = f"\n[{timestamp}] Unclaimed by {request.agent_name}"
     if task.status_notes:

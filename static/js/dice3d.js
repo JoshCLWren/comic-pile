@@ -44,7 +44,7 @@
       ctx.font = 'bold ' + (tileSize * 0.4) + 'px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      
+
       var text = i.toString();
       ctx.fillText(text, x + tileSize / 2, y + tileSize / 2);
     }
@@ -92,11 +92,11 @@
   function createD4Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
     var verts = [], uvs = [], inds = [];
-    
+
     var a = 1.0;
     var h = a * Math.sqrt(2/3);
     var r = a / Math.sqrt(3);
-    
+
     var v = [
       [0, h, 0],
       [-a/2, -h/3, r],
@@ -118,7 +118,7 @@
       var cy = (uv.v0 + uv.v1) / 2;
       var rx = (uv.u1 - uv.u0) * 0.4;
       var ry = (uv.v1 - uv.v0) * 0.4;
-      
+
       addTriangle(verts, uvs, inds,
         v[f[0]], v[f[1]], v[f[2]],
         [cx, cy + ry],
@@ -162,17 +162,17 @@
       var f = faces[i];
       var uv = getUVForNumber(f[4], cols, rows);
       var idx = verts.length / 3;
-      
+
       verts.push(corners[f[0]][0], corners[f[0]][1], corners[f[0]][2]);
       verts.push(corners[f[1]][0], corners[f[1]][1], corners[f[1]][2]);
       verts.push(corners[f[2]][0], corners[f[2]][1], corners[f[2]][2]);
       verts.push(corners[f[3]][0], corners[f[3]][1], corners[f[3]][2]);
-      
+
       uvs.push(uv.u0, uv.v0);
       uvs.push(uv.u1, uv.v0);
       uvs.push(uv.u1, uv.v1);
       uvs.push(uv.u0, uv.v1);
-      
+
       inds.push(idx, idx+1, idx+2, idx, idx+2, idx+3);
     }
 
@@ -213,7 +213,7 @@
       var cy = (uv.v0 + uv.v1) / 2;
       var rx = (uv.u1 - uv.u0) * 0.4;
       var ry = (uv.v1 - uv.v0) * 0.4;
-      
+
       addTriangle(verts, uvs, inds,
         v[f[0]], v[f[1]], v[f[2]],
         [cx, cy + ry],
@@ -237,7 +237,7 @@
   function createD10Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
     var verts = [], uvs = [], inds = [];
-    
+
     var n = 5;
     var h = 0.6;
     var r = 1.0;
@@ -245,10 +245,10 @@
 
     var top = [0, h * 1.5, 0];
     var bottom = [0, -h * 1.5, 0];
-    
+
     var topRing = [];
     var bottomRing = [];
-    
+
     for (var i = 0; i < n; i++) {
       var angle = (i * 2 * Math.PI) / n;
       topRing.push([Math.cos(angle) * r, h * 0.5, Math.sin(angle) * r]);
@@ -257,47 +257,47 @@
 
     for (var i = 0; i < n; i++) {
       var next = (i + 1) % n;
-      
+
       var uv = getUVForNumber(i * 2 + 1, cols, rows);
       var cx = (uv.u0 + uv.u1) / 2;
       var cy = (uv.v0 + uv.v1) / 2;
       var rx = (uv.u1 - uv.u0) * 0.35;
       var ry = (uv.v1 - uv.v0) * 0.35;
-      
+
       var idx = verts.length / 3;
       verts.push(top[0], top[1], top[2]);
       verts.push(topRing[next][0], topRing[next][1], topRing[next][2]);
       verts.push(topRing[i][0], topRing[i][1], topRing[i][2]);
       verts.push(bottomRing[i][0], bottomRing[i][1], bottomRing[i][2]);
-      
+
       uvs.push(cx, cy + ry * 1.2);
       uvs.push(cx + rx, cy + ry * 0.3);
       uvs.push(cx - rx, cy + ry * 0.3);
       uvs.push(cx, cy - ry * 1.2);
-      
+
       inds.push(idx, idx+1, idx+2, idx+1, idx+3, idx+2);
     }
 
     for (var i = 0; i < n; i++) {
       var next = (i + 1) % n;
-      
+
       var uv = getUVForNumber(i * 2 + 2, cols, rows);
       var cx = (uv.u0 + uv.u1) / 2;
       var cy = (uv.v0 + uv.v1) / 2;
       var rx = (uv.u1 - uv.u0) * 0.35;
       var ry = (uv.v1 - uv.v0) * 0.35;
-      
+
       var idx = verts.length / 3;
       verts.push(bottom[0], bottom[1], bottom[2]);
       verts.push(bottomRing[i][0], bottomRing[i][1], bottomRing[i][2]);
       verts.push(bottomRing[next][0], bottomRing[next][1], bottomRing[next][2]);
       verts.push(topRing[next][0], topRing[next][1], topRing[next][2]);
-      
+
       uvs.push(cx, cy - ry * 1.2);
       uvs.push(cx - rx, cy - ry * 0.3);
       uvs.push(cx + rx, cy - ry * 0.3);
       uvs.push(cx, cy + ry * 1.2);
-      
+
       inds.push(idx, idx+1, idx+2, idx+1, idx+3, idx+2);
     }
 
@@ -316,7 +316,7 @@
   function createD12Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
     var verts = [], uvs = [], inds = [];
-    
+
     var phi = (1 + Math.sqrt(5)) / 2;
     var a = 1 / Math.sqrt(3);
     var b = a / phi;
@@ -356,13 +356,13 @@
       center[0] /= 5; center[1] /= 5; center[2] /= 5;
 
       var baseIdx = verts.length / 3;
-      
+
       for (var j = 0; j < 5; j++) {
         verts.push(v[f[j]][0], v[f[j]][1], v[f[j]][2]);
         var angle = (j * 2 * Math.PI / 5) - Math.PI / 2;
         uvs.push(cx + Math.cos(angle) * rx, cy + Math.sin(angle) * ry);
       }
-      
+
       verts.push(center[0], center[1], center[2]);
       uvs.push(cx, cy);
       var centerIdx = baseIdx + 5;
@@ -388,7 +388,7 @@
   function createD20Geometry(atlasInfo) {
     var cols = atlasInfo.cols, rows = atlasInfo.rows;
     var verts = [], uvs = [], inds = [];
-    
+
     var t = (1 + Math.sqrt(5)) / 2;
     var s = 1.0;
 
@@ -415,7 +415,7 @@
       var cy = (uv.v0 + uv.v1) / 2;
       var rx = (uv.u1 - uv.u0) * 0.4;
       var ry = (uv.v1 - uv.v0) * 0.4;
-      
+
       addTriangle(verts, uvs, inds,
         v[f[0]], v[f[1]], v[f[2]],
         [cx, cy + ry],

@@ -87,3 +87,14 @@ class SetWorktreeRequest(BaseModel):
     """Schema for setting task worktree (admin only)."""
 
     worktree: str = Field(..., min_length=1)
+
+
+class PatchTaskRequest(BaseModel):
+    """Schema for partially updating a task."""
+
+    title: str | None = Field(None, min_length=1)
+    description: str | None = None
+    priority: str | None = Field(None, pattern="^(HIGH|MEDIUM|LOW)$")
+    instructions: str | None = None
+    dependencies: str | None = None
+    estimated_effort: str | None = None
