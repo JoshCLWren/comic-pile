@@ -161,8 +161,6 @@
         let rollCount = 0;
         const maxRolls = 10;
         const rollInterval = setInterval(() => {
-            const visualValue = Math.floor(Math.random() * initialDenom) + 1;
-            if (mainDie) mainDie.setValue(visualValue);
             rollCount++;
 
             if (rollCount >= maxRolls) {
