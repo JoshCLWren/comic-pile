@@ -292,3 +292,95 @@ async def test_rate_no_active_thread(client, db):
     response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
     assert "No active thread" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_rate_updates_manual_die(client, db):
+    """Rating updates session manual_die to die_after value."""
+    from app.models import User
+
+    user = User(username="test_user")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    session = SessionModel(start_die=10, manual_die=20, user_id=user.id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=20,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    db.add(event)
+    db.commit()
+
+    response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
+    assert response.status_code == 200
+
+    db.refresh(session)
+    assert session.manual_die == 8
+
+
+@pytest.mark.asyncio
+async def test_rate_low_rating_updates_manual_die(client, db):
+    """Low rating steps die up and updates manual_die."""
+    from app.models import User
+
+    user = User(username="test_user")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    session = SessionModel(start_die=6, manual_die=6, user_id=user.id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=6,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    db.add(event)
+    db.commit()
+
+    response = await client.post("/rate/", json={"rating": 3.0, "issues_read": 1})
+    assert response.status_code == 200
+
+    db.refresh(session)
+    assert session.manual_die == 8
