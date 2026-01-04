@@ -160,20 +160,6 @@ def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
         last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
     )
 
-    return SessionResponse(
-        id=active_session.id,
-        started_at=active_session.started_at,
-        ended_at=active_session.ended_at,
-        start_die=active_session.start_die,
-        user_id=active_session.user_id,
-        ladder_path=build_ladder_path(active_session, db),
-        active_thread=get_active_thread(active_session, db),
-        current_die=get_current_die(active_session.id, db),
-        last_rolled_result=get_active_thread(active_session, db).get("last_rolled_result")
-        if get_active_thread(active_session, db)
-        else None,
-    )
-
 
 @router.get("/")
 def list_sessions(
