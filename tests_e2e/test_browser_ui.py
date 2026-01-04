@@ -1,7 +1,9 @@
 """Browser UI integration tests using Playwright."""
 
+import pytest
 
 
+@pytest.mark.integration
 def test_homepage_renders_dice_ladder(page, test_server_url):
     """Navigate to /, verify expected dice selector exists."""
     page.goto(f"{test_server_url}/roll")
@@ -11,6 +13,7 @@ def test_homepage_renders_dice_ladder(page, test_server_url):
     assert header_die is not None
 
 
+@pytest.mark.integration
 def test_htmx_roll_dice_partial_update(page, test_server_url):
     """Navigate to /roll, click roll button, wait for result update."""
     page.goto(f"{test_server_url}/roll")

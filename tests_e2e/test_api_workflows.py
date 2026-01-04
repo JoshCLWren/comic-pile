@@ -10,6 +10,7 @@ from app.models import Session as SessionModel
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_roll_dice_updates_session(api_client: AsyncClient, db: Session):
     """Post to /roll, verify session updated in database."""
     thread = Thread(
@@ -29,6 +30,7 @@ async def test_roll_dice_updates_session(api_client: AsyncClient, db: Session):
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_rate_comic_updates_rating(api_client: AsyncClient, db: Session):
     """Post to /rate, verify thread rating updated."""
     thread = Thread(
