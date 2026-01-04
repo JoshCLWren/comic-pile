@@ -24,6 +24,9 @@ class TaskResponse(BaseModel):
     blocked_by: str | None
     last_heartbeat: datetime | None
     instructions: str | None
+    task_type: str
+    session_id: str | None
+    session_start_time: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -33,6 +36,7 @@ class ClaimTaskRequest(BaseModel):
 
     agent_name: str = Field(..., min_length=1)
     worktree: str = Field(..., min_length=1)
+    worker_type: str | None = None
 
 
 class UpdateNotesRequest(BaseModel):
@@ -81,6 +85,8 @@ class CreateTaskRequest(BaseModel):
     priority: str = Field(default="MEDIUM")
     dependencies: str | None = None
     estimated_effort: str | None = None
+    task_type: str = Field(default="feature")
+    session_id: str | None = None
 
 
 class SetWorktreeRequest(BaseModel):
@@ -98,3 +104,4 @@ class PatchTaskRequest(BaseModel):
     instructions: str | None = None
     dependencies: str | None = None
     estimated_effort: str | None = None
+    task_type: str | None = None
