@@ -51,9 +51,11 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
-      - name: Install Playwright browsers
+      - name: Install Playwright browsers and system dependencies
         shell: bash
-        run: source .venv/bin/activate && playwright install chromium
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
 
       - name: Run Playwright integration tests
         shell: bash
