@@ -21,3 +21,7 @@ runs:
     - name: Sync dependencies
       shell: bash
       run: source .venv/bin/activate && uv sync --all-extras
+
+    - name: Install Node.js dependencies
+      shell: bash
+      run: npm install
