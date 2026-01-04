@@ -266,13 +266,24 @@ def create_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle validation errors with detailed logging."""
+        errors = []
+        for error in exc.errors():
+            field_path = ".".join(str(loc) for loc in error["loc"])
+            errors.append(
+                {
+                    "field": field_path,
+                    "message": error["msg"],
+                    "type": error["type"],
+                }
+            )
+
         error_data = {
             "timestamp": datetime.now(UTC).isoformat(),
             "method": request.method,
             "path": request.url.path,
             "query_params": str(request.url.query) if request.url.query else None,
             "status_code": 422,
-            "validation_errors": exc.errors(),
+            "validation_errors": errors,
             "body": exc.body,
             "client_host": request.client.host if request.client else None,
             "level": "WARNING",
@@ -286,12 +297,16 @@ def create_app() -> FastAPI:
             error_data["session_id"] = request.state.session_id
 
         logger.warning(
-            f"Validation Error: {exc.errors()}",
+            f"Validation Error: {errors}",
             extra=error_data,
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"detail": exc.errors(), "body": exc.body},
+            content={
+                "detail": "Validation failed",
+                "errors": errors,
+                "body": exc.body,
+            },
         )
 
     app.include_router(thread.router, prefix="/threads", tags=["threads"])

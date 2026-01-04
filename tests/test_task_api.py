@@ -402,3 +402,168 @@ async def test_unclaim_in_progress_resets_to_pending(client: AsyncClient) -> Non
     assert task["assigned_agent"] is None
     assert task["worktree"] is None
     assert "Unclaimed by agent-1" in task["status_notes"]
+
+
+@pytest.mark.asyncio
+async def test_patch_task_title(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test PATCH endpoint to update task title."""
+    response = await client.patch(
+        "/api/tasks/TASK-101",
+        json={"title": "Updated Task Title"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Updated Task Title"
+    assert data["task_id"] == "TASK-101"
+
+
+@pytest.mark.asyncio
+async def test_patch_task_priority(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test PATCH endpoint to update task priority."""
+    response = await client.patch(
+        "/api/tasks/TASK-101",
+        json={"priority": "LOW"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["priority"] == "LOW"
+    assert data["task_id"] == "TASK-101"
+
+
+@pytest.mark.asyncio
+async def test_patch_task_invalid_priority(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test PATCH endpoint with invalid priority returns 422."""
+    response = await client.patch(
+        "/api/tasks/TASK-101",
+        json={"priority": "INVALID"},
+    )
+    assert response.status_code == 422
+    data = response.json()
+    assert "errors" in data
+    assert any("priority" in error["field"] for error in data["errors"])
+
+
+@pytest.mark.asyncio
+async def test_patch_task_multiple_fields(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test PATCH endpoint updating multiple fields at once."""
+    response = await client.patch(
+        "/api/tasks/TASK-101",
+        json={
+            "title": "Multi-field Update",
+            "description": "Updated description",
+            "priority": "MEDIUM",
+            "estimated_effort": "5 hours",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Multi-field Update"
+    assert data["description"] == "Updated description"
+    assert data["priority"] == "MEDIUM"
+    assert data["estimated_effort"] == "5 hours"
+
+
+@pytest.mark.asyncio
+async def test_patch_task_not_found(client: AsyncClient) -> None:
+    """Test PATCH endpoint for non-existent task returns 404."""
+    response = await client.patch(
+        "/api/tasks/TASK-999",
+        json={"title": "Non-existent"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_patch_task_empty_body(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test PATCH endpoint with empty body returns task unchanged."""
+    response = await client.patch(
+        "/api/tasks/TASK-101",
+        json={},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["task_id"] == "TASK-101"
+
+
+@pytest.mark.asyncio
+async def test_validation_error_detailed_response(client: AsyncClient) -> None:
+    """Test that 422 validation errors return detailed field-specific errors."""
+    response = await client.post(
+        "/api/tasks/TASK-999/claim",
+        json={"agent_name": "", "worktree": "test"},
+    )
+    assert response.status_code == 422
+    data = response.json()
+    assert "detail" in data
+    assert "Validation failed" in data["detail"]
+    assert "errors" in data
+    assert any("agent_name" in error["field"] for error in data["errors"])
+
+
+@pytest.mark.asyncio
+async def test_patch_task_with_dependencies(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test PATCH endpoint updating dependencies field."""
+    response = await client.patch(
+        "/api/tasks/TASK-101",
+        json={"dependencies": "TASK-102,TASK-103"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["dependencies"] == "TASK-102,TASK-103"
+
+
+@pytest.mark.asyncio
+async def test_delete_task(client: AsyncClient) -> None:
+    """Test deleting a task."""
+    # Create a task
+    create_response = await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TEST-DELETE-1",
+            "title": "Task to Delete",
+            "priority": "MEDIUM",
+            "description": "This task will be deleted",
+            "instructions": "Test instructions",
+            "estimated_effort": "1 hour",
+        },
+    )
+    assert create_response.status_code == 201
+
+    # Verify task exists
+    get_response = await client.get("/api/tasks/TEST-DELETE-1")
+    assert get_response.status_code == 200
+
+    # Delete task
+    delete_response = await client.delete("/api/tasks/TEST-DELETE-1")
+    assert delete_response.status_code == 204
+
+    # Verify task no longer exists
+    verify_response = await client.get("/api/tasks/TEST-DELETE-1")
+    assert verify_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_task_not_found(client: AsyncClient) -> None:
+    """Test deleting a non-existent task."""
+    response = await client.delete("/api/tasks/TASK-NONEXISTENT")
+    assert response.status_code == 404
+    data = response.json()
+    assert "TASK-NONEXISTENT not found" in data["detail"]
+
+
+@pytest.mark.asyncio
+async def test_delete_claimed_task(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test deleting a claimed task."""
+    # Claim a task
+    await client.post(
+        "/api/tasks/TASK-101/claim",
+        json={"agent_name": "agent-1", "worktree": "comic-pile-task-101"},
+    )
+
+    # Delete claimed task
+    delete_response = await client.delete("/api/tasks/TASK-101")
+    assert delete_response.status_code == 204
+
+    # Verify task no longer exists
+    verify_response = await client.get("/api/tasks/TASK-101")
+    assert verify_response.status_code == 404
