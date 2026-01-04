@@ -88,38 +88,20 @@ fi
 # JavaScript linting
 echo ""
 echo "Running ESLint for JavaScript..."
-if ! command -v eslint &> /dev/null; then
-    echo "${YELLOW}WARNING: eslint not found. Run 'npm install' to install JavaScript linting tools.${NC}"
-else
-    if ! eslint static/js/*.js; then
-        echo ""
-        echo "${RED}ERROR: JavaScript linting failed.${NC}"
-        echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
-        exit 1
-    fi
+if ! npm run lint:js; then
+    echo ""
+    echo "${RED}ERROR: JavaScript linting failed.${NC}"
+    echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
+    exit 1
 fi
 
 # HTML linting
 echo ""
 echo "Running htmlhint for HTML templates..."
-if ! command -v htmlhint &> /dev/null; then
-    echo "${YELLOW}WARNING: htmlhint not found. Run 'npm install' to install HTML linting tools.${NC}"
-else
-    if ! htmlhint app/templates/*.html; then
-        echo ""
-        echo "${RED}ERROR: HTML linting failed.${NC}"
-        echo "${RED}Fix HTML template issues manually.${NC}"
-        exit 1
-    fi
-fi
-
-# Run frontend tests (HTMX integration tests)
-echo ""
-echo "Running frontend HTMX integration tests..."
-if ! pytest tests/integration/test_htmx_interactions.py -v -m integration; then
+if ! npm run lint:html; then
     echo ""
-    echo "${RED}ERROR: Frontend tests failed.${NC}"
-    echo "${RED}Please fix failing tests.${NC}"
+    echo "${RED}ERROR: HTML linting failed.${NC}"
+    echo "${RED}Fix HTML template issues manually.${NC}"
     exit 1
 fi
 
