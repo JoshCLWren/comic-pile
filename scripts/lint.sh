@@ -116,7 +116,7 @@ fi
 # Run frontend tests (HTMX integration tests)
 echo ""
 echo "Running frontend HTMX integration tests..."
-if ! pytest tests/test_htmx_interactions.py -v -m integration; then
+if ! pytest tests/integration/test_htmx_interactions.py -v -m integration; then
     echo ""
     echo "${RED}ERROR: Frontend tests failed.${NC}"
     echo "${RED}Please fix failing tests.${NC}"

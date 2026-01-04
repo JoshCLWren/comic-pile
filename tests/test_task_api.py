@@ -193,6 +193,131 @@ async def test_claim_task_conflict(client: AsyncClient, sample_tasks: list[Task]
 
 
 @pytest.mark.asyncio
+async def test_claim_with_valid_worker_type(client: AsyncClient) -> None:
+    """Test claiming a task with valid worker_type."""
+    import os
+
+    os.environ["SKIP_WORKTREE_CHECK"] = "true"
+    try:
+        await client.post(
+            "/api/tasks/",
+            json={
+                "task_id": "TEST-TYPE-1",
+                "title": "Test Type Task",
+                "priority": "HIGH",
+                "task_type": "test_failure",
+                "estimated_effort": "1 hour",
+            },
+        )
+
+        response = await client.post(
+            "/api/tasks/TEST-TYPE-1/claim",
+            json={
+                "agent_name": "test-fixer",
+                "worktree": "test-worktree",
+                "worker_type": "test-fixer",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "in_progress"
+        assert data["assigned_agent"] == "test-fixer"
+    finally:
+        os.environ.pop("SKIP_WORKTREE_CHECK", None)
+
+
+@pytest.mark.asyncio
+async def test_claim_with_invalid_worker_type(client: AsyncClient) -> None:
+    """Test that wrong worker_type cannot claim incompatible task_type."""
+    import os
+
+    os.environ["SKIP_WORKTREE_CHECK"] = "true"
+    try:
+        await client.post(
+            "/api/tasks/",
+            json={
+                "task_id": "TEST-TYPE-2",
+                "title": "Test Type Task",
+                "priority": "HIGH",
+                "task_type": "feature",
+                "estimated_effort": "1 hour",
+            },
+        )
+
+        response = await client.post(
+            "/api/tasks/TEST-TYPE-2/claim",
+            json={
+                "agent_name": "test-fixer",
+                "worktree": "test-worktree",
+                "worker_type": "test-fixer",
+            },
+        )
+        assert response.status_code == 403
+        data = response.json()
+        assert "test-fixer cannot claim feature tasks" in data["detail"]
+    finally:
+        os.environ.pop("SKIP_WORKTREE_CHECK", None)
+
+
+@pytest.mark.asyncio
+async def test_claim_without_worker_type(client: AsyncClient) -> None:
+    """Test claiming a task without specifying worker_type (no filtering)."""
+    import os
+
+    os.environ["SKIP_WORKTREE_CHECK"] = "true"
+    try:
+        await client.post(
+            "/api/tasks/",
+            json={
+                "task_id": "TEST-TYPE-3",
+                "title": "Test Type Task",
+                "priority": "HIGH",
+                "task_type": "feature",
+                "estimated_effort": "1 hour",
+            },
+        )
+
+        response = await client.post(
+            "/api/tasks/TEST-TYPE-3/claim",
+            json={
+                "agent_name": "test-fixer",
+                "worktree": "test-worktree",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "in_progress"
+        assert data["assigned_agent"] == "test-fixer"
+    finally:
+        os.environ.pop("SKIP_WORKTREE_CHECK", None)
+
+
+@pytest.mark.asyncio
+async def test_patch_task_type(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test PATCH endpoint to update task_type."""
+    response = await client.patch(
+        "/api/tasks/TASK-101",
+        json={"task_type": "bug_fix"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["task_type"] == "bug_fix"
+    assert data["task_id"] == "TASK-101"
+
+
+@pytest.mark.asyncio
+async def test_patch_invalid_task_type(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test PATCH endpoint with invalid task_type returns 400."""
+    response = await client.patch(
+        "/api/tasks/TASK-101",
+        json={"task_type": "invalid_type"},
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert "Invalid task_type" in data["detail"]
+
+
+@pytest.mark.asyncio
 async def test_heartbeat_endpoint(client: AsyncClient, sample_tasks: list[Task]) -> None:
     """Test heartbeat endpoint by owner and non-owner."""
     await client.post(
@@ -648,3 +773,55 @@ async def test_delete_task_with_dependencies_admin_override(
     # Verify task no longer exists
     verify_response = await client.get("/api/tasks/TEST-DEP-OVERRIDE-1")
     assert verify_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_task_with_session_id(client: AsyncClient) -> None:
+    """Test creating a task with session_id."""
+    response = await client.post(
+        "/api/tasks/?session_id=manager-session-123",
+        json={
+            "task_id": "TEST-SESSION-1",
+            "title": "Task with session",
+            "priority": "HIGH",
+            "estimated_effort": "2 hours",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["task_id"] == "TEST-SESSION-1"
+    assert data["session_id"] == "manager-session-123"
+    assert data["session_start_time"] is not None
+    assert data["task_type"] == "feature"
+
+
+@pytest.mark.asyncio
+async def test_create_task_without_session_id(client: AsyncClient) -> None:
+    """Test creating a task without session_id."""
+    response = await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TEST-SESSION-2",
+            "title": "Task without session",
+            "priority": "MEDIUM",
+            "estimated_effort": "1 hour",
+        },
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["task_id"] == "TEST-SESSION-2"
+    assert data["session_id"] is None
+    assert data["session_start_time"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_task_includes_session_fields(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test that task retrieval includes session fields."""
+    response = await client.get("/api/tasks/TASK-101")
+    assert response.status_code == 200
+    data = response.json()
+    assert "session_id" in data
+    assert "session_start_time" in data
+    assert "task_type" in data

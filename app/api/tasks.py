@@ -676,6 +676,21 @@ def patch_task(
         task.dependencies = request.dependencies
     if request.estimated_effort is not None:
         task.estimated_effort = request.estimated_effort
+    if request.task_type is not None:
+        valid_task_types = [
+            "feature",
+            "bug_fix",
+            "test_failure",
+            "conflict",
+            "documentation",
+            "browser_test",
+        ]
+        if request.task_type not in valid_task_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid task_type. Must be one of: {', '.join(valid_task_types)}",
+            )
+        task.task_type = request.task_type
 
     db.commit()
     db.refresh(task)
@@ -890,18 +905,20 @@ def set_status(
             )
         import os
 
-        result = subprocess.run(
-            ["git", "worktree", "list"],
-            capture_output=True,
-            text=True,
-        )
-        if task.worktree not in result.stdout:
-            worktree_path = os.path.join(os.path.dirname(os.getcwd()), task.worktree)
-            if not os.path.exists(worktree_path):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Worktree {task.worktree} does not exist or is not a valid git worktree",
-                )
+        skip_worktree_check = os.getenv("SKIP_WORKTREE_CHECK", "false").lower() == "true"
+        if not skip_worktree_check:
+            result = subprocess.run(
+                ["git", "worktree", "list"],
+                capture_output=True,
+                text=True,
+            )
+            if task.worktree not in result.stdout:
+                worktree_path = os.path.join(os.path.dirname(os.getcwd()), task.worktree)
+                if not os.path.exists(worktree_path):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Worktree {task.worktree} does not exist or is not a valid git worktree",
+                    )
 
     task.status = request.status
     if request.status == "done":
@@ -933,6 +950,8 @@ def set_status(
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
         task_type=task.task_type,
+        session_id=task.session_id,
+        session_start_time=task.session_start_time,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -975,6 +994,8 @@ def set_worktree(
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
         task_type=task.task_type,
+        session_id=task.session_id,
+        session_start_time=task.session_start_time,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -1196,6 +1217,8 @@ def heartbeat(
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
         task_type=task.task_type,
+        session_id=task.session_id,
+        session_start_time=task.session_start_time,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -1222,7 +1245,7 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
     if task.status != "in_review":
         task.status = "pending"
         task.worktree = None
-        task.assigned_agent = None
+    task.assigned_agent = None
     timestamp = datetime.now(UTC).isoformat()
     new_note = f"\n[{timestamp}] Unclaimed by {request.agent_name}"
     if task.status_notes:
@@ -1249,6 +1272,8 @@ def unclaim(task_id: str, request: UnclaimRequest, db: Session = Depends(get_db)
         last_heartbeat=task.last_heartbeat,
         instructions=task.instructions,
         task_type=task.task_type,
+        session_id=task.session_id,
+        session_start_time=task.session_start_time,
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
