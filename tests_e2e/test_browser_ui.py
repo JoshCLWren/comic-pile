@@ -31,6 +31,7 @@ def test_htmx_roll_dice_partial_update(page, test_server_url):
     assert page.url == initial_url
 
 
+@pytest.mark.integration
 def test_htmx_rate_comic_updates_ui(page, test_server_url, db):
     """Navigate to /rate after a roll, update rating slider, verify it works."""
     from app.models import Event, Thread
@@ -72,6 +73,7 @@ def test_htmx_rate_comic_updates_ui(page, test_server_url, db):
     assert float(rating_value) == 3.5
 
 
+@pytest.mark.integration
 def test_queue_management_ui(page, test_server_url, db):
     """Navigate to /queue, verify queue container exists and displays data."""
     from app.models import Thread
@@ -93,6 +95,7 @@ def test_queue_management_ui(page, test_server_url, db):
     assert queue_container is not None
 
 
+@pytest.mark.integration
 def test_view_history_pagination(page, test_server_url):
     """Navigate to /history, verify history list exists."""
     page.goto(f"{test_server_url}/history")
@@ -102,6 +105,7 @@ def test_view_history_pagination(page, test_server_url):
     assert sessions_list is not None
 
 
+@pytest.mark.integration
 def test_full_session_workflow(page, test_server_url, db):
     """Setup session data, navigate to rate page, verify UI is functional."""
     from app.models import Event, Thread
