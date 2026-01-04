@@ -151,3 +151,6 @@ logs/
 .codex/
 .opencode/
 .specify/
+
+# Node.js dependencies
+node_modules/
