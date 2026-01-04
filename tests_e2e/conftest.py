@@ -3,16 +3,23 @@
 import os
 import tempfile
 import threading
-from collections.abc import AsyncGenerator, Generator
+import time
+from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from socket import socket
 
 import pytest
 import pytest_asyncio
+import requests
 from httpx import ASGITransport, AsyncClient
-from playwright.async_api import async_playwright
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession as SQLAlchemyAsyncSession,
+)
+from sqlalchemy.ext.asyncio import (
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import Session, sessionmaker
-import uvicorn
 
 from app.database import Base, get_db
 from app.main import app
@@ -67,65 +74,69 @@ def db_session(db: Session) -> Generator[Session]:
     yield db
 
 
-@pytest.fixture(scope="session")
-def test_server():
-    """Base URL for test server."""
-    yield "http://test"
+@pytest_asyncio.fixture(scope="function")
+async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
+    """Create async SQLite database for tests with transaction rollback."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False}
+    )
 
-    # @pytest.fixture(scope="session", autouse=True)
-    # def live_server():
-    """Start a live test server for e2e browser tests."""
-    import subprocess
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    connection = await engine.connect()
+
+    async with connection.begin():
+        async_session_maker = async_sessionmaker(
+            bind=connection,
+            expire_on_commit=False,
+            class_=SQLAlchemyAsyncSession,
+        )
+
+        async with async_session_maker() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+
+    await connection.close()
+    await engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def test_server_url():
+    """Launch test server for browser tests."""
+    from uvicorn import Config, Server
 
     original_db_url = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
     Base.metadata.create_all(bind=test_engine)
 
-    proc = subprocess.Popen(
-        [
-            ".venv/bin/python",
-            "-m",
-            "uvicorn",
-            "app.main:app",
-            f"--host=127.0.0.1",
-            f"--port={TEST_SERVER_PORT}",
-            "--log-level=error",
-        ],
-        env=os.environ.copy(),
-    )
+    config = Config(app=app, host="127.0.0.1", port=TEST_SERVER_PORT, log_level="error")
+    server = Server(config)
 
-    import time
+    thread = threading.Thread(target=server.run)
+    thread.daemon = True
+    thread.start()
 
-    time.sleep(2)
+    for _ in range(50):
+        try:
+            response = requests.get(f"http://127.0.0.1:{TEST_SERVER_PORT}/health", timeout=0.5)
+            if response.status_code == 200:
+                break
+        except requests.exceptions.RequestException:
+            time.sleep(0.2)
 
-    yield
+    yield f"http://127.0.0.1:{TEST_SERVER_PORT}"
 
-    proc.terminate()
-    proc.wait(timeout=5)
+    server.should_exit = True
+    thread.join(timeout=5)
 
     if original_db_url is None:
         os.environ.pop("DATABASE_URL", None)
     else:
         os.environ["DATABASE_URL"] = original_db_url
-
-
-@pytest_asyncio.fixture(scope="session")
-async def browser():
-    """Shared browser for all integration tests."""
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        yield browser
-        await browser.close()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def browser_page(browser):
-    """New page per test."""
-    context = await browser.new_context()
-    page = await context.new_page()
-    yield page
-    await context.close()
 
 
 @pytest_asyncio.fixture(scope="function")
