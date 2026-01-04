@@ -2,11 +2,12 @@
 (function () {
   'use strict';
 
-  var THREE = window.THREE;
-  if (!THREE) {
-    console.error('[Dice3D] THREE.js not found on window');
-    return;
-  }
+  function initDice3D() {
+    var THREE = window.THREE;
+    if (!THREE) {
+      console.error('[Dice3D] THREE.js not found on window');
+      return;
+    }
 
   var instances = [];
 
@@ -645,5 +646,20 @@
     cleanup: cleanup
   };
 
-  console.log('[Dice3D] Loaded successfully');
+    console.log('[Dice3D] Loaded successfully');
+  }
+
+  function waitForThreeJS() {
+    if (window.THREE) {
+      initDice3D();
+    } else {
+      setTimeout(waitForThreeJS, 50);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', waitForThreeJS);
+  } else {
+    waitForThreeJS();
+  }
 })();
