@@ -41,12 +41,11 @@
       ctx.strokeRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
 
       ctx.fillStyle = '#1a1a2e';
-      ctx.font = 'bold ' + (tileSize * 0.55) + 'px Arial';
+      ctx.font = 'bold ' + (tileSize * 0.4) + 'px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
       var text = i.toString();
-      if (i === 6 || i === 9) text += '.';
       ctx.fillText(text, x + tileSize / 2, y + tileSize / 2);
     }
 
@@ -608,6 +607,10 @@
         this.mesh.material.dispose();
       }
     }
+    var idx = instances.indexOf(this);
+    if (idx !== -1) {
+      instances.splice(idx, 1);
+    }
   };
 
   // ============================================================================
@@ -629,9 +632,17 @@
     return instances[index] || null;
   }
 
+  function cleanup() {
+    for (var i = instances.length - 1; i >= 0; i--) {
+      instances[i].destroy();
+    }
+    instances = [];
+  }
+
   window.Dice3D = {
     create: safeCreate,
-    get: get
+    get: get,
+    cleanup: cleanup
   };
 
   console.log('[Dice3D] Loaded successfully');
