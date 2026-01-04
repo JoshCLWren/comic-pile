@@ -1,0 +1,18 @@
+{
+  "type": "module",
+  "name": "comic-pile",
+  "version": "0.1.0",
+  "description": "Dice-Driven Comic Reading Tracker - FastAPI + HTMX + Tailwind CSS",
+  "devDependencies": {
+    "eslint": "^9.17.0",
+    "@eslint/js": "^9.17.0",
+    "globals": "^15.13.0",
+    "htmlhint": "^1.1.5"
+  },
+  "scripts": {
+    "lint:js": "eslint static/js/*.js",
+    "lint:html": "htmlhint app/templates/*.html",
+    "lint": "npm run lint:js && npm run lint:html",
+    "lint:fix": "eslint static/js/*.js --fix"
+  }
+}

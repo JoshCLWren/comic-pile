@@ -14,7 +14,7 @@
 - **Frontend:** HTMX + Jinja2 templates
 - **Styling:** Tailwind CSS
 - **Testing:** pytest with httpx.AsyncClient for API tests
-- **Code Quality:** ruff linting, pyright type checking, 96% coverage requirement
+- **Code Quality:** ruff linting, pyright type checking, ESLint (JS), htmlhint (HTML), 96% coverage requirement
 
 ## Project Structure & Module Organization
 ```
@@ -44,11 +44,12 @@ comic-pile/
 
 ## Getting Started
 1. Run `uv sync --all-extras` to install all dependencies
-2. Run `make migrate` to create the database schema
-3. Run `make seed` to populate sample data (optional)
-4. Run `make dev` to start the development server
-5. Open http://localhost:8000 to view the app
-6. Open http://localhost:8000/docs to view API documentation
+2. Run `npm install` to install JavaScript linting tools (ESLint, htmlhint)
+3. Run `make migrate` to create the database schema
+4. Run `make seed` to populate sample data (optional)
+5. Run `make dev` to start the development server
+6. Open http://localhost:8000 to view the app
+7. Open http://localhost:8000/docs to view API documentation
 
 ## Git Worktrees (Parallel Work)
 Use git worktrees to work on multiple phases in parallel without branch conflicts:
@@ -113,6 +114,8 @@ The lint script runs:
 - Ruff linting
 - Any type usage check (ruff ANN401 rule)
 - Pyright type checking
+- ESLint for JavaScript files (static/js/*.js)
+- htmlhint for HTML templates (app/templates/*.html)
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
 
