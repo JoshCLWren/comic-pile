@@ -177,3 +177,43 @@ status:  ## Show current task status
 test-integration:  ## Run Playwright integration tests
 	@echo "Running Playwright integration tests..."
 	@pytest tests/integration/ -m integration --headed=false --video=retain-on-failure
+
+save-db:  ## Save database to JSON (python -m scripts.export_db)
+	@echo "Exporting database to db_export.json..."
+	@python -m scripts.export_db
+	@echo "Database saved to db_export.json"
+
+load-db:  ## Load database from JSON (python -m scripts.import_db)
+	@echo "WARNING: This will wipe the current database and restore from db_export.json"
+	@read -p "Are you sure? (yes/no): " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		echo "Loading database from db_export.json..."; \
+		python -m scripts.import_db; \
+		echo "Database restored from db_export.json"; \
+	else \
+		echo "Load cancelled"; \
+	fi
+
+backup:  ## Create timestamped backup with rotation (python -m scripts.backup_database)
+	@echo "Creating timestamped backup..."
+	@python -m scripts.backup_database
+	@echo "Backup complete"
+
+list-backups:  ## List all timestamped backups
+	@echo "Available backups:"
+	@ls -lh backups/db_export_*.json 2>/dev/null || echo "No backups found"
+
+restore-backup:  ## Restore from a specific backup (make restore-backup FILE=backups/db_export_20240104_102530.json)
+	@echo "WARNING: This will wipe the current database and restore from $$FILE"
+	@read -p "Are you sure? (yes/no): " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		if [ -f "$$FILE" ]; then \
+			cp "$$FILE" db_export.json; \
+			python -m scripts.import_db; \
+			echo "Database restored from $$FILE"; \
+		else \
+			echo "Error: File $$FILE not found"; \
+		fi \
+	else \
+		echo "Restore cancelled"; \
+	fi

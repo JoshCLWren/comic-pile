@@ -65,6 +65,16 @@ instance/
 
 # SQLite databases
 comic_pile.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Database exports (optional - add explicitly if you want version control)
+db_export.json
+db_export_*.json
+
+# Automatic backups
+backups/
 
 # Scrapy stuff:
 .scrapy

@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import subprocess
 import time
 import traceback
 from datetime import UTC, datetime
@@ -417,6 +419,28 @@ def create_app() -> FastAPI:
         try:
             Base.metadata.create_all(bind=engine)
             logger.info("Database tables created successfully")
+
+            backup_enabled = os.getenv("AUTO_BACKUP_ENABLED", "true").lower() == "true"
+            if backup_enabled:
+                try:
+                    logger.info("Starting automatic database backup...")
+                    result = subprocess.run(
+                        ["python", "-m", "scripts.backup_database"],
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                    )
+                    if result.returncode == 0:
+                        logger.info(f"Database backup completed:\n{result.stdout}")
+                    else:
+                        logger.warning(f"Database backup warning:\n{result.stderr}")
+                except subprocess.TimeoutExpired:
+                    logger.error("Database backup timed out after 60 seconds")
+                except Exception as backup_error:
+                    logger.error(f"Database backup failed: {backup_error}")
+            else:
+                logger.info("Automatic backup disabled (AUTO_BACKUP_ENABLED=false)")
+
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
 
