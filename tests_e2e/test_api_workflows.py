@@ -65,6 +65,7 @@ async def test_rate_comic_updates_rating(api_client: AsyncClient, db: Session):
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_add_to_queue_updates_queue(api_client: AsyncClient, db: Session):
     """POST to /threads/, verify queue order changed."""
     thread1 = Thread(
@@ -87,6 +88,7 @@ async def test_add_to_queue_updates_queue(api_client: AsyncClient, db: Session):
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_session_persists_across_requests(api_client: AsyncClient, db: Session):
     """Make multiple requests with same session, verify session ID stays consistent."""
     thread = Thread(
@@ -107,6 +109,7 @@ async def test_session_persists_across_requests(api_client: AsyncClient, db: Ses
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_complete_task_advances_queue(api_client: AsyncClient, db: Session):
     """Mark session complete, verify queue advances."""
     thread = Thread(
@@ -142,6 +145,7 @@ async def test_complete_task_advances_queue(api_client: AsyncClient, db: Session
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_csv_export_returns_valid_csv(api_client: AsyncClient, db: Session):
     """GET /export/csv, verify Content-Type and structure."""
     thread = Thread(
