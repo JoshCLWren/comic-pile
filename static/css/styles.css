@@ -6,6 +6,7 @@
     --accent-indigo: #4f46e5;
     --accent-violet: #8b5cf6;
     --accent-teal: #14b8a6;
+    --accent-amber: #fbbf24;
     --glass-bg: rgba(255, 255, 255, 0.05);
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-blur: blur(12px);
@@ -258,5 +259,21 @@ body {
     50% {
         opacity: 0.95;
         transform: scale(1.02);
+    }
+}
+
+.pool-thread-selected {
+    border: 2px solid var(--accent-amber);
+    background: rgba(251, 191, 36, 0.1);
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
+    animation: pool-highlight 2s ease-in-out infinite alternate;
+}
+
+@keyframes pool-highlight {
+    0% {
+        box-shadow: 0 0 15px rgba(251, 191, 36, 0.2);
+    }
+    100% {
+        box-shadow: 0 0 25px rgba(251, 191, 36, 0.4);
     }
 }
