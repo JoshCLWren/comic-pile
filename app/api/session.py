@@ -254,8 +254,13 @@ def get_session_details(
     formatted_events = []
     for event in events:
         thread_title = None
-        if event.thread_id:
-            thread = db.get(Thread, event.thread_id)
+        if event.type == "roll":
+            thread_id = event.selected_thread_id
+        else:
+            thread_id = event.thread_id
+
+        if thread_id:
+            thread = db.get(Thread, thread_id)
             if thread:
                 thread_title = thread.title
 

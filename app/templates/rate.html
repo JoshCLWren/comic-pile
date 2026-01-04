@@ -162,6 +162,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        if (window.Dice3D) {
+            Dice3D.cleanup();
+        }
+
         fetch('/sessions/current/')
             .then(res => res.json())
             .then(data => {

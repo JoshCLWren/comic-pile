@@ -126,9 +126,13 @@
     let headerDie = null;
 
     function initDice() {
+        if (window.Dice3D) {
+            Dice3D.cleanup();
+        }
+
         const mainContainer = document.getElementById('main-die-3d');
         const headerContainer = document.getElementById('header-die-3d');
-        
+
         mainDie = window.Dice3D ? Dice3D.create(mainContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
         headerDie = window.Dice3D ? Dice3D.create(headerContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
 
