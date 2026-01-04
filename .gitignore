@@ -146,3 +146,8 @@ logs/
 *.tmp
 *.bak
 .env.production
+
+# AI tool sessions and configuration
+.codex/
+.opencode/
+.specify/
