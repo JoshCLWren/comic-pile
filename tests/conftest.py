@@ -1,26 +1,25 @@
 """Shared pytest fixtures."""
 
 import os
-import tempfile
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, AsyncIterator, Generator
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession as SQLAlchemyAsyncSession,
+)
+from sqlalchemy.ext.asyncio import (
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
 from app.models import Event, Task, Thread, User
 from app.models import Session as SessionModel
-
-test_db_file = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
-test_db_file.close()
-TEST_DATABASE_URL = f"sqlite:///{test_db_file.name}"
-
-test_engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
-TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -35,16 +34,54 @@ def set_skip_worktree_check():
         os.environ["SKIP_WORKTREE_CHECK"] = original_value
 
 
+@pytest_asyncio.fixture(scope="function")
+async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
+    """Create async SQLite database for tests with transaction rollback."""
+    engine = create_async_engine(
+        "sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False}
+    )
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    connection = await engine.connect()
+
+    async with connection.begin():
+        async_session_maker = async_sessionmaker(
+            bind=connection,
+            expire_on_commit=False,
+            class_=SQLAlchemyAsyncSession,
+        )
+
+        async with async_session_maker() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+
+    await connection.close()
+    await engine.dispose()
+
+
 @pytest.fixture(scope="function")
 def db() -> Generator[Session]:
-    """Create in-memory SQLite database for tests."""
-    Base.metadata.create_all(bind=test_engine)
-    session = TestSessionLocal()
+    """Create in-memory SQLite database for tests with transaction rollback."""
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+
+    Base.metadata.create_all(bind=engine)
+
+    connection = engine.connect()
+    transaction = connection.begin()
+
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+
     try:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=test_engine)
+        transaction.rollback()
+        connection.close()
+        engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")

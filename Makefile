@@ -176,7 +176,7 @@ status:  ## Show current task status
 
 test-integration:  ## Run Playwright integration tests
 	@echo "Running Playwright integration tests..."
-	@pytest tests/integration/ -m integration --headed=false --video=retain-on-failure
+	@pytest tests_e2e/ -m integration --video=retain-on-failure
 
 save-db:  ## Save database to JSON (python -m scripts.export_db)
 	@echo "Exporting database to db_export.json..."

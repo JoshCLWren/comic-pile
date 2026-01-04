@@ -120,6 +120,9 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
                     Save & Continue
                 </button>
+                <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300">
+                    Reroll Die 🎲
+                </button>
                 <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
             </div>
         </div>
@@ -249,8 +252,8 @@ def dismiss_pending(db: Session = Depends(get_db)) -> str:
     return ""
 
 
-@router.post("/set-die")
-def set_manual_die(die: int, db: Session = Depends(get_db)) -> dict:
+@router.post("/set-die", response_class=HTMLResponse)
+def set_manual_die(die: int, db: Session = Depends(get_db)) -> str:
     """Set manual die size for current session."""
     current_session = get_or_create(db, user_id=1)
 
@@ -266,7 +269,7 @@ def set_manual_die(die: int, db: Session = Depends(get_db)) -> dict:
     if clear_cache:
         clear_cache()
 
-    return {"success": True, "die": die}
+    return f"d{die}"
 
 
 @router.post("/reroll", response_class=HTMLResponse)

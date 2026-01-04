@@ -32,7 +32,7 @@ jobs:
 
       - name: Run pytest
         shell: bash
-        run: source .venv/bin/activate && pytest --cov=comic_pile --cov-report=xml
+        run: source .venv/bin/activate && pytest --cov=comic_pile --cov-report=xml -m "not integration"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -51,13 +51,15 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
-      - name: Install Playwright browsers
+      - name: Install Playwright browsers and system dependencies
         shell: bash
-        run: source .venv/bin/activate && playwright install chromium
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
 
       - name: Run Playwright integration tests
         shell: bash
-        run: source .venv/bin/activate && pytest tests/integration/ -m integration --headed=false
+        run: source .venv/bin/activate && pytest tests_e2e/ -m integration
 
       - name: Upload test results
         if: always()

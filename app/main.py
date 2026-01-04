@@ -376,6 +376,8 @@ def create_app() -> FastAPI:
     @app.get("/roll", response_class=HTMLResponse)
     async def roll_page(request: Request, db: Session = Depends(get_db)):
         """Render roll page."""
+        from datetime import datetime, timedelta
+
         from comic_pile.dice_ladder import DICE_LADDER
         from comic_pile.session import get_current_die, get_or_create
 
@@ -383,8 +385,42 @@ def create_app() -> FastAPI:
         current_die = get_current_die(current_session.id, db) if current_session else 6
         if current_die not in DICE_LADDER:
             current_die = 6
+
+        pending_html = ""
+        if current_session and current_session.pending_thread_id:
+            cutoff_time = datetime.now() - timedelta(hours=6)
+            if (
+                current_session.pending_thread_updated_at
+                and current_session.pending_thread_updated_at >= cutoff_time
+            ):
+                from app.models import Thread
+
+                pending_thread = db.get(Thread, current_session.pending_thread_id)
+                if pending_thread:
+                    pending_html = f"""
+                    <div id="pending-thread-alert" class="mb-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <p class="text-yellow-800 font-medium mb-1">You were about to read:</p>
+                                <p class="text-lg font-bold text-gray-900">{pending_thread.title}</p>
+                                <p class="text-sm text-gray-600">{pending_thread.format}</p>
+                            </div>
+                            <button
+                                hx-post="/roll/dismiss-pending"
+                                hx-target="#pending-thread-alert"
+                                hx-swap="outerHTML"
+                                class="text-yellow-700 hover:text-yellow-900 text-2xl ml-2"
+                                aria-label="Dismiss pending thread"
+                            >
+                                &times;
+                            </button>
+                        </div>
+                    </div>
+                    """
+
         return templates.TemplateResponse(
-            "roll.html", {"request": request, "current_die": current_die}
+            "roll.html",
+            {"request": request, "current_die": current_die, "pending_html": pending_html},
         )
 
     @app.get("/settings", response_class=HTMLResponse)

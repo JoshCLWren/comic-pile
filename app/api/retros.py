@@ -12,6 +12,8 @@ router = APIRouter(prefix="/retros", tags=["retros"])
 
 
 class RetroTaskItem(BaseModel):
+    """Task summary for retro report."""
+
     task_id: str
     title: str
     status: str
@@ -23,6 +25,8 @@ class RetroTaskItem(BaseModel):
 
 
 class RetroResponse(BaseModel):
+    """Retrospective report for a session."""
+
     session_id: str
     task_count: int
     completed_count: int
@@ -34,6 +38,8 @@ class RetroResponse(BaseModel):
 
 
 class GenerateRetroRequest(BaseModel):
+    """Request to generate retro for a session."""
+
     session_id: str = Field(..., min_length=1)
 
 
@@ -41,6 +47,7 @@ class GenerateRetroRequest(BaseModel):
 async def generate_retro(
     request: GenerateRetroRequest, db: Session = Depends(get_db)
 ) -> RetroResponse:
+    """Generate retro report for a session."""
     tasks = db.execute(select(Task).where(Task.session_id == request.session_id)).scalars().all()
 
     completed = [t for t in tasks if t.status == "done"]
