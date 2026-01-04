@@ -19,6 +19,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
     "ruff>=0.1.0",
     "pyright>=1.1.0",
     "faker>=20.0.0",
@@ -42,7 +43,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "tests_e2e"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -51,6 +52,10 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-fail-under=0",
+]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests (requires Playwright)",
 ]
 
 [tool.coverage.run]
