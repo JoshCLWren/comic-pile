@@ -24,7 +24,9 @@
 
         <div class="space-y-12 relative z-10">
             <div id="rating-preview-dice" class="dice-perspective mb-4">
-                <div id="die-preview" class="die-3d"></div>
+                <div id="die-preview-wrapper" class="dice-state-rate-flow flex items-center justify-center" style="width: 120px; height: 120px; margin: 0 auto;">
+                    <div id="die-preview" class="die-3d w-full h-full"></div>
+                </div>
             </div>
 
             <div class="text-center space-y-6">
@@ -65,6 +67,7 @@
         const display = document.getElementById('rating-value');
         const effect = document.getElementById('queue-effect');
         const diePreview = document.getElementById('die-preview');
+        const dieWrapper = document.getElementById('die-preview-wrapper');
 
         display.textContent = num.toFixed(1);
         let predictedDie = currentDenom;
@@ -100,6 +103,11 @@
         if (previewDie && previewSides !== predictedDie) {
             previewDie.setSides(predictedDie);
             previewSides = predictedDie;
+        }
+
+        if (dieWrapper) {
+            dieWrapper.classList.remove('dice-state-rate-flow');
+            dieWrapper.classList.add('dice-state-rate-flow');
         }
     }
 
@@ -172,6 +180,7 @@
                 const info = document.getElementById('thread-info');
                 const headerDieContainer = document.getElementById('header-die-container');
                 const diePreview = document.getElementById('die-preview');
+                const dieWrapper = document.getElementById('die-preview-wrapper');
 
                 if (data.active_thread) {
                     currentDenom = data.current_die || 6;
@@ -181,6 +190,10 @@
                         previewDie = Dice3D.create(diePreview, currentDenom, { color: 0xffffff, showValue: false });
                         previewSides = currentDenom;
                         if (previewDie) previewDie.rollTo(rolledValue);
+                    }
+
+                    if (dieWrapper) {
+                        dieWrapper.classList.add('dice-state-rate-flow');
                     }
 
                     info.innerHTML = `

@@ -69,7 +69,7 @@
             <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
             <div id="main-die-wrapper"
-                class="relative z-10 cursor-pointer shrink-0 flex items-center justify-center"
+                class="dice-state-idle relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all"
                 style="width: 200px; height: 200px;"
                 onclick="rollTheDie()"
                 hx-post="/roll/html"
@@ -126,6 +126,15 @@
     let mainDie = null;
     let headerDie = null;
 
+    function setDiceState(state) {
+        const wrapper = document.getElementById('main-die-wrapper');
+        if (!wrapper) return;
+
+        wrapper.classList.remove('dice-state-idle', 'dice-state-rolled', 'dice-state-reroll', 'dice-state-rate-flow');
+        wrapper.classList.add('dice-state-' + state);
+        console.log('[RollPage] Dice state set to:', state);
+    }
+
     function initDice() {
         if (window.Dice3D) {
             Dice3D.cleanup();
@@ -139,6 +148,7 @@
 
         if (mainDie) mainDie.setValue(1);
         updateDieButtonState(initialDenom);
+        setDiceState('idle');
     }
 
     function updateDieButtonState(die) {
@@ -160,6 +170,7 @@
         if (isRolling) return;
 
         isRolling = true;
+        setDiceState('idle');
         const instruction = document.getElementById('tap-instruction');
         if (instruction) instruction.textContent = 'Rolling...';
 

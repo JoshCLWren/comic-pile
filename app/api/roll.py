@@ -91,7 +91,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
         + f"""
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
             <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
-                <div class="threejs-die-container relative z-10" style="width: 100px; height: 100px; margin: 0 auto;">
+                <div id="result-die-wrapper" class="dice-state-rolled threejs-die-container relative z-10 rounded-full" style="width: 100px; height: 100px; margin: 0 auto;">
                     <div id="result-die-3d" class="w-full h-full"></div>
                 </div>
                 <div class="text-center px-4">
@@ -120,7 +120,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
                     Save & Continue
                 </button>
-                <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300">
+                <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300 transition-colors">
                     Reroll Die 🎲
                 </button>
                 <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
@@ -133,6 +133,23 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 isRolling = false;
                 const instruction = document.getElementById('tap-instruction');
                 if (instruction) instruction.textContent = "Tap Die to Roll";
+
+                const resultWrapper = document.getElementById('result-die-wrapper');
+                if (resultWrapper) {{
+                    resultWrapper.classList.add('dice-state-rolled');
+                }}
+
+                const rerollBtn = document.getElementById('reroll-btn');
+                if (rerollBtn) {{
+                    rerollBtn.addEventListener('mouseenter', function() {{
+                        if (resultWrapper) resultWrapper.classList.remove('dice-state-rolled');
+                        if (resultWrapper) resultWrapper.classList.add('dice-state-reroll');
+                    }});
+                    rerollBtn.addEventListener('mouseleave', function() {{
+                        if (resultWrapper) resultWrapper.classList.remove('dice-state-reroll');
+                        if (resultWrapper) resultWrapper.classList.add('dice-state-rolled');
+                    }});
+                }}
 
                 setTimeout(function() {{
                     const resultContainer = document.getElementById('result-die-3d');
@@ -336,7 +353,7 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                 <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
                     Save & Continue
                 </button>
-                <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300">
+                <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300 transition-colors">
                     Reroll Die 🎲
                 </button>
                 <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
