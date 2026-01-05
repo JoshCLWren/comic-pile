@@ -636,7 +636,37 @@ docker-compose -f docker-compose.prod.yml exec -T app alembic upgrade head
 
 ## Part 5: Rollback Plan
 
-### Rolling Back to SQLite
+> **NOTE:** Comprehensive rollback procedures have been documented in [ROLLBACK.md](./ROLLBACK.md). This section provides a quick overview, but detailed procedures, automated scripts, and testing instructions are available in ROLLBACK.md.
+
+### Quick Reference
+
+For common rollback scenarios, use the automated script:
+
+```bash
+# Rollback database migrations
+./scripts/rollback.sh database
+
+# Rollback git to previous commit
+./scripts/rollback.sh git HEAD~1
+
+# Full system rollback (git + docker + database)
+./scripts/rollback.sh full HEAD~1
+
+# Restore from backup
+./scripts/rollback.sh restore ./backups/backup_20240101_120000.sql
+```
+
+### Rollback Scenarios Covered in ROLLBACK.md
+
+- **Bad Migration:** Application fails or data corrupted after migration
+- **Bad Code Deployment:** Incorrect behavior or performance issues
+- **Data Corruption:** Inconsistent or missing data
+- **Database Connection Issues:** Connection pool exhaustion or timeouts
+- **Full Deployment Failure:** Docker Compose fails to start
+
+### Manual Rollback Procedures
+
+#### Rolling Back to SQLite
 
 ```bash
 # 1. Stop Docker services
@@ -659,7 +689,7 @@ make migrate  # Runs SQLite migrations
 make dev
 ```
 
-### Rolling Back PostgreSQL Migration
+#### Rolling Back PostgreSQL Migration
 
 ```bash
 # 1. Take PostgreSQL backup
