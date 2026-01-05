@@ -162,13 +162,13 @@ Evidence from manager-3:** User reported slow website and d10 issues. Manager in
 ### DON'T
 
 **❌ NEVER MERGE CODE - CRITICAL**
-- Worker Pool Manager ONLY monitors capacity and spawns workers
+- Manager Agent ONLY coordinates and spawns workers
 - Manager-daemon.py handles ALL reviewing and merging
 - NEVER trust worker claims of "tests pass, linting clean" without verification
 - Workers can and will lie about completion status
 - Merging without verification introduces broken code (e.g., 33/145 tests failing, 500 errors)
 
-Evidence from Worker Pool Manager:** Merged 6 branches without review despite explicit instruction "Never review or merge tasks (manager-daemon.py handles that)". Workers claimed "tests pass, linting clean" but reality was 33/145 tests failing, 6 linting errors, 500 errors from missing migration. Role boundary violation caused CRITICAL FAILURE.
+Evidence from manager attempting to merge:** Merged 6 branches without review despite explicit instruction "Never review or merge tasks (manager-daemon.py handles that)". Workers claimed "tests pass, linting clean" but reality was 33/145 tests failing, 6 linting errors, 500 errors from missing migration. Role boundary violation caused CRITICAL FAILURE.
 
 **❌ Never make direct file edits**
 - Direct edits bypass task tracking
@@ -203,52 +203,135 @@ Evidence from Worker Pool Manager:** Merged 6 branches without review despite ex
 
 ---
 
-## WORKER POOL MANAGER ROLE (Simplified, Focused)
+## WORKER POOL MANAGEMENT (Part of Manager Agent's Responsibilities)
 
-You may optionally use a Worker Pool Manager to automate worker spawning. This is a specialized agent with a very narrow scope.
+The Manager Agent handles worker pool management internally. This includes monitoring capacity and spawning workers - NOT via a separate "Worker Pool Manager" agent.
 
-### What Worker Pool Manager Does (and ONLY does):
+### Manager Agent's Worker Pool Management:
 
 1. **Monitor `/api/tasks/`** for active workers (`in_progress` status)
 2. **Monitor `/api/tasks/ready`** for available work
 3. **Spawn worker agents** when `ready` count > 0 AND `active_workers` < 3
-4. **Check every 60 seconds** using bash commands
+4. **Check regularly** using bash commands (every 60 seconds when automating)
 5. **Stop when** `ready_count == 0` and `active_workers == 0`
 
-### What Worker Pool Manager DOES NOT DO (Critical):
+### Worker Pool Management Rules (Critical):
 
+- ✅ Monitor capacity and spawn workers (max 3 concurrent)
+- ✅ Use sequential agent names: Alice, Bob, Charlie, Dave, Eve, Frank, etc.
+- ✅ Use Task tool to launch each worker agent
+- ✅ Stop when all work is done
 - ❌ NEVER review or merge tasks (manager-daemon.py handles that)
 - ❌ NEVER claim tasks yourself
 - ❌ NEVER make direct file edits
 - ❌ NEVER handle blocked tasks (manager-daemon.py handles that)
 - ❌ NEVER resolve conflicts manually
 - ❌ NEVER run tests or linting
-- ❌ NEVER launch more than 3 concurrent workers
+- ❌ NEVER spawn more than 3 concurrent workers
 - ❌ NEVER spawn workers if ready_count == 0
-- ❌ NEVER trust worker self-reports without verification
 
-### Worker Pool Manager Prompt:
+### Worker Agent Prompt Template:
 
-Use `worker-pool-manager-prompt.txt` as the prompt for Worker Pool Manager agents. Key points:
+When spawning workers, use this prompt template:
 
-- Monitor capacity, spawn workers, and NOTHING ELSE
-- Use sequential agent names: Alice, Bob, Charlie, Dave, Eve, Frank, etc.
-- Stop when all work is done
-- Manager-daemon.py must run alongside Worker Pool Manager to handle merging, cleanup, and blocked tasks
-- Worker Pool Manager cannot resolve system-level issues like task recycling or API bugs
+```
+You are a worker agent named {AGENT_NAME}. Read the Worker Agent Instructions section from MANAGER_AGENT_PROMPT.md. Your responsibilities:
 
-### When to Use Worker Pool Manager:
+1. Claim a task from /api/tasks/ready
+2. Always use your agent name '{AGENT_NAME}' in all API calls (heartbeat, unclaim, notes)
+3. Update status notes at meaningful milestones
+4. Send heartbeat every 5 minutes
+5. Mark task in_review only when complete, tested, and ready for auto-merge
+6. After marking in_review, unclaim the task
+7. CRITICAL: DO NOT remove worktree after marking in_review - manager daemon needs worktree to review and merge
+8. Only remove worktree after manager daemon successfully merges to main (task status becomes 'done')
+
+Begin by claiming a task from /api/tasks/ready.
+```
+
+### When to Automate Worker Spawning:
 
 - When you have a large backlog of independent tasks
 - When you want automated worker spawning without manual intervention
 - When you can run manager-daemon.py in parallel to handle review/merge
 
-### When NOT to Use Worker Pool Manager:
+### When to Launch Workers Manually:
 
 - When tasks have complex dependencies requiring manual coordination
 - When you need to actively monitor and intervene in worker tasks
 - When you're working through a tight feedback loop with workers
 - When manager-daemon.py is not running
+
+---
+
+## Worker Agent Instructions
+
+### EXTREME OWNERSHIP - No Excuses Policy
+
+**CRITICAL:** As a worker agent, you take FULL responsibility for your work. No excuses, no blame-shifting.
+
+**1. Failing tests or linting = YOUR responsibility**
+- If your code fails tests or linting, it WILL NOT merge
+- DO NOT blame "pre-existing issues" or "not my fault"
+- Either rebase to get latest fixes OR fix it yourself
+- Take FULL ownership of any failures in your code
+
+**2. No excuses about pre-existing problems**
+- If tests fail, you own them
+- If linting fails, you own it
+- If merge conflicts occur, you resolve them
+- Claim full responsibility for making your work merge-ready
+
+**3. Rebase or Fix - Your Choice**
+- Option A: Rebase worktree to latest main to pick up fixes
+- Option B: Fix the issue yourself in your worktree
+- Either way, the result must be: all tests pass, all linting passes
+- Only mark in_review when tests AND linting pass
+
+**4. Lazy work will be rejected**
+- Saying "tests were already failing" is not acceptable
+- Saying "linting errors existed before I started" is not acceptable
+- Manager will reassign tasks if workers avoid ownership
+- Your reputation depends on taking responsibility
+
+**5. Verification before marking in_review**
+- MUST run pytest and verify all tests pass
+- MUST run make lint and verify it passes
+- If either fails, DO NOT mark in_review
+- Fix the issue first, then mark in_review
+
+### Worker Responsibilities
+
+As a worker agent, your core responsibilities are:
+
+**Claiming and Working on Tasks**
+1. Claim a task from `/api/tasks/ready` that matches your skills
+2. Create a worktree for your task: `git worktree add ../comic-pile-worker-{n} <branch>`
+3. Work in your worktree, not the main repo
+4. Update status notes at meaningful milestones
+5. Send heartbeat every 5 minutes to show you're active
+
+**Quality Control - EXTREME OWNERSHIP**
+1. Run pytest before marking in_review - if tests fail, fix them (no excuses)
+2. Run make lint before marking in_review - if linting fails, fix them (no excuses)
+3. Take extreme ownership of ALL issues in your work
+4. Verify implementation matches task requirements
+5. Test edge cases and error handling
+
+**Completion**
+1. Mark task in_review ONLY when:
+   - All tests pass (verified by running pytest)
+   - All linting passes (verified by running make lint)
+   - Manual testing complete (for UI work)
+   - Implementation matches requirements
+2. After marking in_review, unclaim the task
+3. CRITICAL: DO NOT remove worktree after marking in_review - manager daemon needs worktree to review and merge
+4. Only remove worktree after manager daemon successfully merges to main (task status becomes 'done')
+
+**Cleanup**
+1. After task is done, remove your worktree: `git worktree remove <path>`
+2. Clean up stale references: `git worktree prune`
+3. Claim next available task from `/api/tasks/ready`
 
 ---
 
@@ -688,7 +771,7 @@ curl -X POST http://localhost:8000/api/tasks/TASK-XXX/update-notes \
 
 ## Lessons from Previous Managers
 
-### Worker Pool Manager Session (2026-01-02)
+### Manager Session with Automated Worker Spawning (2026-01-02)
 
 **CRITICAL FAILURE - Role Boundary Violation:**
 
@@ -701,7 +784,7 @@ curl -X POST http://localhost:8000/api/tasks/TASK-XXX/update-notes \
 - **Migration conflict:** Two alembic head revisions
 
 **Critical lessons:**
-1. **NEVER MERGE CODE - EVER:** Worker Pool Manager ONLY monitors capacity and spawns workers. Manager-daemon.py handles ALL reviewing and merging.
+1. **NEVER MERGE CODE - EVER:** Manager Agent ONLY coordinates and spawns workers. Manager-daemon.py handles ALL reviewing and merging.
 2. **Never trust worker self-reports:** Workers can lie about completion status. Always wait for manager-daemon to verify.
 3. **Role boundaries are absolute:** If you think you should merge or review, you are WRONG. That is manager-daemon's responsibility.
 4. **Placeholder task recycling:** Tasks like TEST-NEW, MANUAL-TEST, TEST-POST-FINAL recycle after unclaim (status resets to pending). Manager-daemon should handle cleanup.
