@@ -176,8 +176,8 @@ status:  ## Show current task status
 
 test-integration:  ## Run Playwright integration tests
 	@echo "Running Playwright integration tests..."
-	@pytest tests_e2e/ -m integration --video=retain-on-failure
-
+	@pytest tests/integration/ -m integration --headed=false --video=retain-on-failure
+ 
 save-db:  ## Save database to JSON (python -m scripts.export_db)
 	@echo "Exporting database to db_export.json..."
 	@python -m scripts.export_db
@@ -217,3 +217,31 @@ restore-backup:  ## Restore from a specific backup (make restore-backup FILE=bac
 	else \
 		echo "Restore cancelled"; \
 	fi
+
+docker-build:  ## Build Docker images (docker compose build)
+	@echo "Building Docker images..."
+	@docker compose build
+
+docker-up:  ## Start Docker containers (docker compose up -d)
+	@echo "Starting Docker containers..."
+	@docker compose up -d
+
+docker-down:  ## Stop Docker containers (docker compose down)
+	@echo "Stopping Docker containers..."
+	@docker compose down
+
+docker-logs:  ## Show Docker container logs (docker compose logs -f)
+	@echo "Showing Docker container logs..."
+	@docker compose logs -f
+
+docker-migrate:  ## Run database migrations in Docker container
+	@echo "Running database migrations in Docker..."
+	@docker compose exec -T app .venv/bin/alembic upgrade head
+
+docker-test:  ## Run pytest in Docker container
+	@echo "Running tests in Docker container..."
+	@docker compose exec -T app .venv/bin/pytest --cov=comic_pile --cov-report=term-missing
+
+docker-health:  ## Check Docker container health status
+	@echo "Checking Docker container health..."
+	@docker compose ps
