@@ -93,6 +93,13 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
             if is_selected
             else "border-white/5"
         )
+        die_badge = ""
+        if is_selected:
+            die_badge = f"""
+                    <span class="inline-flex items-center px-2 py-1 bg-teal-500/20 text-teal-400 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-[0_0_15px_rgba(20,184,166,0.3)] border border-teal-500/30">
+                        d{current_die}
+                    </span>
+            """
         pool_html += f"""
                 <div class="flex items-center gap-3 px-4 py-2 bg-white/5 {highlight_class} rounded-xl group transition-all">
                     <span class="text-lg font-black text-white/5 group-hover:text-white/10 transition-colors">{i + 1}</span>
@@ -100,6 +107,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                         <p class="font-black text-slate-300 truncate text-sm">{thread.title}</p>
                         <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
                     </div>
+                    {die_badge}
                 </div>
         """
 
@@ -118,6 +126,35 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 </div>
             </div>
         </div>
+
+        <div id="pool-threads" hx-swap-oob="innerHTML">
+            {pool_html}
+        </div>
+            <div id="rating-form-container" class="glass-card p-4 space-y-4 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">
+                <div class="flex flex-col gap-3">
+                    <div class="flex items-center justify-between gap-6">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">Rate your journey</p>
+                            <div id="rating-value" class="text-teal-400 text-4xl font-black leading-none">4.0</div>
+                        </div>
+                        <div class="flex-1 min-w-0 pt-4">
+                            <input type="range" id="rating-input" min="0.5" max="5.0" step="0.5" value="4.0" class="w-full h-2" oninput="updateRatingDisplay(this.value)">
+                        </div>
+                    </div>
+                    <div class="px-3 py-2 bg-teal-500/5 rounded-lg border border-teal-500/20">
+                        <p id="rating-preview" class="text-[9px] font-black text-slate-200 text-center uppercase tracking-[0.2em] leading-tight">
+                            Excellent! Die steps down 🎲 Move to front
+                        </p>
+                    </div>
+                </div>
+                <button id="submit-rating-btn" onclick="submitRating()" class="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.3em] shadow-[0_20px_60px_rgba(79,70,229,0.3)]">
+                    Save & Continue
+                </button>
+                <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300 transition-colors">
+                    Reroll Die 🎲
+                </button>
+                <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
+            </div>
 
         <div id="pool-threads" hx-swap-oob="innerHTML">
             {pool_html}
@@ -345,6 +382,32 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
         current_session.pending_thread_updated_at = datetime.now()
         db.commit()
 
+    pool_html = ""
+    for i, thread in enumerate(threads[:current_die]):
+        is_selected = thread.id == selected_thread.id
+        highlight_class = (
+            "border-2 border-amber-400 bg-amber-500/10 shadow-[0_0_20px_rgba(251,191,36,0.3)]"
+            if is_selected
+            else "border-white/5"
+        )
+        die_badge = ""
+        if is_selected:
+            die_badge = f"""
+                    <span class="inline-flex items-center px-2 py-1 bg-teal-500/20 text-teal-400 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-[0_0_15px_rgba(20,184,166,0.3)] border border-teal-500/30">
+                        d{current_die}
+                    </span>
+            """
+        pool_html += f"""
+                <div class="flex items-center gap-3 px-4 py-2 bg-white/5 {highlight_class} rounded-xl group transition-all">
+                    <span class="text-lg font-black text-white/5 group-hover:text-white/10 transition-colors">{i + 1}</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-black text-slate-300 truncate text-sm">{thread.title}</p>
+                        <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
+                    </div>
+                    {die_badge}
+                </div>
+        """
+
     return f"""
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
             <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
@@ -356,6 +419,10 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                     <h2 class="text-xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
                 </div>
             </div>
+
+        <div id="pool-threads" hx-swap-oob="innerHTML">
+            {pool_html}
+        </div>
 
             <div id="rating-form-container" class="glass-card p-4 space-y-4 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">
                 <div class="flex flex-col gap-3">
