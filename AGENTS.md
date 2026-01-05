@@ -63,7 +63,7 @@ Use git worktrees to work on multiple phases in parallel without branch conflict
 - WIP limit: 3 phases total in progress across all worktrees.
 
 ## Test Coverage Requirements
-- Current target: 96% coverage threshold (configured in `pyproject.toml`)
+- Current target: 90% coverage threshold (configured in `pyproject.toml` with `--cov-fail-under=90`)
 - Always run `pytest --cov=comic_pile --cov-report=term-missing` to check missing coverage
 - When touching logic or input handling, ensure tests are added to maintain coverage
 - Strategies for increasing coverage:
@@ -71,6 +71,7 @@ Use git worktrees to work on multiple phases in parallel without branch conflict
   - Add tests for complex error handling paths
   - Add tests for API endpoints with httpx.AsyncClient
   - Add tests for business logic (dice ladder, queue management, session detection)
+- To check coverage for specific files/modules: `pytest --cov=comic_pile --cov-report=term-missing <test_file>`
 
 ## API-First Development Guidelines
 - Design REST endpoints with clear request/response schemas using Pydantic
