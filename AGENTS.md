@@ -147,6 +147,23 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 - Test both success and error paths for all API endpoints
 - Test business logic (dice ladder, queue management, session detection) independently
 
+### Regression Test Patterns
+
+**When fixing bugs, always add regression tests following these patterns:**
+
+1. **Backend/API Bugs (e.g., BUG-205)**: Add API tests using `httpx.AsyncClient` to verify the bug is fixed and won't regress. Example: `test_get_session_current_uses_selected_thread_id`
+
+2. **Frontend/Visual Bugs (e.g., BUG-201, BUG-202, BUG-203, BUG-206)**: These are harder to test automatically. Options:
+   - Use Playwright for functional checks (e.g., dice displays correct numbers)
+   - Verify backend API behavior covers the bug scenario
+   - Document the bug and fix in commit message for future reference
+   - Manual verification via browser testing may be required
+
+3. **UX Improvement Bugs (e.g., BUG-203 - font size)**: These are subjective improvements. Regression testing via automated tests is difficult. Focus on:
+   - Backend API tests for related functionality
+   - Commit messages documenting the change
+   - Manual verification during code review
+
 ## Agent System Documentation
 
 For detailed agent workflow documentation, see:

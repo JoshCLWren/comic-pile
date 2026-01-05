@@ -10,9 +10,9 @@
     "htmlhint": "^1.1.5"
   },
   "scripts": {
-    "lint:js": "eslint static/js/*.js",
-    "lint:html": "htmlhint app/templates/*.html",
+    "lint:js": "npx eslint static/js/*.js",
+    "lint:html": "npx htmlhint app/templates/*.html",
     "lint": "npm run lint:js && npm run lint:html",
-    "lint:fix": "eslint static/js/*.js --fix"
+    "lint:fix": "npx eslint static/js/*.js --fix"
   }
 }
