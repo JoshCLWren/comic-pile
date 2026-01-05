@@ -42,8 +42,8 @@ export default [
   {
     files: ['static/js/dice3d.js'],
     languageOptions: {
-      ecmaVersion: 2015,
-      sourceType: 'script',
+      ecmaVersion: 2020,
+      sourceType: 'module',
       globals: {
         ...globals.browser,
         'THREE': 'readonly',
