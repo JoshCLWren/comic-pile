@@ -631,8 +631,24 @@ def search_tasks(
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
-) -> HTMLResponse | JSONResponse:
-    """Search tasks with filters and pagination."""
+):
+    """Search tasks with filters and pagination.
+
+    Args:
+        q: Text search across task_id, title, and description (case-insensitive)
+        task_type: Filter by task type
+        priority: Filter by priority (HIGH, MEDIUM, LOW)
+        status: Filter by status
+        assigned_agent: Filter by assigned agent
+        page: Page number (1-indexed)
+        page_size: Number of results per page (1-100)
+
+    Returns:
+        HTML fragment with search results for HTMX requests
+        JSON dict for direct API calls
+    """
+    from fastapi.templating import Jinja2Templates
+
     query = select(Task)
 
     if q:
