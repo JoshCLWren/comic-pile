@@ -825,3 +825,135 @@ async def test_get_task_includes_session_fields(
     assert "session_id" in data
     assert "session_start_time" in data
     assert "task_type" in data
+
+
+@pytest.mark.asyncio
+async def test_search_no_filters(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search with no filters returns all tasks with pagination."""
+    response = await client.get("/api/tasks/search?page=1&page_size=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert "tasks" in data
+    assert "pagination" in data
+    assert len(data["tasks"]) <= 5
+    assert data["pagination"]["page"] == 1
+    assert data["pagination"]["page_size"] == 5
+    assert "total_count" in data["pagination"]
+    assert "total_pages" in data["pagination"]
+
+
+@pytest.mark.asyncio
+async def test_search_by_task_id(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search by exact task ID."""
+    response = await client.get("/api/tasks/search?q=TASK-101")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["tasks"]) >= 1
+    task_ids = [task["task_id"] for task in data["tasks"]]
+    assert "TASK-101" in task_ids
+
+
+@pytest.mark.asyncio
+async def test_search_by_title(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search by partial title match (case-insensitive)."""
+    response = await client.get("/api/tasks/search?q=narrative")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["tasks"]) >= 1
+    titles = [task["title"] for task in data["tasks"]]
+    has_matching_title = any("narrative" in title.lower() for title in titles)
+    assert has_matching_title
+
+
+@pytest.mark.asyncio
+async def test_search_by_task_type(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search filtering by task type."""
+    response = await client.get("/api/tasks/search?task_type=feature")
+    assert response.status_code == 200
+    data = response.json()
+    for task in data["tasks"]:
+        assert task["task_type"] == "feature"
+
+
+@pytest.mark.asyncio
+async def test_search_by_priority(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search filtering by priority."""
+    response = await client.get("/api/tasks/search?priority=HIGH")
+    assert response.status_code == 200
+    data = response.json()
+    for task in data["tasks"]:
+        assert task["priority"] == "HIGH"
+
+
+@pytest.mark.asyncio
+async def test_search_by_status(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search filtering by status."""
+    response = await client.get("/api/tasks/search?status=pending")
+    assert response.status_code == 200
+    data = response.json()
+    for task in data["tasks"]:
+        assert task["status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_search_by_assigned_agent(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search filtering by assigned agent."""
+    response = await client.get("/api/tasks/search?assigned_agent=agent-1")
+    assert response.status_code == 200
+    data = response.json()
+    for task in data["tasks"]:
+        assert task["assigned_agent"] == "agent-1"
+
+
+@pytest.mark.asyncio
+async def test_search_invalid_priority(client: AsyncClient) -> None:
+    """Test search with invalid priority returns 400."""
+    response = await client.get("/api/tasks/search?priority=INVALID")
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_search_pagination(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search pagination with multiple pages."""
+    response = await client.get("/api/tasks/search?page=1&page_size=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["pagination"]["page"] == 1
+    assert data["pagination"]["page_size"] == 2
+    assert len(data["tasks"]) <= 2
+    
+    response = await client.get("/api/tasks/search?page=2&page_size=2")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["pagination"]["page"] == 2
+
+
+@pytest.mark.asyncio
+async def test_search_empty_results(client: AsyncClient) -> None:
+    """Test search with no matching results returns empty list."""
+    response = await client.get("/api/tasks/search?q=NONEXISTENT-TASK-XYZ")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["tasks"]) == 0
+    assert data["pagination"]["total_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_search_special_characters(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search handles special characters gracefully."""
+    response = await client.get("/api/tasks/search?q=Test%20Task")
+    assert response.status_code == 200
+    data = response.json()
+    assert "tasks" in data
+
+
+@pytest.mark.asyncio
+async def test_search_case_insensitive(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test search is case-insensitive."""
+    response1 = await client.get("/api/tasks/search?q=TASK-101")
+    response2 = await client.get("/api/tasks/search?q=task-101")
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+    data1 = response1.json()
+    data2 = response2.json()
+    assert len(data1["tasks"]) == len(data2["tasks"])

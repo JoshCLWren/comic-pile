@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-6">
+    <h1 class="text-3xl font-bold text-glow">Task Search Results</h1>
+
+    <div class="flex items-center justify-between">
+        <p class="text-slate-400">{{ pagination.total_count }} tasks found</p>
+        <button hx-get="/api/tasks/coordinator-data" hx-target="#coordinator-content" class="px-4 py-2 bg-teal-600/20 text-teal-400 rounded-lg hover:bg-teal-600/30 transition-all">
+            Back to Dashboard
+        </button>
+    </div>
+
+    <div class="mt-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
+        <h3 class="font-bold text-slate-300 mb-3">Search & Filter</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+            <input
+                type="text"
+                id="search-q"
+                name="search-q"
+                placeholder="Search tasks..."
+                value="{{ q or '' }}"
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="keyup changed delay:300ms"
+            />
+            <select
+                id="search-task-type"
+                name="search-task-type"
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="change"
+            >
+                <option value="">All Types</option>
+                <option value="feature" {{ 'selected' if task_type == 'feature' else '' }}>Feature</option>
+                <option value="bug_fix" {{ 'selected' if task_type == 'bug_fix' else '' }}>Bug Fix</option>
+                <option value="test_failure" {{ 'selected' if task_type == 'test_failure' else '' }}>Test Failure</option>
+                <option value="conflict" {{ 'selected' if task_type == 'conflict' else '' }}>Conflict</option>
+                <option value="documentation" {{ 'selected' if task_type == 'documentation' else '' }}>Documentation</option>
+                <option value="browser_test" {{ 'selected' if task_type == 'browser_test' else '' }}>Browser Test</option>
+            </select>
+            <select
+                id="search-priority"
+                name="search-priority"
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="change"
+            >
+                <option value="">All Priorities</option>
+                <option value="HIGH" {{ 'selected' if priority == 'HIGH' else '' }}>High</option>
+                <option value="MEDIUM" {{ 'selected' if priority == 'MEDIUM' else '' }}>Medium</option>
+                <option value="LOW" {{ 'selected' if priority == 'LOW' else '' }}>Low</option>
+            </select>
+            <select
+                id="search-status"
+                name="search-status"
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="change"
+            >
+                <option value="">All Statuses</option>
+                <option value="pending" {{ 'selected' if status == 'pending' else '' }}>Pending</option>
+                <option value="in_progress" {{ 'selected' if status == 'in_progress' else '' }}>In Progress</option>
+                <option value="blocked" {{ 'selected' if status == 'blocked' else '' }}>Blocked</option>
+                <option value="in_review" {{ 'selected' if status == 'in_review' else '' }}>In Review</option>
+                <option value="done" {{ 'selected' if status == 'done' else '' }}>Done</option>
+            </select>
+            <input
+                type="text"
+                id="search-agent"
+                name="search-agent"
+                placeholder="Filter by agent..."
+                value="{{ assigned_agent or '' }}"
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="keyup changed delay:300ms"
+            />
+            <button
+                hx-get="/api/tasks/coordinator-data"
+                hx-target="#coordinator-content"
+                class="px-3 py-2 bg-rose-600/20 text-rose-400 rounded-lg hover:bg-rose-600/30 transition-all"
+            >
+                Clear Filters
+            </button>
+        </div>
+    </div>
+
+    <div id="coordinator-content" class="space-y-6">
+        {% if tasks %}
+        <div class="glass-card">
+            <h2 class="text-lg font-semibold text-teal-400 mb-3">Results ({{ pagination.total_count }})</h2>
+            <div class="space-y-2">
+                {% for task in tasks %}
+                <div class="bg-white/5 rounded-lg p-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono text-teal-400">{{ task.task_id }}</span>
+                                <span class="text-xs px-2 py-0.5 rounded bg-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-500/20 text-{{ 'rose' if task.priority == 'HIGH' else 'amber' if task.priority == 'MEDIUM' else 'slate' }}-400">{{ task.priority }}</span>
+                                <span class="text-xs px-2 py-0.5 rounded bg-slate-500/20 text-slate-400">{{ task.status }}</span>
+                            </div>
+                            <p class="text-sm font-medium text-slate-200 truncate mt-1">{{ task.title }}</p>
+                            {% if task.description %}
+                            <p class="text-xs text-slate-400 mt-1">{{ task.description }}</p>
+                            {% endif %}
+                            <div class="flex items-center gap-4 mt-1">
+                                {% if task.assigned_agent %}
+                                <p class="text-xs text-slate-400">
+                                    <span class="font-medium">Agent:</span> {{ task.assigned_agent }}
+                                </p>
+                                {% endif %}
+                                <p class="text-xs text-slate-400">
+                                    <span class="font-medium">Type:</span> {{ task.task_type }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="flex items-center justify-between mt-4 p-3 bg-slate-800/50 rounded-lg">
+                <p class="text-sm text-slate-400">
+                    Page {{ pagination.page }} of {{ pagination.total_pages }} ({{ pagination.total_count }} total)
+                </p>
+                <div class="flex items-center gap-2">
+                    <button
+                        {% if not pagination.has_prev %}disabled{% endif %}
+                        hx-get="/api/tasks/search"
+                        hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                        hx-vals='{"page": {{ pagination.page - 1 }}}'
+                        hx-target="#coordinator-content"
+                        class="px-3 py-1.5 bg-slate-600/20 text-slate-400 rounded-lg text-sm hover:bg-slate-600/30 disabled:opacity-50 transition-all"
+                    >
+                        Previous
+                    </button>
+                    <button
+                        {% if not pagination.has_next %}disabled{% endif %}
+                        hx-get="/api/tasks/search"
+                        hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                        hx-vals='{"page": {{ pagination.page + 1 }}}'
+                        hx-target="#coordinator-content"
+                        class="px-3 py-1.5 bg-slate-600/20 text-slate-400 rounded-lg text-sm hover:bg-slate-600/30 disabled:opacity-50 transition-all"
+                    >
+                        Next
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="glass-card">
+            <h2 class="text-lg font-semibold text-slate-400 mb-3">No Results Found</h2>
+            <p class="text-slate-400">Try adjusting your search terms or filters.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

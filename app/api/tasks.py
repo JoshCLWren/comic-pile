@@ -3,8 +3,9 @@
 import subprocess
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -14,6 +15,7 @@ from app.schemas.task import (
     CreateTaskRequest,
     HeartbeatRequest,
     PatchTaskRequest,
+    SearchTasksRequest,
     SetStatusRequest,
     SetWorktreeRequest,
     TaskCoordinatorResponse,
@@ -616,6 +618,125 @@ def get_stale_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
         )
         for task in tasks
     ]
+
+
+@router.get("/search")
+def search_tasks(
+    request: Request,
+    q: str | None = None,
+    task_type: str | None = None,
+    priority: str | None = None,
+    status: str | None = None,
+    assigned_agent: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+) -> HTMLResponse | JSONResponse:
+    """Search tasks with filters and pagination."""
+    query = select(Task)
+
+    if q:
+        search_pattern = f"%{q}%"
+        query = query.where(
+            (Task.task_id.ilike(search_pattern))
+            | (Task.title.ilike(search_pattern))
+            | (Task.description.ilike(search_pattern))
+        )
+
+    if task_type:
+        query = query.where(Task.task_type == task_type)
+
+    if priority:
+        valid_priorities = ["HIGH", "MEDIUM", "LOW"]
+        if priority not in valid_priorities:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid priority. Must be one of: {', '.join(valid_priorities)}",
+            )
+        query = query.where(Task.priority == priority)
+
+    if status:
+        query = query.where(Task.status == status)
+
+    if assigned_agent:
+        query = query.where(Task.assigned_agent == assigned_agent)
+
+    query = query.order_by(Task.task_id)
+
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    tasks = db.execute(query).scalars().all()
+
+    total_query = select(func.count(Task.id))
+    if q:
+        search_pattern = f"%{q}%"
+        total_query = total_query.where(
+            (Task.task_id.ilike(search_pattern))
+            | (Task.title.ilike(search_pattern))
+            | (Task.description.ilike(search_pattern))
+        )
+    if task_type:
+        total_query = total_query.where(Task.task_type == task_type)
+    if priority:
+        total_query = total_query.where(Task.priority == priority)
+    if status:
+        total_query = total_query.where(Task.status == status)
+    if assigned_agent:
+        total_query = total_query.where(Task.assigned_agent == assigned_agent)
+
+    total_count = db.execute(total_query).scalar()
+    if total_count is None:
+        total_count = 0
+    total_pages = (total_count + page_size - 1) // page_size
+
+    search_results = {
+        "tasks": [
+            TaskResponse(
+                id=task.id,
+                task_id=task.task_id,
+                title=task.title,
+                description=task.description,
+                priority=task.priority,
+                status=task.status,
+                dependencies=task.dependencies,
+                assigned_agent=task.assigned_agent,
+                worktree=task.worktree,
+                status_notes=task.status_notes,
+                estimated_effort=task.estimated_effort,
+                completed=task.completed,
+                blocked_reason=task.blocked_reason,
+                blocked_by=task.blocked_by,
+                last_heartbeat=task.last_heartbeat,
+                instructions=task.instructions,
+                task_type=task.task_type,
+                session_id=task.session_id,
+                session_start_time=task.session_start_time,
+                created_at=task.created_at,
+                updated_at=task.updated_at,
+            )
+            for task in tasks
+        ],
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+        },
+    }
+
+    is_htmx = request.headers.get("hx-request") is not None
+
+    if is_htmx:
+        from fastapi.templating import Jinja2Templates
+
+        templates = Jinja2Templates(directory="app/templates")
+        template = templates.get_template("_search_results.html")
+        return HTMLResponse(content=template.render(search_results=search_results))
+    else:
+        return JSONResponse(content=search_results)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

@@ -11,6 +11,88 @@
         </button>
     </div>
 
+    <div class="mt-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
+        <h3 class="font-bold text-slate-300 mb-3">Search & Filter</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+            <input
+                type="text"
+                id="search-q"
+                name="search-q"
+                placeholder="Search tasks..."
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="keyup changed delay:300ms"
+            />
+            <select
+                id="search-task-type"
+                name="search-task-type"
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="change"
+            >
+                <option value="">All Types</option>
+                <option value="feature">Feature</option>
+                <option value="bug_fix">Bug Fix</option>
+                <option value="test_failure">Test Failure</option>
+                <option value="conflict">Conflict</option>
+                <option value="documentation">Documentation</option>
+                <option value="browser_test">Browser Test</option>
+            </select>
+            <select
+                id="search-priority"
+                name="search-priority"
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="change"
+            >
+                <option value="">All Priorities</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+            </select>
+            <select
+                id="search-status"
+                name="search-status"
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="change"
+            >
+                <option value="">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="blocked">Blocked</option>
+                <option value="in_review">In Review</option>
+                <option value="done">Done</option>
+            </select>
+            <input
+                type="text"
+                id="search-agent"
+                name="search-agent"
+                placeholder="Filter by agent..."
+                class="px-3 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                hx-get="/api/tasks/search"
+                hx-include="#search-q, #search-task-type, #search-priority, #search-status, #search-agent"
+                hx-target="#coordinator-content"
+                hx-trigger="keyup changed delay:300ms"
+            />
+            <button
+                hx-get="/api/tasks/coordinator-data"
+                hx-target="#coordinator-content"
+                class="px-3 py-2 bg-rose-600/20 text-rose-400 rounded-lg hover:bg-rose-600/30 transition-all"
+            >
+                Clear Filters
+            </button>
+        </div>
+    </div>
+
     <div class="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
         <div class="flex items-center justify-between">
             <h3 class="font-bold text-yellow-600">Quick Actions</h3>

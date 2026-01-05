@@ -105,3 +105,17 @@ class PatchTaskRequest(BaseModel):
     dependencies: str | None = None
     estimated_effort: str | None = None
     task_type: str | None = None
+
+
+class SearchTasksRequest(BaseModel):
+    """Schema for searching tasks."""
+
+    q: str | None = Field(None, description="Text search across title and description")
+    task_type: str | None = Field(None, description="Filter by task type")
+    priority: str | None = Field(
+        None, pattern="^(HIGH|MEDIUM|LOW)$", description="Filter by priority"
+    )
+    status: str | None = Field(None, description="Filter by status")
+    assigned_agent: str | None = Field(None, description="Filter by assigned agent")
+    page: int = Field(default=1, ge=1, description="Page number (1-indexed)")
+    page_size: int = Field(default=20, ge=1, le=100, description="Number of results per page")
