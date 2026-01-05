@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+NC=$'\033[0m' # No Color
 
 echo "Running code quality checks..."
 
@@ -83,6 +83,20 @@ if ! pyright $PYRIGHT_ARGS; then
     echo "${RED}ERROR: Type checking failed.${NC}"
     echo "${RED}Please fix the type errors and check CONTRIBUTING.md for guidelines.${NC}"
     exit 1
+fi
+
+# Handle node_modules in git worktrees
+if [ ! -d "node_modules" ]; then
+    if [ -f .git ]; then
+        GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+        if [ -n "$GIT_COMMON_DIR" ]; then
+            MAIN_REPO_DIR=$(dirname "$GIT_COMMON_DIR")
+            if [ -d "$MAIN_REPO_DIR/node_modules" ]; then
+                echo "Detected git worktree, creating symlink to main repo node_modules"
+                ln -sf "$MAIN_REPO_DIR/node_modules" node_modules
+            fi
+        fi
+    fi
 fi
 
 # JavaScript linting
