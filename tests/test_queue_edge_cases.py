@@ -1,6 +1,7 @@
 """Edge case tests for queue reordering operations."""
 
 import pytest
+
 from app.models import Thread
 
 
