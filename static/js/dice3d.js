@@ -1,15 +1,6 @@
-// dice3d.js - Three.js dice with numbers on ALL faces, backward compatible
-(function () {
-  'use strict';
+import * as THREE from 'three';
 
-  function initDice3D() {
-    var THREE = window.THREE;
-    if (!THREE) {
-      console.error('[Dice3D] THREE.js not found on window');
-      return;
-    }
-
-  var instances = [];
+var instances = [];
 
   // ============================================================================
   // TEXTURE & MATERIAL CREATION
@@ -647,19 +638,3 @@
   };
 
     console.log('[Dice3D] Loaded successfully');
-  }
-
-  function waitForThreeJS() {
-    if (window.THREE) {
-      initDice3D();
-    } else {
-      setTimeout(waitForThreeJS, 50);
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', waitForThreeJS);
-  } else {
-    waitForThreeJS();
-  }
-})();

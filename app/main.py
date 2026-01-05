@@ -101,7 +101,7 @@ def create_app() -> FastAPI:
         description="API for tracking comic reading with dice rolls",
         version="0.1.0",
     )
-    templates = Jinja2Templates(directory="app/templates")
+    templates = Jinja2Templates(directory="app/templates", auto_reload=True)
 
     app.add_middleware(
         CORSMiddleware,
