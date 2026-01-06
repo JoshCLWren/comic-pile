@@ -53,14 +53,42 @@ comic-pile/
 
 ## Git Worktrees (Parallel Work)
 Use git worktrees to work on multiple phases in parallel without branch conflicts:
-- Create a branch per phase: `git switch -c phase/2-database-models`
-- Add a worktree: `git worktree add ../comic-pile-p2 phase/2-database-models`
-- Work only in that worktree for the phase; run tests there.
-- Keep the branch updated: `git fetch` then `git rebase origin/main` (or merge).
-- **CRITICAL timing for agent worktrees:** Create worktrees at session start, keep until task is merged to main (status becomes 'done'), not just when marked in_review. Manager daemon needs worktree to review and merge.
-- When merged, remove it: `git worktree remove ../comic-pile-p2`
-- Clean stale refs: `git worktree prune`
-- WIP limit: 3 phases total in progress across all worktrees.
+
+### Creating Worktrees
+```bash
+# Create a branch
+git checkout -b phase/2-database-models
+
+# Add a worktree for that branch
+git worktree add ../comic-pile-p2 phase/2-database-models
+
+# Work in the worktree
+cd ../comic-pile-p2
+```
+
+### Working in Worktrees
+- Run tests and linting in the worktree
+- Commit changes in the worktree
+- Keep the branch updated: `git fetch && git rebase origin/main`
+
+### Removing Worktrees
+```bash
+# When work is complete and merged
+cd /home/josh/code/comic-pile  # Return to main repo
+git worktree remove ../comic-pile-p2
+git worktree prune
+```
+
+### Agent Workflow for Worktrees
+**CRITICAL:** For worker agents using Task API:
+- Create worktree after claiming a task
+- **Keep worktree alive until task status becomes `done`**
+- Manager daemon needs worktree to review and merge tasks marked `in_review`
+- Only remove worktree after daemon successfully merges to main
+- See WORKER_WORKFLOW.md for complete agent workflow
+
+### Limits
+- WIP limit: 3 active worktrees maximum (per AGENTS.md guidelines)
 
 ## Test Coverage Requirements
 - Current target: 90% coverage threshold (configured in `pyproject.toml` with `--cov-fail-under=90`)
@@ -167,16 +195,17 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 ## Agent System Documentation
 
 For detailed agent workflow documentation, see:
-- **WORKFLOW_PATTERNS.md** - Proven successful patterns and critical failures to avoid from manager sessions
-- **MANAGER_DAEMON.md** - Manager daemon responsibilities, setup, and integration with Worker Pool Manager
+
+### Manager Agent
 - **MANAGER-7-PROMPT.md** - Manager agent coordination prompt with active monitoring and task handling
+- **MANAGER_DAEMON.md** - Manager daemon responsibilities, setup, and integration with Worker Pool Manager
+- **WORKFLOW_PATTERNS.md** - Proven successful patterns and critical failures to avoid from manager sessions
+
+### Worker Agents
+- **WORKER_WORKFLOW.md** - Complete end-to-end workflow for worker agents using Task API (READ THIS FIRST)
 - **worker-pool-manager-prompt.txt** - Worker Pool Manager agent prompt for automated worker spawning
 
-## Agent Workflow Patterns
-
-For detailed workflow patterns and evidence from previous manager sessions, see **WORKFLOW_PATTERNS.md**. This includes proven successful patterns and critical failures to avoid.
-
-Key principles:
+### Key Principles
 - Always use Task API for all work
 - Trust the Task API state
 - Active monitoring (not passive claims)
