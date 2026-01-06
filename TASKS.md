@@ -11,6 +11,12 @@
 
 **IMPORTANT**: Task state is now stored in the database instead of this file. All task tracking operations should use the API endpoints below. This file is kept for historical reference and task descriptions.
 
+**For workers using Task API system, see WORKER_WORKFLOW.md for complete end-to-end workflow.** This document includes:
+- Step-by-step workflow from claim to merge
+- Task status flow diagram
+- Troubleshooting common issues
+- Worker responsibilities and limitations
+
 ### API Endpoints
 
 All task operations are performed via REST API endpoints at `/api/tasks/`:
@@ -215,94 +221,9 @@ Returns:
 
 ### Agent Workflow
 
-When working on a PRD alignment task:
+**IMPORTANT:** For complete worker agent workflow, see **WORKER_WORKFLOW.md**. This section provides API reference only.
 
-1. **Claim task** when you start work:
-   ```bash
-   curl -X POST http://localhost:8000/api/tasks/TASK-101/claim \
-     -H "Content-Type: application/json" \
-     -d '{"agent_name": "your-agent-name", "worktree": "your-worktree-path"}'
-   ```
-   - Returns 409 Conflict if task is already claimed by another agent
-   - Includes current assignee name, worktree, and claim time in conflict response
-
-2. **Send heartbeat** every 5-10 minutes while actively working:
-   ```bash
-   curl -X POST http://localhost:8000/api/tasks/TASK-101/heartbeat \
-     -H "Content-Type: application/json" \
-     -d '{"agent_name": "your-agent-name"}'
-   ```
-   - Updates task's `last_heartbeat` timestamp
-   - Returns 403 if you're not the assigned agent
-   - Helps coordinator see who's actively working
-
-3. **Update notes** frequently to document progress:
-   ```bash
-   curl -X POST http://localhost:8000/api/tasks/TASK-101/update-notes \
-     -H "Content-Type: application/json" \
-     -d '{"notes": "Created narrative summary function"}'
-   ```
-
-4. **Set status** when task state changes:
-   - When complete and ready for review: set to `in_review`
-   - When blocked by dependency: set to `blocked` with reason:
-     ```bash
-     curl -X POST http://localhost:8000/api/tasks/TASK-101/set-status \
-       -H "Content-Type: application/json" \
-       -d '{"status": "blocked", "blocked_reason": "Waiting for TASK-102", "blocked_by": "TASK-102"}'
-     ```
-   - When unblocked or continuing: set to `in_progress` or `pending`
-   - When approved: set to `done`
-
-5. **Unclaim task** if abandoning work:
-   ```bash
-   curl -X POST http://localhost:8000/api/tasks/TASK-101/unclaim \
-     -H "Content-Type: application/json" \
-     -d '{"agent_name": "your-agent-name"}'
-   ```
-   - Only allowed by assigned agent (or admin)
-   - Resets status to `pending`
-   - Clears assigned_agent and worktree fields
-   - Adds note: "Unclaimed by {agent_name}"
-
-6. **Check task status** anytime:
-   ```bash
-   curl http://localhost:8000/api/tasks/TASK-101
-   ```
-
-7. **Use coordinator dashboard** for task visibility:
-   - Open http://localhost:8000/tasks/coordinator
-   - Shows all tasks grouped by status
-   - Auto-refreshes every 10 seconds
-   - Has Claim/Unclaim buttons for quick actions
-   - Displays agent, worktree, last_update for each task
-
-8. **Get ready tasks** to see what can be claimed:
-   ```bash
-   curl http://localhost:8000/api/tasks/ready
-   ```
-   - Returns tasks that are:
-     - Status: pending (not claimed)
-     - Not blocked (blocked_reason = NULL)
-     - All dependencies are "done"
-   - Ordered by priority: HIGH first, then MEDIUM, then LOW
-
-2. **Update notes** frequently to document progress:
-   ```bash
-   curl -X POST http://localhost:8000/api/tasks/TASK-101/update-notes \
-     -H "Content-Type: application/json" \
-     -d '{"notes": "Created narrative summary function"}'
-   ```
-
-3. **Set status** when task state changes:
-   - When complete and ready for review: set to `in_review`
-   - When blocked by dependency: set to `blocked`
-   - When approved: set to `done`
-
-4. **Check task status** anytime:
-   ```bash
-   curl http://localhost:8000/api/tasks/TASK-101
-   ```
+Quick reference for key operations:
 
 ### Why Database Instead of This File?
 
