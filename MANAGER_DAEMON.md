@@ -6,30 +6,43 @@ The manager daemon (`agents/manager_daemon.py`) is an automated background proce
 
 The daemon runs continuously once started and performs the following operations:
 
-### 1. Reviewing and Merging In-Review Tasks
+### 1. Reviewing and Merging In-Review Tasks (PRIMARY FUNCTION)
 
-- Queries `/api/tasks/reviewable` for tasks ready for review
+- Queries `/api/tasks/` for tasks with status `in_review`
 - For each in_review task:
-  - Runs `pytest` to verify all tests pass
-  - Runs `make lint` to verify code quality
-  - If both pass: merges the task branch to main
-  - If either fails: marks the task `blocked` with test/lint output
+  1. Checks if worktree exists (skips if missing)
+  2. Changes to worktree directory
+  3. Runs `git fetch origin && git rebase origin/main`
+  4. Runs `pytest` to verify all tests pass
+  5. Runs `make lint` to verify code quality
+  6. Calls `/api/tasks/{task_id}/merge-to-main` if tests/lint pass
+  7. Task status changes to `done` on successful merge
+  8. Marks task `blocked` if tests fail, linting fails, or merge conflict
+
+**CRITICAL:** Workers must keep worktrees alive until task status becomes `done`. The daemon needs the worktree to review and merge.
 
 ### 2. Detecting Stale Workers
 
 - Monitors worker heartbeats via the Task API
 - Detects workers with no heartbeat for 20+ minutes
-- Reports stale workers for manager intervention
+- Reports stale workers in logs (no auto-action - manager must intervene)
 
-### 3. Monitoring Task Availability
+### 3. Auto-Unblocking Agent Confusion Tasks
 
-- Checks if there are pending/ready tasks
+- Checks for tasks with status `blocked` and blocked_reason containing "agent" or "confused"
+- Automatically unclaims these tasks to allow reassignment
+- Does NOT resolve merge conflicts or test failures (requires manager intervention)
+
+### 4. Monitoring Task Availability
+
+- Checks `/api/tasks/ready` for available work
+- Reports ready task count in logs
 - Tracks when all tasks are complete and no workers are active
 
-### 4. Automatic Shutdown
+### 5. Automatic Shutdown
 
-- Stops when all tasks are done and no active workers remain
-- Writes summary logs of work completed
+- Stops when: `ready_tasks == 0` and `active_workers == 0`
+- Writes summary logs of work completed (every 10 minutes)
 
 ## Startup Procedure
 
@@ -75,27 +88,37 @@ python3 -u agents/manager_daemon.py > logs/manager-$(date +%Y%m%d).log 2>&1 &
 
 With the daemon active, the manager agent's responsibilities are:
 
-### What the Daemon Does (Automated)
+### What the Daemon Does (Fully Automated)
 
-- Reviewing in_review tasks
-- Running tests and linting
-- Merging approved tasks
-- Detecting stale workers
+- ✅ Reviewing all `in_review` tasks (every 2 minutes)
+- ✅ Running `pytest` and `make lint` in worktrees
+- ✅ Merging tasks to main via `/api/tasks/{task_id}/merge-to-main`
+- ✅ Setting task status to `done` on successful merge
+- ✅ Setting task status to `blocked` on failures
+- ✅ Auto-unblocking agent confusion tasks
+- ✅ Detecting and reporting stale workers
+- ✅ Monitoring ready tasks and active workers
+- ✅ Shutting down when all work is done
 
 ### What the Manager Still Must Do
 
-- **Handle blocked tasks** - Daemon marks tasks blocked, manager resolves them
-- **Recover abandoned work** - Unclaim stale tasks, reassign
-- **Resolve merge conflicts** - When daemon can't auto-merge
+- **Handle merge conflicts** - Daemon can't resolve these, manager must intervene
+- **Handle test failures** - Manager creates tasks or guides workers to fix
+- **Handle lint failures** - Manager creates tasks or guides workers to fix
+- **Recover abandoned work** - Unclaim stale tasks (20+ min no heartbeat), reassign
+- **Create resolution tasks** - When daemon marks tasks blocked
 - **Launch and coordinate workers** - Manual or via Worker Pool Manager
-- **Monitor for issues** - Workers reporting problems, API failures
+- **Monitor for API failures** - Task API 500 errors need manual intervention
 - **Create new tasks** - When work needs to be done
+- **Handle edge cases** - Anything daemon can't auto-resolve
 
 ### What the Manager Does NOT Do
 
-- ❌ Never click "Auto-Merge All In-Review Tasks" button - daemon handles it
 - ❌ Never manually merge tasks - daemon handles it
 - ❌ Never run tests/linting on in_review tasks - daemon handles it
+- ❌ Never call `/api/tasks/{task_id}/merge-to-main` yourself - daemon handles it
+- ❌ Never click "Auto-Merge All In-Review Tasks" button - daemon handles it automatically
+- ❌ Never unclaim in_review tasks - let daemon review them first
 
 ## Integration with Worker Pool Manager
 
