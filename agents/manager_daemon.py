@@ -71,15 +71,83 @@ async def review_and_merge_task(client, task, verbose=False, stats=None):
         )
 
         if result.returncode != 0 or "CONFLICT" in result.stdout:
-            print(f"[{datetime.now()}] {task_id}: Merge conflict detected, marking blocked")
-            await client.post(
-                f"{SERVER_URL}/api/tasks/{task_id}/set-status",
-                json={
-                    "status": "blocked",
-                    "blocked_reason": "Merge conflict during review",
-                    "blocked_by": "manager-daemon",
-                },
-            )
+            print(f"[{datetime.now()}] {task_id}: Merge conflict detected, gathering details...")
+
+            conflict_details = []
+            conflict_details.append("Merge conflict during rebase with origin/main")
+            conflict_details.append(f"\nGit rebase output:\n{result.stdout}")
+            if result.stderr:
+                conflict_details.append(f"\nGit stderr:\n{result.stderr}")
+
+            try:
+                result = subprocess.run(
+                    ["git", "status", "--short"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode == 0:
+                    conflict_details.append(f"\nGit status:\n{result.stdout}")
+            except Exception as e:
+                conflict_details.append(f"\nFailed to get git status: {e}")
+
+            try:
+                result = subprocess.run(
+                    ["git", "log", "--oneline", "-5"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode == 0 and result.stdout:
+                    conflict_details.append(f"\nRecent commits:\n{result.stdout}")
+            except Exception as e:
+                conflict_details.append(f"\nFailed to get recent commits: {e}")
+
+            try:
+                result = subprocess.run(
+                    ["git", "log", "--oneline", "origin/main", "-5"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode == 0 and result.stdout:
+                    conflict_details.append(f"\nOrigin/main recent commits:\n{result.stdout}")
+            except Exception as e:
+                conflict_details.append(f"\nFailed to get origin/main commits: {e}")
+
+            conflict_note = "\n".join(conflict_details)
+
+            detailed_reason = "Merge conflict during review"
+            print(f"[{datetime.now()}] {task_id}: Marking blocked with conflict details")
+
+            try:
+                response = await client.post(
+                    f"{SERVER_URL}/api/tasks/{task_id}/set-status",
+                    json={
+                        "status": "blocked",
+                        "blocked_reason": detailed_reason,
+                        "blocked_by": "manager-daemon",
+                    },
+                )
+                if response.status_code != 200:
+                    print(
+                        f"[{datetime.now()}] {task_id}: Failed to set blocked status (code: {response.status_code})"
+                    )
+            except Exception as e:
+                print(f"[{datetime.now()}] {task_id}: Error setting blocked status: {e}")
+
+            try:
+                response = await client.post(
+                    f"{SERVER_URL}/api/tasks/{task_id}/update-notes",
+                    json={"notes": conflict_note},
+                )
+                if response.status_code != 200:
+                    print(
+                        f"[{datetime.now()}] {task_id}: Failed to update notes (code: {response.status_code})"
+                    )
+            except Exception as e:
+                print(f"[{datetime.now()}] {task_id}: Error updating notes: {e}")
+
             stats["merge_conflict"] = stats.get("merge_conflict", 0) + 1
             return False
 
@@ -212,10 +280,31 @@ async def check_and_handle_blocked_tasks(client):
         print(f"[{datetime.now()}] {task_id}: {blocked_reason}")
 
         if "Merge conflict" in blocked_reason or "CONFLICT" in blocked_reason:
-            print(
-                f"[{datetime.now()}] {task_id}: Merge conflict detected, cannot auto-resolve. Requires manual intervention."
-            )
+            print(f"[{datetime.now()}] {task_id}: 🔥 MERGE CONFLICT DETECTED")
+            print(f"[{datetime.now()}] {task_id}: Reason: {blocked_reason}")
             print(f"[{datetime.now()}] {task_id}: Worktree: {task.get('worktree')}")
+            print(
+                f"[{datetime.now()}] {task_id}: --------------------------------------------------"
+            )
+
+            status_notes = task.get("status_notes", "")
+            if status_notes:
+                print(f"[{datetime.now()}] {task_id}: Conflict details available in task notes")
+                print(
+                    f"[{datetime.now()}] {task_id}: View details: curl {SERVER_URL}/api/tasks/{task_id}"
+                )
+
+            print(f"[{datetime.now()}] {task_id}: Resolution steps:")
+            print(f"[{datetime.now()}] {task_id}:   1. cd {task.get('worktree')}")
+            print(f"[{datetime.now()}] {task_id}:   2. Review conflict files and resolve manually")
+            print(f"[{datetime.now()}] {task_id}:   3. git add <resolved-files>")
+            print(f"[{datetime.now()}] {task_id}:   4. git rebase --continue")
+            print(f"[{datetime.now()}] {task_id}:   5. Run tests: pytest")
+            print(f"[{datetime.now()}] {task_id}:   6. Run lint: bash scripts/lint.sh")
+            print(f"[{datetime.now()}] {task_id}:   7. Update task status to in_review")
+            print(
+                f"[{datetime.now()}] {task_id}: --------------------------------------------------"
+            )
         elif "agent" in blocked_reason.lower() or "confused" in blocked_reason.lower():
             print(f"[{datetime.now()}] {task_id}: Agent confusion, unblocking for reassignment")
             await client.post(
