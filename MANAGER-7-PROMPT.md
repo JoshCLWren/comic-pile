@@ -155,7 +155,8 @@ curl -X POST http://localhost:8000/api/tasks/create \
 - Create tasks for everything - even small fixes, investigations, testing
 - Claim tasks before coding
 - Update status notes at meaningful milestones
-- Mark tasks `in_review` only when complete and tested
+- Mark tasks `in_review` ONLY by calling POST /api/tasks/{task_id}/set-status with {"status": "in_review"}
+- Always call set-status BEFORE unclaiming - unclaim resets "in_progress" tasks to "pending"
 - Never make direct file edits yourself
 
 **✅ Trust the Task API state**
@@ -379,14 +380,20 @@ Use the Task tool to start each worker agent:
 **Example launch:**
 ```
 Launch agent worker to work on available tasks
-Prompt: "You are a worker agent named Alice. Read the Worker Agent Instructions section from MANAGER_AGENT_PROMPT.md. Your responsibilities:
+Prompt: "You are a worker agent named Alice. Your complete workflow is documented in WORKER_WORKFLOW.md. Key responsibilities:
 
 1. Claim a task from /api/tasks/ready
 2. Always use your agent name 'Alice' in all API calls (heartbeat, unclaim, notes)
 3. Update status notes at meaningful milestones
-4. Send heartbeat every 5 minutes
-5. Mark task in_review only when complete, tested, and ready for auto-merge
-6. After marking in_review, unclaim the task
+4. Send heartbeat every 5-10 minutes
+5. When complete, tested, and ready for auto-merge:
+   - Mark task as in_review: POST /api/tasks/{task_id}/set-status {"status": "in_review"}
+   - Unclaim the task: POST /api/tasks/{task_id}/unclaim
+   - CRITICAL: Keep worktree alive until task status becomes 'done'
+   - Manager daemon will review, test, and merge automatically
+6. After manager daemon merges and task status is 'done', remove worktree
+
+Read WORKER_WORKFLOW.md for complete workflow details including troubleshooting.
 
 Begin by claiming a task from /api/tasks/ready."
 ```
@@ -394,7 +401,7 @@ Begin by claiming a task from /api/tasks/ready."
 **Important guidelines:**
 
 1. **Launch one agent at a time** - Verify it works before launching the next
-2. **Each agent will read MANAGER_AGENT_PROMPT.md** for worker instructions
+2. **Each agent should read WORKER_WORKFLOW.md** for complete workflow instructions
 3. **Agents coordinate via Task API** - you don't need to intermediate messages
 4. **Maximum 3 concurrent workers** - per AGENTS.md guidelines
 5. **Each agent needs unique port** - 8001, 8002, 8003 (main repo uses 8000)
