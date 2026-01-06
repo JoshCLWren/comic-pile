@@ -15,7 +15,6 @@ from app.schemas.task import (
     CreateTaskRequest,
     HeartbeatRequest,
     PatchTaskRequest,
-    SearchTasksRequest,
     SetStatusRequest,
     SetWorktreeRequest,
     TaskCoordinatorResponse,
@@ -25,6 +24,59 @@ from app.schemas.task import (
 )
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+health_router = APIRouter(tags=["health"])
+
+_manager_daemon_last_review: datetime | None = None
+_manager_daemon_active: bool = False
+
+
+def set_manager_daemon_active(active: bool) -> None:
+    """Set manager daemon active status."""
+    global _manager_daemon_active
+    _manager_daemon_active = active
+
+
+def update_manager_daemon_last_review(timestamp: datetime) -> None:
+    """Update manager daemon last review timestamp."""
+    global _manager_daemon_last_review
+    _manager_daemon_last_review = timestamp
+
+
+@health_router.get("/manager-daemon/health")
+def get_manager_daemon_health() -> dict:
+    """Get manager daemon health status."""
+    status = "OK" if _manager_daemon_active else "NOT_RUNNING"
+    return {
+        "status": status,
+        "last_review": _manager_daemon_last_review.isoformat()
+        if _manager_daemon_last_review
+        else None,
+        "daemon_active": _manager_daemon_active,
+    }
+
+
+@health_router.get("/health")
+def health_check(db: Session = Depends(get_db)) -> dict:
+    """Health check endpoint that verifies all components."""
+    database_status = "connected"
+    try:
+        db.execute(select(Task).limit(1))
+    except Exception:
+        database_status = "disconnected"
+
+    manager_daemon_status = "OK" if _manager_daemon_active else "NOT_RUNNING"
+
+    overall_status = "healthy"
+    if database_status != "connected":
+        overall_status = "unhealthy"
+
+    return {
+        "status": overall_status,
+        "database": database_status,
+        "task_api": "OK",
+        "manager_daemon": manager_daemon_status,
+    }
+
 
 INITIAL_TASKS = [
     {
@@ -635,6 +687,7 @@ def search_tasks(
     """Search tasks with filters and pagination.
 
     Args:
+        request: FastAPI request object
         q: Text search across task_id, title, and description (case-insensitive)
         task_type: Filter by task type
         priority: Filter by priority (HIGH, MEDIUM, LOW)
@@ -642,6 +695,7 @@ def search_tasks(
         assigned_agent: Filter by assigned agent
         page: Page number (1-indexed)
         page_size: Number of results per page (1-100)
+        db: Database session
 
     Returns:
         HTML fragment with search results for HTMX requests
@@ -1049,13 +1103,41 @@ def set_status(
                 capture_output=True,
                 text=True,
             )
+            worktree_path = os.path.join(os.path.dirname(os.getcwd()), task.worktree)
             if task.worktree not in result.stdout:
-                worktree_path = os.path.join(os.path.dirname(os.getcwd()), task.worktree)
                 if not os.path.exists(worktree_path):
                     raise HTTPException(
                         status_code=400,
                         detail=f"Worktree {task.worktree} does not exist or is not a valid git worktree",
                     )
+
+            os.chdir(worktree_path)
+
+            result = subprocess.run(
+                ["pytest", "-x", "--tb=short"],
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            if result.returncode != 0:
+                error_output = result.stdout[-500:] if result.stdout else "no output"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Tests must pass before marking in_review. Pytest output:\n{error_output}",
+                )
+
+            result = subprocess.run(
+                ["bash", "scripts/lint.sh"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode != 0:
+                error_output = result.stderr[-300:] if result.stderr else "no output"
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Linting must pass before marking in_review. Lint output:\n{error_output}",
+                )
 
     task.status = request.status
     if request.status == "done":

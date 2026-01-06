@@ -47,10 +47,8 @@ Based on manager-1, manager-2, manager-3 retrospectives:
 
 ### 6. Worktree Management
 
-- Create all worktrees at session start before launching workers
-- Verify each worktree exists and is on correct branch
-- Before accepting task claim, check: `git worktree list | grep <worktree-path>`
-- Only accept claim if worktree exists and path is valid
+- Workers create worktrees AFTER claiming tasks, not before session start
+- Workers must keep worktrees alive until task status becomes 'done', then remove them
 - After task completion, worker removes worktree
 
 ### 7. Manager Daemon Integration
@@ -103,9 +101,9 @@ Based on manager-1, manager-2, manager-3 retrospectives:
 - Workers can and will lie about "tests pass, linting clean"
 - Worker Pool Manager retrospective shows CRITICAL FAILURE from merging broken code
 
-### 4. Ad-Hoc Worktree Creation
+### 4. Improper Worktree Lifecycle Management
 
-- Don't create worktrees after tasks are claimed
-- Don't allow tasks to be claimed without verifying worktree exists
-- Create all worktrees at session start
-- Manager-3 failed this with 404 errors during reassignment
+- Don't remove worktrees before task status becomes 'done'
+- Don't keep worktrees alive after task is complete
+- Workers must create worktrees after claiming tasks, not before
+- Workers must remove worktrees after tasks are done

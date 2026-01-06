@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import admin, queue, rate, retros, roll, session, tasks, thread
-from app.api.tasks import get_coordinator_data
+from app.api.tasks import get_coordinator_data, health_router
 from app.database import Base, engine, get_db
 from app.models import Session as SessionModel
 
@@ -319,6 +319,7 @@ def create_app() -> FastAPI:
     app.include_router(admin.router, tags=["admin"])
     app.include_router(tasks.router, prefix="/api", tags=["tasks"])
     app.include_router(retros.router, prefix="/api", tags=["retros"])
+    app.include_router(health_router, prefix="/api")
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
