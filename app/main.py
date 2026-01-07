@@ -75,6 +75,7 @@ def get_current_session_cached(db: Session) -> dict | None:
             started_at=active_session.started_at,
             ended_at=active_session.ended_at,
             start_die=active_session.start_die,
+            manual_die=active_session.manual_die,
             user_id=active_session.user_id,
             ladder_path=session.build_ladder_path(active_session, db),
             active_thread=active_thread_data,

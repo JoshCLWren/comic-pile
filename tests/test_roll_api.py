@@ -176,3 +176,47 @@ async def test_reroll_result_consistency_regression(client, sample_data):
     assert html_result == api_result, (
         f"Reroll result mismatch: HTML shows {html_result}, API shows {api_result}"
     )
+
+
+@pytest.mark.asyncio
+async def test_set_manual_die(client, sample_data, db):
+    """POST /roll/set-die sets manual_die on session."""
+    response = await client.post("/roll/set-die?die=20")
+    assert response.status_code == 200
+    assert response.text == "d20"
+
+    session_response = await client.get("/sessions/current/")
+    assert session_response.status_code == 200
+    session_data = session_response.json()
+    assert session_data["manual_die"] == 20
+
+
+@pytest.mark.asyncio
+async def test_clear_manual_die(client, sample_data, db):
+    """POST /roll/clear-manual-die clears manual_die and returns to auto mode."""
+    from app.models import Session as SessionModel
+
+    session = (
+        db.execute(select(SessionModel).where(SessionModel.ended_at.is_(None))).scalars().first()
+    )
+    assert session is not None
+
+    session.manual_die = 12
+    db.commit()
+
+    response = await client.post("/roll/clear-manual-die")
+    assert response.status_code == 200
+    assert response.text == "d8"
+
+    session_response = await client.get("/sessions/current/")
+    assert session_response.status_code == 200
+    session_data = session_response.json()
+    assert session_data["manual_die"] is None
+
+
+@pytest.mark.asyncio
+async def test_clear_manual_die_with_no_manual_set(client, sample_data):
+    """POST /roll/clear-manual-die works even when manual_die is not set."""
+    response = await client.post("/roll/clear-manual-die")
+    assert response.status_code == 200
+    assert response.text == "d8"

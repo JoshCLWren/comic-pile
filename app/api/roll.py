@@ -313,6 +313,21 @@ def set_manual_die(die: int, db: Session = Depends(get_db)) -> str:
     return f"d{die}"
 
 
+@router.post("/clear-manual-die", response_class=HTMLResponse)
+def clear_manual_die(db: Session = Depends(get_db)) -> str:
+    """Clear manual die size and return to automatic dice ladder mode."""
+    current_session = get_or_create(db, user_id=1)
+
+    current_session.manual_die = None
+    db.commit()
+
+    if clear_cache:
+        clear_cache()
+
+    current_die = get_current_die(current_session.id, db)
+    return f"d{current_die}"
+
+
 @router.post("/reroll", response_class=HTMLResponse)
 def reroll_dice(db: Session = Depends(get_db)) -> str:
     """Reroll dice, clearing pending thread."""
