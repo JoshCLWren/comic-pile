@@ -114,10 +114,14 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                     <div id="result-die-3d" class="w-full h-full"></div>
                     <span id="result-die-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-teal-400">Rolled</span>
                 </div>
-                <div class="text-center px-4">
-                    <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">You rolled</p>
-                    <h2 class="text-xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
+            <div class="text-center px-4">
+                <div class="flex items-center justify-center gap-2 mb-2">
+                    <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Position</p>
+                    <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg text-sm font-black border border-amber-500/30">#{result_val}</span>
                 </div>
+                <h2 class="text-xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
+                <p class="text-[8px] font-bold text-slate-500 mt-1">in the roll pool</p>
+            </div>
             </div>
         </div>
 
@@ -392,8 +396,12 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                     <span id="result-die-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-teal-400">Rerolled</span>
                 </div>
                 <div class="text-center px-4">
-                    <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">Rerolled</p>
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Position</p>
+                        <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg text-sm font-black border border-amber-500/30">#{result_val}</span>
+                    </div>
                     <h2 class="text-xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
+                    <p class="text-[8px] font-bold text-slate-500 mt-1">in roll pool</p>
                 </div>
             </div>
 
