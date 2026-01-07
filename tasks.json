@@ -164,7 +164,7 @@
       "id": "feat-011",
       "title": "Explore sharing/collaboration features",
       "description": "Explore sharing and collaboration features - what it would take to allow users to share their reading progress, comic ratings, queue configurations, or reading lists with others (for book clubs, shared households, etc.).",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": null,
       "task_type": "feature",
