@@ -22,6 +22,28 @@ from app.models import Event, Task, Thread, User
 from app.models import Session as SessionModel
 
 
+def get_test_database_url() -> str:
+    """Get test database URL from environment or use SQLite default."""
+    test_db_url = os.getenv("TEST_DATABASE_URL")
+    if test_db_url:
+        return test_db_url
+    database_url = os.getenv("DATABASE_URL")
+    if database_url and database_url.startswith("postgresql"):
+        return database_url
+    return "sqlite+aiosqlite:///:memory:"
+
+
+def get_sync_test_database_url() -> str:
+    """Get sync test database URL from environment or use SQLite default."""
+    test_db_url = os.getenv("TEST_DATABASE_URL")
+    if test_db_url:
+        return test_db_url.replace("+asyncpg", "").replace("+aiosqlite", "")
+    database_url = os.getenv("DATABASE_URL")
+    if database_url and database_url.startswith("postgresql"):
+        return database_url
+    return "sqlite:///:memory:"
+
+
 @pytest.fixture(scope="function", autouse=True)
 def set_skip_worktree_check():
     """Skip worktree validation in tests."""
@@ -36,10 +58,13 @@ def set_skip_worktree_check():
 
 @pytest_asyncio.fixture(scope="function")
 async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
-    """Create async SQLite database for tests with transaction rollback."""
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:", connect_args={"check_same_thread": False}
-    )
+    """Create async test database with transaction rollback (PostgreSQL or SQLite)."""
+    database_url = get_test_database_url()
+
+    if database_url.startswith("sqlite"):
+        engine = create_async_engine(database_url, connect_args={"check_same_thread": False})
+    else:
+        engine = create_async_engine(database_url, echo=False)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -65,8 +90,13 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 @pytest.fixture(scope="function")
 def db() -> Generator[Session]:
-    """Create in-memory SQLite database for tests with transaction rollback."""
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    """Create test database with transaction rollback (PostgreSQL or SQLite)."""
+    database_url = get_sync_test_database_url()
+
+    if database_url.startswith("sqlite"):
+        engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    else:
+        engine = create_engine(database_url, echo=False)
 
     Base.metadata.create_all(bind=engine)
 

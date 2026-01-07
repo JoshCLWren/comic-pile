@@ -204,7 +204,7 @@
       "id": "pg-migrate-003",
       "title": "Update test configuration for PostgreSQL",
       "description": "Update test fixtures in tests/conftest.py and tests_e2e/conftest.py to use PostgreSQL test databases instead of SQLite. Ensure tests can run with both databases via environment variable.",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": "PG-MIGRATE-002",
       "task_type": "feature",
