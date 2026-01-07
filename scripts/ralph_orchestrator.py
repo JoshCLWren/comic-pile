@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Ralph Orchestrator - Autonomous task iteration using Ralph mode."""
+"""Ralph Orchestrator - Autonomous task iteration using Ralph mode and OpenCodeClient."""
 
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
+
+sys.path.insert(0, "/home/josh/code/journal")
+from opencode_client import OpenCodeClient  # type: ignore
 
 
 def load_tasks(tasks_file: Path) -> dict:
@@ -92,6 +96,43 @@ def print_task_details(task: dict, verbose: bool = False) -> None:
     print(f"{'=' * 60}\n")
 
 
+def process_task_with_client(
+    client: OpenCodeClient,
+    task: dict,
+    verbose: bool = False,
+) -> bool:
+    """Process a single task using OpenCodeClient."""
+    print("\n" + "=" * 60)
+    print(f"Creating opencode session for task {task['id']}...")
+    print("=" * 60)
+
+    session_id = client.create_session()
+    print(f"Session created: {session_id}")
+
+    ralph_prompt = generate_ralph_prompt(task)
+    print("\n" + "=" * 60)
+    print("Sending Ralph mode prompt to agent...")
+    print("=" * 60)
+
+    if verbose:
+        print("\n--- RALPH MODE PROMPT ---")
+        print(ralph_prompt)
+        print("--- END PROMPT ---\n")
+
+    print("[RALPH] Sending prompt to opencode...")
+    response = client.chat(ralph_prompt)
+
+    print("\n" + "=" * 60)
+    print("AI Response:")
+    print("=" * 60)
+    print(response["content"])
+    print("=" * 60)
+
+    is_complete = "<complete>" in response["content"] or "<promise>" in response["content"]
+
+    return is_complete
+
+
 def main() -> None:
     """Main orchestrator loop."""
     parser = argparse.ArgumentParser(description="Ralph Orchestrator - Autonomous task iteration")
@@ -105,6 +146,12 @@ def main() -> None:
     parser.add_argument(
         "--dry-run", action="store_true", help="Show what would do without executing"
     )
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default="http://127.0.0.1:4096",
+        help="opencode base URL (default: http://127.0.0.1:4096)",
+    )
     args = parser.parse_args()
 
     tasks_file = args.tasks_file
@@ -112,10 +159,38 @@ def main() -> None:
         print(f"Error: {tasks_file} not found", file=sys.stderr)
         sys.exit(1)
 
+    if args.dry_run:
+        print("DRY RUN MODE - No actual changes will be made\n")
+
     iteration_count = 0
 
+    client = None
+    if not args.dry_run:
+        print(f"\nConnecting to opencode at {args.base_url}...")
+        try:
+            client = OpenCodeClient(base_url=args.base_url)
+        except Exception as e:
+            print(f"Error creating OpenCodeClient: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        print("Checking opencode health...")
+        try:
+            health = client.health()
+            if not health.get("healthy"):
+                print(f"OpenCode not healthy: {health}", file=sys.stderr)
+                sys.exit(1)
+            print(f"✓ OpenCode healthy (version: {health.get('version', 'unknown')})")
+        except Exception as e:
+            print(f"Error checking health: {e}", file=sys.stderr)
+            sys.exit(1)
+
     while True:
-        tasks_data = load_tasks(tasks_file)
+        try:
+            tasks_data = load_tasks(tasks_file)
+        except Exception as e:
+            print(f"Error loading tasks from {tasks_file}: {e}", file=sys.stderr)
+            sys.exit(1)
+
         pending_task = find_pending_task(tasks_data)
 
         if not pending_task:
@@ -136,29 +211,49 @@ def main() -> None:
             print("\n--- RALPH MODE PROMPT ---")
             print(ralph_prompt)
             print("--- END PROMPT ---\n")
+            print("[DRY RUN] Would create opencode session and stream responses")
             print("[DRY RUN] Would wait for completion and mark as done")
             break
 
         print("\nMarking task as in_progress...")
         update_task_status(tasks_data, pending_task["id"], "in_progress")
-        save_tasks(tasks_file, tasks_file)
+        save_tasks(tasks_file, tasks_data)
 
-        ralph_prompt = generate_ralph_prompt(pending_task)
-        print("\n" + "=" * 60)
-        print("RALPH MODE PROMPT (copy this to the agent):")
-        print("=" * 60)
-        print(ralph_prompt)
-        print("=" * 60 + "\n")
+        try:
+            assert client is not None, "Client should be initialized outside of dry-run mode"
+            completed = process_task_with_client(client, pending_task, args.verbose)
 
-        input("Press Enter after agent completes task...")
+            if completed:
+                print(f"\n✓ Task {pending_task['id']} completed!")
+                print(f"Marking task {pending_task['id']} as done...")
+                tasks_data = load_tasks(tasks_file)
+                update_task_status(tasks_data, pending_task["id"], "done")
+                save_tasks(tasks_file, tasks_data)
 
-        print(f"\nMarking task {pending_task['id']} as done...")
-        tasks_data = load_tasks(tasks_file)
-        update_task_status(tasks_data, pending_task["id"], "done")
-        save_tasks(tasks_file, tasks_file)
+                iteration_count += 1
+                print(f"Completed iteration {iteration_count}\n")
+            else:
+                print(f"\n⚠ Task {pending_task['id']} not complete, will retry later")
+                tasks_data = load_tasks(tasks_file)
+                update_task_status(tasks_data, pending_task["id"], "pending")
+                save_tasks(tasks_file, tasks_data)
+                print("Task marked as pending (will retry on next iteration)")
+                break
 
-        iteration_count += 1
-        print(f"Completed iteration {iteration_count}\n")
+            print("Waiting 2 seconds before next task...")
+            time.sleep(2)
+
+        except Exception as e:
+            print(f"\nError processing task {pending_task['id']}: {e}", file=sys.stderr)
+            if args.verbose:
+                import traceback
+
+                traceback.print_exc()
+            tasks_data = load_tasks(tasks_file)
+            update_task_status(tasks_data, pending_task["id"], "pending")
+            save_tasks(tasks_file, tasks_data)
+            print("Task marked as pending (will retry on next iteration)")
+            break
 
 
 if __name__ == "__main__":

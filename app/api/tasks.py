@@ -777,33 +777,35 @@ def search_tasks(
         total_count = 0
     total_pages = (total_count + page_size - 1) // page_size
 
+    task_responses = [
+        TaskResponse(
+            id=task.id,
+            task_id=task.task_id,
+            title=task.title,
+            description=task.description,
+            priority=task.priority,
+            status=task.status,
+            dependencies=task.dependencies,
+            assigned_agent=task.assigned_agent,
+            worktree=task.worktree,
+            status_notes=task.status_notes,
+            estimated_effort=task.estimated_effort,
+            completed=task.completed,
+            blocked_reason=task.blocked_reason,
+            blocked_by=task.blocked_by,
+            last_heartbeat=task.last_heartbeat,
+            instructions=task.instructions,
+            task_type=task.task_type,
+            session_id=task.session_id,
+            session_start_time=task.session_start_time,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+        for task in tasks
+    ]
+
     search_results = {
-        "tasks": [
-            TaskResponse(
-                id=task.id,
-                task_id=task.task_id,
-                title=task.title,
-                description=task.description,
-                priority=task.priority,
-                status=task.status,
-                dependencies=task.dependencies,
-                assigned_agent=task.assigned_agent,
-                worktree=task.worktree,
-                status_notes=task.status_notes,
-                estimated_effort=task.estimated_effort,
-                completed=task.completed,
-                blocked_reason=task.blocked_reason,
-                blocked_by=task.blocked_by,
-                last_heartbeat=task.last_heartbeat,
-                instructions=task.instructions,
-                task_type=task.task_type,
-                session_id=task.session_id,
-                session_start_time=task.session_start_time,
-                created_at=task.created_at,
-                updated_at=task.updated_at,
-            )
-            for task in tasks
-        ],
+        "tasks": [task.model_dump(mode="json") for task in task_responses],
         "pagination": {
             "page": page,
             "page_size": page_size,

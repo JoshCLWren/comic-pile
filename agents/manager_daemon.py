@@ -463,6 +463,7 @@ if __name__ == "__main__":
     import atexit
 
     async def cleanup():
+        """Cleanup handler to unregister daemon on shutdown."""
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 await client.post(
