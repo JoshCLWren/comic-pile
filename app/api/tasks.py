@@ -78,6 +78,23 @@ def health_check(db: Session = Depends(get_db)) -> dict:
     }
 
 
+@health_router.post("/manager-daemon/health/set-active")
+def set_daemon_active(request: dict) -> dict:
+    """Set manager daemon active status."""
+    active = request.get("active", False)
+    set_manager_daemon_active(active)
+    status = "active" if _manager_daemon_active else "inactive"
+    return {"status": status}
+
+
+@health_router.post("/manager-daemon/health/update-last-review")
+def update_last_review() -> dict:
+    """Update manager daemon last review timestamp."""
+    timestamp = datetime.now(UTC)
+    update_manager_daemon_last_review(timestamp)
+    return {"last_review": timestamp.isoformat()}
+
+
 INITIAL_TASKS = [
     {
         "task_id": "TASK-101",

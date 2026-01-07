@@ -1,5 +1,29 @@
 # Worker Agent Workflow
 
+## RALPH_MODE Detection
+
+**Check environment variable before reading this document:**
+
+```bash
+if [ "$RALPH_MODE" = "true" ]; then
+    echo "🔄 RALPH_MODE=true - Read docs/RALPH_MODE.md instead"
+    # Exit and follow Ralph mode instructions
+else
+    echo "📋 RALPH_MODE=false - Following worker workflow"
+fi
+```
+
+**If RALPH_MODE=true:**
+- Stop reading this document
+- Read `docs/RALPH_MODE.md` instead
+- Follow autonomous iteration instructions
+
+**If RALPH_MODE=false or unset:**
+- Continue reading this document
+- Follow the Task API worker workflow below
+
+---
+
 This document provides the complete end-to-end workflow for worker agents using the Task API system.
 
 ## Quick Reference

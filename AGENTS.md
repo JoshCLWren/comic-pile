@@ -7,6 +7,61 @@
 - **Respect data integrity:** Never lose user data, validate inputs, and provide clear error messages.
 - **Prefer clarity over cleverness:** Write explicit helpers, document design decisions in pull requests, and leave the code approachable for hobbyist contributors.
 
+## Environment Variable: RALPH_MODE
+
+When `RALPH_MODE=true`, agents operate in Ralph mode:
+- No manager/worker protocols
+- Autonomous iteration only
+- Direct file edits, tests, commits
+- Work from tasks.json, not Task API
+
+When `RALPH_MODE=false` or unset:
+- Full manager/worker coordination system
+- Workers claim tasks via API
+- Manager daemon coordinates and reviews
+- Use existing workflows
+
+### How to Use
+
+```bash
+# Ralph mode (single agent, autonomous)
+export RALPH_MODE=true
+python scripts/ralph_orchestrator.py
+
+# Manager/worker mode (multi-agent coordination)
+export RALPH_MODE=false
+python agents/manager_daemon.py &
+# Then launch workers normally
+```
+
+### Agent Behavior
+
+| RALPH_MODE | Behavior |
+|-------------|----------|
+| `true` | Read docs/RALPH_MODE.md, iterate autonomously, complete tasks one by one |
+| `false` | Follow WORKER_WORKFLOW.md, claim via Task API, coordinate with manager |
+
+### Checking RALPH_MODE
+
+Agents should detect RALPH_MODE at start:
+
+```python
+import os
+
+RALPH_MODE = os.getenv("RALPH_MODE", "false").lower() == "true"
+
+if RALPH_MODE:
+    # Ralph mode behavior
+    print("🔄 Entering Ralph mode")
+    print("   Reading: docs/RALPH_MODE.md")
+    # Autonomous iteration, no coordination
+else:
+    # Manager/worker mode behavior
+    print("📋 Entering manager/worker mode")
+    print("   Reading: WORKER_WORKFLOW.md")
+    # Full coordination system
+```
+
 ## Tech Stack
 - **Backend:** FastAPI (Python 3.13)
 - **Database:** SQLite with SQLAlchemy ORM

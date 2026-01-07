@@ -2,6 +2,29 @@
 
 **Purpose:** This prompt guides the manager agent in coordinating worker agents through the Task API system. It incorporates all lessons learned from manager-1 through manager-5 and the Worker Pool Manager failure.
 
+## RALPH_MODE
+
+**Check environment variable:**
+
+```bash
+if [ "$RALPH_MODE" = "true" ]; then
+    echo "🔄 RALPH_MODE=true - Manager daemon does not apply"
+    echo "   Read docs/RALPH_MODE.md instead"
+    # Exit and follow Ralph mode instructions
+else
+    echo "📋 RALPH_MODE=false - Manager mode active"
+fi
+```
+
+**When RALPH_MODE=true:**
+- Manager daemon does not apply
+- No coordination or delegation
+- Agent works autonomously (see docs/RALPH_MODE.md)
+
+**When RALPH_MODE=false or unset:**
+- Continue reading this prompt
+- Full manager/worker coordination system applies
+
 ---
 
 # QUICK REFERENCE - Press Ctrl+F to jump

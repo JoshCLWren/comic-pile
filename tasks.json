@@ -1,0 +1,1234 @@
+{
+  "tasks": [
+    {
+      "id": "404-001",
+      "title": "Implement custom 404 Not Found page",
+      "description": "Create a custom 404 page that matches the app design",
+      "status": "ready",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "bug-201",
+      "title": "Fix dice number mismatch with roll result",
+      "description": "When rolling the dice, the visual number shown on the dice face does not match the actual roll result. For example, first roll said to read the 4th comic but the d6 showed 5 spinning on the die face.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "bug-202",
+      "title": "Fix number rendering typo (period after 6)",
+      "description": "The number 6 on dice faces is rendered with a trailing period like \"6.\" instead of just \"6\". This appears to be a typo in the number textures or font rendering.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "bug-203",
+      "title": "Reduce dice number size for better readability",
+      "description": "The numbers on dice faces are too large, making them look crowded and hard to read. This affects all dice types (d4, d6, d8, d10, d12, d20).",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "bug-205",
+      "title": "Show book names in history for all roll types",
+      "description": "History entries only display book names when logging ratings, not for regular rolls. Users expect to see which book was assigned for each roll event in the history log.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "bug-206",
+      "title": "Fix dice geometry transformation bug on navigation",
+      "description": "When navigating back to rate a comic, the dice performs a stretching/rolling animation and transforms into a sharp triangular prism (appears to be a d4) even though the UI still shows d6 in the top right corner.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "bug-208",
+      "title": "Add toggle to exit manual mode",
+      "description": "Once in manual mode, there is no way to return to automatic dice ladder mode. Users get stuck.",
+      "status": "pending",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "bug_fix",
+      "blocked_reason": null
+    },
+    {
+      "id": "bug-209",
+      "title": "Fix session end options after rating",
+      "description": "After rating the last issue with a 5, only finish session is shown. Both save and continue and finish session should be available.",
+      "status": "pending",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "bug_fix",
+      "blocked_reason": null
+    },
+    {
+      "id": "cdn-htmx-update",
+      "title": "Update HTMX from 1.9.10 to 2.0.8",
+      "description": "Update HTMX CDN link in app/templates/base.html from version 1.9.10 to 2.0.8 to get bug fixes and performance improvements",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "cdn-sortable-update",
+      "title": "Update SortableJS from 1.15.0 to 1.15.6",
+      "description": "Update SortableJS CDN link in app/templates/base.html from version 1.15.0 to 1.15.6",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "cdn-three-update",
+      "title": "Update Three.js from 0.160.0 to 0.182.0",
+      "description": "Update Three.js CDN link in app/templates/base.html from version 0.160.0 to 0.182.0 to get WebGL improvements and bug fixes",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "code-201",
+      "title": "Fix duplicate get_active_thread call in session.py",
+      "description": "Refactor app/api/session.py line 172 to avoid calling get_active_thread(active_session, db) twice. Store the result in a variable and reuse it. This removes the inefficiency in the return statement at lines 170-175.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "bug_fix",
+      "blocked_reason": null
+    },
+    {
+      "id": "docs-001",
+      "title": "Update AGENTS.md to clarify Manager Agent unified responsibilities",
+      "description": "Remove references to separate Worker Pool Manager role. Clarify that Manager Agent handles both coordination and worker pool management (monitoring capacity, spawning workers). Worker Pool Manager is NOT a separate agent - it is part of Manager Agent responsibilities.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "docs",
+      "blocked_reason": null
+    },
+    {
+      "id": "favicon-001",
+      "title": "Add favicon to web application",
+      "description": "Add a favicon to the comic-pile web application for better branding",
+      "status": "ready",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "feat-003",
+      "title": "Add thread notes field to Thread model",
+      "description": "Add notes field to Thread model to allow tracking additional context about threads (thoughts, decisions, issues, follow-up tasks).",
+      "status": "pending",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "feat-008",
+      "title": "Auto-delete threads when empty",
+      "description": "When a thread reaches 0 issues, it should be automatically deleted.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "feat-011",
+      "title": "Explore sharing/collaboration features",
+      "description": "Explore sharing and collaboration features - what it would take to allow users to share their reading progress, comic ratings, queue configurations, or reading lists with others (for book clubs, shared households, etc.).",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "manual-test",
+      "title": "Manual Test Task",
+      "description": null,
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "pg-migrate-001",
+      "title": "Create .env file with PostgreSQL DATABASE_URL",
+      "description": "Create .env file in main repo with DATABASE_URL configured for PostgreSQL. This will switch the application from SQLite to PostgreSQL.",
+      "status": "blocked",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "pg-migrate-002",
+      "title": "Run PostgreSQL data migration",
+      "description": "Run scripts/migrate_sqlite_to_postgres.py to migrate all data from SQLite to PostgreSQL. Verify data integrity after migration.",
+      "status": "blocked",
+      "priority": "HIGH",
+      "dependencies": "PG-MIGRATE-001",
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "pg-migrate-003",
+      "title": "Update test configuration for PostgreSQL",
+      "description": "Update test fixtures in tests/conftest.py and tests_e2e/conftest.py to use PostgreSQL test databases instead of SQLite. Ensure tests can run with both databases via environment variable.",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": "PG-MIGRATE-002",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "pg-migrate-004",
+      "title": "Update documentation for PostgreSQL",
+      "description": "Update README.md and AGENTS.md to reflect PostgreSQL as the primary database instead of SQLite. Update quick start guide and tech stack sections.",
+      "status": "pending",
+      "priority": "LOW",
+      "dependencies": "PG-MIGRATE-001",
+      "task_type": "docs",
+      "blocked_reason": null
+    },
+    {
+      "id": "pg-migrate-005",
+      "title": "Create migration verification tests",
+      "description": "Create tests to verify SQLite to PostgreSQL migration integrity. Tests should compare row counts, foreign key relationships, and data consistency between databases.",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": "PG-MIGRATE-002",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "pg-migrate-006",
+      "title": "Document graceful SQLite cleanup procedure",
+      "description": "Create documentation for safely removing SQLite database and files after successful PostgreSQL migration. Include backup verification steps and rollback procedures.",
+      "status": "pending",
+      "priority": "LOW",
+      "dependencies": "PG-MIGRATE-002,PG-MIGRATE-005",
+      "task_type": "docs",
+      "blocked_reason": null
+    },
+    {
+      "id": "recovery-001",
+      "title": "Fix test_retros.py file missing from main branch",
+      "description": "File tests/test_retros.py exists in commit f243a24 (Merge UX-001 features) but was removed during stash/checkout. File was renamed/moved - it is now tests_e2e/test_browser_ui.py. Update all task references that point to test_retros.py to use the correct test file name. Test failures: tests/test_retros.py::test_generate_retro_valid_session - sqlalchemy.exc.* error blocking merges.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "recovery-002",
+      "title": "Fix eslint not found error blocking merges",
+      "description": "Manager daemon logs show: Linting failed, skipping merge (error: sh: 1: eslint: not found). Run npm install to install JS linting dependencies (ESLint, htmlhint). Verify scripts/lint.sh works correctly for JavaScript and HTML files.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "recovery-003",
+      "title": "Resolve merge conflicts for 11 blocked bug fix tasks",
+      "description": "Tasks BUG-201, BUG-202, BUG-203, BUG-205, BUG-206, TASK-DB-004, TASK-FEAT-001, TASK-FEAT-004, TASK-FEAT-005, TASK-FEAT-007, TASK-UI-001 are marked done but have blocked_reason Merge conflict during review and worktree=null. Check if these fixes are already merged to main (commits 399b70c for BUG-201, ae138cb for BUG-205/BUG-206). If already merged, mark tasks as done properly. If conflicts exist, resolve them.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "resolve-cdn-updates",
+      "title": "Resolve merge conflicts for CDN update tasks",
+      "description": "Three CDN update tasks are blocked due to merge conflicts: CDN-HTMX-UPDATE, CDN-SORTABLE-UPDATE, CDN-THREE-UPDATE. They have worktree set to comic-pile (main repo) which suggests they were working on main branch. Investigate if branches exist, resolve conflicts, and merge the CDN version updates.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "bugfix",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "resolve-task-api-003",
+      "title": "Resolve merge conflict for TASK-API-003 DELETE endpoint",
+      "description": "TASK-API-003 (Add DELETE endpoint to Task API) is blocked due to merge conflict. Worktree /home/josh/code/comic-pile-delete-endpoint does not exist. Need to restore worktree or find the branch, resolve conflicts, and merge the DELETE endpoint feature.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "bugfix",
+      "blocked_reason": null
+    },
+    {
+      "id": "resolve-ux-001",
+      "title": "Resolve merge conflict for UX-001 dice UI states",
+      "description": "UX-001 (Define explicit dice UI states) is blocked due to merge conflict during review. Worktree: /home/josh/code/comic-pile-bob. The branch UX-001-bob is local only and needs to be merged to main. There may also be a test error in tests/test_retros.py causing the block. Fix the conflict, resolve test errors, and mark the task ready for merge.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "bugfix",
+      "blocked_reason": null
+    },
+    {
+      "id": "spike-001",
+      "title": "Explore dice ladder customization for different reading patterns",
+      "description": "Investigate how to current dice ladder algorithm works with different user patterns (short lists, 100+ threads, etc.) and identify customization opportunities.",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "spike-002",
+      "title": "Explore alternative rating scales",
+      "description": "The current 1-5 rating scale is arbitrary. Explore simpler alternatives like thumbs up/down or 3-star scales that may be easier for users.",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "spike-003",
+      "title": "Explore metadata-driven queue algorithms",
+      "description": "Investigate using metadata (genre, creative team, similarity) to drive queue positioning and ladder promotion/demotion.",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "spike-004",
+      "title": "Explore anti-binge mechanics and goal tracking",
+      "description": "Some users want to avoid binging good series while still making progress through their collection. Explore mechanics to support this.",
+      "status": "in_progress",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-101",
+      "title": "Test PATCH Update",
+      "description": "Review and document all session summaries for narrative continuity",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-102",
+      "title": "Set Up Automated Testing Pipeline",
+      "description": "Configure CI/CD pipeline with automated tests",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-103",
+      "title": "Migrate Database Schema",
+      "description": "Update database schema and create migration scripts",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": "TASK-102",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-104",
+      "title": "Implement Worker Pool Manager",
+      "description": "Create agent pool management system",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": "TASK-101",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-105",
+      "title": "Design Task Dependency Graph",
+      "description": "Create visual representation of task dependencies",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": "TASK-103",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-106",
+      "title": "Add Authentication Middleware",
+      "description": "Implement user authentication for API endpoints",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-107",
+      "title": "Optimize Database Queries",
+      "description": "Identify and optimize slow database queries",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": "TASK-103",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-108",
+      "title": "Create API Documentation",
+      "description": "Document all REST API endpoints",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-109",
+      "title": "Implement Error Logging",
+      "description": "Add centralized error logging and monitoring",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": "TASK-106",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-110",
+      "title": "Add Performance Metrics",
+      "description": "Track application performance metrics",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": "TASK-109",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-111",
+      "title": "Create User Guide",
+      "description": "Write comprehensive user documentation",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": "TASK-108",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-112",
+      "title": "Set Up Production Deployment",
+      "description": "Configure production environment and deployment",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": "TASK-103, TASK-107",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-113",
+      "title": "Fix Session Time-Scoping Bug",
+      "description": null,
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-114",
+      "title": "Fix test_export_json Notes References",
+      "description": null,
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-115",
+      "title": "Fix Event.notes Attribute Error in admin.py",
+      "description": null,
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-116",
+      "title": "Fix constraint_name None in Migration File",
+      "description": null,
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-117",
+      "title": "Fix Linting in Git Worktrees",
+      "description": null,
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-118",
+      "title": "Add Descriptive Error Logs with Stacktraces",
+      "description": null,
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-119",
+      "title": "Architectural Review: Extract Task API to External Service",
+      "description": null,
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-120",
+      "title": "Evaluate Task API as MCP Server vs Alternative Technologies",
+      "description": null,
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-121",
+      "title": "Fix d10 Die Rendering - Cylinder to Decahedron",
+      "description": null,
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-122",
+      "title": "Fix Server Startup SyntaxError",
+      "description": null,
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-123",
+      "title": "Fix Invisible d10 Die Rendering",
+      "description": null,
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-124",
+      "title": "Investigate and Fix Website Performance",
+      "description": "Website is slow when rolling and rating. Should be very fast. Investigate potential causes: database queries, Three.js rendering, network requests, blocking operations. Profile and identify bottlenecks.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-125",
+      "title": "Fix d10 Die Geometry - Proper Pentagonal Trapezohedron",
+      "description": "d10 die renders incorrectly - looks like collapsed cylinder or explosion, not proper pentagonal trapezohedron. Should have kite-shaped faces, formed by two 5-sided pyramids joined at their bases but rotated. Current buildDecahedron implementation in static/js/dice3d.js has wrong vertex positions or face ordering.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-126",
+      "title": "Add Playwright Integration Tests",
+      "description": "Create comprehensive integration tests using Playwright to test app performance and user workflows. Tests should cover: roll functionality, rating workflow, thread management, queue operations, and measure response times for key interactions.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-127",
+      "title": "Fix Session Timezone Bug - Naive vs Aware Datetime Comparison",
+      "description": "The session.started_at field is stored as a naive datetime but compared against timezone-aware datetimes in is_active(), causing incorrect session scoping. This results in sessions persisting longer than configured session_gap_hours. All session-related timestamps should consistently use timezone-aware datetimes.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-200",
+      "title": "Configurable Session Settings",
+      "description": "PRD Section 12 shows settings object with session_gap_hours, start_die, and rating_scale. Currently these are hardcoded in the code. Need to create a Settings model and API to allow configuration of these values.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-201",
+      "title": "Include review_url and last_review_at in Thread API Response",
+      "description": "Thread model has review_url and last_review_at fields (PRD Section 9), but ThreadResponse schema does not include them. These fields should be returned in GET /threads/ and GET /threads/{id} endpoints.",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-300",
+      "title": "Import reading list from Google Sheets",
+      "description": "Add description and last_read_note fields to Thread model, then import actual reading list from Google Sheets (tab-separated format) replacing all existing faker threads",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-api-003",
+      "title": "Add DELETE endpoint to Task API",
+      "description": "Task API currently has no DELETE endpoint. Add ability to delete tasks via DELETE /api/tasks/{task_id} to clean up placeholder/superfluous tasks.",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-api-004",
+      "title": "Add PATCH endpoint and improve error responses",
+      "description": "Task API needs PATCH endpoint for partial updates. Also 422 validation errors are confusing - need better error messages.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-api-005",
+      "title": "Fix and automate git worktree creation in Task API",
+      "description": "Worktree path construction is broken (double slash: ..//home/josh/code/). Also automate worktree creation when claiming tasks to improve developer experience.",
+      "status": "pending",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "bug_fix",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-bug-001",
+      "title": "Fix Die Rolled Display Bug",
+      "description": "The die rolled value always shows 1 when switching between roll and rate views. It should persist the rolled number until a new roll occurs.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-bug-002",
+      "title": "Fix Incorrect Messaging at d4 Stage",
+      "description": "When rating 4+ at d4 stage, the app incorrectly states die step is going down, but d4 is already the minimum die size.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-cleanup-001",
+      "title": "Clean up completed task worktrees",
+      "description": "Remove worktrees for tasks that have been merged to main but still exist on filesystem. Check TASK-FEAT-001/004/005/006/007, TASK-UI-001 branches for merge status, then clean up if merged.",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-cov-001",
+      "title": "Add test coverage for HTMX frontend",
+      "description": "Currently no test coverage for HTMX interactions and frontend templates. Add integration tests for frontend behavior to ensure HTMX events, responses, and UI updates are tested.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-critical-001",
+      "title": "Fix worktree null bug in /unclaim endpoint",
+      "description": "The unclaim endpoint clears worktree field even for in_review tasks, creating silent failures where reviewer-merger cannot review tasks.",
+      "status": "done",
+      "priority": "CRITICAL",
+      "dependencies": null,
+      "task_type": "bug",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-critical-002",
+      "title": "Add session tracking to Task model",
+      "description": "Add session_id and session_start_time fields to Task model for retro generation API",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-critical-006",
+      "title": "Add buffer session convergence criteria",
+      "description": "Update buffer-session agent prompt to include convergence criteria in PHASE 7 to prevent infinite loops. Add stop conditions for max iterations, zero new issues, all previous issues fixed, and human approval required.",
+      "status": "done",
+      "priority": "CRITICAL",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-db-001",
+      "title": "Add PostgreSQL driver to pyproject.toml",
+      "description": "Add psycopg[binary]>=3.1.0 to dependencies in pyproject.toml and run uv sync to install.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-db-002",
+      "title": "Update app/database.py for environment-based database URL",
+      "description": "Modify app/database.py to read DATABASE_URL from environment variable with SQLite fallback, and handle both SQLite and PostgreSQL connection arguments.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": "TASK-DB-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-db-003",
+      "title": "Update Alembic configuration for PostgreSQL",
+      "description": "Update alembic.ini with PostgreSQL connection URL and modify alembic/env.py to use DATABASE_URL environment variable.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": "TASK-DB-002",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-db-004",
+      "title": "Create SQLite to PostgreSQL migration script",
+      "description": "Create scripts/migrate_sqlite_to_postgres.py to migrate all existing data from SQLite to PostgreSQL while preserving relationships.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": "TASK-DB-003",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-db-005",
+      "title": "Add health check endpoint to FastAPI app",
+      "description": "Add /health endpoint to app/main.py that checks database connectivity and returns 200 OK if healthy.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": "TASK-DOCKER-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-deploy-001",
+      "title": "Create docker-compose.prod.yml for production",
+      "description": "Create production Docker Compose configuration with Nginx reverse proxy, proper secrets management, and no volume mounts for app code.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": "TASK-TEST-001",
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-deploy-002",
+      "title": "Update Makefile with Docker commands",
+      "description": "Add Docker-related commands to Makefile for common operations like build, up, down, logs, and running migrations in containers.",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": "TASK-TEST-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-deploy-003",
+      "title": "Create production deployment documentation",
+      "description": "Document production deployment process including environment setup, security considerations, backup procedures, and monitoring.",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": "TASK-DEPLOY-001,TASK-DEPLOY-002",
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-docker-001",
+      "title": "Create Dockerfile for comic-pile application",
+      "description": "Create a multi-stage Dockerfile using Python 3.13-slim base image with production optimization, non-root user, health checks, and uv for dependency management.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-docker-002",
+      "title": "Create docker-compose.yml for local development",
+      "description": "Create docker-compose.yml with PostgreSQL 16, app service with hot reload, optional pgAdmin for database management, and proper health checks.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": "TASK-DOCKER-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-docker-003",
+      "title": "Create .dockerignore and .env.example files",
+      "description": "Create .dockerignore to exclude unnecessary files from Docker build context and .env.example as template for environment variables.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": "TASK-DOCKER-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-feat-001",
+      "title": "Add Manual Dice Control",
+      "description": "Users should be able to manually change which dice they are rolling at any point, giving them control over their reading progression.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-feat-002",
+      "title": "Add Undo/History Functionality",
+      "description": "History should allow going back to a point in history or rewriting it. Currently no undo capability exists.",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-feat-003",
+      "title": "Add Loading Indicator After Rating",
+      "description": "There is a long pause after rating before the app renders. A loading screen or indicator would improve user experience.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-feat-004",
+      "title": "Add Dynamic Rating Messages",
+      "description": "Change the message as user slides rating bar to different phrases matching the score (e.g., \"world class\", \"best ever\", \"worst ever\").",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-feat-005",
+      "title": "Add Reroll Functionality",
+      "description": "Allow users to reroll when stuck in weird loops (e.g., 1,2,1,2 at d4 step). This gives more control over the experience.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-feat-006",
+      "title": "Add Configurable Ladder Starting Point",
+      "description": "Starting the ladder at d6 does not give enough room to climb. Allow configuration of starting die size.",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-feat-007",
+      "title": "Improve Session Events Display",
+      "description": "Session events are indecipherable with just time logs and random interspersed content. Make events clear and meaningful.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-lint-001",
+      "title": "Add linting for JavaScript and HTML",
+      "description": "No automated linting for JavaScript files (static/js/*.js) or HTML templates (app/templates/*.html). Add linting tools and integrate into workflow to catch errors and enforce code style.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-metrics-001",
+      "title": "Add task completion metrics and analytics dashboard",
+      "description": "Add task completion metrics and analytics dashboard. Track key performance indicators and help users understand task system health.",
+      "status": "blocked",
+      "priority": "HIGH",
+      "dependencies": "",
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-rollback-001",
+      "title": "Document and test rollback procedures",
+      "description": "Document rollback procedures for reverting to SQLite and rolling back PostgreSQL migrations. Test rollback procedures.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": "TASK-TEST-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-security-001",
+      "title": "Perform security audit of Docker setup",
+      "description": "Review Docker configuration for security issues including non-root user, secrets management, SSL configuration, and container hardening.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": "TASK-DEPLOY-001",
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-security-002",
+      "title": "Add rate limiting to API endpoints",
+      "description": "Add rate limiting to API endpoints to prevent abuse and ensure fair resource usage.",
+      "status": "pending",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-test-001",
+      "title": "Test dockerized application locally",
+      "description": "Test the complete Docker setup including PostgreSQL integration, migrations, and all API endpoints.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": "TASK-DOCKER-002,TASK-DB-004,TASK-DB-005",
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-test-002",
+      "title": "Create PostgreSQL backup and restore scripts",
+      "description": "Create scripts/backup_postgres.sh for automated backups and document manual restore procedures.",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": "TASK-TEST-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-ui-001",
+      "title": "Redesign Queue Screen",
+      "description": "Queue screen currently shows active ladder with dice and roll pool, which is confusing. Should show all comics in queue with ability to remove, move up/down, and edit.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-ui-002",
+      "title": "Improve Roll Pool Readability",
+      "description": "The numbers next to comics in the roll pool on the roll view are difficult to read. Make them more prominent and legible.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-ui-003",
+      "title": "Add task search and filter to coordinator dashboard",
+      "description": "Add task search and filter functionality to the coordinator dashboard. This will allow users to quickly find tasks by task ID, title, or other criteria without manual scrolling.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "task-unblock-001",
+      "title": "Unblock 11 stuck in_review tasks",
+      "description": "11 tasks stuck in_review with invalid worktrees. Need to either set correct worktrees or reset to pending so workers can properly complete them.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "task-workflow-001",
+      "title": "Fix critical Task API workflow issues",
+      "description": "Fix systemic workflow issues causing tasks to get blocked with worktree=null and workers bypassing review process.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "test-001",
+      "title": "Test Task",
+      "description": null,
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "test-201",
+      "title": "Add tests for app/main.py error handlers",
+      "description": "Add comprehensive tests for all error handlers in app/main.py: global_exception_handler (line 177), http_exception_handler (line 230), and validation_exception_handler (line 268). Test various exception types, error codes, and response formats. Ensure error responses include appropriate status codes and error messages.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "test-202",
+      "title": "Add tests for merge-to-main endpoint",
+      "description": "Add comprehensive tests for POST /api/tasks/{task_id}/merge-to-main endpoint. Test success path, merge conflicts, invalid task status, missing worktree, and various error conditions. Verify task status changes to done on success and blocked on merge conflicts.",
+      "status": "pending",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "test-203",
+      "title": "Add tests for retro report endpoints",
+      "description": "Add comprehensive tests for retro report API endpoints in app/api/retros.py. Test POST /retros/generate endpoint for generating session retrospectives. Test with valid session IDs, invalid session IDs, empty sessions, and sessions with various event types.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "test-204",
+      "title": "Add edge case tests for queue reordering",
+      "description": "Add additional edge case tests for queue reordering operations beyond existing tests. Test concurrent moves, boundary conditions, duplicate operations, large queue sizes, and unusual position values. Ensure queue integrity is maintained in all scenarios.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "test-205",
+      "title": "Add regression test coverage for bug fixes",
+      "description": "Ensure all bug fixes include regression tests. Review recent bug fixes (BUG-201 through BUG-206) and add corresponding regression tests if missing. This establishes a pattern for ongoing bug fix testing.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "test-206",
+      "title": "Enforce 90% coverage on new features",
+      "description": "Establish a process to enforce 90% minimum test coverage for all new features. Update documentation and add CI checks. This is an ongoing process task to ensure quality standards are maintained going forward.",
+      "status": "done",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "documentation",
+      "blocked_reason": null
+    },
+    {
+      "id": "test-check",
+      "title": "Test",
+      "description": null,
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "test-new",
+      "title": "New Test Task",
+      "description": "This is a new test task description",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "test-post-final",
+      "title": "Final POST Endpoint Test",
+      "description": "Testing POST /tasks/ after description field fix",
+      "status": "done",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "ux-001",
+      "title": "Define explicit dice UI states",
+      "description": "Users are confused by dice state transitions (idle vs rolled vs reroll vs rate flow). Define clear visual states.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "ux-002",
+      "title": "Add explicit dice state labels",
+      "description": "Dice state is invisible to users. Add clear, non-intrusive labels to communicate current state.",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": "UX-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "ux-003",
+      "title": "Highlight selected comic in roll pool",
+      "description": "After rolling, users cannot see which comic was selected. Highlight the winning comic visually.",
+      "status": "done",
+      "priority": "HIGH",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "ux-004",
+      "title": "Map dice result to roll pool selection",
+      "description": "Dice result (d4, d6, d8, etc.) needs visual connection to the selected position in roll pool.",
+      "status": "pending",
+      "priority": "HIGH",
+      "dependencies": "UX-003",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "ux-005",
+      "title": "Persist roll pool selection state",
+      "description": "Roll pool selection/highlight does not persist when navigating. State should be maintained.",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": "UX-003, UX-004",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "ux-006",
+      "title": "Add lightweight ladder explanation tooltip",
+      "description": "Ladder concept (d4…d20) is jargon. Add a non-intrusive explanation.",
+      "status": "blocked",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": "Merge conflict during review"
+    },
+    {
+      "id": "ux-007",
+      "title": "Clarify primary action navigation",
+      "description": "Navigation overlaps - tapping dice vs tapping ROLL button is confusing.",
+      "status": "in_progress",
+      "priority": "HIGH",
+      "dependencies": "UX-001",
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "ux-008",
+      "title": "Polish desktop layout and spacing",
+      "description": "Desktop view has excessive empty space and feels broken. Improve layout.",
+      "status": "pending",
+      "priority": "LOW",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    },
+    {
+      "id": "ux-204",
+      "title": "Clarify relationship between dice roll and comic number",
+      "description": "Users get confused because the dice number and comic number do not match. The dice shows a random result while the assigned book number comes from the dice ladder logic. Users need clearer visual indication that these are separate values.",
+      "status": "pending",
+      "priority": "MEDIUM",
+      "dependencies": null,
+      "task_type": "feature",
+      "blocked_reason": null
+    }
+  ]
+}
