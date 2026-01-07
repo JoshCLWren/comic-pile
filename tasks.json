@@ -134,7 +134,7 @@
       "id": "favicon-001",
       "title": "Add favicon to web application",
       "description": "Add a favicon to the comic-pile web application for better branding",
-      "status": "ready",
+      "status": "in_progress",
       "priority": "HIGH",
       "dependencies": null,
       "task_type": "feature",

@@ -12,6 +12,7 @@ class ThreadCreate(BaseModel):
     title: str = Field(..., min_length=1)
     format: str = Field(..., min_length=1)
     issues_remaining: int = Field(..., ge=0)
+    notes: str | None = None
 
 
 class ThreadUpdate(BaseModel):
