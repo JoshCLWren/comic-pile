@@ -214,7 +214,7 @@
       "id": "pg-migrate-004",
       "title": "Update documentation for PostgreSQL",
       "description": "Update README.md and AGENTS.md to reflect PostgreSQL as the primary database instead of SQLite. Update quick start guide and tech stack sections.",
-      "status": "pending",
+      "status": "done",
       "priority": "LOW",
       "dependencies": "PG-MIGRATE-001",
       "task_type": "docs",

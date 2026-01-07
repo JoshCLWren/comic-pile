@@ -13,7 +13,7 @@ A dice-driven comic reading tracker built with FastAPI, HTMX, and Tailwind CSS.
 ## Tech Stack
 
 - **Backend**: FastAPI (Python 3.13)
-- **Database**: SQLite with SQLAlchemy ORM
+- **Database**: PostgreSQL with SQLAlchemy ORM
 - **Migrations**: Alembic
 - **Frontend**: HTMX + Jinja2 templates
 - **Styling**: Tailwind CSS
