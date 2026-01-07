@@ -61,6 +61,7 @@ curl -X POST http://localhost:8000/api/tasks/TASK-101/claim \
 - Returns 409 Conflict if already claimed by another agent
 - Worktree path must exist (or set `SKIP_WORKTREE_CHECK=true`)
 - Status changes to `in_progress`
+- Set `AUTO_CREATE_WORKTREE=true` to automatically create worktrees on claim (git branch and worktree created automatically)
 
 ### 2. Create Worktree (if not exists)
 

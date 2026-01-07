@@ -1006,13 +1006,53 @@ def claim_task(
             capture_output=True,
             text=True,
         )
+
+        worktree_path = (
+            request.worktree
+            if os.path.isabs(request.worktree)
+            else os.path.join(os.path.dirname(os.getcwd()), request.worktree)
+        )
+
         if request.worktree not in result.stdout:
-            worktree_path = os.path.join(os.path.dirname(os.getcwd()), request.worktree)
-            if not os.path.exists(worktree_path):
+            if os.path.exists(worktree_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Worktree {request.worktree} exists but is not a valid git worktree. Please remove the directory or register it as a worktree.",
+                )
+
+            auto_create_worktree = os.getenv("AUTO_CREATE_WORKTREE", "false").lower() == "true"
+            if not auto_create_worktree:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Worktree {request.worktree} does not exist. Please create it first with: git worktree add ../{request.worktree} <branch>",
                 )
+
+            branch_name = f"task/{task.task_id}"
+            result = subprocess.run(
+                ["git", "checkout", "-b", branch_name],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to create branch {branch_name}: {result.stderr}",
+                )
+
+            result = subprocess.run(
+                ["git", "worktree", "add", worktree_path, branch_name],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                subprocess.run(["git", "checkout", "main"], capture_output=True)
+                subprocess.run(["git", "branch", "-D", branch_name], capture_output=True)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to create worktree at {worktree_path}: {result.stderr}",
+                )
+
+            subprocess.run(["git", "checkout", "main"], capture_output=True)
 
     task.status = "in_progress"
     task.assigned_agent = request.agent_name
@@ -1122,7 +1162,11 @@ def set_status(
                 capture_output=True,
                 text=True,
             )
-            worktree_path = os.path.join(os.path.dirname(os.getcwd()), task.worktree)
+            worktree_path = (
+                task.worktree
+                if os.path.isabs(task.worktree)
+                else os.path.join(os.path.dirname(os.getcwd()), task.worktree)
+            )
             if task.worktree not in result.stdout:
                 if not os.path.exists(worktree_path):
                     raise HTTPException(
@@ -1537,7 +1581,11 @@ async def merge_task_to_main(task_id: str, db: Session = Depends(get_db)) -> dic
     worktree_path = task.worktree
     import os
 
-    full_worktree_path = os.path.join(os.path.dirname(os.getcwd()), worktree_path)
+    full_worktree_path = (
+        worktree_path
+        if os.path.isabs(worktree_path)
+        else os.path.join(os.path.dirname(os.getcwd()), worktree_path)
+    )
 
     if not os.path.exists(full_worktree_path):
         raise HTTPException(400, f"Worktree not found: {worktree_path}")

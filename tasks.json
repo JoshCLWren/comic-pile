@@ -664,7 +664,7 @@
       "id": "task-api-005",
       "title": "Fix and automate git worktree creation in Task API",
       "description": "Worktree path construction is broken (double slash: ..//home/josh/code/). Also automate worktree creation when claiming tasks to improve developer experience.",
-      "status": "pending",
+      "status": "done",
       "priority": "HIGH",
       "dependencies": null,
       "task_type": "bug_fix",

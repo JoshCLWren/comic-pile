@@ -1,5 +1,7 @@
 """Tests for task API endpoints."""
 
+import os
+
 import pytest
 from httpx import AsyncClient
 
@@ -921,7 +923,7 @@ async def test_search_pagination(client: AsyncClient, sample_tasks: list[Task]) 
     assert data["pagination"]["page"] == 1
     assert data["pagination"]["page_size"] == 2
     assert len(data["tasks"]) <= 2
-    
+
     response = await client.get("/api/tasks/search?page=2&page_size=2")
     assert response.status_code == 200
     data = response.json()
@@ -957,3 +959,33 @@ async def test_search_case_insensitive(client: AsyncClient, sample_tasks: list[T
     data1 = response1.json()
     data2 = response2.json()
     assert len(data1["tasks"]) == len(data2["tasks"])
+
+
+@pytest.mark.asyncio
+async def test_claim_with_worktree_auto_creation(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test that claiming with AUTO_CREATE_WORKTREE=false requires manual worktree creation."""
+    original_skip_value = os.getenv("SKIP_WORKTREE_CHECK")
+    original_auto_value = os.getenv("AUTO_CREATE_WORKTREE")
+
+    try:
+        os.environ["SKIP_WORKTREE_CHECK"] = "false"
+        os.environ["AUTO_CREATE_WORKTREE"] = "false"
+
+        worktree_name = f"comic-pile-manual-test-{os.getpid()}"
+
+        response = await client.post(
+            "/api/tasks/TASK-101/claim",
+            json={"agent_name": "agent-auto", "worktree": worktree_name},
+        )
+
+        assert response.status_code == 400
+        assert "does not exist" in response.json()["detail"]
+    finally:
+        os.environ.pop("SKIP_WORKTREE_CHECK", None)
+        if original_skip_value:
+            os.environ["SKIP_WORKTREE_CHECK"] = original_skip_value
+        os.environ.pop("AUTO_CREATE_WORKTREE", None)
+        if original_auto_value:
+            os.environ["AUTO_CREATE_WORKTREE"] = original_auto_value
