@@ -59,8 +59,9 @@
                     title="Return to automatic dice ladder mode">Auto</button>
             </div>
             <div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
-                <div id="header-die-container" class="flex items-center justify-center" style="width: 40px; height: 40px;">
+                <div id="header-die-container" class="relative flex items-center justify-center" style="width: 40px; height: 40px;">
                     <div id="header-die-3d" class="w-full h-full"></div>
+                    <span id="header-die-state-label" class="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300 whitespace-nowrap"></span>
                 </div>
                 <div class="text-right">
                     <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">Ladder</span>
@@ -84,6 +85,7 @@
                 hx-swap="innerHTML"
                 hx-trigger="triggerRoll">
                 <div id="main-die-3d" class="w-full h-full"></div>
+                <span id="main-die-state-label" class="absolute -bottom-6 text-[8px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300"></span>
             </div>
 
             <p id="tap-instruction"
@@ -140,6 +142,19 @@
 
         wrapper.classList.remove('dice-state-idle', 'dice-state-rolled', 'dice-state-reroll', 'dice-state-rate-flow');
         wrapper.classList.add('dice-state-' + state);
+
+        const label = document.getElementById('main-die-state-label');
+        if (label) {
+            const stateLabels = {
+                'idle': 'Ready',
+                'rolled': 'Rolled',
+                'reroll': 'Rerolling',
+                'rate-flow': 'Rating'
+            };
+            label.textContent = stateLabels[state] || '';
+            label.style.opacity = state === 'idle' ? '0' : '1';
+        }
+
         console.log('[RollPage] Dice state set to:', state);
     }
 

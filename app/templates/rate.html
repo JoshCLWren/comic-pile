@@ -7,9 +7,10 @@
             <h1 class="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Rate Session</h1>
             <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mark your progress</p>
         </div>
-        <div id="header-die-container" class="dice-perspective"
+        <div id="header-die-container" class="dice-perspective relative"
             style="width: 50px; height: 50px; transform: scale(0.4);">
             <!-- Die injected by JS -->
+            <span id="header-die-state-label" class="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300 whitespace-nowrap"></span>
         </div>
     </header>
 
@@ -24,8 +25,9 @@
 
         <div class="space-y-12 relative z-10">
             <div id="rating-preview-dice" class="dice-perspective mb-4">
-                <div id="die-preview-wrapper" class="dice-state-rate-flow flex items-center justify-center" style="width: 120px; height: 120px; margin: 0 auto;">
+                <div id="die-preview-wrapper" class="dice-state-rate-flow relative flex items-center justify-center" style="width: 120px; height: 120px; margin: 0 auto;">
                     <div id="die-preview" class="die-3d w-full h-full"></div>
+                    <span id="die-preview-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wider text-indigo-400">Rating</span>
                 </div>
             </div>
 

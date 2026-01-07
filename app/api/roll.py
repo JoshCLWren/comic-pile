@@ -111,6 +111,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
             <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
                 <div id="result-die-wrapper" class="dice-state-rolled threejs-die-container relative z-10 rounded-full" style="width: 100px; height: 100px; margin: 0 auto;">
                     <div id="result-die-3d" class="w-full h-full"></div>
+                    <span id="result-die-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-teal-400">Rolled</span>
                 </div>
                 <div class="text-center px-4">
                     <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">You rolled</p>
@@ -164,14 +165,17 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 }}
 
                 const rerollBtn = document.getElementById('reroll-btn');
+                const resultDieLabel = document.getElementById('result-die-state-label');
                 if (rerollBtn) {{
                     rerollBtn.addEventListener('mouseenter', function() {{
                         if (resultWrapper) resultWrapper.classList.remove('dice-state-rolled');
                         if (resultWrapper) resultWrapper.classList.add('dice-state-reroll');
+                        if (resultDieLabel) resultDieLabel.textContent = 'Rerolling';
                     }});
                     rerollBtn.addEventListener('mouseleave', function() {{
                         if (resultWrapper) resultWrapper.classList.remove('dice-state-reroll');
                         if (resultWrapper) resultWrapper.classList.add('dice-state-rolled');
+                        if (resultDieLabel) resultDieLabel.textContent = 'Rolled';
                     }});
                 }}
 
@@ -363,8 +367,9 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
     return f"""
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
             <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
-                <div class="threejs-die-container relative z-10" style="width: 100px; height: 100px; margin: 0 auto;">
+                <div id="result-die-wrapper" class="threejs-die-container relative z-10" style="width: 100px; height: 100px; margin: 0 auto;">
                     <div id="result-die-3d" class="w-full h-full"></div>
+                    <span id="result-die-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-teal-400">Rerolled</span>
                 </div>
                 <div class="text-center px-4">
                     <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">Rerolled</p>

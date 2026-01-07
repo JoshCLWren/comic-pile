@@ -1154,7 +1154,7 @@
       "id": "ux-002",
       "title": "Add explicit dice state labels",
       "description": "Dice state is invisible to users. Add clear, non-intrusive labels to communicate current state.",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": "UX-001",
       "task_type": "feature",
