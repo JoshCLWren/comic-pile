@@ -102,11 +102,15 @@ Do NOT:
 - Create tasks for sub-work
 - Delegate to other workers
 - Wait for instructions
+- Delete or overwrite tasks.json - this file contains all tasks for the project
 
 DO:
 - Iterate until complete
 - Fix failures yourself
 - Test everything
+- Preserve tasks.json - mark tasks as done, do not delete the file
+
+IMPORTANT: When cleaning up after completing tasks, NEVER delete tasks.json. Mark completed tasks as "done" and move on to the next task in a subsequent ralph session.
 """
     return prompt
 
