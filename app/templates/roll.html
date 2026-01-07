@@ -171,6 +171,13 @@
                 btn.classList.add('bg-white/5');
             }
         });
+
+        const autoBtn = document.getElementById('auto-mode-btn');
+        if (autoBtn) {
+            autoBtn.classList.remove('bg-amber-500/20', 'border-amber-500', 'text-amber-400');
+            autoBtn.classList.add('bg-white/5');
+            autoBtn.title = 'Return to automatic dice ladder mode';
+        }
     }
 
     function rollTheDie() {

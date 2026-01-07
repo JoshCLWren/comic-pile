@@ -2,6 +2,7 @@
 """Ralph Orchestrator - Autonomous task iteration using Ralph mode and OpenCodeClient."""
 
 import argparse
+import datetime
 import json
 import sys
 import time
@@ -9,6 +10,38 @@ from pathlib import Path
 
 sys.path.insert(0, "/home/josh/code/journal")
 from opencode_client import OpenCodeClient  # type: ignore
+
+
+def get_timestamp() -> str:
+    """Get current timestamp in HH:MM:SS format."""
+    return datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S")
+
+
+def log_info(message: str) -> None:
+    """Log info message with timestamp."""
+    print(f"[{get_timestamp()}] INFO: {message}")
+
+
+def log_success(message: str) -> None:
+    """Log success message with timestamp."""
+    print(f"[{get_timestamp()}] ✓ {message}")
+
+
+def log_error(message: str) -> None:
+    """Log error message with timestamp."""
+    print(f"[{get_timestamp()}] ✗ {message}", file=sys.stderr)
+
+
+def log_step(step: int, message: str) -> None:
+    """Log step with step number."""
+    print(f"[{get_timestamp()}] [STEP {step}] {message}")
+
+
+def log_section(title: str) -> None:
+    """Log section header."""
+    print(f"\n{'=' * 60}")
+    print(f"  {title}")
+    print(f"{'=' * 60}\n")
 
 
 def load_tasks(tasks_file: Path) -> dict:
@@ -100,35 +133,58 @@ def process_task_with_client(
     client: OpenCodeClient,
     task: dict,
     verbose: bool = False,
+    timeout: int = 600,
 ) -> bool:
     """Process a single task using OpenCodeClient."""
-    print("\n" + "=" * 60)
-    print(f"Creating opencode session for task {task['id']}...")
-    print("=" * 60)
+    log_section(f"TASK: {task['id']} - {task['title']}")
+    log_step(1, "Initializing OpenCode session")
 
-    session_id = client.create_session()
-    print(f"Session created: {session_id}")
+    log_info(f"Connecting to opencode at {client.base_url} (timeout: {timeout}s)")
+    try:
+        session_id = client.create_session()
+        log_success(f"Creating session: {session_id}")
+    except Exception as e:
+        log_error(f"Failed to create session: {e}")
+        raise
 
+    log_step(2, "Generating Ralph mode prompt")
     ralph_prompt = generate_ralph_prompt(task)
-    print("\n" + "=" * 60)
-    print("Sending Ralph mode prompt to agent...")
-    print("=" * 60)
+    log_info("Generating Ralph mode prompt")
 
     if verbose:
         print("\n--- RALPH MODE PROMPT ---")
         print(ralph_prompt)
         print("--- END PROMPT ---\n")
 
-    print("[RALPH] Sending prompt to opencode...")
-    response = client.chat(ralph_prompt)
+    log_step(3, "Sending prompt to opencode session (no timeout - let AI take as long as needed)")
+    log_info("Sending prompt to opencode")
 
-    print("\n" + "=" * 60)
-    print("AI Response:")
-    print("=" * 60)
-    print(response["content"])
-    print("=" * 60)
+    try:
+        response = client.chat(ralph_prompt, timeout=None)
+        content = response.get("content", "")
 
-    is_complete = "<complete>" in response["content"] or "<promise>" in response["content"]
+        # Ralph mode task should include completion signal when done
+        # Don't validate content length - let AI work until complete
+        if not content:
+            log_error("Received empty response from opencode")
+            log_error("AI may have failed to start or complete task")
+            log_error("Retrying task on next iteration...")
+            return False
+
+        log_success(f"Received response ({len(content)} chars)")
+    except Exception as e:
+        log_error(f"Failed to get response: {e}")
+        log_error("Retrying task on next iteration...")
+        return False
+
+    log_step(4, "Parsing AI response for completion detection")
+    is_complete = "<complete>" in content or "<promise>" in content
+    log_info(f"Completion detection: {'COMPLETE' if is_complete else 'NOT COMPLETE'}")
+
+    if not is_complete:
+        log_info("Note: AI response received but completion signal not found")
+        log_info("This is expected in Ralph mode - AI continues working in background")
+        log_info("Task will be retried on next iteration if not complete")
 
     return is_complete
 
@@ -152,107 +208,133 @@ def main() -> None:
         default="http://127.0.0.1:4096",
         help="opencode base URL (default: http://127.0.0.1:4096)",
     )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=600,
+        help="opencode request timeout in seconds (default: 600 = 10 minutes)",
+    )
     args = parser.parse_args()
 
     tasks_file = args.tasks_file
     if not tasks_file.exists():
-        print(f"Error: {tasks_file} not found", file=sys.stderr)
+        log_error(f"{tasks_file} not found")
         sys.exit(1)
 
     if args.dry_run:
-        print("DRY RUN MODE - No actual changes will be made\n")
+        log_info("DRY RUN MODE - No actual changes will be made")
 
     iteration_count = 0
 
     client = None
     if not args.dry_run:
-        print(f"\nConnecting to opencode at {args.base_url}...")
+        log_info("Initializing Ralph orchestrator")
+        log_info(f"Connecting to opencode at {args.base_url}")
         try:
             client = OpenCodeClient(base_url=args.base_url)
         except Exception as e:
-            print(f"Error creating OpenCodeClient: {e}", file=sys.stderr)
+            log_error(f"Error creating OpenCodeClient: {e}")
             sys.exit(1)
 
-        print("Checking opencode health...")
+        log_info("Checking opencode health")
         try:
             health = client.health()
             if not health.get("healthy"):
-                print(f"OpenCode not healthy: {health}", file=sys.stderr)
+                log_error(f"OpenCode not healthy: {health}")
                 sys.exit(1)
-            print(f"✓ OpenCode healthy (version: {health.get('version', 'unknown')})")
+            version = health.get("version", "unknown")
+            log_success(f"Health check passed (version: {version})")
         except Exception as e:
-            print(f"Error checking health: {e}", file=sys.stderr)
+            log_error(f"Error checking health: {e}")
             sys.exit(1)
 
     while True:
+        log_info("Loading tasks.json")
         try:
             tasks_data = load_tasks(tasks_file)
+            task_count = len(tasks_data.get("tasks", []))
+            log_success(f"Loading tasks.json ({task_count} tasks total)")
         except Exception as e:
-            print(f"Error loading tasks from {tasks_file}: {e}", file=sys.stderr)
+            log_error(f"Error loading tasks from {tasks_file}: {e}")
             sys.exit(1)
 
         pending_task = find_pending_task(tasks_data)
 
         if not pending_task:
-            print("\n" + "=" * 60)
-            print("All tasks completed!")
-            print(f"Total iterations: {iteration_count}")
-            print("=" * 60 + "\n")
+            log_section("All tasks completed - exiting")
+            log_success(f"Total iterations: {iteration_count}")
             break
+
+        task_id = pending_task["id"]
+        log_success(f"Found pending task: {task_id}")
 
         if args.verbose:
             print_task_details(pending_task, verbose=True)
         else:
-            print(f"\n[Task {pending_task['id']}] {pending_task['title']}")
+            log_info(f"[Task {task_id}] {pending_task['title']}")
 
         if args.dry_run:
-            print(f"[DRY RUN] Would mark task {pending_task['id']} as in_progress")
+            log_info(f"[DRY RUN] Would mark task {task_id} as in_progress")
             ralph_prompt = generate_ralph_prompt(pending_task)
             print("\n--- RALPH MODE PROMPT ---")
             print(ralph_prompt)
             print("--- END PROMPT ---\n")
-            print("[DRY RUN] Would create opencode session and stream responses")
-            print("[DRY RUN] Would wait for completion and mark as done")
+            log_info("[DRY RUN] Would create opencode session and stream responses")
+            log_info("[DRY RUN] Would wait for completion and mark as done")
             break
 
-        print("\nMarking task as in_progress...")
-        update_task_status(tasks_data, pending_task["id"], "in_progress")
+        log_step(5, "Marking task as in_progress")
+        log_info(f"Marking task {task_id} as in_progress")
+        update_task_status(tasks_data, task_id, "in_progress")
+        log_info("Saving tasks.json")
         save_tasks(tasks_file, tasks_data)
+        log_success("Saving tasks.json")
 
         try:
             assert client is not None, "Client should be initialized outside of dry-run mode"
-            completed = process_task_with_client(client, pending_task, args.verbose)
+            completed = process_task_with_client(
+                client,
+                pending_task,
+                args.verbose,
+                timeout=args.timeout,
+            )
 
             if completed:
-                print(f"\n✓ Task {pending_task['id']} completed!")
-                print(f"Marking task {pending_task['id']} as done...")
+                log_section(f"TASK {task_id} COMPLETED")
+                log_step(6, "Updating tasks.json with 'done' status")
+                log_info(f"Marking task {task_id} as done")
                 tasks_data = load_tasks(tasks_file)
-                update_task_status(tasks_data, pending_task["id"], "done")
+                update_task_status(tasks_data, task_id, "done")
+                log_info("Saving tasks.json")
                 save_tasks(tasks_file, tasks_data)
+                log_success("Saving tasks.json")
 
                 iteration_count += 1
-                print(f"Completed iteration {iteration_count}\n")
+                log_success(f"Iteration {iteration_count} completed")
+                log_info("Waiting 2 seconds before next task...")
+                time.sleep(2)
             else:
-                print(f"\n⚠ Task {pending_task['id']} not complete, will retry later")
+                log_error(f"Task {task_id} not complete - AI did not signal completion")
+                log_step(7, "Marking task as pending for retry")
                 tasks_data = load_tasks(tasks_file)
-                update_task_status(tasks_data, pending_task["id"], "pending")
+                update_task_status(tasks_data, task_id, "pending")
+                log_info("Saving tasks.json")
                 save_tasks(tasks_file, tasks_data)
-                print("Task marked as pending (will retry on next iteration)")
+                log_success("Task marked as pending (will retry on next loop)")
                 break
 
-            print("Waiting 2 seconds before next task...")
-            time.sleep(2)
-
         except Exception as e:
-            print(f"\nError processing task {pending_task['id']}: {e}", file=sys.stderr)
+            log_error(f"\nError processing task {task_id}: {e}")
             if args.verbose:
                 import traceback
 
+                log_info("Traceback:")
                 traceback.print_exc()
             tasks_data = load_tasks(tasks_file)
-            update_task_status(tasks_data, pending_task["id"], "pending")
+            update_task_status(tasks_data, task_id, "pending")
+            log_info("Saving tasks.json")
             save_tasks(tasks_file, tasks_data)
-            print("Task marked as pending (will retry on next iteration)")
+            log_success("Task marked as pending (will retry on next iteration)")
             break
 
 
