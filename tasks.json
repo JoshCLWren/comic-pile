@@ -144,7 +144,7 @@
       "id": "feat-003",
       "title": "Add thread notes field to Thread model",
       "description": "Add notes field to Thread model to allow tracking additional context about threads (thoughts, decisions, issues, follow-up tasks).",
-      "status": "pending",
+      "status": "done",
       "priority": "HIGH",
       "dependencies": null,
       "task_type": "feature",
