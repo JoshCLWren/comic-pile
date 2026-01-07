@@ -224,7 +224,7 @@
       "id": "pg-migrate-005",
       "title": "Create migration verification tests",
       "description": "Create tests to verify SQLite to PostgreSQL migration integrity. Tests should compare row counts, foreign key relationships, and data consistency between databases.",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": "PG-MIGRATE-002",
       "task_type": "feature",
