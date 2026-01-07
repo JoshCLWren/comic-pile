@@ -1184,7 +1184,7 @@
       "id": "ux-005",
       "title": "Persist roll pool selection state",
       "description": "Roll pool selection/highlight does not persist when navigating. State should be maintained.",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": "UX-003, UX-004",
       "task_type": "feature",
