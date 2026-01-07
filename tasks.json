@@ -1224,7 +1224,7 @@
       "id": "ux-204",
       "title": "Clarify relationship between dice roll and comic number",
       "description": "Users get confused because the dice number and comic number do not match. The dice shows a random result while the assigned book number comes from the dice ladder logic. Users need clearer visual indication that these are separate values.",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": null,
       "task_type": "feature",
