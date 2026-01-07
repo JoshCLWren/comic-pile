@@ -245,3 +245,29 @@ docker-test:  ## Run pytest in Docker container
 docker-health:  ## Check Docker container health status
 	@echo "Checking Docker container health..."
 	@docker compose ps
+
+backup-postgres:  ## Create PostgreSQL backup with pg_dump
+	@bash scripts/backup_postgres.sh
+
+restore-postgres:  ## Restore PostgreSQL from backup (make restore-postgres FILE=backups/postgres/postgres_backup_comicpile_20240104_120530.sql.gz)
+	@if [ -z "$$FILE" ]; then \
+		echo "Usage: make restore-postgres FILE=backups/postgres/postgres_backup_YYYYMMDD_HHMMSS.sql.gz"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$$FILE" ]; then \
+		echo "ERROR: File not found: $$FILE"; \
+		exit 1; \
+	fi
+	@echo "WARNING: This will wipe the current database and restore from $$FILE"
+	@read -p "Are you sure? (yes/no): " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		echo "Restoring from $$FILE..."; \
+		gunzip -c "$$FILE" | PGPASSWORD=$$(grep 'postgresql+psycopg://' .env | sed 's/.*:[^:]*@/comicpile:/' | cut -d'@' -f1 | cut -d':' -f3) psql -h $$(grep 'postgresql+psycopg://' .env | sed 's/.*@//' | cut -d':' -f1) -p $$(grep 'postgresql+psycopg://' .env | sed 's/.*@//' | cut -d':' -f2 | cut -d'/' -f1) -U $$(grep 'postgresql+psycopg://' .env | sed 's/.*:\/\///' | cut -d':' -f1) -d $$(grep 'postgresql+psycopg://' .env | sed 's/.*\///'); \
+		echo "Database restored from $$FILE"; \
+	else \
+		echo "Restore cancelled"; \
+	fi
+
+list-postgres-backups:  ## List all PostgreSQL backups
+	@echo "Available PostgreSQL backups:"
+	@ls -lh backups/postgres/postgres_backup_*.sql.gz 2>/dev/null || echo "No PostgreSQL backups found"

@@ -984,7 +984,7 @@
       "id": "task-test-002",
       "title": "Create PostgreSQL backup and restore scripts",
       "description": "Create scripts/backup_postgres.sh for automated backups and document manual restore procedures.",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": "TASK-TEST-001",
       "task_type": "feature",
