@@ -20,12 +20,12 @@
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body class="pb-24">
-    <main class="container mx-auto px-4 py-6 max-w-lg">
+    <main class="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl">
         {% block content %}{% endblock %}
     </main>
 
     <nav class="fixed bottom-0 left-0 right-0 nav-container z-40" role="navigation" aria-label="Main navigation">
-        <div class="flex justify-around items-center h-20 px-2 max-w-lg mx-auto">
+        <div class="flex justify-around items-center h-20 px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
             <a href="/" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/" aria-label="Roll page">
                 <span class="text-2xl mb-1" aria-hidden="true">🎲</span>
                 <span class="text-[10px] uppercase tracking-widest font-bold nav-label">Roll</span>
