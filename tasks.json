@@ -960,11 +960,11 @@
       "task_type": "feature",
       "blocked_reason": "Merge conflict during review"
     },
-    {
+     {
       "id": "task-security-002",
       "title": "Add rate limiting to API endpoints",
       "description": "Add rate limiting to API endpoints to prevent abuse and ensure fair resource usage.",
-      "status": "pending",
+      "status": "done",
       "priority": "HIGH",
       "dependencies": null,
       "task_type": "feature",
