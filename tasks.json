@@ -644,7 +644,7 @@
       "id": "task-api-003",
       "title": "Add DELETE endpoint to Task API",
       "description": "Task API currently has no DELETE endpoint. Add ability to delete tasks via DELETE /api/tasks/{task_id} to clean up placeholder/superfluous tasks.",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": null,
       "task_type": "feature",
