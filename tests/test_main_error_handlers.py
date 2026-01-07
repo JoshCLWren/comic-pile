@@ -13,6 +13,17 @@ async def test_http_exception_handler_404(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_http_exception_handler_404_html(client: AsyncClient) -> None:
+    """Test HTTP exception handler returns HTML 404 page for HTML requests."""
+    response = await client.get("/this-endpoint-does-not-exist", headers={"Accept": "text/html"})
+    assert response.status_code == 404
+    assert "text/html" in response.headers.get("content-type", "")
+    assert "<!DOCTYPE html>" in response.text
+    assert "404" in response.text
+    assert "Page Not Found" in response.text
+
+
+@pytest.mark.asyncio
 async def test_http_exception_handler_for_nonexistent_task(client: AsyncClient) -> None:
     """Test HTTP exception handler when querying non-existent task."""
     response = await client.get("/api/tasks/TASK-NONEXISTENT")

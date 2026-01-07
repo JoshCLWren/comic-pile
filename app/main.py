@@ -261,6 +261,14 @@ def create_app() -> FastAPI:
                 f"HTTP Exception: {exc.status_code} - {exc.detail}",
                 extra=error_data,
             )
+
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            accept_header = request.headers.get("accept", "")
+            if "text/html" in accept_header:
+                return templates.TemplateResponse(
+                    "404.html", {"request": request}, status_code=exc.status_code
+                )
+
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},

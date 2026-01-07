@@ -4,7 +4,7 @@
       "id": "404-001",
       "title": "Implement custom 404 Not Found page",
       "description": "Create a custom 404 page that matches the app design",
-      "status": "ready",
+      "status": "done",
       "priority": "HIGH",
       "dependencies": null,
       "task_type": "feature",
@@ -1193,7 +1193,7 @@
     {
       "id": "ux-006",
       "title": "Add lightweight ladder explanation tooltip",
-      "description": "Ladder concept (d4…d20) is jargon. Add a non-intrusive explanation.",
+      "description": "Ladder concept (d4\u2026d20) is jargon. Add a non-intrusive explanation.",
       "status": "blocked",
       "priority": "LOW",
       "dependencies": null,
