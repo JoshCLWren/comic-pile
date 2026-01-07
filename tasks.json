@@ -1214,7 +1214,7 @@
       "id": "ux-008",
       "title": "Polish desktop layout and spacing",
       "description": "Desktop view has excessive empty space and feels broken. Improve layout.",
-      "status": "pending",
+      "status": "done",
       "priority": "LOW",
       "dependencies": null,
       "task_type": "feature",
