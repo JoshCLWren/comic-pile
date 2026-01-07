@@ -234,7 +234,7 @@
       "id": "pg-migrate-006",
       "title": "Document graceful SQLite cleanup procedure",
       "description": "Create documentation for safely removing SQLite database and files after successful PostgreSQL migration. Include backup verification steps and rollback procedures.",
-      "status": "pending",
+      "status": "done",
       "priority": "LOW",
       "dependencies": "PG-MIGRATE-002,PG-MIGRATE-005",
       "task_type": "docs",
