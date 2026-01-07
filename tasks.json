@@ -1064,7 +1064,7 @@
       "id": "test-202",
       "title": "Add tests for merge-to-main endpoint",
       "description": "Add comprehensive tests for POST /api/tasks/{task_id}/merge-to-main endpoint. Test success path, merge conflicts, invalid task status, missing worktree, and various error conditions. Verify task status changes to done on success and blocked on merge conflicts.",
-      "status": "pending",
+      "status": "done",
       "priority": "HIGH",
       "dependencies": null,
       "task_type": "feature",
