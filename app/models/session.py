@@ -42,3 +42,6 @@ class Session(Base):
     events: Mapped[list["Event"]] = relationship(
         "Event", back_populates="session", cascade="all, delete-orphan"
     )
+    snapshots: Mapped[list["Snapshot"]] = relationship(
+        "Snapshot", back_populates="session", cascade="all, delete-orphan"
+    )
