@@ -427,3 +427,159 @@ async def test_get_stale_threads_custom_threshold(client, db):
     assert len(stale) == 1
     assert stale[0]["id"] == thread_15_days.id
     assert stale[0]["title"] == "15 Days Old"
+
+
+@pytest.mark.asyncio
+async def test_create_thread_with_notes(client, db):
+    """Test POST /threads/ creates thread with notes."""
+    thread_data = {
+        "title": "Batman",
+        "format": "Comic",
+        "issues_remaining": 20,
+        "notes": "Favorite series, must read regularly",
+    }
+    response = await client.post("/threads/", json=thread_data)
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["title"] == "Batman"
+    assert data["format"] == "Comic"
+    assert data["issues_remaining"] == 20
+    assert data["notes"] == "Favorite series, must read regularly"
+    assert "id" in data
+
+    from app.models import Thread
+
+    thread = db.execute(select(Thread).where(Thread.title == "Batman")).scalar_one_or_none()
+    assert thread is not None
+    assert thread.notes == "Favorite series, must read regularly"
+
+
+@pytest.mark.asyncio
+async def test_create_thread_without_notes(client, db):
+    """Test POST /threads/ creates thread without notes (nullable)."""
+    thread_data = {
+        "title": "Superman",
+        "format": "Comic",
+        "issues_remaining": 15,
+    }
+    response = await client.post("/threads/", json=thread_data)
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["title"] == "Superman"
+    assert data["format"] == "Comic"
+    assert data["issues_remaining"] == 15
+    assert data["notes"] is None
+
+    from app.models import Thread
+
+    thread = db.execute(select(Thread).where(Thread.title == "Superman")).scalar_one_or_none()
+    assert thread is not None
+    assert thread.notes is None
+
+
+@pytest.mark.asyncio
+async def test_update_thread_notes(client, sample_data, db):
+    """Test PUT /threads/{id} updates thread notes."""
+    update_data = {
+        "notes": "Updated notes: Need to catch up on back issues",
+    }
+    response = await client.put("/threads/1", json=update_data)
+    assert response.status_code == 200
+
+    thread = response.json()
+    assert thread["id"] == 1
+    assert thread["title"] == "Superman"
+    assert thread["notes"] == "Updated notes: Need to catch up on back issues"
+
+    from app.models import Thread
+
+    db_thread = db.get(Thread, 1)
+    assert db_thread.notes == "Updated notes: Need to catch up on back issues"
+
+
+@pytest.mark.asyncio
+async def test_get_thread_includes_notes(client, sample_data, db):
+    """Test GET /threads/{id} includes notes field."""
+    from datetime import datetime
+
+    from app.models import Thread, User
+
+    user = User(username="notes_user", created_at=datetime.now())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    thread = Thread(
+        title="Wonder Woman",
+        format="Comic",
+        issues_remaining=8,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        notes="Important character, historical significance",
+        created_at=datetime.now(),
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    response = await client.get(f"/threads/{thread.id}")
+    assert response.status_code == 200
+
+    thread_data = response.json()
+    assert thread_data["id"] == thread.id
+    assert thread_data["title"] == "Wonder Woman"
+    assert thread_data["notes"] == "Important character, historical significance"
+
+
+@pytest.mark.asyncio
+async def test_list_threads_includes_notes(client, sample_data, db):
+    """Test GET /threads/ includes notes field in all threads."""
+    from datetime import datetime
+
+    from app.models import Thread, User
+
+    user = User(username="list_notes_user", created_at=datetime.now())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    thread_with_notes = Thread(
+        title="Flash",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        notes="Fast-paced storytelling",
+        created_at=datetime.now(),
+    )
+    thread_without_notes = Thread(
+        title="Aquaman",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        notes=None,
+        created_at=datetime.now(),
+    )
+    db.add_all([thread_with_notes, thread_without_notes])
+    db.commit()
+
+    response = await client.get("/threads/")
+    assert response.status_code == 200
+
+    threads = response.json()
+    assert len(threads) >= 2
+
+    flash_thread = next((t for t in threads if t["title"] == "Flash"), None)
+    aquaman_thread = next((t for t in threads if t["title"] == "Aquaman"), None)
+
+    assert flash_thread is not None
+    assert flash_thread["notes"] == "Fast-paced storytelling"
+
+    assert aquaman_thread is not None
+    assert aquaman_thread["notes"] is None

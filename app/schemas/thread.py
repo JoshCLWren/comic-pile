@@ -21,6 +21,7 @@ class ThreadUpdate(BaseModel):
     title: str | None = Field(None, min_length=1)
     format: str | None = Field(None, min_length=1)
     issues_remaining: int | None = Field(None, ge=0)
+    notes: str | None = None
 
 
 class ThreadResponse(BaseModel):
@@ -36,6 +37,7 @@ class ThreadResponse(BaseModel):
     last_activity_at: datetime | None
     review_url: str | None
     last_review_at: datetime | None
+    notes: str | None
     created_at: datetime
 
 

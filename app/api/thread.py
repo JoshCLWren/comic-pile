@@ -29,6 +29,7 @@ def list_stale_threads(days: int = 30, db: Session = Depends(get_db)) -> list[Th
             last_activity_at=thread.last_activity_at,
             review_url=thread.review_url,
             last_review_at=thread.last_review_at,
+            notes=thread.notes,
             created_at=thread.created_at,
         )
         for thread in threads
@@ -61,6 +62,7 @@ def list_threads(db: Session = Depends(get_db)) -> list[ThreadResponse]:
             last_activity_at=thread.last_activity_at,
             review_url=thread.review_url,
             last_review_at=thread.last_review_at,
+            notes=thread.notes,
             created_at=thread.created_at,
         )
         for thread in threads
@@ -117,6 +119,7 @@ def create_thread(thread_data: ThreadCreate, db: Session = Depends(get_db)) -> T
         issues_remaining=thread_data.issues_remaining,
         queue_position=max_position + 1,
         user_id=1,
+        notes=thread_data.notes,
     )
     db.add(new_thread)
     db.commit()
@@ -134,6 +137,7 @@ def create_thread(thread_data: ThreadCreate, db: Session = Depends(get_db)) -> T
         last_activity_at=new_thread.last_activity_at,
         review_url=new_thread.review_url,
         last_review_at=new_thread.last_review_at,
+        notes=new_thread.notes,
         created_at=new_thread.created_at,
     )
 
@@ -158,6 +162,7 @@ def get_thread(thread_id: int, db: Session = Depends(get_db)) -> ThreadResponse:
         last_activity_at=thread.last_activity_at,
         review_url=thread.review_url,
         last_review_at=thread.last_review_at,
+        notes=thread.notes,
         created_at=thread.created_at,
     )
 
@@ -183,6 +188,8 @@ def update_thread(
             thread.status = "completed"
         else:
             thread.status = "active"
+    if thread_data.notes is not None:
+        thread.notes = thread_data.notes
     db.commit()
     db.refresh(thread)
     if clear_cache:
@@ -198,6 +205,7 @@ def update_thread(
         last_activity_at=thread.last_activity_at,
         review_url=thread.review_url,
         last_review_at=thread.last_review_at,
+        notes=thread.notes,
         created_at=thread.created_at,
     )
 
@@ -257,5 +265,6 @@ def reactivate_thread(request: ReactivateRequest, db: Session = Depends(get_db))
         last_activity_at=thread.last_activity_at,
         review_url=thread.review_url,
         last_review_at=thread.last_review_at,
+        notes=thread.notes,
         created_at=thread.created_at,
     )

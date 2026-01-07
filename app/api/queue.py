@@ -52,6 +52,7 @@ def move_thread_position(
         last_activity_at=thread.last_activity_at,
         review_url=thread.review_url,
         last_review_at=thread.last_review_at,
+        notes=thread.notes,
         created_at=thread.created_at,
     )
 
@@ -83,6 +84,7 @@ def move_thread_front(thread_id: int, db: Session = Depends(get_db)) -> ThreadRe
         last_activity_at=thread.last_activity_at,
         review_url=thread.review_url,
         last_review_at=thread.last_review_at,
+        notes=thread.notes,
         created_at=thread.created_at,
     )
 
@@ -114,5 +116,6 @@ def move_thread_back(thread_id: int, db: Session = Depends(get_db)) -> ThreadRes
         last_activity_at=thread.last_activity_at,
         review_url=thread.review_url,
         last_review_at=thread.last_review_at,
+        notes=thread.notes,
         created_at=thread.created_at,
     )
