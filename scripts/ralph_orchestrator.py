@@ -4,6 +4,7 @@
 import argparse
 import datetime
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -42,6 +43,43 @@ def log_section(title: str) -> None:
     print(f"\n{'=' * 60}")
     print(f"  {title}")
     print(f"{'=' * 60}\n")
+
+
+def find_opencode_port() -> str | None:
+    """Find the port opencode is listening on."""
+    try:
+        result = subprocess.run(
+            ["ss", "-tlnp"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        for line in result.stdout.split("\n"):
+            if "opencode" in line:
+                parts = line.split()
+                for part in parts:
+                    if part.startswith("127.0.0.1:"):
+                        return part.split(":")[1]
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    try:
+        result = subprocess.run(
+            ["lsof", "-i", "-P"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        for line in result.stdout.split("\n"):
+            if "opencode" in line and "LISTEN" in line:
+                parts = line.split()
+                for part in parts:
+                    if part.startswith("127.0.0.1:"):
+                        return part.split(":")[1]
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    return None
 
 
 def load_tasks(tasks_file: Path) -> dict:
@@ -232,10 +270,18 @@ def main() -> None:
 
     client = None
     if not args.dry_run:
+        base_url = args.base_url
+
+        if base_url == "http://127.0.0.1:4096":
+            detected_port = find_opencode_port()
+            if detected_port:
+                base_url = f"http://127.0.0.1:{detected_port}"
+                log_info(f"Auto-detected opencode port: {detected_port}")
+
         log_info("Initializing Ralph orchestrator")
-        log_info(f"Connecting to opencode at {args.base_url}")
+        log_info(f"Connecting to opencode at {base_url}")
         try:
-            client = OpenCodeClient(base_url=args.base_url)
+            client = OpenCodeClient(base_url=base_url)
         except Exception as e:
             log_error(f"Error creating OpenCodeClient: {e}")
             sys.exit(1)
