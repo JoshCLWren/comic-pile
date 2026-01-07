@@ -93,9 +93,10 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
             if is_selected
             else "border-white/5"
         )
+        position_class = "text-amber-400" if is_selected else "text-slate-500/50"
         pool_html += f"""
                 <div class="flex items-center gap-3 px-4 py-2 bg-white/5 {highlight_class} rounded-xl group transition-all">
-                    <span class="text-lg font-black text-white/5 group-hover:text-white/10 transition-colors">{i + 1}</span>
+                    <span class="text-lg font-black {position_class} group-hover:text-slate-400/50 transition-colors">{i + 1}</span>
                     <div class="flex-1 min-w-0">
                         <p class="font-black text-slate-300 truncate text-sm">{thread.title}</p>
                         <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
@@ -364,6 +365,25 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
         current_session.pending_thread_updated_at = datetime.now()
         db.commit()
 
+    pool_html = ""
+    for i, thread in enumerate(threads[:current_die]):
+        is_selected = thread.id == selected_thread.id
+        highlight_class = (
+            "border-2 border-amber-400 bg-amber-500/10 shadow-[0_0_20px_rgba(251,191,36,0.3)]"
+            if is_selected
+            else "border-white/5"
+        )
+        position_class = "text-amber-400" if is_selected else "text-slate-500/50"
+        pool_html += f"""
+                <div class="flex items-center gap-3 px-4 py-2 bg-white/5 {highlight_class} rounded-xl group transition-all">
+                    <span class="text-lg font-black {position_class} group-hover:text-slate-400/50 transition-colors">{i + 1}</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-black text-slate-300 truncate text-sm">{thread.title}</p>
+                        <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
+                    </div>
+                </div>
+        """
+
     return f"""
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
             <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
@@ -375,6 +395,10 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                     <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">Rerolled</p>
                     <h2 class="text-xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
                 </div>
+            </div>
+
+            <div id="pool-threads" hx-swap-oob="innerHTML">
+                {pool_html}
             </div>
 
             <div id="rating-form-container" class="glass-card p-4 space-y-4 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">

@@ -1174,7 +1174,7 @@
       "id": "ux-004",
       "title": "Map dice result to roll pool selection",
       "description": "Dice result (d4, d6, d8, etc.) needs visual connection to the selected position in roll pool.",
-      "status": "pending",
+      "status": "done",
       "priority": "HIGH",
       "dependencies": "UX-003",
       "task_type": "feature",
