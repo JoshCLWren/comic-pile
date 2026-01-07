@@ -162,7 +162,7 @@ async def test_rate_high_rating(client, db):
 
 @pytest.mark.asyncio
 async def test_rate_completes_thread(client, db):
-    """Issues <= 0, moves to back of queue, session ends."""
+    """Issues <= 0, moves to back of queue, session ends only with finish_session=True."""
     from app.models import User
 
     user = User(username="test_user")
@@ -199,7 +199,9 @@ async def test_rate_completes_thread(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await client.post(
+        "/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
+    )
     assert response.status_code == 200
 
     data = response.json()
@@ -384,3 +386,58 @@ async def test_rate_low_rating_updates_manual_die(client, db):
 
     db.refresh(session)
     assert session.manual_die == 8
+
+
+@pytest.mark.asyncio
+async def test_rate_finish_session_flag_controls_session_end(client, db):
+    """finish_session=False keeps session active even when thread completes."""
+    from app.models import User
+
+    user = User(username="test_user")
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    db.add(event)
+    db.commit()
+
+    response = await client.post(
+        "/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": False}
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] != "completed"
+    assert data["issues_remaining"] == 0
+
+    db.refresh(thread)
+    assert thread.status != "completed"
+
+    db.refresh(session)
+    assert session.ended_at is None

@@ -126,7 +126,7 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
     else:
         move_to_back(thread.id, db)
 
-    if thread.issues_remaining <= 0:
+    if request.finish_session and thread.issues_remaining <= 0:
         thread.status = "completed"
         move_to_back(thread.id, db)
         current_session.ended_at = datetime.now()

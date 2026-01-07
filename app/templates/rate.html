@@ -42,8 +42,12 @@
                 </p>
             </div>
 
-            <button type="button" id="submit-btn" onclick="submitRating()"
+            <button type="button" id="submit-btn" onclick="submitRating(false)"
                 class="w-full py-6 glass-button text-xl font-black uppercase tracking-[0.2em] relative shadow-[0_15px_40px_rgba(20,184,166,0.3)]">
+                Save & Continue
+            </button>
+            <button type="button" id="finish-btn" onclick="submitRating(true)"
+                class="w-full py-4 text-lg font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-300 transition-colors">
                 Finish Session
             </button>
             <div id="error-message" class="text-xs text-rose-500 text-center font-bold hidden"></div>
@@ -111,13 +115,14 @@
         }
     }
 
-    async function submitRating() {
+    async function submitRating(finishSession) {
         const ratingInput = document.getElementById('rating-input');
         const rating = ratingInput ? parseFloat(ratingInput.value) : 4.0;
         const btn = document.getElementById('submit-btn');
+        const finishBtn = document.getElementById('finish-btn');
         const err = document.getElementById('error-message');
 
-        console.log('[RatePage] Submitting rating:', rating);
+        console.log('[RatePage] Submitting rating:', rating, 'finish_session:', finishSession);
         if (err) err.classList.add('hidden');
 
         if (rating >= 4.0) {
@@ -139,6 +144,7 @@
         }
 
         btn.disabled = true;
+        if (finishBtn) finishBtn.disabled = true;
         btn.innerHTML = '<span class="spinner mx-auto"></span>';
 
         try {
@@ -146,7 +152,7 @@
             const res = await fetch('/rate/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rating, issues_read: 1 })
+                body: JSON.stringify({ rating, issues_read: 1, finish_session: finishSession })
             });
             console.log('[RatePage] Response status:', res.status);
             if (res.ok) {
@@ -160,11 +166,13 @@
                     err.classList.remove('hidden');
                 }
                 btn.disabled = false;
+                if (finishBtn) finishBtn.disabled = false;
                 btn.textContent = 'Retry';
             }
         } catch (e) {
             console.error('[RatePage] Error:', e);
             btn.disabled = false;
+            if (finishBtn) finishBtn.disabled = false;
             btn.textContent = 'Network Error';
         }
     }

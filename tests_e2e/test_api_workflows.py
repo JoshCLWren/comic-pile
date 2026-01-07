@@ -135,7 +135,8 @@ async def test_complete_task_advances_queue(api_client: AsyncClient, db: Session
     db.commit()
 
     response = await api_client.post(
-        "/rate/", json={"thread_id": thread.id, "rating": 4.0, "issues_read": 1}
+        "/rate/",
+        json={"thread_id": thread.id, "rating": 4.0, "issues_read": 1, "finish_session": True},
     )
     assert response.status_code == 200
 
