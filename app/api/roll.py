@@ -431,6 +431,7 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
             (function() {{
                 rolledResult = {result_val};
                 threadId = "{selected_thread.id}";
+                localStorage.setItem('selectedThreadId', '{selected_thread.id}');
                 isRolling = false;
                 const instruction = document.getElementById('tap-instruction');
                 if (instruction) instruction.textContent = "Tap Die to Roll";
