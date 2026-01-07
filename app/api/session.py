@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Event, Thread
+from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.schemas.thread import SessionResponse
 from comic_pile.session import get_current_die, is_active
@@ -292,5 +292,62 @@ def get_session_details(
             "narrative_summary": build_narrative_summary(session_id, db),
             "current_die": get_current_die(session_obj.id, db),
             "events": formatted_events,
+        },
+    )
+
+
+@router.get("/{session_id}/snapshots")
+def get_session_snapshots(session_id: int, db: Session = Depends(get_db)) -> list[dict]:
+    """Get all snapshots for a session."""
+    session = db.get(SessionModel, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    snapshots = (
+        db.execute(
+            select(Snapshot)
+            .where(Snapshot.session_id == session_id)
+            .order_by(Snapshot.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return [
+        {
+            "id": s.id,
+            "created_at": s.created_at,
+            "description": s.description,
+            "event_id": s.event_id,
+        }
+        for s in snapshots
+    ]
+
+
+@router.get("/{session_id}/snapshots", response_class=HTMLResponse)
+def get_session_snapshots_html(
+    session_id: int, request: Request, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    """Get HTML for session snapshots list."""
+    session = db.get(SessionModel, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    snapshots = (
+        db.execute(
+            select(Snapshot)
+            .where(Snapshot.session_id == session_id)
+            .order_by(Snapshot.created_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+
+    return templates.TemplateResponse(
+        "snapshots_list.html",
+        {
+            "request": request,
+            "session_id": session_id,
+            "snapshots": snapshots,
         },
     )

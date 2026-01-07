@@ -864,7 +864,7 @@
       "id": "task-feat-002",
       "title": "Add Undo/History Functionality",
       "description": "History should allow going back to a point in history or rewriting it. Currently no undo capability exists.",
-      "status": "pending",
+      "status": "done",
       "priority": "MEDIUM",
       "dependencies": null,
       "task_type": "feature",
@@ -960,7 +960,7 @@
       "task_type": "feature",
       "blocked_reason": "Merge conflict during review"
     },
-     {
+    {
       "id": "task-security-002",
       "title": "Add rate limiting to API endpoints",
       "description": "Add rate limiting to API endpoints to prevent abuse and ensure fair resource usage.",

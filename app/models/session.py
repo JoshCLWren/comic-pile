@@ -10,6 +10,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.event import Event
+    from app.models.snapshot import Snapshot
     from app.models.thread import Thread
     from app.models.user import User
 

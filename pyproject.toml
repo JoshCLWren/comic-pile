@@ -85,7 +85,7 @@ exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/ver
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "D", "ANN401"]
-ignore = ["D203", "D213", "E501", "B008"]
+ignore = ["D203", "D213", "E501", "B008", "I001"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -95,6 +95,7 @@ include = ["app", "comic_pile", "tests"]
 exclude = ["**/node_modules", "**/__pycache__", ".venv", "alembic/versions/*.py"]
 venvPath = "."
 venv = ".venv"
+typeStubPaths = []
 
 [tool.pytest.markers]
 integration = "marks tests as integration tests using Playwright"

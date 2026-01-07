@@ -1,0 +1,46 @@
+{% if snapshots %}
+<div class="space-y-2">
+    {% for snapshot in snapshots %}
+    <div class="flex items-center justify-between px-4 py-3 bg-white/5 rounded-xl border border-white/5 group transition-all hover:bg-white/10">
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-[9px] font-black uppercase tracking-widest text-teal-400">
+                    {{ snapshot.created_at.strftime('%b %d, %I:%M %p') }}
+                </span>
+                <span class="text-[10px] font-bold text-slate-300 truncate">
+                    {{ snapshot.description }}
+                </span>
+            </div>
+        </div>
+        <button
+            onclick="undoToSnapshot({{ session_id }}, {{ snapshot.id }})"
+            class="h-8 px-3 glass-button text-[10px] font-black uppercase tracking-widest whitespace-nowrap bg-teal-500/10 border-teal-500/20 hover:bg-teal-500/20">
+            <span class="htmx-indicator flex items-center justify-center">
+                <span class="spinner"></span>
+            </span>
+            <span class="htmx-request:hidden">Restore</span>
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-[10px] text-slate-500 text-center py-4">No snapshots available for this session</p>
+{% endif %}
+
+<script>
+    function undoToSnapshot(sessionId, snapshotId) {
+        fetch(`/undo/${sessionId}/undo/${snapshotId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert('Session restored successfully!');
+            location.reload();
+        })
+        .catch(error => {
+            console.error('Undo failed:', error);
+            alert('Failed to undo. Please try again.');
+        });
+    }
+</script>

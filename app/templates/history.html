@@ -53,15 +53,26 @@
                     </div>
                 </div>
 
-                <button
-                    class="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-                    hx-get="/sessions/{{ session.id }}/details" hx-target="#details-{{ session.id }}"
-                    hx-swap="innerHTML" aria-expanded="false" aria-controls="details-{{ session.id }}">
-                    <span class="htmx-indicator flex items-center justify-center">
-                        <span class="spinner"></span>
-                    </span>
-                    <span class="htmx-request:hidden">Details</span>
-                </button>
+                <div class="flex gap-2">
+                    <button
+                        class="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+                        hx-get="/sessions/{{ session.id }}/details" hx-target="#details-{{ session.id }}"
+                        hx-swap="innerHTML" aria-expanded="false" aria-controls="details-{{ session.id }}">
+                        <span class="htmx-indicator flex items-center justify-center">
+                            <span class="spinner"></span>
+                        </span>
+                        <span class="htmx-request:hidden">Details</span>
+                    </button>
+                    <button
+                        class="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl bg-teal-500/10 border-teal-500/20 hover:bg-teal-500/20"
+                        hx-get="/sessions/{{ session.id }}/snapshots" hx-target="#snapshots-{{ session.id }}"
+                        hx-swap="outerHTML" aria-expanded="false" aria-controls="snapshots-{{ session.id }}">
+                        <span class="htmx-indicator flex items-center justify-center">
+                            <span class="spinner"></span>
+                        </span>
+                        <span class="htmx-request:hidden">Undo</span>
+                    </button>
+                </div>
             </div>
 
             <div id="details-{{ session.id }}"
@@ -69,6 +80,12 @@
                 role="region" aria-live="polite">
                 <!-- HTMX injected content -->
             </div>
+
+                <div id="snapshots-{{ session.id }}"
+                class="mt-4 border-t border-white/5 pt-4 hidden transition-all animate-[slide-down_0.3s_ease-out]"
+                role="region" aria-live="polite">
+                    <p class="text-[10px] text-slate-500">Loading...</p>
+                </div>
         </div>
         {% endfor %}
     </div>
@@ -91,14 +108,25 @@
     });
 
     document.addEventListener('click', function (e) {
-        const btn = e.target.closest('button[hx-get*="/details"]');
-        if (btn && btn.getAttribute('aria-expanded') === 'true') {
-            const detailsId = btn.getAttribute('aria-controls');
+        const detailsBtn = e.target.closest('button[hx-get*="/details"]');
+        if (detailsBtn && detailsBtn.getAttribute('aria-expanded') === 'true') {
+            const detailsId = detailsBtn.getAttribute('aria-controls');
             const details = document.getElementById(detailsId);
             if (details) {
                 details.classList.add('hidden');
-                btn.textContent = 'Details';
-                btn.setAttribute('aria-expanded', 'false');
+                detailsBtn.textContent = 'Details';
+                detailsBtn.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        const undoBtn = e.target.closest('button[hx-get*="/snapshots"]');
+        if (undoBtn && undoBtn.getAttribute('aria-expanded') === 'true') {
+            const snapshotsId = undoBtn.getAttribute('aria-controls');
+            const snapshots = document.getElementById(snapshotsId);
+            if (snapshots) {
+                snapshots.classList.add('hidden');
+                undoBtn.textContent = 'Undo';
+                undoBtn.setAttribute('aria-expanded', 'false');
             }
         }
     });
