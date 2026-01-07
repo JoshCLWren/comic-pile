@@ -7,13 +7,40 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Event, Settings, Thread
+from app.models import Event, Settings, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.schemas import RateRequest, ThreadResponse
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front
 
 router = APIRouter()
+
+
+def snapshot_thread_states(db: Session, session_id: int, event: Event) -> None:
+    """Create a snapshot of all thread states for undo functionality."""
+    threads = db.execute(select(Thread)).scalars().all()
+
+    thread_states = {}
+    for thread in threads:
+        thread_states[thread.id] = {
+            "issues_remaining": thread.issues_remaining,
+            "last_rating": thread.last_rating,
+            "last_activity_at": thread.last_activity_at.isoformat()
+            if thread.last_activity_at
+            else None,
+            "queue_position": thread.queue_position,
+            "status": thread.status,
+        }
+
+    snapshot = Snapshot(
+        session_id=session_id,
+        event_id=event.id,
+        thread_states=thread_states,
+        description=f"After rating {event.rating}/5.0",
+    )
+    db.add(snapshot)
+    db.commit()
+
 
 try:
     from app.main import clear_cache
@@ -138,6 +165,8 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
     current_session.pending_thread_updated_at = None
 
     db.commit()
+
+    snapshot_thread_states(db, current_session.id, event)
     db.refresh(thread)
 
     return ThreadResponse(

@@ -14,16 +14,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import admin, queue, rate, retros, roll, session, tasks, thread
+from app.api import admin, queue, rate, retros, roll, session, tasks, thread, undo
 from app.api.tasks import get_coordinator_data, health_router
 from app.database import Base, engine, get_db
 from app.models import Session as SessionModel
 
 logger = logging.getLogger(__name__)
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 _thread_cache: dict[str, tuple[list, float]] = {}
@@ -102,6 +107,8 @@ def create_app() -> FastAPI:
         description="API for tracking comic reading with dice rolls",
         version="0.1.0",
     )
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     templates = Jinja2Templates(directory="app/templates", auto_reload=True)
 
     app.add_middleware(
@@ -329,6 +336,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router, prefix="/api", tags=["tasks"])
     app.include_router(retros.router, prefix="/api", tags=["retros"])
     app.include_router(health_router, prefix="/api")
+    app.include_router(undo.router, prefix="/undo", tags=["undo"])
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
