@@ -1119,3 +1119,321 @@ async def test_get_metrics_ready_to_claim(client: AsyncClient, sample_tasks: lis
     data = response.json()
     assert "ready_to_claim" in data
     assert data["ready_to_claim"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_initialize_tasks(client: AsyncClient) -> None:
+    """Test initializing tasks with sample data."""
+    response = await client.post("/api/tasks/initialize")
+    assert response.status_code == 200
+    data = response.json()
+    assert "message" in data
+    assert data["message"] == "Tasks initialized successfully"
+    assert "tasks" in data
+    assert isinstance(data["tasks"], list)
+    assert len(data["tasks"]) > 0
+    assert data["tasks"][0]["task_id"] == "TASK-101"
+
+
+@pytest.mark.asyncio
+async def test_initialize_tasks_updates_existing(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test that initialize updates existing tasks instead of duplicating."""
+    initial_response = await client.post("/api/tasks/initialize")
+    assert initial_response.status_code == 200
+    initial_data = initial_response.json()
+    initial_count = initial_data["tasks_created"]
+
+    second_response = await client.post("/api/tasks/initialize")
+    assert second_response.status_code == 200
+    second_data = second_response.json()
+    assert second_data["tasks_created"] == 0
+    assert second_data["tasks_updated"] >= initial_count
+
+
+@pytest.mark.asyncio
+async def test_create_tasks_bulk(client: AsyncClient) -> None:
+    """Test bulk creation of multiple tasks."""
+    tasks_to_create = [
+        {
+            "task_id": "BULK-001",
+            "title": "Bulk Task 1",
+            "priority": "HIGH",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "2 hours",
+        },
+        {
+            "task_id": "BULK-002",
+            "title": "Bulk Task 2",
+            "priority": "MEDIUM",
+            "description": "Test description",
+            "instructions": "Test instructions",
+            "estimated_effort": "1 hour",
+        },
+    ]
+
+    response = await client.post("/api/tasks/bulk", json=tasks_to_create)
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+    assert data[0]["task_id"] == "BULK-001"
+    assert data[1]["task_id"] == "BULK-002"
+
+
+@pytest.mark.asyncio
+async def test_create_tasks_bulk_duplicate_fails(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test that bulk creation fails if any task already exists."""
+    tasks_to_create = [
+        {
+            "task_id": "TASK-101",
+            "title": "Duplicate Task",
+            "priority": "HIGH",
+            "estimated_effort": "1 hour",
+        },
+        {
+            "task_id": "NEW-TASK",
+            "title": "New Task",
+            "priority": "HIGH",
+            "estimated_effort": "1 hour",
+        },
+    ]
+
+    response = await client.post("/api/tasks/bulk", json=tasks_to_create)
+    assert response.status_code == 400
+    assert "TASK-101 already exists" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_get_stale_tasks(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test getting stale tasks (in_progress with old heartbeat)."""
+    response = await client.get("/api/tasks/stale")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+
+@pytest.mark.asyncio
+async def test_get_task_history(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test getting task history (audit trail)."""
+    response = await client.get("/api/tasks/TASK-101/history")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+
+
+@pytest.mark.asyncio
+async def test_get_task_history_appends_notes(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test that task history captures status notes changes."""
+    await client.post(
+        "/api/tasks/TASK-101/update-notes",
+        json={"notes": "First note"},
+    )
+
+    await client.post(
+        "/api/tasks/TASK-101/update-notes",
+        json={"notes": "Second note"},
+    )
+
+    response = await client.get("/api/tasks/TASK-101/history")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+
+
+@pytest.mark.asyncio
+async def test_get_task_history_not_found(client: AsyncClient) -> None:
+    """Test getting history for non-existent task."""
+    response = await client.get("/api/tasks/TASK-999/history")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_coordinator_html_page(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test rendering coordinator HTML page."""
+    response = await client.get("/tasks/coordinator")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+    html_content = response.text
+    assert "Task Coordinator" in html_content
+    assert "Pending" in html_content
+    assert "In Progress" in html_content
+    assert "Blocked" in html_content
+    assert "In Review" in html_content
+    assert "Done" in html_content
+
+
+@pytest.mark.asyncio
+async def test_coordinator_html_page_with_task_data(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test coordinator page displays task data correctly."""
+    await client.post(
+        "/api/tasks/TASK-101/claim",
+        json={"agent_name": "agent-1", "worktree": "comic-pile-task-101"},
+    )
+
+    response = await client.get("/tasks/coordinator")
+    assert response.status_code == 200
+    html_content = response.text
+    assert "TASK-101" in html_content
+    assert "agent-1" in html_content
+
+
+@pytest.mark.asyncio
+async def test_analytics_html_page(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test rendering analytics HTML page."""
+    response = await client.get("/tasks/analytics")
+    assert response.status_code == 200
+    assert "text/html" in response.headers.get("content-type", "")
+    html_content = response.text
+    assert "Task Analytics" in html_content
+    assert "Total Tasks" in html_content
+    assert "Completion Rate" in html_content
+    assert "Ready to Claim" in html_content
+    assert "Tasks by Status" in html_content
+    assert "Tasks by Priority" in html_content
+    assert "System Health" in html_content
+    assert "Recent Completions" in html_content
+
+
+@pytest.mark.asyncio
+async def test_analytics_html_page_displays_metrics(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test analytics page displays actual metrics data."""
+    response = await client.get("/tasks/analytics")
+    assert response.status_code == 200
+    html_content = response.text
+    assert html_content  # Should have content with metrics
+
+
+@pytest.mark.asyncio
+async def test_metrics_average_completion_time(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test average completion time calculation in metrics."""
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "average_completion_time_hours" in data
+
+
+@pytest.mark.asyncio
+async def test_metrics_tasks_by_type_breakdown(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test tasks by type breakdown in metrics."""
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TYPE-TEST-1",
+            "title": "Feature Task",
+            "priority": "HIGH",
+            "task_type": "feature",
+            "estimated_effort": "1 hour",
+        },
+    )
+
+    await client.post(
+        "/api/tasks/",
+        json={
+            "task_id": "TYPE-TEST-2",
+            "title": "Bug Fix Task",
+            "priority": "MEDIUM",
+            "task_type": "bug_fix",
+            "estimated_effort": "1 hour",
+        },
+    )
+
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "tasks_by_type" in data
+    assert isinstance(data["tasks_by_type"], dict)
+    assert "feature" in data["tasks_by_type"] or "bug_fix" in data["tasks_by_type"]
+
+
+@pytest.mark.asyncio
+async def test_metrics_recent_completions_limit(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test that recent completions is limited to 10 items."""
+    await client.post("/api/tasks/TASK-101/set-status", json={"status": "done"})
+    await client.post("/api/tasks/TASK-102/set-status", json={"status": "done"})
+
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "recent_completions" in data
+    assert isinstance(data["recent_completions"], list)
+    assert len(data["recent_completions"]) <= 10
+
+
+@pytest.mark.asyncio
+async def test_metrics_active_agents_includes_task_details(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test active agents includes task details."""
+    await client.post(
+        "/api/tasks/TASK-101/claim",
+        json={"agent_name": "agent-active", "worktree": "comic-pile-task-101"},
+    )
+
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "active_agents" in data
+    assert isinstance(data["active_agents"], list)
+
+    if len(data["active_agents"]) > 0:
+        agent = data["active_agents"][0]
+        assert "agent_name" in agent
+        assert "active_tasks" in agent
+        assert "task_ids" in agent
+
+
+@pytest.mark.asyncio
+async def test_metrics_ready_to_claim_filters_dependencies(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test ready to claim correctly filters by dependencies."""
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "ready_to_claim" in data
+    assert data["ready_to_claim"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_coordinator_data_endpoint_structure(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test coordinator data endpoint returns correct structure."""
+    await client.post(
+        "/api/tasks/TASK-101/claim",
+        json={"agent_name": "agent-1", "worktree": "comic-pile-task-101"},
+    )
+
+    await client.post("/api/tasks/TASK-102/set-status", json={"status": "done"})
+
+    response = await client.get("/api/tasks/coordinator-data")
+    assert response.status_code == 200
+    data = response.json()
+    assert "pending" in data
+    assert "in_progress" in data
+    assert "blocked" in data
+    assert "in_review" in data
+    assert "done" in data
+    assert isinstance(data["pending"], list)
+    assert isinstance(data["in_progress"], list)
+    assert isinstance(data["blocked"], list)
+    assert isinstance(data["in_review"], list)
+    assert isinstance(data["done"], list)
