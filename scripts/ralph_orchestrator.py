@@ -267,36 +267,8 @@ def main() -> None:
         log_info("DRY RUN MODE - No actual changes will be made")
 
     iteration_count = 0
-
     client = None
-    if not args.dry_run:
-        base_url = args.base_url
-
-        if base_url == "http://127.0.0.1:4096":
-            detected_port = find_opencode_port()
-            if detected_port:
-                base_url = f"http://127.0.0.1:{detected_port}"
-                log_info(f"Auto-detected opencode port: {detected_port}")
-
-        log_info("Initializing Ralph orchestrator")
-        log_info(f"Connecting to opencode at {base_url}")
-        try:
-            client = OpenCodeClient(base_url=base_url)
-        except Exception as e:
-            log_error(f"Error creating OpenCodeClient: {e}")
-            sys.exit(1)
-
-        log_info("Checking opencode health")
-        try:
-            health = client.health()
-            if not health.get("healthy"):
-                log_error(f"OpenCode not healthy: {health}")
-                sys.exit(1)
-            version = health.get("version", "unknown")
-            log_success(f"Health check passed (version: {version})")
-        except Exception as e:
-            log_error(f"Error checking health: {e}")
-            sys.exit(1)
+    base_url = args.base_url
 
     while True:
         log_info("Loading tasks.json")
@@ -311,9 +283,9 @@ def main() -> None:
         pending_task = find_pending_task(tasks_data)
 
         if not pending_task:
-            log_section("All tasks completed - exiting")
-            log_success(f"Total iterations: {iteration_count}")
-            break
+            log_info("No pending tasks found - waiting 60 seconds...")
+            time.sleep(60)
+            continue
 
         task_id = pending_task["id"]
         log_success(f"Found pending task: {task_id}")
@@ -332,6 +304,33 @@ def main() -> None:
             log_info("[DRY RUN] Would create opencode session and stream responses")
             log_info("[DRY RUN] Would wait for completion and mark as done")
             break
+
+        if not client:
+            log_info("Initializing opencode client for first task")
+            if base_url == "http://127.0.0.1:4096":
+                detected_port = find_opencode_port()
+                if detected_port:
+                    base_url = f"http://127.0.0.1:{detected_port}"
+                    log_info(f"Auto-detected opencode port: {detected_port}")
+
+            log_info(f"Connecting to opencode at {base_url}")
+            try:
+                client = OpenCodeClient(base_url=base_url)
+            except Exception as e:
+                log_error(f"Error creating OpenCodeClient: {e}")
+                sys.exit(1)
+
+            log_info("Checking opencode health")
+            try:
+                health = client.health()
+                if not health.get("healthy"):
+                    log_error(f"OpenCode not healthy: {health}")
+                    sys.exit(1)
+                version = health.get("version", "unknown")
+                log_success(f"Health check passed (version: {version})")
+            except Exception as e:
+                log_error(f"Error checking health: {e}")
+                sys.exit(1)
 
         log_step(5, "Marking task as in_progress")
         log_info(f"Marking task {task_id} as in_progress")
@@ -371,7 +370,7 @@ def main() -> None:
                 log_info("Saving tasks.json")
                 save_tasks(tasks_file, tasks_data)
                 log_success("Task marked as pending (will retry on next loop)")
-                break
+                continue
 
         except Exception as e:
             log_error(f"\nError processing task {task_id}: {e}")
@@ -385,7 +384,7 @@ def main() -> None:
             log_info("Saving tasks.json")
             save_tasks(tasks_file, tasks_data)
             log_success("Task marked as pending (will retry on next iteration)")
-            break
+            continue
 
 
 if __name__ == "__main__":
