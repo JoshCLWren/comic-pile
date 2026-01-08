@@ -102,6 +102,73 @@ def find_pending_task(tasks_data: dict) -> dict | None:
     return None
 
 
+def find_blocked_task(tasks_data: dict) -> dict | None:
+    """Find a blocked task that might be unblockable."""
+    for task in tasks_data["tasks"]:
+        if task["status"] == "blocked":
+            return task
+    return None
+
+
+def find_task_by_id(tasks_data: dict, task_id: str) -> dict | None:
+    """Find a task by its ID."""
+    for task in tasks_data["tasks"]:
+        if task["id"] == task_id:
+            return task
+    return None
+
+
+def are_dependencies_resolved(task: dict, tasks_data: dict) -> bool:
+    """Check if all task dependencies are done."""
+    if not task.get("dependencies"):
+        return True
+
+    deps = (
+        task["dependencies"].split(",")
+        if isinstance(task["dependencies"], str)
+        else task["dependencies"]
+    )
+
+    for dep in deps:
+        dep_id = dep.strip().upper()
+        dep_task = find_task_by_id(tasks_data, dep_id)
+        if dep_task and dep_task["status"] != "done":
+            log_info(f"  Dependency {dep_id} not done (status: {dep_task['status']})")
+            return False
+
+    return True
+
+
+def has_circular_dependency(
+    task_id: str, tasks_data: dict, visited: set[str] | None = None
+) -> bool:
+    """Detect circular dependencies in task graph."""
+    if visited is None:
+        visited = set()
+
+    if task_id in visited:
+        log_error(f"  Circular dependency detected: {task_id}")
+        return True
+
+    visited.add(task_id)
+
+    task = find_task_by_id(tasks_data, task_id)
+    if not task:
+        return False
+
+    deps = task.get("dependencies")
+    if not deps:
+        return False
+
+    dep_list = deps.split(",") if isinstance(deps, str) else deps
+
+    for dep in dep_list:
+        if has_circular_dependency(dep.strip().upper(), tasks_data, visited.copy()):
+            return True
+
+    return False
+
+
 def update_task_status(tasks_data: dict, task_id: str, status: str) -> dict | None:
     """Update task status and return the task."""
     for task in tasks_data["tasks"]:
@@ -283,7 +350,41 @@ def main() -> None:
         pending_task = find_pending_task(tasks_data)
 
         if not pending_task:
-            log_info("No pending tasks found - waiting 60 seconds...")
+            blocked_task = find_blocked_task(tasks_data)
+
+            if blocked_task:
+                log_info("No pending tasks found, checking blocked tasks...")
+                log_info(f"Found blocked task: {blocked_task['id']} - {blocked_task['title']}")
+
+                if has_circular_dependency(blocked_task["id"], tasks_data):
+                    log_error(f"  Task {blocked_task['id']} has circular dependencies - skipping")
+                    time.sleep(60)
+                    continue
+
+                if are_dependencies_resolved(blocked_task, tasks_data):
+                    log_success(
+                        f"  All dependencies resolved - unblocking task {blocked_task['id']}"
+                    )
+                    update_task_status(tasks_data, blocked_task["id"], "pending")
+                    save_tasks(tasks_file, tasks_data)
+                    continue
+
+                deps = blocked_task.get("dependencies", "none")
+                log_info(f"  Still blocked by: {deps}")
+                log_info("  Skipping to next blocked task...")
+                current_idx = tasks_data["tasks"].index(blocked_task)
+                remaining_blocked = [
+                    t for t in tasks_data["tasks"][current_idx + 1 :] if t["status"] == "blocked"
+                ]
+
+                if remaining_blocked:
+                    next_blocked = remaining_blocked[0]
+                    log_info(f"  Trying next blocked task: {next_blocked['id']}")
+
+                time.sleep(60)
+                continue
+
+            log_info("No pending or blocked tasks found - waiting 60 seconds...")
             time.sleep(60)
             continue
 
