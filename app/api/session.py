@@ -435,38 +435,3 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
     )
-    for thread_id, state in thread_states.items():
-        thread = db.get(Thread, thread_id)
-        if thread:
-            thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
-            thread.last_rating = state.get("last_rating", thread.last_rating)
-            thread.queue_position = state.get("queue_position", thread.queue_position)
-            thread.status = state.get("status", thread.status)
-            if state.get("last_activity_at"):
-                from datetime import datetime
-
-                thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
-
-    if snapshot.session_state:
-        session.start_die = snapshot.session_state.get("start_die", session.start_die)
-        session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
-
-    db.commit()
-
-    if clear_cache:
-        clear_cache()
-
-    active_thread = get_active_thread(session, db)
-
-    return SessionResponse(
-        id=session.id,
-        started_at=session.started_at,
-        ended_at=session.ended_at,
-        start_die=session.start_die,
-        manual_die=session.manual_die,
-        user_id=session.user_id,
-        ladder_path=build_ladder_path(session, db),
-        active_thread=active_thread,
-        current_die=get_current_die(session.id, db),
-        last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
-    )

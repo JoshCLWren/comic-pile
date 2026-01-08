@@ -282,13 +282,13 @@
       "title": "Implement session save points and restore",
       "description": "Users must be able to restore their reading list and dice state to a known good point in time, especially after exploratory or demo usage.",
       "priority": "HIGH",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
-      "assigned_agent": null,
+      "assigned_agent": "Ralph",
       "worktree": null,
-      "status_notes": null,
+      "status_notes": "Feature already implemented in codebase. Fixed duplicate code in app/api/session.py restore_session_start function. Verified:\n- Session start snapshot created automatically when session begins (comic_pile/session.py:create_session_start_snapshot)\n- Captures thread order (queue_position), thread states (issues_remaining, last_rating, status, last_activity_at), session state (start_die, manual_die)\n- Restore endpoint exists: /sessions/{session_id}/restore-session-start\n- Single atomic operation using database transaction\n- All 257 tests pass\n- Linting clean",
       "estimated_effort": "4 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": null,
@@ -297,7 +297,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-08T04:51:07.560232",
-      "updated_at": "2026-01-08T04:51:07.560237"
+      "updated_at": "2026-01-08T11:26:32.520185Z"
     },
     {
       "id": 131,
