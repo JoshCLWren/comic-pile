@@ -8,7 +8,10 @@ import time
 import traceback
 from datetime import UTC, datetime
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Request, status
+
+load_dotenv()
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse

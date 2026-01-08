@@ -305,7 +305,7 @@
       "title": "Fix undo to restore full historical state",
       "description": "Undo currently does nothing or partially applies changes, breaking user trust.",
       "priority": "HIGH",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,

@@ -4,14 +4,27 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
-from app.models import Event, Session as SessionModel, Snapshot, Thread  # noqa: I001
+from app.models import Event, Session as SessionModel, Snapshot, Thread, User  # noqa: I001
+
+
+@pytest.fixture(scope="function")
+def sample_user(db) -> User:
+    """Create a test user for undo tests."""
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=datetime.now(UTC))
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
 
 
 @pytest.mark.asyncio
-async def test_list_snapshots_empty(client: AsyncClient, db):
+async def test_list_snapshots_empty(client: AsyncClient, db, sample_user):
     """Test listing snapshots for a session with no snapshots."""
-    session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -22,9 +35,9 @@ async def test_list_snapshots_empty(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_list_snapshots_with_data(client: AsyncClient, db):
+async def test_list_snapshots_with_data(client: AsyncClient, db, sample_user):
     """Test listing snapshots for a session with snapshots."""
-    session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -34,7 +47,7 @@ async def test_list_snapshots_with_data(client: AsyncClient, db):
         format="comic",
         issues_remaining=10,
         queue_position=1,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add(thread)
     db.commit()
@@ -80,9 +93,9 @@ async def test_list_snapshots_invalid_session(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot(client: AsyncClient, db):
+async def test_undo_to_snapshot(client: AsyncClient, db, sample_user):
     """Test undoing to a specific snapshot."""
-    session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -93,7 +106,7 @@ async def test_undo_to_snapshot(client: AsyncClient, db):
         issues_remaining=10,
         queue_position=1,
         last_rating=4.0,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add(thread)
     db.commit()
@@ -138,7 +151,7 @@ async def test_undo_to_snapshot(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot_invalid_session(client: AsyncClient, db):
+async def test_undo_to_snapshot_invalid_session(client: AsyncClient, db, sample_user):
     """Test undoing with invalid session ID."""
     response = await client.post("/undo/9999/undo/1")
     assert response.status_code == 404
@@ -146,11 +159,11 @@ async def test_undo_to_snapshot_invalid_session(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot_invalid_snapshot(client: AsyncClient, db):
+async def test_undo_to_snapshot_invalid_snapshot(client: AsyncClient, db, sample_user):
     """Test undoing with invalid snapshot ID."""
     from app.models import Session as SessionModel
 
-    session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -161,9 +174,9 @@ async def test_undo_to_snapshot_invalid_snapshot(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db):
+async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db, sample_user):
     """Test that undo correctly restores all thread states."""
-    session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -174,7 +187,7 @@ async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db):
         issues_remaining=5,
         queue_position=1,
         last_rating=4.0,
-        user_id=1,
+        user_id=sample_user.id,
     )
     thread2 = Thread(
         title="Comic 2",
@@ -182,7 +195,7 @@ async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db):
         issues_remaining=15,
         queue_position=2,
         last_rating=3.0,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add_all([thread1, thread2])
     db.commit()
@@ -239,9 +252,9 @@ async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_snapshot_created_on_rating(client: AsyncClient, db):
+async def test_snapshot_created_on_rating(client: AsyncClient, db, sample_user):
     """Test that a snapshot is automatically created when rating."""
-    session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -251,7 +264,7 @@ async def test_snapshot_created_on_rating(client: AsyncClient, db):
         format="comic",
         issues_remaining=10,
         queue_position=1,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add(thread)
     db.commit()
@@ -280,9 +293,9 @@ async def test_snapshot_created_on_rating(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db):
+async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db, sample_user):
     """Test that multiple snapshots are listed in reverse chronological order."""
-    session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -292,7 +305,7 @@ async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db):
         format="comic",
         issues_remaining=10,
         queue_position=1,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add(thread)
     db.commit()
@@ -331,9 +344,9 @@ async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_undo_to_earliest_snapshot(client: AsyncClient, db):
+async def test_undo_to_earliest_snapshot(client: AsyncClient, db, sample_user):
     """Test undoing to earliest snapshot in a session."""
-    session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -343,7 +356,7 @@ async def test_undo_to_earliest_snapshot(client: AsyncClient, db):
         format="comic",
         issues_remaining=10,
         queue_position=1,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add(thread)
     db.commit()
@@ -395,9 +408,11 @@ async def test_undo_to_earliest_snapshot(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_undo_restores_session_state(client: AsyncClient, db):
+async def test_undo_restores_session_state(client: AsyncClient, db, sample_user):
     """Test that undo correctly restores session state (start_die, manual_die)."""
-    session = SessionModel(start_die=6, manual_die=4, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(
+        start_die=6, manual_die=4, user_id=sample_user.id, started_at=datetime.now(UTC)
+    )
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -407,7 +422,7 @@ async def test_undo_restores_session_state(client: AsyncClient, db):
         format="comic",
         issues_remaining=10,
         queue_position=1,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add(thread)
     db.commit()
@@ -443,9 +458,9 @@ async def test_undo_restores_session_state(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_undo_to_session_start_snapshot(client: AsyncClient, db):
+async def test_undo_to_session_start_snapshot(client: AsyncClient, db, sample_user):
     """Test undoing to session start snapshot restores initial state."""
-    session = SessionModel(start_die=20, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(start_die=20, user_id=sample_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -455,7 +470,7 @@ async def test_undo_to_session_start_snapshot(client: AsyncClient, db):
         format="comic",
         issues_remaining=5,
         queue_position=1,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add(thread)
     db.commit()
@@ -493,9 +508,11 @@ async def test_undo_to_session_start_snapshot(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_undo_handles_missing_session_state(client: AsyncClient, db):
+async def test_undo_handles_missing_session_state(client: AsyncClient, db, sample_user):
     """Test that undo works when snapshot has no session_state (backward compatibility)."""
-    session = SessionModel(start_die=6, manual_die=4, user_id=1, started_at=datetime.now(UTC))
+    session = SessionModel(
+        start_die=6, manual_die=4, user_id=sample_user.id, started_at=datetime.now(UTC)
+    )
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -505,7 +522,7 @@ async def test_undo_handles_missing_session_state(client: AsyncClient, db):
         format="comic",
         issues_remaining=10,
         queue_position=1,
-        user_id=1,
+        user_id=sample_user.id,
     )
     db.add(thread)
     db.commit()

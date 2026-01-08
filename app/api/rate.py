@@ -23,6 +23,8 @@ def snapshot_thread_states(db: Session, session_id: int, event: Event) -> None:
     thread_states = {}
     for thread in threads:
         thread_states[thread.id] = {
+            "title": thread.title,
+            "format": thread.format,
             "issues_remaining": thread.issues_remaining,
             "last_rating": thread.last_rating,
             "last_activity_at": thread.last_activity_at.isoformat()
@@ -30,6 +32,12 @@ def snapshot_thread_states(db: Session, session_id: int, event: Event) -> None:
             else None,
             "queue_position": thread.queue_position,
             "status": thread.status,
+            "review_url": thread.review_url,
+            "last_review_at": thread.last_review_at.isoformat() if thread.last_review_at else None,
+            "notes": thread.notes,
+            "is_test": thread.is_test,
+            "created_at": thread.created_at.isoformat(),
+            "user_id": thread.user_id,
         }
 
     session = db.get(SessionModel, session_id)

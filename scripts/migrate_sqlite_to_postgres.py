@@ -1,5 +1,6 @@
 """Migrate data from SQLite to PostgreSQL."""
 
+import json
 import os
 import sqlite3
 import sys
@@ -9,7 +10,15 @@ from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.models import Event, Session, Settings, Task, Thread, User
+from app.models import Event, Session, Settings, Snapshot, Task, Thread, User
+
+env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+if os.path.exists(env_file):
+    with open(env_file) as f:
+        for line in f:
+            if line.strip() and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ[key.strip()] = value.strip()
 
 sqlite_db_path = os.getenv("SQLITE_DB_PATH", "comic_pile.db")
 if not os.path.isabs(sqlite_db_path):
@@ -19,7 +28,7 @@ sqlite_conn = sqlite3.connect(sqlite_db_path)
 sqlite_conn.row_factory = sqlite3.Row
 
 pg_url = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://comicpile:comicpile_password@localhost:5432/comicpile"
+    "DATABASE_URL", "postgresql+psycopg://comicpile:comicpile_password@localhost:5435/comicpile"
 )
 pg_engine = create_engine(pg_url)
 pg_session = sessionmaker(bind=pg_engine)()
@@ -28,7 +37,8 @@ pg_session = sessionmaker(bind=pg_engine)()
 def migrate_users():
     """Migrate users table."""
     cursor = sqlite_conn.execute("SELECT * FROM users")
-    for row in cursor:
+    rows = cursor.fetchall()
+    for row in rows:
         user = User(
             id=row["id"],
             username=row["username"],
@@ -36,13 +46,20 @@ def migrate_users():
         )
         pg_session.merge(user)
     pg_session.commit()
-    print(f"Migrated {cursor.rowcount} users")
+    print(f"Migrated {len(rows)} users")
 
 
 def migrate_threads():
     """Migrate threads table."""
     cursor = sqlite_conn.execute("SELECT * FROM threads")
-    for row in cursor:
+    rows = cursor.fetchall()
+    for row in rows:
+        is_test = row["is_test"]
+        if isinstance(is_test, str):
+            is_test = is_test.lower() == "true"
+        elif is_test is None:
+            is_test = False
+
         thread = Thread(
             id=row["id"],
             title=row["title"],
@@ -54,18 +71,29 @@ def migrate_threads():
             last_activity_at=row["last_activity_at"] if row["last_activity_at"] else None,
             review_url=row["review_url"] if row["review_url"] else None,
             last_review_at=row["last_review_at"] if row["last_review_at"] else None,
+            notes=row["notes"] if row["notes"] else None,
+            is_test=is_test,
             created_at=row["created_at"],
             user_id=row["user_id"],
         )
         pg_session.merge(thread)
     pg_session.commit()
-    print(f"Migrated {cursor.rowcount} threads")
+    print(f"Migrated {len(rows)} threads")
 
 
 def migrate_sessions():
     """Migrate sessions table."""
     cursor = sqlite_conn.execute("SELECT * FROM sessions")
-    for row in cursor:
+    rows = cursor.fetchall()
+
+    cursor_threads = sqlite_conn.execute("SELECT id FROM threads")
+    valid_thread_ids = {row[0] for row in cursor_threads.fetchall()}
+
+    for row in rows:
+        pending_thread_id = row["pending_thread_id"] if row["pending_thread_id"] else None
+        if pending_thread_id and pending_thread_id not in valid_thread_ids:
+            pending_thread_id = None
+
         session = Session(
             id=row["id"],
             started_at=row["started_at"],
@@ -73,20 +101,21 @@ def migrate_sessions():
             start_die=row["start_die"],
             manual_die=row["manual_die"] if row["manual_die"] else None,
             user_id=row["user_id"],
-            pending_thread_id=row["pending_thread_id"] if row["pending_thread_id"] else None,
+            pending_thread_id=pending_thread_id,
             pending_thread_updated_at=row["pending_thread_updated_at"]
             if row["pending_thread_updated_at"]
             else None,
         )
         pg_session.merge(session)
     pg_session.commit()
-    print(f"Migrated {cursor.rowcount} sessions")
+    print(f"Migrated {len(rows)} sessions")
 
 
 def migrate_events():
     """Migrate events table."""
     cursor = sqlite_conn.execute("SELECT * FROM events")
-    for row in cursor:
+    rows = cursor.fetchall()
+    for row in rows:
         event = Event(
             id=row["id"],
             type=row["type"],
@@ -104,13 +133,53 @@ def migrate_events():
         )
         pg_session.merge(event)
     pg_session.commit()
-    print(f"Migrated {cursor.rowcount} events")
+    print(f"Migrated {len(rows)} events")
+
+
+def migrate_snapshots():
+    """Migrate snapshots table."""
+    cursor = sqlite_conn.execute("SELECT * FROM snapshots")
+    rows = cursor.fetchall()
+
+    cursor_events = sqlite_conn.execute("SELECT id FROM events")
+    valid_event_ids = {row[0] for row in cursor_events.fetchall()}
+
+    for row in rows:
+        thread_states = row["thread_states"]
+        if isinstance(thread_states, str):
+            thread_states = json.loads(thread_states)
+
+        session_state = row["session_state"]
+        if session_state and isinstance(session_state, str):
+            session_state = json.loads(session_state)
+
+        event_id = row["event_id"] if row["event_id"] else None
+        if event_id and event_id not in valid_event_ids:
+            event_id = None
+
+        snapshot = Snapshot(
+            id=row["id"],
+            session_id=row["session_id"],
+            event_id=event_id,
+            thread_states=thread_states,
+            session_state=session_state,
+            created_at=row["created_at"],
+            description=row["description"] if row["description"] else None,
+        )
+        pg_session.merge(snapshot)
+    pg_session.commit()
+    print(f"Migrated {len(rows)} snapshots")
 
 
 def migrate_tasks():
     """Migrate tasks table."""
     cursor = sqlite_conn.execute("SELECT * FROM tasks")
-    for row in cursor:
+    rows = cursor.fetchall()
+    for row in rows:
+        completed = row["completed"]
+        if isinstance(completed, str):
+            completed = completed.lower() == "true"
+
         task = Task(
             id=row["id"],
             task_id=row["task_id"],
@@ -123,7 +192,7 @@ def migrate_tasks():
             worktree=row["worktree"] if row["worktree"] else None,
             status_notes=row["status_notes"] if row["status_notes"] else None,
             estimated_effort=row["estimated_effort"],
-            completed=row["completed"],
+            completed=completed,
             blocked_reason=row["blocked_reason"] if row["blocked_reason"] else None,
             blocked_by=row["blocked_by"] if row["blocked_by"] else None,
             last_heartbeat=row["last_heartbeat"] if row["last_heartbeat"] else None,
@@ -133,13 +202,14 @@ def migrate_tasks():
         )
         pg_session.merge(task)
     pg_session.commit()
-    print(f"Migrated {cursor.rowcount} tasks")
+    print(f"Migrated {len(rows)} tasks")
 
 
 def migrate_settings():
     """Migrate settings table."""
     cursor = sqlite_conn.execute("SELECT * FROM settings")
-    for row in cursor:
+    rows = cursor.fetchall()
+    for row in rows:
         settings = Settings(
             id=row["id"],
             session_gap_hours=row["session_gap_hours"],
@@ -153,7 +223,7 @@ def migrate_settings():
         )
         pg_session.merge(settings)
     pg_session.commit()
-    print(f"Migrated {cursor.rowcount} settings")
+    print(f"Migrated {len(rows)} settings")
 
 
 if __name__ == "__main__":
@@ -167,6 +237,7 @@ if __name__ == "__main__":
         migrate_threads()
         migrate_sessions()
         migrate_events()
+        migrate_snapshots()
         migrate_tasks()
         migrate_settings()
 

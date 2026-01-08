@@ -1,5 +1,6 @@
 """Session API endpoints."""
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -388,18 +389,70 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
             detail=f"No session start snapshot found for session {session_id}",
         )
 
-    thread_states = snapshot.thread_states
-    for thread_id, state in thread_states.items():
+    from sqlalchemy import delete, or_, update
+
+    snapshot_thread_ids = set(snapshot.thread_states.keys())
+
+    current_threads = db.execute(select(Thread)).scalars().all()
+    current_thread_ids = {thread.id for thread in current_threads}
+
+    threads_to_delete = current_thread_ids - snapshot_thread_ids
+    if threads_to_delete:
+        db.execute(
+            update(Event)
+            .where(
+                or_(
+                    Event.thread_id.in_(threads_to_delete),
+                    Event.selected_thread_id.in_(threads_to_delete),
+                )
+            )
+            .values(thread_id=None, selected_thread_id=None)
+        )
+        db.execute(delete(Thread).where(Thread.id.in_(threads_to_delete)))
+
+    for thread_id, state in snapshot.thread_states.items():
         thread = db.get(Thread, thread_id)
         if thread:
+            if "title" in state:
+                thread.title = state["title"]
+            if "format" in state:
+                thread.format = state["format"]
             thread.issues_remaining = state.get("issues_remaining", thread.issues_remaining)
             thread.last_rating = state.get("last_rating", thread.last_rating)
             thread.queue_position = state.get("queue_position", thread.queue_position)
             thread.status = state.get("status", thread.status)
+            if "review_url" in state:
+                thread.review_url = state["review_url"]
+            if "notes" in state:
+                thread.notes = state["notes"]
+            if "is_test" in state:
+                thread.is_test = state["is_test"]
             if state.get("last_activity_at"):
-                from datetime import datetime
-
                 thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
+            if state.get("last_review_at"):
+                thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
+        else:
+            new_thread = Thread(
+                id=thread_id,
+                title=state.get("title", "Unknown Thread"),
+                format=state.get("format", "comic"),
+                issues_remaining=state.get("issues_remaining", 0),
+                last_rating=state.get("last_rating"),
+                queue_position=state.get("queue_position", 1),
+                status=state.get("status", "active"),
+                review_url=state.get("review_url"),
+                notes=state.get("notes"),
+                is_test=state.get("is_test", False),
+                user_id=state.get("user_id", session.user_id),
+                created_at=datetime.fromisoformat(state["created_at"])
+                if state.get("created_at")
+                else datetime.now(),
+            )
+            if state.get("last_activity_at"):
+                new_thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
+            if state.get("last_review_at"):
+                new_thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
+            db.add(new_thread)
 
     if snapshot.session_state:
         session.start_die = snapshot.session_state.get("start_die", session.start_die)
