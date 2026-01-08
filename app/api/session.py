@@ -296,34 +296,6 @@ def get_session_details(
     )
 
 
-@router.get("/{session_id}/snapshots")
-def get_session_snapshots(session_id: int, db: Session = Depends(get_db)) -> list[dict]:
-    """Get all snapshots for a session."""
-    session = db.get(SessionModel, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    snapshots = (
-        db.execute(
-            select(Snapshot)
-            .where(Snapshot.session_id == session_id)
-            .order_by(Snapshot.created_at.desc())
-        )
-        .scalars()
-        .all()
-    )
-
-    return [
-        {
-            "id": s.id,
-            "created_at": s.created_at,
-            "description": s.description,
-            "event_id": s.event_id,
-        }
-        for s in snapshots
-    ]
-
-
 @router.get("/{session_id}/snapshots", response_class=HTMLResponse)
 def get_session_snapshots_html(
     session_id: int, request: Request, db: Session = Depends(get_db)
