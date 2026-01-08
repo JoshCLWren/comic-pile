@@ -2,13 +2,13 @@
 
 ## Current Status
 
-**Status:** BLOCKED - Merge conflict during review
+**Status:** PENDING - Ready to implement
 **Priority:** HIGH
 **Task Type:** Feature
-**Blocked Reason:** Merge conflict during review
-**Worktree:** Previously `/home/josh/code/comic-pile-task-metrics` (missing)
-**Commit:** 2b27d8e (feat(TASK-METRICS-001): add task metrics endpoint and analytics dashboard)
-**Branch:** task/metrics-001
+**Blocked Reason:** None
+**Worktree:** None (needs to be created)
+**Commit:** None
+**Branch:** None (needs to be created)
 
 ---
 
@@ -402,4 +402,6 @@ From the retro file by worker agent Yvonne:
 
 **Last Updated:** January 7, 2026
 **Audit Date:** January 7, 2026
-**Status:** BLOCKED - Needs clean implementation in new branch
+**Status:** PENDING - Ready for fresh implementation from main branch
+
+**Note:** Previous implementation on task/metrics-001 branch was deleted due to massive merge conflicts. Task needs to be implemented fresh from current main branch.

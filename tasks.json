@@ -934,11 +934,11 @@
       "id": "task-metrics-001",
       "title": "Add task completion metrics and analytics dashboard",
       "description": "Add task completion metrics and analytics dashboard. Track key performance indicators and help users understand task system health.",
-      "status": "blocked",
+      "status": "pending",
       "priority": "HIGH",
       "dependencies": "",
       "task_type": "feature",
-      "blocked_reason": "Merge conflict during review"
+      "blocked_reason": null
     },
     {
       "id": "task-rollback-001",
@@ -1194,11 +1194,11 @@
       "id": "ux-006",
       "title": "Add lightweight ladder explanation tooltip",
       "description": "Ladder concept (d4\u2026d20) is jargon. Add a non-intrusive explanation.",
-      "status": "blocked",
+      "status": "pending",
       "priority": "LOW",
       "dependencies": null,
       "task_type": "feature",
-      "blocked_reason": "Merge conflict during review"
+      "blocked_reason": null
     },
     {
       "id": "ux-007",
