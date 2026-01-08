@@ -392,3 +392,154 @@ async def test_undo_to_earliest_snapshot(client: AsyncClient, db):
 
     db.refresh(thread)
     assert thread.issues_remaining == 100
+
+
+@pytest.mark.asyncio
+async def test_undo_restores_session_state(client: AsyncClient, db):
+    """Test that undo correctly restores session state (start_die, manual_die)."""
+    session = SessionModel(start_die=6, manual_die=4, user_id=1, started_at=datetime.now(UTC))
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=1,
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        session_id=session.id,
+        thread_id=thread.id,
+        selected_thread_id=thread.id,
+        result=3,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=event.id,
+        thread_states={thread.id: {"issues_remaining": 15}},
+        session_state={"start_die": 10, "manual_die": 8},
+        description="Session with different dice",
+    )
+    db.add(snapshot)
+    db.commit()
+
+    response = await client.post(f"/undo/{session.id}/undo/{snapshot.id}")
+    assert response.status_code == 200
+
+    db.refresh(session)
+    assert session.start_die == 10
+    assert session.manual_die == 8
+
+
+@pytest.mark.asyncio
+async def test_undo_to_session_start_snapshot(client: AsyncClient, db):
+    """Test undoing to session start snapshot restores initial state."""
+    session = SessionModel(start_die=20, user_id=1, started_at=datetime.now(UTC))
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=5,
+        queue_position=1,
+        user_id=1,
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        session_id=session.id,
+        thread_id=thread.id,
+        selected_thread_id=thread.id,
+        result=3,
+    )
+    db.add(event)
+    db.commit()
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=None,
+        thread_states={thread.id: {"issues_remaining": 10, "queue_position": 1}},
+        session_state={"start_die": 6, "manual_die": None},
+        description="Session start",
+    )
+    db.add(snapshot)
+    db.commit()
+
+    await client.post(f"/undo/{session.id}/undo/{snapshot.id}")
+
+    db.refresh(session)
+    db.refresh(thread)
+
+    assert session.start_die == 6
+    assert session.manual_die is None
+    assert thread.issues_remaining == 10
+    assert thread.queue_position == 1
+
+
+@pytest.mark.asyncio
+async def test_undo_handles_missing_session_state(client: AsyncClient, db):
+    """Test that undo works when snapshot has no session_state (backward compatibility)."""
+    session = SessionModel(start_die=6, manual_die=4, user_id=1, started_at=datetime.now(UTC))
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    thread = Thread(
+        title="Test Comic",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=1,
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        session_id=session.id,
+        thread_id=thread.id,
+        selected_thread_id=thread.id,
+        result=3,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=event.id,
+        thread_states={thread.id: {"issues_remaining": 15}},
+        session_state=None,
+        description="Old snapshot without session state",
+    )
+    db.add(snapshot)
+    db.commit()
+
+    original_start_die = session.start_die
+    original_manual_die = session.manual_die
+
+    response = await client.post(f"/undo/{session.id}/undo/{snapshot.id}")
+    assert response.status_code == 200
+
+    db.refresh(session)
+
+    assert session.start_die == original_start_die
+    assert session.manual_die == original_manual_die
+    assert thread.issues_remaining == 15

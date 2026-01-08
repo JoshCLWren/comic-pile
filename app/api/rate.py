@@ -32,10 +32,19 @@ def snapshot_thread_states(db: Session, session_id: int, event: Event) -> None:
             "status": thread.status,
         }
 
+    session = db.get(SessionModel, session_id)
+    session_state = None
+    if session:
+        session_state = {
+            "start_die": session.start_die,
+            "manual_die": session.manual_die,
+        }
+
     snapshot = Snapshot(
         session_id=session_id,
         event_id=event.id,
         thread_states=thread_states,
+        session_state=session_state,
         description=f"After rating {event.rating}/5.0",
     )
     db.add(snapshot)

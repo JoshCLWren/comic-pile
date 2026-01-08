@@ -59,6 +59,10 @@ def undo_to_snapshot(
             if state.get("last_activity_at"):
                 thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
 
+    if snapshot.session_state:
+        session.start_die = snapshot.session_state.get("start_die", session.start_die)
+        session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
+
     db.commit()
 
     if clear_cache:
