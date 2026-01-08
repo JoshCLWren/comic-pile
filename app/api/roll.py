@@ -125,7 +125,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
             thread = threads[i]
             dice_html += f"""
             <div id="dice-wrapper-{position}" class="dice-wrapper">
-                <div id="dice-container-{position}" class="dice-container">
+                <div id="dice-container-{position}" class="dice-container ladder-active">
                     <div id="die-3d-{position}" class="w-full h-full"></div>
                     <div class="dice-number">{position}</div>
                 </div>
