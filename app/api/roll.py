@@ -110,7 +110,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
         + f"""
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
             <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
-                <div id="result-die-wrapper" class="dice-state-rolled threejs-die-container relative z-10 rounded-full" style="width: 100px; height: 100px; margin: 0 auto;">
+                <div id="result-die-wrapper" class="dice-state-rolled threejs-die-container relative z-10 rounded-full cursor-pointer" style="width: 100px; height: 100px; margin: 0 auto;" onclick="triggerReroll()">
                     <div id="result-die-3d" class="w-full h-full"></div>
                     <span id="result-die-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-teal-400">Rolled</span>
                 </div>
@@ -162,7 +162,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 localStorage.setItem('selectedThreadId', '{selected_thread.id}');
                 isRolling = false;
                 const instruction = document.getElementById('tap-instruction');
-                if (instruction) instruction.textContent = "Tap Die to Roll";
+                if (instruction) instruction.textContent = "Tap Die or Button to Reroll";
 
                 const resultWrapper = document.getElementById('result-die-wrapper');
                 if (resultWrapper) {{
@@ -392,7 +392,7 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
     return f"""
         <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
             <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
-                <div id="result-die-wrapper" class="threejs-die-container relative z-10" style="width: 100px; height: 100px; margin: 0 auto;">
+                <div id="result-die-wrapper" class="threejs-die-container relative z-10 rounded-full cursor-pointer" style="width: 100px; height: 100px; margin: 0 auto;" onclick="triggerReroll()">
                     <div id="result-die-3d" class="w-full h-full"></div>
                     <span id="result-die-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-teal-400">Rerolled</span>
                 </div>
@@ -443,7 +443,7 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                 localStorage.setItem('selectedThreadId', '{selected_thread.id}');
                 isRolling = false;
                 const instruction = document.getElementById('tap-instruction');
-                if (instruction) instruction.textContent = "Tap Die to Roll";
+                if (instruction) instruction.textContent = "Tap Die or Button to Reroll";
 
                 setTimeout(function() {{
                     const resultContainer = document.getElementById('result-die-3d');

@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator, AsyncIterator, Generator
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession as SQLAlchemyAsyncSession,
 )
@@ -90,26 +90,34 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 @pytest.fixture(scope="function")
 def db() -> Generator[Session]:
-    """Create test database with transaction rollback (PostgreSQL or SQLite)."""
+    """Create test database with transaction rollback (SQLite) or TRUNCATE (PostgreSQL)."""
     database_url = get_sync_test_database_url()
 
     if database_url.startswith("sqlite"):
         engine = create_engine(database_url, connect_args={"check_same_thread": False})
+        Base.metadata.create_all(bind=engine)
+        connection = engine.connect()
+        transaction = connection.begin()
+        session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
     else:
         engine = create_engine(database_url, echo=False)
-
-    Base.metadata.create_all(bind=engine)
-
-    connection = engine.connect()
-    transaction = connection.begin()
-
-    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+        Base.metadata.create_all(bind=engine)
+        connection = engine.connect()
+        connection.execute(
+            text(
+                "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, settings, users RESTART IDENTITY CASCADE;"
+            )
+        )
+        connection.commit()
+        transaction = None
+        session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
     try:
         yield session
     finally:
         session.close()
-        transaction.rollback()
+        if transaction is not None:
+            transaction.rollback()
         connection.close()
         engine.dispose()
 
@@ -183,10 +191,12 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
     from datetime import UTC, datetime
 
     now = datetime.now(UTC)
-    user = User(username="test_user", created_at=now)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=now)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     threads = [
         Thread(

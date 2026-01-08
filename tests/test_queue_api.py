@@ -1,8 +1,11 @@
 """Tests for queue API endpoints."""
 
 import pytest
+from datetime import datetime
+from sqlalchemy import select
 
 from app.models import Thread
+from comic_pile.queue import get_roll_pool
 
 
 @pytest.mark.asyncio
@@ -224,7 +227,7 @@ async def test_move_to_same_position(db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_get_stale_threads(db):
+async def test_setup_stale_threads(db):
     """Returns threads inactive for specified days."""
     from datetime import datetime, timedelta
 
@@ -233,10 +236,12 @@ async def test_get_stale_threads(db):
 
     now = datetime.now()
 
-    user = User(username="test_user", created_at=datetime.now())
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=datetime.now())
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     stale_thread = Thread(
         title="Old Thread",
@@ -358,17 +363,16 @@ async def test_get_stale_threads_excludes_inactive(db):
 
 
 @pytest.mark.asyncio
-async def test_get_roll_pool_direct(db):
-    """Returns active threads ordered by position."""
-    from datetime import datetime
-
+async def test_get_stale_threads(db):
+    """Test GET /stale-threads returns stale threads."""
     from app.models import User
-    from comic_pile.queue import get_roll_pool
 
-    user = User(username="test_user", created_at=datetime.now())
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=datetime.now())
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     thread1 = Thread(
         title="Thread 1",
