@@ -333,6 +333,7 @@ def clear_manual_die(db: Session = Depends(get_db)) -> str:
     if clear_cache:
         clear_cache()
 
+    db.expire(current_session)
     current_die = get_current_die(current_session.id, db)
     return f"d{current_die}"
 

@@ -220,3 +220,31 @@ async def test_clear_manual_die_with_no_manual_set(client, sample_data):
     response = await client.post("/roll/clear-manual-die")
     assert response.status_code == 200
     assert response.text == "d8"
+
+
+@pytest.mark.asyncio
+async def test_clear_manual_die_returns_correct_current_die_regression(client, sample_data, db):
+    """Regression test for bug where clearing manual die returned wrong die value.
+
+    When manual mode is disengaged by clicking auto, the endpoint should return
+    the correct current die from the dice ladder, not a stale cached value.
+    """
+    from app.models import Session as SessionModel
+
+    session = (
+        db.execute(select(SessionModel).where(SessionModel.ended_at.is_(None))).scalars().first()
+    )
+    assert session is not None
+
+    session.manual_die = 20
+    db.commit()
+
+    response = await client.post("/roll/clear-manual-die")
+    assert response.status_code == 200
+
+    session_response = await client.get("/sessions/current/")
+    assert session_response.status_code == 200
+    session_data = session_response.json()
+
+    assert session_data["manual_die"] is None
+    assert response.text == f"d{session_data['current_die']}"
