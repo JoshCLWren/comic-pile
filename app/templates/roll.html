@@ -80,8 +80,28 @@
     .dice-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 1rem;
-        padding: 1rem;
+        gap: 1.5rem;
+        padding: 1.5rem;
+    }
+
+    @media (min-width: 1024px) {
+        .dice-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            padding: 2rem;
+        }
+    }
+
+    @media (min-width: 1280px) {
+        .dice-grid {
+            grid-template-columns: repeat(5, 1fr);
+        }
+    }
+
+    @media (min-width: 1536px) {
+        .dice-grid {
+            grid-template-columns: repeat(6, 1fr);
+        }
     }
 
     .dice-wrapper {
@@ -107,14 +127,14 @@
     .dice-container.selected {
         border-color: rgba(251, 191, 36, 0.8);
         box-shadow: 0 0 40px rgba(251, 191, 36, 0.4), inset 0 0 0 3px rgba(251, 191, 36, 0.3);
-        transform: scale(1.4);
+        transform: scale(1.3);
         z-index: 10;
     }
 
     .dice-container.ladder-active {
         border-color: rgba(20, 184, 166, 0.6);
         box-shadow: 0 0 25px rgba(20, 184, 166, 0.25);
-        transform: scale(1.05);
+        transform: scale(1.1);
     }
 
     .dice-number {
@@ -316,6 +336,27 @@
         stateLabel.className = `text-[9px] font-black uppercase ${config.class}`;
     }
 
+    function updateDiceContainerSize() {
+        const containers = document.querySelectorAll('.dice-container');
+        const width = window.innerWidth;
+
+        let size;
+        if (width < 640) {
+            size = 70;
+        } else if (width < 1024) {
+            size = 90;
+        } else if (width < 1280) {
+            size = 110;
+        } else {
+            size = 130;
+        }
+
+        containers.forEach(container => {
+            container.style.width = `${size}px`;
+            container.style.height = `${size}px`;
+        });
+    }
+
     function initDice() {
         if (window.Dice3D) {
             Dice3D.cleanup();
@@ -333,8 +374,6 @@
 
             const container = document.createElement('div');
             container.className = 'dice-container';
-            container.style.width = '80px';
-            container.style.height = '80px';
             container.id = `dice-container-${i}`;
 
             const die3dContainer = document.createElement('div');
@@ -363,6 +402,8 @@
             if (die) die.setValue(i);
             diceInstances[i] = die;
         }
+
+        updateDiceContainerSize();
 
         updateDieButtonState(initialDenom);
         if (selectedThreadId) {
@@ -701,6 +742,9 @@
         initDice();
         loadStaleSuggestion();
         checkManualMode();
+        updateDiceContainerSize();
     });
+
+    window.addEventListener('resize', updateDiceContainerSize);
 </script>
 {% endblock %}

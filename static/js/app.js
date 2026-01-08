@@ -45,77 +45,77 @@ function loadQueue() {
                 const hasNotes = thread.notes && thread.notes.trim() !== '';
 
                 return `
-                    <div class="glass-card border-white/10 p-4 rounded-xl transition-all hover:border-white/20"
+                    <div class="glass-card border-white/10 p-4 rounded-xl transition-all hover:border-white/20 flex flex-col h-full"
                          data-thread-id="${thread.id}"
                          data-position="${position}">
-                        <div class="flex items-start gap-3">
-                            <div class="cursor-move text-slate-400 hover:text-slate-200 touch-manipulation flex items-center justify-center pt-1">
+                        <div class="flex items-start gap-3 mb-3">
+                            <div class="cursor-move text-slate-400 hover:text-slate-200 touch-manipulation flex items-center justify-center pt-1 flex-shrink-0">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
                                 </svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="flex items-start justify-between gap-2">
-                                    <div class="min-w-0 flex-1">
-                                        <h3 class="text-base font-bold text-slate-100 truncate">${thread.title}</h3>
-                                        <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-                                            <span class="px-2 py-0.5 bg-white/10 text-slate-300 rounded text-[10px] font-bold uppercase tracking-wider">
-                                                ${thread.format}
-                                            </span>
-                                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                                ${thread.issues_remaining} issues
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
-                                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">#${position}</span>
-                                        ${staleness.badge || ''}
-                                    </div>
+                                <h3 class="text-base font-bold text-slate-100 truncate">${thread.title}</h3>
+                                <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                                    <span class="px-2 py-0.5 bg-white/10 text-slate-300 rounded text-[10px] font-bold uppercase tracking-wider">
+                                        ${thread.format}
+                                    </span>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        ${thread.issues_remaining} issues
+                                    </span>
                                 </div>
-                                ${hasNotes ? `
-                                    <div class="mt-3 pt-3 border-t border-white/5">
-                                        <div class="flex items-start gap-2">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                            <p class="text-[10px] text-slate-400 leading-relaxed break-words">${thread.notes}</p>
-                                        </div>
-                                    </div>
-                                ` : ''}
-                                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
-                                    <button onclick="moveThread(${thread.id}, 'up')"
-                                        ${isFirst ? 'disabled' : ''}
-                                        class="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
-                                        ↑ Up
-                                    </button>
-                                    <button onclick="moveThread(${thread.id}, 'down')"
-                                        ${isLast ? 'disabled' : ''}
-                                        class="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
-                                        ↓ Down
-                                    </button>
-                                    <button onclick="moveToFront(${thread.id})"
-                                        ${isFirst ? 'disabled' : ''}
-                                        class="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
-                                        ⏮ Front
-                                    </button>
-                                    <button onclick="moveToBack(${thread.id})"
-                                        ${isLast ? 'disabled' : ''}
-                                        class="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
-                                        ⏭ Back
-                                    </button>
-                                    <button onclick="openPositionModal(${thread.id}, ${position}, ${threads.length})"
-                                        class="px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-purple-400 hover:bg-purple-500/20 transition-all active:scale-95">
-                                        # Jump
-                                    </button>
-                                    <button onclick="openEditModal(${thread.id})"
-                                        class="px-3 py-1.5 bg-teal-500/10 border border-teal-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-teal-400 hover:bg-teal-500/20 transition-all active:scale-95">
-                                        Edit
-                                    </button>
-                                    <button onclick="deleteThread(${thread.id})"
-                                        class="px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-red-400 hover:bg-red-500/20 transition-all active:scale-95 ml-auto">
-                                        Remove
-                                    </button>
+                            </div>
+                            <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">#${position}</span>
+                                ${staleness.badge || ''}
+                            </div>
+                        </div>
+                        ${hasNotes ? `
+                            <div class="mt-2 pt-3 border-t border-white/5 mb-3">
+                                <div class="flex items-start gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <p class="text-[10px] text-slate-400 leading-relaxed break-words">${thread.notes}</p>
                                 </div>
+                            </div>
+                        ` : ''}
+                        <div class="mt-auto pt-3 border-t border-white/5">
+                            <div class="grid grid-cols-3 gap-2 mb-2">
+                                <button onclick="moveThread(${thread.id}, 'up')"
+                                    ${isFirst ? 'disabled' : ''}
+                                    class="px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[9px] font-bold uppercase tracking-wider text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
+                                    ↑ Up
+                                </button>
+                                <button onclick="moveThread(${thread.id}, 'down')"
+                                    ${isLast ? 'disabled' : ''}
+                                    class="px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[9px] font-bold uppercase tracking-wider text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
+                                    ↓ Down
+                                </button>
+                                <button onclick="openPositionModal(${thread.id}, ${position}, ${threads.length})"
+                                    class="px-2 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-[9px] font-bold uppercase tracking-wider text-purple-400 hover:bg-purple-500/20 transition-all active:scale-95">
+                                    # Jump
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-4 gap-2">
+                                <button onclick="moveToFront(${thread.id})"
+                                    ${isFirst ? 'disabled' : ''}
+                                    class="px-2 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[9px] font-bold uppercase tracking-wider text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
+                                    ⏮ Front
+                                </button>
+                                <button onclick="moveToBack(${thread.id})"
+                                    ${isLast ? 'disabled' : ''}
+                                    class="px-2 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[9px] font-bold uppercase tracking-wider text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
+                                    ⏭ Back
+                                </button>
+                                <button onclick="openEditModal(${thread.id})"
+                                    class="px-2 py-1.5 bg-teal-500/10 border border-teal-500/20 rounded-lg text-[9px] font-bold uppercase tracking-wider text-teal-400 hover:bg-teal-500/20 transition-all active:scale-95">
+                                    Edit
+                                </button>
+                                <button onclick="deleteThread(${thread.id})"
+                                    class="px-2 py-1.5 bg-red-500/10 border border-red-500/20 rounded-lg text-[9px] font-bold uppercase tracking-wider text-red-400 hover:bg-red-500/20 transition-all active:scale-95">
+                                    Remove
+                                </button>
                             </div>
                         </div>
                     </div>
