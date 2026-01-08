@@ -1,14 +1,22 @@
 # PRD Misses Analysis
 
-This document identifies gaps between the PRD (prd.md) requirements and the current implementation.
+This document identifies gaps between the PRD (prd.md) requirements and the current implementation based on concurrent agent checks.
 
 ## Executive Summary
 
-**Overall Status**: Approximately 90% of PRD features are implemented. Most core functionality is complete, with remaining gaps focused on:
-- Configuration/settings management
-- UI enhancements
-- API response completeness
-- Export formatting
+**Total PRD Sections**: 13
+
+| Status | Count | Sections |
+|--------|-------|----------|
+| Fully Implemented | 3 | Sections 7, 12, 9 (Review URL) |
+| Partially Implemented | 3 | Sections 5.2, 9 (Review Timestamp), 11 |
+| Not Implemented | 1 | Section 13 Wireframes |
+| Complete | 6 | Sections 1-4, 6, 8, 10 |
+
+**Overall Status**: Approximately 85% of PRD features are fully implemented. Core functionality is complete, with remaining gaps focused on:
+- UI polish and visual enhancements
+- Display format alignment with PRD specifications
+- Wireframe-specific features
 
 ## Detailed Analysis by PRD Section
 
@@ -46,56 +54,144 @@ This document identifies gaps between the PRD (prd.md) requirements and the curr
 - Roll pool definition (first N active threads): **Implemented**
 - Manual override support: **Implemented**
 
-### Section 5: Rating Model ✅ MOSTLY COMPLETE
-- Rating scale (0.5 → 5.0): **Implemented**
-- Progress rules (rating decrements issues): **Implemented**
-- Queue movement based on rating: **Implemented**
-- **MISSING**: Issues read adjustment UI (covered by TASK-108)
+### Section 5.2: Issues Read Adjustment UI ⚠️ PARTIALLY IMPLEMENTED
+**Status**: Backend supports, UI control missing
+
+**What's Working**:
+- Backend API supports issues_read field updates
+- Rating decrements issues_remaining correctly
+
+**What's Missing**:
+- UI control for adjusting issues_read on rate.html (no increment/decrement buttons)
+- PRD Section 13 shows controls, but not implemented in UI
+
+**File Locations**:
+- Model: `app/models/thread.py` (issues_read field exists)
+- API: `app/api/threads.py` (supports updates via POST /threads/{id}/rate/)
+- UI: `app/templates/rate.html` (missing UI controls)
 
 ### Section 6: Completion Semantics ✅ COMPLETE
 - Thread completion on issues_remaining = 0: **Implemented**
 - Completion removes from roll pool: **Implemented**
 - Reactivation when new issues owned: **Implemented**
 
-### Section 7: Staleness Awareness ✅ PARTIAL
-- Last read/rating/review timestamps: **Implemented** (in model)
-- Stale thread tracking: **Implemented** (get_stale_threads API)
-- **MISSING**: Staleness awareness UI on roll screen (TASK-102)
+### Section 7: Staleness Awareness UI ✅ FULLY IMPLEMENTED
+**Status**: Backend API and subtle nudges work
+
+**What's Working**:
+- Last read/rating/review timestamps tracked in model
+- get_stale_threads API endpoint exists
+- Subtle nudges displayed on roll screen
+
+**File Locations**:
+- Model: `app/models/thread.py` (last_read_at, last_rating_at, last_review_at fields)
+- API: `app/api/threads.py` (GET /threads/stale endpoint)
+- UI: `app/templates/roll.html` (stale thread nudges displayed)
 
 ### Section 8: Time Tracking ✅ COMPLETE
 - Raw timestamps for all events: **Implemented**
 - No derived labels: **Correctly avoided**
 
-### Section 9: Reviews & External Data ✅ MOSTLY COMPLETE
-- Review URL storage: **Implemented** (review_url field in Thread model)
-- Review timestamp storage: **Implemented** (last_review_at field in Thread model)
-- **MISSING**: Review URL in API response (TASK-201)
-- **MISSING**: Review timestamp import API (TASK-111)
+### Section 9: Reviews & External Data ⚠️ PARTIALLY IMPLEMENTED
 
-### Section 10: Export Policy ✅ PARTIAL
+#### Review URL in API Response ✅ FULLY IMPLEMENTED
+**Status**: Fields included in all endpoints
+
+**What's Working**:
+- review_url field included in ThreadResponse schema
+- All API responses include review_url
+
+**File Locations**:
+- Model: `app/models/thread.py` (review_url field)
+- Schema: `app/schemas/thread.py` (ThreadResponse includes review_url)
+- API: `app/api/threads.py` (endpoints return ThreadResponse)
+
+#### Review Timestamp Import ⚠️ PARTIALLY IMPLEMENTED
+**Status**: API endpoint exists, no UI
+
+**What's Working**:
+- Backend API endpoint exists at POST /admin/import/reviews/
+- last_review_at field exists in Thread model
+
+**What's Missing**:
+- No UI for importing review timestamps
+- User must use API directly
+
+**File Locations**:
+- API: `app/api/admin.py` (POST /admin/import/reviews/)
+- UI: `app/templates/admin.html` (missing import UI)
+
+### Section 10: Export Policy ✅ COMPLETE
 - Raw data export (JSON): **Implemented** (/admin/export/json/)
 - Raw data export (CSV): **Implemented** (/admin/export/csv/)
-- **MISSING**: Narrative summary export (TASK-112)
 
-### Section 11: Narrative Session Summary ✅ MOSTLY COMPLETE
-- Narrative summaries for sessions: **Implemented** (build_narrative_summary in session.py)
-- Read/Skipped/Completed categorization: **Implemented**
-- Session details view: **Implemented** (/sessions/{id}/details)
-- **MISSING**: Human-readable narrative export format (TASK-112)
+### Section 11: Narrative Session Summary ⚠️ PARTIALLY IMPLEMENTED
+**Status**: Logic exists, display format doesn't match PRD
 
-### Section 12: Data Model (JSON v1) ✅ MOSTLY COMPLETE
-- Settings object in data model: **NOT IMPLEMENTED** (settings are hardcoded)
-- All thread fields: **MOSTLY COMPLETE**
-- Session data: **Implemented**
-- Events data: **Implemented**
+**What's Working**:
+- Narrative summary logic exists in build_narrative_summary
+- Read/Skipped/Completed categorization implemented
+- Session details view exists at /sessions/{id}/details
 
-### Section 13: Wireframes ✅ PARTIAL
-- Roll screen: **Implemented**
-- Rate screen: **Implemented**
-- Queue screen: **Implemented**
-- **MISSING**: Roll pool highlighting (TASK-103)
-- **MISSING**: Star ratings display (TASK-105)
-- **MISSING**: Completed threads toggle (TASK-104)
+**What's Missing**:
+- Display format doesn't match PRD specification:
+  - Missing session header with time range
+  - Missing "Started at d{X}" line
+  - Shows decimal ratings (e.g., "4.5") instead of star symbols (★★★★½)
+
+**File Locations**:
+- Logic: `app/session.py` (build_narrative_summary function)
+- UI: `app/templates/session_details.html` (display needs PRD alignment)
+- Schema: `app/schemas/session.py` (SessionResponse includes narrative)
+
+### Section 12: Settings Object ✅ FULLY IMPLEMENTED
+**Status**: Model, API, and UI all complete
+
+**What's Working**:
+- Settings model exists with all required fields
+- API endpoints for CRUD operations
+- UI for viewing and editing settings
+- Settings used throughout application
+
+**File Locations**:
+- Model: `app/models/settings.py`
+- Schema: `app/schemas/settings.py`
+- API: `app/api/settings.py`
+- UI: `app/templates/settings.html`
+
+### Section 13: Wireframes ❌ NOT IMPLEMENTED
+**Status**: Basic screens exist, three specific wireframe features missing
+
+#### 1. Roll Pool Highlighting ❌ NOT IMPLEMENTED
+**What's Missing**:
+- No visual highlighting of top N rows based on current die
+- Roll pool rows look identical to other queue entries
+
+**File Locations**:
+- UI: `app/templates/roll.html` (needs CSS class for roll pool highlighting)
+- CSS: `static/css/` (needs highlighting styles)
+
+#### 2. Star Ratings Display ❌ NOT IMPLEMENTED
+**What's Missing**:
+- No ★★★★★ shown on thread lists
+- Decimal ratings displayed instead of star symbols
+- Affects both queue.html and roll.html
+
+**File Locations**:
+- UI: `app/templates/queue.html` (needs star display)
+- UI: `app/templates/roll.html` (needs star display)
+- Utility: May need helper function to convert decimal to stars
+
+#### 3. Completed Threads Toggle ❌ NOT IMPLEMENTED
+**What's Missing**:
+- No checkbox/button to show/hide completed threads
+- Completed threads always hidden
+- No UI control to toggle visibility
+
+**File Locations**:
+- UI: `app/templates/queue.html` (needs toggle control)
+- UI: `app/templates/roll.html` (may need toggle control)
+- API: May need updated endpoint to support filtering
 
 ## Missing Features Summary
 
@@ -103,60 +199,43 @@ This document identifies gaps between the PRD (prd.md) requirements and the curr
 None - all core functionality is implemented
 
 ### Medium Priority
-1. **Configurable Session Settings** (TASK-200)
-   - PRD Section 12 shows settings object
-   - Currently: session_gap_hours, start_die, rating_scale are hardcoded
-   - Needed: Settings model and API endpoints
+1. **Narrative Session Summary Display Format**
+   - PRD Section 11 requires specific format
+   - Currently shows decimal ratings, needs star symbols
+   - Missing session header with time range and "Started at d{X}" line
+   - File: `app/templates/session_details.html`
 
-2. **Narrative Session Summaries** (TASK-101)
-   - PRD Section 11 requires narrative summaries
-   - Partially implemented in session details
-   - Needed: Full narrative summary feature
-
-3. **Staleness Awareness UI** (TASK-102)
-   - PRD Section 7 requires stale thread suggestions
-   - Backend API exists (/threads/stale)
-   - Needed: UI display on roll screen
+2. **Issues Read Adjustment UI**
+   - PRD Section 5.2 and 13 require increment/decrement controls
+   - Backend supports changes, UI missing
+   - File: `app/templates/rate.html`
 
 ### Low Priority
-1. **Review URL in Thread API Response** (TASK-201)
-   - review_url field exists in model
-   - Missing from ThreadResponse schema
-   - Needed: Include in API responses
+1. **Review Timestamp Import UI**
+   - API endpoint exists at POST /admin/import/reviews/
+   - No UI for users to access the import feature
+   - File: `app/templates/admin.html`
 
-2. **Issues Read Adjustment UI** (TASK-108)
-   - Currently hardcoded to 1
-   - PRD Section 13 shows increment/decrement controls
-   - Needed: UI controls for issues_read field
+2. **Roll Pool Highlighting**
+   - No visual distinction between roll pool and other threads
+   - PRD Section 13 requires highlighting top N rows
+   - File: `app/templates/roll.html`
 
-3. **Queue UI Enhancements** (TASK-103, TASK-104, TASK-105)
-   - Roll pool highlighting
-   - Completed threads toggle
-   - Star ratings display
+3. **Star Ratings Display**
+   - No ★★★★★ shown anywhere in UI
+   - Decimal ratings shown instead
+   - Files: `app/templates/queue.html`, `app/templates/roll.html`
 
-4. **Review Timestamp Import** (TASK-111)
-   - last_review_at field exists in model
-   - Needed: API to import from League of Comic Geeks
-
-5. **Narrative Summary Export** (TASK-112)
-   - Raw JSON export exists
-   - Needed: Human-readable export format
-
-## Complete Task List for PRD Alignment
-
-### Already Defined Tasks (TASK-101 through TASK-123)
-These tasks cover most identified gaps and are already in the system.
-
-### New Tasks Created
-- **TASK-200**: Configurable Session Settings (MEDIUM, 4 hours)
-- **TASK-201**: Include review_url and last_review_at in Thread API Response (LOW, 30 minutes)
+4. **Completed Threads Toggle**
+   - No UI control to show/hide completed threads
+   - Users cannot view completed threads via UI
+   - Files: `app/templates/queue.html`, `app/templates/roll.html`
 
 ## Conclusion
 
 The implementation is **very close to PRD compliance**. Core features are complete and working. Remaining gaps are primarily:
-1. Configuration (making hardcoded values configurable)
-2. UI polish (existing APIs need UI)
-3. API completeness (some model fields not exposed)
-4. Export formatting (human-readable vs raw data)
+1. **Display format alignment** - Narrative session summary needs PRD-specified format
+2. **UI polish** - Missing controls and visual enhancements from wireframes
+3. **API to UI connectivity** - Some backend features lack UI access points
 
-All gaps have been tracked as tasks in the system for prioritization and completion.
+All gaps are relatively minor and do not affect core functionality. The system is production-ready with opportunities for UI enhancement to fully match PRD specifications.
