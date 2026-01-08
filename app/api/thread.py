@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.middleware import limiter
 from app.models import Event, Thread
 from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
 from comic_pile import get_stale_threads
@@ -47,7 +48,8 @@ except ImportError:
 
 
 @router.get("/", response_model=list[ThreadResponse])
-def list_threads(db: Session = Depends(get_db)) -> list[ThreadResponse]:
+@limiter.limit("100/minute")
+def list_threads(request: Request, db: Session = Depends(get_db)) -> list[ThreadResponse]:
     """List all threads ordered by position."""
     if get_threads_cached:
         threads = get_threads_cached(db)
@@ -111,7 +113,10 @@ def list_active_threads(request: Request, db: Session = Depends(get_db)) -> str:
 
 
 @router.post("/", response_model=ThreadResponse, status_code=status.HTTP_201_CREATED)
-def create_thread(thread_data: ThreadCreate, db: Session = Depends(get_db)) -> ThreadResponse:
+@limiter.limit("30/minute")
+def create_thread(
+    request: Request, thread_data: ThreadCreate, db: Session = Depends(get_db)
+) -> ThreadResponse:
     """Create a new thread."""
     max_position = (
         db.execute(select(Thread.queue_position).order_by(Thread.queue_position.desc())).scalar()

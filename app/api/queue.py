@@ -2,11 +2,12 @@
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.middleware import limiter
 from app.models import Event, Thread
 from app.schemas import ThreadResponse
 from comic_pile.queue import move_to_back, move_to_front, move_to_position
@@ -26,8 +27,12 @@ class PositionRequest(BaseModel):
 
 
 @router.put("/threads/{thread_id}/position/", response_model=ThreadResponse)
+@limiter.limit("30/minute")
 def move_thread_position(
-    thread_id: int, request: PositionRequest, db: Session = Depends(get_db)
+    request: Request,
+    thread_id: int,
+    position_request: PositionRequest,
+    db: Session = Depends(get_db),
 ) -> ThreadResponse:
     """Move thread to specific position."""
     thread = db.get(Thread, thread_id)
@@ -38,7 +43,7 @@ def move_thread_position(
         )
 
     old_position = thread.queue_position
-    move_to_position(thread_id, request.new_position, db)
+    move_to_position(thread_id, position_request.new_position, db)
     db.refresh(thread)
 
     if old_position != thread.queue_position:
@@ -71,7 +76,10 @@ def move_thread_position(
 
 
 @router.put("/threads/{thread_id}/front/", response_model=ThreadResponse)
-def move_thread_front(thread_id: int, db: Session = Depends(get_db)) -> ThreadResponse:
+@limiter.limit("30/minute")
+def move_thread_front(
+    request: Request, thread_id: int, db: Session = Depends(get_db)
+) -> ThreadResponse:
     """Move thread to front of queue."""
     thread = db.get(Thread, thread_id)
     if not thread:
@@ -114,7 +122,10 @@ def move_thread_front(thread_id: int, db: Session = Depends(get_db)) -> ThreadRe
 
 
 @router.put("/threads/{thread_id}/back/", response_model=ThreadResponse)
-def move_thread_back(thread_id: int, db: Session = Depends(get_db)) -> ThreadResponse:
+@limiter.limit("30/minute")
+def move_thread_back(
+    request: Request, thread_id: int, db: Session = Depends(get_db)
+) -> ThreadResponse:
     """Move thread to back of queue."""
     thread = db.get(Thread, thread_id)
     if not thread:

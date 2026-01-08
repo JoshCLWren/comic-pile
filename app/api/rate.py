@@ -2,11 +2,12 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.middleware import limiter
 from app.models import Event, Settings, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.schemas import RateRequest, ThreadResponse
@@ -77,7 +78,10 @@ def _get_settings(db: Session) -> Settings:
 
 
 @router.post("/", response_model=ThreadResponse)
-def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadResponse:
+@limiter.limit("60/minute")
+def rate_thread(
+    request: Request, rate_data: RateRequest, db: Session = Depends(get_db)
+) -> ThreadResponse:
     """Rate current reading and update thread."""
     current_session = (
         db.execute(
@@ -137,17 +141,17 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
 
     settings = _get_settings(db)
 
-    if request.rating < settings.rating_min or request.rating > settings.rating_max:
+    if rate_data.rating < settings.rating_min or rate_data.rating > settings.rating_max:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Rating must be between {settings.rating_min} and {settings.rating_max}",
         )
 
-    thread.issues_remaining -= request.issues_read
-    thread.last_rating = request.rating
+    thread.issues_remaining -= rate_data.issues_read
+    thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now()
 
-    if request.rating >= settings.rating_threshold:
+    if rate_data.rating >= settings.rating_threshold:
         new_die = step_down(current_die)
     else:
         new_die = step_up(current_die)
@@ -158,19 +162,19 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
         type="rate",
         session_id=current_session.id,
         thread_id=thread.id,
-        rating=request.rating,
-        issues_read=request.issues_read,
+        rating=rate_data.rating,
+        issues_read=rate_data.issues_read,
         die=current_die,
         die_after=new_die,
     )
     db.add(event)
 
-    if request.rating >= settings.rating_threshold:
+    if rate_data.rating >= settings.rating_threshold:
         move_to_front(thread.id, db)
     else:
         move_to_back(thread.id, db)
 
-    if request.finish_session and thread.issues_remaining <= 0:
+    if rate_data.finish_session and thread.issues_remaining <= 0:
         thread.status = "completed"
         move_to_back(thread.id, db)
         current_session.ended_at = datetime.now()

@@ -8,32 +8,30 @@ import time
 import traceback
 from datetime import UTC, datetime
 
-from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Request, status
+from dotenv import load_dotenv  # noqa: E402
+from fastapi import Depends, FastAPI, Request, status  # noqa: E402
 
 load_dotenv()
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.templating import Jinja2Templates  # noqa: E402
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 
-from app.api import admin, error_handler, queue, rate, retros, roll, session, tasks, thread, undo
-from app.api.tasks import get_coordinator_data, health_router
-from app.database import Base, engine, get_db
-from app.models import Event
-from app.models import Session as SessionModel
-from app.models import Thread
+from app.api import admin, error_handler, queue, rate, retros, roll, session, tasks, thread, undo  # noqa: E402
+from app.api.tasks import get_coordinator_data, health_router  # noqa: E402
+from app.database import Base, engine, get_db  # noqa: E402
+from app.middleware import limiter  # noqa: E402
+from app.models import Event  # noqa: E402
+from app.models import Session as SessionModel  # noqa: E402
+from app.models import Thread  # noqa: E402
 
 logger = logging.getLogger(__name__)
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 _thread_cache: dict[str, tuple[list, float]] = {}

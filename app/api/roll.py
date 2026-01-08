@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.middleware import limiter
 from app.models import Event, Thread
 from app.models import Session as SessionModel
 from app.schemas.thread import OverrideRequest, RollResponse
@@ -24,6 +25,7 @@ except ImportError:
 
 
 @router.post("/html", response_class=HTMLResponse)
+@limiter.limit("30/minute")
 def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
     """Roll dice and return HTML result."""
     current_session = get_or_create(db, user_id=1)
@@ -222,7 +224,8 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
 
 
 @router.post("/", response_model=RollResponse)
-def roll_dice(db: Session = Depends(get_db)) -> RollResponse:
+@limiter.limit("30/minute")
+def roll_dice(request: Request, db: Session = Depends(get_db)) -> RollResponse:
     """Roll dice to select a thread."""
     threads = get_roll_pool(db)
     if not threads:

@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, text
 
 
 def migrate():
+    """Migrate data from SQLite to PostgreSQL database."""
     sqlite_path = "/home/josh/code/comic-pile/comic_pile.db"
     pg_url = os.getenv(
         "DATABASE_URL",

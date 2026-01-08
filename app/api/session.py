@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.middleware import limiter
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.schemas.thread import SessionResponse
@@ -118,7 +119,8 @@ def get_active_thread(session: SessionModel, db: Session) -> dict[str, Any] | No
 
 
 @router.get("/current/")
-def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
+@limiter.limit("200/minute")
+def get_current_session(request: Request, db: Session = Depends(get_db)) -> SessionResponse:
     """Get current active session."""
     if get_current_session_cached:
         cached = get_current_session_cached(db)

@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.middleware import limiter
 from app.models import Task
 from app.schemas.task import (
     ClaimTaskRequest,
@@ -391,7 +392,8 @@ INITIAL_TASKS = [
 
 
 @router.get("/", response_model=list[TaskResponse])
-def list_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
+@limiter.limit("200/minute")
+def list_tasks(request: Request, db: Session = Depends(get_db)) -> list[TaskResponse]:
     """List all tasks with their current state."""
     tasks = db.execute(select(Task).order_by(Task.task_id)).scalars().all()
     return [
@@ -423,27 +425,29 @@ def list_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
 
 
 @router.post("/", response_model=TaskResponse, status_code=201)
+@limiter.limit("60/minute")
 def create_task(
-    request: CreateTaskRequest,
+    request: Request,
+    create_request: CreateTaskRequest,
     db: Session = Depends(get_db),
     session_id: str | None = None,
 ) -> TaskResponse:
     """Create a new task."""
     existing_task = db.execute(
-        select(Task).where(Task.task_id == request.task_id)
+        select(Task).where(Task.task_id == create_request.task_id)
     ).scalar_one_or_none()
     if existing_task:
-        raise HTTPException(status_code=400, detail=f"Task {request.task_id} already exists")
+        raise HTTPException(status_code=400, detail=f"Task {create_request.task_id} already exists")
 
     new_task = Task(
-        task_id=request.task_id,
-        title=request.title,
-        description=request.description,
-        instructions=request.instructions,
-        priority=request.priority,
-        dependencies=request.dependencies,
-        estimated_effort=request.estimated_effort,
-        task_type=request.task_type,
+        task_id=create_request.task_id,
+        title=create_request.title,
+        description=create_request.description,
+        instructions=create_request.instructions,
+        priority=create_request.priority,
+        dependencies=create_request.dependencies,
+        estimated_effort=create_request.estimated_effort,
+        task_type=create_request.task_type,
         status="pending",
         completed=False,
         session_id=session_id,
@@ -539,7 +543,8 @@ def create_tasks_bulk(
 
 
 @router.get("/ready", response_model=list[TaskResponse])
-def get_ready_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
+@limiter.limit("200/minute")
+def get_ready_tasks(request: Request, db: Session = Depends(get_db)) -> list[TaskResponse]:
     """Get tasks ready for claiming.
 
     Returns tasks that are:
