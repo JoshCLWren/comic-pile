@@ -365,7 +365,7 @@ def get_session_snapshots_html(
 @router.post("/{session_id}/restore-session-start")
 def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> SessionResponse:
     """Restore session to its initial state at session start."""
-    session = db.get(SessionModel, session_id)
+    session = db.get(SessionModel, session_id, with_for_update=True)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -391,7 +391,7 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
 
     from sqlalchemy import delete, or_, update
 
-    snapshot_thread_ids = set(snapshot.thread_states.keys())
+    snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
 
     current_threads = db.execute(select(Thread)).scalars().all()
     current_thread_ids = {thread.id for thread in current_threads}
@@ -411,7 +411,8 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
         db.execute(delete(Thread).where(Thread.id.in_(threads_to_delete)))
 
     for thread_id, state in snapshot.thread_states.items():
-        thread = db.get(Thread, thread_id)
+        thread_id_int = int(thread_id)
+        thread = db.get(Thread, thread_id_int)
         if thread:
             if "title" in state:
                 thread.title = state["title"]

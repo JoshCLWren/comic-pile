@@ -25,7 +25,7 @@ def undo_to_snapshot(
     session_id: int, snapshot_id: int, db: Session = Depends(get_db)
 ) -> SessionResponse:
     """Undo session state to a specific snapshot."""
-    session = db.get(SessionModel, session_id)
+    session = db.get(SessionModel, session_id, with_for_update=True)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -50,7 +50,7 @@ def undo_to_snapshot(
 
     from sqlalchemy import delete, or_, update
 
-    snapshot_thread_ids = set(snapshot.thread_states.keys())
+    snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
 
     current_threads = db.execute(select(Thread)).scalars().all()
     current_thread_ids = {thread.id for thread in current_threads}
@@ -71,7 +71,8 @@ def undo_to_snapshot(
         db.expire_all()
 
     for thread_id, state in snapshot.thread_states.items():
-        thread = db.execute(select(Thread).where(Thread.id == thread_id)).scalar_one_or_none()
+        thread_id_int = int(thread_id)
+        thread = db.get(Thread, thread_id_int)
         if thread:
             if "title" in state:
                 thread.title = state["title"]
