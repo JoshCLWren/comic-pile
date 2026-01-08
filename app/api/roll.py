@@ -163,11 +163,11 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
             <div id="rating-form-container" class="glass-card p-4 space-y-4 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">
                 <div class="flex flex-col gap-3">
                     <div class="flex items-center justify-center gap-2 mb-2">
-                        <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Selected</p>
+                        <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Position</p>
                         <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg text-sm font-black border border-amber-500/30">#{result_val}</span>
                     </div>
                     <h2 class="text-center text-lg font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
-                    <p class="text-center text-[8px] font-bold text-slate-500">{selected_thread.format}</p>
+                    <p class="text-center text-[8px] font-bold text-slate-500">in roll pool</p>
                     <div class="h-px bg-white/10 my-2"></div>
                     <div class="flex items-center justify-between gap-6">
                         <div class="flex-1 min-w-0">
@@ -476,11 +476,11 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
             <div id="rating-form-container" class="glass-card p-4 space-y-4 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">
                 <div class="flex flex-col gap-3">
                     <div class="flex items-center justify-center gap-2 mb-2">
-                        <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Selected</p>
+                        <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Position</p>
                         <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg text-sm font-black border border-amber-500/30">#{result_val}</span>
                     </div>
                     <h2 class="text-center text-lg font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
-                    <p class="text-center text-[8px] font-bold text-slate-500">{selected_thread.format}</p>
+                    <p class="text-center text-[8px] font-bold text-slate-500">in roll pool</p>
                     <div class="h-px bg-white/10 my-2"></div>
                     <div class="flex items-center justify-between gap-6">
                         <div class="flex-1 min-w-0">

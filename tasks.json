@@ -3179,13 +3179,13 @@
       "title": "Clarify relationship between dice roll and comic number",
       "description": "Users get confused because the dice number and comic number do not match. The dice shows a random result while the assigned book number comes from the dice ladder logic. Users need clearer visual indication that these are separate values.",
       "priority": "MEDIUM",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,
-      "status_notes": "Claimed by Tanya at 2026-01-05T15:22:17.165476+00:00\n[2026-01-05T15:24:12.855233+00:00] Starting work. Analyzing roll logic:\n- Die shows random roll result (1-N representing pool position)\n- Selected thread comes from random index in pool\n- Pool shows numbered items (1, 2, 3...) which are visual pool positions\n- Need to add clarifying UI elements explaining die result vs thread selection\n[2026-01-05T15:32:01.380511+00:00] Implementation complete. Changes:\n1. Added \"Die result\" badge showing roll number and die size (e.g., \"4 (d6)\")\n2. Changed \"You rolled\" to \"Selected from pool\" with teal color for visual distinction\n3. Added pool position indicator: \"Pool position {result} of {size}\"\n4. Added info tooltip button in header explaining roll mechanics\n5. Tooltip clarifies: die shows random roll result (pool position), selection is thread at that position, dice ladder adjusts pool size\n\nTests: 190 passed, coverage 97.56%\nLinting: All checks passed\n[2026-01-05T15:36:57.427106+00:00] Implementation complete and tested. All changes successfully made:\n\n**Files modified:**\n1. app/api/roll.py - Added clarifying UI elements\n   - \"Die result\" badge showing roll number and die size (e.g., \"4 (d6)\")\n   - Changed \"You rolled\" to \"Selected from pool\" with teal color\n   - Added pool position indicator: \"Pool position {result} of {pool_size}\"\n   - Applied same changes to reroll_dice() for consistency\n\n2. app/templates/roll.html - Added info tooltip button\n   - Tooltip explains: die shows random roll result, selection is thread at that position, dice ladder adjusts pool size\n   - Uses hover to display without cluttering UI\n\n3. retro.md - Comprehensive retro documenting work, lessons learned\n\n**Testing:**\n- 190 tests passed (100%)\n- Coverage: 97.56%\n- Linting: All checks passed (ruff, pyright, htmlhint)\n\n**Note:** Implementation files exist in worktree at /home/josh/code/comic-pile-ux-204/ with all changes applied. Git repository has environment issues preventing commit, but code changes are verified and tested.\n[2026-01-05T15:38:34.255699+00:00] Unclaimed by Tanya",
+      "status_notes": "Completed by Ralph at 2026-01-08T12:00:00+00:00\n\nChanges implemented:\n- Changed \"Selected\" to \"Position\" in both roll_dice_html and reroll_dice\n- Changed format display to \"in roll pool\" for clarity\n- Makes it explicit that die result is pool position (1-6), not comic number\n- All 54 roll page tests pass\n- Linting clean\n\nThis re-implements clarifications from commit 9b40178 which were overwritten by subsequent roll screen redesign commits.",
       "estimated_effort": "3 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": "2026-01-05T15:37:01.650729",
@@ -3194,7 +3194,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-04T14:00:38.679159",
-      "updated_at": "2026-01-05T15:38:34.256339"
+      "updated_at": "2026-01-08T12:00:00.000000Z"
     },
     {
       "task_id": "API-ERROR-20260108133910",
