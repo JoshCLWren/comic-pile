@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -84,6 +84,13 @@ def undo_to_snapshot(
     if active_thread and active_thread.selected_thread_id:
         thread = db.get(Thread, active_thread.selected_thread_id)
 
+    snapshot_count = (
+        db.execute(
+            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
+        ).scalar()
+        or 0
+    )
+
     return SessionResponse(
         id=session.id,
         started_at=session.started_at,
@@ -104,6 +111,8 @@ def undo_to_snapshot(
         else None,
         current_die=get_current_die(session.id, db),
         last_rolled_result=active_thread.result if active_thread else None,
+        has_restore_point=snapshot_count > 0,
+        snapshot_count=snapshot_count,
     )
 
 

@@ -84,3 +84,5 @@ class SessionResponse(BaseModel):
     active_thread: dict[str, Any] | None
     current_die: int
     last_rolled_result: int | None
+    has_restore_point: bool
+    snapshot_count: int

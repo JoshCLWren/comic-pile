@@ -223,7 +223,21 @@ function closeEditModal() {
     editingThreadId = null;
 }
 
-function deleteThread(threadId) {
+async function deleteThread(threadId) {
+    try {
+        const res = await fetch('/sessions/current/');
+        const session = await res.json();
+
+        if (!session.has_restore_point) {
+            const confirmed = confirm('⚠️ No restore point available!\n\nYou are about to delete this thread permanently. This action cannot be undone. Continue anyway?');
+            if (!confirmed) {
+                return;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to check restore point:', e);
+    }
+
     if (!confirm('Are you sure you want to remove this comic from the queue?')) {
         return;
     }

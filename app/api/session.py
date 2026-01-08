@@ -148,6 +148,17 @@ def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
 
     active_thread = get_active_thread(active_session, db)
 
+    from sqlalchemy import func
+
+    snapshot_count = (
+        db.execute(
+            select(func.count())
+            .select_from(Snapshot)
+            .where(Snapshot.session_id == active_session.id)
+        ).scalar()
+        or 0
+    )
+
     return SessionResponse(
         id=active_session.id,
         started_at=active_session.started_at,
@@ -159,6 +170,8 @@ def get_current_session(db: Session = Depends(get_db)) -> SessionResponse:
         active_thread=active_thread,
         current_die=get_current_die(active_session.id, db),
         last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
+        has_restore_point=snapshot_count > 0,
+        snapshot_count=snapshot_count,
     )
 
 
@@ -181,8 +194,18 @@ def list_sessions(
     )
 
     responses = []
+    from sqlalchemy import func
+
     for session in sessions:
         active_thread = get_active_thread(session, db)
+
+        snapshot_count = (
+            db.execute(
+                select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
+            ).scalar()
+            or 0
+        )
+
         responses.append(
             SessionResponse(
                 id=session.id,
@@ -197,6 +220,8 @@ def list_sessions(
                 last_rolled_result=active_thread.get("last_rolled_result")
                 if active_thread
                 else None,
+                has_restore_point=snapshot_count > 0,
+                snapshot_count=snapshot_count,
             )
         )
     return responses
@@ -211,6 +236,15 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
 
     active_thread = get_active_thread(session, db)
 
+    from sqlalchemy import func
+
+    snapshot_count = (
+        db.execute(
+            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
+        ).scalar()
+        or 0
+    )
+
     return SessionResponse(
         id=session.id,
         started_at=session.started_at,
@@ -222,6 +256,8 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
         active_thread=active_thread,
         current_die=get_current_die(session.id, db),
         last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
+        has_restore_point=snapshot_count > 0,
+        snapshot_count=snapshot_count,
     )
 
 
@@ -374,7 +410,16 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
     if clear_cache:
         clear_cache()
 
+    from sqlalchemy import func
+
     active_thread = get_active_thread(session, db)
+
+    snapshot_count = (
+        db.execute(
+            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
+        ).scalar()
+        or 0
+    )
 
     return SessionResponse(
         id=session.id,
@@ -387,26 +432,9 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
         active_thread=active_thread,
         current_die=get_current_die(session.id, db),
         last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
+        has_restore_point=snapshot_count > 0,
+        snapshot_count=snapshot_count,
     )
-
-    snapshot = (
-        db.execute(
-            select(Snapshot)
-            .where(Snapshot.session_id == session_id)
-            .where(Snapshot.description == "Session start")
-            .order_by(Snapshot.created_at)
-        )
-        .scalars()
-        .first()
-    )
-
-    if not snapshot:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No session start snapshot found for session {session_id}",
-        )
-
-    thread_states = snapshot.thread_states
     for thread_id, state in thread_states.items():
         thread = db.get(Thread, thread_id)
         if thread:

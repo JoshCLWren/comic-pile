@@ -185,6 +185,10 @@
             </div>
         </div>
         <div class="flex items-center gap-2">
+            <div id="session-safe-indicator" class="hidden flex items-center gap-1 px-2 py-1 bg-teal-500/10 border border-teal-500/20 rounded-lg">
+                <span class="text-xs">🛡️</span>
+                <span class="text-[9px] font-black text-teal-400 uppercase">Session Safe</span>
+            </div>
             <div class="relative" id="die-selector">
                 <button
                     hx-post="/roll/set-die?die=4"
@@ -488,6 +492,14 @@
         const errorDisplay = document.getElementById('error-message');
 
         console.log('[RollPage] submitRating START:', rating);
+
+        const canProceed = await checkRestorePointBeforeSubmit();
+        if (!canProceed) {
+            btn.disabled = false;
+            btn.textContent = 'Save & Continue';
+            return;
+        }
+
         if (rating >= 4.0) createExplosion();
 
         btn.disabled = true;
@@ -560,8 +572,35 @@
                 autoBtn.classList.add('bg-white/5');
                 autoBtn.title = 'Return to automatic dice ladder mode';
             }
+
+            const safeIndicator = document.getElementById('session-safe-indicator');
+            if (safeIndicator) {
+                if (session.has_restore_point) {
+                    safeIndicator.classList.remove('hidden');
+                    safeIndicator.classList.add('flex');
+                } else {
+                    safeIndicator.classList.add('hidden');
+                    safeIndicator.classList.remove('flex');
+                }
+            }
         } catch (e) {
             console.error('[RollPage] Failed to check manual mode:', e);
+        }
+    }
+
+    async function checkRestorePointBeforeSubmit() {
+        try {
+            const res = await fetch('/sessions/current/');
+            const session = await res.json();
+
+            if (!session.has_restore_point) {
+                const confirmed = confirm('⚠️ No restore point available!\n\nYou are about to make a destructive action that cannot be undone. Continue anyway?');
+                return confirmed;
+            }
+            return true;
+        } catch (e) {
+            console.error('[RollPage] Failed to check restore point:', e);
+            return true;
         }
     }
 

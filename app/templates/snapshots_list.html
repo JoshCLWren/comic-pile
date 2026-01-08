@@ -1,5 +1,13 @@
 {% if snapshots %}
 <div class="space-y-2">
+    <div class="flex items-center justify-between px-3 py-2 mb-3 bg-teal-500/5 border border-teal-500/10 rounded-lg">
+        <div class="flex items-center gap-2">
+            <span class="text-xs">🛡️</span>
+            <span class="text-[10px] font-bold text-teal-400 uppercase tracking-wider">
+                {{ snapshots|length }} Restore Points Available
+            </span>
+        </div>
+    </div>
     <div id="undo-success-message" class="hidden mb-3 p-3 bg-teal-500/10 border border-teal-500/20 rounded-lg">
         <p class="text-xs font-black text-teal-400 text-center uppercase tracking-wider">
             ✓ Successfully restored
@@ -47,6 +55,11 @@
 </div>
 {% else %}
 <p class="text-[10px] text-slate-500 text-center py-4">No snapshots available for this session</p>
+<div class="px-3 py-2 bg-rose-500/5 border border-rose-500/10 rounded-lg">
+    <p class="text-[10px] font-black text-rose-300 text-center uppercase tracking-wider">
+        ⚠️ No restore points available
+    </p>
+</div>
 {% endif %}
 
 <script>

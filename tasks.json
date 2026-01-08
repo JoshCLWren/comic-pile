@@ -466,13 +466,13 @@
       "title": "Add \"safe mode\" session navigation",
       "description": "Users need to feel confident experimenting without fear of irreversible damage.",
       "priority": "MEDIUM",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,
-      "status_notes": null,
+      "status_notes": "Implemented safe mode session navigation:\n- Added has_restore_point and snapshot_count fields to SessionResponse schema\n- Added session safe indicator (🛡️ Session Safe) badge on roll, rate, and queue pages\n- Added warning dialogs for destructive actions (rating, deleting threads) when no restore point exists\n- Made undo availability explicit in history page (shows 'Undo' when available, 'No Undo' when not)\n- Updated undo page to show count of available restore points\n- All 257 tests pass, 97.81% coverage, linting clean.",
       "estimated_effort": "4 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": null,
@@ -481,7 +481,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-08T04:50:59.088290",
-      "updated_at": "2026-01-08T04:50:59.088299"
+      "updated_at": "2026-01-08T05:30:00.000000"
     }
   ]
 }

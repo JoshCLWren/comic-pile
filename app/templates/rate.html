@@ -7,10 +7,16 @@
             <h1 class="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Rate Session</h1>
             <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mark your progress</p>
         </div>
-        <div id="header-die-container" class="dice-perspective relative"
-            style="width: 50px; height: 50px; transform: scale(0.4);">
-            <!-- Die injected by JS -->
-            <span id="header-die-state-label" class="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300 whitespace-nowrap"></span>
+        <div class="flex items-center gap-3">
+            <div id="session-safe-indicator" class="hidden flex items-center gap-1 px-2 py-1 bg-teal-500/10 border border-teal-500/20 rounded-lg">
+                <span class="text-xs">🛡️</span>
+                <span class="text-[9px] font-black text-teal-400 uppercase">Session Safe</span>
+            </div>
+            <div id="header-die-container" class="dice-perspective relative"
+                style="width: 50px; height: 50px; transform: scale(0.4);">
+                <!-- Die injected by JS -->
+                <span id="header-die-state-label" class="absolute -bottom-3 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300 whitespace-nowrap"></span>
+            </div>
         </div>
     </header>
 
@@ -117,6 +123,22 @@
         }
     }
 
+    async function checkRestorePointBeforeSubmit() {
+        try {
+            const res = await fetch('/sessions/current/');
+            const session = await res.json();
+
+            if (!session.has_restore_point) {
+                const confirmed = confirm('⚠️ No restore point available!\n\nYou are about to make a destructive action that cannot be undone. Continue anyway?');
+                return confirmed;
+            }
+            return true;
+        } catch (e) {
+            console.error('[RatePage] Failed to check restore point:', e);
+            return true;
+        }
+    }
+
     async function submitRating(finishSession) {
         const ratingInput = document.getElementById('rating-input');
         const rating = ratingInput ? parseFloat(ratingInput.value) : 4.0;
@@ -126,6 +148,14 @@
 
         console.log('[RatePage] Submitting rating:', rating, 'finish_session:', finishSession);
         if (err) err.classList.add('hidden');
+
+        const canProceed = await checkRestorePointBeforeSubmit();
+        if (!canProceed) {
+            btn.disabled = false;
+            if (finishBtn) finishBtn.disabled = false;
+            btn.textContent = 'Save & Continue';
+            return;
+        }
 
         if (rating >= 4.0) {
             console.log('[RatePage] Triggering explosion');
@@ -191,6 +221,17 @@
                 const headerDieContainer = document.getElementById('header-die-container');
                 const diePreview = document.getElementById('die-preview');
                 const dieWrapper = document.getElementById('die-preview-wrapper');
+                const safeIndicator = document.getElementById('session-safe-indicator');
+
+                if (safeIndicator) {
+                    if (data.has_restore_point) {
+                        safeIndicator.classList.remove('hidden');
+                        safeIndicator.classList.add('flex');
+                    } else {
+                        safeIndicator.classList.add('hidden');
+                        safeIndicator.classList.remove('flex');
+                    }
+                }
 
                 if (data.active_thread) {
                     currentDenom = data.current_die || 6;

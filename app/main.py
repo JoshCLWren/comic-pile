@@ -74,8 +74,20 @@ def get_current_session_cached(db: Session) -> dict | None:
     if active_session:
         from app.schemas.thread import SessionResponse
         from comic_pile.session import get_current_die
+        from sqlalchemy import func
+        from app.models import Snapshot
 
         active_thread_data = session.get_active_thread(active_session, db)
+
+        snapshot_count = (
+            db.execute(
+                select(func.count())
+                .select_from(Snapshot)
+                .where(Snapshot.session_id == active_session.id)
+            ).scalar()
+            or 0
+        )
+
         response = SessionResponse(
             id=active_session.id,
             started_at=active_session.started_at,
@@ -89,6 +101,36 @@ def get_current_session_cached(db: Session) -> dict | None:
             last_rolled_result=active_thread_data.get("last_rolled_result")
             if active_thread_data
             else None,
+            has_restore_point=snapshot_count > 0,
+            snapshot_count=snapshot_count,
+        )
+        _session_cache[cache_key] = (response.model_dump(), now)
+        return response.model_dump()
+
+        snapshot_count = (
+            db.execute(
+                select(func.count())
+                .select_from(Snapshot)
+                .where(Snapshot.session_id == active_session.id)
+            ).scalar()
+            or 0
+        )
+
+        response = SessionResponse(
+            id=active_session.id,
+            started_at=active_session.started_at,
+            ended_at=active_session.ended_at,
+            start_die=active_session.start_die,
+            manual_die=active_session.manual_die,
+            user_id=active_session.user_id,
+            ladder_path=session.build_ladder_path(active_session, db),
+            active_thread=active_thread_data,
+            current_die=get_current_die(active_session.id, db),
+            last_rolled_result=active_thread_data.get("last_rolled_result")
+            if active_thread_data
+            else None,
+            has_restore_point=snapshot_count > 0,
+            snapshot_count=snapshot_count,
         )
         _session_cache[cache_key] = (response.model_dump(), now)
         return response.model_dump()
