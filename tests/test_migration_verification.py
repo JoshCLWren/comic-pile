@@ -10,7 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Event, Session, Settings, Task, Thread, User
+from app.models import Event, Session, Settings, Snapshot, Task, Thread, User
 
 
 def migrate_sqlite_to_postgres(sqlite_path: str, pg_db_session):
@@ -124,6 +124,32 @@ def migrate_sqlite_to_postgres(sqlite_path: str, pg_db_session):
                 updated_at=row["updated_at"],
             )
             pg_db_session.merge(setting)
+        pg_db_session.commit()
+
+        cursor = sqlite_conn.execute("SELECT * FROM snapshots")
+        for row in cursor:
+            import json
+
+            thread_states = row["thread_states"]
+            if isinstance(thread_states, str):
+                thread_states = json.loads(thread_states)
+
+            session_state = row["session_state"]
+            if session_state and isinstance(session_state, str):
+                session_state = json.loads(session_state)
+
+            event_id = row["event_id"] if row["event_id"] else None
+
+            snapshot = Snapshot(
+                id=row["id"],
+                session_id=row["session_id"],
+                event_id=event_id,
+                thread_states=thread_states,
+                session_state=session_state,
+                created_at=row["created_at"],
+                description=row["description"] if row["description"] else None,
+            )
+            pg_db_session.merge(snapshot)
         pg_db_session.commit()
     finally:
         sqlite_conn.close()
@@ -252,6 +278,20 @@ def sqlite_connection(sqlite_db_path):
     )
 
     cursor.execute(
+        """CREATE TABLE snapshots (
+        id INTEGER PRIMARY KEY,
+        session_id INTEGER NOT NULL,
+        event_id INTEGER,
+        thread_states TEXT NOT NULL,
+        session_state TEXT,
+        created_at TIMESTAMP,
+        description TEXT,
+        FOREIGN KEY (session_id) REFERENCES sessions (id),
+        FOREIGN KEY (event_id) REFERENCES events (id)
+    )"""
+    )
+
+    cursor.execute(
         "INSERT INTO users (id, username, created_at) VALUES (?, ?, ?)",
         (1, "test_user", now_iso),
     )
@@ -369,6 +409,32 @@ def sqlite_connection(sqlite_db_path):
         (1, 24, 6, 1.0, 5.0, 0.5, 3.5, now_iso, now_iso),
     )
 
+    import json
+
+    thread_states_1 = json.dumps(
+        [{"id": 1, "queue_position": 1, "issues_remaining": 10, "status": "active"}]
+    )
+    thread_states_2 = json.dumps(
+        [
+            {"id": 1, "queue_position": 2, "issues_remaining": 9, "status": "active"},
+            {"id": 2, "queue_position": 1, "issues_remaining": 5, "status": "active"},
+        ]
+    )
+    session_state_1 = json.dumps({"start_die": 6, "manual_die": None})
+
+    cursor.execute(
+        """INSERT INTO snapshots 
+        (id, session_id, event_id, thread_states, session_state, created_at, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (1, 1, 1, thread_states_1, session_state_1, now_iso, "Session start snapshot"),
+    )
+    cursor.execute(
+        """INSERT INTO snapshots 
+        (id, session_id, event_id, thread_states, session_state, created_at, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (2, 1, 2, thread_states_2, session_state_1, now_iso, "After first roll"),
+    )
+
     conn.commit()
     yield conn
     conn.close()
@@ -400,11 +466,11 @@ def test_migration_row_counts_match(sqlite_connection, postgres_db):
     sqlite_counts = {}
     cursor = sqlite_connection.cursor()
 
-    for table in ["users", "threads", "sessions", "events", "tasks", "settings"]:
+    for table in ["users", "threads", "sessions", "events", "tasks", "settings", "snapshots"]:
         cursor.execute(f"SELECT COUNT(*) FROM {table}")
         sqlite_counts[table] = cursor.fetchone()[0]
 
-    for table in ["users", "threads", "sessions", "events", "tasks", "settings"]:
+    for table in ["users", "threads", "sessions", "events", "tasks", "settings", "snapshots"]:
         pg_count = postgres_db.execute(f"SELECT COUNT(*) FROM {table}").scalar()
         assert pg_count == sqlite_counts[table], f"Row count mismatch for {table}"
 
@@ -626,6 +692,43 @@ def test_migration_settings_data_integrity(sqlite_connection, postgres_db):
         assert pg_setting.rating_threshold == sqlite_setting["rating_threshold"]
 
 
+def test_migration_snapshots_data_integrity(sqlite_connection, postgres_db):
+    """Test that snapshots data is migrated correctly."""
+    import json
+
+    sqlite_snapshots = sqlite_connection.execute("SELECT * FROM snapshots ORDER BY id").fetchall()
+    pg_snapshots = postgres_db.execute("SELECT * FROM snapshots ORDER BY id").all()
+
+    assert len(sqlite_snapshots) == len(pg_snapshots)
+
+    for sqlite_snapshot, pg_snapshot in zip(sqlite_snapshots, pg_snapshots, strict=True):
+        assert pg_snapshot.id == sqlite_snapshot["id"]
+        assert pg_snapshot.session_id == sqlite_snapshot["session_id"]
+
+        if sqlite_snapshot["event_id"] is not None:
+            assert pg_snapshot.event_id == sqlite_snapshot["event_id"]
+        else:
+            assert pg_snapshot.event_id is None
+
+        sqlite_thread_states = sqlite_snapshot["thread_states"]
+        if isinstance(sqlite_thread_states, str):
+            sqlite_thread_states = json.loads(sqlite_thread_states)
+        assert pg_snapshot.thread_states == sqlite_thread_states
+
+        sqlite_session_state = sqlite_snapshot["session_state"]
+        if sqlite_session_state and isinstance(sqlite_session_state, str):
+            sqlite_session_state = json.loads(sqlite_session_state)
+        if sqlite_session_state is not None:
+            assert pg_snapshot.session_state == sqlite_session_state
+        else:
+            assert pg_snapshot.session_state is None
+
+        if sqlite_snapshot["description"] is not None:
+            assert pg_snapshot.description == sqlite_snapshot["description"]
+        else:
+            assert pg_snapshot.description is None
+
+
 def test_migration_foreign_key_relationships(sqlite_connection, postgres_db):
     """Test that foreign key relationships are preserved."""
     sqlite_users = sqlite_connection.execute("SELECT id FROM users ORDER BY id").fetchall()
@@ -675,18 +778,31 @@ def test_migration_foreign_key_relationships(sqlite_connection, postgres_db):
 
         assert pg_event_count == sqlite_event_count
 
-    sqlite_sessions = sqlite_connection.execute("SELECT id FROM sessions ORDER BY id").fetchall()
-    pg_sessions = postgres_db.execute("SELECT id FROM sessions ORDER BY id").all()
-
-    for sqlite_session, pg_session in zip(sqlite_sessions, pg_sessions, strict=True):
-        sqlite_event_count = sqlite_connection.execute(
-            "SELECT COUNT(*) FROM events WHERE session_id = ?", (sqlite_session["id"],)
+        sqlite_snapshot_count = sqlite_connection.execute(
+            "SELECT COUNT(*) FROM snapshots WHERE session_id = ?", (sqlite_session["id"],)
         ).fetchone()[0]
-        pg_event_count = postgres_db.execute(
-            "SELECT COUNT(*) FROM events WHERE session_id = ?", (pg_session.id,)
+        pg_snapshot_count = postgres_db.execute(
+            "SELECT COUNT(*) FROM snapshots WHERE session_id = ?", (pg_session.id,)
         ).scalar()
 
-        assert pg_event_count == sqlite_event_count
+        assert pg_snapshot_count == sqlite_snapshot_count
+
+    sqlite_events = sqlite_connection.execute(
+        "SELECT id FROM events WHERE event_id IS NOT NULL ORDER BY id"
+    ).fetchall()
+    pg_events = postgres_db.execute(
+        "SELECT id FROM events WHERE event_id IS NOT NULL ORDER BY id"
+    ).all()
+
+    for sqlite_event, pg_event in zip(sqlite_events, pg_events, strict=True):
+        sqlite_snapshot_count = sqlite_connection.execute(
+            "SELECT COUNT(*) FROM snapshots WHERE event_id = ?", (sqlite_event["id"],)
+        ).fetchone()[0]
+        pg_snapshot_count = postgres_db.execute(
+            "SELECT COUNT(*) FROM snapshots WHERE event_id = ?", (pg_event.id,)
+        ).scalar()
+
+        assert pg_snapshot_count == sqlite_snapshot_count
 
 
 def test_migration_with_empty_tables(sqlite_connection, postgres_db):
