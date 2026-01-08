@@ -1,14 +1,13 @@
 """Tests for history event logging."""
 
 import pytest
-from datetime import UTC, datetime
 from sqlalchemy import select
 
 
 @pytest.mark.asyncio
 async def test_queue_move_creates_event(client, sample_data, db):
     """Test that moving a thread in queue creates a reorder event."""
-    from app.models import Event, Thread
+    from app.models import Event
 
     thread_id = sample_data["threads"][0].id
 
@@ -30,7 +29,7 @@ async def test_queue_move_creates_event(client, sample_data, db):
 @pytest.mark.asyncio
 async def test_move_to_front_creates_event(client, sample_data, db):
     """Test that moving thread to front creates a reorder event."""
-    from app.models import Event, Thread
+    from app.models import Event
 
     thread_id = sample_data["threads"][1].id
 
@@ -52,7 +51,7 @@ async def test_move_to_front_creates_event(client, sample_data, db):
 @pytest.mark.asyncio
 async def test_move_to_back_creates_event(client, sample_data, db):
     """Test that moving thread to back creates a reorder event."""
-    from app.models import Event, Thread
+    from app.models import Event
 
     thread_id = sample_data["threads"][2].id
 
@@ -74,7 +73,7 @@ async def test_move_to_back_creates_event(client, sample_data, db):
 @pytest.mark.asyncio
 async def test_delete_thread_creates_event(client, sample_data, db):
     """Test that deleting a thread creates a delete event."""
-    from app.models import Event, Thread
+    from app.models import Event
 
     initial_delete_count = len(
         db.execute(select(Event).where(Event.type == "delete")).scalars().all()
@@ -96,6 +95,8 @@ async def test_delete_thread_creates_event(client, sample_data, db):
 
     assert final_delete_count == initial_delete_count + 1
 
+    from app.models import Thread
+
     db_thread = db.get(Thread, thread_id)
     assert db_thread is None
 
@@ -103,7 +104,7 @@ async def test_delete_thread_creates_event(client, sample_data, db):
 @pytest.mark.asyncio
 async def test_no_duplicate_event_on_no_movement(client, sample_data, db):
     """Test that moving to same position does not create event."""
-    from app.models import Event, Thread
+    from app.models import Event
 
     thread_id = sample_data["threads"][0].id
     initial_event_count = len(
