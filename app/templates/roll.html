@@ -454,17 +454,35 @@
             const pool = threads.slice(0, dieSize);
 
             for (let i = 0; i < dieSize; i++) {
+                const diceContainer = document.getElementById(`dice-container-${i + 1}`);
+                const diceNumber = document.getElementById(`dice-wrapper-${i + 1}`)?.querySelector('.dice-number');
                 const threadPreview = document.getElementById(`thread-preview-${i + 1}`);
-                if (threadPreview) {
-                    if (i < pool.length) {
-                        const t = pool[i];
-                        const isSelected = selectedThreadId && parseInt(selectedThreadId) === t.id;
+
+                if (i < pool.length) {
+                    const t = pool[i];
+                    const isSelected = selectedThreadId && parseInt(selectedThreadId) === t.id;
+
+                    if (diceContainer) {
+                        diceContainer.className = 'dice-container' + (isSelected ? ' selected' : ' ladder-active');
+                    }
+                    if (diceNumber) {
+                        diceNumber.className = 'dice-number' + (isSelected ? ' selected' : '');
+                    }
+                    if (threadPreview) {
                         threadPreview.className = 'thread-preview' + (isSelected ? ' selected' : '');
                         threadPreview.innerHTML = `
                             <div class="thread-preview-title">${t.title}</div>
                             <div class="thread-preview-format">${t.format}</div>
                         `;
-                    } else {
+                    }
+                } else {
+                    if (diceContainer) {
+                        diceContainer.className = 'dice-container';
+                    }
+                    if (diceNumber) {
+                        diceNumber.className = 'dice-number';
+                    }
+                    if (threadPreview) {
                         threadPreview.className = 'thread-preview';
                         threadPreview.innerHTML = `
                             <div class="thread-preview-title text-slate-600">Empty</div>
