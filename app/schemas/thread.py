@@ -13,6 +13,7 @@ class ThreadCreate(BaseModel):
     format: str = Field(..., min_length=1)
     issues_remaining: int = Field(..., ge=0)
     notes: str | None = None
+    is_test: bool = False
 
 
 class ThreadUpdate(BaseModel):
@@ -22,6 +23,7 @@ class ThreadUpdate(BaseModel):
     format: str | None = Field(None, min_length=1)
     issues_remaining: int | None = Field(None, ge=0)
     notes: str | None = None
+    is_test: bool | None = None
 
 
 class ThreadResponse(BaseModel):
@@ -38,6 +40,7 @@ class ThreadResponse(BaseModel):
     review_url: str | None
     last_review_at: datetime | None
     notes: str | None
+    is_test: bool
     created_at: datetime
 
 

@@ -683,5 +683,43 @@
     "dependencies": null,
     "estimated_effort": "1.5 hours",
     "created_at": "2026-01-08T05:34:15.794653"
+  },
+  {
+    "id": 130,
+    "task_id": "API-COMPLIANCE-001",
+    "title": "CRITICAL: Fix /roll/html endpoint - returns HTML instead of JSON",
+    "description": "## Current Issue\nPOST /roll/html returns raw HTML string instead of JSON API response.\n\n## Non-Compliance with Google API Design Guide:\n1. AIP-193: REST APIs should return JSON, not HTML\n2. Inconsistent with other API endpoints which return JSON\n3. Mixing REST API with UI rendering violates separation of concerns\n\n## Sample Request\n```json\n{\n  \"http_method\": \"POST\",\n  \"path\": \"/roll/html\",\n  \"headers\": {\n    \"Content-Type\": \"application/json\",\n    \"Accept\": \"application/json\"\n  },\n  \"request_body\": {}\n}\n```\n\n## Sample Error Response (What we GET)\n```html\n<!DOCTYPE html>...\n<div id=\"dice-grid\">...\n```\n\n## Expected Behavior\nReturn JSON response with roll result:\n```json\n{\n  \"result\": 4,\n  \"selected_thread\": {\n    \"id\": 3,\n    \"title\": \"Daredevil: Born Again\",\n    \"format\": \"Comic\"\n  },\n  \"current_die\": 6\n}\n```\n\n## Fix Approach\n1. Create separate UI endpoint: `POST /roll/view` for HTML rendering\n2. Make `POST /roll/html` return JSON API response\n3. Update frontend to call `/roll/html` for data, then fetch UI from `/roll/view`\n4. Or move HTML generation to client-side using JSON from API\n\n## Files to Modify\n- app/api/roll.py - Remove HTML generation, return JSON\n- app/main.py - Add `/roll/view` endpoint for UI rendering\n- app/templates/roll.html - Update to use JSON from API instead of server-rendered HTML\n\n## Testing\n1. Test POST /roll/html returns JSON with 200 status\n2. Test all roll pool data available in JSON response\n3. Test frontend can render UI using JSON data\n",
+    "priority": "CRITICAL",
+    "status": "pending",
+    "task_type": "bug",
+    "dependencies": null,
+    "estimated_effort": "2 hours",
+    "created_at": "2026-01-08T07:53:49.387923"
+  },
+  {
+    "id": 131,
+    "task_id": "API-COMPLIANCE-002",
+    "title": "HIGH: Add pagination to /threads/ endpoint",
+    "description": "## Current Issue\nGET /threads/ returns all threads without pagination. With large datasets, this causes:\n1. Performance issues (loading all records)\n2. Network bandwidth waste\n3. Poor UX (slow page loads)\n4. Violates AIP-157: Pagination guidelines\n\n## Non-Compliance\n- No pagination, filtering, or sorting\n- Returns entire dataset regardless of size\n- No way to control response size\n\n## Sample Request\n```json\n{\n  \"http_method\": \"GET\",\n  \"path\": \"/threads/\",\n  \"headers\": {\n    \"Accept\": \"application/json\"\n  },\n  \"path_params\": {},\n  \"query_params\": {\n    \"page\": 1,\n    \"limit\": 20,\n    \"sort\": \"queue_position\",\n    \"order\": \"asc\"\n  }\n}\n```\n\n## Expected Behavior\nReturn paginated response with metadata:\n```json\n{\n  \"threads\": [...],\n  \"pagination\": {\n    \"page\": 1,\n    \"limit\": 20,\n    \"total\": 37,\n    \"total_pages\": 2,\n    \"has_next\": true,\n    \"has_prev\": false\n  }\n}\n```\n\n## Fix Approach\n1. Add query parameters: page, limit, sort, order\n2. Return paginated response with ThreadPagination schema\n3. Update OpenAPI docs to document pagination parameters\n4. Add default limits (e.g., page=1, limit=20, max=100)\n\n## Files to Modify\n- app/api/thread.py - Add pagination logic\n- app/schemas/thread.py - Add ThreadPagination response model\n- Tests - Add pagination tests\n\n## Testing\n1. Test GET /threads/?page=1&limit=20 returns correct subset\n2. Test GET /threads/?page=2&limit=20 returns next page\n3. Test invalid page numbers return 404 or empty array\n4. Test limit=0 returns error\n",
+    "priority": "HIGH",
+    "status": "pending",
+    "task_type": "feature",
+    "dependencies": null,
+    "estimated_effort": "3 hours",
+    "created_at": "2026-01-08T07:53:49.387944"
+  },
+  {
+    "id": 132,
+    "task_id": "API-COMPLIANCE-003",
+    "title": "HIGH: Add filtering and sorting to /threads/ endpoint",
+    "description": "## Current Issue\nGET /threads/ has no filtering or sorting capabilities. Users cannot:\n1. Filter by status (active, completed)\n2. Sort by any field (title, created_at, last_rating)\n3. Order ascending/descending\n\n## Non-Compliance\n- No AIP-157: Filtering support\n- No AIP-157: Sorting support\n- Poor DX with large datasets\n\n## Sample Request\n```json\n{\n  \"http_method\": \"GET\",\n  \"path\": \"/threads/\",\n  \"headers\": {\n    \"Accept\": \"application/json\"\n  },\n  \"path_params\": {},\n  \"query_params\": {\n    \"status\": \"active\",\n    \"sort\": \"last_rating\",\n    \"order\": \"desc\"\n  }\n}\n```\n\n## Expected Behavior\nSupport standard filter and sort parameters:\n```\nGET /threads/?status=active&sort=last_rating&order=desc\nGET /threads/?status=completed&sort=created_at&order=asc\n```\n\n## Fix Approach\n1. Add optional query parameters: status, sort, order\n2. Apply filters in SQLAlchemy query\n3. Update OpenAPI docs\n4. Add validation for invalid sort fields\n\n## Files to Modify\n- app/api/thread.py - Add filter/sort logic\n- Tests - Add filter/sort tests\n\n## Testing\n1. Test filtering by status works\n2. Test sorting by different fields\n3. Test invalid sort fields return 400 error\n4. Test combining filters with pagination\n",
+    "priority": "HIGH",
+    "status": "pending",
+    "task_type": "feature",
+    "dependencies": [
+      "API-COMPLIANCE-002"
+    ],
+    "estimated_effort": "2 hours",
+    "created_at": "2026-01-08T07:53:49.387947"
   }
 ]

@@ -198,5 +198,6 @@ def rate_thread(request: RateRequest, db: Session = Depends(get_db)) -> ThreadRe
         review_url=thread.review_url,
         last_review_at=thread.last_review_at,
         notes=thread.notes,
+        is_test=thread.is_test,
         created_at=thread.created_at,
     )

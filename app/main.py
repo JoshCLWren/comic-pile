@@ -24,11 +24,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import admin, queue, rate, retros, roll, session, tasks, thread, undo
+from app.api import admin, error_handler, queue, rate, retros, roll, session, tasks, thread, undo
 from app.api.tasks import get_coordinator_data, health_router
 from app.database import Base, engine, get_db
-from app.models import Event, Thread
+from app.models import Event
 from app.models import Session as SessionModel
+from app.models import Thread
 
 logger = logging.getLogger(__name__)
 
@@ -271,10 +272,16 @@ def create_app() -> FastAPI:
         if hasattr(request.state, "session_id"):
             error_data["session_id"] = request.state.session_id
 
+        error_handler.handle_5xx_error(exc, request)
+
         logger.error(
             f"Unhandled Exception: {type(exc).__name__}",
             extra=error_data,
             exc_info=True,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error"},
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -304,6 +311,8 @@ def create_app() -> FastAPI:
 
         if exc.status_code >= 500:
             error_data["level"] = "ERROR"
+            mock_exc = Exception(f"HTTP {exc.status_code}: {exc.detail}")
+            error_handler.handle_5xx_error(mock_exc, request)
             logger.error(
                 f"HTTP Exception: {exc.status_code} - {exc.detail}",
                 extra=error_data,
@@ -570,6 +579,16 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
             )
+
+    @app.get("/debug/5xx-stats")
+    async def get_5xx_error_stats():
+        """Debug endpoint to show 5xx error statistics."""
+        return error_handler.get_error_stats()
+
+    @app.get("/debug/trigger-500")
+    async def trigger_500_error():
+        """Debug endpoint to trigger a 500 error for testing."""
+        raise Exception("OperationalError: test database connection failed")
 
     @app.on_event("startup")
     async def startup_event():
