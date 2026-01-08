@@ -4,6 +4,78 @@
 <style>
     body { padding-bottom: 0 !important; }
     main { padding: 0 !important; height: calc(100dvh - 5rem); max-width: 100%; }
+    
+    .tooltip-container {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        cursor: help;
+    }
+    
+    .tooltip-icon {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: rgba(148, 163, 184, 0.3);
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: bold;
+        color: rgba(148, 163, 184, 0.7);
+        transition: all 0.2s;
+    }
+    
+    .tooltip-icon:hover {
+        background: rgba(20, 184, 166, 0.2);
+        border-color: rgba(20, 184, 166, 0.5);
+        color: rgba(20, 184, 166, 0.8);
+    }
+    
+    .tooltip-content {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        margin-bottom: 8px;
+        width: 200px;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 9px;
+        font-weight: normal;
+        line-height: 1.4;
+        color: rgba(203, 213, 225, 0.9);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s, visibility 0.2s;
+        backdrop-filter: blur(8px);
+        z-index: 100;
+        pointer-events: none;
+    }
+    
+    .tooltip-content::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        right: 20px;
+        margin-top: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
+    }
+    
+    .tooltip-container:hover .tooltip-content {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .tooltip-content strong {
+        color: rgba(45, 212, 191, 0.9);
+        font-weight: 600;
+    }
 </style>
 
 <div class="h-full flex flex-col overflow-hidden">
@@ -64,7 +136,16 @@
                     <span id="header-die-state-label" class="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300 whitespace-nowrap"></span>
                 </div>
                 <div class="text-right">
-                    <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">Ladder</span>
+                    <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">
+                        <span class="tooltip-container">
+                            Ladder
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-content">
+                                <strong>What is the ladder?</strong><br><br>
+                                Controls how many comics are in your roll pool. Smaller dice = focused reading, larger dice = more variety. Steps up/down based on your ratings.
+                            </span>
+                        </span>
+                    </span>
                     <span id="header-die-label" class="text-[10px] font-black text-teal-400">d{{ current_die }}</span>
                 </div>
             </div>
