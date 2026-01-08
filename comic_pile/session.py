@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Event, Settings
+from app.models import Event, Settings, Snapshot, Thread
 from app.models import Session as SessionModel
 
 
@@ -44,6 +44,38 @@ def should_start_new(db: Session) -> bool:
     return len(recent_sessions) == 0
 
 
+def create_session_start_snapshot(db: Session, session: SessionModel) -> None:
+    """Create a snapshot of all states at session start."""
+    threads = db.execute(select(Thread)).scalars().all()
+
+    thread_states = {}
+    for thread in threads:
+        thread_states[thread.id] = {
+            "issues_remaining": thread.issues_remaining,
+            "last_rating": thread.last_rating,
+            "last_activity_at": thread.last_activity_at.isoformat()
+            if thread.last_activity_at
+            else None,
+            "queue_position": thread.queue_position,
+            "status": thread.status,
+        }
+
+    session_state = {
+        "start_die": session.start_die,
+        "manual_die": session.manual_die,
+    }
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=None,
+        thread_states=thread_states,
+        description="Session start",
+    )
+    snapshot.session_state = session_state
+    db.add(snapshot)
+    db.commit()
+
+
 def get_or_create(db: Session, user_id: int) -> SessionModel:
     """Get active session or create new one."""
     settings = _get_settings(db)
@@ -68,6 +100,8 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
     db.add(new_session)
     db.commit()
     db.refresh(new_session)
+
+    create_session_start_snapshot(db, new_session)
 
     return new_session
 
