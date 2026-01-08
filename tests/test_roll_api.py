@@ -95,8 +95,7 @@ async def test_reroll_success(client, sample_data, db):
     response = await client.post("/roll/reroll")
     assert response.status_code == 200
     html = response.text
-    assert "Rerolled" in html
-    assert "result-reveal" in html
+    assert "dice-grid" in html
     assert "rating-form-container" in html
 
     new_events = db.execute(select(Event).where(Event.selection_method == "reroll")).scalars().all()

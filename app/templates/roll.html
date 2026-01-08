@@ -4,7 +4,7 @@
 <style>
     body { padding-bottom: 0 !important; }
     main { padding: 0 !important; max-width: 100%; }
-    
+
     .tooltip-container {
         position: relative;
         display: inline-flex;
@@ -12,7 +12,7 @@
         gap: 2px;
         cursor: help;
     }
-    
+
     .tooltip-icon {
         width: 14px;
         height: 14px;
@@ -27,13 +27,13 @@
         color: rgba(148, 163, 184, 0.7);
         transition: all 0.2s;
     }
-    
+
     .tooltip-icon:hover {
         background: rgba(20, 184, 166, 0.2);
         border-color: rgba(20, 184, 166, 0.5);
         color: rgba(20, 184, 166, 0.8);
     }
-    
+
     .tooltip-content {
         position: absolute;
         bottom: 100%;
@@ -55,7 +55,7 @@
         z-index: 100;
         pointer-events: none;
     }
-    
+
     .tooltip-content::after {
         content: '';
         position: absolute;
@@ -66,88 +66,169 @@
         border-style: solid;
         border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
     }
-    
+
     .tooltip-container:hover .tooltip-content {
         opacity: 1;
         visibility: visible;
     }
-    
+
     .tooltip-content strong {
         color: rgba(45, 212, 191, 0.9);
         font-weight: 600;
+    }
+
+    .dice-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .dice-wrapper {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    }
+
+    .dice-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.02);
+        border: 2px solid rgba(255, 255, 255, 0.05);
+        transition: all 0.3s ease;
+    }
+
+    .dice-container.selected {
+        border-color: rgba(251, 191, 36, 0.5);
+        box-shadow: 0 0 30px rgba(251, 191, 36, 0.3);
+        transform: scale(1.3);
+        z-index: 10;
+    }
+
+    .dice-container.ladder-active {
+        border-color: rgba(20, 184, 166, 0.5);
+        box-shadow: 0 0 20px rgba(20, 184, 166, 0.2);
+    }
+
+    .dice-number {
+        position: absolute;
+        font-size: 0.75rem;
+        font-weight: 900;
+        color: rgba(148, 163, 184, 0.5);
+        pointer-events: none;
+    }
+
+    .thread-preview {
+        margin-top: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 0.5rem;
+        text-align: center;
+        transition: all 0.2s ease;
+        max-width: 100%;
+    }
+
+    .thread-preview.selected {
+        background: rgba(251, 191, 36, 0.1);
+        border-color: rgba(251, 191, 36, 0.3);
+    }
+
+    .thread-preview-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: rgba(203, 213, 225, 0.8);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .thread-preview-format {
+        font-size: 0.6rem;
+        font-weight: 700;
+        color: rgba(148, 163, 184, 0.5);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+
+    @media (max-width: 640px) {
+        .dice-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            padding: 0.75rem;
+        }
+
+        .dice-container.selected {
+            transform: scale(1.2);
+        }
+
+        .thread-preview-title {
+            font-size: 0.65rem;
+        }
     }
 </style>
 
 <div class="h-screen flex flex-col overflow-hidden">
     <header class="flex justify-between items-center px-3 py-2 shrink-0 z-10">
-        <div>
-            <h1 class="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
-            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active session</p>
+        <div class="flex items-center gap-3">
+            <div>
+                <h1 class="text-xl font-black tracking-tighter text-glow uppercase">Roll</h1>
+            </div>
+            <div class="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg border border-white/10">
+                <span class="text-[9px] font-black text-slate-500 uppercase">d{{ current_die }}</span>
+            </div>
         </div>
         <div class="flex items-center gap-2">
             <div class="relative" id="die-selector">
                 <button
                     hx-post="/roll/set-die?die=4"
-                    hx-target="#header-die-label"
+                    hx-target="#current-die-label"
                     hx-swap="innerText"
-                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
-                    data-die="4">d4</button>
+                    class="die-btn px-1.5 py-0.5 text-[9px] font-black bg-white/5 rounded border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="4">4</button>
                 <button
                     hx-post="/roll/set-die?die=6"
-                    hx-target="#header-die-label"
+                    hx-target="#current-die-label"
                     hx-swap="innerText"
-                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
-                    data-die="6">d6</button>
+                    class="die-btn px-1.5 py-0.5 text-[9px] font-black bg-white/5 rounded border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="6">6</button>
                 <button
                     hx-post="/roll/set-die?die=8"
-                    hx-target="#header-die-label"
+                    hx-target="#current-die-label"
                     hx-swap="innerText"
-                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
-                    data-die="8">d8</button>
+                    class="die-btn px-1.5 py-0.5 text-[9px] font-black bg-white/5 rounded border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="8">8</button>
                 <button
                     hx-post="/roll/set-die?die=10"
-                    hx-target="#header-die-label"
+                    hx-target="#current-die-label"
                     hx-swap="innerText"
-                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
-                    data-die="10">d10</button>
+                    class="die-btn px-1.5 py-0.5 text-[9px] font-black bg-white/5 rounded border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="10">10</button>
                 <button
                     hx-post="/roll/set-die?die=12"
-                    hx-target="#header-die-label"
+                    hx-target="#current-die-label"
                     hx-swap="innerText"
-                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
-                    data-die="12">d12</button>
+                    class="die-btn px-1.5 py-0.5 text-[9px] font-black bg-white/5 rounded border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="12">12</button>
                 <button
                     hx-post="/roll/set-die?die=20"
-                    hx-target="#header-die-label"
+                    hx-target="#current-die-label"
                     hx-swap="innerText"
-                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
-                    data-die="20">d20</button>
+                    class="die-btn px-1.5 py-0.5 text-[9px] font-black bg-white/5 rounded border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="20">20</button>
                 <button
                     hx-post="/roll/clear-manual-die"
-                    hx-target="#header-die-label"
+                    hx-target="#current-die-label"
                     hx-swap="innerText"
                     id="auto-mode-btn"
-                    class="px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    class="px-1.5 py-0.5 text-[9px] font-black bg-white/5 rounded border border-white/10 hover:bg-white/10 transition-colors"
                     title="Return to automatic dice ladder mode">Auto</button>
-            </div>
-            <div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
-                <div id="header-die-container" class="relative flex items-center justify-center" style="width: 40px; height: 40px;">
-                    <div id="header-die-3d" class="w-full h-full"></div>
-                    <span id="header-die-state-label" class="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300 whitespace-nowrap"></span>
-                </div>
-                <div class="text-right">
-                    <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">
-                        <span class="tooltip-container">
-                            Ladder
-                            <span class="tooltip-icon">?</span>
-                            <span class="tooltip-content">
-                                <strong>What is the ladder?</strong><br><br>
-                                Controls how many comics are in your roll pool. Smaller dice = focused reading, larger dice = more variety. Steps up/down based on your ratings.
-                            </span>
-                        </span>
-                    </span>
-                    <span id="header-die-label" class="text-[10px] font-black text-teal-400">d{{ current_die }}</span>
-                </div>
             </div>
         </div>
     </header>
@@ -157,31 +238,12 @@
         <div id="roll-container" class="glass-card flex-1 flex flex-col relative overflow-hidden">
             <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-            <div id="main-die-wrapper"
-                class="dice-state-idle relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all"
-                style="width: 200px; height: 200px;"
-                onclick="rollTheDie()"
-                hx-post="/roll/html"
-                hx-target="#result"
-                hx-swap="innerHTML"
-                hx-trigger="triggerRoll">
-                <div id="main-die-3d" class="w-full h-full"></div>
-                <span id="main-die-state-label" class="absolute -bottom-6 text-[8px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300"></span>
+            <div id="dice-grid" class="dice-grid flex-1 min-h-0">
             </div>
 
-            <p id="tap-instruction"
-                class="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0">Tap Die to
-                Roll</p>
-
-            <div id="pool-display" class="flex-1 min-h-0 mt-4 px-4 pb-4 overflow-hidden flex flex-col">
-                <div class="flex items-center gap-2 shrink-0">
-                    <div class="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_15px_var(--accent-teal)]"></div>
-                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Roll Pool</span>
-                </div>
-                <div id="pool-threads" class="flex-1 overflow-y-auto mt-2 space-y-2 scrollbar-thin">
-                    <div class="h-10 bg-white/5 rounded-xl animate-pulse"></div>
-                    <div class="h-10 bg-white/5 rounded-xl animate-pulse"></div>
-                </div>
+            <div id="tap-instruction"
+                class="text-center text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse py-4 shrink-0">
+                Tap Anywhere to Roll
             </div>
 
             <div id="stale-suggestion" class="px-4 pb-4 shrink-0 hidden transition-all animate-[fade-in_0.5s_ease-out]">
@@ -213,29 +275,10 @@
     let threadId = null;
     let isRolling = false;
     let currentDieValue = 1;
-    let mainDie = null;
-    let headerDie = null;
+    let diceInstances = {};
     let selectedThreadId = localStorage.getItem('selectedThreadId') || null;
 
     function setDiceState(state) {
-        const wrapper = document.getElementById('main-die-wrapper');
-        if (!wrapper) return;
-
-        wrapper.classList.remove('dice-state-idle', 'dice-state-rolled', 'dice-state-reroll', 'dice-state-rate-flow');
-        wrapper.classList.add('dice-state-' + state);
-
-        const label = document.getElementById('main-die-state-label');
-        if (label) {
-            const stateLabels = {
-                'idle': 'Ready',
-                'rolled': 'Rolled',
-                'reroll': 'Rerolling',
-                'rate-flow': 'Rating'
-            };
-            label.textContent = stateLabels[state] || '';
-            label.style.opacity = state === 'idle' ? '0' : '1';
-        }
-
         console.log('[RollPage] Dice state set to:', state);
     }
 
@@ -244,15 +287,52 @@
             Dice3D.cleanup();
         }
 
-        const mainContainer = document.getElementById('main-die-3d');
-        const headerContainer = document.getElementById('header-die-3d');
+        const grid = document.getElementById('dice-grid');
+        if (!grid) return;
 
-        mainDie = window.Dice3D ? Dice3D.create(mainContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
-        headerDie = window.Dice3D ? Dice3D.create(headerContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
+        grid.innerHTML = '';
 
-        if (mainDie) mainDie.setValue(1);
+        for (let i = 1; i <= initialDenom; i++) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'dice-wrapper';
+            wrapper.id = `dice-wrapper-${i}`;
+
+            const container = document.createElement('div');
+            container.className = 'dice-container';
+            container.style.width = '80px';
+            container.style.height = '80px';
+            container.id = `dice-container-${i}`;
+
+            const die3dContainer = document.createElement('div');
+            die3dContainer.className = 'w-full h-full';
+            die3dContainer.id = `die-3d-${i}`;
+
+            const numberLabel = document.createElement('div');
+            numberLabel.className = 'dice-number';
+            numberLabel.textContent = i;
+
+            const threadPreview = document.createElement('div');
+            threadPreview.className = 'thread-preview';
+            threadPreview.id = `thread-preview-${i}`;
+            threadPreview.innerHTML = `
+                <div class="thread-preview-title">...</div>
+                <div class="thread-preview-format">Loading</div>
+            `;
+
+            container.appendChild(die3dContainer);
+            container.appendChild(numberLabel);
+            wrapper.appendChild(container);
+            wrapper.appendChild(threadPreview);
+            grid.appendChild(wrapper);
+
+            const die = window.Dice3D ? Dice3D.create(die3dContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
+            if (die) die.setValue(i);
+            diceInstances[i] = die;
+        }
+
         updateDieButtonState(initialDenom);
         setDiceState('idle');
+        loadRollPool();
     }
 
     function updateDieButtonState(die) {
@@ -297,7 +377,7 @@
                 clearInterval(rollInterval);
                 setTimeout(() => {
                     console.log('[RollPage] Triggering HTMX roll event');
-                    htmx.trigger('#main-die-wrapper', 'triggerRoll');
+                    htmx.trigger('#roll-container', 'triggerRoll');
                 }, 400);
             }
         }, 80);
@@ -332,29 +412,29 @@
             const threads = await res.json();
             const sessionRes = await fetch('/sessions/current/');
             const session = await sessionRes.json();
-            const container = document.getElementById('pool-threads');
-            if (!container) return;
-
             const dieSize = session.current_die || 6;
             const pool = threads.slice(0, dieSize);
 
-            if (pool.length === 0) {
-                container.innerHTML = '<div class="text-center py-10 text-slate-600 font-black uppercase tracking-widest text-[10px]">Queue Empty</div>';
-                return;
+            for (let i = 0; i < dieSize; i++) {
+                const threadPreview = document.getElementById(`thread-preview-${i + 1}`);
+                if (threadPreview) {
+                    if (i < pool.length) {
+                        const t = pool[i];
+                        const isSelected = selectedThreadId && parseInt(selectedThreadId) === t.id;
+                        threadPreview.className = 'thread-preview' + (isSelected ? ' selected' : '');
+                        threadPreview.innerHTML = `
+                            <div class="thread-preview-title">${t.title}</div>
+                            <div class="thread-preview-format">${t.format}</div>
+                        `;
+                    } else {
+                        threadPreview.className = 'thread-preview';
+                        threadPreview.innerHTML = `
+                            <div class="thread-preview-title text-slate-600">Empty</div>
+                            <div class="thread-preview-format">--</div>
+                        `;
+                    }
+                }
             }
-
-            container.innerHTML = pool.map((t, i) => {
-                const isSelected = selectedThreadId && parseInt(selectedThreadId) === t.id;
-                const highlightClass = isSelected ? 'pool-thread-selected' : '';
-                return `
-                <div class="flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all ${highlightClass}" data-thread-id="${t.id}">
-                    <span class="text-lg font-black text-slate-500/50 group-hover:text-slate-400/50 transition-colors">${i + 1}</span>
-                    <div class="flex-1 min-w-0">
-                        <p class="font-black text-slate-300 truncate text-sm">${t.title}</p>
-                        <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest">${t.format}</p>
-                    </div>
-                </div>
-            `}).join('');
         } catch (e) {
             console.error('[RollPage] Failed to load pool:', e);
         }
@@ -364,11 +444,10 @@
         console.log('[RollPage] HTMX afterRequest target:', evt.detail.target.id, 'Status:', evt.detail.xhr.status);
         const target = evt.detail.target.id;
 
-        if (target === 'header-die-label' && evt.detail.xhr.status === 200) {
+        if (target === 'current-die-label' && evt.detail.xhr.status === 200) {
             const newDie = parseInt(evt.detail.target.innerText.replace('d', ''));
-            if (headerDie) headerDie.setSides(newDie);
             updateDieButtonState(newDie);
-            loadRollPool();
+            initDice();
         }
     });
 
@@ -400,10 +479,6 @@
                 preview.innerHTML = 'Already at maximum 🎲 Die stays at d20';
             }
         }
-
-        const headerDieLabel = document.getElementById('header-die-label');
-        if (headerDieLabel) headerDieLabel.textContent = 'd' + predictedDie;
-        if (headerDie) headerDie.setSides(predictedDie);
     }
 
     async function submitRating() {
@@ -523,11 +598,16 @@
         }
     }
 
+    document.getElementById('roll-container').addEventListener('click', (e) => {
+        if (!isRolling && !e.target.closest('button') && !e.target.closest('input')) {
+            rollTheDie();
+        }
+    });
+
     document.addEventListener('DOMContentLoaded', () => {
         console.log('[RollPage] DOMContentLoaded');
 
         initDice();
-        loadRollPool();
         loadStaleSuggestion();
         checkManualMode();
     });

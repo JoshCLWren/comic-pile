@@ -104,33 +104,68 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 </div>
         """
 
+    # MULTI-DICE VISUALIZATION
+    dice_html = ""
+    for i in range(current_die):
+        position = i + 1
+        if position == result_val:
+            dice_html += f"""
+            <div id="dice-wrapper-{position}" class="dice-wrapper">
+                <div id="dice-container-{position}" class="dice-container selected">
+                    <div id="die-3d-{position}" class="w-full h-full"></div>
+                    <div class="dice-number">{position}</div>
+                </div>
+                <div id="thread-preview-{position}" class="thread-preview selected">
+                    <div class="thread-preview-title">{selected_thread.title}</div>
+                    <div class="thread-preview-format">{selected_thread.format}</div>
+                </div>
+            </div>
+            """
+        elif i < len(threads):
+            thread = threads[i]
+            dice_html += f"""
+            <div id="dice-wrapper-{position}" class="dice-wrapper">
+                <div id="dice-container-{position}" class="dice-container">
+                    <div id="die-3d-{position}" class="w-full h-full"></div>
+                    <div class="dice-number">{position}</div>
+                </div>
+                <div id="thread-preview-{position}" class="thread-preview">
+                    <div class="thread-preview-title">{thread.title}</div>
+                    <div class="thread-preview-format">{thread.format}</div>
+                </div>
+            </div>
+            """
+        else:
+            dice_html += f"""
+            <div id="dice-wrapper-{position}" class="dice-wrapper">
+                <div id="dice-container-{position}" class="dice-container">
+                    <div id="die-3d-{position}" class="w-full h-full"></div>
+                    <div class="dice-number">{position}</div>
+                </div>
+                <div id="thread-preview-{position}" class="thread-preview">
+                    <div class="thread-preview-title text-slate-600">Empty</div>
+                    <div class="thread-preview-format">--</div>
+                </div>
+            </div>
+            """
+
     # SERVER SIDE RATING FORM (RELIABLE)
     return (
         pending_html
         + f"""
-        <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
-            <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
-                <div id="result-die-wrapper" class="dice-state-rolled threejs-die-container relative z-10 rounded-full cursor-pointer" style="width: 100px; height: 100px; margin: 0 auto;" onclick="triggerReroll()">
-                    <div id="result-die-3d" class="w-full h-full"></div>
-                    <span id="result-die-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-teal-400">Rolled</span>
-                </div>
-            <div class="text-center px-4">
-                <div class="flex items-center justify-center gap-2 mb-2">
-                    <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Position</p>
-                    <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg text-sm font-black border border-amber-500/30">#{result_val}</span>
-                </div>
-                <h2 class="text-xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
-                <p class="text-[8px] font-bold text-slate-500 mt-1">in the roll pool</p>
-            </div>
-            </div>
-        </div>
-
-        <div id="pool-threads" hx-swap-oob="innerHTML">
-            {pool_html}
+        <div id="dice-grid" class="dice-grid flex-1 min-h-0" data-result="{result_val}">
+            {dice_html}
         </div>
 
             <div id="rating-form-container" class="glass-card p-4 space-y-4 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">
                 <div class="flex flex-col gap-3">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Selected</p>
+                        <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg text-sm font-black border border-amber-500/30">#{result_val}</span>
+                    </div>
+                    <h2 class="text-center text-lg font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
+                    <p class="text-center text-[8px] font-bold text-slate-500">{selected_thread.format}</p>
+                    <div class="h-px bg-white/10 my-2"></div>
                     <div class="flex items-center justify-between gap-6">
                         <div class="flex-1 min-w-0">
                             <p class="text-[8px] font-black uppercase tracking-[0.5em] text-slate-600 mb-1">Rate your journey</p>
@@ -150,7 +185,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                     Save & Continue
                 </button>
                 <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300 transition-colors">
-                    Reroll Die 🎲
+                    Reroll Dice 🎲
                 </button>
                 <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
             </div>
@@ -162,33 +197,21 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 localStorage.setItem('selectedThreadId', '{selected_thread.id}');
                 isRolling = false;
                 const instruction = document.getElementById('tap-instruction');
-                if (instruction) instruction.textContent = "Tap Die or Button to Reroll";
-
-                const resultWrapper = document.getElementById('result-die-wrapper');
-                if (resultWrapper) {{
-                    resultWrapper.classList.add('dice-state-rolled');
-                }}
-
-                const rerollBtn = document.getElementById('reroll-btn');
-                const resultDieLabel = document.getElementById('result-die-state-label');
-                if (rerollBtn) {{
-                    rerollBtn.addEventListener('mouseenter', function() {{
-                        if (resultWrapper) resultWrapper.classList.remove('dice-state-rolled');
-                        if (resultWrapper) resultWrapper.classList.add('dice-state-reroll');
-                        if (resultDieLabel) resultDieLabel.textContent = 'Rerolling';
-                    }});
-                    rerollBtn.addEventListener('mouseleave', function() {{
-                        if (resultWrapper) resultWrapper.classList.remove('dice-state-reroll');
-                        if (resultWrapper) resultWrapper.classList.add('dice-state-rolled');
-                        if (resultDieLabel) resultDieLabel.textContent = 'Rolled';
-                    }});
+                if (instruction) {{
+                    instruction.innerHTML = 'Tap #{result_val} to rate, or Reroll';
+                    instruction.classList.remove('animate-pulse');
                 }}
 
                 setTimeout(function() {{
-                    const resultContainer = document.getElementById('result-die-3d');
-                    if (resultContainer && window.Dice3D) {{
-                        const die = Dice3D.create(resultContainer, {current_die}, {{ color: 0xffffff, showValue: false }});
-                        if (die) die.rollTo({result_val});
+                    for (let i = 1; i <= {current_die}; i++) {{
+                        const dieContainer = document.getElementById('die-3d-' + i);
+                        if (dieContainer && window.Dice3D) {{
+                            const die = Dice3D.create(dieContainer, {current_die}, {{ color: 0xffffff, showValue: false }});
+                            if (die) {{
+                                die.setValue(i);
+                                diceInstances[i] = die;
+                            }}
+                        }}
                     }}
                 }}, 100);
             }})();
@@ -389,32 +412,68 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                 </div>
         """
 
-    return f"""
-        <div class="result-reveal" data-thread-id="{selected_thread.id}" data-result="{result_val}" data-title="{selected_thread.title}">
-            <div class="flex flex-col gap-4 mb-4 animate-[bounce-in_0.8s_ease-out]">
-                <div id="result-die-wrapper" class="threejs-die-container relative z-10 rounded-full cursor-pointer" style="width: 100px; height: 100px; margin: 0 auto;" onclick="triggerReroll()">
-                    <div id="result-die-3d" class="w-full h-full"></div>
-                    <span id="result-die-state-label" class="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-teal-400">Rerolled</span>
+    # MULTI-DICE VISUALIZATION
+    dice_html = ""
+    for i in range(current_die):
+        position = i + 1
+        if position == result_val:
+            dice_html += f"""
+            <div id="dice-wrapper-{position}" class="dice-wrapper">
+                <div id="dice-container-{position}" class="dice-container selected">
+                    <div id="die-3d-{position}" class="w-full h-full"></div>
+                    <div class="dice-number">{position}</div>
                 </div>
-                <div class="text-center px-4">
-                    <div class="flex items-center justify-center gap-2 mb-2">
-                        <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Position</p>
-                        <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg text-sm font-black border border-amber-500/30">#{result_val}</span>
-                    </div>
-                    <h2 class="text-xl font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
-                    <p class="text-[8px] font-bold text-slate-500 mt-1">in roll pool</p>
+                <div id="thread-preview-{position}" class="thread-preview selected">
+                    <div class="thread-preview-title">{selected_thread.title}</div>
+                    <div class="thread-preview-format">{selected_thread.format}</div>
                 </div>
             </div>
+            """
+        elif i < len(threads):
+            thread = threads[i]
+            dice_html += f"""
+            <div id="dice-wrapper-{position}" class="dice-wrapper">
+                <div id="dice-container-{position}" class="dice-container">
+                    <div id="die-3d-{position}" class="w-full h-full"></div>
+                    <div class="dice-number">{position}</div>
+                </div>
+                <div id="thread-preview-{position}" class="thread-preview">
+                    <div class="thread-preview-title">{thread.title}</div>
+                    <div class="thread-preview-format">{thread.format}</div>
+                </div>
+            </div>
+            """
+        else:
+            dice_html += f"""
+            <div id="dice-wrapper-{position}" class="dice-wrapper">
+                <div id="dice-container-{position}" class="dice-container">
+                    <div id="die-3d-{position}" class="w-full h-full"></div>
+                    <div class="dice-number">{position}</div>
+                </div>
+                <div id="thread-preview-{position}" class="thread-preview">
+                    <div class="thread-preview-title text-slate-600">Empty</div>
+                    <div class="thread-preview-format">--</div>
+                </div>
+            </div>
+            """
 
-            <div id="pool-threads" hx-swap-oob="innerHTML">
-                {pool_html}
-            </div>
+    return f"""
+        <div id="dice-grid" class="dice-grid flex-1 min-h-0" data-result="{result_val}">
+            {dice_html}
+        </div>
 
             <div id="rating-form-container" class="glass-card p-4 space-y-4 animate-[bounce-in_0.6s_ease-out] shadow-2xl border-white/10 mb-4">
                 <div class="flex flex-col gap-3">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em]">Selected</p>
+                        <span class="bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-lg text-sm font-black border border-amber-500/30">#{result_val}</span>
+                    </div>
+                    <h2 class="text-center text-lg font-black text-slate-100 leading-tight tracking-tight">{selected_thread.title}</h2>
+                    <p class="text-center text-[8px] font-bold text-slate-500">{selected_thread.format}</p>
+                    <div class="h-px bg-white/10 my-2"></div>
                     <div class="flex items-center justify-between gap-6">
                         <div class="flex-1 min-w-0">
-                            <p class="text-[8px] font-black text-slate-600 uppercase tracking-[0.5em] mb-1">Rate your journey</p>
+                            <p class="text-[8px] font-black uppercase tracking-[0.5em] text-slate-600 mb-1">Rate your journey</p>
                             <div id="rating-value" class="text-teal-400 text-4xl font-black leading-none">4.0</div>
                         </div>
                         <div class="flex-1 min-w-0 pt-4">
@@ -431,7 +490,7 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                     Save & Continue
                 </button>
                 <button id="reroll-btn" onclick="triggerReroll()" class="w-full py-3 text-sm font-black uppercase tracking-[0.3em] text-slate-400 hover:text-slate-300 transition-colors">
-                    Reroll Die 🎲
+                    Reroll Dice 🎲
                 </button>
                 <div id="error-message" class="text-center text-rose-500 text-xs font-bold hidden"></div>
             </div>
@@ -443,13 +502,21 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                 localStorage.setItem('selectedThreadId', '{selected_thread.id}');
                 isRolling = false;
                 const instruction = document.getElementById('tap-instruction');
-                if (instruction) instruction.textContent = "Tap Die or Button to Reroll";
+                if (instruction) {{
+                    instruction.innerHTML = 'Tap #{result_val} to rate, or Reroll';
+                    instruction.classList.remove('animate-pulse');
+                }}
 
                 setTimeout(function() {{
-                    const resultContainer = document.getElementById('result-die-3d');
-                    if (resultContainer && window.Dice3D) {{
-                        const die = Dice3D.create(resultContainer, {current_die}, {{ color: 0xffffff, showValue: false }});
-                        if (die) die.rollTo({result_val});
+                    for (let i = 1; i <= {current_die}; i++) {{
+                        const dieContainer = document.getElementById('die-3d-' + i);
+                        if (dieContainer && window.Dice3D) {{
+                            const die = Dice3D.create(dieContainer, {current_die}, {{ color: 0xffffff, showValue: false }});
+                            if (die) {{
+                                die.setValue(i);
+                                diceInstances[i] = die;
+                            }}
+                        }}
                     }}
                 }}, 100);
             }})();
