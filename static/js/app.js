@@ -40,6 +40,8 @@ function loadQueue() {
             threadList.innerHTML = threads.map((thread, index) => {
                 const position = index + 1;
                 const staleness = calculateStaleness(thread.last_activity_at || thread.created_at);
+                const isFirst = position === 1;
+                const isLast = position === threads.length;
 
                 return `
                     <div class="glass-card border-white/10 p-4 rounded-xl transition-all hover:border-white/20"
@@ -71,12 +73,24 @@ function loadQueue() {
                                 </div>
                                 <div class="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
                                     <button onclick="moveThread(${thread.id}, 'up')"
+                                        ${isFirst ? 'disabled' : ''}
                                         class="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
                                         ↑ Up
                                     </button>
                                     <button onclick="moveThread(${thread.id}, 'down')"
+                                        ${isLast ? 'disabled' : ''}
                                         class="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
                                         ↓ Down
+                                    </button>
+                                    <button onclick="moveToFront(${thread.id})"
+                                        ${isFirst ? 'disabled' : ''}
+                                        class="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
+                                        ⏮ Front
+                                    </button>
+                                    <button onclick="moveToBack(${thread.id})"
+                                        ${isLast ? 'disabled' : ''}
+                                        class="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95">
+                                        ⏭ Back
                                     </button>
                                     <button onclick="openPositionModal(${thread.id}, ${position}, ${threads.length})"
                                         class="px-3 py-1.5 bg-purple-500/10 border border-purple-500/20 rounded-lg text-[10px] font-bold uppercase tracking-wider text-purple-400 hover:bg-purple-500/20 transition-all active:scale-95">
@@ -199,6 +213,24 @@ function moveThread(threadId, direction) {
     if (newPosition && newPosition > 0) {
         updateThreadPosition(threadId, newPosition);
     }
+}
+
+function moveToFront(threadId) {
+    fetch(`/queue/threads/${threadId}/front/`, { method: 'PUT' })
+        .then(() => loadQueue())
+        .catch(error => {
+            console.error('Error moving to front:', error);
+            loadQueue();
+        });
+}
+
+function moveToBack(threadId) {
+    fetch(`/queue/threads/${threadId}/back/`, { method: 'PUT' })
+        .then(() => loadQueue())
+        .catch(error => {
+            console.error('Error moving to back:', error);
+            loadQueue();
+        });
 }
 
 function openEditModal(threadId) {
