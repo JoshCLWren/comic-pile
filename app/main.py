@@ -454,6 +454,14 @@ def create_app() -> FastAPI:
             "coordinator.html", {"request": request, **coordinator_data.model_dump()}
         )
 
+    @app.get("/tasks/analytics", response_class=HTMLResponse)
+    async def analytics_page(request: Request, db: Session = Depends(get_db)):
+        """Render task analytics dashboard."""
+        from app.api.tasks import get_metrics
+
+        metrics = get_metrics(db)
+        return templates.TemplateResponse("analytics.html", {"request": request, **metrics})
+
     @app.get("/health")
     async def health_check(db: Session = Depends(get_db)):
         """Health check endpoint that verifies database connectivity."""

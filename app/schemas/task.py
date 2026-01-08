@@ -119,3 +119,19 @@ class SearchTasksRequest(BaseModel):
     assigned_agent: str | None = Field(None, description="Filter by assigned agent")
     page: int = Field(default=1, ge=1, description="Page number (1-indexed)")
     page_size: int = Field(default=20, ge=1, le=100, description="Number of results per page")
+
+
+class TaskMetricsResponse(BaseModel):
+    """Schema for task completion metrics."""
+
+    total_tasks: int
+    tasks_by_status: dict[str, int]
+    tasks_by_priority: dict[str, int]
+    tasks_by_type: dict[str, int]
+    completion_rate: float
+    average_completion_time_hours: float | None
+    recent_completions: list[dict[str, str | datetime]]
+    active_agents: list[dict[str, str]]
+    stale_tasks_count: int
+    blocked_tasks_count: int
+    ready_to_claim: int

@@ -989,3 +989,133 @@ async def test_claim_with_worktree_auto_creation(
         os.environ.pop("AUTO_CREATE_WORKTREE", None)
         if original_auto_value:
             os.environ["AUTO_CREATE_WORKTREE"] = original_auto_value
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_basic(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test getting basic task metrics."""
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "total_tasks" in data
+    assert "tasks_by_status" in data
+    assert "tasks_by_priority" in data
+    assert "completion_rate" in data
+    assert data["total_tasks"] > 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_completion_rate(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test completion rate calculation in metrics."""
+    await client.post("/api/tasks/TASK-101/set-status", json={"status": "done"})
+    await client.post("/api/tasks/TASK-102/set-status", json={"status": "done"})
+
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["completion_rate"] >= 0.0
+    assert data["completion_rate"] <= 100.0
+    assert data["tasks_by_status"]["done"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_by_status(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test task counts by status in metrics."""
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+
+    for status in ["pending", "in_progress", "blocked", "in_review", "done"]:
+        assert status in data["tasks_by_status"]
+        assert data["tasks_by_status"][status] >= 0
+
+    total_status_tasks = sum(data["tasks_by_status"].values())
+    assert total_status_tasks == data["total_tasks"]
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_by_priority(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test task counts by priority in metrics."""
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+
+    for priority in ["HIGH", "MEDIUM", "LOW"]:
+        assert priority in data["tasks_by_priority"]
+        assert data["tasks_by_priority"][priority] >= 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_by_type(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test task counts by type in metrics."""
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "tasks_by_type" in data
+    assert isinstance(data["tasks_by_type"], dict)
+    assert len(data["tasks_by_type"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_recent_completions(
+    client: AsyncClient, sample_tasks: list[Task]
+) -> None:
+    """Test recent completions list in metrics."""
+    await client.post("/api/tasks/TASK-101/set-status", json={"status": "done"})
+
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "recent_completions" in data
+    assert isinstance(data["recent_completions"], list)
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_active_agents(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test active agents list in metrics."""
+    await client.post(
+        "/api/tasks/TASK-101/claim",
+        json={"agent_name": "agent-1", "worktree": "comic-pile-task-101"},
+    )
+
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "active_agents" in data
+    assert isinstance(data["active_agents"], list)
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_stale_tasks(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test stale tasks count in metrics."""
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "stale_tasks_count" in data
+    assert data["stale_tasks_count"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_blocked_tasks(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test blocked tasks count in metrics."""
+    await client.post(
+        "/api/tasks/TASK-101/set-status",
+        json={"status": "blocked", "blocked_reason": "Test block"},
+    )
+
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "blocked_tasks_count" in data
+    assert data["blocked_tasks_count"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_get_metrics_ready_to_claim(client: AsyncClient, sample_tasks: list[Task]) -> None:
+    """Test ready to claim count in metrics."""
+    response = await client.get("/api/tasks/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "ready_to_claim" in data
+    assert data["ready_to_claim"] >= 0

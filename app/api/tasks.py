@@ -689,6 +689,117 @@ def get_stale_tasks(db: Session = Depends(get_db)) -> list[TaskResponse]:
     ]
 
 
+@router.get("/metrics", response_model=dict)
+def get_metrics(db: Session = Depends(get_db)) -> dict:
+    """Get task completion metrics and analytics data."""
+    all_tasks = db.execute(select(Task).order_by(Task.task_id)).scalars().all()
+
+    total_tasks = len(all_tasks)
+
+    tasks_by_status = {"pending": 0, "in_progress": 0, "blocked": 0, "in_review": 0, "done": 0}
+    tasks_by_priority = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    tasks_by_type = {}
+    recent_completions = []
+    active_agents = {}
+
+    completed_tasks_with_time = []
+
+    for task in all_tasks:
+        tasks_by_status[task.status] = tasks_by_status.get(task.status, 0) + 1
+        if task.priority in tasks_by_priority:
+            tasks_by_priority[task.priority] += 1
+
+        task_type = task.task_type or "feature"
+        tasks_by_type[task_type] = tasks_by_type.get(task_type, 0) + 1
+
+        if task.status == "done" and task.updated_at:
+            completed_tasks_with_time.append(task)
+            if len(recent_completions) < 10:
+                recent_completions.append(
+                    {
+                        "task_id": task.task_id,
+                        "title": task.title,
+                        "completed_at": task.updated_at,
+                        "completed_by": task.assigned_agent or "unknown",
+                    }
+                )
+
+        if task.status == "in_progress" and task.assigned_agent:
+            if task.assigned_agent not in active_agents:
+                active_agents[task.assigned_agent] = {
+                    "agent_name": task.assigned_agent,
+                    "active_tasks": 0,
+                    "task_ids": [],
+                }
+            active_agents[task.assigned_agent]["active_tasks"] += 1
+            active_agents[task.assigned_agent]["task_ids"].append(task.task_id)
+
+    completion_rate = (tasks_by_status["done"] / total_tasks * 100) if total_tasks > 0 else 0.0
+
+    average_completion_time_hours = None
+    if completed_tasks_with_time:
+        completion_times_hours = []
+        for task in completed_tasks_with_time:
+            if task.created_at and task.updated_at:
+                duration_hours = (task.updated_at - task.created_at).total_seconds() / 3600
+                completion_times_hours.append(duration_hours)
+        if completion_times_hours:
+            average_completion_time_hours = sum(completion_times_hours) / len(
+                completion_times_hours
+            )
+
+    stale_threshold = datetime.now(UTC) - timedelta(minutes=20)
+    stale_tasks_count = len(
+        [
+            t
+            for t in all_tasks
+            if t.status == "in_progress"
+            and t.last_heartbeat
+            and (
+                (t.last_heartbeat.tzinfo is not None and t.last_heartbeat < stale_threshold)
+                or (
+                    t.last_heartbeat.tzinfo is None
+                    and t.last_heartbeat.replace(tzinfo=UTC) < stale_threshold
+                )
+            )
+        ]
+    )
+
+    blocked_tasks_count = len([t for t in all_tasks if t.status == "blocked"])
+
+    ready_to_claim = 0
+    for task in all_tasks:
+        if task.status == "pending" and not task.blocked_reason:
+            deps_are_done = True
+            if task.dependencies:
+                dep_task_ids = [d.strip() for d in task.dependencies.split(",")]
+                for dep_id in dep_task_ids:
+                    dep_task = db.execute(
+                        select(Task).where(Task.task_id == dep_id)
+                    ).scalar_one_or_none()
+                    if not dep_task or dep_task.status != "done":
+                        deps_are_done = False
+                        break
+            if deps_are_done:
+                ready_to_claim += 1
+
+    return {
+        "total_tasks": total_tasks,
+        "tasks_by_status": tasks_by_status,
+        "tasks_by_priority": tasks_by_priority,
+        "tasks_by_type": tasks_by_type,
+        "completion_rate": round(completion_rate, 2),
+        "average_completion_time_hours": (
+            round(average_completion_time_hours, 2) if average_completion_time_hours else None
+        ),
+        "recent_completions": recent_completions,
+        "active_agents": list(active_agents.values()),
+        "stale_tasks_count": stale_tasks_count,
+        "blocked_tasks_count": blocked_tasks_count,
+        "ready_to_claim": ready_to_claim,
+    }
+
+
 @router.get("/search")
 def search_tasks(
     request: Request,
