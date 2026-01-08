@@ -70,7 +70,16 @@ def create_error_task(
     task_id = f"API-ERROR-{timestamp}"
     error_type = type(error).__name__
 
+    if not TASKS_FILE.exists():
+        tasks = {"tasks": []}
+        next_id = 1
+    else:
+        with open(TASKS_FILE) as f:
+            tasks = json.load(f)
+        next_id = max((task.get("id", 0) for task in tasks["tasks"]), default=0) + 1
+
     task = {
+        "id": next_id,
         "task_id": task_id,
         "title": f"5xx Error: {error_type}",
         "description": {
@@ -91,18 +100,12 @@ def create_error_task(
         ),
     }
 
-    if not TASKS_FILE.exists():
-        tasks = {"tasks": []}
-    else:
-        with open(TASKS_FILE) as f:
-            tasks = json.load(f)
-
     tasks["tasks"].append(task)
 
     with open(TASKS_FILE, "w") as f:
         json.dump(tasks, f, indent=2, default=str)
 
-    logger.info(f"Created task {task_id} for 5xx error: {error_type}")
+    logger.info(f"Created task {task_id} (id={next_id}) for 5xx error: {error_type}")
 
 
 def handle_5xx_error(error: Exception, request: Request) -> dict[str, str]:

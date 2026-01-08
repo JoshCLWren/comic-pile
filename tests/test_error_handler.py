@@ -12,26 +12,31 @@ from app.api import error_handler
 
 class OperationalError(Exception):
     """Mock database connection error."""
+
     pass
 
 
 class QueryTimeoutError(Exception):
     """Mock query timeout error."""
+
     pass
 
 
 class IntegrityError(Exception):
     """Mock constraint violation error."""
+
     pass
 
 
 class TransientError(Exception):
     """Mock temporary server error."""
+
     pass
 
 
 class SomeRandomError(Exception):
     """Mock unknown error."""
+
     pass
 
 
@@ -69,7 +74,9 @@ def temp_tasks_file(tmp_path):
 def test_is_known_5xx_error_database_connection():
     """Test detection of database connection errors."""
     exc = OperationalError("database connection failed")
-    is_known, error_info = error_handler.is_known_5xx_error(exc, "OperationalError", "database connection failed")
+    is_known, error_info = error_handler.is_known_5xx_error(
+        exc, "OperationalError", "database connection failed"
+    )
     assert is_known is True
     assert error_info is not None
     assert error_info["create_task"] is True
@@ -79,7 +86,9 @@ def test_is_known_5xx_error_database_connection():
 def test_is_known_5xx_error_query_timeout():
     """Test detection of query timeout errors."""
     exc = QueryTimeoutError("statement timeout")
-    is_known, error_info = error_handler.is_known_5xx_error(exc, "QueryTimeoutError", "statement timeout")
+    is_known, error_info = error_handler.is_known_5xx_error(
+        exc, "QueryTimeoutError", "statement timeout"
+    )
     assert is_known is True
     assert error_info is not None
     assert error_info["create_task"] is True
@@ -89,7 +98,9 @@ def test_is_known_5xx_error_query_timeout():
 def test_is_known_5xx_error_constraint_violation():
     """Test detection of constraint violation errors."""
     exc = IntegrityError("foreign key constraint")
-    is_known, error_info = error_handler.is_known_5xx_error(exc, "IntegrityError", "foreign key constraint")
+    is_known, error_info = error_handler.is_known_5xx_error(
+        exc, "IntegrityError", "foreign key constraint"
+    )
     assert is_known is True
     assert error_info is not None
     assert error_info["create_task"] is True
@@ -99,7 +110,9 @@ def test_is_known_5xx_error_constraint_violation():
 def test_is_known_5xx_error_temporary():
     """Test detection of temporary server errors."""
     exc = TransientError("temporary failure")
-    is_known, error_info = error_handler.is_known_5xx_error(exc, "TransientError", "temporary failure")
+    is_known, error_info = error_handler.is_known_5xx_error(
+        exc, "TransientError", "temporary failure"
+    )
     assert is_known is True
     assert error_info is not None
     assert error_info["create_task"] is False
@@ -126,6 +139,7 @@ def test_handle_5xx_error_known_with_task(mock_request, temp_tasks_file):
     with open(temp_tasks_file) as f:
         tasks = json.load(f)
     assert len(tasks["tasks"]) == 1
+    assert tasks["tasks"][0]["id"] == 1
     assert tasks["tasks"][0]["task_id"].startswith("API-ERROR-")
     assert tasks["tasks"][0]["status"] == "pending"
     assert tasks["tasks"][0]["priority"] == "HIGH"
@@ -179,6 +193,7 @@ def test_create_error_task_with_full_debug_info(mock_request, temp_tasks_file):
     assert len(tasks["tasks"]) == 1
 
     task = tasks["tasks"][0]
+    assert task["id"] == 1
     assert task["title"] == "5xx Error: IntegrityError"
     assert task["description"]["request_body"] == {"test": "data"}
     assert task["description"]["path"] == "/test/path"
