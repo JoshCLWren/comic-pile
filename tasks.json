@@ -1684,13 +1684,13 @@
       "title": "Add DELETE endpoint to Task API",
       "description": "Task API currently has no DELETE endpoint. Add ability to delete tasks via DELETE /api/tasks/{task_id} to clean up placeholder/superfluous tasks.",
       "priority": "MEDIUM",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": "/home/josh/code/comic-pile-task-api-003",
       "status_notes": "Claimed by Zach at 2026-01-05T16:00:23.309196+00:00\n[2026-01-05T16:02:46.147536+00:00] Verified DELETE endpoint implementation:\n- Endpoint exists at DELETE /api/tasks/{task_id} (app/api/tasks.py:1365)\n- Returns 204 No Content on success\n- Returns 404 if task not found\n- Validates dependencies (rejects deletion if tasks depend on this one)\n- Admin override (admin_override=true) allows deletion with dependencies\n- All 5 delete tests pass:\n  * test_delete_task - successful deletion\n  * test_delete_task_not_found - 404 response\n  * test_delete_claimed_task - delete claimed tasks\n  * test_delete_task_with_dependencies - dependency validation\n  * test_delete_task_with_dependencies_admin_override - admin override\n- Tested with curl: curl -X DELETE http://localhost:8000/api/tasks/TEST-PLACEHOLDER (returns 204)\n- make lint passes\n- pytest tests/test_task_api.py: 43/43 passed, 97.56% coverage\n\nAll requirements met. Ready for review.\n[2026-01-05T16:03:38.868599+00:00] Unclaimed by Zach",
       "estimated_effort": "2 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": "2026-01-05T16:03:29.987227",
@@ -1699,7 +1699,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-04T14:59:29.077638",
-      "updated_at": "2026-01-06T01:41:17.026126"
+      "updated_at": "2026-01-08T15:22:40.289925+00:00"
     },
     {
       "id": 71,
@@ -1730,13 +1730,13 @@
       "title": "Fix and automate git worktree creation in Task API",
       "description": "Worktree path construction is broken (double slash: ..//home/josh/code/). Also automate worktree creation when claiming tasks to improve developer experience.",
       "priority": "HIGH",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
-      "worktree": "/home/josh/code/comic-pile-task-api-005",
-      "status_notes": "Claimed by Yvonne at 2026-01-05T15:08:04.720312+00:00\n[2026-01-05T15:08:43.839821+00:00] Analyzing worktree path bug in claim endpoint. Found double slash issue at line 800: os.path.join(os.path.dirname(os.getcwd()), request.worktree)\n[2026-01-05T15:09:50.323915+00:00] Fixed worktree path construction bug by handling absolute/relative paths correctly. Added proper git repository validation using git rev-parse\n[2026-01-05T15:16:20.369654+00:00] Fixed worktree path bug and added auto-create functionality. Added 4 new tests covering absolute paths, auto-create, missing worktree, and invalid git repo scenarios. All 47 task API tests pass.\n[2026-01-05T15:20:29.516512+00:00] Complete. Fixed worktree path construction bug, added auto-create functionality, and added 4 new tests. All 47 task API tests pass, Python linting clean (ruff + pyright). Changes committed to task-api-005 branch.\n[2026-01-05T15:20:59.860124+00:00] Unclaimed by Yvonne",
+      "worktree": null,
+      "status_notes": "Claimed by Yvonne at 2026-01-05T15:08:04.720312+00:00\n[2026-01-05T15:08:43.839821+00:00] Analyzing worktree path bug in claim endpoint. Found double slash issue at line 800: os.path.join(os.path.dirname(os.getcwd()), request.worktree)\n[2026-01-05T15:09:50.323915+00:00] Fixed worktree path construction bug by handling absolute/relative paths correctly. Added proper git repository validation using git rev-parse\n[2026-01-05T15:16:20.369654+00:00] Fixed worktree path bug and added auto-create functionality. Added 4 new tests covering absolute paths, auto-create, missing worktree, and invalid git repo scenarios. All 47 task API tests pass.\n[2026-01-05T15:20:29.516512+00:00] Complete. Fixed worktree path construction bug, added auto-create functionality, and added 4 new tests. All 47 task API tests pass, Python linting clean (ruff + pyright). Changes committed to task-api-005 branch.\n[2026-01-05T15:20:59.860124+00:00] Unclaimed by Yvonne\n[2026-01-08T11:30:00.000000Z] Task verified complete. Work merged to main (commit 7736f35). All 66 task API tests pass, 10 merge to main tests pass. Linting clean for changes (pre-existing errors in other files). Double-slash bug fixed by checking if worktree path is absolute before joining. AUTO_CREATE_WORKTREE env var added for automated worktree creation.",
       "estimated_effort": "4 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": "2026-01-05T15:20:21.438573",
@@ -1745,7 +1745,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-05T13:53:16.813883",
-      "updated_at": "2026-01-06T01:41:17.061462"
+      "updated_at": "2026-01-08T11:30:00.000000Z"
     },
     {
       "id": 50,
