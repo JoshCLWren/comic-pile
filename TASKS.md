@@ -1,5 +1,5 @@
 # Task Tracking - Dice-Driven Comic Tracker
-# FastAPI + HTMX + Tailwind CSS + SQLite
+# FastAPI + HTMX + Tailwind CSS + PostgreSQL
 
 **Last Updated**: 2025-12-31 (Task database system implemented)
 **Current Phase**: 10 (PRD Alignment)
