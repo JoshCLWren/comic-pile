@@ -456,6 +456,7 @@ def create_app() -> FastAPI:
                     event_data.update(
                         {
                             "rating": event.rating,
+                            "issues_read": event.issues_read,
                         }
                     )
 

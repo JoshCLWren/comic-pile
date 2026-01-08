@@ -1,12 +1,14 @@
 """Thread CRUD API endpoints."""
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Thread
+from app.models import Event, Thread
 from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
 from comic_pile import get_stale_threads
 
@@ -219,6 +221,13 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
         )
+
+    delete_event = Event(
+        type="delete",
+        timestamp=datetime.now(UTC),
+        thread_id=None,
+    )
+    db.add(delete_event)
     db.delete(thread)
     db.commit()
     if clear_cache:

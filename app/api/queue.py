@@ -1,11 +1,13 @@
 """Queue API routes."""
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Thread
+from app.models import Event, Thread
 from app.schemas import ThreadResponse
 from comic_pile.queue import move_to_back, move_to_front, move_to_position
 
@@ -35,8 +37,18 @@ def move_thread_position(
             detail=f"Thread {thread_id} not found",
         )
 
+    old_position = thread.queue_position
     move_to_position(thread_id, request.new_position, db)
     db.refresh(thread)
+
+    if old_position != thread.queue_position:
+        reorder_event = Event(
+            type="reorder",
+            timestamp=datetime.now(UTC),
+            thread_id=thread_id,
+        )
+        db.add(reorder_event)
+        db.commit()
 
     if clear_cache:
         clear_cache()
@@ -67,8 +79,18 @@ def move_thread_front(thread_id: int, db: Session = Depends(get_db)) -> ThreadRe
             detail=f"Thread {thread_id} not found",
         )
 
+    old_position = thread.queue_position
     move_to_front(thread_id, db)
     db.refresh(thread)
+
+    if old_position != thread.queue_position:
+        reorder_event = Event(
+            type="reorder",
+            timestamp=datetime.now(UTC),
+            thread_id=thread_id,
+        )
+        db.add(reorder_event)
+        db.commit()
 
     if clear_cache:
         clear_cache()
@@ -99,8 +121,18 @@ def move_thread_back(thread_id: int, db: Session = Depends(get_db)) -> ThreadRes
             detail=f"Thread {thread_id} not found",
         )
 
+    old_position = thread.queue_position
     move_to_back(thread_id, db)
     db.refresh(thread)
+
+    if old_position != thread.queue_position:
+        reorder_event = Event(
+            type="reorder",
+            timestamp=datetime.now(UTC),
+            thread_id=thread_id,
+        )
+        db.add(reorder_event)
+        db.commit()
 
     if clear_cache:
         clear_cache()
