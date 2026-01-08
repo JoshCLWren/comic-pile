@@ -116,7 +116,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
             <div id="dice-wrapper-{position}" class="dice-wrapper">
                 <div id="dice-container-{position}" class="dice-container selected">
                     <div id="die-3d-{position}" class="w-full h-full"></div>
-                    <div class="dice-number">{position}</div>
+                    <div class="dice-number selected">{position}</div>
                 </div>
                 <div id="thread-preview-{position}" class="thread-preview selected">
                     <div class="thread-preview-title">{selected_thread.title}</div>
@@ -432,7 +432,7 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
             <div id="dice-wrapper-{position}" class="dice-wrapper">
                 <div id="dice-container-{position}" class="dice-container selected">
                     <div id="die-3d-{position}" class="w-full h-full"></div>
-                    <div class="dice-number">{position}</div>
+                    <div class="dice-number selected">{position}</div>
                 </div>
                 <div id="thread-preview-{position}" class="thread-preview selected">
                     <div class="thread-preview-title">{selected_thread.title}</div>
@@ -462,8 +462,8 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                     <div class="dice-number">{position}</div>
                 </div>
                 <div id="thread-preview-{position}" class="thread-preview">
-                <div class="thread-preview-title text-slate-600">Empty</div>
-                <div class="thread-preview-format">--</div>
+                    <div class="thread-preview-title text-slate-600">Empty</div>
+                    <div class="thread-preview-format">--</div>
                 </div>
             </div>
             """
