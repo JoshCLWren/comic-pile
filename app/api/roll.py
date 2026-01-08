@@ -27,6 +27,7 @@ except ImportError:
 def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
     """Roll dice and return HTML result."""
     current_session = get_or_create(db, user_id=1)
+    db.refresh(current_session)
 
     pending_html = ""
     if current_session and current_session.pending_thread_id:
@@ -250,6 +251,8 @@ def roll_dice(db: Session = Depends(get_db)) -> RollResponse:
         current_session.pending_thread_id = selected_thread.id
         current_session.pending_thread_updated_at = datetime.now()
         db.commit()
+        if clear_cache:
+            clear_cache()
 
     return RollResponse(
         thread_id=selected_thread.id,
@@ -286,6 +289,8 @@ def override_roll(request: OverrideRequest, db: Session = Depends(get_db)) -> Ro
         current_session.pending_thread_id = thread.id
         current_session.pending_thread_updated_at = datetime.now()
         db.commit()
+        if clear_cache:
+            clear_cache()
 
     if clear_cache:
         clear_cache()
@@ -392,6 +397,8 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
         current_session.pending_thread_id = selected_thread.id
         current_session.pending_thread_updated_at = datetime.now()
         db.commit()
+        if clear_cache:
+            clear_cache()
 
     pool_html = ""
     for i, thread in enumerate(threads[:current_die]):
