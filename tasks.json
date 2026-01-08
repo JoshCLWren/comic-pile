@@ -397,7 +397,7 @@
       "title": "Add test comic identification and bulk delete",
       "description": "Test comics should not pollute real reading sessions.",
       "priority": "MEDIUM",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,

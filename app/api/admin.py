@@ -108,6 +108,7 @@ def export_csv(db: Session = Depends(get_db)) -> StreamingResponse:
             .where(Thread.status == "active")
             .where(Thread.queue_position >= 1)
             .where(Thread.issues_remaining > 0)
+            .where(Thread.is_test.is_(False))
             .order_by(Thread.queue_position)
         )
         .scalars()
@@ -135,10 +136,10 @@ def export_csv(db: Session = Depends(get_db)) -> StreamingResponse:
 def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
     """Export full database as JSON for backups.
 
-    Includes all data: users, threads, sessions, events
+    Includes all data: users, threads, sessions, events (excludes test data)
     """
     users = db.execute(select(User)).scalars().all()
-    threads = db.execute(select(Thread)).scalars().all()
+    threads = db.execute(select(Thread).where(Thread.is_test.is_(False))).scalars().all()
     sessions = db.execute(select(SessionModel)).scalars().all()
     events = db.execute(select(Event)).scalars().all()
 
@@ -208,6 +209,57 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=database_backup.json"},
     )
+
+
+@router.post("/delete-test-data/")
+async def delete_test_data(db: Session = Depends(get_db)) -> dict[str, int]:
+    """Delete all test data (threads, sessions, events marked as test).
+
+    Returns count of deleted items.
+    """
+    test_threads = db.execute(select(Thread).where(Thread.is_test.is_(True))).scalars().all()
+    thread_ids = [t.id for t in test_threads]
+
+    deleted_events = 0
+    deleted_sessions = 0
+    deleted_threads = len(test_threads)
+
+    for thread_id in thread_ids:
+        events_by_thread_id = (
+            db.execute(select(Event).where(Event.thread_id == thread_id)).scalars().all()
+        )
+        events_by_selected_thread_id = (
+            db.execute(select(Event).where(Event.selected_thread_id == thread_id)).scalars().all()
+        )
+        all_events = set()
+        for e in events_by_thread_id:
+            all_events.add(e)
+        for e in events_by_selected_thread_id:
+            all_events.add(e)
+        deleted_events += len(all_events)
+        for event in all_events:
+            db.delete(event)
+
+    for _thread_id in thread_ids:
+        sessions = db.execute(select(SessionModel).where(SessionModel.user_id == 1)).scalars().all()
+        for session in sessions:
+            session_events = (
+                db.execute(select(Event).where(Event.session_id == session.id)).scalars().all()
+            )
+            if all(e.thread_id in thread_ids for e in session_events if e.thread_id):
+                db.delete(session)
+                deleted_sessions += 1
+
+    for thread in test_threads:
+        db.delete(thread)
+
+    db.commit()
+
+    return {
+        "deleted_threads": deleted_threads,
+        "deleted_sessions": deleted_sessions,
+        "deleted_events": deleted_events,
+    }
 
 
 @router.post("/import/reviews/")
@@ -285,10 +337,29 @@ def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
     """Export narrative session summaries as markdown file.
 
     Formats all sessions with read, skipped, and completed lists per PRD Section 11.
+    Excludes sessions that only involve test threads.
     """
-    sessions = (
+    all_sessions = (
         db.execute(select(SessionModel).order_by(SessionModel.started_at.desc())).scalars().all()
     )
+
+    test_thread_ids = {
+        t.id for t in db.execute(select(Thread).where(Thread.is_test.is_(True))).scalars().all()
+    }
+
+    sessions = []
+    for session in all_sessions:
+        session_events = (
+            db.execute(select(Event).where(Event.session_id == session.id)).scalars().all()
+        )
+        thread_ids_in_session = set()
+        for event in session_events:
+            if event.thread_id:
+                thread_ids_in_session.add(event.thread_id)
+            if event.selected_thread_id:
+                thread_ids_in_session.add(event.selected_thread_id)
+        if not thread_ids_in_session or not thread_ids_in_session.issubset(test_thread_ids):
+            sessions.append(session)
 
     output = io.StringIO()
 

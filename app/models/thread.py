@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,6 +31,7 @@ class Thread(Base):
     review_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

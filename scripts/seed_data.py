@@ -53,6 +53,7 @@ def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
                 issues_remaining=issues_remaining,
                 queue_position=i + 1,
                 status="active",
+                is_test=True,
                 user_id=user.id,
                 last_rating=random.uniform(0.5, 5.0) if random.random() > 0.3 else None,
             )
