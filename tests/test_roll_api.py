@@ -43,11 +43,9 @@ async def test_roll_override(client, sample_data):
 @pytest.mark.asyncio
 async def test_roll_no_pool(client, db):
     """Returns error if no active threads."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(id=1, username="test_user")
-    db.add(user)
-    db.commit()
+    get_or_create_user(db)
 
     response = await client.post("/roll/")
     assert response.status_code == 400
@@ -57,10 +55,10 @@ async def test_roll_no_pool(client, db):
 @pytest.mark.asyncio
 async def test_roll_overflow(client, db):
     """Roll works correctly when thread count < die size."""
-    from app.models import Thread, User
+    from app.models import Thread
+    from tests.conftest import get_or_create_user
 
-    user = User(id=1, username="test_user")
-    db.add(user)
+    get_or_create_user(db)
 
     thread = Thread(
         title="Only Thread",
@@ -109,11 +107,9 @@ async def test_reroll_success(client, sample_data, db):
 @pytest.mark.asyncio
 async def test_reroll_no_pool(client, db):
     """Returns error if no active threads."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(id=1, username="test_user")
-    db.add(user)
-    db.commit()
+    get_or_create_user(db)
 
     response = await client.post("/roll/reroll")
     assert response.status_code == 200

@@ -2,17 +2,16 @@
 
 import pytest
 
-from app.models import Event, Session as SessionModel, Thread, User
+from app.models import Event, Session as SessionModel, Thread
 
 
 @pytest.mark.asyncio
 async def test_both_buttons_available_when_thread_complete(client, db):
     """Both Save & Continue and Finish Session should be available even when issues_remaining is 0."""
     # Create user
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    from tests.conftest import get_or_create_user
+
+    user = get_or_create_user(db)
 
     # Create session
     session = SessionModel(start_die=10, user_id=user.id)
@@ -71,13 +70,10 @@ async def test_both_buttons_available_when_thread_complete(client, db):
 @pytest.mark.asyncio
 async def test_can_still_rate_after_thread_complete(client, db):
     """After rating last issue, should still be able to rate again if rolled."""
-    from app.models import Session as SessionModel, Thread, User
-
     # Create user
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    from tests.conftest import get_or_create_user
+
+    user = get_or_create_user(db)
 
     # Create session
     session = SessionModel(start_die=10, user_id=user.id)

@@ -10,12 +10,9 @@ from app.models import Session as SessionModel
 @pytest.mark.asyncio
 async def test_rate_success(client, db):
     """POST /rate/ updates thread correctly."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
@@ -61,12 +58,9 @@ async def test_rate_success(client, db):
 @pytest.mark.asyncio
 async def test_rate_low_rating(client, db):
     """Rating=3.0, die_size steps up."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
@@ -112,12 +106,9 @@ async def test_rate_low_rating(client, db):
 @pytest.mark.asyncio
 async def test_rate_high_rating(client, db):
     """Rating=4.0, die_size steps down."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
@@ -163,12 +154,9 @@ async def test_rate_high_rating(client, db):
 @pytest.mark.asyncio
 async def test_rate_completes_thread(client, db):
     """Issues <= 0, moves to back of queue, session ends only with finish_session=True."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
@@ -219,12 +207,9 @@ async def test_rate_completes_thread(client, db):
 @pytest.mark.asyncio
 async def test_rate_records_event(client, db):
     """Event saved with rating and issues_read."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
@@ -279,12 +264,9 @@ async def test_rate_no_active_session(client, db):
 @pytest.mark.asyncio
 async def test_rate_no_active_thread(client, db):
     """Returns error if no active thread in session."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)
@@ -299,12 +281,9 @@ async def test_rate_no_active_thread(client, db):
 @pytest.mark.asyncio
 async def test_rate_updates_manual_die(client, db):
     """Rating updates session manual_die to die_after value."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=10, manual_die=20, user_id=user.id)
     db.add(session)
@@ -345,12 +324,9 @@ async def test_rate_updates_manual_die(client, db):
 @pytest.mark.asyncio
 async def test_rate_low_rating_updates_manual_die(client, db):
     """Low rating steps die up and updates manual_die."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=6, manual_die=6, user_id=user.id)
     db.add(session)
@@ -391,12 +367,9 @@ async def test_rate_low_rating_updates_manual_die(client, db):
 @pytest.mark.asyncio
 async def test_rate_finish_session_flag_controls_session_end(client, db):
     """finish_session=False keeps session active even when thread completes."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user")
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     session = SessionModel(start_die=10, user_id=user.id)
     db.add(session)

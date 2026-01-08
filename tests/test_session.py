@@ -267,12 +267,9 @@ def test_session_start_snapshot_created(db):
 
 def test_session_start_snapshot_captures_thread_states(db):
     """Snapshot captures all thread states at session start."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user", created_at=datetime.now(UTC))
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     thread1 = Thread(
         title="Thread 1",
@@ -365,12 +362,9 @@ def test_session_start_snapshot_captures_manual_die(db):
 
 def test_restore_session_start(db):
     """Restore session to start state via API."""
-    from app.models import User
+    from tests.conftest import get_or_create_user
 
-    user = User(username="test_user", created_at=datetime.now(UTC))
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = get_or_create_user(db)
 
     thread1 = Thread(
         title="Thread 1",

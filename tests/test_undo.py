@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 
 from app.models import Event, Session as SessionModel, Snapshot, Thread, User  # noqa: I001
 
@@ -12,13 +11,9 @@ from app.models import Event, Session as SessionModel, Snapshot, Thread, User  #
 @pytest.fixture(scope="function")
 def sample_user(db) -> User:
     """Create a test user for undo tests."""
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
-    if not user:
-        user = User(username="test_user", created_at=datetime.now(UTC))
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
+    from tests.conftest import get_or_create_user
+
+    return get_or_create_user(db)
 
 
 @pytest.mark.asyncio

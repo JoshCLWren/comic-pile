@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import AsyncGenerator, AsyncIterator, Generator
+from datetime import UTC, datetime
 
 import pytest
 import pytest_asyncio
@@ -20,6 +21,46 @@ from app.database import Base, get_db
 from app.main import app
 from app.models import Event, Task, Thread, User
 from app.models import Session as SessionModel
+
+
+def _ensure_default_user(db: Session) -> User:
+    """Ensure default user exists in database (user_id=1 for API compatibility)."""
+    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    if not user:
+        user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+        if not user:
+            user = User(username="test_user", created_at=datetime.now(UTC))
+            db.add(user)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
+            else:
+                db.refresh(user)
+    return user
+
+
+def get_or_create_user(db: Session, username: str = "test_user") -> User:
+    """Get or create user with given username."""
+    user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+    if not user:
+        user = User(username=username, created_at=datetime.now(UTC))
+        db.add(user)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            user = db.execute(select(User).where(User.username == username)).scalar_one()
+        else:
+            db.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def default_user(db: Session) -> User:
+    """Get or create default test user."""
+    return _ensure_default_user(db)
 
 
 def get_test_database_url() -> str:
@@ -113,6 +154,7 @@ def db() -> Generator[Session]:
         session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
     try:
+        _ensure_default_user(session)
         yield session
     finally:
         session.close()
@@ -193,7 +235,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
     now = datetime.now(UTC)
     user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
     if not user:
-        user = User(username="test_user", created_at=now)
+        user = User(username="test_user", id=1, created_at=now)
         db.add(user)
         db.commit()
         db.refresh(user)

@@ -235,7 +235,7 @@ async def test_setup_stale_threads(db):
 
     user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
     if not user:
-        user = User(username="test_user", created_at=datetime.now())
+        user = User(username="test_user", created_at=datetime.now(), id=1)
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -287,10 +287,12 @@ async def test_get_stale_threads_custom_days(db):
 
     now = datetime.now()
 
-    user = User(username="test_user", created_at=datetime.now())
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=datetime.now(), id=1)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     thread_5_days = Thread(
         title="5 Days Old",
@@ -328,10 +330,12 @@ async def test_get_stale_threads_excludes_inactive(db):
 
     now = datetime.now()
 
-    user = User(username="test_user", created_at=datetime.now())
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=datetime.now(), id=1)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
     stale_inactive_thread = Thread(
         title="Stale Inactive",
@@ -366,7 +370,7 @@ async def test_get_stale_threads(db):
 
     user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
     if not user:
-        user = User(username="test_user", created_at=datetime.now())
+        user = User(username="test_user", created_at=datetime.now(), id=1)
         db.add(user)
         db.commit()
         db.refresh(user)

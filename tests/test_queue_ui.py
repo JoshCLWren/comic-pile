@@ -2,6 +2,8 @@
 
 import pytest
 
+from app.models import Thread
+
 
 @pytest.mark.asyncio
 async def test_queue_ui_first_thread_has_disabled_up(client, db, sample_data):
@@ -114,9 +116,6 @@ async def test_drag_and_drop_updates_position(client, db, sample_data):
 
     thread = db.get(Thread, thread_id)
     assert thread.queue_position == new_position
-
-
-from app.models import Thread
 
 
 @pytest.mark.asyncio
