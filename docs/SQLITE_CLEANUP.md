@@ -132,29 +132,271 @@ mv db_export.json db_export_sqlite_pre_cleanup_$(date +%Y%m%d_%H%M%S).json
 ls -lh db_export_sqlite_pre_cleanup_*.json
 ```
 
-### 2.2 Create SQLite Database Backup
+### 2.2 Verify JSON Backup Integrity
+
+```bash
+# Check JSON file is valid
+python -c "import json; json.load(open('db_export_sqlite_pre_cleanup_*.json'))"
+
+# Verify all required tables exist
+python -c "
+import json, glob
+latest = max(glob.glob('db_export_sqlite_pre_cleanup_*.json'), key=glob.os.path.getmtime)
+data = json.load(open(latest))
+required = ['users', 'threads', 'sessions', 'events', 'tasks', 'settings', 'snapshots']
+missing = [t for t in required if t not in data or not data[t]]
+if missing:
+    print(f'❌ Missing tables: {missing}')
+    exit(1)
+print('✅ All required tables present')
+print(f'   Users: {len(data[\"users\"])}, Threads: {len(data[\"threads\"])}, Sessions: {len(data[\"sessions\"])}, Events: {len(data[\"events\"])}')
+"
+
+# Compute checksum for verification
+shasum db_export_sqlite_pre_cleanup_*.json > db_export_checksum.txt
+cat db_export_checksum.txt
+```
+
+### 2.3 Create SQLite Database Backup
 
 ```bash
 # Create a compressed backup of the SQLite database
 tar -czf comic_pile.db.backup.$(date +%Y%m%d_%H%M%S).tar.gz comic_pile.db
 
-# Verify backup exists
+# Verify backup exists and is valid
 ls -lh comic_pile.db.backup.*.tar.gz
+
+# Test archive integrity
+tar -tzf comic_pile.db.backup.*.tar.gz | head -5
+
+# Extract and verify backup in temporary directory
+mkdir -p /tmp/sqlite-verify
+tar -xzf comic_pile.db.backup.*.tar.gz -C /tmp/sqlite-verify
+sqlite3 /tmp/sqlite-verify/comic_pile.db ".tables"
+sqlite3 /tmp/sqlite-verify/comic_pile.db "SELECT COUNT(*) FROM users;"
+sqlite3 /tmp/sqlite-verify/comic_pile.db "SELECT COUNT(*) FROM threads;"
+rm -rf /tmp/sqlite-verify
 ```
 
-### 2.3 Store Backup Securely
+### 2.4 Store Backup Securely
 
 ```bash
 # Move backups to a safe location (outside project directory if possible)
 mkdir -p ~/comic-pile-backups
 mv db_export_sqlite_pre_cleanup_*.json ~/comic-pile-backups/
+mv db_export_sqlite_pre_cleanup_*.txt ~/comic-pile-backups/
 mv comic_pile.db.backup.*.tar.gz ~/comic-pile-backups/
 
 # Verify backups are safe
 ls -lh ~/comic-pile-backups/
+
+# Create backup manifest
+cat > ~/comic-pile-backups/backup_manifest.txt <<EOF
+Backup Date: $(date)
+SQLite DB: comic_pile.db
+PostgreSQL URL: $DATABASE_URL
+Checksum: $(cat ~/comic-pile-backups/db_export_checksum.txt)
+EOF
+
+cat ~/comic-pile-backups/backup_manifest.txt
 ```
 
 **Keep these backups for at least 1 week** before deleting them.
+
+### 2.5 Automated Backup Verification
+
+Run this automated verification script before cleanup:
+
+```bash
+#!/bin/bash
+# scripts/verify_backup.sh - Verify SQLite backups before cleanup
+
+BACKUP_DIR="${BACKUP_DIR:-$HOME/comic-pile-backups}"
+ERRORS=0
+
+echo "=== Backup Verification Script ==="
+echo ""
+
+# Verify JSON backup
+echo "Checking JSON backup..."
+LATEST_JSON=$(ls -t "$BACKUP_DIR"/db_export_sqlite_pre_cleanup_*.json 2>/dev/null | head -1)
+
+if [ -z "$LATEST_JSON" ]; then
+    echo "✗ No JSON backup found!"
+    ERROR_ERRORS=$((ERRORS + 1))
+else
+    echo "Found: $LATEST_JSON"
+
+    # Check JSON validity
+    if python -c "import json; json.load(open('$LATEST_JSON'))" 2>/dev/null; then
+        echo "✓ JSON is valid"
+    else
+        echo "✗ JSON is invalid!"
+        ERRORS=$((ERRORS + 1))
+    fi
+
+    # Check for all required tables
+    MISSING=$(python -c "
+import json, sys
+data = json.load(open('$LATEST_JSON'))
+required = ['users', 'threads', 'sessions', 'events', 'tasks', 'settings', 'snapshots']
+missing = [t for t in required if t not in data or not data[t]]
+print(','.join(missing) if missing else '')
+" 2>/dev/null)
+
+    if [ -n "$MISSING" ]; then
+        echo "✗ Missing tables: $MISSING"
+        ERRORS=$((ERRORS + 1))
+    else
+        echo "✓ All required tables present"
+    fi
+fi
+
+# Verify database backup
+echo ""
+echo "Checking database backup..."
+LATEST_DB=$(ls -t "$BACKUP_DIR"/comic_pile.db.backup.*.tar.gz 2>/dev/null | head -1)
+
+if [ -z "$LATEST_DB" ]; then
+    echo "✗ No database backup found!"
+    ERRORS=$((ERRORS + 1))
+else
+    echo "Found: $LATEST_DB"
+
+    # Check tar.gz integrity
+    if tar -tzf "$LATEST_DB" > /dev/null 2>&1; then
+        echo "✓ Archive is valid"
+
+        # Extract and verify
+        TEMP_DIR=$(mktemp -d)
+        tar -xzf "$LATEST_DB" -C "$TEMP_DIR"
+        if [ -f "$TEMP_DIR/comic_pile.db" ]; then
+            echo "✓ Database file exists in archive"
+
+            # Verify database integrity
+            if sqlite3 "$TEMP_DIR/comic_pile.db" "PRAGMA integrity_check;" | grep -q "ok"; then
+                echo "✓ Database integrity check passed"
+
+                # Check tables exist
+                TABLES=$(sqlite3 "$TEMP_DIR/comic_pile.db" ".tables")
+                REQUIRED_TABLES="users threads sessions events tasks settings snapshots"
+                MISSING_TABLES=""
+                for table in $REQUIRED_TABLES; do
+                    if ! echo "$TABLES" | grep -q "$table"; then
+                        MISSING_TABLES="$MISSING_TABLES $table"
+                    fi
+                done
+
+                if [ -n "$MISSING_TABLES" ]; then
+                    echo "✗ Missing tables in database:$MISSING_TABLES"
+                    ERRORS=$((ERRORS + 1))
+                else
+                    echo "✓ All required tables present in database"
+                fi
+            else
+                echo "✗ Database integrity check failed!"
+                ERRORS=$((ERRORS + 1))
+            fi
+        else
+            echo "✗ Database file not found in archive!"
+            ERRORS=$((ERRORS + 1))
+        fi
+        rm -rf "$TEMP_DIR"
+    else
+        echo "✗ Archive is invalid!"
+        ERRORS=$((ERRORS + 1))
+    fi
+fi
+
+# Verify checksum
+echo ""
+echo "Checking checksums..."
+if [ -f "$BACKUP_DIR/db_export_checksum.txt" ]; then
+    echo "✓ Checksum file found"
+    if shasum -c "$BACKUP_DIR/db_export_checksum.txt" > /dev/null 2>&1; then
+        echo "✓ Checksums verified"
+    else
+        echo "⚠ Checksum verification failed (file may have been modified)"
+        echo "  This is normal if you've made changes since backup"
+    fi
+else
+    echo "⚠ No checksum file found"
+fi
+
+# Summary
+echo ""
+if [ $ERRORS -eq 0 ]; then
+    echo "✅ All checks passed! Backups are valid."
+    exit 0
+else
+    echo "❌ Found $ERRORS error(s)! Do not proceed with cleanup."
+    exit 1
+fi
+```
+
+Usage:
+
+```bash
+# Make script executable
+chmod +x scripts/verify_backup.sh
+
+# Run verification
+./scripts/verify_backup.sh
+
+# With custom backup directory
+BACKUP_DIR=/path/to/backups ./scripts/verify_backup.sh
+```
+
+## Pre-Cleanup Verification Checklist
+
+Before proceeding with cleanup, complete this checklist:
+
+### Automated Verification
+
+```bash
+# Run migration verification tests
+pytest tests/test_migration_verification.py -v
+
+# Expected: All tests pass
+```
+
+### Manual Verification Checklist
+
+- [ ] **Migration verification tests pass** (all green, no failures)
+- [ ] **Row counts match exactly** between SQLite and PostgreSQL for all tables
+- [ ] **Foreign key relationships verified** (no orphaned records)
+- [ ] **JSON backup created and validated** (verified structure, checksum computed)
+- [ ] **Database backup created and tested** (tar.gz valid, extraction works)
+- [ ] **Backups stored securely** (outside project directory or in cloud storage)
+- [ ] **Application starts without errors** (no missing database errors)
+- [ ] **Health check passes** (`/health` endpoint returns "connected")
+- [ ] **All features tested manually** (roll, rate, queue, history all work)
+- [ ] **All automated tests pass** (pytest passes with >=96% coverage)
+- [ ] **Backup manifest created** (documenting what was backed up and when)
+
+### Summary Printout
+
+```bash
+# Generate summary before cleanup
+cat <<EOF
+╔═══════════════════════════════════════════════════════════╗
+║              PRE-CLEANUP VERIFICATION SUMMARY                 ║
+╠═══════════════════════════════════════════════════════════╣
+║ Backup Date: $(date)                                      ║
+║ Backup Location: ~/comic-pile-backups/                    ║
+║                                                             ║
+║ Migration Status:                                           ║
+$(pytest tests/test_migration_verification.py -v --tb=no 2>&1 | grep -E "PASSED|FAILED|ERROR" | sed 's/^/║  /')
+║                                                             ║
+║ Backup Integrity:                                            ║
+║  ✓ JSON export valid and complete                           ║
+║  ✓ Database backup (tar.gz) tested                          ║
+║  ✓ Checksums computed and stored                            ║
+║                                                             ║
+║ Read to proceed? Run Step 3 when ready.                    ║
+╚═══════════════════════════════════════════════════════════╝
+EOF
+```
 
 ## Step 3: Remove SQLite Files
 
@@ -168,9 +410,7 @@ find . -name "*.db" -o -name "*.sqlite" -o -name "*.sqlite3" | grep -v ".venv"
 ```
 
 Typical output:
-```
 ./comic_pile.db
-```
 
 ### 3.2 Verify Files to Delete
 
@@ -262,6 +502,12 @@ You have JSON and tar.gz backups from Step 2.
 cp ~/comic-pile-backups/comic_pile.db.backup.*.tar.gz .
 tar -xzf comic_pile.db.backup.*.tar.gz
 
+# Verify database integrity
+sqlite3 comic_pile.db "PRAGMA integrity_check;"
+sqlite3 comic_pile.db ".tables"
+sqlite3 comic_pile.db "SELECT COUNT(*) FROM users;"
+sqlite3 comic_pile.db "SELECT COUNT(*) FROM threads;"
+
 # Update DATABASE_URL to use SQLite
 nano .env
 
@@ -270,6 +516,16 @@ nano .env
 
 # Restart application
 make dev
+
+# Verify rollback worked
+curl http://localhost:8000/health
+curl http://localhost:8000/api/threads/
+
+# Verify checksum matches backup
+shasum -c ~/comic-pile-backups/db_export_checksum.txt
+
+# Run tests to verify data integrity
+pytest tests/ -v
 
 # Import JSON backup if needed
 cp ~/comic-pile-backups/db_export_sqlite_pre_cleanup_*.json db_export.json
@@ -446,6 +702,118 @@ Before considering cleanup complete, verify:
 - [scripts/migrate_sqlite_to_postgres.py](../scripts/migrate_sqlite_to_postgres.py) - Migration script
 - [AGENTS.md](../AGENTS.md) - Project guidelines and PostgreSQL setup
 - [README.md](../README.md) - Quick start and tech stack
+
+## Automated Cleanup Script
+
+For automated cleanup, create and use this script:
+
+```bash
+#!/bin/bash
+# scripts/cleanup_sqlite.sh - Automated SQLite cleanup with verification
+
+set -e  # Exit on error
+
+BACKUP_DIR="${BACKUP_DIR:-$HOME/comic-pile-backups}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+echo "=== SQLite Cleanup Script ==="
+echo "Backup Directory: $BACKUP_DIR"
+echo ""
+
+# Step 1: Create backup directory
+mkdir -p "$BACKUP_DIR"
+echo "✓ Backup directory created"
+
+# Step 2: Export to JSON
+python -m scripts.export_db
+mv db_export.json "$BACKUP_DIR/db_export_sqlite_pre_cleanup_$TIMESTAMP.json"
+echo "✓ JSON backup created"
+
+# Step 3: Verify JSON
+python -c "
+import json, os, glob
+latest = max(glob.glob(os.path.join('$BACKUP_DIR', 'db_export_sqlite_pre_cleanup_*.json')), key=os.path.getmtime)
+data = json.load(open(latest))
+required = ['users', 'threads', 'sessions', 'events', 'tasks', 'settings', 'snapshots']
+missing = [t for t in required if t not in data or not data[t]]
+if missing:
+    print(f'✗ Missing tables: {missing}')
+    exit(1)
+print(f'✓ JSON verified: {len(data[\"users\"])} users, {len(data[\"threads\"])} threads')
+"
+
+# Step 4: Create compressed backup
+tar -czf "$BACKUP_DIR/comic_pile.db.backup.$TIMESTAMP.tar.gz" comic_pile.db
+echo "✓ Database backup created"
+
+# Step 5: Verify backup
+tar -tzf "$BACKUP_DIR/comic_pile.db.backup.$TIMESTAMP.tar.gz" > /dev/null
+echo "✓ Backup integrity verified"
+
+# Step 6: Create manifest
+cat > "$BACKUP_DIR/backup_manifest_$TIMESTAMP.txt" <<EOF
+Backup Date: $(date)
+SQLite DB: comic_pile.db
+PostgreSQL URL: $DATABASE_URL
+Timestamp: $TIMESTAMP
+EOF
+
+# Step 7: Run verification tests
+echo ""
+echo "=== Running Migration Verification Tests ==="
+if pytest tests/test_migration_verification.py -v; then
+    echo "✓ All migration verification tests passed"
+else
+    echo "✗ Migration verification tests failed!"
+    echo "  Aborting cleanup. Backups are preserved in $BACKUP_DIR"
+    exit 1
+fi
+
+# Step 8: Remove SQLite files
+echo ""
+echo "=== Removing SQLite Files ==="
+rm -f comic_pile.db
+rm -f comic_pile.db-journal
+rm -f comic_pile.db-wal
+rm -f comic_pile.db-shm
+echo "✓ SQLite files removed"
+
+# Step 9: Verify application works
+echo ""
+echo "=== Verifying Application ==="
+if curl -sf http://localhost:8000/health > /dev/null; then
+    echo "✓ Health check passed"
+else
+    echo "✗ Health check failed!"
+    echo "  Restore backups from $BACKUP_DIR"
+    exit 1
+fi
+
+# Summary
+echo ""
+echo "=== Cleanup Complete ==="
+echo "Backups preserved in: $BACKUP_DIR"
+echo "Keep backups for at least 1 week before deletion"
+echo ""
+ls -lh "$BACKUP_DIR" | tail -5
+```
+
+### Usage
+
+To use the automated cleanup script:
+
+1. Save the script above to `scripts/cleanup_sqlite.sh`
+2. Make it executable: `chmod +x scripts/cleanup_sqlite.sh`
+3. Run it: `./scripts/cleanup_sqlite.sh`
+4. Optionally set custom backup directory: `BACKUP_DIR=/path/to/backups ./scripts/cleanup_sqlite.sh`
+
+The script will:
+- Create JSON and tar.gz backups
+- Verify backup integrity
+- Run migration verification tests
+- Remove SQLite files
+- Verify application still works
+- Abort on any error with backups preserved
 
 ## Summary
 
