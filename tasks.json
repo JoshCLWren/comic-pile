@@ -2788,13 +2788,13 @@
       "title": "Add integration tests for navigation and global modals",
       "description": "Add comprehensive integration tests for base.html navigation, add thread modal, and reactivate modal using httpx.AsyncClient.",
       "priority": "MEDIUM",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,
-      "status_notes": null,
+      "status_notes": "Completed by Ralph at 2026-01-08T12:00:00+00:00\n\nCreated comprehensive integration tests in tests/test_navigation_integration.py:\n\n1. Main navigation tests (6 tests):\n   - test_roll_page_navigation\n   - test_roll_page_explicit_navigation\n   - test_rate_page_navigation\n   - test_queue_page_navigation\n   - test_history_page_navigation\n   - test_navigation_all_pages\n\n2. Add thread modal tests (6 tests):\n   - test_add_thread_modal_valid\n   - test_add_thread_modal_different_formats\n   - test_add_thread_modal_various_issues\n   - test_add_thread_modal_empty_title_fails_validation\n   - test_add_thread_modal_missing_format_fails_validation\n   - test_add_thread_modal_invalid_issues_fails_validation\n\n3. Reactivate completed thread modal tests (5 tests):\n   - test_reactivate_completed_thread_modal\n   - test_reactive_thread_updates_issues_remaining\n   - test_reactive_nonexistent_thread_returns_404\n   - test_reactivate_already_active_thread_fails\n   - test_reactivate_with_zero_issues_fails\n\n4. Override roll modal tests (2 tests):\n   - test_override_roll_modal\n   - test_override_roll_nonexistent_thread_returns_404\n\n5. 404 error page tests (3 tests):\n   - test_404_error_page\n   - test_404_page_contains_home_link\n   - test_404_status_code_is_correct\n\n6. Navigation flow tests (6 tests):\n   - test_navigation_flow_roll_to_rate_to_queue_to_history\n   - test_session_persists_across_pages\n   - test_navigation_back_to_roll\n   - test_navigation_with_active_session\n   - test_base_template_includes_navigation\n   - test_base_template_includes_modals\n\nAll 28 tests pass successfully. Coverage: 92.70% (exceeds 90% threshold). Linting passes (ruff, pyright, eslint, htmlhint).",
       "estimated_effort": "3 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": null,
@@ -2803,7 +2803,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-08T11:14:09.464884",
-      "updated_at": "2026-01-08T11:14:09.464896"
+      "updated_at": "2026-01-08T12:00:00.000000"
     },
     {
       "id": 27,
