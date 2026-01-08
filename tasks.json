@@ -374,13 +374,13 @@
       "title": "Add bulk and direct thread reordering",
       "description": "Moving comics one step at a time is unusable at scale.",
       "priority": "HIGH",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,
-      "status_notes": null,
+      "status_notes": "Added # Jump button for direct position entry modal with input field. Removed disabled attribute from Up/Down buttons - they now work for all positions. Added tests for jump-to-position functionality: test_jump_to_far_position, test_jump_to_near_position, test_jump_beyond_last_position, test_jump_to_negative_position_fails_validation, test_jump_to_zero_position_fails_validation. Updated PositionRequest schema to require ge=1 instead of ge=0. Fixed timezone comparison issue in comic_pile/session.py (is_active and should_start_new functions). All 252 tests pass, 97.81% coverage, linting clean.",
       "estimated_effort": "4 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": null,
@@ -389,7 +389,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-08T04:51:13.732891",
-      "updated_at": "2026-01-08T04:51:13.732897"
+      "updated_at": "2026-01-08T06:00:00.000000"
     },
     {
       "id": 133,

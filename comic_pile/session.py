@@ -23,14 +23,17 @@ def _get_settings(db: Session) -> Settings:
 def is_active(session: SessionModel, db: Session) -> bool:
     """Check if session was within configured gap hours."""
     settings = _get_settings(db)
-    cutoff_time = datetime.now().replace(tzinfo=None) - timedelta(hours=settings.session_gap_hours)
-    return session.started_at >= cutoff_time and session.ended_at is None
+    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
+    session_time = session.started_at
+    if session_time.tzinfo is None:
+        session_time = session_time.replace(tzinfo=UTC)
+    return session_time >= cutoff_time and session.ended_at is None
 
 
 def should_start_new(db: Session) -> bool:
     """Check if no active session in configured gap hours."""
     settings = _get_settings(db)
-    cutoff_time = datetime.now().replace(tzinfo=None) - timedelta(hours=settings.session_gap_hours)
+    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
     recent_sessions = (
         db.execute(
             select(SessionModel)
@@ -79,9 +82,7 @@ def create_session_start_snapshot(db: Session, session: SessionModel) -> None:
 def get_or_create(db: Session, user_id: int) -> SessionModel:
     """Get active session or create new one."""
     settings = _get_settings(db)
-    cutoff_time = datetime.now(UTC).replace(tzinfo=None) - timedelta(
-        hours=settings.session_gap_hours
-    )
+    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
     active_session = (
         db.execute(
             select(SessionModel)
@@ -110,7 +111,7 @@ def end_session(session_id: int, db: Session) -> None:
     """Mark session as ended."""
     session = db.get(SessionModel, session_id)
     if session:
-        session.ended_at = datetime.now()
+        session.ended_at = datetime.now(UTC)
         db.commit()
 
 

@@ -22,7 +22,7 @@ export default [
       }
     },
     rules: {
-      'no-unused-vars': ['warn', { varsIgnorePattern: '^(calculateStaleness|loadQueue|initializeSortable|updateThreadPosition|moveThread|openEditModal|closeEditModal|deleteThread)$' }],
+      'no-unused-vars': ['warn', { varsIgnorePattern: '^(calculateStaleness|loadQueue|initializeSortable|updateThreadPosition|moveThread|openEditModal|closeEditModal|deleteThread|openPositionModal)$' }],
       'no-console': 'off',
       'no-undef': 'error',
       'semi': ['error', 'always'],

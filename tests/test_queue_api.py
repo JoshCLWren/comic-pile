@@ -105,15 +105,12 @@ async def test_move_to_position_invalid(client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_zero(client, db, sample_data):
-    """Moving to position 0 caps at 1."""
+async def test_move_to_position_zero_fails_validation(client, db, sample_data):
+    """Moving to position 0 fails validation."""
     thread_id = sample_data["threads"][2].id
 
     response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 0})
-    assert response.status_code == 200
-
-    thread = db.get(Thread, thread_id)
-    assert thread.queue_position == 1
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -411,3 +408,75 @@ async def test_get_stale_threads(db):
     assert len(roll_pool) == 2
     assert roll_pool[0].id == thread2.id
     assert roll_pool[1].id == thread1.id
+
+
+@pytest.mark.asyncio
+async def test_jump_to_far_position(client, db, sample_data):
+    """Jump from position 1 to position 5 works correctly."""
+    thread_id = sample_data["threads"][0].id
+
+    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 5})
+    assert response.status_code == 200
+
+    thread = db.get(Thread, thread_id)
+    assert thread.queue_position == 5
+
+    thread2 = db.get(Thread, sample_data["threads"][1].id)
+    thread3 = db.get(Thread, sample_data["threads"][2].id)
+    thread4 = db.get(Thread, sample_data["threads"][3].id)
+    thread5 = db.get(Thread, sample_data["threads"][4].id)
+
+    assert thread2.queue_position == 1
+    assert thread3.queue_position == 2
+    assert thread4.queue_position == 3
+    assert thread5.queue_position == 4
+
+
+@pytest.mark.asyncio
+async def test_jump_to_near_position(client, db, sample_data):
+    """Jump from position 5 to position 2 works correctly."""
+    thread_id = sample_data["threads"][4].id
+
+    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 2})
+    assert response.status_code == 200
+
+    thread = db.get(Thread, thread_id)
+    assert thread.queue_position == 2
+
+    thread1 = db.get(Thread, sample_data["threads"][0].id)
+    thread2 = db.get(Thread, sample_data["threads"][1].id)
+    thread3 = db.get(Thread, sample_data["threads"][2].id)
+
+    assert thread1.queue_position == 1
+    assert thread2.queue_position == 3
+    assert thread3.queue_position == 4
+
+
+@pytest.mark.asyncio
+async def test_jump_beyond_last_position(client, db, sample_data):
+    """Jumping beyond last position caps at last position."""
+    thread_id = sample_data["threads"][0].id
+
+    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 999})
+    assert response.status_code == 200
+
+    thread = db.get(Thread, thread_id)
+    assert thread.queue_position == 5
+
+
+@pytest.mark.asyncio
+async def test_jump_to_negative_position_fails_validation(client, db, sample_data):
+    """Jumping to negative position fails validation."""
+    thread_id = sample_data["threads"][4].id
+
+    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": -5})
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_jump_to_zero_position_fails_validation(client, db, sample_data):
+    """Jumping to position 0 fails validation."""
+    thread_id = sample_data["threads"][4].id
+
+    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 0})
+    assert response.status_code == 422
