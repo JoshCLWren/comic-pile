@@ -2466,13 +2466,13 @@
       "title": "Create PostgreSQL backup and restore scripts",
       "description": "Create scripts/backup_postgres.sh for automated backups and document manual restore procedures.",
       "priority": "MEDIUM",
-      "status": "pending",
+      "status": "done",
       "dependencies": "TASK-TEST-001",
       "assigned_agent": null,
       "worktree": "/home/josh/code/comic-pile-task-test-002",
       "status_notes": "Claimed by Mike at 2026-01-05T14:23:10.816557+00:00\n[2026-01-05T14:25:30.929656+00:00] [2026-01-05T14:25:00Z] Created backup_postgres.sh and restore_postgres.sh scripts with error handling, logging, and documentation. Ready to test.\n[2026-01-05T14:29:42.464699+00:00] [2026-01-05T14:30:00Z] Created backup_postgres.sh and restore_postgres.sh scripts with error handling, logging, and documentation.\n[2026-01-05T14:31:00Z] Updated DOCKER_MIGRATION.md Part 9 with comprehensive documentation for both scripts.\n[2026-01-05T14:32:00Z] Tested backup and restore cycle successfully - backup created, database dropped, restored, and data verified. All requirements met.\n[2026-01-05T14:32:09.937801+00:00] All requirements completed:\n- Created backup_postgres.sh with timestamp, gzip compression, SHA256 checksums, automatic cleanup (7-day retention)\n- Created restore_postgres.sh with confirmation prompts, integrity verification, database verification\n- Updated DOCKER_MIGRATION.md Part 9 with comprehensive documentation\n- Tested backup and restore cycle: created backup, dropped database, restored, verified data integrity\n- Fixed pre-existing ESLint error in eslint.config.js (dice3d.js sourceType: \"module\")\n- All linting passes (ruff, pyright, ESLint, htmlhint)\n- Created retro.md documenting work, learnings, and technical decisions\n\nFiles created:\n- scripts/backup_postgres.sh (executable, 180+ lines)\n- scripts/restore_postgres.sh (executable, 150+ lines)\n- retro.md (comprehensive retro)\n\nFiles modified:\n- DOCKER_MIGRATION.md (Part 9 updated)\n- eslint.config.js (fixed sourceType for dice3d.js)\n\nTask ready for review and auto-merge.\n[2026-01-05T14:32:23.483132+00:00] Unclaimed by Mike",
       "estimated_effort": "2 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": "2026-01-05T14:32:02.255414",
@@ -2481,7 +2481,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-01T19:18:00.922590",
-      "updated_at": "2026-01-06T01:41:17.125193"
+      "updated_at": "2026-01-08T11:17:32.719101Z"
     },
     {
       "id": 52,

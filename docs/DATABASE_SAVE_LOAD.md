@@ -29,6 +29,17 @@ The `scripts/backup_postgres.sh` script:
 4. Implements automatic rotation (keeps last 10 backups by default)
 5. Verifies backup integrity with `gzip -t`
 
+### Restore Script Details
+
+The `scripts/restore_postgres.sh` script:
+
+1. Parses `DATABASE_URL` from `.env` file
+2. Lists available backups when run without arguments
+3. Verifies backup file integrity with `gzip -t`
+4. Prompts for confirmation before restoring
+5. Restores database using `gunzip` and `psql`
+6. Verifies database contents after restore
+
 ### Backup Configuration
 
 Environment variables in `.env`:
@@ -68,7 +79,27 @@ Choose the backup with the appropriate timestamp.
 **Step 3: Restore using make target**
 
 ```bash
-make restore-postgres FILE=backups/postgres/postgres_backup_comicpile_20260104_103354.sql.gz
+make restore-postgres FILE=backups/postgres/postgres_backup_comicpile_20240104_103354.sql.gz
+```
+
+**Step 4: Restore using script directly**
+
+```bash
+bash scripts/restore_postgres.sh backups/postgres/postgres_backup_comicpile_20240104_103354.sql.gz
+```
+
+**Step 5: Manual restore (alternative method)**
+
+If the make target or script doesn't work, restore manually:
+
+```bash
+# Extract DATABASE_URL components
+# From .env: DATABASE_URL=postgresql+psycopg://comicpile:comicpile_password@localhost:5435/comicpile
+
+# Decompress and restore
+gunzip -c backups/postgres/postgres_backup_comicpile_20240104_103354.sql.gz | \
+    PGPASSWORD=comicpile_password \
+    psql -h localhost -p 5435 -U comicpile -d comicpile
 ```
 
 **Step 4: Manual restore (alternative method)**
