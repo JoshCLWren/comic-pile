@@ -2650,13 +2650,13 @@
       "title": "Add tests for merge-to-main endpoint",
       "description": "Add comprehensive tests for POST /api/tasks/{task_id}/merge-to-main endpoint. Test success path, merge conflicts, invalid task status, missing worktree, and various error conditions. Verify task status changes to done on success and blocked on merge conflicts.",
       "priority": "HIGH",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
-      "assigned_agent": null,
-      "worktree": "/home/josh/code/comic-pile-test-202",
-      "status_notes": "Claimed by Dave at 2026-01-05T13:50:41.430710+00:00\n[2026-01-05T13:51:50.313745+00:00] Checked worktree and found no tests for merge-to-main endpoint yet. Need to add comprehensive tests.\n[2026-01-05T13:52:32.288851+00:00] Writing tests for merge-to-main endpoint. Testing success path, merge conflicts, invalid status, missing worktree, and error handling.\n[2026-01-05T14:03:20.920978+00:00] All 8 merge-to-main tests passing. Tests cover: success path, merge conflicts, invalid status, missing worktree, nonexistent worktree, fetch failure, push failure, task not found.\n[2026-01-05T14:07:09.627298+00:00] Done. Added 8 test functions for merge-to-main endpoint in tests/test_task_api.py. All tests passing. Tests cover: success path, merge conflicts, invalid status, missing worktree, nonexistent worktree, fetch failure, push failure, task not found. Created retro.md documenting work and limitations.\n[2026-01-05T14:07:28.806356+00:00] Unclaimed by Dave",
+      "assigned_agent": "Ralph",
+      "worktree": null,
+      "status_notes": "Claimed by Dave at 2026-01-05T13:50:41.430710+00:00\n[2026-01-05T13:51:50.313745+00:00] Checked worktree and found no tests for merge-to-main endpoint yet. Need to add comprehensive tests.\n[2026-01-05T13:52:32.288851+00:00] Writing tests for merge-to-main endpoint. Testing success path, merge conflicts, invalid status, missing worktree, and error handling.\n[2026-01-05T14:03:20.920978+00:00] All 8 merge-to-main tests passing. Tests cover: success path, merge conflicts, invalid status, missing worktree, nonexistent worktree, fetch failure, push failure, task not found.\n[2026-01-05T14:07:09.627298+00:00] Done. Added 8 test functions for merge-to-main endpoint in tests/test_task_api.py. All tests passing. Tests cover: success path, merge conflicts, invalid status, missing worktree, nonexistent worktree, fetch failure, push failure, task not found. Created retro.md documenting work and limitations.\n[2026-01-05T14:07:28.806356+00:00] Unclaimed by Dave\n[2026-01-08T12:00:00.000000Z] Verified complete. 11 tests in tests/test_merge_to_main.py all passing. Tests cover: success path, merge conflicts, invalid status, missing worktree, nonexistent worktree, fetch failure, push failure, task not found, path handling, directory changes, git commands. Linting clean. Committed to main.",
       "estimated_effort": "3 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": "2026-01-05T00:06:46.256794",
@@ -2665,7 +2665,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-04T22:13:59.492900",
-      "updated_at": "2026-01-06T01:41:17.155614"
+      "updated_at": "2026-01-08T12:00:00.000000Z"
     },
     {
       "id": 89,
