@@ -42,6 +42,7 @@ function loadQueue() {
                 const staleness = calculateStaleness(thread.last_activity_at || thread.created_at);
                 const isFirst = position === 1;
                 const isLast = position === threads.length;
+                const hasNotes = thread.notes && thread.notes.trim() !== '';
 
                 return `
                     <div class="glass-card border-white/10 p-4 rounded-xl transition-all hover:border-white/20"
@@ -71,6 +72,16 @@ function loadQueue() {
                                         ${staleness.badge || ''}
                                     </div>
                                 </div>
+                                ${hasNotes ? `
+                                    <div class="mt-3 pt-3 border-t border-white/5">
+                                        <div class="flex items-start gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            <p class="text-[10px] text-slate-400 leading-relaxed break-words">${thread.notes}</p>
+                                        </div>
+                                    </div>
+                                ` : ''}
                                 <div class="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
                                     <button onclick="moveThread(${thread.id}, 'up')"
                                         ${isFirst ? 'disabled' : ''}
@@ -241,6 +252,7 @@ function openEditModal(threadId) {
             document.getElementById('edit-title').value = thread.title;
             document.getElementById('edit-format').value = thread.format;
             document.getElementById('edit-issues').value = thread.issues_remaining;
+            document.getElementById('edit-notes').value = thread.notes || '';
             editingThreadId = threadId;
             document.getElementById('edit-thread-modal').classList.remove('hidden');
         })
@@ -292,6 +304,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const title = document.getElementById('edit-title').value;
         const format = document.getElementById('edit-format').value;
         const issuesRemaining = parseInt(document.getElementById('edit-issues').value);
+        const notes = document.getElementById('edit-notes').value;
 
         fetch(`/threads/${threadId}`, {
             method: 'PUT',
@@ -299,7 +312,8 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify({
                 title: title,
                 format: format,
-                issues_remaining: issuesRemaining
+                issues_remaining: issuesRemaining,
+                notes: notes
             })
         })
         .then(response => response.json())
