@@ -203,6 +203,10 @@
                 <span class="text-xs">🛡️</span>
                 <span class="text-[9px] font-black text-teal-400 uppercase">Session Safe</span>
             </div>
+            <div id="dice-state-label" class="flex items-center gap-1 px-2 py-1 bg-white/5 border border-white/10 rounded-lg">
+                <span class="text-xs">🎲</span>
+                <span id="dice-state-text" class="text-[9px] font-black text-slate-500 uppercase">Ready</span>
+            </div>
             <div class="relative" id="die-selector">
                 <button
                     hx-post="/roll/set-die?die=4"
@@ -298,6 +302,18 @@
 
     function setDiceState(state) {
         console.log('[RollPage] Dice state set to:', state);
+        const stateLabel = document.getElementById('dice-state-text');
+        if (!stateLabel) return;
+
+        const stateConfig = {
+            idle: { text: 'Ready', class: 'text-slate-500' },
+            rolling: { text: 'Rolling...', class: 'text-indigo-400' },
+            selected: { text: 'Selected', class: 'text-amber-400' }
+        };
+
+        const config = stateConfig[state] || stateConfig.idle;
+        stateLabel.textContent = config.text;
+        stateLabel.className = `text-[9px] font-black uppercase ${config.class}`;
     }
 
     function initDice() {
@@ -349,7 +365,11 @@
         }
 
         updateDieButtonState(initialDenom);
-        setDiceState('idle');
+        if (selectedThreadId) {
+            setDiceState('selected');
+        } else {
+            setDiceState('idle');
+        }
         loadRollPool();
     }
 
@@ -382,7 +402,7 @@
         selectedThreadId = null;
 
         isRolling = true;
-        setDiceState('idle');
+        setDiceState('rolling');
         const instruction = document.getElementById('tap-instruction');
         if (instruction) instruction.textContent = 'Rolling...';
 

@@ -3018,7 +3018,7 @@
       "title": "Add explicit dice state labels",
       "description": "Dice state is invisible to users. Add clear, non-intrusive labels to communicate current state.",
       "priority": "MEDIUM",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": "UX-001",
       "assigned_agent": null,
       "worktree": "/home/josh/code/comic-pile-ux-002",

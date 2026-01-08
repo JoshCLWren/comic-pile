@@ -199,6 +199,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 threadId = "{selected_thread.id}";
                 localStorage.setItem('selectedThreadId', '{selected_thread.id}');
                 isRolling = false;
+                setDiceState('selected');
                 const instruction = document.getElementById('tap-instruction');
                 if (instruction) {{
                     instruction.innerHTML = 'Tap #{result_val} to rate, or Reroll';
@@ -461,8 +462,8 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                     <div class="dice-number">{position}</div>
                 </div>
                 <div id="thread-preview-{position}" class="thread-preview">
-                    <div class="thread-preview-title text-slate-600">Empty</div>
-                    <div class="thread-preview-format">--</div>
+                <div class="thread-preview-title text-slate-600">Empty</div>
+                <div class="thread-preview-format">--</div>
                 </div>
             </div>
             """
@@ -511,6 +512,7 @@ def reroll_dice(db: Session = Depends(get_db)) -> str:
                 threadId = "{selected_thread.id}";
                 localStorage.setItem('selectedThreadId', '{selected_thread.id}');
                 isRolling = false;
+                setDiceState('selected');
                 const instruction = document.getElementById('tap-instruction');
                 if (instruction) {{
                     instruction.innerHTML = 'Tap #{result_val} to rate, or Reroll';
