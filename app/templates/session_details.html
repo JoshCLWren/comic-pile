@@ -42,7 +42,7 @@
     {% if events %}
     <div class="space-y-3">
         {% for event in events %}
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-3 hover:shadow-md transition-shadow">
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-3 hover:shadow-md transition-shadow cursor-pointer">
             <div class="flex items-start gap-3">
                 <div class="flex-shrink-0 mt-0.5">
                     {% if event.type == "roll" %}
@@ -60,7 +60,7 @@
                     {% endif %}
                 </div>
                 <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
                         <span class="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
                             {{ event.timestamp.strftime('%I:%M %p') }}
                         </span>

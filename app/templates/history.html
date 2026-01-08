@@ -17,7 +17,6 @@
     <div id="sessions-list" class="space-y-4" role="list" aria-label="Session history">
         {% for session in sessions %}
         <div class="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
-            <!-- Session Content -->
             <div class="flex justify-between items-start gap-6 relative z-10">
                 <div class="space-y-4 flex-1 min-w-0">
                     <div class="flex items-center gap-3">
@@ -37,7 +36,7 @@
                                 {{ session.ladder_path.split(',')[0].replace('d', '') if ',' in session.ladder_path else
                                 '6' }}
                             </div>
-                            <p class="text-lg font-black text-slate-200 leading-tight truncate">Ladder: {{
+                            <p class="text-lg font-black text-slate-200 leading-tight">Ladder: {{
                                 session.ladder_path }}</p>
                         </div>
 
@@ -45,12 +44,32 @@
                         <div
                             class="flex items-center gap-3 px-3 py-2 bg-indigo-500/5 rounded-xl border border-indigo-500/10">
                             <div class="w-1 h-1 rounded-full bg-indigo-400 shadow-[0_0_8px_var(--accent-indigo)]"></div>
-                            <p class="text-xs text-indigo-300 font-black uppercase tracking-wider truncate">
+                            <p class="text-xs text-indigo-300 font-black uppercase tracking-wider">
                                 {{ session.active_thread.title }}
                             </p>
                         </div>
                         {% endif %}
                     </div>
+
+                    {% if session.recent_events %}
+                    <div class="space-y-2 pt-2">
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Recent Activity</p>
+                        {% for event in session.recent_events[:3] %}
+                        <div class="flex items-center gap-2 text-[10px]">
+                            {% if event.type == "roll" %}
+                            <span class="px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[9px] font-black uppercase">Roll</span>
+                            <span class="text-slate-400">d{{ event.die }} → {{ event.result }}</span>
+                            {% elif event.type == "rate" %}
+                            <span class="px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 rounded text-[9px] font-black uppercase">Rate</span>
+                            <span class="text-slate-400">{{ event.rating }}/5</span>
+                            {% endif %}
+                            {% if event.thread_title %}
+                            <span class="text-slate-500 truncate max-w-[200px]">{{ event.thread_title }}</span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div class="flex gap-2">
@@ -78,14 +97,13 @@
             <div id="details-{{ session.id }}"
                 class="mt-8 border-t border-white/5 pt-8 hidden transition-all animate-[slide-down_0.3s_ease-out]"
                 role="region" aria-live="polite">
-                <!-- HTMX injected content -->
             </div>
 
-                <div id="snapshots-{{ session.id }}"
+            <div id="snapshots-{{ session.id }}"
                 class="mt-4 border-t border-white/5 pt-4 hidden transition-all animate-[slide-down_0.3s_ease-out]"
                 role="region" aria-live="polite">
-                    <p class="text-[10px] text-slate-500">Loading...</p>
-                </div>
+                <p class="text-[10px] text-slate-500">Loading...</p>
+            </div>
         </div>
         {% endfor %}
     </div>
@@ -103,6 +121,20 @@
                     button.textContent = 'Hide';
                     button.setAttribute('aria-expanded', 'true');
                 }
+            }
+        }
+    });
+
+    document.addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.xhr.getResponseHeader('X-Undo-Success') === 'true') {
+            const undoContainer = document.getElementById('undo-success-message');
+            if (undoContainer) {
+                undoContainer.classList.remove('hidden');
+                undoContainer.classList.add('animate-pulse');
+                setTimeout(() => {
+                    undoContainer.classList.add('hidden');
+                    undoContainer.classList.remove('animate-pulse');
+                }, 3000);
             }
         }
     });
