@@ -15,7 +15,7 @@ from opencode_client import OpenCodeClient  # type: ignore
 
 def get_timestamp() -> str:
     """Get current timestamp in HH:MM:SS format."""
-    return datetime.datetime.now(datetime.UTC).strftime("%H:%M:%S")
+    return datetime.datetime.now().strftime("%H:%M:%S")
 
 
 def log_info(message: str) -> None:
