@@ -1,11 +1,13 @@
 """Task API endpoints."""
 
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -433,59 +435,75 @@ def create_task(
     session_id: str | None = None,
 ) -> TaskResponse:
     """Create a new task."""
-    from sqlalchemy.exc import IntegrityError
+    max_retries = 3
+    initial_delay = 0.1
+    retries = 0
 
-    new_task = Task(
-        task_id=create_request.task_id,
-        title=create_request.title,
-        description=create_request.description,
-        instructions=create_request.instructions,
-        priority=create_request.priority,
-        dependencies=create_request.dependencies,
-        estimated_effort=create_request.estimated_effort,
-        task_type=create_request.task_type,
-        status="pending",
-        completed=False,
-        session_id=session_id,
-        session_start_time=datetime.now(UTC) if session_id else None,
-    )
-    db.add(new_task)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        existing_task = db.execute(
-            select(Task).where(Task.task_id == create_request.task_id)
-        ).scalar_one_or_none()
-        if existing_task:
-            raise HTTPException(
-                status_code=400, detail=f"Task {create_request.task_id} already exists"
-            ) from None
-        raise
-    db.refresh(new_task)
-    return TaskResponse(
-        id=new_task.id,
-        task_id=new_task.task_id,
-        title=new_task.title,
-        description=new_task.description,
-        priority=new_task.priority,
-        status=new_task.status,
-        dependencies=new_task.dependencies,
-        assigned_agent=new_task.assigned_agent,
-        worktree=new_task.worktree,
-        status_notes=new_task.status_notes,
-        estimated_effort=new_task.estimated_effort,
-        completed=new_task.completed,
-        blocked_reason=new_task.blocked_reason,
-        blocked_by=new_task.blocked_by,
-        last_heartbeat=new_task.last_heartbeat,
-        instructions=new_task.instructions,
-        task_type=new_task.task_type,
-        session_id=new_task.session_id,
-        session_start_time=new_task.session_start_time,
-        created_at=new_task.created_at,
-        updated_at=new_task.updated_at,
-    )
+    while retries < max_retries:
+        try:
+            new_task = Task(
+                task_id=create_request.task_id,
+                title=create_request.title,
+                description=create_request.description,
+                instructions=create_request.instructions,
+                priority=create_request.priority,
+                dependencies=create_request.dependencies,
+                estimated_effort=create_request.estimated_effort,
+                task_type=create_request.task_type,
+                status="pending",
+                completed=False,
+                session_id=session_id,
+                session_start_time=datetime.now(UTC) if session_id else None,
+            )
+            db.add(new_task)
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+                existing_task = db.execute(
+                    select(Task).where(Task.task_id == create_request.task_id)
+                ).scalar_one_or_none()
+                if existing_task:
+                    raise HTTPException(
+                        status_code=400, detail=f"Task {create_request.task_id} already exists"
+                    ) from None
+                raise
+            db.refresh(new_task)
+            return TaskResponse(
+                id=new_task.id,
+                task_id=new_task.task_id,
+                title=new_task.title,
+                description=new_task.description,
+                priority=new_task.priority,
+                status=new_task.status,
+                dependencies=new_task.dependencies,
+                assigned_agent=new_task.assigned_agent,
+                worktree=new_task.worktree,
+                status_notes=new_task.status_notes,
+                estimated_effort=new_task.estimated_effort,
+                completed=new_task.completed,
+                blocked_reason=new_task.blocked_reason,
+                blocked_by=new_task.blocked_by,
+                last_heartbeat=new_task.last_heartbeat,
+                instructions=new_task.instructions,
+                task_type=new_task.task_type,
+                session_id=new_task.session_id,
+                session_start_time=new_task.session_start_time,
+                created_at=new_task.created_at,
+                updated_at=new_task.updated_at,
+            )
+        except OperationalError as e:
+            if "deadlock" in str(e).lower():
+                db.rollback()
+                retries += 1
+                if retries >= max_retries:
+                    raise
+                delay = initial_delay * (2 ** (retries - 1))
+                time.sleep(delay)
+            else:
+                raise
+
+    raise RuntimeError(f"Failed to create task after {max_retries} retries")
 
 
 @router.post("/bulk", response_model=list[TaskResponse])
@@ -493,68 +511,84 @@ def create_tasks_bulk(
     requests: list[CreateTaskRequest], db: Session = Depends(get_db)
 ) -> list[TaskResponse]:
     """Create multiple tasks in one transaction."""
-    from sqlalchemy.exc import IntegrityError
+    max_retries = 3
+    initial_delay = 0.1
+    retries = 0
 
-    created_tasks = []
-    for request in requests:
-        new_task = Task(
-            task_id=request.task_id,
-            title=request.title,
-            description=request.description,
-            instructions=request.instructions,
-            priority=request.priority,
-            dependencies=request.dependencies,
-            estimated_effort=request.estimated_effort,
-            task_type=request.task_type,
-            status="pending",
-            completed=False,
-        )
-        db.add(new_task)
-        created_tasks.append(new_task)
+    while retries < max_retries:
+        try:
+            created_tasks = []
+            for request in requests:
+                new_task = Task(
+                    task_id=request.task_id,
+                    title=request.title,
+                    description=request.description,
+                    instructions=request.instructions,
+                    priority=request.priority,
+                    dependencies=request.dependencies,
+                    estimated_effort=request.estimated_effort,
+                    task_type=request.task_type,
+                    status="pending",
+                    completed=False,
+                )
+                db.add(new_task)
+                created_tasks.append(new_task)
 
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        for task in created_tasks:
-            existing = db.execute(
-                select(Task).where(Task.task_id == task.task_id)
-            ).scalar_one_or_none()
-            if existing:
-                raise HTTPException(
-                    status_code=400, detail=f"Task {task.task_id} already exists"
-                ) from None
-        raise
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+                for task in created_tasks:
+                    existing = db.execute(
+                        select(Task).where(Task.task_id == task.task_id)
+                    ).scalar_one_or_none()
+                    if existing:
+                        raise HTTPException(
+                            status_code=400, detail=f"Task {task.task_id} already exists"
+                        ) from None
+                raise
 
-    for task in created_tasks:
-        db.refresh(task)
+            for task in created_tasks:
+                db.refresh(task)
 
-    return [
-        TaskResponse(
-            id=task.id,
-            task_id=task.task_id,
-            title=task.title,
-            description=task.description,
-            priority=task.priority,
-            status=task.status,
-            dependencies=task.dependencies,
-            assigned_agent=task.assigned_agent,
-            worktree=task.worktree,
-            status_notes=task.status_notes,
-            estimated_effort=task.estimated_effort,
-            completed=task.completed,
-            blocked_reason=task.blocked_reason,
-            blocked_by=task.blocked_by,
-            last_heartbeat=task.last_heartbeat,
-            instructions=task.instructions,
-            task_type=task.task_type,
-            session_id=task.session_id,
-            session_start_time=task.session_start_time,
-            created_at=task.created_at,
-            updated_at=task.updated_at,
-        )
-        for task in created_tasks
-    ]
+            return [
+                TaskResponse(
+                    id=task.id,
+                    task_id=task.task_id,
+                    title=task.title,
+                    description=task.description,
+                    priority=task.priority,
+                    status=task.status,
+                    dependencies=task.dependencies,
+                    assigned_agent=task.assigned_agent,
+                    worktree=task.worktree,
+                    status_notes=task.status_notes,
+                    estimated_effort=task.estimated_effort,
+                    completed=task.completed,
+                    blocked_reason=task.blocked_reason,
+                    blocked_by=task.blocked_by,
+                    last_heartbeat=task.last_heartbeat,
+                    instructions=task.instructions,
+                    task_type=task.task_type,
+                    session_id=task.session_id,
+                    session_start_time=task.session_start_time,
+                    created_at=task.created_at,
+                    updated_at=task.updated_at,
+                )
+                for task in created_tasks
+            ]
+        except OperationalError as e:
+            if "deadlock" in str(e).lower():
+                db.rollback()
+                retries += 1
+                if retries >= max_retries:
+                    raise
+                delay = initial_delay * (2 ** (retries - 1))
+                time.sleep(delay)
+            else:
+                raise
+
+    raise RuntimeError(f"Failed to create tasks after {max_retries} retries")
 
 
 @router.get("/ready", response_model=list[TaskResponse])

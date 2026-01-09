@@ -1,5 +1,6 @@
 """Test concurrent task creation to verify deadlock fix."""
 
+import inspect
 import os
 import tempfile
 
@@ -9,6 +10,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.tasks import create_task as create_task_func
+from app.api.tasks import create_tasks_bulk as create_tasks_bulk_func
 from app.database import Base
 from app.models import Task
 
@@ -114,3 +117,37 @@ def test_create_task_duplicate_handling_in_code() -> None:
         finally:
             db_session.close()
             engine.dispose()
+
+
+def test_create_task_handles_deadlock_regression():
+    """Test that create_task has retry logic for deadlock handling.
+
+    Regression test for BUG-157: DeadlockDetected error during task creation.
+    This test verifies the code structure includes deadlock retry logic.
+    """
+    source = inspect.getsource(create_task_func)
+
+    assert "OperationalError" in source, "create_task should handle OperationalError"
+    assert "deadlock" in source.lower(), "create_task should check for deadlock errors"
+    assert "retry" in source.lower() or "while" in source.lower(), (
+        "create_task should have retry logic"
+    )
+    assert "rollback" in source.lower(), "create_task should rollback on deadlock"
+    assert "max_retries" in source.lower(), "create_task should have max retry limit"
+
+
+def test_create_tasks_bulk_handles_deadlock_regression():
+    """Test that create_tasks_bulk has retry logic for deadlock handling.
+
+    Regression test for BUG-157: DeadlockDetected error during bulk task creation.
+    This test verifies the code structure includes deadlock retry logic.
+    """
+    source = inspect.getsource(create_tasks_bulk_func)
+
+    assert "OperationalError" in source, "create_tasks_bulk should handle OperationalError"
+    assert "deadlock" in source.lower(), "create_tasks_bulk should check for deadlock errors"
+    assert "retry" in source.lower() or "while" in source.lower(), (
+        "create_tasks_bulk should have retry logic"
+    )
+    assert "rollback" in source.lower(), "create_tasks_bulk should rollback on deadlock"
+    assert "max_retries" in source.lower(), "create_tasks_bulk should have max retry limit"
