@@ -78,3 +78,7 @@ export const undoApi = {
   undo: (sessionId, snapshotId) => api.post(`/undo/${sessionId}/undo/${snapshotId}`),
   listSnapshots: (sessionId) => api.get(`/undo/${sessionId}/snapshots`),
 }
+
+export const tasksApi = {
+  getMetrics: () => api.get('/tasks/metrics'),
+}

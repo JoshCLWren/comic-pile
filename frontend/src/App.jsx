@@ -4,6 +4,7 @@ import RatePage from './pages/RatePage'
 import QueuePage from './pages/QueuePage'
 import HistoryPage from './pages/HistoryPage'
 import SessionPage from './pages/SessionPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 import Navigation from './components/Navigation'
 import './index.css'
 
@@ -17,6 +18,7 @@ function App() {
           <Route path="/queue" element={<QueuePage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/sessions/:id" element={<SessionPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
         </Routes>
       </main>
       <Navigation />
