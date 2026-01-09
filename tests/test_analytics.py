@@ -1,6 +1,7 @@
 """Tests for task analytics and metrics API."""
 
 import pytest
+from datetime import UTC
 
 
 @pytest.mark.asyncio
@@ -61,7 +62,7 @@ async def test_get_analytics_metrics_empty(client, db):
 async def test_get_analytics_metrics_completion_time(client, db):
     """Test GET /api/tasks/metrics calculates average completion time."""
     from app.models import Task as TaskModel
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     task1 = TaskModel(
         task_id="TASK-001",
@@ -70,8 +71,8 @@ async def test_get_analytics_metrics_completion_time(client, db):
         status="done",
         estimated_effort="2 hours",
         completed=True,
-        created_at=datetime(2025, 1, 1, 10, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2025, 1, 1, 12, 0, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 1, 10, 0, tzinfo=UTC),
+        updated_at=datetime(2025, 1, 1, 12, 0, tzinfo=UTC),
     )
     task2 = TaskModel(
         task_id="TASK-002",
@@ -80,8 +81,8 @@ async def test_get_analytics_metrics_completion_time(client, db):
         status="done",
         estimated_effort="1 hour",
         completed=True,
-        created_at=datetime(2025, 1, 2, 10, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2025, 1, 2, 11, 0, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 2, 10, 0, tzinfo=UTC),
+        updated_at=datetime(2025, 1, 2, 11, 0, tzinfo=UTC),
     )
     db.add(task1)
     db.add(task2)
