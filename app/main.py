@@ -23,8 +23,9 @@ from sqlalchemy.orm import Session  # noqa: E402
 from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 
 from app.api import admin, error_handler, queue, rate, retros, roll, session, tasks, thread, undo  # noqa: E402
-from app.api.tasks import health_router/
+from app.api.tasks import health_router  # noqa: E402
 from app.database import Base, engine, get_db  # noqa: E402
+from app.models.session import Session as SessionModel  # noqa: E402
 from app.middleware import limiter  # noqa: E402
 
 logger = logging.getLogger(__name__)
