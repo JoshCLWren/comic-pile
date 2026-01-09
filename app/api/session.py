@@ -1,11 +1,13 @@
 """Session API endpoints."""
 
+import time
 from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError as SAOperationalError
 
 from app.database import get_db
 from app.middleware import limiter
@@ -126,55 +128,75 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
         if cached:
             return SessionResponse(**cached)
 
-    active_sessions = (
-        db.execute(
-            select(SessionModel)
-            .where(SessionModel.ended_at.is_(None))
-            .order_by(SessionModel.started_at.desc())
-        )
-        .scalars()
-        .all()
-    )
+    max_retries = 3
+    initial_delay = 0.1
+    retries = 0
 
-    active_session = None
-    for session in active_sessions:
-        if is_active(session.started_at, session.ended_at, db):
-            active_session = session
-            break
+    while retries < max_retries:
+        try:
+            active_sessions = (
+                db.execute(
+                    select(SessionModel)
+                    .where(SessionModel.ended_at.is_(None))
+                    .order_by(SessionModel.started_at.desc())
+                )
+                .scalars()
+                .all()
+            )
 
-    if not active_session:
-        raise HTTPException(
-            status_code=404,
-            detail="No active session found",
-        )
+            active_session = None
+            for session in active_sessions:
+                if is_active(session.started_at, session.ended_at, db):
+                    active_session = session
+                    break
 
-    active_thread = get_active_thread(active_session, db)
+            if not active_session:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No active session found",
+                )
 
-    from sqlalchemy import func
+            active_thread = get_active_thread(active_session, db)
 
-    snapshot_count = (
-        db.execute(
-            select(func.count())
-            .select_from(Snapshot)
-            .where(Snapshot.session_id == active_session.id)
-        ).scalar()
-        or 0
-    )
+            from sqlalchemy import func
 
-    return SessionResponse(
-        id=active_session.id,
-        started_at=active_session.started_at,
-        ended_at=active_session.ended_at,
-        start_die=active_session.start_die,
-        manual_die=active_session.manual_die,
-        user_id=active_session.user_id,
-        ladder_path=build_ladder_path(active_session, db),
-        active_thread=active_thread,
-        current_die=get_current_die(active_session.id, db),
-        last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
-        has_restore_point=snapshot_count > 0,
-        snapshot_count=snapshot_count,
-    )
+            snapshot_count = (
+                db.execute(
+                    select(func.count())
+                    .select_from(Snapshot)
+                    .where(Snapshot.session_id == active_session.id)
+                ).scalar()
+                or 0
+            )
+
+            return SessionResponse(
+                id=active_session.id,
+                started_at=active_session.started_at,
+                ended_at=active_session.ended_at,
+                start_die=active_session.start_die,
+                manual_die=active_session.manual_die,
+                user_id=active_session.user_id,
+                ladder_path=build_ladder_path(active_session, db),
+                active_thread=active_thread,
+                current_die=get_current_die(active_session.id, db),
+                last_rolled_result=active_thread.get("last_rolled_result")
+                if active_thread
+                else None,
+                has_restore_point=snapshot_count > 0,
+                snapshot_count=snapshot_count,
+            )
+        except SAOperationalError as e:
+            if "deadlock" in str(e).lower():
+                db.rollback()
+                retries += 1
+                if retries >= max_retries:
+                    raise
+                delay = initial_delay * (2 ** (retries - 1))
+                time.sleep(delay)
+            else:
+                raise
+
+    raise RuntimeError(f"Failed to get current session after {max_retries} retries")
 
 
 @router.get("/")
