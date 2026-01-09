@@ -59,7 +59,7 @@ async def test_both_buttons_available_when_thread_complete(client, db):
     assert session.ended_at is None  # Session should still be active
 
     # Get current session to verify active_thread is still available
-    response = await client.get("/sessions/current/")
+    response = await client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert data["active_thread"]["id"] == thread.id
@@ -117,5 +117,5 @@ async def test_can_still_rate_after_thread_complete(client, db):
     assert thread.issues_remaining == 0
 
     # Roll again (should be able to roll thread with 0 issues)
-    response = await client.post("/roll/")
+    response = await client.post("/api/roll/")
     assert response.status_code == 200

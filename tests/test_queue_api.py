@@ -15,7 +15,7 @@ async def test_move_to_position(client, db, sample_data):
     new_position = 1
 
     response = await client.put(
-        f"/queue/threads/{thread_id}/position/", json={"new_position": new_position}
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": new_position}
     )
     assert response.status_code == 200
 
@@ -39,7 +39,7 @@ async def test_move_to_front(client, db, sample_data):
     """PUT /queue/threads/{id}/front/ moves to position 1."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/front/")
+    response = await client.put(f"/api/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
 
     data = response.json()
@@ -58,7 +58,7 @@ async def test_move_to_back(client, db, sample_data):
     """PUT /queue/threads/{id}/back/ moves to last position."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/back/")
+    response = await client.put(f"/api/queue/threads/{thread_id}/back/")
     assert response.status_code == 200
 
     data = response.json()
@@ -76,7 +76,7 @@ async def test_queue_order_preserved(client, db, sample_data):
     new_position = 4
 
     response = await client.put(
-        f"/queue/threads/{thread_id}/position/", json={"new_position": new_position}
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": new_position}
     )
     assert response.status_code == 200
 
@@ -97,7 +97,7 @@ async def test_move_to_position_invalid(client, db, sample_data):
     """Moving to invalid position caps at boundaries."""
     thread_id = sample_data["threads"][2].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 999})
+    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 999})
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -109,14 +109,14 @@ async def test_move_to_position_zero_fails_validation(client, db, sample_data):
     """Moving to position 0 fails validation."""
     thread_id = sample_data["threads"][2].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 0})
+    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 0})
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_get_roll_pool(client, sample_data):
     """GET /threads/ returns threads ordered by position."""
-    response = await client.get("/threads/")
+    response = await client.get("/api/threads/")
     assert response.status_code == 200
 
     data = response.json()
@@ -133,7 +133,7 @@ async def test_move_completed_thread(client, db, sample_data):
     new_position = 1
 
     response = await client.put(
-        f"/queue/threads/{thread_id}/position/", json={"new_position": new_position}
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": new_position}
     )
     assert response.status_code == 200
 
@@ -144,7 +144,7 @@ async def test_move_completed_thread(client, db, sample_data):
 @pytest.mark.asyncio
 async def test_move_nonexistent_thread(client, db, sample_data):
     """Returns 404 for non-existent thread."""
-    response = await client.put("/queue/threads/999/front/")
+    response = await client.put("/api/queue/threads/999/front/")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
 
@@ -419,7 +419,7 @@ async def test_jump_to_far_position(client, db, sample_data):
     """Jump from position 1 to position 5 works correctly."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 5})
+    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 5})
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -441,7 +441,7 @@ async def test_jump_to_near_position(client, db, sample_data):
     """Jump from position 5 to position 2 works correctly."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 2})
+    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 2})
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -461,7 +461,7 @@ async def test_jump_beyond_last_position(client, db, sample_data):
     """Jumping beyond last position caps at last position."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 999})
+    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 999})
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -473,7 +473,7 @@ async def test_jump_to_negative_position_fails_validation(client, db, sample_dat
     """Jumping to negative position fails validation."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": -5})
+    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": -5})
     assert response.status_code == 422
 
 
@@ -482,5 +482,5 @@ async def test_jump_to_zero_position_fails_validation(client, db, sample_data):
     """Jumping to position 0 fails validation."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/position/", json={"new_position": 0})
+    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 0})
     assert response.status_code == 422

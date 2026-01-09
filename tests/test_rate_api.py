@@ -43,7 +43,7 @@ async def test_rate_success(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 2})
+    response = await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 2})
     assert response.status_code == 200
 
     data = response.json()
@@ -91,7 +91,7 @@ async def test_rate_low_rating(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/rate/", json={"rating": 3.0, "issues_read": 1})
+    response = await client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
     assert response.status_code == 200
 
     events = (
@@ -139,7 +139,7 @@ async def test_rate_high_rating(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 200
 
     events = (
@@ -188,7 +188,7 @@ async def test_rate_completes_thread(client, db):
     db.commit()
 
     response = await client.post(
-        "/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
+        "/api/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
     )
     assert response.status_code == 200
 
@@ -240,7 +240,7 @@ async def test_rate_records_event(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/rate/", json={"rating": 4.5, "issues_read": 2})
+    response = await client.post("/api/rate/", json={"rating": 4.5, "issues_read": 2})
     assert response.status_code == 200
 
     events = (
@@ -256,7 +256,7 @@ async def test_rate_records_event(client, db):
 @pytest.mark.asyncio
 async def test_rate_no_active_session(client, db):
     """Returns error if no active session."""
-    response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
     assert "No active session" in response.json()["detail"]
 
@@ -273,7 +273,7 @@ async def test_rate_no_active_thread(client, db):
     db.commit()
     db.refresh(session)
 
-    response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
     assert "No active thread" in response.json()["detail"]
 
@@ -314,7 +314,7 @@ async def test_rate_updates_manual_die(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 200
 
     db.refresh(session)
@@ -357,7 +357,7 @@ async def test_rate_low_rating_updates_manual_die(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/rate/", json={"rating": 3.0, "issues_read": 1})
+    response = await client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
     assert response.status_code == 200
 
     db.refresh(session)
@@ -401,7 +401,7 @@ async def test_rate_finish_session_flag_controls_session_end(client, db):
     db.commit()
 
     response = await client.post(
-        "/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": False}
+        "/api/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 

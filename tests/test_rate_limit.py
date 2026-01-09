@@ -11,10 +11,10 @@ from app.main import app
 async def test_rate_limit_on_tasks_list(client: AsyncClient) -> None:
     """Test that rate limiting is applied to GET /api/tasks/ endpoint."""
     for _ in range(200):
-        response = await client.get("/api/tasks/")
+        response = await client.get("/api/api/tasks/")
         assert response.status_code == 200
 
-    response = await client.get("/api/tasks/")
+    response = await client.get("/api/api/tasks/")
     assert response.status_code == 429
     assert "rate limit" in response.json()["error"].lower()
 
@@ -54,10 +54,10 @@ async def test_rate_limit_on_tasks_create(client: AsyncClient) -> None:
 async def test_rate_limit_on_threads_list(client: AsyncClient) -> None:
     """Test that rate limiting is applied to GET /threads/ endpoint."""
     for _ in range(100):
-        response = await client.get("/threads/")
+        response = await client.get("/api/threads/")
         assert response.status_code == 200
 
-    response = await client.get("/threads/")
+    response = await client.get("/api/threads/")
     assert response.status_code == 429
 
 
@@ -88,20 +88,20 @@ async def test_rate_limit_on_thread_create(client: AsyncClient) -> None:
 async def test_rate_limit_on_roll(client: AsyncClient) -> None:
     """Test that rate limiting is applied to POST /roll/ endpoint."""
     for _ in range(30):
-        response = await client.post("/roll/")
+        response = await client.post("/api/roll/")
         assert response.status_code in (200, 400)
 
-    response = await client.post("/roll/")
+    response = await client.post("/api/roll/")
     assert response.status_code == 429
 
 
 async def test_rate_limit_on_roll_html(client: AsyncClient) -> None:
     """Test that rate limiting is applied to POST /roll/html endpoint."""
     for _ in range(30):
-        response = await client.post("/roll/html")
+        response = await client.post("/api/roll/html")
         assert response.status_code in (200, 400)
 
-    response = await client.post("/roll/html")
+    response = await client.post("/api/roll/html")
     assert response.status_code == 429
 
 
@@ -144,20 +144,20 @@ async def test_rate_limit_on_queue_move(client: AsyncClient) -> None:
 
 async def test_rate_limit_on_session_current(client: AsyncClient) -> None:
     """Test that rate limiting is applied to GET /sessions/current/ endpoint."""
-    response = await client.post("/sessions/")
+    response = await client.post("/api/sessions/")
     assert response.status_code == 201
 
     for _ in range(200):
-        response = await client.get("/sessions/current/")
+        response = await client.get("/api/sessions/current/")
         assert response.status_code == 200
 
-    response = await client.get("/sessions/current/")
+    response = await client.get("/api/sessions/current/")
     assert response.status_code == 429
 
 
 async def test_rate_limit_headers(client: AsyncClient) -> None:
     """Test that rate limiting is applied to endpoints."""
-    response = await client.get("/threads/")
+    response = await client.get("/api/threads/")
     assert response.status_code == 200
 
 
@@ -166,15 +166,15 @@ async def test_rate_limit_reset_after_time_window(client: AsyncClient, db: Sessi
     import time
 
     for _ in range(100):
-        response = await client.get("/threads/")
+        response = await client.get("/api/threads/")
         assert response.status_code == 200
 
-    response = await client.get("/threads/")
+    response = await client.get("/api/threads/")
     assert response.status_code == 429
 
     time.sleep(60)
 
-    response = await client.get("/threads/")
+    response = await client.get("/api/threads/")
     assert response.status_code == 200
 
 
@@ -190,7 +190,7 @@ async def test_rate_limit_by_ip(client: AsyncClient) -> None:
         ) as ip_client:
             success_count = 0
             for _ in range(150):
-                response = await ip_client.get("/threads/")
+                response = await ip_client.get("/api/threads/")
                 if response.status_code == 200:
                     success_count += 1
             return success_count
@@ -206,16 +206,16 @@ async def test_rate_limit_by_ip(client: AsyncClient) -> None:
 async def test_no_rate_limit_on_health_check(client: AsyncClient) -> None:
     """Test that health check endpoint has no rate limit."""
     for _ in range(500):
-        response = await client.get("/health")
+        response = await client.get("/api/health")
         assert response.status_code == 200
 
 
 async def test_rate_limit_exceeded_message(client: AsyncClient) -> None:
     """Test that rate limit exceeded returns helpful error message."""
     for _ in range(101):
-        await client.get("/threads/")
+        await client.get("/api/threads/")
 
-    response = await client.get("/threads/")
+    response = await client.get("/api/threads/")
     assert response.status_code == 429
     data = response.json()
     assert "error" in data

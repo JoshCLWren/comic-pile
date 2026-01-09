@@ -3531,7 +3531,7 @@
       "title": "Fix HTMX roll trigger",
       "description": "Roll functionality broken. JavaScript triggers htmx.trigger(\"#roll-container\", \"triggerRoll\") but no element has hx-trigger attribute. This causes all roll requests to fail silently.",
       "priority": "HIGH",
-      "status": "pending",
+      "status": "in_progress",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,

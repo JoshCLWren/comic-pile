@@ -11,7 +11,7 @@ from app.models import Event
 @pytest.mark.asyncio
 async def test_roll_success(client, sample_data):
     """POST /roll/ returns valid thread."""
-    response = await client.post("/roll/")
+    response = await client.post("/api/roll/")
     assert response.status_code == 200
 
     data = response.json()
@@ -30,7 +30,7 @@ async def test_roll_success(client, sample_data):
 async def test_roll_override(client, sample_data):
     """POST /roll/override/ sets specific thread."""
     thread_id = 1
-    response = await client.post("/roll/override", json={"thread_id": thread_id})
+    response = await client.post("/api/roll/override", json={"thread_id": thread_id})
     assert response.status_code == 200
 
     data = response.json()
@@ -47,7 +47,7 @@ async def test_roll_no_pool(client, db):
 
     get_or_create_user(db)
 
-    response = await client.post("/roll/")
+    response = await client.post("/api/roll/")
     assert response.status_code == 400
     assert "No active threads" in response.json()["detail"]
 
@@ -71,7 +71,7 @@ async def test_roll_overflow(client, db):
     db.add(thread)
     db.commit()
 
-    response = await client.post("/roll/")
+    response = await client.post("/api/roll/")
     assert response.status_code == 200
 
     data = response.json()
@@ -82,7 +82,7 @@ async def test_roll_overflow(client, db):
 @pytest.mark.asyncio
 async def test_roll_override_nonexistent(client, sample_data):
     """Override returns 404 for non-existent thread."""
-    response = await client.post("/roll/override", json={"thread_id": 999})
+    response = await client.post("/api/roll/override", json={"thread_id": 999})
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
 
@@ -90,7 +90,7 @@ async def test_roll_override_nonexistent(client, sample_data):
 @pytest.mark.asyncio
 async def test_reroll_success(client, sample_data, db):
     """POST /roll/reroll returns new roll with reroll selection method."""
-    response = await client.post("/roll/reroll")
+    response = await client.post("/api/roll/reroll")
     assert response.status_code == 200
     html = response.text
     assert "dice-grid" in html
@@ -111,7 +111,7 @@ async def test_reroll_no_pool(client, db):
 
     get_or_create_user(db)
 
-    response = await client.post("/roll/reroll")
+    response = await client.post("/api/roll/reroll")
     assert response.status_code == 200
     assert "No active threads" in response.text
 
@@ -125,7 +125,7 @@ async def test_roll_result_consistency_regression(client, sample_data):
 
     Fix: Server is single source of truth; client only displays server-provided value.
     """
-    html_response = await client.post("/roll/html")
+    html_response = await client.post("/api/roll/html")
     assert html_response.status_code == 200
 
     html = html_response.text
@@ -135,7 +135,7 @@ async def test_roll_result_consistency_regression(client, sample_data):
 
     html_result = int(match.group(1))
 
-    session_response = await client.get("/sessions/current/")
+    session_response = await client.get("/api/sessions/current/")
     assert session_response.status_code == 200
 
     session_data = session_response.json()
@@ -154,7 +154,7 @@ async def test_reroll_result_consistency_regression(client, sample_data):
 
     Ensures reroll endpoint also maintains consistency between HTML and API.
     """
-    html_response = await client.post("/roll/reroll")
+    html_response = await client.post("/api/roll/reroll")
     assert html_response.status_code == 200
 
     html = html_response.text
@@ -163,7 +163,7 @@ async def test_reroll_result_consistency_regression(client, sample_data):
 
     html_result = int(match.group(1))
 
-    session_response = await client.get("/sessions/current/")
+    session_response = await client.get("/api/sessions/current/")
     assert session_response.status_code == 200
 
     session_data = session_response.json()
@@ -178,11 +178,11 @@ async def test_reroll_result_consistency_regression(client, sample_data):
 @pytest.mark.asyncio
 async def test_set_manual_die(client, sample_data, db):
     """POST /roll/set-die sets manual_die on session."""
-    response = await client.post("/roll/set-die?die=20")
+    response = await client.post("/api/roll/set-die?die=20")
     assert response.status_code == 200
     assert response.text == "d20"
 
-    session_response = await client.get("/sessions/current/")
+    session_response = await client.get("/api/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
     assert session_data["manual_die"] == 20
@@ -201,11 +201,11 @@ async def test_clear_manual_die(client, sample_data, db):
     session.manual_die = 12
     db.commit()
 
-    response = await client.post("/roll/clear-manual-die")
+    response = await client.post("/api/roll/clear-manual-die")
     assert response.status_code == 200
     assert response.text == "d8"
 
-    session_response = await client.get("/sessions/current/")
+    session_response = await client.get("/api/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
     assert session_data["manual_die"] is None
@@ -214,7 +214,7 @@ async def test_clear_manual_die(client, sample_data, db):
 @pytest.mark.asyncio
 async def test_clear_manual_die_with_no_manual_set(client, sample_data):
     """POST /roll/clear-manual-die works even when manual_die is not set."""
-    response = await client.post("/roll/clear-manual-die")
+    response = await client.post("/api/roll/clear-manual-die")
     assert response.status_code == 200
     assert response.text == "d8"
 
@@ -236,10 +236,10 @@ async def test_clear_manual_die_returns_correct_current_die_regression(client, s
     session.manual_die = 20
     db.commit()
 
-    response = await client.post("/roll/clear-manual-die")
+    response = await client.post("/api/roll/clear-manual-die")
     assert response.status_code == 200
 
-    session_response = await client.get("/sessions/current/")
+    session_response = await client.get("/api/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
 

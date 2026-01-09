@@ -83,7 +83,7 @@ def sample_retro_tasks(db) -> list:
 
 async def test_generate_retro_valid_session(client: AsyncClient, sample_retro_tasks) -> None:
     """Test retro generation with valid session ID."""
-    response = await client.post("/api/retros/generate", json={"session_id": "SESSION-001"})
+    response = await client.post("/api/api/retros/generate", json={"session_id": "SESSION-001"})
 
     assert response.status_code == 200
     data = response.json()
@@ -99,7 +99,7 @@ async def test_generate_retro_valid_session(client: AsyncClient, sample_retro_ta
 
 async def test_generate_retro_nonexistent_session(client: AsyncClient) -> None:
     """Test retro generation with non-existent session ID."""
-    response = await client.post("/api/retros/generate", json={"session_id": "SESSION-999"})
+    response = await client.post("/api/api/retros/generate", json={"session_id": "SESSION-999"})
 
     assert response.status_code == 200
     data = response.json()
@@ -115,7 +115,7 @@ async def test_generate_retro_nonexistent_session(client: AsyncClient) -> None:
 
 async def test_generate_retro_empty_session(client: AsyncClient, db) -> None:
     """Test retro generation with empty session (no events)."""
-    response = await client.post("/api/retros/generate", json={"session_id": "SESSION-EMPTY"})
+    response = await client.post("/api/api/retros/generate", json={"session_id": "SESSION-EMPTY"})
 
     assert response.status_code == 200
     data = response.json()
@@ -138,7 +138,7 @@ async def test_generate_retro_session_with_roll_events(client: AsyncClient, db) 
     db.add(task)
     db.commit()
 
-    response = await client.post("/api/retros/generate", json={"session_id": "SESSION-ROLL"})
+    response = await client.post("/api/api/retros/generate", json={"session_id": "SESSION-ROLL"})
 
     assert response.status_code == 200
     data = response.json()
@@ -164,7 +164,7 @@ async def test_generate_retro_session_with_rate_events(client: AsyncClient, db) 
     db.add(task)
     db.commit()
 
-    response = await client.post("/api/retros/generate", json={"session_id": "SESSION-RATE"})
+    response = await client.post("/api/api/retros/generate", json={"session_id": "SESSION-RATE"})
 
     assert response.status_code == 200
     data = response.json()
@@ -199,7 +199,7 @@ async def test_generate_retro_session_with_mixed_events(client: AsyncClient, db)
     db.add(task2)
     db.commit()
 
-    response = await client.post("/api/retros/generate", json={"session_id": "SESSION-MIXED"})
+    response = await client.post("/api/api/retros/generate", json={"session_id": "SESSION-MIXED"})
 
     assert response.status_code == 200
     data = response.json()
@@ -214,7 +214,7 @@ async def test_generate_retro_session_with_mixed_events(client: AsyncClient, db)
 
 async def test_generate_retro_invalid_session_id(client: AsyncClient) -> None:
     """Test retro generation with invalid session ID (empty string)."""
-    response = await client.post("/api/retros/generate", json={"session_id": ""})
+    response = await client.post("/api/api/retros/generate", json={"session_id": ""})
 
     assert response.status_code == 422
 
@@ -233,7 +233,7 @@ async def test_generate_retro_status_notes_truncation(client: AsyncClient, db) -
     db.add(task_with_long_notes)
     db.commit()
 
-    response = await client.post("/api/retros/generate", json={"session_id": "SESSION-001"})
+    response = await client.post("/api/api/retros/generate", json={"session_id": "SESSION-001"})
 
     assert response.status_code == 200
     data = response.json()

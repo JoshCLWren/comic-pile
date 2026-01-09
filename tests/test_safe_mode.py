@@ -99,7 +99,7 @@ async def test_current_session_response_includes_restore_point(
     db.add(snapshot)
     db.commit()
 
-    response = await client.get("/sessions/current/")
+    response = await client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "has_restore_point" in data
@@ -138,7 +138,7 @@ async def test_list_sessions_includes_restore_point_for_each(
     db.add(snapshot)
     db.commit()
 
-    response = await client.get("/sessions/")
+    response = await client.get("/api/sessions/")
     assert response.status_code == 200
     sessions = response.json()
     assert len(sessions) == 2

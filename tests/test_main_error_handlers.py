@@ -9,14 +9,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 @pytest.mark.asyncio
 async def test_http_exception_handler_404(client: AsyncClient) -> None:
     """Test HTTP exception handler with 404 status code for non-existent endpoint."""
-    response = await client.get("/this-endpoint-does-not-exist")
+    response = await client.get("/api/this-endpoint-does-not-exist")
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_http_exception_handler_for_nonexistent_task(client: AsyncClient) -> None:
     """Test HTTP exception handler when querying non-existent task."""
-    response = await client.get("/api/tasks/TASK-NONEXISTENT")
+    response = await client.get("/api/api/tasks/TASK-NONEXISTENT")
     assert response.status_code == 404
     data = response.json()
     assert "detail" in data
@@ -25,7 +25,7 @@ async def test_http_exception_handler_for_nonexistent_task(client: AsyncClient) 
 @pytest.mark.asyncio
 async def test_http_exception_handler_for_nonexistent_thread(client: AsyncClient) -> None:
     """Test HTTP exception handler when querying non-existent thread."""
-    response = await client.get("/threads/999999")
+    response = await client.get("/api/api/threads/999999")
     assert response.status_code == 404
     data = response.json()
     assert "detail" in data
@@ -36,7 +36,7 @@ async def test_validation_exception_handler_invalid_task_id_type(
     client: AsyncClient,
 ) -> None:
     """Test validation exception handler for invalid task_id type."""
-    response = await client.get("/api/tasks/12345")
+    response = await client.get("/api/api/tasks/12345")
     assert response.status_code == 404
 
 

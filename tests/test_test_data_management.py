@@ -108,7 +108,7 @@ async def test_bulk_delete_test_data(client, db):
     db.add_all([event1, event2])
     db.commit()
 
-    response = await client.post("/admin/delete-test-data/")
+    response = await client.post("/api/admin/delete-test-data/")
     assert response.status_code == 200
     data = response.json()
     assert data["deleted_threads"] == 2
@@ -150,7 +150,7 @@ async def test_export_csv_excludes_test_data(client, db):
     db.add_all([test_thread, real_thread])
     db.commit()
 
-    response = await client.get("/admin/export/csv/")
+    response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.content.decode("utf-8")
@@ -193,7 +193,7 @@ async def test_export_json_excludes_test_data(client, db):
     db.add_all([test_thread, real_thread])
     db.commit()
 
-    response = await client.get("/admin/export/json/")
+    response = await client.get("/api/admin/export/json/")
     assert response.status_code == 200
 
     data = json.loads(response.content.decode("utf-8"))
@@ -274,7 +274,7 @@ async def test_export_summary_excludes_test_only_sessions(client, db):
     db.add_all([test_event, real_event])
     db.commit()
 
-    response = await client.get("/admin/export/summary/")
+    response = await client.get("/api/admin/export/summary/")
     assert response.status_code == 200
 
     content = response.content.decode("utf-8")

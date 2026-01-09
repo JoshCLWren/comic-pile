@@ -433,7 +433,7 @@ async def test_get_current_session_active(client: AsyncClient, db, default_user)
     db.add(event)
     db.commit()
 
-    response = await client.get("/sessions/current/")
+    response = await client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == session.id
@@ -457,7 +457,7 @@ async def test_get_current_session_no_active(client: AsyncClient, db, default_us
     db.add(session)
     db.commit()
 
-    response = await client.get("/sessions/current/")
+    response = await client.get("/api/sessions/current/")
     assert response.status_code == 404
     assert "No active session found" in response.json()["detail"]
 
@@ -474,7 +474,7 @@ async def test_list_sessions(client: AsyncClient, db, default_user):
         db.add(session)
     db.commit()
 
-    response = await client.get("/sessions/?limit=3&offset=0")
+    response = await client.get("/api/sessions/?limit=3&offset=0")
     assert response.status_code == 200
     sessions = response.json()
     assert len(sessions) == 3
@@ -492,12 +492,12 @@ async def test_list_sessions_pagination(client: AsyncClient, db, default_user):
         db.add(session)
     db.commit()
 
-    first_page = await client.get("/sessions/?limit=2&offset=0")
+    first_page = await client.get("/api/sessions/?limit=2&offset=0")
     assert first_page.status_code == 200
     first_sessions = first_page.json()
     assert len(first_sessions) == 2
 
-    second_page = await client.get("/sessions/?limit=2&offset=2")
+    second_page = await client.get("/api/sessions/?limit=2&offset=2")
     assert second_page.status_code == 200
     second_sessions = second_page.json()
     assert len(second_sessions) == 2
@@ -515,7 +515,7 @@ async def test_get_session_by_id(client: AsyncClient, db, default_user):
     db.commit()
     db.refresh(session)
 
-    response = await client.get(f"/sessions/{session.id}")
+    response = await client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == session.id
@@ -525,7 +525,7 @@ async def test_get_session_by_id(client: AsyncClient, db, default_user):
 @pytest.mark.asyncio
 async def test_get_session_not_found(client: AsyncClient):
     """Test getting a non-existent session."""
-    response = await client.get("/sessions/9999")
+    response = await client.get("/api/sessions/9999")
     assert response.status_code == 404
     assert "Session not found" in response.json()["detail"]
 
@@ -570,7 +570,7 @@ async def test_get_session_includes_ladder_path(client: AsyncClient, db, default
     db.add(event2)
     db.commit()
 
-    response = await client.get(f"/sessions/{session.id}")
+    response = await client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert "6 → 8" in data["ladder_path"]
@@ -616,7 +616,7 @@ async def test_get_session_includes_snapshot_info(client: AsyncClient, db, defau
     db.add(snapshot)
     db.commit()
 
-    response = await client.get(f"/sessions/{session.id}")
+    response = await client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["snapshot_count"] == 1
@@ -665,7 +665,7 @@ async def test_restore_session_start(client: AsyncClient, db, default_user):
     session.manual_die = 20
     db.commit()
 
-    response = await client.post(f"/sessions/{session.id}/restore-session-start")
+    response = await client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
     data = response.json()
     assert data["start_die"] == 6
@@ -690,7 +690,7 @@ async def test_restore_session_start_no_snapshot(client: AsyncClient, db, defaul
     db.commit()
     db.refresh(session)
 
-    response = await client.post(f"/sessions/{session.id}/restore-session-start")
+    response = await client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 404
     assert "No session start snapshot found" in response.json()["detail"]
 
@@ -734,10 +734,10 @@ async def test_restore_session_start_with_deleted_threads(client: AsyncClient, d
     thread2.issues_remaining = 0
     db.commit()
 
-    await client.delete(f"/threads/{thread2.id}")
+    await client.delete(f"/api/threads/{thread2.id}")
     db.expire_all()
 
-    response = await client.post(f"/sessions/{session.id}/restore-session-start")
+    response = await client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
 
     refreshed_thread1 = db.get(Thread, thread1.id)

@@ -254,16 +254,16 @@ def create_app() -> FastAPI:
             },
         )
 
-    app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
+    app.include_router(thread.router, prefix="/threads", tags=["threads"])
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(session.router, prefix="/api", tags=["session"])
-    app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+    app.include_router(rate.router, prefix="/rate", tags=["rate"])
+    app.include_router(queue.router, prefix="/queue", tags=["queue"])
+    app.include_router(session.router, tags=["session"])
+    app.include_router(admin.router, tags=["admin"])
     app.include_router(tasks.router, prefix="/api", tags=["tasks"])
     app.include_router(retros.router, prefix="/api", tags=["retros"])
     app.include_router(health_router, prefix="/api")
-    app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
+    app.include_router(undo.router, prefix="/undo", tags=["undo"])
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
     app.mount("/react", StaticFiles(directory="static/react", html=True), name="react")
