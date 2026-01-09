@@ -202,6 +202,25 @@ def test_get_or_create_returns_most_recent(db):
     assert result.start_die == 10
 
 
+def test_get_or_create_creates_default_user(db):
+    """BUG-141: Creates default user when user_id doesn't exist."""
+    from app.models import User
+
+    non_existent_user_id = 999
+
+    user = db.get(User, non_existent_user_id)
+    assert user is None
+
+    new_session = get_or_create(db, user_id=non_existent_user_id)
+
+    assert new_session is not None
+    assert new_session.user_id == non_existent_user_id
+
+    user = db.get(User, non_existent_user_id)
+    assert user is not None
+    assert user.username == "default_user"
+
+
 def test_get_active_thread_includes_last_rolled_result(db, sample_data):
     """Get active thread includes last rolled result value."""
     session = sample_data["sessions"][0]

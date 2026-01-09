@@ -89,7 +89,17 @@ def create_session_start_snapshot(db: Session, session: SessionModel) -> None:
 
 def get_or_create(db: Session, user_id: int) -> SessionModel:
     """Get active session or create new one."""
+    from app.models import User
+
     settings = _get_settings(db)
+
+    user = db.get(User, user_id)
+    if not user:
+        user = User(id=user_id, username="default_user")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
     cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
     active_session = (
         db.execute(
