@@ -2,6 +2,10 @@
 
 import random
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from faker import Faker
 from sqlalchemy import select
 
@@ -15,6 +19,9 @@ FORMATS = ["TPB", "Issue", "Graphic Novel", "OGN"]
 
 
 def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
+    import os
+
+    print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
     """Seed database with sample threads, sessions, and events.
 
     Args:

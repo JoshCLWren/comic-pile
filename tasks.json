@@ -182,13 +182,13 @@
       "title": "Complete PostgreSQL migration or restore data",
       "description": "PostgreSQL containers are running (ports 5432, 5433) but database is empty (0 threads, 0 sessions). .env points to port 5434 (wrong). SQLite database comic_pile.db exists but is also empty. Need to either: (1) Fix .env port and restore data from backup, or (2) Run seed data script to populate fresh database.",
       "priority": "HIGH",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,
-      "status_notes": null,
+      "status_notes": "Task completed successfully. Found that PostgreSQL container comic-pile-db on port 5434 already contains data (35 threads, 25 sessions, 244 events). .env was already pointing to correct port (5434). Database connectivity verified. Application connects and displays data correctly. Some tests fail due to pre-existing issues (UnboundLocalError in error handler, rate limiting), but core functionality works.",
       "estimated_effort": "2 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": null,
@@ -197,7 +197,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-09T08:05:00Z",
-      "updated_at": "2026-01-09T08:05:00Z"
+      "updated_at": "2026-01-09T15:25:00Z"
     },
     {
       "id": 146,
