@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Dice-Driven Comic Tracker</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+    </script>
+    <script type="module" src="/static/js/dice3d.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="pb-24">
+    <main class="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl">
+        {% block content %}{% endblock %}
+    </main>
+
+    <nav class="fixed bottom-0 left-0 right-0 nav-container z-40" role="navigation" aria-label="Main navigation">
+        <div class="flex justify-around items-center h-20 px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
+            <a href="/" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/" aria-label="Roll page">
+                <span class="text-2xl mb-1" aria-hidden="true">🎲</span>
+                <span class="text-[10px] uppercase tracking-widest font-bold nav-label">Roll</span>
+            </a>
+            <a href="/rate" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/rate" aria-label="Rate page">
+                <span class="text-2xl mb-1" aria-hidden="true">📝</span>
+                <span class="text-[10px] uppercase tracking-widest font-bold nav-label">Rate</span>
+            </a>
+            <a href="/queue" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/queue" aria-label="Queue page">
+                <span class="text-2xl mb-1" aria-hidden="true">📚</span>
+                <span class="text-[10px] uppercase tracking-widest font-bold nav-label">Queue</span>
+            </a>
+            <a href="/history" class="nav-item flex flex-col items-center justify-center flex-1 h-full hover:bg-white/5 transition-all duration-200 focus:outline-none" data-path="/history" aria-label="History page">
+                <span class="text-2xl mb-1" aria-hidden="true">📜</span>
+                <span class="text-[10px] uppercase tracking-widest font-bold nav-label">History</span>
+            </a>
+        </div>
+    </nav>
+
+    <script>
+        function updateActiveNav() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.nav-item');
+
+            navLinks.forEach(link => {
+                const linkPath = link.getAttribute('data-path');
+                if (currentPath === linkPath) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', updateActiveNav);
+        document.addEventListener('htmx:afterSwap', updateActiveNav);
+    </script>
+
+    <!-- Modal Base Styling applies to all below -->
+    <div id="reactivate-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-sm p-6 overflow-hidden">
+            <h2 class="text-2xl font-bold mb-6 text-glow">Reactivate Thread</h2>
+            <form id="reactivate-form" hx-post="/threads/reactivate" hx-swap="none" hx-on::after-request="document.getElementById('reactivate-modal').classList.add('hidden'); htmx.trigger(window, 'refreshQueue');" onsubmit="return validateReactivateForm()">
+                <div class="mb-4">
+                    <label for="reactivate-thread-id" class="block text-sm font-medium text-slate-300 mb-2">Thread</label>
+                    <select id="reactivate-thread-id" name="thread_id" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" hx-get="/threads/completed" hx-target="#reactivate-thread-id" hx-trigger="load" required onchange="validateReactivateForm()">
+                        <option value="">Select a thread...</option>
+                    </select>
+                    <p id="thread-error" class="text-rose-500 text-xs mt-2 hidden">Please select a thread</p>
+                </div>
+                <div class="mb-6">
+                    <label for="issues_to_add" class="block text-sm font-medium text-slate-300 mb-2">Issues to Add</label>
+                    <input type="number" id="issues_to_add" name="issues_to_add" min="1" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" oninput="validateReactivateForm()">
+                    <p id="issues-to-add-error" class="text-rose-500 text-xs mt-2 hidden">Must add at least 1 issue</p>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" class="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all" onclick="document.getElementById('reactivate-modal').classList.add('hidden');">Cancel</button>
+                    <button type="submit" id="reactivate-submit-btn" class="flex-1 glass-button disabled:opacity-50" disabled>
+                        <span class="htmx-indicator flex items-center justify-center gap-2">
+                            <span class="spinner"></span>
+                        </span>
+                        <span class="htmx-request:hidden">Reactivate</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Similar pattern for other modals -->
+    <div id="add-thread-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-sm p-6">
+            <h2 class="text-2xl font-bold mb-6 text-glow">New Thread</h2>
+            <form hx-post="/threads/" hx-target="#queue-list" hx-swap="innerHTML" hx-on::after-request="this.closest('#add-thread-modal').classList.add('hidden'); htmx.trigger(window, 'refreshQueue');" onsubmit="return validateAddThreadForm()">
+                <div class="space-y-4 mb-8">
+                    <div>
+                        <label for="title" class="block text-sm font-medium text-slate-300 mb-1">Title</label>
+                        <input type="text" name="title" id="title" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g., Hellboy Vol 2" oninput="validateAddThreadForm()">
+                    </div>
+                    <div>
+                        <label for="format" class="block text-sm font-medium text-slate-300 mb-1">Format</label>
+                        <select name="format" id="format" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" onchange="validateAddThreadForm()">
+                            <option value="">Select format...</option>
+                            <option value="TPB">TPB</option>
+                            <option value="Issue">Issue</option>
+                            <option value="Graphic Novel">Graphic Novel</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="issues_remaining" class="block text-sm font-medium text-slate-300 mb-1">Issues Remaining</label>
+                        <input type="number" name="issues_remaining" id="issues_remaining" min="1" required class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g., 6" oninput="validateAddThreadForm()">
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" onclick="document.getElementById('add-thread-modal').classList.add('hidden')" class="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all">Cancel</button>
+                    <button type="submit" id="add-thread-submit-btn" class="flex-1 glass-button" disabled>Add</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Override Modal -->
+    <div id="override-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-sm p-6">
+            <h2 class="text-2xl font-bold mb-6 text-glow">Override</h2>
+            <form hx-post="/roll/override" hx-swap="none" hx-on::after-request="document.getElementById('override-modal').classList.add('hidden'); htmx.trigger(window, 'refreshRoll');">
+                <div id="override-thread-list" class="mb-6 max-h-60 overflow-y-auto space-y-2 pr-2" hx-get="/threads/active" hx-trigger="load">
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" class="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all" onclick="document.getElementById('override-modal').classList.add('hidden');">Cancel</button>
+                    <button type="submit" class="flex-1 glass-button">Override</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function validateAddThreadForm() {
+            const title = document.getElementById('title').value.trim();
+            const format = document.getElementById('format').value;
+            const issuesRemaining = parseInt(document.getElementById('issues_remaining').value);
+            const submitBtn = document.getElementById('add-thread-submit-btn');
+            const isValid = title && format && !isNaN(issuesRemaining) && issuesRemaining >= 1;
+            submitBtn.disabled = !isValid;
+            return isValid;
+        }
+
+        function validateReactivateForm() {
+            const threadId = document.getElementById('reactivate-thread-id').value;
+            const issuesToAdd = parseInt(document.getElementById('issues_to_add').value);
+            const submitBtn = document.getElementById('reactivate-submit-btn');
+            const isValid = threadId && !isNaN(issuesToAdd) && issuesToAdd >= 1;
+            submitBtn.disabled = !isValid;
+            return isValid;
+        }
+    </script>
+</body>
+</html>

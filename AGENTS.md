@@ -1,7 +1,6 @@
 # Repository Guidelines
 
 ## Project Ethos
-- **API-first design:** Build clear, documented REST endpoints that can serve both HTMX and future native clients.
 - **Minimal dependencies:** Keep the stack lean with FastAPI, SQLAlchemy, and standard library where possible.
 - **Mobile-first UX:** Design touch-friendly interfaces with large buttons and responsive layouts.
 - **Respect data integrity:** Never lose user data, validate inputs, and provide clear error messages.
@@ -66,9 +65,9 @@ else:
 - **Backend:** FastAPI (Python 3.13)
 - **Database:** PostgreSQL with SQLAlchemy ORM
 - **Migrations:** Alembic
-- **Frontend:** HTMX + Jinja2 templates
+- **Frontend:** React + Vite
 - **Styling:** Tailwind CSS
-- **Testing:** pytest with httpx.AsyncClient for API tests
+- **Testing:** pytest with httpx.AsyncClient for API tests, httpx for E2E tests
 - **Code Quality:** ruff linting, pyright type checking, ESLint (JS), htmlhint (HTML), 96% coverage requirement
 
 ## Project Structure & Module Organization
@@ -80,7 +79,7 @@ comic-pile/
 │   ├── api/               # API route handlers
 │   ├── models/            # SQLAlchemy database models
 │   ├── schemas/           # Pydantic request/response schemas
-│   └── templates/         # Jinja2 templates
+│   └── templates/         # React components
 ├── scripts/               # Utility scripts (seed data, etc.)
 ├── tests/                 # pytest test suite
 ├── static/                # Static assets (CSS, JS)
@@ -164,12 +163,10 @@ git worktree prune
 - Use database models for persistence, Pydantic schemas for API contracts
 
 ## Frontend Development Guidelines
-- Use HTMX for interactivity (AJAX requests without writing JavaScript)
 - Keep templates in `app/templates/` with Jinja2 syntax
 - Use Tailwind CSS for styling (CDN or compiled)
 - Design mobile-first with touch targets ≥44px
 - Use semantic HTML for accessibility
-- Minimize custom JavaScript - prefer HTMX attributes
 
 ## Database Development Guidelines
 - Define SQLAlchemy models in `app/models/`

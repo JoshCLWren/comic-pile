@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-8 pb-20">
+    <header class="px-2">
+        <div class="flex items-center gap-4">
+            <h1 class="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">History</h1>
+            <a href="/admin/export/summary/"
+               class="h-10 px-4 glass-button text-[10px] font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+               download>
+                Export Summary
+            </a>
+        </div>
+        <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Chronicle of your journey</p>
+    </header>
+
+    <div id="sessions-list" class="space-y-4" role="list" aria-label="Session history">
+        {% for session in sessions %}
+        <div class="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
+            <div class="flex justify-between items-start gap-6 relative z-10">
+                <div class="space-y-4 flex-1 min-w-0">
+                    <div class="flex items-center gap-3">
+                        {% if session.has_restore_point %}
+                        <div class="flex items-center gap-1 px-2 py-0.5 bg-teal-500/10 border border-teal-500/20 rounded-lg">
+                            <span class="text-[9px]">🛡️</span>
+                            <span class="text-[9px] font-black text-teal-400 uppercase">Safe</span>
+                        </div>
+                        {% endif %}
+                        <div
+                            class="px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            {{ session.started_at.strftime('%b %d') }}
+                        </div>
+                        <span class="text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                            {{ session.started_at.strftime('%I:%M %p') }}
+                        </span>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="die-base die-mini die-{{ session.ladder_path.split(',')[0].replace('d', '') if ',' in session.ladder_path else '6' }} shadow-xl">
+                                {{ session.ladder_path.split(',')[0].replace('d', '') if ',' in session.ladder_path else
+                                '6' }}
+                            </div>
+                            <p class="text-lg font-black text-slate-200 leading-tight">Ladder: {{
+                                session.ladder_path }}</p>
+                        </div>
+
+                        {% if session.active_thread %}
+                        <div
+                            class="flex items-center gap-3 px-3 py-2 bg-indigo-500/5 rounded-xl border border-indigo-500/10">
+                            <div class="w-1 h-1 rounded-full bg-indigo-400 shadow-[0_0_8px_var(--accent-indigo)]"></div>
+                            <p class="text-xs text-indigo-300 font-black uppercase tracking-wider">
+                                {{ session.active_thread.title }}
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if session.recent_events %}
+                    <div class="space-y-2 pt-2">
+                        <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Recent Activity</p>
+                        {% for event in session.recent_events[:3] %}
+                        <div class="flex items-start gap-2 text-[10px] bg-white/5 rounded-lg px-3 py-2 border border-white/5 hover:border-white/10 transition-all cursor-pointer group">
+                            <div class="flex-shrink-0 mt-0.5">
+                                {% if event.type == "roll" %}
+                                <div class="w-5 h-5 rounded bg-blue-500/10 flex items-center justify-center">
+                                    <span class="text-[8px] font-black text-blue-400">🎲</span>
+                                </div>
+                                {% elif event.type == "rate" %}
+                                <div class="w-5 h-5 rounded bg-yellow-500/10 flex items-center justify-center">
+                                    <span class="text-[8px] font-black text-yellow-400">⭐</span>
+                                </div>
+                                {% elif event.type == "delete" %}
+                                <div class="w-5 h-5 rounded bg-rose-500/10 flex items-center justify-center">
+                                    <span class="text-[8px] font-black text-rose-400">🗑️</span>
+                                </div>
+                                {% elif event.type == "reorder" %}
+                                <div class="w-5 h-5 rounded bg-purple-500/10 flex items-center justify-center">
+                                    <span class="text-[8px] font-black text-purple-400">↔️</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="flex-1 min-w-0 space-y-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    {% if event.type == "roll" %}
+                                    <span class="px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[9px] font-black uppercase">Roll</span>
+                                    <span class="text-slate-400">d{{ event.die }} → {{ event.result }}</span>
+                                    {% elif event.type == "rate" %}
+                                    <span class="px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 rounded text-[9px] font-black uppercase">Rate</span>
+                                    <span class="text-slate-400">{{ event.rating }}/5</span>
+                                    {% elif event.type == "delete" %}
+                                    <span class="px-1.5 py-0.5 bg-rose-500/10 text-rose-400 rounded text-[9px] font-black uppercase">Delete</span>
+                                    {% elif event.type == "reorder" %}
+                                    <span class="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded text-[9px] font-black uppercase">Reorder</span>
+                                    {% endif %}
+                                    {% if event.timestamp %}
+                                    <span class="text-[9px] text-slate-500">{{ event.timestamp.strftime('%I:%M %p') }}</span>
+                                    {% endif %}
+                                </div>
+                                {% if event.thread_title %}
+                                <p class="text-slate-300 font-medium leading-tight break-words">{{ event.thread_title }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="flex gap-2">
+                    <button
+                        id="details-btn-{{ session.id }}"
+                        class="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+                        hx-get="/sessions/{{ session.id }}/details" hx-target="#details-{{ session.id }}"
+                        hx-swap="innerHTML" hx-disabled-elt="#details-btn-{{ session.id }}"
+                        aria-expanded="false" aria-controls="details-{{ session.id }}">
+                        <span class="htmx-indicator flex items-center justify-center">
+                            <span class="spinner"></span>
+                        </span>
+                        <span class="htmx-request:hidden">Details</span>
+                    </button>
+                    <button
+                        id="undo-btn-{{ session.id }}"
+                        class="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl bg-teal-500/10 border-teal-500/20 hover:bg-teal-500/20 {% if not session.has_restore_point %}opacity-50 cursor-not-allowed{% endif %}"
+                        hx-get="/sessions/{{ session.id }}/snapshots" hx-target="#snapshots-{{ session.id }}"
+                        hx-swap="outerHTML" hx-disabled-elt="#undo-btn-{{ session.id }}"
+                        aria-expanded="false" aria-controls="snapshots-{{ session.id }}"
+                        {% if not session.has_restore_point %}disabled{% endif %}>
+                        <span class="htmx-indicator flex items-center justify-center">
+                            <span class="spinner"></span>
+                        </span>
+                        <span class="htmx-request:hidden">
+                            {{ 'Undo' if session.has_restore_point else 'No Undo' }}
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="details-{{ session.id }}"
+                class="mt-8 border-t border-white/5 pt-8 hidden transition-all animate-[slide-down_0.3s_ease-out]"
+                role="region" aria-live="polite">
+            </div>
+
+            <div id="snapshots-{{ session.id }}"
+                class="mt-4 border-t border-white/5 pt-4 hidden transition-all animate-[slide-down_0.3s_ease-out]"
+                role="region" aria-live="polite">
+                <p class="text-[10px] text-slate-500">Loading...</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+    document.addEventListener('htmx:afterSwap', function (evt) {
+        if (evt.target.id.startsWith('details-')) {
+            const details = evt.target;
+            const button = evt.detail.requestConfig.trigger;
+
+            if (details.innerHTML.trim()) {
+                details.classList.remove('hidden');
+                if (button) {
+                    button.textContent = 'Hide';
+                    button.setAttribute('aria-expanded', 'true');
+                }
+            }
+        }
+    });
+
+    document.addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.xhr.getResponseHeader('X-Undo-Success') === 'true') {
+            const undoContainer = document.getElementById('undo-success-message');
+            if (undoContainer) {
+                undoContainer.classList.remove('hidden');
+                undoContainer.classList.add('animate-pulse');
+                setTimeout(() => {
+                    undoContainer.classList.add('hidden');
+                    undoContainer.classList.remove('animate-pulse');
+                }, 3000);
+            }
+        }
+    });
+
+    document.addEventListener('click', function (e) {
+        const detailsBtn = e.target.closest('button[hx-get*="/details"]');
+        if (detailsBtn && detailsBtn.getAttribute('aria-expanded') === 'true') {
+            const detailsId = detailsBtn.getAttribute('aria-controls');
+            const details = document.getElementById(detailsId);
+            if (details) {
+                details.classList.add('hidden');
+                detailsBtn.textContent = 'Details';
+                detailsBtn.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        const undoBtn = e.target.closest('button[hx-get*="/snapshots"]');
+        if (undoBtn && undoBtn.getAttribute('aria-expanded') === 'true') {
+            const snapshotsId = undoBtn.getAttribute('aria-controls');
+            const snapshots = document.getElementById(snapshotsId);
+            if (snapshots) {
+                snapshots.classList.add('hidden');
+                undoBtn.textContent = 'Undo';
+                undoBtn.setAttribute('aria-expanded', 'false');
+            }
+        }
+    });
+</script>
+{% endblock %}

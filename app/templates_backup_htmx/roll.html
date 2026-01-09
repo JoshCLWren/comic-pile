@@ -1,0 +1,580 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    body { padding-bottom: 0 !important; }
+    main { padding: 0 !important; max-width: 100%; }
+
+    .tooltip-container {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        cursor: help;
+    }
+
+    .tooltip-icon {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: rgba(148, 163, 184, 0.3);
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: bold;
+        color: rgba(148, 163, 184, 0.7);
+        transition: all 0.2s;
+    }
+
+    .tooltip-icon:hover {
+        background: rgba(20, 184, 166, 0.2);
+        border-color: rgba(20, 184, 166, 0.5);
+        color: rgba(20, 184, 166, 0.8);
+    }
+
+    .tooltip-content {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        margin-bottom: 8px;
+        width: 200px;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 9px;
+        font-weight: normal;
+        line-height: 1.4;
+        color: rgba(203, 213, 225, 0.9);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s, visibility 0.2s;
+        backdrop-filter: blur(8px);
+        z-index: 100;
+        pointer-events: none;
+    }
+
+    .tooltip-content::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        right: 20px;
+        margin-top: -5px;
+        border-width: 5px;
+        border-style: solid;
+        border-color: rgba(15, 23, 42, 0.95) transparent transparent transparent;
+    }
+
+    .tooltip-container:hover .tooltip-content {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .tooltip-content strong {
+        color: rgba(45, 212, 191, 0.9);
+        font-weight: 600;
+    }
+</style>
+
+<div class="h-screen flex flex-col overflow-hidden">
+    <header class="flex justify-between items-center px-3 py-2 shrink-0 z-10">
+        <div>
+            <h1 class="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
+            <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active session</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <div id="session-safe-indicator" class="hidden flex items-center gap-1 px-2 py-1 bg-teal-500/10 border border-teal-500/20 rounded-lg">
+                <span class="text-xs">🛡️</span>
+                <span class="text-[9px] font-black text-teal-400 uppercase">Session Safe</span>
+            </div>
+            <div class="relative" id="die-selector">
+                <button
+                    hx-post="/roll/set-die?die=4"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="4">d4</button>
+                <button
+                    hx-post="/roll/set-die?die=6"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="6">d6</button>
+                <button
+                    hx-post="/roll/set-die?die=8"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="8">d8</button>
+                <button
+                    hx-post="/roll/set-die?die=10"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="10">d10</button>
+                <button
+                    hx-post="/roll/set-die?die=12"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="12">d12</button>
+                <button
+                    hx-post="/roll/set-die?die=20"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    class="die-btn px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    data-die="20">d20</button>
+                <button
+                    hx-post="/roll/clear-manual-die"
+                    hx-target="#header-die-label"
+                    hx-swap="innerText"
+                    id="auto-mode-btn"
+                    class="px-2 py-1 text-[10px] font-black bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors"
+                    title="Return to automatic dice ladder mode">Auto</button>
+            </div>
+            <div class="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
+                <div id="header-die-container" class="relative flex items-center justify-center" style="width: 40px; height: 40px;">
+                    <div id="header-die-3d" class="w-full h-full"></div>
+                    <span id="header-die-state-label" class="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300 whitespace-nowrap"></span>
+                </div>
+                <div class="text-right">
+                    <span class="block text-[8px] font-black text-slate-500 uppercase tracking-wider">
+                        <span class="tooltip-container">
+                            Ladder
+                            <span class="tooltip-icon">?</span>
+                            <span class="tooltip-content">
+                                <strong>What is ladder?</strong><br><br>
+                                Controls how many comics are in your roll pool. Smaller dice = focused reading, larger dice = more variety. Steps up/down based on your ratings.
+                            </span>
+                        </span>
+                    </span>
+                    <span id="header-die-label" class="text-[10px] font-black text-teal-400">d{{ current_die }}</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div id="result" class="flex-1 overflow-auto flex flex-col" role="region" aria-live="polite">
+        {{ pending_html|safe }}
+        <div id="roll-container" class="glass-card flex-1 flex flex-col relative overflow-hidden">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+            <div id="main-die-wrapper"
+                class="dice-state-idle relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all"
+                style="width: 200px; height: 200px;"
+                onclick="rollTheDie()"
+                hx-post="/roll/html"
+                hx-target="#result"
+                hx-swap="innerHTML"
+                hx-trigger="triggerRoll">
+                <div id="main-die-3d" class="w-full h-full"></div>
+                <span id="main-die-state-label" class="absolute -bottom-6 text-[8px] font-bold uppercase tracking-wider text-slate-500 opacity-0 transition-opacity duration-300"></span>
+            </div>
+
+            <p id="tap-instruction"
+                class="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0">Tap Die to
+                Roll</p>
+
+            <div id="pool-display" class="flex-1 min-h-0 mt-4 px-4 pb-4 overflow-hidden flex flex-col">
+                <div class="flex items-center gap-2 shrink-0">
+                    <div class="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_15px_var(--accent-teal)]"></div>
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Roll Pool</span>
+                </div>
+                <div id="pool-threads" class="flex-1 overflow-y-auto mt-2 space-y-2 scrollbar-thin">
+                    <div class="h-10 bg-white/5 rounded-xl animate-pulse"></div>
+                    <div class="h-10 bg-white/5 rounded-xl animate-pulse"></div>
+                </div>
+            </div>
+
+            <div id="stale-suggestion" class="px-4 pb-4 shrink-0 hidden transition-all animate-[fade-in_0.5s_ease-out]">
+                <div class="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
+                    <div class="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
+                        <span class="text-sm">⏳</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p id="stale-text"
+                            class="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
+                            You haven't touched <span class="text-amber-400 font-black">Title</span> in <span
+                                class="text-amber-400 font-black">X</span> days
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="explosion-layer" class="explosion-wrap"></div>
+
+<script>
+    console.log('[RollPage] Script Initialization Started');
+
+    const DICE_LADDER = [4, 6, 8, 10, 12, 20];
+    const initialDenom = {{ current_die }};
+    let rolledResult = null;
+    let threadId = null;
+    let isRolling = false;
+    let currentDieValue = 1;
+    let mainDie = null;
+    let headerDie = null;
+    let selectedThreadId = localStorage.getItem('selectedThreadId') || null;
+
+    function setDiceState(state) {
+        const wrapper = document.getElementById('main-die-wrapper');
+        if (!wrapper) return;
+
+        wrapper.classList.remove('dice-state-idle', 'dice-state-rolled', 'dice-state-reroll', 'dice-state-rate-flow');
+        wrapper.classList.add('dice-state-' + state);
+
+        const label = document.getElementById('main-die-state-label');
+        if (label) {
+            const stateLabels = {
+                'idle': 'Ready',
+                'rolled': 'Rolled',
+                'reroll': 'Rerolling',
+                'rate-flow': 'Rating'
+            };
+            label.textContent = stateLabels[state] || '';
+            label.style.opacity = state === 'idle' ? '0' : '1';
+        }
+
+        console.log('[RollPage] Dice state set to:', state);
+    }
+
+    function initDice() {
+        if (window.Dice3D) {
+            Dice3D.cleanup();
+        }
+
+        const mainContainer = document.getElementById('main-die-3d');
+        const headerContainer = document.getElementById('header-die-3d');
+
+        mainDie = window.Dice3D ? Dice3D.create(mainContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
+        headerDie = window.Dice3D ? Dice3D.create(headerContainer, initialDenom, { color: 0xffffff, showValue: false }) : null;
+
+        if (mainDie) mainDie.setValue(1);
+        updateDieButtonState(initialDenom);
+        setDiceState('idle');
+    }
+
+    function updateDieButtonState(die) {
+        const buttons = document.querySelectorAll('.die-btn');
+        buttons.forEach(btn => {
+            const btnDie = parseInt(btn.getAttribute('data-die'));
+            if (btnDie === die) {
+                btn.classList.remove('bg-white/5');
+                btn.classList.add('bg-teal-500/20', 'border-teal-500', 'text-teal-400');
+            } else {
+                btn.classList.remove('bg-teal-500/20', 'border-teal-500', 'text-teal-400');
+                btn.classList.add('bg-white/5');
+            }
+        });
+
+        const autoBtn = document.getElementById('auto-mode-btn');
+        if (autoBtn) {
+            autoBtn.classList.remove('bg-amber-500/20', 'border-amber-500', 'text-amber-400');
+            autoBtn.classList.add('bg-white/5');
+            autoBtn.title = 'Return to automatic dice ladder mode';
+        }
+    }
+
+    function rollTheDie() {
+        console.log('[RollPage] rollTheDie called');
+        if (isRolling) return;
+
+        localStorage.removeItem('selectedThreadId');
+        selectedThreadId = null;
+
+        isRolling = true;
+        setDiceState('idle');
+        const instruction = document.getElementById('tap-instruction');
+        if (instruction) instruction.textContent = 'Rolling...';
+
+        let rollCount = 0;
+        const maxRolls = 10;
+        const rollInterval = setInterval(() => {
+            rollCount++;
+
+            if (rollCount >= maxRolls) {
+                clearInterval(rollInterval);
+                setTimeout(() => {
+                    console.log('[RollPage] Triggering HTMX roll event');
+                    htmx.trigger('#main-die-wrapper', 'triggerRoll');
+                }, 400);
+            }
+        }, 80);
+    }
+
+    function createExplosion() {
+        const layer = document.getElementById('explosion-layer');
+        if (!layer) return;
+        const count = 70;
+        const x = window.innerWidth / 2;
+        const y = window.innerHeight / 2;
+
+        for (let i = 0; i < count; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 100 + Math.random() * 400;
+            p.style.left = x + 'px';
+            p.style.top = y + 'px';
+            p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+            p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+            p.style.background = i % 2 ? 'var(--accent-teal)' : 'var(--accent-violet)';
+            layer.appendChild(p);
+            setTimeout(() => p.remove(), 1200);
+        }
+    }
+
+    async function loadRollPool() {
+        try {
+            console.log('[RollPage] Loading Roll Pool');
+            const res = await fetch('/threads/');
+            const threads = await res.json();
+            const sessionRes = await fetch('/sessions/current/');
+            const session = await sessionRes.json();
+            const container = document.getElementById('pool-threads');
+            if (!container) return;
+
+            const dieSize = session.current_die || 6;
+            const pool = threads.slice(0, dieSize);
+
+            if (pool.length === 0) {
+                container.innerHTML = '<div class="text-center py-10 text-slate-600 font-black uppercase tracking-widest text-[10px]">Queue Empty</div>';
+                return;
+            }
+
+            container.innerHTML = pool.map((t, i) => {
+                const isSelected = selectedThreadId && parseInt(selectedThreadId) === t.id;
+                const highlightClass = isSelected ? 'pool-thread-selected' : '';
+                return `
+                <div class="flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all ${highlightClass}" data-thread-id="${t.id}">
+                    <span class="text-lg font-black text-slate-500/50 group-hover:text-slate-400/50 transition-colors">${i + 1}</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-black text-slate-300 truncate text-sm">${t.title}</p>
+                        <p class="text-[8px] font-black text-slate-500 uppercase tracking-widest">${t.format}</p>
+                    </div>
+                </div>
+            `}).join('');
+        } catch (e) {
+            console.error('[RollPage] Failed to load pool:', e);
+        }
+    }
+
+    document.body.addEventListener('htmx:afterRequest', (evt) => {
+        console.log('[RollPage] HTMX afterRequest target:', evt.detail.target.id, 'Status:', evt.detail.xhr.status);
+        const target = evt.detail.target.id;
+
+        if (target === 'header-die-label' && evt.detail.xhr.status === 200) {
+            const newDie = parseInt(evt.detail.target.innerText.replace('d', ''));
+            if (headerDie) headerDie.setSides(newDie);
+            updateDieButtonState(newDie);
+            loadRollPool();
+        }
+    });
+
+    function updateRatingDisplay(val) {
+        const display = document.getElementById('rating-value');
+        const preview = document.getElementById('rating-preview');
+        const num = parseFloat(val);
+        display.textContent = num.toFixed(1);
+
+        let predictedDie = initialDenom;
+        if (num >= 4.0) {
+            display.className = 'text-teal-400';
+            const idx = DICE_LADDER.indexOf(initialDenom);
+            if (idx > 0) {
+                predictedDie = DICE_LADDER[idx - 1];
+                preview.innerHTML = 'Excellent! Die steps down 🎲 Move to front';
+            } else {
+                predictedDie = DICE_LADDER[0];
+                preview.innerHTML = 'Already at minimum 🎲 Die stays at d4';
+            }
+        } else {
+            display.className = 'text-indigo-400';
+            const idx = DICE_LADDER.indexOf(initialDenom);
+            if (idx < DICE_LADDER.length - 1) {
+                predictedDie = DICE_LADDER[idx + 1];
+                preview.innerHTML = 'Okay. Die steps up 🎲 Move to back';
+            } else {
+                predictedDie = DICE_LADDER[DICE_LADDER.length - 1];
+                preview.innerHTML = 'Already at maximum 🎲 Die stays at d20';
+            }
+        }
+
+        const headerDieLabel = document.getElementById('header-die-label');
+        if (headerDieLabel) headerDieLabel.textContent = 'd' + predictedDie;
+        if (headerDie) headerDie.setSides(predictedDie);
+    }
+
+    async function submitRating() {
+        const ratingInput = document.getElementById('rating-input');
+        const rating = ratingInput ? parseFloat(ratingInput.value) : 4.0;
+        const btn = document.getElementById('submit-rating-btn');
+        const errorDisplay = document.getElementById('error-message');
+
+        console.log('[RollPage] submitRating START:', rating);
+
+        const canProceed = await checkRestorePointBeforeSubmit();
+        if (!canProceed) {
+            btn.disabled = false;
+            btn.textContent = 'Save & Continue';
+            return;
+        }
+
+        if (rating >= 4.0) createExplosion();
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner mx-auto"></span>';
+        if (errorDisplay) errorDisplay.classList.add('hidden');
+
+        try {
+            const res = await fetch('/rate/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rating, issues_read: 1 })
+            });
+            console.log('[RollPage] Response status:', res.status);
+            if (res.ok) {
+                localStorage.removeItem('selectedThreadId');
+                setTimeout(() => window.location.href = '/roll', 1200);
+            } else {
+                const errData = await res.json();
+                if (errorDisplay) {
+                    errorDisplay.textContent = errData.detail || 'Error saving rating';
+                    errorDisplay.classList.remove('hidden');
+                }
+                btn.disabled = false;
+                btn.textContent = 'Retry';
+            }
+        } catch (e) {
+            console.error('[RollPage] submitRating FATAL:', e);
+            btn.disabled = false;
+            btn.innerHTML = 'Network Error! Retry?';
+        }
+    }
+
+    async function loadStaleSuggestion() {
+        try {
+            console.log('[RollPage] Checking for stale threads');
+            const res = await fetch('/threads/stale?days=7');
+            const staleThreads = await res.json();
+            const container = document.getElementById('stale-suggestion');
+            const textSpan = document.getElementById('stale-text');
+
+            if (staleThreads && staleThreads.length > 0) {
+                const thread = staleThreads[0];
+                const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at);
+                const diffMs = new Date() - lastActivity;
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+                if (diffDays >= 7) {
+                    textSpan.innerHTML = `You haven't touched <span class="text-amber-400 font-black">${thread.title}</span> in <span class="text-amber-400 font-black">${diffDays}</span> days`;
+                    container.classList.remove('hidden');
+                }
+            }
+        } catch (e) {
+            console.error('[RollPage] Failed to load stale suggestion:', e);
+        }
+    }
+
+    async function checkManualMode() {
+        try {
+            const res = await fetch('/sessions/current/');
+            const session = await res.json();
+            const autoBtn = document.getElementById('auto-mode-btn');
+            if (!autoBtn) return;
+
+            if (session.manual_die) {
+                autoBtn.classList.remove('bg-white/5');
+                autoBtn.classList.add('bg-amber-500/20', 'border-amber-500', 'text-amber-400');
+                autoBtn.title = 'Exit manual mode (currently ' + session.manual_die + ')';
+            } else {
+                autoBtn.classList.remove('bg-amber-500/20', 'border-amber-500', 'text-amber-400');
+                autoBtn.classList.add('bg-white/5');
+                autoBtn.title = 'Return to automatic dice ladder mode';
+            }
+
+            const safeIndicator = document.getElementById('session-safe-indicator');
+            if (safeIndicator) {
+                if (session.has_restore_point) {
+                    safeIndicator.classList.remove('hidden');
+                    safeIndicator.classList.add('flex');
+                } else {
+                    safeIndicator.classList.add('hidden');
+                    safeIndicator.classList.remove('flex');
+                }
+            }
+        } catch (e) {
+            console.error('[RollPage] Failed to check manual mode:', e);
+        }
+    }
+
+    async function checkRestorePointBeforeSubmit() {
+        try {
+            const res = await fetch('/sessions/current/');
+            const session = await res.json();
+
+            if (!session.has_restore_point) {
+                const confirmed = confirm('⚠️ No restore point available!\n\nYou are about to make a destructive action that cannot be undone. Continue anyway?');
+                return confirmed;
+            }
+            return true;
+        } catch (e) {
+            console.error('[RollPage] Failed to check restore point:', e);
+            return true;
+        }
+    }
+
+    async function triggerReroll() {
+        localStorage.removeItem('selectedThreadId');
+        selectedThreadId = null;
+
+        const btn = document.getElementById('reroll-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner mx-auto"></span> Rerolling...';
+        }
+
+        try {
+            const res = await fetch('/roll/reroll', {
+                method: 'POST'
+            });
+            console.log('[RollPage] Reroll response status:', res.status);
+            if (res.ok) {
+                const html = await res.text();
+                document.getElementById('result').innerHTML = html;
+            } else {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Reroll Failed. Retry?';
+                }
+            }
+        } catch (e) {
+            console.error('[RollPage] triggerReroll FATAL:', e);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = 'Network Error! Retry?';
+            }
+        }
+    }
+
+    document.getElementById('roll-container').addEventListener('click', (e) => {
+        if (!isRolling && !e.target.closest('button') && !e.target.closest('input')) {
+            rollTheDie();
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('[RollPage] DOMContentLoaded');
+
+        initDice();
+        loadRollPool();
+        loadStaleSuggestion();
+        checkManualMode();
+    });
+</script>
+{% endblock %}
