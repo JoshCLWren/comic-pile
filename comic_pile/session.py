@@ -3,7 +3,7 @@
 import time
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -109,6 +109,25 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
                 db.refresh(user)
 
             cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
+            active_session = (
+                db.execute(
+                    select(SessionModel)
+                    .where(SessionModel.ended_at.is_(None))
+                    .where(SessionModel.started_at >= cutoff_time)
+                    .order_by(SessionModel.started_at.desc())
+                )
+                .scalars()
+                .first()
+            )
+
+            if active_session:
+                return active_session
+
+            try:
+                db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
+            except Exception:
+                pass
+
             active_session = (
                 db.execute(
                     select(SessionModel)
