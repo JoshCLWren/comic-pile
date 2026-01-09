@@ -64,25 +64,39 @@ def default_user(db: Session) -> User:
 
 
 def get_test_database_url() -> str:
-    """Get test database URL from environment or use SQLite default."""
+    """Get test database URL from environment or use PostgreSQL default."""
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
         return test_db_url
     database_url = os.getenv("DATABASE_URL")
     if database_url and database_url.startswith("postgresql"):
         return database_url
-    return "sqlite+aiosqlite:///:memory:"
+    use_sqlite = os.getenv("USE_SQLITE_FOR_TESTS", "").lower() in ("1", "true", "yes")
+    if use_sqlite:
+        return "sqlite+aiosqlite:///:memory:"
+    raise ValueError(
+        "No PostgreSQL test database configured. "
+        "Set TEST_DATABASE_URL or DATABASE_URL environment variable, "
+        "or set USE_SQLITE_FOR_TESTS=true for SQLite."
+    )
 
 
 def get_sync_test_database_url() -> str:
-    """Get sync test database URL from environment or use SQLite default."""
+    """Get sync test database URL from environment or use PostgreSQL default."""
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
         return test_db_url.replace("+asyncpg", "").replace("+aiosqlite", "")
     database_url = os.getenv("DATABASE_URL")
     if database_url and database_url.startswith("postgresql"):
         return database_url
-    return "sqlite:///:memory:"
+    use_sqlite = os.getenv("USE_SQLITE_FOR_TESTS", "").lower() in ("1", "true", "yes")
+    if use_sqlite:
+        return "sqlite:///:memory:"
+    raise ValueError(
+        "No PostgreSQL test database configured. "
+        "Set TEST_DATABASE_URL or DATABASE_URL environment variable, "
+        "or set USE_SQLITE_FOR_TESTS=true for SQLite."
+    )
 
 
 @pytest.fixture(scope="function", autouse=True)
