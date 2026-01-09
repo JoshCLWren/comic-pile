@@ -3,9 +3,6 @@
 import random
 
 from dotenv import load_dotenv
-
-load_dotenv()
-
 from faker import Faker
 from sqlalchemy import select
 
@@ -13,12 +10,20 @@ from app.database import SessionLocal
 from app.models import Event, Session, Thread, User
 from comic_pile import DICE_LADDER
 
+load_dotenv()
+
 fake = Faker()
 
 FORMATS = ["TPB", "Issue", "Graphic Novel", "OGN"]
 
 
 def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
+    """Seed database with sample threads, sessions, and events.
+
+    Args:
+        num_threads: Number of threads to create (default 25).
+        num_sessions: Number of sessions to create (default 7).
+    """
     import os
 
     print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")

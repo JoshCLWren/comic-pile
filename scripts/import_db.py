@@ -12,11 +12,7 @@ from app.models import Event, Session, Settings, Task, Thread, User
 
 def import_database():
     """Wipe database and import data from JSON file."""
-    import os
-
-    print(f"DEBUG: DATABASE_URL = {os.getenv('DATABASE_URL')}")
     db = SessionLocal()
-    print(f"DEBUG: Engine URL = {db.bind.url}")
 
     try:
         with open("db_export.json") as f:
