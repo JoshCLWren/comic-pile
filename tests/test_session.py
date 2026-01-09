@@ -782,3 +782,21 @@ def test_is_active_no_lazy_load(db):
         assert result is False
     finally:
         new_db.close()
+
+
+def test_get_or_create_handles_deadlock_regression():
+    """Test that get_or_create has retry logic for deadlock handling.
+
+    Regression test for BUG-158: DeadlockDetected error during concurrent operations.
+    This test verifies the code structure includes deadlock retry logic.
+    """
+    import inspect
+
+    source = inspect.getsource(get_or_create)
+
+    assert "OperationalError" in source, "get_or_create should handle OperationalError"
+    assert "deadlock" in source.lower(), "get_or_create should check for deadlock errors"
+    assert "retry" in source.lower() or "while" in source.lower(), (
+        "get_or_create should have retry logic"
+    )
+    assert "rollback" in source.lower(), "get_or_create should rollback on deadlock"

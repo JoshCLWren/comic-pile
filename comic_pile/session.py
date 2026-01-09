@@ -1,8 +1,10 @@
 """Session management functions."""
 
+import time
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.models import Event, Settings, Snapshot, Thread
@@ -91,38 +93,56 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
     """Get active session or create new one."""
     from app.models import User
 
-    settings = _get_settings(db)
+    max_retries = 3
+    initial_delay = 0.1
+    retries = 0
 
-    user = db.get(User, user_id)
-    if not user:
-        user = User(id=user_id, username="default_user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    while retries < max_retries:
+        try:
+            settings = _get_settings(db)
 
-    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
-    active_session = (
-        db.execute(
-            select(SessionModel)
-            .where(SessionModel.ended_at.is_(None))
-            .where(SessionModel.started_at >= cutoff_time)
-            .order_by(SessionModel.started_at.desc())
-        )
-        .scalars()
-        .first()
-    )
+            user = db.get(User, user_id)
+            if not user:
+                user = User(id=user_id, username="default_user")
+                db.add(user)
+                db.commit()
+                db.refresh(user)
 
-    if active_session:
-        return active_session
+            cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
+            active_session = (
+                db.execute(
+                    select(SessionModel)
+                    .where(SessionModel.ended_at.is_(None))
+                    .where(SessionModel.started_at >= cutoff_time)
+                    .order_by(SessionModel.started_at.desc())
+                )
+                .scalars()
+                .first()
+            )
 
-    new_session = SessionModel(start_die=settings.start_die, user_id=user_id)
-    db.add(new_session)
-    db.commit()
-    db.refresh(new_session)
+            if active_session:
+                return active_session
 
-    create_session_start_snapshot(db, new_session)
+            new_session = SessionModel(start_die=settings.start_die, user_id=user_id)
+            db.add(new_session)
+            db.commit()
+            db.refresh(new_session)
 
-    return new_session
+            create_session_start_snapshot(db, new_session)
+
+            return new_session
+        except OperationalError as e:
+            if "deadlock" in str(e).lower():
+                db.rollback()
+                retries += 1
+                if retries >= max_retries:
+                    raise
+                delay = initial_delay * (2 ** (retries - 1))
+                time.sleep(delay)
+            else:
+                raise
+
+    raise RuntimeError(f"Failed to get_or_create session after {max_retries} retries")
 
 
 def end_session(session_id: int, db: Session) -> None:
