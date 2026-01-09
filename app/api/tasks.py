@@ -433,11 +433,7 @@ def create_task(
     session_id: str | None = None,
 ) -> TaskResponse:
     """Create a new task."""
-    existing_task = db.execute(
-        select(Task).where(Task.task_id == create_request.task_id)
-    ).scalar_one_or_none()
-    if existing_task:
-        raise HTTPException(status_code=400, detail=f"Task {create_request.task_id} already exists")
+    from sqlalchemy.exc import IntegrityError
 
     new_task = Task(
         task_id=create_request.task_id,
@@ -454,7 +450,18 @@ def create_task(
         session_start_time=datetime.now(UTC) if session_id else None,
     )
     db.add(new_task)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing_task = db.execute(
+            select(Task).where(Task.task_id == create_request.task_id)
+        ).scalar_one_or_none()
+        if existing_task:
+            raise HTTPException(
+                status_code=400, detail=f"Task {create_request.task_id} already exists"
+            ) from None
+        raise
     db.refresh(new_task)
     return TaskResponse(
         id=new_task.id,
@@ -486,14 +493,10 @@ def create_tasks_bulk(
     requests: list[CreateTaskRequest], db: Session = Depends(get_db)
 ) -> list[TaskResponse]:
     """Create multiple tasks in one transaction."""
+    from sqlalchemy.exc import IntegrityError
+
     created_tasks = []
     for request in requests:
-        existing_task = db.execute(
-            select(Task).where(Task.task_id == request.task_id)
-        ).scalar_one_or_none()
-        if existing_task:
-            raise HTTPException(status_code=400, detail=f"Task {request.task_id} already exists")
-
         new_task = Task(
             task_id=request.task_id,
             title=request.title,
@@ -509,7 +512,19 @@ def create_tasks_bulk(
         db.add(new_task)
         created_tasks.append(new_task)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        for task in created_tasks:
+            existing = db.execute(
+                select(Task).where(Task.task_id == task.task_id)
+            ).scalar_one_or_none()
+            if existing:
+                raise HTTPException(
+                    status_code=400, detail=f"Task {task.task_id} already exists"
+                ) from None
+        raise
 
     for task in created_tasks:
         db.refresh(task)
