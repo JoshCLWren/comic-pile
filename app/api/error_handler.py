@@ -1,42 +1,38 @@
-"""Automatic 5xx error handling and task creation system."""
+"""Automatic 5xx error handling and GitHub issue creation system."""
 
-import json
 import logging
 import traceback
 from datetime import UTC, datetime
-from pathlib import Path
 
 from fastapi import Request
 
 logger = logging.getLogger(__name__)
 
-TASKS_FILE = Path("tasks.json")
-
 ERROR_COUNTER: dict[str, int] = {"total_5xx": 0}
 
 KNOWN_5XX_ERRORS: dict[str, dict[str, str | bool | list[str]]] = {
     "database_connection_failed": {
-        "create_task": True,
+        "create_issue": True,
         "keywords": ["OperationalError", "database connection", "connection refused"],
-        "priority": "HIGH",
+        "priority": "high",
         "estimated_effort": "2 hours",
     },
     "query_timeout": {
-        "create_task": True,
+        "create_issue": True,
         "keywords": ["timeout", "QueryTimeoutError", "statement timeout"],
-        "priority": "HIGH",
+        "priority": "high",
         "estimated_effort": "2 hours",
     },
     "constraint_violation": {
-        "create_task": True,
+        "create_issue": True,
         "keywords": ["IntegrityError", "foreign key constraint", "unique constraint", "NOT NULL"],
-        "priority": "HIGH",
+        "priority": "high",
         "estimated_effort": "1 hour",
     },
     "temporary_server_error": {
-        "create_task": False,
+        "create_issue": False,
         "keywords": ["temporary", "TransientError", "retry"],
-        "priority": "LOW",
+        "priority": "low",
         "estimated_effort": "0 hours",
     },
 }
@@ -55,7 +51,7 @@ def is_known_5xx_error(
     return False, None
 
 
-def create_error_task(
+def create_github_issue(
     request_body: str | dict | list | None,
     path: str,
     http_method: str,
@@ -63,53 +59,82 @@ def create_error_task(
     headers: dict[str, str],
     error: Exception,
     error_info: dict[str, str | bool | list[str]],
-    request: Request,
 ) -> None:
-    """Create a task in tasks.json with full debugging information."""
-    timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-    task_id = f"API-ERROR-{timestamp}"
-    error_type = type(error).__name__
+    """Create a GitHub issue with full debugging information."""
+    try:
+        from scripts.github_task_client import GitHubTaskClient
 
-    if not TASKS_FILE.exists():
-        tasks = {"tasks": []}
-        next_id = 1
-    else:
-        with open(TASKS_FILE) as f:
-            tasks = json.load(f)
-        next_id = max((task.get("id", 0) for task in tasks["tasks"]), default=0) + 1
+        client = GitHubTaskClient()
 
-    task = {
-        "id": next_id,
-        "task_id": task_id,
-        "title": f"5xx Error: {error_type}",
-        "description": {
-            "request_body": request_body,
-            "path": path,
-            "http_method": http_method,
-            "path_params": path_params,
-            "headers": headers,
-            "error": str(error),
-            "traceback": traceback.format_exc(),
-        },
-        "priority": error_info.get("priority", "HIGH"),
-        "status": "pending",
-        "task_type": "bug",
-        "estimated_effort": error_info.get("estimated_effort", "2 hours"),
-        "instructions": (
-            f"Investigate and fix {error_type} error. Check traceback for root cause and location."
-        ),
-    }
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+        error_type = type(error).__name__
 
-    tasks["tasks"].append(task)
+        description = f"""## Error Details
 
-    with open(TASKS_FILE, "w") as f:
-        json.dump(tasks, f, indent=2, default=str)
+**Error Type:** {error_type}
+**Timestamp:** {timestamp}
+**Path:** {http_method} {path}
 
-    logger.info(f"Created task {task_id} (id={next_id}) for 5xx error: {error_type}")
+## Request Information
+
+**Path Parameters:**
+```
+{path_params}
+```
+
+**Headers:**
+```
+{headers}
+```
+
+**Request Body:**
+```
+{request_body}
+```
+
+## Error Message
+
+```
+{str(error)}
+```
+
+## Traceback
+
+```
+{traceback.format_exc()}
+```
+
+## Instructions
+
+Investigate and fix this {error_type} error:
+1. Check the traceback for the root cause and location
+2. Identify the code path that triggered the error
+3. Implement a fix to prevent this error
+4. Add tests to prevent regression
+5. Test the fix in a development environment
+
+## Auto-Generated
+
+This issue was automatically created by the error handler.
+"""
+
+        priority = error_info.get("priority", "high").lower()
+        task_type = "bug"
+
+        issue = client.create_task(
+            title=f"5xx Error: {error_type}",
+            description=description,
+            priority=priority,
+            task_type=task_type,
+        )
+
+        logger.info(f"Created GitHub issue #{issue['id']} for 5xx error: {error_type}")
+    except Exception as e:
+        logger.error(f"Failed to create GitHub issue for error: {e}")
 
 
 def handle_5xx_error(error: Exception, request: Request) -> dict[str, str]:
-    """Handle 5xx errors by creating tasks or incrementing counter."""
+    """Handle 5xx errors by creating GitHub issues or incrementing counter."""
     ERROR_COUNTER["total_5xx"] += 1
 
     error_type = type(error).__name__
@@ -124,12 +149,12 @@ def handle_5xx_error(error: Exception, request: Request) -> dict[str, str]:
 
     is_known, error_info = is_known_5xx_error(error, error_type, error_message)
 
-    if is_known and error_info and error_info.get("create_task", False):
-        create_error_task(
-            request_body, path, http_method, path_params, headers, error, error_info, request
+    if is_known and error_info and error_info.get("create_issue", False):
+        create_github_issue(
+            request_body, path, http_method, path_params, headers, error, error_info
         )
         logger.info(f"5xx error handled as known issue: {error_type}")
-        return {"action": "task_created", "error_type": error_type}
+        return {"action": "issue_created", "error_type": error_type}
     else:
         if is_known:
             logger.info(f"5xx error logged (known temporary error): {error_type}")

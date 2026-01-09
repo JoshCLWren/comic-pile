@@ -12,13 +12,32 @@ When `RALPH_MODE=true`, agents operate in Ralph mode:
 - No manager/worker protocols
 - Autonomous iteration only
 - Direct file edits, tests, commits
-- Work from tasks.json, not Task API
+- Work from GitHub Issues, not Task API
 
 When `RALPH_MODE=false` or unset:
 - Full manager/worker coordination system
 - Workers claim tasks via API
 - Manager daemon coordinates and reviews
 - Use existing workflows
+
+### GitHub Integration (Ralph Mode)
+
+Ralph mode uses GitHub Issues as single source of truth:
+
+**Requirements:**
+- `GITHUB_TOKEN`: Personal Access Token with `repo` scope
+- `GITHUB_REPO`: Repository name (default: anomalyco/comic-pile)
+
+**Features:**
+- No file corruption (Git-backed)
+- Email notifications (built-in)
+- Audit trail (issue history)
+- Collaboration (comments, mentions)
+- Accessible from anywhere
+- Better search (GitHub UI)
+- Auto-backup (Git history)
+
+See `docs/RALPH_GITHUB_SETUP.md` for complete setup guide.
 
 ### How to Use
 

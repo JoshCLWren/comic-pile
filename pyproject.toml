@@ -28,6 +28,7 @@ dev = [
     "playwright==1.48.0",
     "pytest-playwright==0.7.0",
     "uvicorn>=0.30.0",
+    "PyGithub>=2.0.0",
 ]
 
 [dependency-groups]

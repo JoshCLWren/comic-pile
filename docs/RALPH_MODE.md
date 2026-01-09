@@ -14,10 +14,51 @@ export RALPH_MODE=true
 When active, agents:
 - Operate autonomously without manager/worker protocols
 - Make direct file edits, tests, and commits
-- Work from tasks.json, not the Task API
+- Work from GitHub Issues, not tasks.json
 - Follow the iteration workflow described in this document
 
 **Note:** When RALPH_MODE=true, the manager daemon and worker coordination system do not apply.
+
+## GitHub Integration
+
+Ralph mode now uses GitHub Issues as the single source of truth for task management instead of local `tasks.json` files.
+
+### Benefits
+
+- **No file corruption**: All tasks are Git-backed in GitHub
+- **Email notifications**: Built-in GitHub email notifications
+- **Audit trail**: Complete issue history and comments
+- **Collaboration**: Easy to add comments, assignees, and mentions
+- **Accessible anywhere**: View and manage tasks from any device
+- **Better search**: Use GitHub's powerful search UI
+- **Auto-backup**: Git history provides automatic task backups
+
+### Required Environment Variables
+
+```bash
+export GITHUB_TOKEN="your_personal_access_token"
+export GITHUB_REPO="anomalyco/comic-pile"
+```
+
+The `GITHUB_TOKEN` must be a Personal Access Token with `repo` scope.
+
+### Task Labels
+
+Ralph tasks are identified by labels:
+
+- **ralph-task**: Marks all Ralph tasks
+- **Status labels**: `ralph-status:pending`, `ralph-status:in-progress`, `ralph-status:done`, `ralph-status:blocked`, `ralph-status:in-review`
+- **Priority labels**: `ralph-priority:critical`, `ralph-priority:high`, `ralph-priority:medium`, `ralph-priority:low`
+
+### Local Cache
+
+A local cache (`.task_cache.json`) minimizes GitHub API calls and provides offline capability when the cache is available.
+
+### Metrics
+
+Task execution metrics are stored in the `agent_metrics` database table for performance analysis and debugging.
+
+See `docs/RALPH_GITHUB_SETUP.md` for detailed setup instructions.
 
 ## What This Mode Does
 
