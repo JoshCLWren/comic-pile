@@ -20,14 +20,14 @@ def _get_settings(db: Session) -> Settings:
     return settings
 
 
-def is_active(session: SessionModel, db: Session) -> bool:
+def is_active(started_at: datetime, ended_at: datetime | None, db: Session) -> bool:
     """Check if session was within configured gap hours."""
     settings = _get_settings(db)
     cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
-    session_time = session.started_at
+    session_time = started_at
     if session_time.tzinfo is None:
         session_time = session_time.replace(tzinfo=UTC)
-    return session_time >= cutoff_time and session.ended_at is None
+    return session_time >= cutoff_time and ended_at is None
 
 
 def should_start_new(db: Session) -> bool:

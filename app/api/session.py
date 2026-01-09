@@ -138,7 +138,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
 
     active_session = None
     for session in active_sessions:
-        if is_active(session, db):
+        if is_active(session.started_at, session.ended_at, db):
             active_session = session
             break
 

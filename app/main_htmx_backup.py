@@ -70,7 +70,7 @@ def get_current_session_cached(db: Session) -> dict | None:
     )
     active_session = None
     for s in active_sessions:
-        if is_active(s, db):
+        if is_active(s.started_at, s.ended_at, db):
             active_session = s
             break
     if active_session:

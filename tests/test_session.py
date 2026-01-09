@@ -28,7 +28,7 @@ def test_is_active_true(db):
     db.add(session)
     db.commit()
 
-    result = is_active(session, db)
+    result = is_active(session.started_at, session.ended_at, db)
     assert result is True
 
 
@@ -42,7 +42,7 @@ def test_is_active_false_old(db):
     db.add(session)
     db.commit()
 
-    result = is_active(session, db)
+    result = is_active(session.started_at, session.ended_at, db)
     assert result is False
 
 
@@ -57,7 +57,7 @@ def test_is_active_false_ended(db):
     db.add(session)
     db.commit()
 
-    result = is_active(session, db)
+    result = is_active(session.started_at, session.ended_at, db)
     assert result is False
 
 
@@ -161,7 +161,7 @@ def test_is_active_exactly_6_hours(db):
     db.add(session)
     db.commit()
 
-    result = is_active(session, db)
+    result = is_active(session.started_at, session.ended_at, db)
     assert result is True
 
 
@@ -746,3 +746,39 @@ async def test_restore_session_start_with_deleted_threads(client: AsyncClient, d
     restored_thread = db.get(Thread, thread2.id)
     assert restored_thread is not None
     assert restored_thread.issues_remaining == 5
+
+
+def test_is_active_no_lazy_load(db):
+    """Test that is_active doesn't cause lazy load of session object."""
+    session = SessionModel(
+        started_at=datetime.now(UTC) - timedelta(hours=1),
+        start_die=6,
+        user_id=1,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    started_at = session.started_at
+    ended_at = session.ended_at
+    db.expunge_all()
+
+    from app.database import SessionLocal
+
+    new_db = SessionLocal()
+
+    try:
+        result = is_active(started_at, ended_at, new_db)
+        assert result is True
+
+        old_started_at = datetime.now(UTC) - timedelta(hours=7)
+        old_ended_at = None
+        result = is_active(old_started_at, old_ended_at, new_db)
+        assert result is False
+
+        ended_started_at = datetime.now(UTC) - timedelta(hours=1)
+        ended_ended_at = datetime.now(UTC)
+        result = is_active(ended_started_at, ended_ended_at, new_db)
+        assert result is False
+    finally:
+        new_db.close()
