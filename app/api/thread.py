@@ -1,10 +1,12 @@
 """Thread CRUD API endpoints."""
 
+import time
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -115,39 +117,59 @@ def create_thread(
     request: Request, thread_data: ThreadCreate, db: Session = Depends(get_db)
 ) -> ThreadResponse:
     """Create a new thread."""
-    max_position = (
-        db.execute(select(Thread.queue_position).order_by(Thread.queue_position.desc())).scalar()
-        or 0
-    )
-    new_thread = Thread(
-        title=thread_data.title,
-        format=thread_data.format,
-        issues_remaining=thread_data.issues_remaining,
-        queue_position=max_position + 1,
-        user_id=1,
-        notes=thread_data.notes,
-        is_test=thread_data.is_test,
-    )
-    db.add(new_thread)
-    db.commit()
-    db.refresh(new_thread)
-    if clear_cache:
-        clear_cache()
-    return ThreadResponse(
-        id=new_thread.id,
-        title=new_thread.title,
-        format=new_thread.format,
-        issues_remaining=new_thread.issues_remaining,
-        position=new_thread.queue_position,
-        status=new_thread.status,
-        last_rating=new_thread.last_rating,
-        last_activity_at=new_thread.last_activity_at,
-        review_url=new_thread.review_url,
-        last_review_at=new_thread.last_review_at,
-        notes=new_thread.notes,
-        is_test=new_thread.is_test,
-        created_at=new_thread.created_at,
-    )
+    max_retries = 3
+    initial_delay = 0.1
+    retries = 0
+
+    while retries < max_retries:
+        try:
+            max_position = (
+                db.execute(
+                    select(Thread.queue_position).order_by(Thread.queue_position.desc())
+                ).scalar()
+                or 0
+            )
+            new_thread = Thread(
+                title=thread_data.title,
+                format=thread_data.format,
+                issues_remaining=thread_data.issues_remaining,
+                queue_position=max_position + 1,
+                user_id=1,
+                notes=thread_data.notes,
+                is_test=thread_data.is_test,
+            )
+            db.add(new_thread)
+            db.commit()
+            db.refresh(new_thread)
+            if clear_cache:
+                clear_cache()
+            return ThreadResponse(
+                id=new_thread.id,
+                title=new_thread.title,
+                format=new_thread.format,
+                issues_remaining=new_thread.issues_remaining,
+                position=new_thread.queue_position,
+                status=new_thread.status,
+                last_rating=new_thread.last_rating,
+                last_activity_at=new_thread.last_activity_at,
+                review_url=new_thread.review_url,
+                last_review_at=new_thread.last_review_at,
+                notes=new_thread.notes,
+                is_test=new_thread.is_test,
+                created_at=new_thread.created_at,
+            )
+        except OperationalError as e:
+            if "deadlock" in str(e).lower():
+                db.rollback()
+                retries += 1
+                if retries >= max_retries:
+                    raise
+                delay = initial_delay * (2 ** (retries - 1))
+                time.sleep(delay)
+            else:
+                raise
+
+    raise RuntimeError(f"Failed to create thread after {max_retries} retries")
 
 
 @router.get("/{thread_id}", response_model=ThreadResponse)
