@@ -4,12 +4,19 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING
 
 from github import Github, GithubException, Issue
 from github.Rate import Rate
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    pass
+
+
+TaskDict = dict[str, object]
+
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "anomalyco/comic-pile")
@@ -43,7 +50,7 @@ class GitHubRateLimitError(Exception):
             rate_limit: GitHub rate limit object
         """
         self.rate_limit = rate_limit
-        reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)
+        reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)  # type: ignore
         wait_time = (reset_time - datetime.now(UTC)).total_seconds()
         super().__init__(f"Rate limit exceeded. Reset at {reset_time}. Wait {wait_time:.0f}s")
 
@@ -59,26 +66,30 @@ class GitHubTaskClient:
         if not self.token:
             raise ValueError("GITHUB_TOKEN environment variable is required")
 
-        self._github = None
-        self._repo = None
+        from github import Github
+
+        self._github: Github | None = None
+        self._repo: object | None = None  # type: ignore
         self._initialize_github()
 
     def _initialize_github(self) -> None:
         """Initialize GitHub client and repository."""
         self._github = Github(self.token)
-        self._repo = self._github.get_repo(self.repo_name)
+        assert self._github is not None
+        self._repo = self._github.get_repo(self.repo_name)  # type: ignore
         logger.info(f"Connected to GitHub repository: {self.repo_name}")
 
     def _check_rate_limit(self) -> None:
         """Check GitHub API rate limit and raise error if exceeded."""
-        rate_limit = self._github.get_rate_limit().core
+        assert self._github is not None
+        rate_limit = self._github.get_rate_limit().core  # type: ignore
         remaining = rate_limit.remaining
-        reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)
+        reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)  # type: ignore
 
         logger.debug(f"GitHub API rate limit: {remaining} remaining, resets at {reset_time}")
 
         if remaining == 0:
-            raise GitHubRateLimitError(rate_limit)
+            raise GitHubRateLimitError(rate_limit)  # type: ignore
 
     def _wait_for_rate_limit_reset(self, max_wait: int = 600) -> None:
         """Wait for GitHub API rate limit to reset.
@@ -87,8 +98,9 @@ class GitHubTaskClient:
             max_wait: Maximum time to wait in seconds (default: 10 minutes)
         """
         try:
-            rate_limit = self._github.get_rate_limit().core
-            reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)
+            assert self._github is not None
+            rate_limit = self._github.get_rate_limit().core  # type: ignore
+            reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)  # type: ignore
             now = datetime.now(UTC)
             wait_time = (reset_time - now).total_seconds()
 
@@ -114,10 +126,11 @@ class GitHubTaskClient:
             List of GitHub issues with ralph-task label
         """
         self._check_rate_limit()
-        issues = self._repo.get_issues(labels=["ralph-task"], state="all")
+        assert self._repo is not None
+        issues = self._repo.get_issues(labels=["ralph-task"], state="all")  # type: ignore
         return list(issues)
 
-    def _parse_issue_to_task(self, issue: Issue.Issue) -> dict[str, Any]:
+    def _parse_issue_to_task(self, issue: Issue.Issue) -> TaskDict:
         """Parse a GitHub issue into a task dictionary.
 
         Args:
@@ -173,7 +186,7 @@ class GitHubTaskClient:
                 return line.split(":", 1)[1].strip()
         return default
 
-    def find_pending_task(self) -> dict[str, Any] | None:
+    def find_pending_task(self) -> dict[str, object] | None:
         """Find the first pending Ralph task.
 
         Returns:
@@ -202,7 +215,7 @@ class GitHubTaskClient:
                 return self.find_pending_task()
             raise
 
-    def find_blocked_task(self) -> dict[str, Any] | None:
+    def find_blocked_task(self) -> dict[str, object] | None:
         """Find a blocked Ralph task that might be unblockable.
 
         Returns:
@@ -228,7 +241,7 @@ class GitHubTaskClient:
 
     def update_status(
         self, task_id: int, status: str, comment: str | None = None
-    ) -> dict[str, Any] | None:
+    ) -> dict[str, object] | None:
         """Update the status of a Ralph task.
 
         Args:
@@ -247,20 +260,21 @@ class GitHubTaskClient:
 
         try:
             self._check_rate_limit()
-            issue = self._repo.get_issue(task_id)
+            assert self._repo is not None
+            issue = self._repo.get_issue(task_id)  # type: ignore
 
             labels = {label.name for label in issue.labels}
 
             for status_label in STATUS_LABELS.values():
                 if status_label in labels:
-                    issue.remove_from_labels(status_label)
+                    issue.remove_from_labels(status_label)  # type: ignore
 
-            issue.add_to_labels(STATUS_LABELS[status])
+            issue.add_to_labels(STATUS_LABELS[status])  # type: ignore
 
             if comment:
                 self.add_comment(task_id, comment)
 
-            updated_issue = self._repo.get_issue(task_id)
+            updated_issue = self._repo.get_issue(task_id)  # type: ignore
             return self._parse_issue_to_task(updated_issue)
         except GithubException as e:
             if e.status == 404:
@@ -281,8 +295,9 @@ class GitHubTaskClient:
         """
         try:
             self._check_rate_limit()
-            issue = self._repo.get_issue(task_id)
-            issue.create_comment(comment)
+            assert self._repo is not None
+            issue = self._repo.get_issue(task_id)  # type: ignore
+            issue.create_comment(comment)  # type: ignore
             logger.info(f"Added comment to task {task_id}")
         except GithubException as e:
             if e.status == 404:
@@ -302,7 +317,7 @@ class GitHubTaskClient:
         priority: str = "medium",
         task_type: str = "feature",
         dependencies: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, object]:
         """Create a new Ralph task as a GitHub issue.
 
         Args:
@@ -323,6 +338,7 @@ class GitHubTaskClient:
 
         try:
             self._check_rate_limit()
+            assert self._repo is not None
 
             body = f"""## Description
 
@@ -337,7 +353,7 @@ class GitHubTaskClient:
 
             labels = ["ralph-task", STATUS_LABELS["pending"], PRIORITY_LABELS[priority]]
 
-            issue = self._repo.create_issue(title=title, body=body, labels=labels)
+            issue = self._repo.create_issue(title=title, body=body, labels=labels)  # type: ignore
 
             logger.info(f"Created task {issue.number}: {title}")
             return self._parse_issue_to_task(issue)
@@ -348,7 +364,7 @@ class GitHubTaskClient:
                 return self.create_task(title, description, priority, task_type, dependencies)
             raise
 
-    def get_task(self, task_id: int) -> dict[str, Any] | None:
+    def get_task(self, task_id: int) -> dict[str, object] | None:
         """Get a Ralph task by ID.
 
         Args:
@@ -359,7 +375,8 @@ class GitHubTaskClient:
         """
         try:
             self._check_rate_limit()
-            issue = self._repo.get_issue(task_id)
+            assert self._repo is not None
+            issue = self._repo.get_issue(task_id)  # type: ignore
             return self._parse_issue_to_task(issue)
         except GithubException as e:
             if e.status == 404:
@@ -371,7 +388,7 @@ class GitHubTaskClient:
                 return self.get_task(task_id)
             raise
 
-    def are_dependencies_resolved(self, task: dict[str, Any]) -> bool:
+    def are_dependencies_resolved(self, task: dict[str, object]) -> bool:
         """Check if all task dependencies are done.
 
         Args:
@@ -380,11 +397,11 @@ class GitHubTaskClient:
         Returns:
             True if all dependencies are done or no dependencies, False otherwise
         """
-        dependencies = task.get("dependencies")
+        dependencies = task.get("dependencies")  # type: ignore
         if not dependencies or dependencies == "none":
             return True
 
-        dep_ids = [dep.strip() for dep in dependencies.split(",") if dep.strip()]
+        dep_ids = [dep.strip() for dep in dependencies.split(",") if dep.strip()]  # type: ignore
 
         for dep_id in dep_ids:
             try:
@@ -400,7 +417,7 @@ class GitHubTaskClient:
 
         return True
 
-    def _are_dependencies_resolved(self, task: dict[str, Any]) -> bool:
+    def _are_dependencies_resolved(self, task: dict[str, object]) -> bool:
         """Internal alias for are_dependencies_resolved."""
         return self.are_dependencies_resolved(task)
 
@@ -410,13 +427,14 @@ class GitHubTaskClient:
         all_labels.extend(STATUS_LABELS.values())
         all_labels.extend(PRIORITY_LABELS.values())
 
-        existing_labels = {label.name for label in self._repo.get_labels()}
+        assert self._repo is not None
+        existing_labels = {label.name for label in self._repo.get_labels()}  # type: ignore
 
         for label_name in all_labels:
             if label_name not in existing_labels:
                 color = self._get_label_color(label_name)
                 try:
-                    self._repo.create_label(name=label_name, color=color)
+                    self._repo.create_label(name=label_name, color=color)  # type: ignore
                     logger.info(f"Created label: {label_name}")
                 except GithubException as e:
                     if e.status == 422:

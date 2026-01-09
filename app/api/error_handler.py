@@ -118,7 +118,11 @@ Investigate and fix this {error_type} error:
 This issue was automatically created by the error handler.
 """
 
-        priority = error_info.get("priority", "high").lower()
+        priority_value = error_info.get("priority", "high")
+        if isinstance(priority_value, str):
+            priority = priority_value.lower()
+        else:
+            priority = "high"
         task_type = "bug"
 
         issue = client.create_task(

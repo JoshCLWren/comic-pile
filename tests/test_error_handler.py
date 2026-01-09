@@ -1,7 +1,6 @@
 """Test error handler functionality."""
 
-import json
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from fastapi import Request
@@ -61,16 +60,6 @@ def mock_request():
     return request
 
 
-@pytest.fixture
-def temp_tasks_file(tmp_path):
-    """Create a temporary tasks.json file for testing."""
-    tasks_file = tmp_path / "tasks.json"
-    original_tasks_file = error_handler.TASKS_FILE
-    error_handler.TASKS_FILE = tasks_file
-    yield tasks_file
-    error_handler.TASKS_FILE = original_tasks_file
-
-
 def test_is_known_5xx_error_database_connection():
     """Test detection of database connection errors."""
     exc = OperationalError("database connection failed")
@@ -79,8 +68,8 @@ def test_is_known_5xx_error_database_connection():
     )
     assert is_known is True
     assert error_info is not None
-    assert error_info["create_task"] is True
-    assert error_info["priority"] == "HIGH"
+    assert error_info["create_issue"] is True
+    assert error_info["priority"] == "high"
 
 
 def test_is_known_5xx_error_query_timeout():
@@ -91,8 +80,8 @@ def test_is_known_5xx_error_query_timeout():
     )
     assert is_known is True
     assert error_info is not None
-    assert error_info["create_task"] is True
-    assert error_info["priority"] == "HIGH"
+    assert error_info["create_issue"] is True
+    assert error_info["priority"] == "high"
 
 
 def test_is_known_5xx_error_constraint_violation():
@@ -103,8 +92,8 @@ def test_is_known_5xx_error_constraint_violation():
     )
     assert is_known is True
     assert error_info is not None
-    assert error_info["create_task"] is True
-    assert error_info["priority"] == "HIGH"
+    assert error_info["create_issue"] is True
+    assert error_info["priority"] == "high"
 
 
 def test_is_known_5xx_error_temporary():
@@ -115,7 +104,7 @@ def test_is_known_5xx_error_temporary():
     )
     assert is_known is True
     assert error_info is not None
-    assert error_info["create_task"] is False
+    assert error_info["create_issue"] is False
 
 
 def test_is_known_5xx_error_unknown():
@@ -126,28 +115,33 @@ def test_is_known_5xx_error_unknown():
     assert error_info is None
 
 
-def test_handle_5xx_error_known_with_task(mock_request, temp_tasks_file):
-    """Test handling known 5xx errors that create tasks."""
+@patch("app.api.error_handler.GitHubTaskClient")
+def test_handle_5xx_error_known_with_issue(mock_github_client_class, mock_request):
+    """Test handling known 5xx errors that create GitHub issues."""
+    mock_client = Mock()
+    mock_github_client_class.return_value = mock_client
+    mock_client.create_task.return_value = {"id": 123, "title": "Test Issue"}
+
     exc = OperationalError("database connection failed")
     result = error_handler.handle_5xx_error(exc, mock_request)
 
-    assert result["action"] == "task_created"
+    assert result["action"] == "issue_created"
     assert result["error_type"] == "OperationalError"
     assert error_handler.ERROR_COUNTER["total_5xx"] == 1
 
-    # Verify task was created in tasks.json
-    with open(temp_tasks_file) as f:
-        tasks = json.load(f)
-    assert len(tasks["tasks"]) == 1
-    assert tasks["tasks"][0]["id"] == 1
-    assert tasks["tasks"][0]["task_id"].startswith("API-ERROR-")
-    assert tasks["tasks"][0]["status"] == "pending"
-    assert tasks["tasks"][0]["priority"] == "HIGH"
-    assert tasks["tasks"][0]["task_type"] == "bug"
+    mock_client.create_task.assert_called_once()
+    call_args = mock_client.create_task.call_args
+    assert "5xx Error: OperationalError" in call_args[1]["title"]
+    assert call_args[1]["priority"] == "high"
+    assert call_args[1]["task_type"] == "bug"
 
 
-def test_handle_5xx_error_known_no_task(mock_request):
-    """Test handling known temporary errors (no task created)."""
+@patch("app.api.error_handler.GitHubTaskClient")
+def test_handle_5xx_error_known_no_issue(mock_github_client_class, mock_request):
+    """Test handling known temporary errors (no issue created)."""
+    mock_client = Mock()
+    mock_github_client_class.return_value = mock_client
+
     exc = TransientError("temporary failure")
     result = error_handler.handle_5xx_error(exc, mock_request)
 
@@ -155,9 +149,11 @@ def test_handle_5xx_error_known_no_task(mock_request):
     assert result["error_type"] == "TransientError"
     assert error_handler.ERROR_COUNTER["total_5xx"] == 1
 
+    mock_client.create_task.assert_not_called()
+
 
 def test_handle_5xx_error_unknown(mock_request):
-    """Test handling unknown errors (no task created)."""
+    """Test handling unknown errors (no issue created)."""
     exc = SomeRandomError("unknown issue")
     result = error_handler.handle_5xx_error(exc, mock_request)
 
@@ -166,17 +162,22 @@ def test_handle_5xx_error_unknown(mock_request):
     assert error_handler.ERROR_COUNTER["total_5xx"] == 1
 
 
-def test_create_error_task_with_full_debug_info(mock_request, temp_tasks_file):
-    """Test that error tasks capture full debugging information."""
+@patch("app.api.error_handler.GitHubTaskClient")
+def test_create_github_issue_with_full_debug_info(mock_github_client_class, mock_request):
+    """Test that error issues capture full debugging information."""
+    mock_client = Mock()
+    mock_github_client_class.return_value = mock_client
+    mock_client.create_task.return_value = {"id": 123, "title": "Test Issue"}
+
     exc = IntegrityError("unique constraint violation")
     error_info = {
-        "create_task": True,
-        "priority": "HIGH",
+        "create_issue": True,
+        "priority": "high",
         "estimated_effort": "1 hour",
         "keywords": ["IntegrityError"],
     }
 
-    error_handler.create_error_task(
+    error_handler.create_github_issue(
         request_body=mock_request.state.request_body,
         path=mock_request.url.path,
         http_method=mock_request.method,
@@ -184,29 +185,22 @@ def test_create_error_task_with_full_debug_info(mock_request, temp_tasks_file):
         headers=dict(mock_request.headers),
         error=exc,
         error_info=error_info,
-        request=mock_request,
     )
 
-    # Verify task contains all required debugging info
-    with open(temp_tasks_file) as f:
-        tasks = json.load(f)
-    assert len(tasks["tasks"]) == 1
+    mock_client.create_task.assert_called_once()
+    call_args = mock_client.create_task.call_args
 
-    task = tasks["tasks"][0]
-    assert task["id"] == 1
-    assert task["title"] == "5xx Error: IntegrityError"
-    assert task["description"]["request_body"] == {"test": "data"}
-    assert task["description"]["path"] == "/test/path"
-    assert task["description"]["http_method"] == "POST"
-    assert task["description"]["path_params"] == {"thread_id": "123"}
-    assert "content-type" in task["description"]["headers"]
-    assert "authorization" in task["description"]["headers"]
-    assert "unique constraint violation" in task["description"]["error"]
-    assert "traceback" in task["description"]
-    assert task["priority"] == "HIGH"
-    assert task["status"] == "pending"
-    assert task["task_type"] == "bug"
-    assert task["estimated_effort"] == "1 hour"
+    assert "5xx Error: IntegrityError" in call_args[1]["title"]
+    assert "Error Details" in call_args[1]["description"]
+    assert "Error Type: IntegrityError" in call_args[1]["description"]
+    assert "Path: POST /test/path" in call_args[1]["description"]
+    assert "Path Parameters:" in call_args[1]["description"]
+    assert "Headers:" in call_args[1]["description"]
+    assert "Request Body:" in call_args[1]["description"]
+    assert "unique constraint violation" in call_args[1]["description"]
+    assert "Instructions" in call_args[1]["description"]
+    assert call_args[1]["priority"] == "high"
+    assert call_args[1]["task_type"] == "bug"
 
 
 def test_get_error_stats():
@@ -214,7 +208,7 @@ def test_get_error_stats():
     error_handler.ERROR_COUNTER = {"total_5xx": 5}
     stats = error_handler.get_error_stats()
     assert stats == {"total_5xx": 5}
-    assert stats is not error_handler.ERROR_COUNTER  # Should return a copy
+    assert stats is not error_handler.ERROR_COUNTER
 
 
 def test_multiple_errors_increment_counter(mock_request):

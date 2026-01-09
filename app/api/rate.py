@@ -60,10 +60,7 @@ def snapshot_thread_states(db: Session, session_id: int, event: Event) -> None:
     db.commit()
 
 
-try:
-    from app.main import clear_cache
-except ImportError:
-    clear_cache = None
+clear_cache = None
 
 
 def _get_settings(db: Session) -> Settings:

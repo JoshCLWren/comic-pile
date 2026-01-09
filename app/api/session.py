@@ -22,11 +22,8 @@ from comic_pile.session import get_current_die, is_active
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
-try:
-    from app.main import clear_cache, get_current_session_cached
-except ImportError:
-    clear_cache = None
-    get_current_session_cached = None
+clear_cache = None
+get_current_session_cached = None
 
 
 def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]]:

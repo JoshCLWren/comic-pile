@@ -14,10 +14,7 @@ from comic_pile.queue import move_to_back, move_to_front, move_to_position
 
 router = APIRouter()
 
-try:
-    from app.main import clear_cache
-except ImportError:
-    clear_cache = None
+clear_cache = None
 
 
 class PositionRequest(BaseModel):

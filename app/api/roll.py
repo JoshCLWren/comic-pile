@@ -18,10 +18,7 @@ from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["roll"])
 
-try:
-    from app.main import clear_cache
-except ImportError:
-    clear_cache = None
+clear_cache = None
 
 
 @router.post("/html", response_class=HTMLResponse)

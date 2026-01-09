@@ -71,6 +71,15 @@ class TestGitHubTaskClient:
         with pytest.raises(ValueError, match="GITHUB_TOKEN"):
             GitHubTaskClient(token=None, repo="test/repo")
 
+    def test_initialization_with_invalid_token(self, mock_github, mock_repo):
+        """Test client initialization."""
+        mock_github.return_value = mock_repo
+        os.environ["GITHUB_TOKEN"] = "test_token"
+        os.environ["GITHUB_REPO"] = "test/repo"
+        client = GitHubTaskClient()
+        assert client.token == "test_token"
+        assert client.repo_name == "test/repo"
+
     def test_parse_issue_to_task(self, github_client, mock_issue):
         """Test parsing GitHub issue to task dict."""
         mock_label_pending = MagicMock(spec=Label.Label)

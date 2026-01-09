@@ -40,11 +40,8 @@ def list_stale_threads(days: int = 30, db: Session = Depends(get_db)) -> list[Th
     ]
 
 
-try:
-    from app.main import clear_cache, get_threads_cached
-except ImportError:
-    clear_cache = None
-    get_threads_cached = None
+clear_cache = None
+get_threads_cached = None
 
 
 @router.get("/", response_model=list[ThreadResponse])

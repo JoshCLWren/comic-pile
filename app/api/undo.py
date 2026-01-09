@@ -14,10 +14,7 @@ from comic_pile.session import get_current_die
 
 router = APIRouter(tags=["undo"])
 
-try:
-    from app.main import clear_cache
-except ImportError:
-    clear_cache = None
+clear_cache = None
 
 
 @router.post("/{session_id}/undo/{snapshot_id}")
