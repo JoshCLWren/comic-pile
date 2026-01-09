@@ -4,8 +4,6 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,10 +11,14 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
-from app.schemas.thread import SessionResponse
+from app.schemas.thread import (
+    EventDetail,
+    SessionDetailsResponse,
+    SessionResponse,
+    SnapshotResponse,
+    SnapshotsListResponse,
+)
 from comic_pile.session import get_current_die, is_active
-
-templates = Jinja2Templates(directory="app/templates")
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -264,10 +266,8 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
     )
 
 
-@router.get("/{session_id}/details", response_class=HTMLResponse)
-def get_session_details(
-    session_id: int, request: Request, db: Session = Depends(get_db)
-) -> HTMLResponse:
+@router.get("/{session_id}/details")
+def get_session_details(session_id: int, db: Session = Depends(get_db)) -> SessionDetailsResponse:
     """Get session details with all events for expanded view."""
     session_obj = db.get(SessionModel, session_id)
     if not session_obj:
@@ -292,54 +292,40 @@ def get_session_details(
             if thread:
                 thread_title = thread.title
 
-        event_data = {
-            "id": event.id,
-            "type": event.type,
-            "timestamp": event.timestamp,
-            "thread_title": thread_title,
-        }
+        event_data = EventDetail(
+            id=event.id,
+            type=event.type,
+            timestamp=event.timestamp,
+            thread_title=thread_title,
+        )
 
         if event.type == "roll":
-            event_data.update(
-                {
-                    "die": event.die,
-                    "result": event.result,
-                    "selection_method": event.selection_method,
-                }
-            )
+            event_data.die = event.die
+            event_data.result = event.result
+            event_data.selection_method = event.selection_method
         elif event.type == "rate":
-            event_data.update(
-                {
-                    "rating": event.rating,
-                    "issues_read": event.issues_read,
-                    "queue_move": event.queue_move,
-                    "die_after": event.die_after,
-                }
-            )
+            event_data.rating = event.rating
+            event_data.issues_read = event.issues_read
+            event_data.queue_move = event.queue_move
+            event_data.die_after = event.die_after
 
         formatted_events.append(event_data)
 
-    return templates.TemplateResponse(
-        "session_details.html",
-        {
-            "request": request,
-            "session_id": session_obj.id,
-            "started_at": session_obj.started_at,
-            "ended_at": session_obj.ended_at,
-            "start_die": session_obj.start_die,
-            "ladder_path": build_ladder_path(session_obj, db),
-            "narrative_summary": build_narrative_summary(session_id, db),
-            "current_die": get_current_die(session_obj.id, db),
-            "events": formatted_events,
-        },
+    return SessionDetailsResponse(
+        session_id=session_obj.id,
+        started_at=session_obj.started_at,
+        ended_at=session_obj.ended_at,
+        start_die=session_obj.start_die,
+        ladder_path=build_ladder_path(session_obj, db),
+        narrative_summary=build_narrative_summary(session_id, db),
+        current_die=get_current_die(session_obj.id, db),
+        events=formatted_events,
     )
 
 
-@router.get("/{session_id}/snapshots", response_class=HTMLResponse)
-def get_session_snapshots_html(
-    session_id: int, request: Request, db: Session = Depends(get_db)
-) -> HTMLResponse:
-    """Get HTML for session snapshots list."""
+@router.get("/{session_id}/snapshots")
+def get_session_snapshots(session_id: int, db: Session = Depends(get_db)) -> SnapshotsListResponse:
+    """Get session snapshots list."""
     session = db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -354,13 +340,17 @@ def get_session_snapshots_html(
         .all()
     )
 
-    return templates.TemplateResponse(
-        "snapshots_list.html",
-        {
-            "request": request,
-            "session_id": session_id,
-            "snapshots": snapshots,
-        },
+    return SnapshotsListResponse(
+        session_id=session_id,
+        snapshots=[
+            SnapshotResponse(
+                id=s.id,
+                session_id=s.session_id,
+                created_at=s.created_at,
+                description=s.description,
+            )
+            for s in snapshots
+        ],
     )
 
 

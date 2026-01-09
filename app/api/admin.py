@@ -5,9 +5,8 @@ import io
 import json
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,7 +17,6 @@ from app.models import Session as SessionModel
 from app.schemas import SettingsResponse, UpdateSettingsRequest
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-templates = Jinja2Templates(directory="app/templates")
 
 
 @router.post("/import/csv/")
@@ -429,39 +427,12 @@ def get_settings(db: Session = Depends(get_db)) -> SettingsResponse:
     )
 
 
-@router.get("/settings/form", response_class=HTMLResponse)
-def settings_form(request: Request, db: Session = Depends(get_db)):
-    """Render settings form HTML fragment."""
-    settings = db.execute(select(Settings)).scalars().first()
-
-    if not settings:
-        settings = Settings()
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-
-    die_options = [4, 6, 8, 10, 12, 20]
-
-    return templates.TemplateResponse(
-        "settings_form.html",
-        {
-            "request": request,
-            "settings": settings,
-            "die_options": die_options,
-        },
-    )
-
-
-@router.put("/settings", response_class=HTMLResponse)
-def update_settings(
-    request_data: UpdateSettingsRequest,
-    req: Request,
-    db: Session = Depends(get_db),
-):
+@router.put("/settings")
+def update_settings(request_data: UpdateSettingsRequest, db: Session = Depends(get_db)):
     """Update application settings.
 
-    Only updates fields that are provided in the request.
-    Returns HTML form fragment for HTMX.
+    Only updates fields that are provided in request.
+    Returns JSON response.
     """
     settings = db.execute(select(Settings)).scalars().first()
 
@@ -485,13 +456,14 @@ def update_settings(
     db.commit()
     db.refresh(settings)
 
-    die_options = [4, 6, 8, 10, 12, 20]
-
-    return templates.TemplateResponse(
-        "settings_form.html",
-        {
-            "request": req,
-            "settings": settings,
-            "die_options": die_options,
-        },
+    return SettingsResponse(
+        id=settings.id,
+        session_gap_hours=settings.session_gap_hours,
+        start_die=settings.start_die,
+        rating_min=settings.rating_min,
+        rating_max=settings.rating_max,
+        rating_step=settings.rating_step,
+        rating_threshold=settings.rating_threshold,
+        created_at=settings.created_at,
+        updated_at=settings.updated_at,
     )

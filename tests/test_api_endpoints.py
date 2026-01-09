@@ -323,14 +323,14 @@ async def test_get_session_not_found(client):
 
 @pytest.mark.asyncio
 async def test_get_session_details(client, sample_data):
-    """Test GET /sessions/{id}/details returns events."""
+    """Test GET /sessions/{id}/details returns events as JSON."""
     response = await client.get("/sessions/1/details")
     assert response.status_code == 200
 
-    content = response.text
-    assert "Rolled" in content
-    assert "Rated" in content
-    assert "Superman" in content
+    data = response.json()
+    assert data["session_id"] == 1
+    assert "events" in data
+    assert len(data["events"]) > 0
 
 
 @pytest.mark.asyncio

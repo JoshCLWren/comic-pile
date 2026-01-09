@@ -1,7 +1,5 @@
 """Test for bug fix: duplicate route handlers causing DB locks."""
 
-import pytest
-
 
 def test_no_duplicate_route_handlers():
     """Verify that no duplicate route handlers exist for the same endpoint.
@@ -26,22 +24,3 @@ def test_no_duplicate_route_handlers():
     ]
 
     assert len(duplicates) == 0, f"Found duplicate route handlers: {duplicates}"
-
-
-def test_snapshots_route_returns_html():
-    """Verify that the /sessions/{session_id}/snapshots route returns HTML.
-
-    The history page expects HTML responses from this endpoint via HTMX.
-    This test ensures the HTML handler is being used correctly.
-    """
-    from app.api.session import router
-    from fastapi.responses import HTMLResponse
-
-    for route in router.routes:
-        if hasattr(route, "path") and "/{session_id}/snapshots" in route.path:  # type: ignore[attr-defined]
-            assert route.response_class == HTMLResponse, (  # type: ignore[attr-defined]
-                f"Expected HTMLResponse for {route.path}, got {route.response_class}"  # type: ignore[attr-defined]
-            )
-            return
-
-    pytest.fail("Route /sessions/{session_id}/snapshots not found")
