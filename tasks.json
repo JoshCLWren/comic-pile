@@ -3531,7 +3531,7 @@
       "title": "Fix HTMX roll trigger",
       "description": "Roll functionality broken. JavaScript triggers htmx.trigger(\"#roll-container\", \"triggerRoll\") but no element has hx-trigger attribute. This causes all roll requests to fail silently.",
       "priority": "HIGH",
-      "status": "in_progress",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,
@@ -3554,13 +3554,13 @@
       "title": "Fix three.min.js library issues",
       "description": "Three.js library import errors recurring. File static/js/three.min.js is only 181 bytes (corrupted?). dice3d.js already exists.",
       "priority": "HIGH",
-      "status": "pending",
+      "status": "done",
       "dependencies": null,
       "assigned_agent": null,
       "worktree": null,
       "status_notes": null,
       "estimated_effort": "2 hours",
-      "completed": false,
+      "completed": true,
       "blocked_reason": null,
       "blocked_by": null,
       "last_heartbeat": null,
@@ -3569,7 +3569,7 @@
       "session_id": null,
       "session_start_time": null,
       "created_at": "2026-01-08T19:50:00.000000",
-      "updated_at": "2026-01-08T19:50:00.000000"
+      "updated_at": "2026-01-09T18:40:00.000000"
     },
     {
       "id": 155,

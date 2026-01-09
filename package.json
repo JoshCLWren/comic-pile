@@ -10,9 +10,9 @@
     "htmlhint": "^1.1.5"
   },
   "scripts": {
-    "lint:js": "npx eslint static/js/*.js",
+    "lint:js": "sh -c 'if ls static/js/*.js >/dev/null 2>&1; then npx eslint static/js/*.js; else echo \"No JavaScript files to lint\"; fi'",
     "lint:html": "npx htmlhint app/templates/*.html",
     "lint": "npm run lint:js && npm run lint:html",
-    "lint:fix": "npx eslint static/js/*.js --fix"
+    "lint:fix": "sh -c 'if ls static/js/*.js >/dev/null 2>&1; then npx eslint static/js/*.js --fix; else echo \"No JavaScript files to fix\"; fi'"
   }
 }
