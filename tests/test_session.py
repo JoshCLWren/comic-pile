@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from httpx import AsyncClient
 
 from app.api.session import get_active_thread
-from app.models import Event, Snapshot, Thread
+from app.models import Event, Session, Snapshot, Thread
 from app.models import Session as SessionModel
 from comic_pile.session import (
     create_session_start_snapshot,
@@ -217,6 +217,28 @@ def test_get_or_create_creates_default_user(db):
     assert new_session.user_id == non_existent_user_id
 
     user = db.get(User, non_existent_user_id)
+    assert user is not None
+    assert user.username == "default_user"
+
+
+def test_get_or_create_creates_user_id_1(db):
+    """BUG-142: Creates default user when user_id=1 doesn't exist."""
+    from app.models import User
+    from sqlalchemy import delete
+
+    db.execute(delete(Session))
+    db.execute(delete(User))
+    db.commit()
+
+    user = db.get(User, 1)
+    assert user is None
+
+    new_session = get_or_create(db, user_id=1)
+
+    assert new_session is not None
+    assert new_session.user_id == 1
+
+    user = db.get(User, 1)
     assert user is not None
     assert user.username == "default_user"
 
