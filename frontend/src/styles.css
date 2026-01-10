@@ -190,6 +190,11 @@ body {
 }
 
 .nav-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
   background: rgba(5, 2, 12, 0.95);
   backdrop-filter: blur(20px);
   border-top: 1px solid var(--glass-border);
