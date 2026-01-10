@@ -52,7 +52,7 @@ Historical documentation is organized in [../archive/](../archive/) for referenc
 
 - **archive/old-prompts/** - Superseded agent prompt files
 - **archive/phase1/** - Phase 1 agent task documentation
-- **archive/htmx-backup/** - HTMX-related documentation (stack migrated to React)
+- **archive/htmx-backup/** - Legacy frontend documentation (stack migrated to React)
 - **archive/sessions/** - Session handoff and context documents
 - **archive/exploration/** - Exploratory research documents (MCP, Docker, etc.)
 - **archive/historical/** - Historical summaries and audit reports
@@ -71,7 +71,7 @@ Historical documentation is organized in [../archive/](../archive/) for referenc
 **Testing:**
 - pytest for backend API tests
 - Playwright for E2E tests
-- Coverage target: 90%
+- Coverage target: 96%
 
 **Code Quality:**
 - ruff for linting

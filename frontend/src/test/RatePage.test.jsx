@@ -57,12 +57,12 @@ it('renders rate page and submits rating', async () => {
   await waitFor(() => expect(screen.getByText('Rate Session')).toBeInTheDocument())
   await user.click(await screen.findByRole('button', { name: /save & continue/i }))
 
-  await waitFor(() =>
-    expect(rateApi.rate).toHaveBeenCalledWith({
-      rating: 4,
-      issues_read: 1,
-      finish_session: false,
-    })
-  )
+  await waitFor(() => expect(rateApi.rate).toHaveBeenCalled())
+  const [payload] = rateApi.rate.mock.calls[0]
+  expect(payload).toEqual({
+    rating: 4,
+    issues_read: 1,
+    finish_session: false,
+  })
   await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith('/'))
 })

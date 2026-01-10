@@ -321,7 +321,7 @@ The task/metrics-001 branch has diverged significantly from main due to:
 - [ ] test_get_metrics_stale_tasks passes
 - [ ] test_get_metrics_blocked_tasks passes
 - [ ] Full test suite passes: `pytest` (46+ tests)
-- [ ] Test coverage maintained at 90%+ threshold
+- [ ] Test coverage maintained at 96%+ threshold
 
 ### Linting and Code Quality
 
@@ -343,7 +343,7 @@ The task/metrics-001 branch has diverged significantly from main due to:
 - [ ] Metrics endpoint returns correct data for various task states
 - [ ] Dashboard displays metrics correctly in browser
 - [ ] CSV download works and contains correct data
-- [ ] Refresh button reloads metrics via HTMX
+- [ ] Refresh button reloads metrics via frontend request
 - [ ] Average completion time calculated correctly
 - [ ] Stale and blocked tasks counted correctly
 
