@@ -76,9 +76,14 @@ export default function HistoryPage() {
                 )}
 
                 {session.active_thread && (
-                  <div className="text-sm">
+                  <div className="text-sm space-y-1">
                     <p className="font-black text-slate-300 truncate">{session.active_thread.title}</p>
                     <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{session.active_thread.format}</p>
+                    {session.last_rolled_result !== null && session.last_rolled_result !== undefined && (
+                      <p className="text-[9px] font-black text-teal-300 uppercase tracking-widest">
+                        Roll: {session.last_rolled_result}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

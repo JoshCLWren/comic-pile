@@ -592,7 +592,7 @@ export default function Dice3D({ sides = 6, value = 1, isRolling = false, showVa
           targetRotationRef.current = null;
           if (onRollComplete) onRollComplete();
         }
-      } else {
+      } else if (!showValue) {
         meshRef.current.rotation.y += 0.008;
       }
 
@@ -610,7 +610,7 @@ export default function Dice3D({ sides = 6, value = 1, isRolling = false, showVa
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [isRolling, onRollComplete]);
+  }, [isRolling, onRollComplete, showValue]);
 
   useEffect(() => {
     if (!isRolling && meshRef.current) {

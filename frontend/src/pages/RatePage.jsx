@@ -170,7 +170,7 @@ export default function RatePage() {
                 sides={previewSides}
                 value={rolledValue}
                 isRolling={false}
-                showValue={false}
+                showValue
                 color={0xffffff}
               />
               <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wider text-indigo-400">
