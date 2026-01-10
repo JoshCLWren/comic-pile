@@ -1,6 +1,6 @@
 # Comic Pile
 
-A dice-driven comic reading tracker built with FastAPI, HTMX, and Tailwind CSS.
+A dice-driven comic reading tracker built with FastAPI, React, and Tailwind CSS.
 
 ## Features
 
@@ -15,7 +15,7 @@ A dice-driven comic reading tracker built with FastAPI, HTMX, and Tailwind CSS.
 - **Backend**: FastAPI (Python 3.13)
 - **Database**: PostgreSQL with SQLAlchemy ORM
 - **Migrations**: Alembic
-- **Frontend**: HTMX + Jinja2 templates
+- **Frontend**: React + Vite + Tailwind CSS
 - **Styling**: Tailwind CSS
 - **Testing**: pytest with httpx.AsyncClient for API tests
 - **Code Quality**: ruff linting, pyright type checking, 96% coverage requirement
@@ -90,7 +90,7 @@ make migrate
 │   ├── api/               # API route handlers
 │   ├── models/            # SQLAlchemy database models
 │   ├── schemas/           # Pydantic request/response schemas
-│   └── templates/         # Jinja2 templates
+│   └── templates/         # React components
 ├── comic_pile/            # Core package (dice ladder, queue, session logic)
 ├── migrations/            # Alembic migration files
 ├── scripts/               # Utility scripts (seed data, etc.)

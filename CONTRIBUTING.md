@@ -57,10 +57,9 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 
 ### Frontend Development
 
-- Templates live in `app/templates/` with Jinja2 syntax
-- Use HTMX for interactivity (AJAX without JavaScript)
+- React components live in `app/templates/` with JSX syntax
 - Style with Tailwind CSS (mobile-first, touch targets ≥44px)
-- Keep custom JavaScript to a minimum
+- Keep custom JavaScript to a minimum (React handles most interactivity)
 
 ### Database Migrations
 
