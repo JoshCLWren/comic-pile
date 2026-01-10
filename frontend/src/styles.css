@@ -196,6 +196,23 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+.nav-item {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.nav-item:hover {
+  color: rgba(226, 232, 240, 0.95);
+}
+
+.nav-item.active {
+  color: #f8fafc;
+  background: rgba(79, 70, 229, 0.18);
+}
+
+.nav-item.active .nav-label {
+  color: #f8fafc;
+}
+
 .glass-card {
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);

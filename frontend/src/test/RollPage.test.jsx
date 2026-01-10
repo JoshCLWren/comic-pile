@@ -4,7 +4,17 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
-import { useClearManualDie, useOverrideRoll, useReroll, useSetDie } from '../hooks/useRoll'
+import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
+
+const navigateSpy = vi.fn()
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => navigateSpy,
+  }
+})
 
 vi.mock('../components/LazyDice3D', () => ({
   default: () => <div data-testid="lazy-dice" />,
@@ -15,7 +25,7 @@ vi.mock('../hooks/useThread', () => ({ useThreads: vi.fn(), useStaleThreads: vi.
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
   useClearManualDie: vi.fn(),
-  useReroll: vi.fn(),
+  useRoll: vi.fn(),
   useOverrideRoll: vi.fn(),
 }))
 
@@ -37,7 +47,7 @@ beforeEach(() => {
   useStaleThreads.mockReturnValue({ data: [] })
   useSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useReroll.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useOverrideRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
 })
 

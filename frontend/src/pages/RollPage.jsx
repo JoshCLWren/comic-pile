@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
+import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../components/diceLadder'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
-import { useClearManualDie, useOverrideRoll, useReroll, useSetDie } from '../hooks/useRoll'
+import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
 
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
@@ -21,9 +22,10 @@ export default function RollPage() {
   const { data: threads } = useThreads()
   const { data: staleThreads } = useStaleThreads(7)
 
+  const navigate = useNavigate()
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
-  const rerollMutation = useReroll()
+  const rollMutation = useRoll()
   const overrideMutation = useOverrideRoll()
 
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
@@ -83,8 +85,17 @@ export default function RollPage() {
       if (currentRollCount >= maxRolls) {
         clearInterval(rollInterval)
         setTimeout(() => {
-          rerollMutation.mutate(undefined, {
-            onSuccess: () => setIsRolling(false),
+          rollMutation.mutate(undefined, {
+            onSuccess: (response) => {
+              if (response?.result) {
+                setRolledResult(response.result)
+              }
+              if (response?.thread_id) {
+                setSelectedThreadId(response.thread_id)
+              }
+              setIsRolling(false)
+              navigate('/rate')
+            },
             onError: () => setIsRolling(false),
           })
         }, 400)
@@ -108,6 +119,7 @@ export default function RollPage() {
         onSuccess: () => {
           setIsOverrideOpen(false)
           setOverrideThreadId('')
+          navigate('/rate')
         },
       }
     )
