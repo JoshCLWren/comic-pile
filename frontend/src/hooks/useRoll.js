@@ -8,6 +8,7 @@ export function useRoll() {
     mutationFn: () => rollApi.roll(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['session'] })
+      queryClient.invalidateQueries({ queryKey: ['session', 'current'] })
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
   })
@@ -20,6 +21,7 @@ export function useOverrideRoll() {
     mutationFn: (data) => rollApi.override(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['session'] })
+      queryClient.invalidateQueries({ queryKey: ['session', 'current'] })
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
   })
@@ -65,6 +67,7 @@ export function useReroll() {
     mutationFn: () => rollApi.reroll(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['session'] })
+      queryClient.invalidateQueries({ queryKey: ['session', 'current'] })
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
   })

@@ -211,7 +211,7 @@ export default function RollPage() {
                 sides={currentDie}
                 value={rolledResult || 1}
                 isRolling={isRolling}
-                showValue={!isRolling && rolledResult !== null}
+                showValue={false}
                 color={0xffffff}
                 onRollComplete={handleRollComplete}
               />

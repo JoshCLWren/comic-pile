@@ -465,28 +465,85 @@ function buildGeometry(sides, atlasInfo) {
   }
 }
 
-function getFaceRotation(sides, value) {
-  if (sides === 6) {
-    const rotations = {
-      1: { x: 0, y: 0, z: 0 },
-      2: { x: 0, y: -Math.PI / 2, z: 0 },
-      3: { x: Math.PI / 2, y: 0, z: 0 },
-      4: { x: -Math.PI / 2, y: 0, z: 0 },
-      5: { x: 0, y: Math.PI / 2, z: 0 },
-      6: { x: Math.PI, y: 0, z: 0 }
-    };
-    return rotations[value] || { x: 0, y: 0, z: 0 };
-  }
-  return { x: Math.random() * Math.PI * 2, y: Math.random() * Math.PI * 2, z: Math.random() * Math.PI * 2 };
+function getNumberFromUv(u, v, cols, rows) {
+  const col = Math.max(0, Math.min(cols - 1, Math.floor(u * cols)))
+  const row = Math.max(0, Math.min(rows - 1, Math.floor((1 - v) * rows)))
+  return row * cols + col + 1
 }
 
-export default function Dice3D({ sides = 6, value = 1, isRolling = false, showValue = false, color = 0xffffff, onRollComplete = null }) {
+function buildNumberNormals(geometry, cols, rows) {
+  const position = geometry.getAttribute('position')
+  const uv = geometry.getAttribute('uv')
+  const index = geometry.getIndex()
+  const normals = new Map()
+  const counts = new Map()
+
+  const triangleCount = index ? index.count / 3 : position.count / 3
+
+  for (let i = 0; i < triangleCount; i++) {
+    const a = index ? index.getX(i * 3) : i * 3
+    const b = index ? index.getX(i * 3 + 1) : i * 3 + 1
+    const c = index ? index.getX(i * 3 + 2) : i * 3 + 2
+
+    const ax = position.getX(a)
+    const ay = position.getY(a)
+    const az = position.getZ(a)
+    const bx = position.getX(b)
+    const by = position.getY(b)
+    const bz = position.getZ(b)
+    const cx = position.getX(c)
+    const cy = position.getY(c)
+    const cz = position.getZ(c)
+
+    const ab = new THREE.Vector3(bx - ax, by - ay, bz - az)
+    const ac = new THREE.Vector3(cx - ax, cy - ay, cz - az)
+    const normal = new THREE.Vector3().crossVectors(ab, ac).normalize()
+
+    const u = (uv.getX(a) + uv.getX(b) + uv.getX(c)) / 3
+    const v = (uv.getY(a) + uv.getY(b) + uv.getY(c)) / 3
+    const number = getNumberFromUv(u, v, cols, rows)
+
+    const current = normals.get(number) ?? new THREE.Vector3()
+    current.add(normal)
+    normals.set(number, current)
+    counts.set(number, (counts.get(number) ?? 0) + 1)
+  }
+
+  for (const [number, normal] of normals.entries()) {
+    normal.divideScalar(counts.get(number)).normalize()
+  }
+
+  return normals
+}
+
+function getFaceRotation(value, normalMap) {
+  const normal = normalMap?.get(value)
+  if (!normal) {
+    return { x: 0, y: 0, z: 0 }
+  }
+
+  const target = new THREE.Vector3(0, 0, 1)
+  const quaternion = new THREE.Quaternion().setFromUnitVectors(normal.clone().normalize(), target)
+  const euler = new THREE.Euler().setFromQuaternion(quaternion)
+  return { x: euler.x, y: euler.y, z: euler.z }
+}
+
+export default function Dice3D({
+  sides = 6,
+  value = 1,
+  isRolling = false,
+  showValue = false,
+  freeze = false,
+  color = 0xffffff,
+  onRollComplete = null,
+}) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const rendererRef = useRef(null);
   const meshRef = useRef(null);
   const targetRotationRef = useRef(null);
+  const numberNormalsRef = useRef(null);
   const previousSidesRef = useRef(sides);
 
   useEffect(() => {
@@ -552,6 +609,7 @@ export default function Dice3D({ sides = 6, value = 1, isRolling = false, showVa
 
     const atlasInfo = createTextureAtlas(sides);
     const geometry = buildGeometry(sides, atlasInfo);
+    numberNormalsRef.current = buildNumberNormals(geometry, atlasInfo.cols, atlasInfo.rows)
     const material = new THREE.MeshStandardMaterial({
       map: atlasInfo.texture,
       color,
@@ -592,7 +650,7 @@ export default function Dice3D({ sides = 6, value = 1, isRolling = false, showVa
           targetRotationRef.current = null;
           if (onRollComplete) onRollComplete();
         }
-      } else if (!showValue) {
+      } else if (!freeze) {
         meshRef.current.rotation.y += 0.008;
       }
 
@@ -610,39 +668,20 @@ export default function Dice3D({ sides = 6, value = 1, isRolling = false, showVa
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [isRolling, onRollComplete, showValue]);
+  }, [isRolling, onRollComplete, freeze]);
 
   useEffect(() => {
     if (!isRolling && meshRef.current) {
-      targetRotationRef.current = getFaceRotation(sides, value);
+      targetRotationRef.current = getFaceRotation(value, numberNormalsRef.current)
     }
-  }, [value, isRolling, sides]);
+  }, [value, isRolling, sides])
 
   return (
     <div
       ref={containerRef}
       className="dice-3d"
       style={{ width: '100%', height: '100%', position: 'relative' }}
-    >
-      {showValue && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            fontSize: '3rem',
-            fontWeight: 900,
-            color: '#fff',
-            textShadow: '0 0 20px rgba(79, 70, 229, 0.8)',
-            pointerEvents: 'none',
-            zIndex: 10
-          }}
-        >
-          {value}
-        </div>
-      )}
-    </div>
-  );
+    />
+  )
 }
 

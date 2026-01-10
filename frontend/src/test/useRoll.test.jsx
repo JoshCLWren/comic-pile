@@ -47,12 +47,12 @@ beforeEach(() => {
 })
 
 it('calls roll mutation and invalidates queries', async () => {
-  await setupMutation(useRoll, undefined, [['session'], ['threads']])
+  await setupMutation(useRoll, undefined, [['session'], ['session', 'current'], ['threads']])
   expect(rollApi.roll).toHaveBeenCalled()
 })
 
 it('calls override mutation and invalidates queries', async () => {
-  await setupMutation(useOverrideRoll, { thread_id: 9 }, [['session'], ['threads']])
+  await setupMutation(useOverrideRoll, { thread_id: 9 }, [['session'], ['session', 'current'], ['threads']])
   expect(rollApi.override).toHaveBeenCalledWith({ thread_id: 9 })
 })
 
@@ -72,6 +72,6 @@ it('calls clear manual die mutation and invalidates session', async () => {
 })
 
 it('calls reroll mutation and invalidates queries', async () => {
-  await setupMutation(useReroll, undefined, [['session'], ['threads']])
+  await setupMutation(useReroll, undefined, [['session'], ['session', 'current'], ['threads']])
   expect(rollApi.reroll).toHaveBeenCalled()
 })

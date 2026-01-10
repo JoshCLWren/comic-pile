@@ -4,6 +4,30 @@ import Dice3D from '../components/Dice3D'
 
 vi.mock('three', () => {
   class BufferGeometry {
+    constructor() {
+      this.attributes = {
+        position: {
+          count: 3,
+          getX: () => 0,
+          getY: () => 0,
+          getZ: () => 0,
+        },
+        uv: {
+          getX: () => 0.1,
+          getY: () => 0.1,
+        },
+      }
+      this.index = {
+        count: 3,
+        getX: (idx) => idx,
+      }
+    }
+    getAttribute(name) {
+      return this.attributes[name]
+    }
+    getIndex() {
+      return this.index
+    }
     setAttribute() {}
     setIndex() {}
     computeVertexNormals() {}
@@ -62,6 +86,41 @@ vi.mock('three', () => {
     }
   }
 
+  class Vector3 {
+    constructor(x = 0, y = 0, z = 0) {
+      this.x = x
+      this.y = y
+      this.z = z
+    }
+    crossVectors() {
+      return this
+    }
+    normalize() {
+      return this
+    }
+    add() {
+      return this
+    }
+    divideScalar() {
+      return this
+    }
+    clone() {
+      return new Vector3(this.x, this.y, this.z)
+    }
+  }
+
+  class Quaternion {
+    setFromUnitVectors() {
+      return this
+    }
+  }
+
+  class Euler {
+    setFromQuaternion() {
+      return this
+    }
+  }
+
   return {
     BufferGeometry,
     BufferAttribute,
@@ -73,6 +132,9 @@ vi.mock('three', () => {
     DirectionalLight,
     MeshStandardMaterial,
     Mesh,
+    Vector3,
+    Quaternion,
+    Euler,
   }
 })
 
@@ -97,7 +159,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('renders dice value overlay when enabled', () => {
-  render(<Dice3D sides={6} value={3} showValue />)
-  expect(screen.getByText('3')).toBeInTheDocument()
+it('renders dice container', () => {
+  render(<Dice3D sides={6} value={3} />)
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
 })
