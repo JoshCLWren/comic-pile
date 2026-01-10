@@ -50,5 +50,5 @@ it('renders queue items and opens create modal', async () => {
   expect(screen.getByText('Descender')).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: /add thread/i }))
-  expect(screen.getByText('Create Thread')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /create thread/i })).toBeInTheDocument()
 })

@@ -7,9 +7,14 @@ vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
   return {
     ...actual,
-    BrowserRouter: ({ children, basename }) => (
-      <actual.MemoryRouter initialEntries={[basename ?? '/']}>{children}</actual.MemoryRouter>
-    ),
+    BrowserRouter: ({ children, basename }) => {
+      const initialEntry = basename ? `${basename}/` : '/'
+      return (
+        <actual.MemoryRouter initialEntries={[initialEntry]} basename={basename}>
+          {children}
+        </actual.MemoryRouter>
+      )
+    },
   }
 })
 

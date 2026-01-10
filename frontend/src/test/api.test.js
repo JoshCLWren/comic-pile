@@ -1,20 +1,18 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const get = vi.fn()
-const post = vi.fn()
-const put = vi.fn()
-const del = vi.fn()
-
-const apiMock = {
-  get,
-  post,
-  put,
-  delete: del,
+const apiMock = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  put: vi.fn(),
+  delete: vi.fn(),
   interceptors: {
     request: { use: vi.fn() },
     response: { use: vi.fn() },
   },
-}
+}))
+
+const { get, post, put } = apiMock
+const del = apiMock.delete
 
 vi.mock('axios', () => ({
   default: {

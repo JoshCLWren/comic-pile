@@ -139,7 +139,6 @@ async def test_roll_result_consistency_regression(client, sample_data):
     assert session_response.status_code == 200
 
     session_data = session_response.json()
-    print(f"DEBUG test_roll: session_data = {session_data}")
     api_result = session_data.get("last_rolled_result")
 
     assert api_result is not None, "Session should have last_rolled_result"

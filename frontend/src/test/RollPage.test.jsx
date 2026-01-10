@@ -50,5 +50,5 @@ it('renders roll page content and opens override modal', async () => {
   expect(screen.getByText('Saga')).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: /override/i }))
-  expect(screen.getByText('Override Roll')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /override roll/i })).toBeInTheDocument()
 })
