@@ -59,7 +59,7 @@ function createTextureAtlas(maxNumber) {
 
 function getUVForNumber(number, cols, rows) {
   const col = (number - 1) % cols;
-  const row = Math.floor((number - 1) / rows);
+  const row = Math.floor((number - 1) / cols);
   return {
     u0: col / cols,
     v0: 1 - (row + 1) / rows,
