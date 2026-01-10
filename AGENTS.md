@@ -80,6 +80,33 @@ else:
     # Full coordination system
 ```
 
+### Ralph Ownership and Quality Control
+
+**CRITICAL:** Ralph mode agents own the entire task lifecycle and must meet strict quality standards.
+
+**Ownership Requirements:**
+- **Direct accountability:** You are responsible for completing the task end-to-end
+- **No delegation:** Do not create subtasks or delegate work
+- **Self-correction:** Fix all failures yourself through iteration
+- **Complete work:** Continue until all tests pass and linting is clean
+
+**Quality Control Gates:**
+- All code must pass `make lint` (ruff, pyright, ESLint, htmlhint)
+- All tests must pass with 90%+ coverage (configured in pyproject.toml)
+- No type/linter ignores allowed (`# type: ignore`, `# noqa`, etc.)
+- Pre-commit hook will block commits with quality violations
+- Regression tests required for all bug fixes
+
+**Code Standards Are Strict:**
+- Follow PEP 8 spacing (4 spaces, 100-character soft wrap)
+- Use specific types, not `Any` (ruff ANN401 rule)
+- Annotate all public functions with precise types
+- Avoid code comments - prefer clear code and commit messages
+- Run `make lint` after every change
+- Run `pytest` when touching logic or input handling
+
+**Reference:** See `docs/RALPH_MODE.md` for complete Ralph mode philosophy and workflow patterns.
+
 ## Tech Stack
 - **Backend:** FastAPI (Python 3.13)
 - **Database:** PostgreSQL with SQLAlchemy ORM
