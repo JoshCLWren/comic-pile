@@ -174,44 +174,26 @@ def end_session(session_id: int, db: Session) -> None:
 
 def get_current_die(session_id: int, db: Session) -> int:
     """Get current die size based on manual selection or last rating event."""
-    max_retries = 3
-    initial_delay = 0.1
-    retries = 0
+    settings = _get_settings(db)
+    session = db.get(SessionModel, session_id)
 
-    while retries < max_retries:
-        try:
-            settings = _get_settings(db)
-            session = db.get(SessionModel, session_id)
+    if session and session.manual_die:
+        return session.manual_die
 
-            if session and session.manual_die:
-                return session.manual_die
+    last_rate_event = (
+        db.execute(
+            select(Event)
+            .where(Event.session_id == session_id)
+            .where(Event.type == "rate")
+            .where(Event.die_after.is_not(None))
+            .order_by(Event.timestamp.desc())
+        )
+        .scalars()
+        .first()
+    )
 
-            last_rate_event = (
-                db.execute(
-                    select(Event)
-                    .where(Event.session_id == session_id)
-                    .where(Event.type == "rate")
-                    .where(Event.die_after.is_not(None))
-                    .order_by(Event.timestamp.desc())
-                )
-                .scalars()
-                .first()
-            )
+    if last_rate_event:
+        die_after = last_rate_event.die_after
+        return die_after if die_after is not None else settings.start_die
 
-            if last_rate_event:
-                die_after = last_rate_event.die_after
-                return die_after if die_after is not None else settings.start_die
-
-            return session.start_die if session else settings.start_die
-        except OperationalError as e:
-            if "deadlock" in str(e).lower():
-                db.rollback()
-                retries += 1
-                if retries >= max_retries:
-                    raise
-                delay = initial_delay * (2 ** (retries - 1))
-                time.sleep(delay)
-            else:
-                raise
-
-    raise RuntimeError(f"Failed to get current die after {max_retries} retries")
+    return session.start_die if session else settings.start_die
