@@ -1,18 +1,18 @@
 """API endpoint integration tests."""
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 
 @pytest.mark.asyncio
 async def test_create_thread(client, db):
-    """Test POST /threads/ creates new thread."""
+    """Test POST /api/threads/ creates new thread."""
     thread_data = {
         "title": "Spider-Man",
         "format": "Comic",
         "issues_remaining": 12,
     }
-    response = await client.post("/threads/", json=thread_data)
+    response = await client.post("/api/threads/", json=thread_data)
     assert response.status_code == 201
 
     data = response.json()
@@ -33,20 +33,20 @@ async def test_create_thread(client, db):
 
 @pytest.mark.asyncio
 async def test_create_thread_validation(client):
-    """Test POST /threads/ validates input."""
+    """Test POST /api/threads/ validates input."""
     invalid_data = {
         "title": "",
         "format": "Comic",
         "issues_remaining": 12,
     }
-    response = await client.post("/threads/", json=invalid_data)
+    response = await client.post("/api/threads/", json=invalid_data)
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_list_threads(client, sample_data):
-    """Test GET /threads/ returns all threads."""
-    response = await client.get("/threads/")
+    """Test GET /api/threads/ returns all threads."""
+    response = await client.get("/api/threads/")
     assert response.status_code == 200
 
     threads = response.json()
@@ -60,16 +60,16 @@ async def test_list_threads(client, sample_data):
 
 @pytest.mark.asyncio
 async def test_list_threads_empty(client):
-    """Test GET /threads/ with no threads returns empty list."""
-    response = await client.get("/threads/")
+    """Test GET /api/threads/ with no threads returns empty list."""
+    response = await client.get("/api/threads/")
     assert response.status_code == 200
     assert response.json() == []
 
 
 @pytest.mark.asyncio
 async def test_get_thread(client, sample_data):
-    """Test GET /threads/{id} returns single thread."""
-    response = await client.get("/threads/1")
+    """Test GET /api/threads/{id} returns single thread."""
+    response = await client.get("/api/threads/1")
     assert response.status_code == 200
 
     thread = response.json()
@@ -83,21 +83,21 @@ async def test_get_thread(client, sample_data):
 
 @pytest.mark.asyncio
 async def test_get_thread_not_found(client):
-    """Test GET /threads/{id} returns 404 for non-existent thread."""
-    response = await client.get("/threads/999")
+    """Test GET /api/threads/{id} returns 404 for non-existent thread."""
+    response = await client.get("/api/threads/999")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
 async def test_update_thread(client, sample_data, db):
-    """Test PUT /threads/{id} updates thread."""
+    """Test PUT /api/threads/{id} updates thread."""
     update_data = {
         "title": "Superman Updated",
         "format": "Trade Paperback",
         "issues_remaining": 8,
     }
-    response = await client.put("/threads/1", json=update_data)
+    response = await client.put("/api/threads/1", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -116,11 +116,11 @@ async def test_update_thread(client, sample_data, db):
 
 @pytest.mark.asyncio
 async def test_update_thread_partial(client, sample_data):
-    """Test PUT /threads/{id} with partial data."""
+    """Test PUT /api/threads/{id} with partial data."""
     update_data = {
         "title": "Batman Updated",
     }
-    response = await client.put("/threads/2", json=update_data)
+    response = await client.put("/api/threads/2", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -131,21 +131,21 @@ async def test_update_thread_partial(client, sample_data):
 
 @pytest.mark.asyncio
 async def test_update_thread_not_found(client):
-    """Test PUT /threads/{id} returns 404 for non-existent thread."""
+    """Test PUT /api/threads/{id} returns 404 for non-existent thread."""
     update_data = {
         "title": "Non-existent",
     }
-    response = await client.put("/threads/999", json=update_data)
+    response = await client.put("/api/threads/999", json=update_data)
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_update_thread_complete_status(client, sample_data, db):
-    """Test PUT /threads/{id} sets completed status when issues_remaining is 0."""
+    """Test PUT /api/threads/{id} sets completed status when issues_remaining is 0."""
     update_data = {
         "issues_remaining": 0,
     }
-    response = await client.put("/threads/1", json=update_data)
+    response = await client.put("/api/threads/1", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -160,11 +160,11 @@ async def test_update_thread_complete_status(client, sample_data, db):
 
 @pytest.mark.asyncio
 async def test_update_thread_active_status(client, sample_data, db):
-    """Test PUT /threads/{id} sets active status when issues_remaining > 0."""
+    """Test PUT /api/threads/{id} sets active status when issues_remaining > 0."""
     update_data = {
         "issues_remaining": 5,
     }
-    response = await client.put("/threads/3", json=update_data)
+    response = await client.put("/api/threads/3", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -179,8 +179,8 @@ async def test_update_thread_active_status(client, sample_data, db):
 
 @pytest.mark.asyncio
 async def test_delete_thread(client, sample_data, db):
-    """Test DELETE /threads/{id} removes thread."""
-    response = await client.delete("/threads/1")
+    """Test DELETE /api/threads/{id} removes thread."""
+    response = await client.delete("/api/threads/1")
     assert response.status_code == 204
 
     from app.models import Thread
@@ -188,14 +188,14 @@ async def test_delete_thread(client, sample_data, db):
     db_thread = db.get(Thread, 1)
     assert db_thread is None
 
-    response = await client.get("/threads/1")
+    response = await client.get("/api/threads/1")
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_delete_thread_not_found(client):
-    """Test DELETE /threads/{id} returns 404 for non-existent thread."""
-    response = await client.delete("/threads/999")
+    """Test DELETE /api/threads/{id} returns 404 for non-existent thread."""
+    response = await client.delete("/api/threads/999")
     assert response.status_code == 404
 
 
@@ -219,11 +219,21 @@ async def test_get_session_current(client, db):
 
 
 @pytest.mark.asyncio
-async def test_get_session_current_not_found(client):
-    """Test GET /session/current/ returns 404 when no active session."""
+async def test_get_session_current_creates_session(client, db):
+    """Test GET /api/sessions/current/ creates new session when none exists."""
+    from app.models import Session as SessionModel
+
+    initial_count = db.execute(select(func.count()).select_from(SessionModel)).scalar()
+
     response = await client.get("/api/sessions/current/")
-    assert response.status_code == 404
-    assert "no active session" in response.json()["detail"].lower()
+    assert response.status_code == 200
+
+    session_data = response.json()
+    assert "id" in session_data
+    assert "start_die" in session_data
+
+    final_count = db.execute(select(func.count()).select_from(SessionModel)).scalar()
+    assert final_count == initial_count + 1
 
 
 @pytest.mark.asyncio
@@ -335,7 +345,7 @@ async def test_get_session_details(client, sample_data):
 
 @pytest.mark.asyncio
 async def test_get_stale_threads(client, db):
-    """Test GET /threads/stale returns threads inactive for specified days."""
+    """Test GET /api/threads/stale returns threads inactive for specified days."""
     from datetime import datetime, timedelta
 
     from app.models import Thread, User
@@ -375,7 +385,7 @@ async def test_get_stale_threads(client, db):
     db.add_all([stale_thread, recent_thread, no_activity_thread])
     db.commit()
 
-    response = await client.get("/threads/stale?days=7")
+    response = await client.get("/api/threads/stale?days=7")
     assert response.status_code == 200
 
     stale = response.json()
@@ -388,7 +398,7 @@ async def test_get_stale_threads(client, db):
 
 @pytest.mark.asyncio
 async def test_get_stale_threads_custom_threshold(client, db):
-    """Test GET /threads/stale with custom days parameter."""
+    """Test GET /api/threads/stale with custom days parameter."""
     from datetime import datetime, timedelta
 
     from app.models import Thread, User
@@ -420,7 +430,7 @@ async def test_get_stale_threads_custom_threshold(client, db):
     db.add_all([thread_5_days, thread_15_days])
     db.commit()
 
-    response = await client.get("/threads/stale?days=10")
+    response = await client.get("/api/threads/stale?days=10")
     assert response.status_code == 200
 
     stale = response.json()
@@ -431,14 +441,14 @@ async def test_get_stale_threads_custom_threshold(client, db):
 
 @pytest.mark.asyncio
 async def test_create_thread_with_notes(client, db):
-    """Test POST /threads/ creates thread with notes."""
+    """Test POST /api/threads/ creates thread with notes."""
     thread_data = {
         "title": "Batman",
         "format": "Comic",
         "issues_remaining": 20,
         "notes": "Favorite series, must read regularly",
     }
-    response = await client.post("/threads/", json=thread_data)
+    response = await client.post("/api/threads/", json=thread_data)
     assert response.status_code == 201
 
     data = response.json()
@@ -457,13 +467,13 @@ async def test_create_thread_with_notes(client, db):
 
 @pytest.mark.asyncio
 async def test_create_thread_without_notes(client, db):
-    """Test POST /threads/ creates thread without notes (nullable)."""
+    """Test POST /api/threads/ creates thread without notes (nullable)."""
     thread_data = {
         "title": "Superman",
         "format": "Comic",
         "issues_remaining": 15,
     }
-    response = await client.post("/threads/", json=thread_data)
+    response = await client.post("/api/threads/", json=thread_data)
     assert response.status_code == 201
 
     data = response.json()
@@ -481,11 +491,11 @@ async def test_create_thread_without_notes(client, db):
 
 @pytest.mark.asyncio
 async def test_update_thread_notes(client, sample_data, db):
-    """Test PUT /threads/{id} updates thread notes."""
+    """Test PUT /api/threads/{id} updates thread notes."""
     update_data = {
         "notes": "Updated notes: Need to catch up on back issues",
     }
-    response = await client.put("/threads/1", json=update_data)
+    response = await client.put("/api/threads/1", json=update_data)
     assert response.status_code == 200
 
     thread = response.json()
@@ -501,7 +511,7 @@ async def test_update_thread_notes(client, sample_data, db):
 
 @pytest.mark.asyncio
 async def test_get_thread_includes_notes(client, sample_data, db):
-    """Test GET /threads/{id} includes notes field."""
+    """Test GET /api/threads/{id} includes notes field."""
     from datetime import datetime
 
     from app.models import Thread, User
@@ -525,7 +535,7 @@ async def test_get_thread_includes_notes(client, sample_data, db):
     db.commit()
     db.refresh(thread)
 
-    response = await client.get(f"/threads/{thread.id}")
+    response = await client.get(f"/api/threads/{thread.id}")
     assert response.status_code == 200
 
     thread_data = response.json()
@@ -536,7 +546,7 @@ async def test_get_thread_includes_notes(client, sample_data, db):
 
 @pytest.mark.asyncio
 async def test_list_threads_includes_notes(client, sample_data, db):
-    """Test GET /threads/ includes notes field in all threads."""
+    """Test GET /api/threads/ includes notes field in all threads."""
     from datetime import datetime
 
     from app.models import Thread, User
@@ -569,7 +579,7 @@ async def test_list_threads_includes_notes(client, sample_data, db):
     db.add_all([thread_with_notes, thread_without_notes])
     db.commit()
 
-    response = await client.get("/threads/")
+    response = await client.get("/api/threads/")
     assert response.status_code == 200
 
     threads = response.json()

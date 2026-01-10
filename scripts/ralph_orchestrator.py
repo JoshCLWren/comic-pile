@@ -414,24 +414,29 @@ You are working in Ralph mode. Read docs/RALPH_MODE.md.
 {task["description"]}
 
 ## Instructions
+0. Ensure you have a fresh lint and test run before starting. Fix any issues found before proceeding.
 1. Read docs/RALPH_MODE.md for Ralph mode philosophy
 2. Work autonomously to complete this task
 3. Follow AGENTS.md for code style guidelines
-4. Run tests (pytest) until all pass
-5. Run linting (make lint) until clean
+4. Run tests (pytest) until all pass even if they have nothing to do with this task.
+5. Run linting (make lint) until clean even if unrelated to this task.
 6. Commit changes with conventional format
 7. When complete, output: <complete>Task done</complete>
 
 Do NOT:
 - Ask for approval on anything
-- Create tasks for sub-work
-- Delegate to other workers
 - Wait for instructions
+- Mark tests as expected to fail.
+- Take shortcuts.
 
  DO:
  - Iterate until complete
  - Fix failures yourself
  - Test everything
+ - Practice extreme ownership of the Codebase.
+ - Feel free to delegate tasks to sub-agents if needed.
+ - Write code that Mrs. Crabapple will approve on QC review.
+ - Unblock yourself. If you get stuck, find a way around it, use sub-agents if needed.
 
 ## Ralph Ownership and Quality Control
 
@@ -442,6 +447,7 @@ Do NOT:
 - **Don't leave technical debt** - address issues properly
 - **Don't defer to other tasks** or create sub-tasks to avoid work
 - **Investigate full scope** - understand all aspects of the problem before fixing
+- **Leave it better than you found it** - improve code quality wherever possible even if you're just tasked with writing a md file.
 
 ### QUALITY CONTROL
 - **No shortcuts** - QC agents expect full, proper solutions
