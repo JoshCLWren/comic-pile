@@ -122,7 +122,7 @@ class GitHubTaskClient:
                 "--state",
                 "all",
                 "--json",
-                "number,title,body,labels,created_at,updated_at,url",
+                "number,title,body,labels,createdAt,updatedAt,url",
             ]
         )
         issues = json.loads(result.stdout)
@@ -162,8 +162,8 @@ class GitHubTaskClient:
             "task_type": self._extract_field_from_body(body, "type", "feature"),
             "dependencies": self._extract_field_from_body(body, "dependencies"),
             "blocked_reason": self._extract_field_from_body(body, "blocked_reason"),
-            "created_at": issue.get("created_at", ""),
-            "updated_at": issue.get("updated_at", ""),
+            "created_at": issue.get("createdAt", ""),
+            "updated_at": issue.get("updatedAt", ""),
             "url": issue.get("url", ""),
             "github_issue": issue,
         }
@@ -385,7 +385,7 @@ class GitHubTaskClient:
                     "--repo",
                     self.repo_name,
                     "--json",
-                    "number,title,body,labels,created_at,updated_at,url",
+                    "number,title,body,labels,createdAt,updatedAt,url",
                 ]
             )
             issue = json.loads(result.stdout)
