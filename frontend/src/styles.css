@@ -1,0 +1,242 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg-main: #0a0518;
+  --bg-darker: #05020c;
+  --accent-indigo: #4f46e5;
+  --accent-violet: #8b5cf6;
+  --accent-teal: #14b8a6;
+  --accent-amber: #fbbf24;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(12px);
+}
+
+body {
+  background: radial-gradient(
+    circle at top left,
+    #1e1b4b 0%,
+    var(--bg-main) 40%,
+    var(--bg-darker) 100%
+  );
+  color: #f8fafc;
+  font-family: 'Outfit', sans-serif;
+  min-height: 100vh;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.threejs-dice-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.threejs-die-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dice-canvas {
+  display: block;
+}
+
+.mini-dice-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.result-dice-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.dice3d-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.dice3d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.dice3d-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #f8fafc;
+  text-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.dice3d-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.explosion-wrap {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2000;
+}
+
+.particle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  animation: p-fly 1s ease-out forwards;
+}
+
+@keyframes p-fly {
+  0% {
+    transform: translate(0, 0) scale(1.5);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes bounce-in {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+
+  50% {
+    transform: scale(1.02);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.result-reveal {
+  padding: 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.result-reveal::-webkit-scrollbar {
+  width: 6px;
+}
+
+.result-reveal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.result-reveal::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+#rating-value {
+  font-size: 3.5rem;
+  font-weight: 900;
+  text-shadow: 0 0 30px var(--accent-teal);
+  transition: all 0.2s;
+}
+
+.glass-button {
+  letter-spacing: 0.15em;
+  font-weight: 900;
+  border-radius: 1.5rem;
+}
+
+.nav-container {
+  background: rgba(5, 2, 12, 0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--glass-border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+}
+
+.dice-state-idle {
+  opacity: 0.7;
+  filter: brightness(0.8);
+  transition: all 0.3s ease;
+}
+
+.dice-state-idle:hover {
+  opacity: 1;
+  filter: brightness(1);
+  box-shadow: 0 0 30px rgba(20, 184, 166, 0.3);
+  border-color: var(--accent-teal);
+}
+
+.dice-state-rolled {
+  opacity: 1;
+  filter: brightness(1);
+  box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
+}
+
+.dice-state-reroll {
+  opacity: 1;
+  animation: bounce-in 0.5s ease;
+  box-shadow: 0 0 45px rgba(251, 191, 36, 0.4);
+}
+
+.dice-state-rate-flow {
+  opacity: 1;
+  animation: bounce-in 0.6s ease;
+}
+
+.pool-thread-selected {
+  border-color: rgba(20, 184, 166, 0.6);
+  box-shadow: 0 0 20px rgba(20, 184, 166, 0.35);
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(79, 70, 229, 0.5);
+}

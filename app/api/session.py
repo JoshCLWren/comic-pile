@@ -20,7 +20,7 @@ from app.schemas.thread import (
     SnapshotResponse,
     SnapshotsListResponse,
 )
-from comic_pile.session import get_current_die, is_active
+from comic_pile.session import get_current_die, get_or_create, is_active
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -151,10 +151,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
                     break
 
             if not active_session:
-                raise HTTPException(
-                    status_code=404,
-                    detail="No active session found",
-                )
+                active_session = get_or_create(db, user_id=1)
 
             active_thread = get_active_thread(active_session, db)
 

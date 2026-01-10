@@ -10,7 +10,7 @@ import './index.css'
 
 function App() {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <BrowserRouter basename="/react">
       <main className="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
         <Routes>
           <Route path="/" element={<RollPage />} />
