@@ -1,10 +1,8 @@
 """Tests for deadlock handling in concurrent operations."""
 
-import asyncio
 import threading
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-import pytest
 
 from app.database import SessionLocal
 from app.models import Session as SessionModel
