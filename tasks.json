@@ -3336,7 +3336,7 @@
       "dependencies": null,
       "assigned_agent": "Ralph",
       "worktree": null,
-      "status_notes": "Added Tooltip component to RollPage.jsx that shows on hover over 'Ladder' label. Tooltip explains: 'Dice ladder: d4→d6→d8→d10→d12→d20. Promotes automatically based on ratings (5→up, 1-2→down)'. Visual cue added with dashed underline and cursor-help style. Non-intrusive, lightweight, accessible (keyboard focus). Build succeeds (832KB JS, 7.6KB CSS). ESLint clean.",
+      "status_notes": "Added Tooltip component to RollPage.jsx that shows on hover over 'Ladder' label. Tooltip explains: 'Dice ladder: d4\u2192d6\u2192d8\u2192d10\u2192d12\u2192d20. Promotes automatically based on ratings (5\u2192up, 1-2\u2192down)'. Visual cue added with dashed underline and cursor-help style. Non-intrusive, lightweight, accessible (keyboard focus). Build succeeds (832KB JS, 7.6KB CSS). ESLint clean.",
       "estimated_effort": "2 hours",
       "completed": true,
       "blocked_reason": null,

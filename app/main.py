@@ -264,6 +264,19 @@ def create_app() -> FastAPI:
     app.include_router(retros.router, prefix="/api", tags=["retros"])
     app.include_router(health_router, prefix="/api")
     app.include_router(undo.router, prefix="/undo", tags=["undo"])
+    app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
+    app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
+    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
+    app.include_router(session.router, prefix="/api", tags=["session"])
+    app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
+
+    @app.api_route(
+        "/api/{path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    )
+    async def api_not_found(path: str) -> JSONResponse:
+        """Return a JSON 404 for unknown API routes."""
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
     app.mount("/react", StaticFiles(directory="static/react", html=True), name="react")

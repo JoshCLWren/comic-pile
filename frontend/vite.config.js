@@ -8,6 +8,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export default defineConfig({
   base: '/react/',
   plugins: [react()],
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000',
+    },
+  },
   build: {
     outDir: '../static/react',
     emptyOutDir: true,
