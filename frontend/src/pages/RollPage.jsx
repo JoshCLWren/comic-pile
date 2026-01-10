@@ -131,7 +131,7 @@ export default function RollPage() {
               <span className="text-[9px] font-black text-teal-400 uppercase">Session Safe</span>
             </div>
           )}
-          <div className="relative">
+          <div className="relative" id="die-selector">
             {DICE_LADDER.map((die) => (
               <button
                 key={die}
@@ -169,7 +169,7 @@ export default function RollPage() {
               <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. Promotes automatically based on ratings (5→up, 1-2→down)">
                 <span className="block text-[8px] font-black text-slate-500 uppercase tracking-wider cursor-help border-b border-dashed border-slate-600">Ladder</span>
               </Tooltip>
-              <span className="text-[10px] font-black text-teal-400">d{currentDie}</span>
+              <span id="header-die-label" className="text-[10px] font-black text-teal-400">d{currentDie}</span>
             </div>
           </div>
           <Tooltip content="Manually select a thread to override the next roll result.">
@@ -189,6 +189,7 @@ export default function RollPage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
           <div
+            id="main-die-3d"
             onClick={handleRoll}
             className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all`}
             style={{ width: '200px', height: '200px', margin: '0 auto' }}
@@ -206,7 +207,10 @@ export default function RollPage() {
           </div>
 
           {!isRolling && (
-            <p className="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0 text-center">
+            <p
+              id="tap-instruction"
+              className="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0 text-center"
+            >
               Tap Die to Roll
             </p>
           )}

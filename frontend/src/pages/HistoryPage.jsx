@@ -53,7 +53,7 @@ export default function HistoryPage() {
         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Chronicle of your journey</p>
       </header>
 
-      <div className="space-y-4" role="list" aria-label="Session history">
+      <div id="sessions-list" className="space-y-4" role="list" aria-label="Session history">
         {sessions.map((session) => (
           <div key={session.id} className="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
             <div className="flex justify-between items-start gap-6 relative z-10">

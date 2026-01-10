@@ -194,6 +194,7 @@ export default function QueuePage() {
         <div className="text-center text-slate-500">No active threads in queue</div>
       ) : (
         <div
+          id="queue-container"
           role="list"
           aria-label="Thread queue"
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"

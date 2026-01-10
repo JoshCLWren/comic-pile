@@ -14,4 +14,5 @@ test('renders navigation links', () => {
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /settings page/i })).toBeInTheDocument()
 })

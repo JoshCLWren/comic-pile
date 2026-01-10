@@ -106,6 +106,13 @@ def test_view_history_pagination(page, test_server_url):
 
 
 @pytest.mark.integration
+def test_settings_page_renders(page, test_server_url):
+    """Navigate to /settings, verify settings header exists."""
+    page.goto(f"{test_server_url}/react/settings")
+    page.wait_for_selector("text=Settings", timeout=5000)
+
+
+@pytest.mark.integration
 def test_full_session_workflow(page, test_server_url, db):
     """Setup session data, navigate to rate page, verify UI is functional."""
     from app.models import Event, Thread
