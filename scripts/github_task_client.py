@@ -1,13 +1,13 @@
-"""GitHub Task Client for Ralph mode task management."""
+"""GitHub Task Client for Ralph mode task management.
 
+Uses gh CLI commands exclusively for all GitHub operations.
+"""
+
+import json
 import logging
 import os
-import time
-from datetime import UTC, datetime
+import subprocess
 from typing import TYPE_CHECKING
-
-from github import Github, GithubException, Issue
-from github.Rate import Rate
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +18,7 @@ if TYPE_CHECKING:
 TaskDict = dict[str, object]
 
 
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-GITHUB_REPO = os.getenv("GITHUB_REPO", "anomalyco/comic-pile")
+GITHUB_REPO = os.getenv("GITHUB_REPO", "JoshCLWren/comic-pile")
 
 VALID_STATUSES = {"pending", "in-progress", "done", "blocked", "in-review"}
 VALID_PRIORITIES = {"critical", "high", "medium", "low"}
@@ -41,105 +40,104 @@ PRIORITY_LABELS = {
 
 
 class GitHubRateLimitError(Exception):
-    """Raised when GitHub API rate limit is exceeded."""
-
-    def __init__(self, rate_limit: Rate):
-        """Initialize the error with rate limit details.
-
-        Args:
-            rate_limit: GitHub rate limit object
-        """
-        self.rate_limit = rate_limit
-        reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)  # type: ignore
-        wait_time = (reset_time - datetime.now(UTC)).total_seconds()
-        super().__init__(f"Rate limit exceeded. Reset at {reset_time}. Wait {wait_time:.0f}s")
+    """Raised when gh CLI rate limit is exceeded."""
 
 
 class GitHubTaskClient:
-    """Client for managing Ralph tasks via GitHub Issues API."""
+    """Client for managing Ralph tasks via gh CLI."""
 
-    def __init__(self, token: str | None = None, repo: str | None = None) -> None:
-        """Initialize the GitHub task client."""
-        self.token = token or GITHUB_TOKEN
+    def __init__(self, repo: str | None = None) -> None:
+        """Initialize GitHub task client using gh CLI."""
         self.repo_name = repo or GITHUB_REPO
+        logger.info("Using gh CLI for GitHub operations")
+        logger.info(f"Target repository: {self.repo_name}")
+        self._verify_gh_cli()
 
-        if not self.token:
-            raise ValueError("GITHUB_TOKEN environment variable is required")
+    def _verify_gh_cli(self) -> None:
+        """Verify gh CLI is installed and authenticated."""
+        try:
+            result = subprocess.run(
+                ["gh", "auth", "status"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if result.returncode != 0:
+                raise ValueError("gh CLI not authenticated. Run: gh auth login")
+            if result.returncode != 0:
+                raise ValueError("gh CLI not authenticated. Run: gh auth login")
+            logger.info("gh CLI authenticated and ready")
+        except FileNotFoundError as e:
+            raise ValueError("gh CLI not found. Install from: https://cli.github.com/") from e
+        except subprocess.TimeoutExpired as e:
+            raise ValueError("gh CLI timeout during authentication check") from e
 
-        from github import Github
-
-        self._github: Github | None = None
-        self._repo: object | None = None  # type: ignore
-        self._initialize_github()
-
-    def _initialize_github(self) -> None:
-        """Initialize GitHub client and repository."""
-        self._github = Github(self.token)
-        assert self._github is not None
-        self._repo = self._github.get_repo(self.repo_name)  # type: ignore
-        logger.info(f"Connected to GitHub repository: {self.repo_name}")
-
-    def _check_rate_limit(self) -> None:
-        """Check GitHub API rate limit and raise error if exceeded."""
-        assert self._github is not None
-        rate_limit = self._github.get_rate_limit().core  # type: ignore
-        remaining = rate_limit.remaining
-        reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)  # type: ignore
-
-        logger.debug(f"GitHub API rate limit: {remaining} remaining, resets at {reset_time}")
-
-        if remaining == 0:
-            raise GitHubRateLimitError(rate_limit)  # type: ignore
-
-    def _wait_for_rate_limit_reset(self, max_wait: int = 600) -> None:
-        """Wait for GitHub API rate limit to reset.
+    def _run_gh_command(
+        self, args: list[str], capture: bool = True, check: bool = True
+    ) -> subprocess.CompletedProcess[str]:
+        """Run a gh CLI command.
 
         Args:
-            max_wait: Maximum time to wait in seconds (default: 10 minutes)
+            args: Command arguments (excluding 'gh')
+            capture: Whether to capture stdout/stderr
+            check: Whether to raise on non-zero exit code
+
+        Returns:
+            CompletedProcess result
         """
+        cmd = ["gh"] + args
+        logger.debug(f"Running: {' '.join(cmd)}")
+
         try:
-            assert self._github is not None
-            rate_limit = self._github.get_rate_limit().core  # type: ignore
-            reset_time = datetime.fromtimestamp(rate_limit.reset_timestamp, UTC)  # type: ignore
-            now = datetime.now(UTC)
-            wait_time = (reset_time - now).total_seconds()
+            result = subprocess.run(
+                cmd,
+                capture_output=capture,
+                text=True,
+                check=check,
+                timeout=60,
+            )
+            return result
+        except subprocess.TimeoutExpired:
+            logger.error(f"gh CLI timeout: {cmd}")
+            raise
+        except subprocess.CalledProcessError as e:
+            logger.error(f"gh CLI error: {e}")
+            raise
 
-            if wait_time <= 0:
-                return
-
-            if wait_time > max_wait:
-                logger.warning(
-                    f"Rate limit reset too far in the future ({wait_time:.0f}s), "
-                    f"not waiting (max: {max_wait}s)"
-                )
-                return
-
-            logger.info(f"Rate limit exceeded, waiting {wait_time:.0f}s for reset...")
-            time.sleep(wait_time)
-        except GithubException as e:
-            logger.error(f"Error checking rate limit: {e}")
-
-    def _get_ralph_tasks(self) -> list[Issue.Issue]:
+    def _get_ralph_tasks(self) -> list[TaskDict]:
         """Get all issues labeled as Ralph tasks.
 
         Returns:
-            List of GitHub issues with ralph-task label
+            List of task dictionaries with ralph-task label
         """
-        self._check_rate_limit()
-        assert self._repo is not None
-        issues = self._repo.get_issues(labels=["ralph-task"], state="all")  # type: ignore
-        return list(issues)
+        result = self._run_gh_command(
+            [
+                "issue",
+                "list",
+                "--repo",
+                self.repo_name,
+                "--label",
+                "ralph-task",
+                "--state",
+                "all",
+                "--json",
+                "number,title,body,labels,created_at,updated_at,url",
+            ]
+        )
+        issues = json.loads(result.stdout)
+        return [self._parse_issue_to_task(issue) for issue in issues]
 
-    def _parse_issue_to_task(self, issue: Issue.Issue) -> TaskDict:
-        """Parse a GitHub issue into a task dictionary.
+    def _parse_issue_to_task(self, issue: dict) -> TaskDict:
+        """Parse a GitHub issue JSON into a task dictionary.
 
         Args:
-            issue: GitHub issue object
+            issue: GitHub issue object from gh CLI JSON output
 
         Returns:
             Task dictionary with standard fields
         """
-        labels = {label.name for label in issue.labels}
+        labels = {label["name"] for label in issue.get("labels", [])}
 
         status = "pending"
         for status_label, label_name in STATUS_LABELS.items():
@@ -153,18 +151,20 @@ class GitHubTaskClient:
                 priority = priority_label
                 break
 
+        body = issue.get("body", "")
+
         return {
-            "id": issue.number,
-            "title": issue.title,
-            "description": issue.body or "",
+            "id": issue["number"],
+            "title": issue["title"],
+            "description": body,
             "status": status,
             "priority": priority,
-            "task_type": self._extract_field_from_body(issue.body or "", "type", "feature"),
-            "dependencies": self._extract_field_from_body(issue.body or "", "dependencies"),
-            "blocked_reason": self._extract_field_from_body(issue.body or "", "blocked_reason"),
-            "created_at": issue.created_at.isoformat(),
-            "updated_at": issue.updated_at.isoformat(),
-            "url": issue.html_url,
+            "task_type": self._extract_field_from_body(body, "type", "feature"),
+            "dependencies": self._extract_field_from_body(body, "dependencies"),
+            "blocked_reason": self._extract_field_from_body(body, "blocked_reason"),
+            "created_at": issue.get("created_at", ""),
+            "updated_at": issue.get("updated_at", ""),
+            "url": issue.get("url", ""),
             "github_issue": issue,
         }
 
@@ -181,67 +181,65 @@ class GitHubTaskClient:
         Returns:
             Field value or default
         """
+        field_pattern = f"**{field}:**"
         for line in body.split("\n"):
-            if line.strip().startswith(f"**{field}:**"):
-                return line.split(":", 1)[1].strip()
+            if field_pattern.lower() in line.lower():
+                idx = line.lower().find(field_pattern.lower())
+                value = line[idx + len(field_pattern) :].strip()
+                return value
         return default
 
-    def find_pending_task(self) -> dict[str, object] | None:
+    def find_pending_task(self) -> TaskDict | None:
         """Find the first pending Ralph task.
 
         Returns:
             Task dictionary or None if no pending tasks found
         """
-        try:
-            issues = self._get_ralph_tasks()
+        tasks = self._get_ralph_tasks()
 
-            for issue in issues:
-                labels = {label.name for label in issue.labels}
+        for task in tasks:
+            status = task.get("status", "pending")
 
-                if STATUS_LABELS["pending"] in labels or STATUS_LABELS["in-progress"] in labels:
-                    task = self._parse_issue_to_task(issue)
+            if status in ("pending", "in-progress"):
+                if task.get("dependencies"):
+                    if not self.are_dependencies_resolved(task):
+                        continue
 
-                    if task.get("dependencies"):
-                        if not self._are_dependencies_resolved(task):
-                            continue
+                return task
 
-                    return task
+        return None
 
-            return None
-        except GithubException as e:
-            if e.status == 403:
-                logger.warning("Rate limit hit when finding pending task")
-                self._wait_for_rate_limit_reset()
-                return self.find_pending_task()
-            raise
-
-    def find_blocked_task(self) -> dict[str, object] | None:
+    def find_blocked_task(self) -> TaskDict | None:
         """Find a blocked Ralph task that might be unblockable.
 
         Returns:
             Task dictionary or None if no blocked tasks found
         """
-        try:
-            issues = self._get_ralph_tasks()
+        tasks = self._get_ralph_tasks()
 
-            for issue in issues:
-                labels = {label.name for label in issue.labels}
+        for task in tasks:
+            if task.get("status") == "blocked":
+                return task
 
-                if STATUS_LABELS["blocked"] in labels:
-                    task = self._parse_issue_to_task(issue)
-                    return task
+        return None
 
-            return None
-        except GithubException as e:
-            if e.status == 403:
-                logger.warning("Rate limit hit when finding blocked task")
-                self._wait_for_rate_limit_reset()
-                return self.find_blocked_task()
-            raise
+    def find_in_review_task(self) -> TaskDict | None:
+        """Find a task in review status.
+
+        Returns:
+            Task dictionary or None if no in-review tasks found
+        """
+        tasks = self._get_ralph_tasks()
+
+        for task in tasks:
+            if task.get("status") == "in-review":
+                return task
+
+        return None
 
     def update_status(
         self, task_id: int, status: str, comment: str | None = None
-    ) -> dict[str, object] | None:
+    ) -> TaskDict | None:
         """Update the status of a Ralph task.
 
         Args:
@@ -258,33 +256,41 @@ class GitHubTaskClient:
         if status not in VALID_STATUSES:
             raise ValueError(f"Invalid status: {status}. Valid values: {VALID_STATUSES}")
 
-        try:
-            self._check_rate_limit()
-            assert self._repo is not None
-            issue = self._repo.get_issue(task_id)  # type: ignore
+        result = self._run_gh_command(
+            [
+                "issue",
+                "view",
+                str(task_id),
+                "--repo",
+                self.repo_name,
+                "--json",
+                "labels",
+            ]
+        )
 
-            labels = {label.name for label in issue.labels}
+        issue_data = json.loads(result.stdout)
+        current_labels = {label["name"] for label in issue_data.get("labels", [])}
 
-            for status_label in STATUS_LABELS.values():
-                if status_label in labels:
-                    issue.remove_from_labels(status_label)  # type: ignore
+        args = [
+            "issue",
+            "edit",
+            str(task_id),
+            "--repo",
+            self.repo_name,
+        ]
 
-            issue.add_to_labels(STATUS_LABELS[status])  # type: ignore
+        for status_label in STATUS_LABELS.values():
+            if status_label in current_labels:
+                args.extend(["--remove-label", status_label])
 
-            if comment:
-                self.add_comment(task_id, comment)
+        args.extend(["--add-label", STATUS_LABELS[status]])
 
-            updated_issue = self._repo.get_issue(task_id)  # type: ignore
-            return self._parse_issue_to_task(updated_issue)
-        except GithubException as e:
-            if e.status == 404:
-                logger.error(f"Task {task_id} not found")
-                return None
-            if e.status == 403:
-                logger.warning(f"Rate limit hit when updating status for task {task_id}")
-                self._wait_for_rate_limit_reset()
-                return self.update_status(task_id, status, comment)
-            raise
+        self._run_gh_command(args, check=False)
+
+        if comment:
+            self.add_comment(task_id, comment)
+
+        return self.get_task(task_id)
 
     def add_comment(self, task_id: int, comment: str) -> None:
         """Add a comment to a Ralph task.
@@ -293,22 +299,11 @@ class GitHubTaskClient:
             task_id: GitHub issue number
             comment: Comment text to add
         """
-        try:
-            self._check_rate_limit()
-            assert self._repo is not None
-            issue = self._repo.get_issue(task_id)  # type: ignore
-            issue.create_comment(comment)  # type: ignore
-            logger.info(f"Added comment to task {task_id}")
-        except GithubException as e:
-            if e.status == 404:
-                logger.error(f"Task {task_id} not found")
-                return
-            if e.status == 403:
-                logger.warning(f"Rate limit hit when adding comment to task {task_id}")
-                self._wait_for_rate_limit_reset()
-                self.add_comment(task_id, comment)
-                return
-            raise
+        self._run_gh_command(
+            ["issue", "comment", str(task_id), "--body", comment],
+            check=False,
+        )
+        logger.info(f"Added comment to task {task_id}")
 
     def create_task(
         self,
@@ -317,7 +312,7 @@ class GitHubTaskClient:
         priority: str = "medium",
         task_type: str = "feature",
         dependencies: str | None = None,
-    ) -> dict[str, object]:
+    ) -> TaskDict:
         """Create a new Ralph task as a GitHub issue.
 
         Args:
@@ -336,11 +331,7 @@ class GitHubTaskClient:
         if priority not in VALID_PRIORITIES:
             raise ValueError(f"Invalid priority: {priority}. Valid values: {VALID_PRIORITIES}")
 
-        try:
-            self._check_rate_limit()
-            assert self._repo is not None
-
-            body = f"""## Description
+        body = f"""## Description
 
 {description}
 
@@ -351,20 +342,32 @@ class GitHubTaskClient:
 **Dependencies:** {dependencies or "none"}
 """
 
-            labels = ["ralph-task", STATUS_LABELS["pending"], PRIORITY_LABELS[priority]]
+        labels = ["ralph-task", STATUS_LABELS["pending"], PRIORITY_LABELS[priority]]
 
-            issue = self._repo.create_issue(title=title, body=body, labels=labels)  # type: ignore
+        result = self._run_gh_command(
+            [
+                "issue",
+                "create",
+                "--repo",
+                self.repo_name,
+                "--title",
+                title,
+                "--body",
+                body,
+                *[arg for label in labels for arg in ("--label", label)],
+            ]
+        )
 
-            logger.info(f"Created task {issue.number}: {title}")
-            return self._parse_issue_to_task(issue)
-        except GithubException as e:
-            if e.status == 403:
-                logger.warning("Rate limit hit when creating task")
-                self._wait_for_rate_limit_reset()
-                return self.create_task(title, description, priority, task_type, dependencies)
-            raise
+        issue_url = result.stdout.strip()
+        task_id = int(issue_url.split("/")[-1])
 
-    def get_task(self, task_id: int) -> dict[str, object] | None:
+        logger.info(f"Created task {task_id}: {title}")
+        task = self.get_task(task_id)
+        if task is None:
+            raise RuntimeError(f"Failed to retrieve created task {task_id}")
+        return task
+
+    def get_task(self, task_id: int) -> TaskDict | None:
         """Get a Ralph task by ID.
 
         Args:
@@ -374,21 +377,24 @@ class GitHubTaskClient:
             Task dictionary or None if not found
         """
         try:
-            self._check_rate_limit()
-            assert self._repo is not None
-            issue = self._repo.get_issue(task_id)  # type: ignore
+            result = self._run_gh_command(
+                [
+                    "issue",
+                    "view",
+                    str(task_id),
+                    "--repo",
+                    self.repo_name,
+                    "--json",
+                    "number,title,body,labels,created_at,updated_at,url",
+                ]
+            )
+            issue = json.loads(result.stdout)
             return self._parse_issue_to_task(issue)
-        except GithubException as e:
-            if e.status == 404:
-                logger.error(f"Task {task_id} not found")
-                return None
-            if e.status == 403:
-                logger.warning(f"Rate limit hit when getting task {task_id}")
-                self._wait_for_rate_limit_reset()
-                return self.get_task(task_id)
-            raise
+        except subprocess.CalledProcessError:
+            logger.error(f"Task {task_id} not found")
+            return None
 
-    def are_dependencies_resolved(self, task: dict[str, object]) -> bool:
+    def are_dependencies_resolved(self, task: TaskDict) -> bool:
         """Check if all task dependencies are done.
 
         Args:
@@ -397,27 +403,26 @@ class GitHubTaskClient:
         Returns:
             True if all dependencies are done or no dependencies, False otherwise
         """
-        dependencies = task.get("dependencies")  # type: ignore
-        if not dependencies or dependencies == "none":
+        dependencies = task.get("dependencies")
+        if dependencies is None or dependencies == "none":
             return True
 
-        dep_ids = [dep.strip() for dep in dependencies.split(",") if dep.strip()]  # type: ignore
+        dep_ids = [dep.strip() for dep in str(dependencies).split(",") if dep.strip()]
 
         for dep_id in dep_ids:
             try:
                 dep_task = self.get_task(int(dep_id))
-                if not dep_task or dep_task["status"] != "done":
-                    logger.debug(
-                        f"Dependency {dep_id} not done (status: {dep_task['status'] if dep_task else 'not found'})"
-                    )
+                if not dep_task or dep_task.get("status") != "done":
+                    status_str = dep_task.get("status") if dep_task else "not found"
+                    logger.debug(f"Dependency {dep_id} not done (status: {status_str})")
                     return False
-            except (ValueError, GithubException):
+            except (ValueError, subprocess.CalledProcessError):
                 logger.error(f"Error checking dependency {dep_id}")
                 return False
 
         return True
 
-    def _are_dependencies_resolved(self, task: dict[str, object]) -> bool:
+    def _are_dependencies_resolved(self, task: TaskDict) -> bool:
         """Internal alias for are_dependencies_resolved."""
         return self.are_dependencies_resolved(task)
 
@@ -426,21 +431,22 @@ class GitHubTaskClient:
         all_labels = ["ralph-task"]
         all_labels.extend(STATUS_LABELS.values())
         all_labels.extend(PRIORITY_LABELS.values())
+        all_labels.append("qc-issue")
 
-        assert self._repo is not None
-        existing_labels = {label.name for label in self._repo.get_labels()}  # type: ignore
+        result = self._run_gh_command(["label", "list", "--repo", self.repo_name, "--json", "name"])
+        existing_labels = {label["name"] for label in json.loads(result.stdout)}
 
         for label_name in all_labels:
             if label_name not in existing_labels:
                 color = self._get_label_color(label_name)
                 try:
-                    self._repo.create_label(name=label_name, color=color)  # type: ignore
+                    self._run_gh_command(
+                        ["label", "create", label_name, "--color", color, "--repo", self.repo_name],
+                        check=False,
+                    )
                     logger.info(f"Created label: {label_name}")
-                except GithubException as e:
-                    if e.status == 422:
-                        logger.warning(f"Label {label_name} may already exist")
-                    else:
-                        raise
+                except subprocess.CalledProcessError:
+                    logger.warning(f"Label {label_name} may already exist")
 
     def _get_label_color(self, label_name: str) -> str:
         """Get color for a label based on its type.
@@ -453,6 +459,8 @@ class GitHubTaskClient:
         """
         if label_name == "ralph-task":
             return "7057ff"
+        if label_name == "qc-issue":
+            return "d93f0b"
         if label_name.startswith("ralph-status:"):
             colors = {
                 "pending": "fef2c0",

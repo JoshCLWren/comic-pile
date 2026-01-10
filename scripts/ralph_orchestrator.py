@@ -4,16 +4,19 @@
 import argparse
 import logging
 import random
+import re
+import subprocess
 import sys
 import time
+import traceback
 from datetime import UTC, datetime
 
 sys.path.insert(0, "/home/josh/code/journal")
 from opencode_client import OpenCodeClient  # type: ignore
 
 sys.path.insert(0, "/home/josh/code/comic-pile")
-from scripts.github_task_client import GitHubTaskClient, GitHubRateLimitError
-import scripts.metrics_db as metrics_db
+from scripts import metrics_db
+from scripts.github_task_client import GitHubTaskClient
 from scripts.opencode_launcher import ensure_opencode_running
 
 logging.basicConfig(
@@ -27,6 +30,7 @@ MAX_ITERATIONS = 1000
 MAX_CONSECUTIVE_FAILURES = 10
 MIN_BACKOFF_SECONDS = 10
 MAX_BACKOFF_SECONDS = 600
+QC_CHECK_INTERVAL = 30
 
 
 class CircuitBreakerState:
@@ -105,6 +109,295 @@ def log_section(title: str) -> None:
     print(f"{'=' * 60}\n")
 
 
+def run_pytest() -> tuple[bool, str, float]:
+    """Run pytest and check results.
+
+    Returns:
+        (passed, output, coverage_percentage)
+    """
+    logger.info("Running pytest...")
+    try:
+        result = subprocess.run(
+            ["pytest", "--cov=comic_pile", "--cov-report=term-missing", "-q"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        output = result.stdout + result.stderr
+        coverage = 0.0
+
+        for line in output.split("\n"):
+            if "TOTAL" in line and "coverage" in line.lower():
+                try:
+                    coverage_str = line.split("coverage")[1].split("%")[0].strip()
+                    coverage = float(coverage_str)
+                except Exception:
+                    pass
+
+        passed = result.returncode == 0
+        return passed, output, coverage
+    except subprocess.TimeoutExpired:
+        return False, "Tests timed out after 5 minutes", 0.0
+    except Exception as e:
+        return False, str(e), 0.0
+
+
+def run_lint() -> tuple[bool, str]:
+    """Run linting and check results.
+
+    Returns:
+        (passed, output)
+    """
+    logger.info("Running lint...")
+    try:
+        result = subprocess.run(
+            ["bash", "scripts/lint.sh"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        output = result.stdout + result.stderr
+        passed = result.returncode == 0
+        return passed, output
+    except subprocess.TimeoutExpired:
+        return False, "Linting timed out after 2 minutes"
+    except Exception as e:
+        return False, str(e)
+
+
+def analyze_code_quality(task: dict) -> list[str]:
+    """Check for code quality issues in the task's changes.
+
+    Returns:
+        List of quality findings
+    """
+    issues = []
+
+    try:
+        result = subprocess.run(
+            ["git", "log", "--all", "--oneline", "--grep", f"#{task['id']}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if result.stdout.strip():
+            commit_hash = result.stdout.split()[0].split(":")[-1]
+            diff_result = subprocess.run(
+                ["git", "show", "--stat", commit_hash],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            diff_output = diff_result.stdout + diff_result.stderr
+
+            if "TODO" in diff_output or "FIXME" in diff_output:
+                issues.append("Found TODO/FIXME comments in new code")
+
+            if "print(" in diff_output or "console.log" in diff_output:
+                issues.append("Found debug print statements or console.log calls")
+
+            if "# type: ignore" in diff_output:
+                issues.append("Found '# type: ignore' comments - should use proper types")
+
+            if "# noqa" in diff_output or "# pylint: ignore" in diff_output:
+                issues.append("Found '# noqa' or '# pylint: ignore' - fix linting issue")
+    except Exception as e:
+        logger.warning(f"Could not analyze code quality: {e}")
+
+    return issues
+
+
+def analyze_edge_cases(task: dict) -> list[str]:
+    """Check for edge case handling.
+
+    Returns:
+        List of edge case issues
+    """
+    issues = []
+
+    try:
+        result = subprocess.run(
+            ["git", "log", "--all", "--oneline", "--grep", f"#{task['id']}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if result.stdout.strip():
+            commit_hash = result.stdout.split()[0].split(":")[-1]
+            diff_result = subprocess.run(
+                ["git", "show", commit_hash],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            diff_output = diff_result.stdout + diff_result.stderr
+
+            if "except:" in diff_output and "raise" not in diff_output:
+                issues.append("Exception handler doesn't re-raise - errors swallowed")
+
+            if task.get("task_type") in ["feature", "bug_fix"]:
+                if "validate" not in diff_output and "check" not in diff_output:
+                    issues.append("No input validation found for user-facing changes")
+    except Exception as e:
+        logger.warning(f"Could not analyze edge cases: {e}")
+
+    return issues
+
+
+def analyze_hacks(task: dict) -> list[str]:
+    """Check for hacks and workarounds.
+
+    Returns:
+        List of hack findings
+    """
+    issues = []
+
+    try:
+        result = subprocess.run(
+            ["git", "log", "--all", "--oneline", "--grep", f"#{task['id']}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if result.stdout.strip():
+            commit_hash = result.stdout.split()[0].split(":")[-1]
+            diff_result = subprocess.run(
+                ["git", "show", commit_hash],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            diff_output = diff_result.stdout + diff_result.stderr
+
+            if re.search(r"try:\s*import.*except.*:", diff_output):
+                issues.append("Found try/except import pattern - should fix circular imports")
+
+            if "user_id=1" in diff_output:
+                issues.append("Hardcoded user_id=1 - should use proper user context")
+
+            if "'*'" in diff_output and "CORS" in diff_output:
+                issues.append("CORS set to wildcard - security risk")
+    except Exception as e:
+        logger.warning(f"Could not analyze hacks: {e}")
+
+    return issues
+
+
+def mrs_crabapple_qc_review(task_id: int, github_client: GitHubTaskClient) -> bool:
+    """Mrs. Crabapple reviews an in-review task for quality.
+
+    Args:
+        task_id: GitHub issue number
+        github_client: GitHub task client (using gh CLI)
+
+    Returns:
+        True if approved (marks as done), False if rejected (reverts to pending)
+    """
+    log_section(f"MRS. CRABAPPLE QC REVIEW FOR TASK {task_id}")
+
+    task = github_client.get_task(task_id)
+    if not task:
+        logger.error(f"Task {task_id} not found")
+        return False
+
+    task_title = task.get("title", "Unknown")
+
+    logger.info("Running pytest...")
+    test_passed, test_output, test_coverage = run_pytest()
+
+    logger.info("Running linting...")
+    lint_passed, lint_output = run_lint()
+
+    logger.info(f"Test coverage: {test_coverage:.1f}%")
+
+    all_issues = []
+
+    if not test_passed:
+        all_issues.append("Tests failed")
+
+    if not lint_passed:
+        all_issues.append("Linting failed")
+        if lint_output:
+            all_issues.append(f"Linting errors: {lint_output}")
+
+    code_quality_issues = analyze_code_quality(task)
+    all_issues.extend(code_quality_issues)
+
+    edge_case_issues = analyze_edge_cases(task)
+    all_issues.extend(edge_case_issues)
+
+    hack_issues = analyze_hacks(task)
+    all_issues.extend(hack_issues)
+
+    if all_issues:
+        log_section(f"TASK {task_id} QC REJECTED")
+        log_step(1, "Quality issues found:")
+        for i, issue in enumerate(all_issues, 1):
+            log_step(1 + i, f"  - {issue}")
+
+        qc_comment = f"""## Mrs. Crabapple Quality Control Review
+
+**Task:** #{task_id} - {task_title}
+**Reviewed at:** {datetime.now(UTC).isoformat()}
+
+### Test Results
+- **Tests:** {"✓ PASSED" if test_passed else "✗ FAILED"}
+- **Coverage:** {test_coverage:.1f}%
+
+### Linting Results
+- **Linting:** {"✓ PASSED" if lint_passed else "✗ FAILED"}
+
+### Quality Issues Found
+"""
+        for issue in all_issues:
+            qc_comment += f"- {issue}\n"
+
+        qc_comment += """
+### Action Required
+Please address the issues above and resubmit for review.
+This task will be picked up by Ralph for another iteration.
+"""
+
+        log_step(2, f"Reverting task {task_id} to pending with QC notes")
+        github_client.update_status(task_id, "pending", qc_comment)
+        logger.info(f"Reverted task {task_id} to pending")
+        return False
+    else:
+        log_section(f"TASK {task_id} QC APPROVED")
+        log_step(1, "✓ All quality checks passed")
+        log_step(2, f"  - Tests passed with {test_coverage:.1f}% coverage")
+        log_step(3, "  - Linting passed")
+        log_step(4, "  - No code quality issues found")
+
+        qc_comment = f"""## Mrs. Crabapple Quality Control Review
+
+**Task:** #{task_id} - {task_title}
+**Reviewed at:** {datetime.now(UTC).isoformat()}
+
+### Test Results
+- **Tests:** ✓ PASSED
+- **Coverage:** {test_coverage:.1f}%
+
+### Linting Results
+- **Linting:** ✓ PASSED
+
+### Quality Assessment
+✅ **APPROVED** - Code meets all quality standards.
+
+This task is marked as done and Ralph will move to the next task.
+"""
+
+        log_step(5, f"Marking task {task_id} as done")
+        github_client.update_status(task_id, "done", qc_comment)
+        logger.info(f"Approved and marked task {task_id} as done")
+        return True
+
+
 def generate_ralph_prompt(task: dict) -> str:
     """Generate a Ralph mode prompt for the agent."""
     prompt = f"""# Ralph Mode Task
@@ -135,10 +428,34 @@ Do NOT:
 - Delegate to other workers
 - Wait for instructions
 
-DO:
-- Iterate until complete
-- Fix failures yourself
-- Test everything
+ DO:
+ - Iterate until complete
+ - Fix failures yourself
+ - Test everything
+
+## Ralph Ownership and Quality Control
+
+### OWNERSHIP
+- **Don't skip work** because something is pre-existing or not related to the task at hand
+- **Take full ownership** - solve the actual problem, don't work around it
+- **Fix root causes**, not symptoms
+- **Don't leave technical debt** - address issues properly
+- **Don't defer to other tasks** or create sub-tasks to avoid work
+- **Investigate full scope** - understand all aspects of the problem before fixing
+
+### QUALITY CONTROL
+- **No shortcuts** - QC agents expect full, proper solutions
+- **No hacks or workarounds** that violate code standards
+- **Complete solutions** - partial fixes that create more debt will be rejected
+- **Test edge cases** - QC checks for coverage and error handling
+- **Fix all linting issues** - don't use `# type: ignore` or `# noqa` to bypass standards
+- **Ensure tests pass and linting clean** before marking as done
+
+### WHEN TO ASK FOR CLARIFICATION
+If the task description is incomplete or ambiguous:
+- Ask for clarification BEFORE starting work
+- Don't assume scope beyond what's documented
+- Once scope is clear, take full ownership and complete without further questions
 """
     return prompt
 
@@ -244,7 +561,6 @@ def main() -> None:
         logger.info("Connected to GitHub")
     except ValueError as e:
         logger.error(f"Failed to initialize GitHub client: {e}")
-        logger.error("GITHUB_TOKEN environment variable is required")
         sys.exit(1)
 
     logger.info("Ensuring opencode is running...")
@@ -277,7 +593,39 @@ def main() -> None:
             continue
 
         try:
-            logger.info("Finding pending task...")
+            log_step(1, "Checking for in-review tasks (Mrs. Crabapple)...")
+            in_review_task = github_client.find_in_review_task()
+
+            if in_review_task:
+                task_id = in_review_task.get("id")
+                if not isinstance(task_id, int):
+                    logger.error(f"Invalid in-review task ID: {task_id}")
+                    time.sleep(2)
+                    continue
+
+                log_section(f"PROCESSING IN-REVIEW TASK: {task_id}")
+
+                qc_passed = mrs_crabapple_qc_review(task_id, github_client)
+
+                if qc_passed:
+                    metrics_db.record_metric(
+                        task_id=task_id,
+                        status="done",
+                        duration=0,
+                    )
+                else:
+                    metrics_db.record_metric(
+                        task_id=task_id,
+                        status="pending",
+                        duration=0,
+                    )
+
+                total_iterations += 1
+                logger.info(f"Iteration {total_iterations}/{args.max_iterations} completed")
+                time.sleep(2)
+                continue
+
+            log_step(2, "No in-review tasks, checking for pending tasks...")
             pending_task = github_client.find_pending_task()
 
             if not pending_task:
@@ -285,50 +633,54 @@ def main() -> None:
                 blocked_task = github_client.find_blocked_task()
 
                 if blocked_task:
-                    logger.info(
-                        f"Found blocked task: {blocked_task['id']} - {blocked_task['title']}"
-                    )
-
-                    if github_client.are_dependencies_resolved(blocked_task):
+                    blocked_id = blocked_task.get("id")
+                    if isinstance(blocked_id, int):
                         logger.info(
-                            f"  All dependencies resolved - unblocking task {blocked_task['id']}"
+                            f"Found blocked task: {blocked_id} - {blocked_task.get('title')}"
                         )
-                        github_client.update_status(blocked_task["id"], "pending")  # type: ignore
-                        time.sleep(2)
+
+                        if github_client.are_dependencies_resolved(blocked_task):
+                            logger.info(
+                                f"  All dependencies resolved - unblocking task {blocked_id}"
+                            )
+                            github_client.update_status(blocked_id, "pending")
+                            time.sleep(2)
+                            continue
+
+                        deps = blocked_task.get("dependencies", "none")
+                        logger.info(f"  Still blocked by: {deps}")
+                        logger.info("  Waiting 60 seconds before next check...")
+                        time.sleep(60)
                         continue
-
-                    deps = blocked_task.get("dependencies", "none")
-                    logger.info(f"  Still blocked by: {deps}")
-                    logger.info("  Waiting 60 seconds before next check...")
-                    time.sleep(60)
-                    continue
-
-                    deps = blocked_task.get("dependencies", "none")
-                    logger.info(f"  Still blocked by: {deps}")
-                    logger.info("  Waiting 60 seconds before next check...")
-                    time.sleep(60)
-                    continue
+                    else:
+                        logger.warning(f"Invalid blocked task ID: {blocked_id}")
+                        time.sleep(60)
+                        continue
 
                 logger.info("No pending or blocked tasks found - waiting 60 seconds...")
                 time.sleep(60)
                 continue
 
-            task_id = pending_task["id"]
-            logger.info(f"Found pending task: {task_id} - {pending_task['title']}")
+            task_id_val = pending_task.get("id")
+            if not isinstance(task_id_val, int):
+                logger.error(f"Invalid task ID: {task_id_val}")
+                continue
+            task_id = task_id_val
+            logger.info(f"Found pending task: {task_id} - {pending_task.get('title')}")
 
             if args.verbose:
                 print(f"\n{'=' * 60}")
-                print(f"Task: {pending_task['id']} - {pending_task['title']}")
+                print(f"Task: {task_id} - {pending_task.get('title')}")
                 print(f"{'=' * 60}\n")
-                print(f"Status: {pending_task['status']}")
-                print(f"Priority: {pending_task['priority']}")
-                print(f"Type: {pending_task['task_type']}")
+                print(f"Status: {pending_task.get('status')}")
+                print(f"Priority: {pending_task.get('priority')}")
+                print(f"Type: {pending_task.get('task_type')}")
                 if pending_task.get("dependencies"):
-                    print(f"Dependencies: {pending_task['dependencies']}")
+                    print(f"Dependencies: {pending_task.get('dependencies')}")
                 print(f"{'=' * 60}\n")
 
-            log_step(5, f"Marking task {task_id} as in-progress")
-            github_client.update_status(task_id, "in-progress")  # type: ignore
+            log_step(3, f"Marking task {task_id} as in-progress")
+            github_client.update_status(task_id, "in-progress")
             logger.info(f"Marked task {task_id} as in-progress")
 
             start_time = time.time()
@@ -344,31 +696,56 @@ def main() -> None:
                 duration = time.time() - start_time
 
                 if completed:
-                    log_section(f"TASK {task_id} COMPLETED")
-                    log_step(6, f"Updating task {task_id} to 'done' status")
-                    github_client.update_status(task_id, "done")  # type: ignore
-                    logger.info(f"Marked task {task_id} as done")
+                    log_section(f"TASK {task_id} COMPLETED - RUNNING QC CHECKS")
 
-                    metrics_db.record_metric(
-                        task_id=task_id,  # type: ignore
-                        status="done",
-                        duration=duration,
-                    )
+                    test_passed, test_output, test_coverage = run_pytest()
+                    lint_passed, lint_output = run_lint()
 
-                    circuit_breaker.record_success()
-                    iteration_count += 1
-                    total_iterations += 1
-                    logger.info(f"Iteration {iteration_count}/{args.max_iterations} completed")
-                    logger.info("Waiting 2 seconds before next task...")
-                    time.sleep(2)
+                    if test_passed and lint_passed:
+                        log_step(4, f"QC checks passed (tests: {test_coverage}%, linting: clean)")
+                        log_step(5, f"Marking task {task_id} as in-review for QC review")
+                        github_client.update_status(task_id, "in-review")
+                        logger.info(f"Marked task {task_id} as in-review")
+                        log_section(f"TASK {task_id} READY FOR QC")
+                        metrics_db.record_metric(
+                            task_id=task_id,
+                            status="done",
+                            duration=duration,
+                        )
+                        circuit_breaker.record_success()
+                        iteration_count += 1
+                        total_iterations += 1
+                        logger.info(f"Iteration {iteration_count}/{args.max_iterations} completed")
+                        logger.info("Waiting 2 seconds before next task...")
+                        time.sleep(2)
+                    else:
+                        log_section(f"TASK {task_id} QC CHECKS FAILED")
+                        logger.warning(
+                            f"Tests passed: {test_passed}, Linting passed: {lint_passed}"
+                        )
+                        if not test_passed:
+                            log_step(6, f"Test output:\n{test_output}")
+                        if not lint_passed:
+                            log_step(7, f"Lint output:\n{lint_output}")
+                        log_step(8, f"Marking task {task_id} as pending for retry")
+                        github_client.update_status(task_id, "pending")
+                        logger.info(f"Marked task {task_id} as pending (will retry on next loop)")
+                        metrics_db.record_metric(
+                            task_id=task_id,
+                            status="pending",
+                            duration=duration,
+                            error_type="qc_failed",
+                        )
+                        circuit_breaker.record_failure()
+                        total_iterations += 1
                 else:
                     logger.error(f"Task {task_id} not complete - AI did not signal completion")
-                    log_step(7, f"Marking task {task_id} as pending for retry")
-                    github_client.update_status(task_id, "pending")  # type: ignore
+                    log_step(6, f"Marking task {task_id} as pending for retry")
+                    github_client.update_status(task_id, "pending")
                     logger.info(f"Marked task {task_id} as pending (will retry on next loop)")
 
                     metrics_db.record_metric(
-                        task_id=task_id,  # type: ignore
+                        task_id=task_id,
                         status="pending",
                         duration=duration,
                         error_type="no_completion_signal",
@@ -377,26 +754,19 @@ def main() -> None:
                     circuit_breaker.record_failure()
                     total_iterations += 1
 
-            except GitHubRateLimitError as e:
-                logger.warning(f"GitHub rate limit hit: {e}")
-                logger.info("Waiting for rate limit to reset...")
-                github_client._wait_for_rate_limit_reset()
-                continue
             except Exception as e:
                 duration = time.time() - start_time
                 logger.error(f"\nError processing task {task_id}: {e}")
                 if args.verbose:
-                    import traceback
-
                     logger.info("Traceback:")
                     traceback.print_exc()
 
-                log_step(7, f"Marking task {task_id} as pending for retry")
-                github_client.update_status(task_id, "pending")  # type: ignore
+                log_step(6, f"Marking task {task_id} as pending for retry")
+                github_client.update_status(task_id, "pending")
                 logger.info(f"Marked task {task_id} as pending (will retry on next iteration)")
 
                 metrics_db.record_metric(
-                    task_id=task_id,  # type: ignore
+                    task_id=task_id,
                     status="pending",
                     duration=duration,
                     error_type="no_completion_signal",
@@ -411,8 +781,6 @@ def main() -> None:
         except Exception as e:
             logger.error(f"Unexpected error in main loop: {e}")
             if args.verbose:
-                import traceback
-
                 traceback.print_exc()
             time.sleep(5)
             total_iterations += 1
