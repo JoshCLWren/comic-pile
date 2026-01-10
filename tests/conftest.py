@@ -233,7 +233,7 @@ def sample_tasks(db: Session) -> list[Task]:
 
     for task in tasks:
         db.add(task)
-    db.commit()
+    db.flush()
 
     for task in tasks:
         db.refresh(task)
@@ -304,7 +304,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
 
     for thread in threads:
         db.add(thread)
-    db.commit()
+    db.flush()
 
     for thread in threads:
         db.refresh(thread)
@@ -324,7 +324,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
 
     for sess in sessions:
         db.add(sess)
-    db.commit()
+    db.flush()
 
     for sess in sessions:
         db.refresh(sess)
@@ -354,7 +354,7 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
 
     for event in events:
         db.add(event)
-    db.commit()
+    db.flush()
 
     for event in events:
         db.refresh(event)
@@ -380,7 +380,7 @@ def task_data(db: Session) -> list:
         db.add(task)
         tasks.append(task)
 
-    db.commit()
+    db.flush()
 
     for task in tasks:
         db.refresh(task)

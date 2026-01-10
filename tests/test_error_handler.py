@@ -115,7 +115,7 @@ def test_is_known_5xx_error_unknown():
     assert error_info is None
 
 
-@patch("app.api.error_handler.GitHubTaskClient")
+@patch("scripts.github_task_client.GitHubTaskClient")
 def test_handle_5xx_error_known_with_issue(mock_github_client_class, mock_request):
     """Test handling known 5xx errors that create GitHub issues."""
     mock_client = Mock()
@@ -136,7 +136,7 @@ def test_handle_5xx_error_known_with_issue(mock_github_client_class, mock_reques
     assert call_args[1]["task_type"] == "bug"
 
 
-@patch("app.api.error_handler.GitHubTaskClient")
+@patch("scripts.github_task_client.GitHubTaskClient")
 def test_handle_5xx_error_known_no_issue(mock_github_client_class, mock_request):
     """Test handling known temporary errors (no issue created)."""
     mock_client = Mock()
@@ -162,7 +162,7 @@ def test_handle_5xx_error_unknown(mock_request):
     assert error_handler.ERROR_COUNTER["total_5xx"] == 1
 
 
-@patch("app.api.error_handler.GitHubTaskClient")
+@patch("scripts.github_task_client.GitHubTaskClient")
 def test_create_github_issue_with_full_debug_info(mock_github_client_class, mock_request):
     """Test that error issues capture full debugging information."""
     mock_client = Mock()
