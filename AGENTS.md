@@ -182,7 +182,7 @@ git worktree prune
 - Use database models for persistence, Pydantic schemas for API contracts
 
 ## Frontend Development Guidelines
-- Keep templates in `app/templates/` with Jinja2 syntax
+- Keep React components in `app/templates/` with JSX syntax
 - Use Tailwind CSS for styling (CDN or compiled)
 - Design mobile-first with touch targets ≥44px
 - Use semantic HTML for accessibility

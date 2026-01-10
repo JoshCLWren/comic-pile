@@ -1,7 +1,7 @@
 [project]
 name = "comic_pile"
 version = "0.1.0"
-description = "Dice-Driven Comic Reading Tracker - FastAPI + HTMX + Tailwind CSS"
+description = "Dice-Driven Comic Reading Tracker - FastAPI + React + Tailwind CSS"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
