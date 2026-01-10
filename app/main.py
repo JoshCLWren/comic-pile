@@ -41,9 +41,10 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
+    cors_origins = os.getenv("CORS_ORIGINS", "*").split(",") if os.getenv("CORS_ORIGINS") else ["*"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -254,16 +255,11 @@ def create_app() -> FastAPI:
             },
         )
 
-    app.include_router(thread.router, prefix="/threads", tags=["threads"])
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    app.include_router(rate.router, prefix="/rate", tags=["rate"])
-    app.include_router(queue.router, prefix="/queue", tags=["queue"])
-    app.include_router(session.router, tags=["session"])
     app.include_router(admin.router, tags=["admin"])
     app.include_router(tasks.router, prefix="/api", tags=["tasks"])
     app.include_router(retros.router, prefix="/api", tags=["retros"])
     app.include_router(health_router, prefix="/api")
-    app.include_router(undo.router, prefix="/undo", tags=["undo"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
@@ -280,7 +276,6 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
     app.mount("/react", StaticFiles(directory="static/react", html=True), name="react")
-    app.mount("/", StaticFiles(directory="static/react", html=True), name="root")
 
     @app.get("/health")
     async def health_check(db: Session = Depends(get_db)):
