@@ -1,45 +1,49 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Dice3D, { DICE_LADDER } from '../components/Dice3D';
-import { rateApi, sessionApi } from '../services/api';
+import { useEffect, useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import LazyDice3D from '../components/LazyDice3D'
+import Tooltip from '../components/Tooltip'
+import { DICE_LADDER } from '../components/diceLadder'
+import { rateApi, sessionApi } from '../services/api'
 
 export default function RatePage() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
-  const [rating, setRating] = useState(4.0);
-  const [predictedDie, setPredictedDie] = useState(6);
-  const [currentDie, setCurrentDie] = useState(6);
-  const [previewSides, setPreviewSides] = useState(6);
-  const [rolledValue, setRolledValue] = useState(1);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [rating, setRating] = useState(4.0)
+  const [predictedDie, setPredictedDie] = useState(6)
+  const [currentDie, setCurrentDie] = useState(6)
+  const [previewSides, setPreviewSides] = useState(6)
+  const [rolledValue, setRolledValue] = useState(1)
+  const [errorMessage, setErrorMessage] = useState('')
 
   const { data: session } = useQuery({
     queryKey: ['session', 'current'],
     queryFn: sessionApi.getCurrent,
-  });
+  })
 
   const rateMutation = useMutation({
     mutationFn: rateApi.rate,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session', 'current'] });
-      queryClient.invalidateQueries({ queryKey: ['threads'] });
-      window.location.href = '/';
+      queryClient.invalidateQueries({ queryKey: ['session', 'current'] })
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
+      navigate('/')
     },
     onError: (error) => {
-      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+      setErrorMessage(error.response?.data?.detail || 'Failed to save rating')
     },
-  });
+  })
 
   useEffect(() => {
     if (session) {
-      const die = session.current_die || 6;
-      const result = session.last_rolled_result || 1;
-      setCurrentDie(die);
-      setPredictedDie(die);
-      setPreviewSides(die);
-      setRolledValue(result);
+      const die = session.current_die || 6
+      const result = session.last_rolled_result || 1
+      setCurrentDie(die)
+      setPredictedDie(die)
+      setPreviewSides(die)
+      setRolledValue(result)
     }
-  }, [session]);
+  }, [session])
 
   function updateUI(val) {
     const num = parseFloat(val);
@@ -132,7 +136,7 @@ export default function RatePage() {
             </div>
           )}
           <div className="dice-perspective relative" style={{ width: '50px', height: '50px', transform: 'scale(0.4)' }}>
-            <Dice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
+            <LazyDice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
           </div>
         </div>
       </header>
@@ -162,7 +166,7 @@ export default function RatePage() {
               className="dice-state-rate-flow relative flex items-center justify-center"
               style={{ width: '120px', height: '120px', margin: '0 auto' }}
             >
-              <Dice3D
+              <LazyDice3D
                 sides={previewSides}
                 value={rolledValue}
                 isRolling={false}
@@ -176,7 +180,9 @@ export default function RatePage() {
           </div>
 
           <div className="text-center space-y-6">
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">How was it?</p>
+            <Tooltip content="Ratings of 4.0+ move the thread to the front and step the die down. Lower ratings move it back and step the die up.">
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 cursor-help">How was it?</p>
+            </Tooltip>
             <div id="rating-value" className={rating >= 4.0 ? 'text-teal-400' : 'text-indigo-400'}>
               {rating.toFixed(1)}
             </div>

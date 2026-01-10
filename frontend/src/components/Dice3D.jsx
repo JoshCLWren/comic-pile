@@ -1,8 +1,6 @@
 import { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 
-const DICE_LADDER = [4, 6, 8, 10, 12, 20];
-
 function normalize(v) {
   const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
   return [v[0] / len, v[1] / len, v[2] / len];
@@ -648,4 +646,3 @@ export default function Dice3D({ sides = 6, value = 1, isRolling = false, showVa
   );
 }
 
-export { DICE_LADDER };

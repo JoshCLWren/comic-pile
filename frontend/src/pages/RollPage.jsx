@@ -1,152 +1,120 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Dice3D, { DICE_LADDER } from '../components/Dice3D';
-import { rollApi, threadsApi, sessionApi } from '../services/api';
-
-function Tooltip({ children, content }) {
-  const [isVisible, setIsVisible] = useState(false);
-
-  return (
-    <div
-      className="relative inline-block"
-      onMouseEnter={() => setIsVisible(true)}
-      onMouseLeave={() => setIsVisible(false)}
-      onFocus={() => setIsVisible(true)}
-      onBlur={() => setIsVisible(false)}
-    >
-      {children}
-      {isVisible && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 bg-slate-900/95 text-slate-200 text-[10px] rounded-lg shadow-xl border border-white/10 z-50">
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-slate-900/95 border-r border-b border-white/10"></div>
-          {content}
-        </div>
-      )}
-    </div>
-  );
-}
+import { useState, useEffect } from 'react'
+import LazyDice3D from '../components/LazyDice3D'
+import Modal from '../components/Modal'
+import Tooltip from '../components/Tooltip'
+import { DICE_LADDER } from '../components/diceLadder'
+import { useSession } from '../hooks/useSession'
+import { useStaleThreads, useThreads } from '../hooks/useThread'
+import { useClearManualDie, useOverrideRoll, useReroll, useSetDie } from '../hooks/useRoll'
 
 export default function RollPage() {
-  const queryClient = useQueryClient();
+  const [isRolling, setIsRolling] = useState(false)
+  const [rolledResult, setRolledResult] = useState(null)
+  const [selectedThreadId, setSelectedThreadId] = useState(null)
+  const [currentDie, setCurrentDie] = useState(6)
+  const [diceState, setDiceState] = useState('idle')
+  const [staleThread, setStaleThread] = useState(null)
+  const [isOverrideOpen, setIsOverrideOpen] = useState(false)
+  const [overrideThreadId, setOverrideThreadId] = useState('')
 
-  const [isRolling, setIsRolling] = useState(false);
-  const [rolledResult, setRolledResult] = useState(null);
-  const [selectedThreadId, setSelectedThreadId] = useState(null);
-  const [currentDie, setCurrentDie] = useState(6);
-  const [diceState, setDiceState] = useState('idle');
-  const [staleThread, setStaleThread] = useState(null);
+  const { data: session } = useSession()
+  const { data: threads } = useThreads()
+  const { data: staleThreads } = useStaleThreads(7)
 
-  const { data: session } = useQuery({
-    queryKey: ['session', 'current'],
-    queryFn: sessionApi.getCurrent,
-    refetchInterval: 30000,
-  });
+  const setDieMutation = useSetDie()
+  const clearManualDieMutation = useClearManualDie()
+  const rerollMutation = useReroll()
+  const overrideMutation = useOverrideRoll()
 
-  const { data: threads } = useQuery({
-    queryKey: ['threads'],
-    queryFn: threadsApi.list,
-  });
-
-  const { data: staleThreads } = useQuery({
-    queryKey: ['threads', 'stale'],
-    queryFn: () => threadsApi.listStale(7),
-  });
-
-  const setDieMutation = useMutation({
-    mutationFn: rollApi.setDie,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session', 'current'] });
-      queryClient.invalidateQueries({ queryKey: ['threads'] });
-    },
-  });
-
-  const clearManualDieMutation = useMutation({
-    mutationFn: rollApi.clearManualDie,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session', 'current'] });
-    },
-  });
-
-  const rollMutation = useMutation({
-    mutationFn: rollApi.reroll,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session', 'current'] });
-      queryClient.invalidateQueries({ queryKey: ['threads'] });
-      setIsRolling(false);
-    },
-    onError: () => {
-      setIsRolling(false);
-    },
-  });
+  const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
 
   useEffect(() => {
     if (session?.current_die) {
-      setCurrentDie(session.current_die);
+      setCurrentDie(session.current_die)
     }
     if (session?.last_rolled_result) {
-      setRolledResult(session.last_rolled_result);
+      setRolledResult(session.last_rolled_result)
     }
-  }, [session]);
+  }, [session])
 
   useEffect(() => {
     if (staleThreads && staleThreads.length > 0) {
-      const thread = staleThreads[0];
-      const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at);
-      const diffMs = new Date() - lastActivity;
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const thread = staleThreads[0]
+      const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
+      const diffMs = new Date() - lastActivity
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
       if (diffDays >= 7) {
-        setStaleThread({ ...thread, days: diffDays });
+        setStaleThread({ ...thread, days: diffDays })
       }
     }
-  }, [staleThreads]);
+  }, [staleThreads])
 
-  const dieSize = session?.current_die || 6;
-  const pool = threads?.slice(0, dieSize) || [];
+  const dieSize = session?.current_die || 6
+  const pool = activeThreads.slice(0, dieSize) || []
 
   function setDiceStateValue(state) {
-    setDiceState(state);
-    console.log('[RollPage] Dice state set to:', state);
+    setDiceState(state)
+    console.log('[RollPage] Dice state set to:', state)
   }
 
   function handleSetDie(die) {
-    setCurrentDie(die);
-    setDieMutation.mutate(die);
+    setCurrentDie(die)
+    setDieMutation.mutate(die)
   }
 
   function handleClearManualDie() {
-    clearManualDieMutation.mutate();
+    clearManualDieMutation.mutate()
   }
 
   function handleRoll() {
-    if (isRolling) return;
+    if (isRolling) return
 
-    setSelectedThreadId(null);
-    setIsRolling(true);
-    setDiceStateValue('idle');
+    setSelectedThreadId(null)
+    setIsRolling(true)
+    setDiceStateValue('idle')
 
-    let currentRollCount = 0;
-    const maxRolls = 10;
+    let currentRollCount = 0
+    const maxRolls = 10
 
     const rollInterval = setInterval(() => {
-      currentRollCount++;
+      currentRollCount++
 
       if (currentRollCount >= maxRolls) {
-        clearInterval(rollInterval);
+        clearInterval(rollInterval)
         setTimeout(() => {
-          rollMutation.mutate();
-        }, 400);
+          rerollMutation.mutate(undefined, {
+            onSuccess: () => setIsRolling(false),
+            onError: () => setIsRolling(false),
+          })
+        }, 400)
       }
-    }, 80);
+    }, 80)
 
-    return () => clearInterval(rollInterval);
+    return () => clearInterval(rollInterval)
   }
 
   function handleRollComplete() {
-    setDiceStateValue('rolled');
+    setDiceStateValue('rolled')
+  }
+
+  function handleOverrideSubmit(event) {
+    event.preventDefault()
+    if (!overrideThreadId) return
+
+    overrideMutation.mutate(
+      { thread_id: Number(overrideThreadId) },
+      {
+        onSuccess: () => {
+          setIsOverrideOpen(false)
+          setOverrideThreadId('')
+        },
+      }
+    )
   }
 
   if (!session) {
-    return <div className="text-center py-10 text-slate-500 font-black uppercase tracking-widest text-[10px]">Loading...</div>;
+    return <div className="text-center py-10 text-slate-500 font-black uppercase tracking-widest text-[10px]">Loading...</div>
   }
 
   return (
@@ -194,7 +162,7 @@ export default function RollPage() {
           <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
             <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
               <div className="w-full h-full">
-                <Dice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
+                <LazyDice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
               </div>
             </div>
             <div className="text-right">
@@ -204,6 +172,15 @@ export default function RollPage() {
               <span className="text-[10px] font-black text-teal-400">d{currentDie}</span>
             </div>
           </div>
+          <Tooltip content="Manually select a thread to override the next roll result.">
+            <button
+              type="button"
+              onClick={() => setIsOverrideOpen(true)}
+              className="px-3 py-2 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+            >
+              Override
+            </button>
+          </Tooltip>
         </div>
       </header>
 
@@ -217,7 +194,7 @@ export default function RollPage() {
             style={{ width: '200px', height: '200px', margin: '0 auto' }}
           >
             <div className="w-full h-full">
-              <Dice3D
+              <LazyDice3D
                 sides={currentDie}
                 value={rolledResult || 1}
                 isRolling={isRolling}
@@ -245,25 +222,25 @@ export default function RollPage() {
                   Queue Empty
                 </div>
               ) : (
-                pool.map((t, i) => {
-                  const isSelected = selectedThreadId && parseInt(selectedThreadId) === t.id;
+                pool.map((thread, index) => {
+                  const isSelected = selectedThreadId && parseInt(selectedThreadId, 10) === thread.id
                   return (
                     <div
-                      key={t.id}
-                      onClick={() => setSelectedThreadId(t.id)}
+                      key={thread.id}
+                      onClick={() => setSelectedThreadId(thread.id)}
                       className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all ${
                         isSelected ? 'pool-thread-selected' : ''
                       }`}
                     >
                       <span className="text-lg font-black text-slate-500/50 group-hover:text-slate-400/50 transition-colors">
-                        {i + 1}
+                        {index + 1}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="font-black text-slate-300 truncate text-sm">{t.title}</p>
-                        <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{t.format}</p>
+                        <p className="font-black text-slate-300 truncate text-sm">{thread.title}</p>
+                        <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
                       </div>
                     </div>
-                  );
+                  )
                 })
               )}
             </div>
@@ -288,6 +265,35 @@ export default function RollPage() {
       </div>
 
       <div id="explosion-layer" className="explosion-wrap"></div>
+
+      <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>
+        <form className="space-y-4" onSubmit={handleOverrideSubmit}>
+          <p className="text-xs text-slate-400">Pick a thread to force the next roll result.</p>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Thread</label>
+            <select
+              value={overrideThreadId}
+              onChange={(event) => setOverrideThreadId(event.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              required
+            >
+              <option value="">Select a thread...</option>
+              {activeThreads.map((thread) => (
+                <option key={thread.id} value={thread.id}>
+                  {thread.title} ({thread.format})
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            disabled={overrideMutation.isPending || !overrideThreadId}
+            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+          >
+            {overrideMutation.isPending ? 'Overriding...' : 'Override Roll'}
+          </button>
+        </form>
+      </Modal>
     </div>
-  );
+  )
 }
