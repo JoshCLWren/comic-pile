@@ -1,0 +1,6 @@
+Work log summary (2026-01-10):
+
+- Corrected D4 geometry to be a true tetrahedron with four equilateral faces.
+- Rebuilt D10 geometry for a cleaner trapezohedron silhouette and corrected UV orientation so numbers are no longer mirrored.
+- Added roll/rate/history consistency test to validate roll -> thread -> history alignment and ladder step behavior.
+- Noted pytest coverage enforcement triggers when running single tests; full suite needed for coverage compliance.

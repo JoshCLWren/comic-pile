@@ -74,22 +74,19 @@ function createD4Geometry(atlasInfo) {
   const uvs = [];
   const inds = [];
 
-  const a = 1.0;
-  const h = a * Math.sqrt(2 / 3);
-  const r = a / Math.sqrt(3);
-
+  const scale = 1 / Math.sqrt(3);
   const v = [
-    [0, h, 0],
-    [-a / 2, -h / 3, r],
-    [a / 2, -h / 3, r],
-    [0, -h / 3, -r * 2]
+    [scale, scale, scale],
+    [scale, -scale, -scale],
+    [-scale, scale, -scale],
+    [-scale, -scale, scale]
   ];
 
   const faces = [
-    [0, 1, 2, 1],
-    [0, 2, 3, 2],
-    [0, 3, 1, 3],
-    [1, 3, 2, 4]
+    [0, 2, 1, 1],
+    [0, 1, 3, 2],
+    [0, 3, 2, 3],
+    [1, 2, 3, 4]
   ];
 
   for (let i = 0; i < faces.length; i++) {
@@ -100,7 +97,17 @@ function createD4Geometry(atlasInfo) {
     const rx = (uv.u1 - uv.u0) * 0.4;
     const ry = (uv.v1 - uv.v0) * 0.4;
 
-    addTriangle(verts, uvs, inds, v[f[0]], v[f[1]], v[f[2]], [cx, cy + ry], [cx - rx, cy - ry], [cx + rx, cy - ry]);
+    addTriangle(
+      verts,
+      uvs,
+      inds,
+      v[f[0]],
+      v[f[1]],
+      v[f[2]],
+      [cx, cy + ry],
+      [cx - rx, cy - ry],
+      [cx + rx, cy - ry]
+    );
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -216,67 +223,43 @@ function createD10Geometry(atlasInfo) {
   const uvs = [];
   const inds = [];
 
-  const n = 5;
-  const h = 0.6;
-  const r = 1.0;
-  const twist = Math.PI / n;
+  const faceCount = 10;
+  const ringRadius = 0.95;
+  const poleHeight = 1.2;
 
-  const top = [0, h * 1.5, 0];
-  const bottom = [0, -h * 1.5, 0];
+  const top = [0, poleHeight, 0];
+  const bottom = [0, -poleHeight, 0];
+  const ring = [];
 
-  const topRing = [];
-  const bottomRing = [];
-
-  for (let i = 0; i < n; i++) {
-    const angle = (i * 2 * Math.PI) / n;
-    topRing.push([Math.cos(angle) * r, h * 0.5, Math.sin(angle) * r]);
-    bottomRing.push([Math.cos(angle + twist) * r, -h * 0.5, Math.sin(angle + twist) * r]);
+  for (let i = 0; i < faceCount; i++) {
+    const angle = (i * 2 * Math.PI) / faceCount;
+    ring.push([Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius]);
   }
 
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
+  for (let i = 0; i < faceCount; i++) {
+    const next = (i + 1) % faceCount;
 
-    const uv = getUVForNumber(i * 2 + 1, cols, rows);
+    const uv = getUVForNumber(i + 1, cols, rows);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.35;
-    const ry = (uv.v1 - uv.v0) * 0.35;
+    const rx = (uv.u1 - uv.u0) * 0.42;
+    const ry = (uv.v1 - uv.v0) * 0.42;
 
     const idx = verts.length / 3;
     verts.push(top[0], top[1], top[2]);
-    verts.push(topRing[next][0], topRing[next][1], topRing[next][2]);
-    verts.push(topRing[i][0], topRing[i][1], topRing[i][2]);
-    verts.push(bottomRing[i][0], bottomRing[i][1], bottomRing[i][2]);
-
-    uvs.push(cx, cy + ry * 1.2);
-    uvs.push(cx + rx, cy + ry * 0.3);
-    uvs.push(cx - rx, cy + ry * 0.3);
-    uvs.push(cx, cy - ry * 1.2);
-
-    inds.push(idx, idx + 1, idx + 2, idx + 1, idx + 3, idx + 2);
-  }
-
-  for (let i = 0; i < n; i++) {
-    const next = (i + 1) % n;
-
-    const uv = getUVForNumber(i * 2 + 2, cols, rows);
-    const cx = (uv.u0 + uv.u1) / 2;
-    const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.35;
-    const ry = (uv.v1 - uv.v0) * 0.35;
-
-    const idx = verts.length / 3;
+    verts.push(ring[i][0], ring[i][1], ring[i][2]);
+    verts.push(ring[next][0], ring[next][1], ring[next][2]);
     verts.push(bottom[0], bottom[1], bottom[2]);
-    verts.push(bottomRing[i][0], bottomRing[i][1], bottomRing[i][2]);
-    verts.push(bottomRing[next][0], bottomRing[next][1], bottomRing[next][2]);
-    verts.push(topRing[next][0], topRing[next][1], topRing[next][2]);
 
-    uvs.push(cx, cy - ry * 1.2);
-    uvs.push(cx - rx, cy - ry * 0.3);
-    uvs.push(cx + rx, cy - ry * 0.3);
-    uvs.push(cx, cy + ry * 1.2);
+    const left = i % 2 === 0 ? cx - rx : cx + rx;
+    const right = i % 2 === 0 ? cx + rx : cx - rx;
 
-    inds.push(idx, idx + 1, idx + 2, idx + 1, idx + 3, idx + 2);
+    uvs.push(cx, cy + ry * 1.1);
+    uvs.push(left, cy);
+    uvs.push(right, cy);
+    uvs.push(cx, cy - ry * 1.1);
+
+    inds.push(idx, idx + 1, idx + 2, idx, idx + 2, idx + 3);
   }
 
   const geometry = new THREE.BufferGeometry();
