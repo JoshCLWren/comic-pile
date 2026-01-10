@@ -12,8 +12,11 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
 function App() {
+  const baseUrl = import.meta.env.BASE_URL || '/'
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) || '/' : baseUrl
+
   return (
-    <BrowserRouter basename="/react">
+    <BrowserRouter basename={normalizedBase}>
       <main className="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
         <Suspense fallback={<div className="text-center text-slate-500">Loading page...</div>}>
           <Routes>
