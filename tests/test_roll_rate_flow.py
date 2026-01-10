@@ -7,6 +7,7 @@ from comic_pile.dice_ladder import step_down
 
 
 async def test_roll_rate_history_consistency(client, db, default_user) -> None:
+    """Verify roll and rate operations maintain consistent session state across history."""
     now = datetime.now(UTC)
     threads = [
         Thread(

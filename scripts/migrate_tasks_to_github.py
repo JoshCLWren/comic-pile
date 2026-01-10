@@ -75,7 +75,7 @@ def create_github_issue(task: dict, dry_run: bool = False) -> str | None:
     body = "\n".join(body_parts)
 
     if dry_run:
-        print(f"[DRY RUN] Would create issue:")
+        print("[DRY RUN] Would create issue:")
         print(f"  Title: {title}")
         print(f"  Labels: {', '.join(labels)}")
         print()
@@ -130,7 +130,7 @@ def main() -> None:
 
     os.environ["GITHUB_REPO"] = args.repo
 
-    print(f"Loading tasks from tasks.json...")
+    print("Loading tasks from tasks.json...")
     all_tasks = load_tasks()
     print(f"Total tasks: {len(all_tasks)}")
 

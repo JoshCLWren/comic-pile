@@ -39,7 +39,7 @@ def get_item_priority(content: str, item_number: int) -> str:
     return "medium"  # Default
 
 
-def extract_item_details(content: str, item_number: int) -> dict:
+def extract_item_details(content: str, item_number: int) -> dict[str, str] | None:
     """Extract details for a single debt item."""
     # Find to section for this item
     item_pattern = rf"^### {item_number}\. (.+)$"
@@ -125,8 +125,8 @@ def create_github_issue(item: dict, dry_run: bool = False) -> str | None:
     body_parts = [
         f"**Task ID:** `{task_id}`",
         f"**Priority:** {item['priority'].upper()}",
-        f"**Status:** pending",
-        f"**Type:** code_debt",
+        "**Status:** pending",
+        "**Type:** code_debt",
         "",
         "## Description",
         item["description"],
@@ -136,7 +136,7 @@ def create_github_issue(item: dict, dry_run: bool = False) -> str | None:
     ]
 
     if item["location"]:
-        body_parts.extend(["", "## Location", f"```", item["location"], f"```"])
+        body_parts.extend(["", "## Location", "```", item["location"], "```"])
 
     if item["approach"]:
         body_parts.extend(["", "## Suggested Approach", item["approach"]])
@@ -146,7 +146,7 @@ def create_github_issue(item: dict, dry_run: bool = False) -> str | None:
     body = "\n".join(body_parts)
 
     if dry_run:
-        print(f"[DRY RUN] Would create issue:")
+        print("[DRY RUN] Would create issue:")
         print(f"  Title: {title}")
         print(f"  Priority: {item['priority']}")
         print(f"  Labels: {', '.join(labels)}")
