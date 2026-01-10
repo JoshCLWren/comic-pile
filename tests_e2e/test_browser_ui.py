@@ -6,7 +6,7 @@ import pytest
 @pytest.mark.integration
 def test_homepage_renders_dice_ladder(page, test_server_url):
     """Navigate to /, verify expected dice selector exists."""
-    page.goto(f"{test_server_url}/roll")
+    page.goto(f"{test_server_url}/react/")
     page.wait_for_selector("#die-selector", timeout=5000)
 
     header_die = page.query_selector("#header-die-label")
@@ -16,7 +16,7 @@ def test_homepage_renders_dice_ladder(page, test_server_url):
 @pytest.mark.integration
 def test_htmx_roll_dice_partial_update(page, test_server_url):
     """Navigate to /roll, click roll button, wait for result update."""
-    page.goto(f"{test_server_url}/roll")
+    page.goto(f"{test_server_url}/react/")
 
     page.wait_for_selector("#tap-instruction", timeout=5000)
 
@@ -63,7 +63,7 @@ def test_htmx_rate_comic_updates_ui(page, test_server_url, db):
     db.add(roll_event)
     db.commit()
 
-    page.goto(f"{test_server_url}/rate")
+    page.goto(f"{test_server_url}/react/rate")
     page.wait_for_selector("#rating-input", timeout=5000)
 
     page.evaluate("document.getElementById('rating-input').value = '3.5'")
@@ -88,7 +88,7 @@ def test_queue_management_ui(page, test_server_url, db):
     db.add(thread)
     db.commit()
 
-    page.goto(f"{test_server_url}/queue")
+    page.goto(f"{test_server_url}/react/queue")
     page.wait_for_selector("#queue-container", timeout=5000)
 
     queue_container = page.query_selector("#queue-container")
@@ -98,7 +98,7 @@ def test_queue_management_ui(page, test_server_url, db):
 @pytest.mark.integration
 def test_view_history_pagination(page, test_server_url):
     """Navigate to /history, verify history list exists."""
-    page.goto(f"{test_server_url}/history")
+    page.goto(f"{test_server_url}/react/history")
     page.wait_for_selector("#sessions-list", timeout=5000)
 
     sessions_list = page.query_selector("#sessions-list")
@@ -137,7 +137,7 @@ def test_full_session_workflow(page, test_server_url, db):
     db.add(roll_event)
     db.commit()
 
-    page.goto(f"{test_server_url}/rate")
+    page.goto(f"{test_server_url}/react/rate")
     page.wait_for_selector("#rating-input", timeout=5000)
 
     rating_input = page.query_selector("#rating-input")
