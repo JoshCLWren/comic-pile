@@ -67,9 +67,11 @@ export default function HistoryPage() {
                   </span>
                 </div>
 
-                {session.ladder_path && session.ladder_path.length > 0 && (
+                {session.ladder_path && (
                   <div className="space-y-2">
-                    <p className="text-sm font-black text-slate-300">Ladder: {session.ladder_path.join(', ')}</p>
+                    <p className="text-sm font-black text-slate-300">
+                      Ladder: {Array.isArray(session.ladder_path) ? session.ladder_path.join(', ') : session.ladder_path}
+                    </p>
                   </div>
                 )}
 
