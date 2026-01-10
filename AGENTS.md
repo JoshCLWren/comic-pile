@@ -84,20 +84,70 @@ else:
 
 **CRITICAL:** Ralph mode agents own the entire task lifecycle and must meet strict quality standards.
 
-**Ownership Requirements:**
-- **Direct accountability:** You are responsible for completing the task end-to-end
-- **No delegation:** Do not create subtasks or delegate work
-- **Self-correction:** Fix all failures yourself through iteration
-- **Complete work:** Continue until all tests pass and linting is clean
+#### Ownership Requirements
 
-**Quality Control Gates:**
+**Direct accountability:** You are responsible for completing the task end-to-end. Do not create subtasks or delegate work to others.
+
+**No delegation:** Fix all failures yourself through iteration. Continue until all tests pass and linting is clean.
+
+**Don't skip work because of pre-existing issues:**
+- Read existing code thoroughly - add coverage for all new paths
+- Review database schema - add migrations if needed
+- See messy code - refactor it as part of your task
+- Take responsibility for ALL code you touch, regardless of origin
+
+**Take full ownership - solve actual problems, don't work around them:**
+- Find WHY the error happens and fix the underlying issue
+- Make the code work correctly without hiding failures
+- Write tests to prevent the root cause from returning
+- Investigate full scope before fixing
+
+**Fix root causes, not symptoms:**
+- Don't add try/except to catch errors
+- Don't add sleep() to fix race conditions
+- Don't comment out failing lines
+- Fix the actual issue with proper solutions
+
+**Don't leave technical debt - address issues properly:**
+- Write proper parsers with validation
+- Fix linter issues or make exceptions justified
+- Do the work now, not later
+- Make code configurable with proper defaults
+
+**No deferring to other tasks or creating sub-tasks to avoid work:**
+- Not "Not my problem, only working on feature X"
+- Not "Create a separate issue to fix later"
+- Not "Leave it for the next person"
+- Make the codebase better as a whole
+
+#### Quality Control Gates
+
+**No shortcuts - QC expects full, proper solutions:**
+- Partial fixes that create more debt will be rejected
+- Solutions must work under all conditions, not just specific ones
+- Code must pass tests AND type/lint checks
+- No "TODO: fix properly later" comments
+
+**No hacks or workarounds that violate code standards:**
+- Don't use eval() to parse quickly
+- Don't disable the linter for functions
+- Don't hardcode values for now
+- Write proper, maintainable code
+
+**Complete solutions - partial fixes will be rejected:**
 - All code must pass `make lint` (ruff, pyright, ESLint, htmlhint)
 - All tests must pass with 90%+ coverage (configured in pyproject.toml)
 - No type/linter ignores allowed (`# type: ignore`, `# noqa`, etc.)
 - Pre-commit hook will block commits with quality violations
 - Regression tests required for all bug fixes
 
-**Code Standards Are Strict:**
+**Test edge cases - QC checks for coverage and error handling:**
+- Add tests for remaining uncovered edge cases
+- Add tests for complex error handling paths
+- Add tests for API endpoints with httpx.AsyncClient
+- Add tests for business logic (dice ladder, queue management, session detection)
+
+**Fix all linting issues - no `# type: ignore` or `# noqa`:**
 - Follow PEP 8 spacing (4 spaces, 100-character soft wrap)
 - Use specific types, not `Any` (ruff ANN401 rule)
 - Annotate all public functions with precise types
