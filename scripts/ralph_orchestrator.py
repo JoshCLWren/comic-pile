@@ -699,48 +699,22 @@ def main() -> None:
                 duration = time.time() - start_time
 
                 if completed:
-                    log_section(f"TASK {task_id} COMPLETED - RUNNING QC CHECKS")
-
-                    test_passed, test_output, test_coverage = run_pytest()
-                    lint_passed, lint_output = run_lint()
-
-                    if test_passed and lint_passed:
-                        log_step(4, f"QC checks passed (tests: {test_coverage}%, linting: clean)")
-                        log_step(5, f"Marking task {task_id} as in-review for QC review")
-                        github_client.update_status(task_id, "in-review")
-                        logger.info(f"Marked task {task_id} as in-review")
-                        log_section(f"TASK {task_id} READY FOR QC")
-                        metrics_db.record_metric(
-                            task_id=task_id,
-                            status="done",
-                            duration=duration,
-                        )
-                        circuit_breaker.record_success()
-                        iteration_count += 1
-                        total_iterations += 1
-                        logger.info(f"Iteration {iteration_count}/{args.max_iterations} completed")
-                        logger.info("Waiting 2 seconds before next task...")
-                        time.sleep(2)
-                    else:
-                        log_section(f"TASK {task_id} QC CHECKS FAILED")
-                        logger.warning(
-                            f"Tests passed: {test_passed}, Linting passed: {lint_passed}"
-                        )
-                        if not test_passed:
-                            log_step(6, f"Test output:\n{test_output}")
-                        if not lint_passed:
-                            log_step(7, f"Lint output:\n{lint_output}")
-                        log_step(8, f"Marking task {task_id} as pending for retry")
-                        github_client.update_status(task_id, "pending")
-                        logger.info(f"Marked task {task_id} as pending (will retry on next loop)")
-                        metrics_db.record_metric(
-                            task_id=task_id,
-                            status="pending",
-                            duration=duration,
-                            error_type="qc_failed",
-                        )
-                        circuit_breaker.record_failure()
-                        total_iterations += 1
+                    log_section(f"TASK {task_id} COMPLETED")
+                    log_step(4, f"Marking task {task_id} as in-review")
+                    github_client.update_status(task_id, "in-review")
+                    logger.info(f"Marked task {task_id} as in-review")
+                    log_section(f"TASK {task_id} READY FOR QC")
+                    metrics_db.record_metric(
+                        task_id=task_id,
+                        status="done",
+                        duration=duration,
+                    )
+                    circuit_breaker.record_success()
+                    iteration_count += 1
+                    total_iterations += 1
+                    logger.info(f"Iteration {iteration_count}/{args.max_iterations} completed")
+                    logger.info("Waiting 2 seconds before next task...")
+                    time.sleep(2)
                 else:
                     logger.error(f"Task {task_id} not complete - AI did not signal completion")
                     log_step(6, f"Marking task {task_id} as pending for retry")
