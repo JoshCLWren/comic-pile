@@ -4,8 +4,6 @@
 import argparse
 import logging
 import random
-import re
-import subprocess
 import sys
 import time
 import traceback
@@ -109,293 +107,66 @@ def log_section(title: str) -> None:
     print(f"{'=' * 60}\n")
 
 
-def run_pytest() -> tuple[bool, str, float]:
-    """Run pytest and check results.
+def generate_mrs_crabapple_prompt(task: dict) -> str:
+    """Generate a Mrs. Crabapple QC review prompt for the agent."""
+    prompt = f"""# Mrs. Crabapple Quality Control Review
 
-    Returns:
-        (passed, output, coverage_percentage)
-    """
-    logger.info("Running pytest...")
-    try:
-        result = subprocess.run(
-            ["pytest", "--cov=comic_pile", "--cov-report=term-missing", "-q"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
+You are Mrs. Crabapple, a quality control agent reviewing code changes.
 
-        output = result.stdout + result.stderr
-        coverage = 0.0
+## Task
+**ID:** {task["id"]}
+**Title:** {task["title"]}
+**Priority:** {task["priority"]}
+**Type:** {task["task_type"]}
 
-        for line in output.split("\n"):
-            if "TOTAL" in line and "coverage" in line.lower():
-                try:
-                    coverage_str = line.split("coverage")[1].split("%")[0].strip()
-                    coverage = float(coverage_str)
-                except Exception:
-                    pass
+## Description
+{task["description"]}
 
-        passed = result.returncode == 0
-        return passed, output, coverage
-    except subprocess.TimeoutExpired:
-        return False, "Tests timed out after 5 minutes", 0.0
-    except Exception as e:
-        return False, str(e), 0.0
+## Instructions
+1. Review the git changes for this task (use git log and git show)
+2. Run pytest to verify all tests pass
+3. Run make lint to verify code quality
+4. Analyze code for quality issues (TODO/FIXME, debug prints, type ignores, etc.)
+5. Check for proper edge case handling
+6. Identify any hacks or workarounds
 
+## Output Format
 
-def run_lint() -> tuple[bool, str]:
-    """Run linting and check results.
+If APPROVED (all quality checks pass):
+```
+<approve>
+All quality checks passed:
+- Tests passed
+- Linting clean
+- No code quality issues
+</approve>
+```
 
-    Returns:
-        (passed, output)
-    """
-    logger.info("Running lint...")
-    try:
-        result = subprocess.run(
-            ["bash", "scripts/lint.sh"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+If REJECTED (quality issues found):
+```
+<reject>
+Quality issues found:
+- [list each issue with details]
+</reject>
+```
 
-        output = result.stdout + result.stderr
-        passed = result.returncode == 0
-        return passed, output
-    except subprocess.TimeoutExpired:
-        return False, "Linting timed out after 2 minutes"
-    except Exception as e:
-        return False, str(e)
+After outputting your decision, add a GitHub comment with your findings using the gh CLI:
+- If approved: gh issue comment {task["id"]} --body "## QC Review\n✅ APPROVED"
+- If rejected: gh issue comment {task["id"]} --body "## QC Review\n❌ REJECTED\n\n[list issues]"
 
+Then update the task status using the GitHub client:
+- If approved: Mark as done
+- If rejected: Mark as pending (so Ralph can retry)
 
-def analyze_code_quality(task: dict) -> list[str]:
-    """Check for code quality issues in the task's changes.
-
-    Returns:
-        List of quality findings
-    """
-    issues = []
-
-    try:
-        result = subprocess.run(
-            ["git", "log", "--all", "--oneline", "--grep", f"#{task['id']}"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.stdout.strip():
-            commit_hash = result.stdout.split()[0].split(":")[-1]
-            diff_result = subprocess.run(
-                ["git", "show", "--stat", commit_hash],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            diff_output = diff_result.stdout + diff_result.stderr
-
-            if "TODO" in diff_output or "FIXME" in diff_output:
-                issues.append("Found TODO/FIXME comments in new code")
-
-            if "print(" in diff_output or "console.log" in diff_output:
-                issues.append("Found debug print statements or console.log calls")
-
-            if "# type: ignore" in diff_output:
-                issues.append("Found '# type: ignore' comments - should use proper types")
-
-            if "# noqa" in diff_output or "# pylint: ignore" in diff_output:
-                issues.append("Found '# noqa' or '# pylint: ignore' - fix linting issue")
-    except Exception as e:
-        logger.warning(f"Could not analyze code quality: {e}")
-
-    return issues
-
-
-def analyze_edge_cases(task: dict) -> list[str]:
-    """Check for edge case handling.
-
-    Returns:
-        List of edge case issues
-    """
-    issues = []
-
-    try:
-        result = subprocess.run(
-            ["git", "log", "--all", "--oneline", "--grep", f"#{task['id']}"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.stdout.strip():
-            commit_hash = result.stdout.split()[0].split(":")[-1]
-            diff_result = subprocess.run(
-                ["git", "show", commit_hash],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            diff_output = diff_result.stdout + diff_result.stderr
-
-            if "except:" in diff_output and "raise" not in diff_output:
-                issues.append("Exception handler doesn't re-raise - errors swallowed")
-
-            if task.get("task_type") in ["feature", "bug_fix"]:
-                if "validate" not in diff_output and "check" not in diff_output:
-                    issues.append("No input validation found for user-facing changes")
-    except Exception as e:
-        logger.warning(f"Could not analyze edge cases: {e}")
-
-    return issues
-
-
-def analyze_hacks(task: dict) -> list[str]:
-    """Check for hacks and workarounds.
-
-    Returns:
-        List of hack findings
-    """
-    issues = []
-
-    try:
-        result = subprocess.run(
-            ["git", "log", "--all", "--oneline", "--grep", f"#{task['id']}"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.stdout.strip():
-            commit_hash = result.stdout.split()[0].split(":")[-1]
-            diff_result = subprocess.run(
-                ["git", "show", commit_hash],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            diff_output = diff_result.stdout + diff_result.stderr
-
-            if re.search(r"try:\s*import.*except.*:", diff_output):
-                issues.append("Found try/except import pattern - should fix circular imports")
-
-            if "user_id=1" in diff_output:
-                issues.append("Hardcoded user_id=1 - should use proper user context")
-
-            if "'*'" in diff_output and "CORS" in diff_output:
-                issues.append("CORS set to wildcard - security risk")
-    except Exception as e:
-        logger.warning(f"Could not analyze hacks: {e}")
-
-    return issues
-
-
-def mrs_crabapple_qc_review(task_id: int, github_client: GitHubTaskClient) -> bool:
-    """Mrs. Crabapple reviews an in-review task for quality.
-
-    Args:
-        task_id: GitHub issue number
-        github_client: GitHub task client (using gh CLI)
-
-    Returns:
-        True if approved (marks as done), False if rejected (reverts to pending)
-    """
-    log_section(f"MRS. CRABAPPLE QC REVIEW FOR TASK {task_id}")
-
-    task = github_client.get_task(task_id)
-    if not task:
-        logger.error(f"Task {task_id} not found")
-        return False
-
-    task_title = task.get("title", "Unknown")
-
-    logger.info("Running pytest...")
-    test_passed, test_output, test_coverage = run_pytest()
-
-    logger.info("Running linting...")
-    lint_passed, lint_output = run_lint()
-
-    logger.info(f"Test coverage: {test_coverage:.1f}%")
-
-    all_issues = []
-
-    if not test_passed:
-        all_issues.append("Tests failed")
-
-    if not lint_passed:
-        all_issues.append("Linting failed")
-        if lint_output:
-            all_issues.append(f"Linting errors: {lint_output}")
-
-    code_quality_issues = analyze_code_quality(task)
-    all_issues.extend(code_quality_issues)
-
-    edge_case_issues = analyze_edge_cases(task)
-    all_issues.extend(edge_case_issues)
-
-    hack_issues = analyze_hacks(task)
-    all_issues.extend(hack_issues)
-
-    if all_issues:
-        log_section(f"TASK {task_id} QC REJECTED")
-        log_step(1, "Quality issues found:")
-        for i, issue in enumerate(all_issues, 1):
-            log_step(1 + i, f"  - {issue}")
-
-        qc_comment = f"""## Mrs. Crabapple Quality Control Review
-
-**Task:** #{task_id} - {task_title}
-**Reviewed at:** {datetime.now(UTC).isoformat()}
-
-### Test Results
-- **Tests:** {"✓ PASSED" if test_passed else "✗ FAILED"}
-- **Coverage:** {test_coverage:.1f}%
-
-### Linting Results
-- **Linting:** {"✓ PASSED" if lint_passed else "✗ FAILED"}
-
-### Quality Issues Found
+## Quality Standards
+- No shortcuts or partial fixes
+- No hacks or workarounds
+- Complete solutions with proper error handling
+- All tests passing
+- Linting clean (no type: ignore, noqa, etc.)
+- Documentation updated
 """
-        for issue in all_issues:
-            qc_comment += f"- {issue}\n"
-
-        qc_comment += """
-### Action Required
-Please address the issues above and resubmit for review.
-This task will be picked up by Ralph for another iteration.
-"""
-
-        log_step(2, f"Reverting task {task_id} to pending with QC notes")
-        github_client.update_status(task_id, "pending", qc_comment)
-        logger.info(f"Reverted task {task_id} to pending")
-        return False
-    else:
-        log_section(f"TASK {task_id} QC APPROVED")
-        log_step(1, "✓ All quality checks passed")
-        log_step(2, f"  - Tests passed with {test_coverage:.1f}% coverage")
-        log_step(3, "  - Linting passed")
-        log_step(4, "  - No code quality issues found")
-
-        qc_comment = f"""## Mrs. Crabapple Quality Control Review
-
-**Task:** #{task_id} - {task_title}
-**Reviewed at:** {datetime.now(UTC).isoformat()}
-
-### Test Results
-- **Tests:** ✓ PASSED
-- **Coverage:** {test_coverage:.1f}%
-
-### Linting Results
-- **Linting:** ✓ PASSED
-
-### Quality Assessment
-✅ **APPROVED** - Code meets all quality standards.
-
-This task is marked as done and Ralph will move to the next task.
-"""
-
-        log_step(5, f"Marking task {task_id} as done")
-        github_client.update_status(task_id, "done", qc_comment)
-        logger.info(f"Approved and marked task {task_id} as done")
-        return True
+    return prompt
 
 
 def generate_ralph_prompt(task: dict) -> str:
@@ -607,21 +378,66 @@ def main() -> None:
                     continue
 
                 log_section(f"PROCESSING IN-REVIEW TASK: {task_id}")
+                log_step(1, "Initializing Mrs. Crabapple session")
 
-                qc_passed = mrs_crabapple_qc_review(task_id, github_client)
+                logger.info(f"Connecting to opencode at {opencode_client.base_url}")
+                try:
+                    session_id = opencode_client.create_session()
+                    logger.info(f"Creating session: {session_id}")
+                except Exception as e:
+                    logger.error(f"Failed to create session: {e}")
+                    raise
 
-                if qc_passed:
+                log_step(2, "Generating Mrs. Crabapple QC prompt")
+                crabapple_prompt = generate_mrs_crabapple_prompt(in_review_task)
+                logger.info("Generating Mrs. Crabapple QC prompt")
+
+                if args.verbose:
+                    print("\n--- MRS. CRABAPPLE PROMPT ---")
+                    print(crabapple_prompt)
+                    print("--- END PROMPT ---\n")
+
+                log_step(3, "Sending prompt to opencode session")
+                logger.info("Sending prompt to opencode")
+
+                try:
+                    response = opencode_client.chat(crabapple_prompt, timeout=None)
+                    content = response.get("content", "")
+
+                    if not content:
+                        logger.error("Received empty response from opencode")
+                        logger.error("AI may have failed to complete QC review")
+                        logger.error("Retrying task on next iteration...")
+                        continue
+
+                    logger.info(f"Received response ({len(content)} chars)")
+                except Exception as e:
+                    logger.error(f"Failed to get response: {e}")
+                    logger.error("Retrying task on next iteration...")
+                    continue
+
+                log_step(4, "Parsing QC review decision")
+                is_approved = "<approve>" in content
+                is_rejected = "<reject>" in content
+
+                if is_approved:
+                    log_section(f"TASK {task_id} QC APPROVED")
                     metrics_db.record_metric(
                         task_id=task_id,
                         status="done",
                         duration=0,
                     )
-                else:
+                elif is_rejected:
+                    log_section(f"TASK {task_id} QC REJECTED")
                     metrics_db.record_metric(
                         task_id=task_id,
                         status="pending",
                         duration=0,
                     )
+                else:
+                    logger.warning("No decision found in QC review response")
+                    logger.warning("Retrying task on next iteration...")
+                    continue
 
                 total_iterations += 1
                 logger.info(f"Iteration {total_iterations}/{args.max_iterations} completed")
