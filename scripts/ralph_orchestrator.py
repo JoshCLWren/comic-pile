@@ -564,9 +564,12 @@ def main() -> None:
         sys.exit(1)
 
     logger.info("Ensuring opencode is running...")
-    if not ensure_opencode_running(base_url=args.base_url):
+    opencode_running, actual_url = ensure_opencode_running(base_url=args.base_url)
+    if not opencode_running:
         logger.error("Failed to ensure opencode is running")
         sys.exit(1)
+
+    args.base_url = actual_url
 
     logger.info(f"Connecting to opencode at {args.base_url}")
     try:

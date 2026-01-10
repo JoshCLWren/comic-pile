@@ -56,6 +56,20 @@ def find_available_port(ports: list[int] | None = None) -> int:
     return 4096
 
 
+def find_opencode_port() -> int | None:
+    """Find which port opencode is listening on by checking default ports.
+
+    Returns:
+        Port number if found, None otherwise
+    """
+    for port in DEFAULT_PORTS:
+        base_url = f"http://127.0.0.1:{port}"
+        if check_health(base_url, timeout=2):
+            logger.info(f"Found opencode healthy on port {port}")
+            return port
+    return None
+
+
 def check_health(base_url: str, timeout: int = 5) -> bool:
     """Check if opencode is healthy.
 
@@ -111,7 +125,11 @@ def is_opencode_running(base_url: str) -> bool:
     Returns:
         True if running, False otherwise
     """
-    return check_health(base_url, timeout=2)
+    port = find_opencode_port()
+    if port:
+        logger.info(f"Found opencode running on port {port}")
+        return True
+    return False
 
 
 def kill_existing_opencode() -> None:
@@ -206,7 +224,7 @@ def launch_opencode(
 def ensure_opencode_running(
     base_url: str = "http://127.0.0.1:4096",
     restart: bool = False,
-) -> bool:
+) -> tuple[bool, str]:
     """Ensure opencode is running, launching if necessary.
 
     Args:
@@ -214,19 +232,21 @@ def ensure_opencode_running(
         restart: Whether to restart if already running
 
     Returns:
-        True if running, False otherwise
+        (success, actual_url) tuple
     """
-    if is_opencode_running(base_url):
+    port = find_opencode_port()
+    if port:
+        actual_url = f"http://127.0.0.1:{port}"
+        logger.info(f"opencode already running at {actual_url}")
         if restart:
             logger.info("Restarting opencode...")
             kill_existing_opencode()
-            return launch_opencode(base_url)
+            return launch_opencode(base_url), base_url
         else:
-            logger.info(f"opencode already running at {base_url}")
-            return True
-    else:
-        logger.info("opencode not running, launching...")
-        return launch_opencode(base_url)
+            return True, actual_url
+
+    logger.info("opencode not running, launching...")
+    return launch_opencode(base_url), base_url
 
 
 def stop_opencode() -> bool:
