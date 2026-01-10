@@ -450,12 +450,6 @@ Do NOT:
 - **Test edge cases** - QC checks for coverage and error handling
 - **Fix all linting issues** - don't use `# type: ignore` or `# noqa` to bypass standards
 - **Ensure tests pass and linting clean** before marking as done
-
-### WHEN TO ASK FOR CLARIFICATION
-If the task description is incomplete or ambiguous:
-- Ask for clarification BEFORE starting work
-- Don't assume scope beyond what's documented
-- Once scope is clear, take full ownership and complete without further questions
 """
     return prompt
 
