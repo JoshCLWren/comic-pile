@@ -185,14 +185,15 @@ You are working in Ralph mode. Read docs/RALPH_MODE.md.
 {task["description"]}
 
 ## Instructions
-0. Ensure you have a fresh lint and test run before starting. Fix any issues found before proceeding.
+0. Claim this task by running: gh issue edit {task["id"]} --add-label ralph-status:in-progress
 1. Read docs/RALPH_MODE.md for Ralph mode philosophy
 2. Work autonomously to complete this task
 3. Follow AGENTS.md for code style guidelines
 4. Run tests (pytest) until all pass even if they have nothing to do with this task.
 5. Run linting (make lint) until clean even if unrelated to this task.
 6. Commit changes with conventional format
-7. When complete, output: <complete>Task done</complete>
+7. When complete, mark as in-review: gh issue edit {task["id"]} --remove-label ralph-status:in-progress --add-label ralph-status:in-review
+8. Output: <complete>Task done</complete>
 
 Do NOT:
 - Ask for approval on anything
@@ -367,7 +368,21 @@ def main() -> None:
             continue
 
         try:
-            log_step(1, "Checking for in-review tasks (Mrs. Crabapple)...")
+            log_step(1, "Checking for stale in-progress tasks...")
+            stale_task = github_client.find_stale_in_progress_task(stale_seconds=3600)
+
+            if stale_task:
+                stale_id = stale_task.get("id")
+                if isinstance(stale_id, int):
+                    logger.info(
+                        f"Found stale in-progress task: {stale_id} - {stale_task.get('title')}"
+                    )
+                    logger.info("  Reverting to pending so Ralph can retry")
+                    github_client.update_status(stale_id, "pending")
+                    time.sleep(2)
+                    continue
+
+            log_step(2, "Checking for in-review tasks (Mrs. Crabapple)...")
             in_review_task = github_client.find_in_review_task()
 
             if in_review_task:
@@ -378,7 +393,7 @@ def main() -> None:
                     continue
 
                 log_section(f"PROCESSING IN-REVIEW TASK: {task_id}")
-                log_step(1, "Initializing Mrs. Crabapple session")
+                log_step(2, "Initializing Mrs. Crabapple session")
 
                 logger.info(f"Connecting to opencode at {opencode_client.base_url}")
                 try:
@@ -388,7 +403,7 @@ def main() -> None:
                     logger.error(f"Failed to create session: {e}")
                     raise
 
-                log_step(2, "Generating Mrs. Crabapple QC prompt")
+                log_step(3, "Generating Mrs. Crabapple QC prompt")
                 crabapple_prompt = generate_mrs_crabapple_prompt(in_review_task)
                 logger.info("Generating Mrs. Crabapple QC prompt")
 
@@ -397,7 +412,7 @@ def main() -> None:
                     print(crabapple_prompt)
                     print("--- END PROMPT ---\n")
 
-                log_step(3, "Sending prompt to opencode session")
+                log_step(4, "Sending prompt to opencode session")
                 logger.info("Sending prompt to opencode")
 
                 try:
@@ -416,7 +431,7 @@ def main() -> None:
                     logger.error("Retrying task on next iteration...")
                     continue
 
-                log_step(4, "Parsing QC review decision")
+                log_step(5, "Parsing QC review decision")
                 is_approved = "<approve>" in content
                 is_rejected = "<reject>" in content
 
@@ -444,7 +459,7 @@ def main() -> None:
                 time.sleep(2)
                 continue
 
-            log_step(2, "No in-review tasks, checking for pending tasks...")
+            log_step(3, "No in-review tasks, checking for pending tasks...")
             pending_task = github_client.find_pending_task()
 
             if not pending_task:
@@ -498,10 +513,7 @@ def main() -> None:
                     print(f"Dependencies: {pending_task.get('dependencies')}")
                 print(f"{'=' * 60}\n")
 
-            log_step(3, f"Marking task {task_id} as in-progress")
-            github_client.update_status(task_id, "in-progress")
-            logger.info(f"Marked task {task_id} as in-progress")
-
+            log_step(3, "Sending task to Ralph agent (Ralph will claim it)")
             start_time = time.time()
 
             try:
@@ -516,9 +528,6 @@ def main() -> None:
 
                 if completed:
                     log_section(f"TASK {task_id} COMPLETED")
-                    log_step(4, f"Marking task {task_id} as in-review")
-                    github_client.update_status(task_id, "in-review")
-                    logger.info(f"Marked task {task_id} as in-review")
                     log_section(f"TASK {task_id} READY FOR QC")
                     metrics_db.record_metric(
                         task_id=task_id,
@@ -532,14 +541,12 @@ def main() -> None:
                     logger.info("Waiting 2 seconds before next task...")
                     time.sleep(2)
                 else:
-                    logger.error(f"Task {task_id} not complete - AI did not signal completion")
-                    log_step(6, f"Marking task {task_id} as pending for retry")
-                    github_client.update_status(task_id, "pending")
-                    logger.info(f"Marked task {task_id} as pending (will retry on next loop)")
+                    logger.warning(f"Task {task_id} not signaled complete yet")
+                    logger.warning("Ralph will retry on next loop (task is in-progress)")
 
                     metrics_db.record_metric(
                         task_id=task_id,
-                        status="pending",
+                        status="in-progress",
                         duration=duration,
                         error_type="no_completion_signal",
                     )
@@ -554,15 +561,13 @@ def main() -> None:
                     logger.info("Traceback:")
                     traceback.print_exc()
 
-                log_step(6, f"Marking task {task_id} as pending for retry")
-                github_client.update_status(task_id, "pending")
-                logger.info(f"Marked task {task_id} as pending (will retry on next iteration)")
+                logger.warning(f"Task {task_id} will be retried on next loop")
 
                 metrics_db.record_metric(
                     task_id=task_id,
-                    status="pending",
+                    status="in-progress",
                     duration=duration,
-                    error_type="no_completion_signal",
+                    error_type="exception",
                 )
 
                 circuit_breaker.record_failure()

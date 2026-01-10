@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import subprocess
+from datetime import UTC
 from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
@@ -234,6 +235,35 @@ class GitHubTaskClient:
         for task in tasks:
             if task.get("status") == "in-review":
                 return task
+
+        return None
+
+    def find_stale_in_progress_task(self, stale_seconds: int = 3600) -> TaskDict | None:
+        """Find a stale in-progress task.
+
+        Args:
+            stale_seconds: Number of seconds before considering a task stale (default: 1 hour)
+
+        Returns:
+            Task dictionary or None if no stale in-progress tasks found
+        """
+        from datetime import datetime
+
+        tasks = self._get_ralph_tasks()
+
+        for task in tasks:
+            if task.get("status") == "in-progress":
+                updated_at = task.get("updated_at", "")
+                if updated_at and isinstance(updated_at, str):
+                    try:
+                        updated_dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                        now = datetime.now(UTC)
+                        age_seconds = (now - updated_dt).total_seconds()
+
+                        if age_seconds > stale_seconds:
+                            return task
+                    except Exception:
+                        pass
 
         return None
 
