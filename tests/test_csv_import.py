@@ -271,10 +271,10 @@ Wonder Woman,Trade Paperback,3"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    import_response = await client.post("/api/admin/import/csv/", files=files)
+    import_response = await client.post("/admin/import/csv/", files=files)
     assert import_response.status_code == 200
 
-    export_response = await client.get("/api/admin/export/csv/")
+    export_response = await client.get("/admin/export/csv/")
     assert export_response.status_code == 200
 
     exported_content = export_response.text
