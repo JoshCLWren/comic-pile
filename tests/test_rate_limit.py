@@ -11,10 +11,10 @@ from app.main import app
 async def test_rate_limit_on_tasks_list(client: AsyncClient) -> None:
     """Test that rate limiting is applied to GET /api/tasks/ endpoint."""
     for _ in range(200):
-        response = await client.get("/api/api/tasks/")
+        response = await client.get("/api/tasks/")
         assert response.status_code == 200
 
-    response = await client.get("/api/api/tasks/")
+    response = await client.get("/api/tasks/")
     assert response.status_code == 429
     assert "rate limit" in response.json()["error"].lower()
 
@@ -65,7 +65,7 @@ async def test_rate_limit_on_thread_create(client: AsyncClient) -> None:
     """Test that rate limiting is applied to POST /threads/ endpoint."""
     for _ in range(30):
         response = await client.post(
-            "/threads/",
+            "/api/threads/",
             json={
                 "title": f"Test Thread {random.randint(10000, 99999)}",
                 "format": "Comic",
@@ -75,7 +75,7 @@ async def test_rate_limit_on_thread_create(client: AsyncClient) -> None:
         assert response.status_code == 201
 
     response = await client.post(
-        "/threads/",
+        "/api/threads/",
         json={
             "title": f"Test Thread {random.randint(10000, 99999)}",
             "format": "Comic",
@@ -109,13 +109,13 @@ async def test_rate_limit_on_rate(client: AsyncClient) -> None:
     """Test that rate limiting is applied to POST /rate/ endpoint."""
     for _ in range(60):
         response = await client.post(
-            "/rate/",
+            "/api/rate/",
             json={"rating": 3, "issues_read": 1},
         )
         assert response.status_code in (200, 400)
 
     response = await client.post(
-        "/rate/",
+        "/api/rate/",
         json={"rating": 3, "issues_read": 1},
     )
     assert response.status_code == 429
@@ -124,7 +124,7 @@ async def test_rate_limit_on_rate(client: AsyncClient) -> None:
 async def test_rate_limit_on_queue_move(client: AsyncClient) -> None:
     """Test that rate limiting is applied to queue movement endpoints."""
     response = await client.post(
-        "/threads/",
+        "/api/threads/",
         json={
             "title": "Test Thread for Queue",
             "format": "Comic",
@@ -135,10 +135,10 @@ async def test_rate_limit_on_queue_move(client: AsyncClient) -> None:
     thread_id = response.json()["id"]
 
     for _ in range(30):
-        response = await client.put(f"/queue/threads/{thread_id}/front/")
+        response = await client.put(f"/api/queue/threads/{thread_id}/front/")
         assert response.status_code == 200
 
-    response = await client.put(f"/queue/threads/{thread_id}/front/")
+    response = await client.put(f"/api/queue/threads/{thread_id}/front/")
     assert response.status_code == 429
 
 

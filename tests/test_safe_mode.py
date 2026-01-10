@@ -48,7 +48,7 @@ async def test_session_response_has_restore_point_true(client: AsyncClient, db, 
     db.add(snapshot)
     db.commit()
 
-    response = await client.get(f"/sessions/{session.id}")
+    response = await client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is True
@@ -63,7 +63,7 @@ async def test_session_response_has_restore_point_false(client: AsyncClient, db,
     db.commit()
     db.refresh(session)
 
-    response = await client.get(f"/sessions/{session.id}")
+    response = await client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is False
@@ -204,7 +204,7 @@ async def test_snapshot_count_increases_with_multiple_snapshots(
     db.add_all([snapshot1, snapshot2])
     db.commit()
 
-    response = await client.get(f"/sessions/{session.id}")
+    response = await client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is True

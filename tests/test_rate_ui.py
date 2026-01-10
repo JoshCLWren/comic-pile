@@ -47,7 +47,7 @@ async def test_both_buttons_available_when_thread_complete(client, db):
 
     # Rate the last issue (issues_remaining becomes 0)
     response = await client.post(
-        "/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
+        "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 
@@ -109,7 +109,7 @@ async def test_can_still_rate_after_thread_complete(client, db):
 
     # Rate the last issue (issues_remaining becomes 0)
     response = await client.post(
-        "/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
+        "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 

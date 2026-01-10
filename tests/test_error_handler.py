@@ -192,8 +192,8 @@ def test_create_github_issue_with_full_debug_info(mock_github_client_class, mock
 
     assert "5xx Error: IntegrityError" in call_args[1]["title"]
     assert "Error Details" in call_args[1]["description"]
-    assert "Error Type: IntegrityError" in call_args[1]["description"]
-    assert "Path: POST /test/path" in call_args[1]["description"]
+    assert "**Error Type:** IntegrityError" in call_args[1]["description"]
+    assert "**Path:** POST /test/path" in call_args[1]["description"]
     assert "Path Parameters:" in call_args[1]["description"]
     assert "Headers:" in call_args[1]["description"]
     assert "Request Body:" in call_args[1]["description"]

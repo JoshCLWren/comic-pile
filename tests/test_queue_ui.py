@@ -75,7 +75,7 @@ async def test_jump_to_position_works_for_large_distance(client, db, sample_data
     last_position = len(threads)
 
     response = await client.put(
-        f"/queue/threads/{thread_id}/position/", json={"new_position": last_position}
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": last_position}
     )
     assert response.status_code == 200
 
@@ -91,7 +91,7 @@ async def test_jump_to_position_works_for_small_distance(client, db, sample_data
     last_thread_id = threads[-1]["id"]
 
     response = await client.put(
-        f"/queue/threads/{last_thread_id}/position/", json={"new_position": 1}
+        f"/api/queue/threads/{last_thread_id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200
 
@@ -106,7 +106,7 @@ async def test_drag_and_drop_updates_position(client, db, sample_data):
     new_position = 3
 
     response = await client.put(
-        f"/queue/threads/{thread_id}/position/", json={"new_position": new_position}
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": new_position}
     )
     assert response.status_code == 200
 
@@ -123,7 +123,7 @@ async def test_move_to_front_via_api(client, db, sample_data):
     """Move to front endpoint works correctly."""
     thread_id = sample_data["threads"][2].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/front/")
+    response = await client.put(f"/api/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -139,7 +139,7 @@ async def test_move_to_back_via_api(client, db, sample_data):
     threads = response.json()
     last_position = len(threads)
 
-    response = await client.put(f"/queue/threads/{thread_id}/back/")
+    response = await client.put(f"/api/queue/threads/{thread_id}/back/")
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)

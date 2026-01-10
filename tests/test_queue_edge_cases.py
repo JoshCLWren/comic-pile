@@ -10,7 +10,7 @@ async def test_move_first_to_front_no_op(client, db, sample_data):
     """Moving first thread to front is a no-op."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/front/")
+    response = await client.put(f"/api/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
 
     data = response.json()
@@ -36,7 +36,7 @@ async def test_move_last_to_back_no_op(client, db, sample_data):
     """Moving last thread to back is a no-op."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/queue/threads/{thread_id}/back/")
+    response = await client.put(f"/api/queue/threads/{thread_id}/back/")
     assert response.status_code == 200
 
     data = response.json()

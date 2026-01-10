@@ -13,7 +13,7 @@ from app.models import Task
 @pytest.mark.asyncio
 async def test_merge_to_main_not_found(client: AsyncClient) -> None:
     """Test merging a non-existent task returns 404."""
-    response = await client.post("/api/api/tasks/NONEXISTENT/merge-to-main")
+    response = await client.post("/api/tasks/NONEXISTENT/merge-to-main")
     assert response.status_code == 404
     data = response.json()
     assert "Task not found" in data["detail"]
@@ -22,7 +22,7 @@ async def test_merge_to_main_not_found(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_merge_to_main_invalid_status(client: AsyncClient, sample_tasks: list[Task]) -> None:
     """Test merging a task not in in_review status returns 400."""
-    response = await client.post("/api/api/tasks/TASK-101/merge-to-main")
+    response = await client.post("/api/tasks/TASK-101/merge-to-main")
     assert response.status_code == 400
     data = response.json()
     assert "Task must be in_review" in data["detail"]
@@ -50,7 +50,7 @@ async def test_merge_to_main_missing_worktree(client: AsyncClient, db: Session) 
         task.status = "in_review"
         db.commit()
 
-    response = await client.post("/api/api/tasks/MERGE-NO-WORKTREE/merge-to-main")
+    response = await client.post("/api/tasks/MERGE-NO-WORKTREE/merge-to-main")
     assert response.status_code == 400
     data = response.json()
     assert "No worktree assigned to task" in data["detail"]
@@ -82,7 +82,7 @@ async def test_merge_to_main_worktree_not_found(client: AsyncClient, db: Session
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
         with patch.object(os.path, "exists", return_value=False):
-            response = await client.post("/api/api/tasks/MERGE-BAD-PATH/merge-to-main")
+            response = await client.post("/api/tasks/MERGE-BAD-PATH/merge-to-main")
             assert response.status_code == 400
             data = response.json()
             assert "Worktree not found" in data["detail"]
@@ -117,7 +117,7 @@ async def test_merge_to_main_git_fetch_failure(client: AsyncClient, db: Session)
 
         with patch.object(os.path, "exists", return_value=True):
             with patch.object(os, "chdir"):
-                response = await client.post("/api/api/tasks/MERGE-FETCH-FAIL/merge-to-main")
+                response = await client.post("/api/tasks/MERGE-FETCH-FAIL/merge-to-main")
                 assert response.status_code == 500
                 data = response.json()
                 assert "Failed to fetch main" in data["detail"]
@@ -166,9 +166,9 @@ async def test_merge_to_main_conflict_appends_status_notes(
 
         with patch.object(os.path, "exists", return_value=True):
             with patch.object(os, "chdir"):
-                await client.post("/api/api/tasks/MERGE-NOTES-CONFLICT/merge-to-main")
+                await client.post("/api/tasks/MERGE-NOTES-CONFLICT/merge-to-main")
 
-                get_response = await client.get("/api/api/tasks/MERGE-NOTES-CONFLICT")
+                get_response = await client.get("/api/tasks/MERGE-NOTES-CONFLICT")
                 task_data = get_response.json()
                 assert "Previous notes before merge" in task_data["status_notes"]
                 assert "Auto-merge failed" in task_data["status_notes"]
@@ -212,7 +212,7 @@ async def test_merge_to_main_absolute_worktree_path(client: AsyncClient, db: Ses
 
         with patch.object(os.path, "exists", return_value=True):
             with patch.object(os, "chdir") as mock_chdir:
-                await client.post("/api/api/tasks/MERGE-ABS-PATH/merge-to-main")
+                await client.post("/api/tasks/MERGE-ABS-PATH/merge-to-main")
                 mock_chdir.assert_called_once_with(absolute_path)
 
 
@@ -254,7 +254,7 @@ async def test_merge_to_main_relative_worktree_path(client: AsyncClient, db: Ses
         with patch.object(os.path, "exists", return_value=True):
             with patch.object(os, "chdir") as mock_chdir:
                 with patch.object(os, "getcwd", return_value="/home/josh/code/comic-pile"):
-                    await client.post("/api/api/tasks/MERGE-REL-PATH/merge-to-main")
+                    await client.post("/api/tasks/MERGE-REL-PATH/merge-to-main")
                     expected_path = "/home/josh/code/../comic-pile-test"
                     mock_chdir.assert_called_once_with(expected_path)
 
@@ -295,7 +295,7 @@ async def test_merge_to_main_conflict_output_truncated(client: AsyncClient, db: 
 
         with patch.object(os.path, "exists", return_value=True):
             with patch.object(os, "chdir"):
-                response = await client.post("/api/api/tasks/MERGE-LONG-OUTPUT/merge-to-main")
+                response = await client.post("/api/tasks/MERGE-LONG-OUTPUT/merge-to-main")
                 assert response.status_code == 200
                 data = response.json()
                 assert data["success"] is False
@@ -338,7 +338,7 @@ async def test_merge_to_main_changes_directory(client: AsyncClient, db: Session)
 
         with patch.object(os.path, "exists", return_value=True):
             with patch.object(os, "chdir") as mock_chdir:
-                await client.post("/api/api/tasks/MERGE-CHDIR/merge-to-main")
+                await client.post("/api/tasks/MERGE-CHDIR/merge-to-main")
                 mock_chdir.assert_called_once()
 
 
@@ -378,7 +378,7 @@ async def test_merge_to_main_runs_git_commands(client: AsyncClient, db: Session)
 
         with patch.object(os.path, "exists", return_value=True):
             with patch.object(os, "chdir"):
-                await client.post("/api/api/tasks/MERGE-GIT-CMDS/merge-to-main")
+                await client.post("/api/tasks/MERGE-GIT-CMDS/merge-to-main")
                 assert mock_run.call_count == 3
                 calls = [call[0][0] for call in mock_run.call_args_list]
                 assert calls[0] == ["git", "fetch", "origin", "main"]

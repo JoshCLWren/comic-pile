@@ -19,7 +19,7 @@ async def test_roll_dice_updates_session(api_client: AsyncClient, db: Session):
     db.add(thread)
     db.commit()
 
-    response = await api_client.post("/roll/")
+    response = await api_client.post("/api/roll/")
     assert response.status_code == 200
 
     session = db.execute(
@@ -56,7 +56,7 @@ async def test_rate_comic_updates_rating(api_client: AsyncClient, db: Session):
     db.commit()
 
     response = await api_client.post(
-        "/rate/", json={"thread_id": thread.id, "rating": 4.0, "issues_read": 1}
+        "/api/rate/", json={"thread_id": thread.id, "rating": 4.0, "issues_read": 1}
     )
     assert response.status_code == 200
 
@@ -79,7 +79,7 @@ async def test_add_to_queue_updates_queue(api_client: AsyncClient, db: Session):
     db.commit()
 
     response = await api_client.post(
-        "/threads/", json={"title": "Comic 3", "format": "Comic", "issues_remaining": 4}
+        "/api/threads/", json={"title": "Comic 3", "format": "Comic", "issues_remaining": 4}
     )
     assert response.status_code == 201
 
@@ -97,12 +97,12 @@ async def test_session_persists_across_requests(api_client: AsyncClient, db: Ses
     db.add(thread)
     db.commit()
 
-    await api_client.post("/roll/")
+    await api_client.post("/api/roll/")
 
     session1 = db.execute(select(SessionModel).where(SessionModel.ended_at.is_(None))).scalar_one()
     session_id = session1.id
 
-    await api_client.post("/roll/")
+    await api_client.post("/api/roll/")
 
     session2 = db.execute(select(SessionModel).where(SessionModel.ended_at.is_(None))).scalar_one()
     assert session2.id == session_id
@@ -135,7 +135,7 @@ async def test_complete_task_advances_queue(api_client: AsyncClient, db: Session
     db.commit()
 
     response = await api_client.post(
-        "/rate/",
+        "/api/rate/",
         json={"thread_id": thread.id, "rating": 4.0, "issues_read": 1, "finish_session": True},
     )
     assert response.status_code == 200
