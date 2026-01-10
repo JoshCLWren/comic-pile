@@ -25,7 +25,7 @@ export default function RatePage() {
   const rateMutation = useMutation({
     mutationFn: rateApi.rate,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session', 'current'] })
+      queryClient.invalidateQueries({ queryKey: ['session'] })
       queryClient.invalidateQueries({ queryKey: ['threads'] })
       navigate('/')
     },
