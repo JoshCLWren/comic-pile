@@ -5,7 +5,6 @@ from httpx import AsyncClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
-@pytest.mark.skip("Skipped: StaticFiles 404 handling has starlette framework bug")
 @pytest.mark.asyncio
 async def test_http_exception_handler_404(client: AsyncClient) -> None:
     """Test HTTP exception handler with 404 status code for non-existent endpoint."""
