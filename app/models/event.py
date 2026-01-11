@@ -10,6 +10,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.session import Session
+    from app.models.snapshot import Snapshot
     from app.models.thread import Thread
 
 
@@ -43,3 +44,6 @@ class Event(Base):
 
     session: Mapped["Session"] = relationship("Session", back_populates="events")
     thread: Mapped["Thread"] = relationship("Thread", back_populates="events")
+    snapshots: Mapped[list["Snapshot"]] = relationship(
+        "Snapshot", back_populates="event", cascade="all, delete-orphan"
+    )

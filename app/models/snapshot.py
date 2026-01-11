@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.event import Event
     from app.models.session import Session
 
 
@@ -32,3 +33,4 @@ class Snapshot(Base):
     )
 
     session: Mapped["Session"] = relationship("Session", back_populates="snapshots")
+    event: Mapped["Event"] = relationship("Event", back_populates="snapshots")

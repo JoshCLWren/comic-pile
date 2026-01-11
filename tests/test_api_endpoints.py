@@ -2,6 +2,7 @@
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 
 @pytest.mark.asyncio
@@ -197,6 +198,67 @@ async def test_delete_thread_not_found(client):
     """Test DELETE /api/threads/{id} returns 404 for non-existent thread."""
     response = await client.delete("/api/threads/999")
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_thread_cascades_to_events_and_snapshots(sample_data, db: Session, client):
+    """Test that deleting a thread also deletes associated events and snapshots."""
+    from datetime import UTC, datetime
+
+    from app.models import Event, Session as SessionModel, Snapshot, Thread, User
+
+    now = datetime.now(UTC)
+    user = db.execute(select(User).where(User.id == 1)).scalar_one()
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=100,
+        user_id=user.id,
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    session = SessionModel(start_die=6, user_id=user.id, started_at=now)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    event = Event(
+        type="roll",
+        die=6,
+        result=4,
+        session_id=session.id,
+        thread_id=thread.id,
+        timestamp=now,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=event.id,
+        thread_states={"1": {"title": "Test Thread"}},
+        description="Test snapshot",
+    )
+    db.add(snapshot)
+    db.commit()
+
+    response = await client.delete(f"/api/threads/{thread.id}")
+    assert response.status_code == 204
+
+    db_thread = db.get(Thread, thread.id)
+    assert db_thread is None
+
+    db_event = db.get(Event, event.id)
+    assert db_event is None
+
+    snapshot_count_after = db.execute(
+        select(func.count(Snapshot.id)).where(Snapshot.event_id == event.id)
+    ).scalar()
+    assert snapshot_count_after == 0
 
 
 @pytest.mark.asyncio
