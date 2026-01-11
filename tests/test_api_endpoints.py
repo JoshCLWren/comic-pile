@@ -655,3 +655,45 @@ async def test_list_threads_includes_notes(client, sample_data, db):
 
     assert aquaman_thread is not None
     assert aquaman_thread["notes"] is None
+
+
+@pytest.mark.asyncio
+async def test_delete_thread_clears_pending_thread_id(client, db: Session):
+    """Test that deleting a thread clears pending_thread_id from sessions."""
+    from datetime import datetime
+
+    from app.models import Session as SessionModel, Thread, User
+
+    user = User(username="delete_pending_user", created_at=datetime.now())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    thread = Thread(
+        title="Batman",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(),
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    session = SessionModel(start_die=6, user_id=user.id, pending_thread_id=thread.id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    assert session.pending_thread_id == thread.id
+
+    response = await client.delete(f"/api/threads/{thread.id}")
+    assert response.status_code == 204
+
+    db_thread = db.get(Thread, thread.id)
+    assert db_thread is None
+
+    db.refresh(session)
+    assert session.pending_thread_id is None

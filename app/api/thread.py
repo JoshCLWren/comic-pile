@@ -5,13 +5,13 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Thread
+from app.models import Event, Session as SessionModel, Thread
 from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
 from comic_pile import get_stale_threads
 
@@ -254,6 +254,11 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
             detail=f"Thread {thread_id} not found",
         )
 
+    db.execute(
+        update(SessionModel)
+        .where(SessionModel.pending_thread_id == thread_id)
+        .values(pending_thread_id=None)
+    )
     delete_event = Event(
         type="delete",
         timestamp=datetime.now(UTC),
