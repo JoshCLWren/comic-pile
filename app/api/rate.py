@@ -243,10 +243,11 @@ def rate_thread(
             detail="No active session. Please roll the dice first.",
         )
 
+    current_session_id = current_session.id
     last_roll_event = (
         db.execute(
             select(Event)
-            .where(Event.session_id == current_session.id)
+            .where(Event.session_id == current_session_id)
             .where(Event.type == "roll")
             .where(Event.selected_thread_id.is_not(None))
             .order_by(Event.timestamp.desc())
@@ -272,7 +273,7 @@ def rate_thread(
     last_rate_event = (
         db.execute(
             select(Event)
-            .where(Event.session_id == current_session.id)
+            .where(Event.session_id == current_session_id)
             .where(Event.type == "rate")
             .order_by(Event.timestamp.desc())
         )
@@ -304,7 +305,7 @@ def rate_thread(
 
     event = Event(
         type="rate",
-        session_id=current_session.id,
+        session_id=current_session_id,
         thread_id=thread.id,
         rating=rate_data.rating,
         issues_read=rate_data.issues_read,
@@ -331,7 +332,7 @@ def rate_thread(
 
     db.commit()
 
-    snapshot_thread_states(db, current_session.id, event)
+    snapshot_thread_states(db, current_session_id, event)
     db.refresh(thread)
 
     return ThreadResponse(

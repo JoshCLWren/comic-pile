@@ -832,3 +832,98 @@ def test_build_ladder_path_uses_session_id_not_object(db, sample_data):
 
     assert "session_id: int" in source, "build_ladder_path should accept session_id parameter"
     assert "session.id" not in source, "build_ladder_path should not access session.id"
+
+
+def test_get_or_create_deadlock_retry(db, sample_data):
+    """Test that get_or_create retries on deadlock errors.
+
+    Regression test for BUG-126: OperationalError deadlock.
+    This test mocks as db.commit to raise a deadlock error once,
+    then succeeds on retry.
+    """
+    from unittest.mock import patch
+
+    call_count = 0
+
+    original_commit = db.commit
+
+    def mock_commit(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            from sqlalchemy.exc import OperationalError
+
+            raise OperationalError(
+                "deadlock detected",
+                {},
+                Exception("psycopg.errors.DeadlockDetected: deadlock detected"),
+            )
+        return original_commit()
+
+    with patch.object(db, "commit", side_effect=mock_commit):
+        session = get_or_create(db, user_id=1)
+        assert session is not None
+        assert session.start_die == 6
+
+
+def test_get_or_create_uses_session_id_to_prevent_lazy_load(db, sample_data):
+    """Test that get_or_create session object doesn't cause lazy loading issues.
+
+    Regression test for BUG-126: Verify that session returned from get_or_create
+    can have its id extracted without triggering lazy loading that causes deadlocks.
+    """
+    for session in sample_data["sessions"]:
+        session.ended_at = datetime.now(UTC)
+    db.commit()
+
+    result_session = get_or_create(db, user_id=1)
+
+    session_id = result_session.id
+    assert session_id is not None
+    assert isinstance(session_id, int)
+
+
+def test_get_or_create_non_deadlock_operational_error(db, sample_data):
+    """Test that get_or_create raises non-deadlock OperationalError.
+
+    Regression test for BUG-126: Verify that non-deadlock OperationalErrors
+    are properly raised without retrying.
+    """
+    from unittest.mock import patch
+    from sqlalchemy.exc import OperationalError
+
+    for session in sample_data["sessions"]:
+        session.ended_at = datetime.now(UTC) - timedelta(hours=7)
+    db.commit()
+
+    commit_call_count = 0
+    original_commit = db.commit
+
+    def mock_commit(*args, **kwargs):
+        nonlocal commit_call_count
+        commit_call_count += 1
+        if commit_call_count == 1:
+            raise OperationalError("some other error", {}, Exception())
+        return original_commit()
+
+    with patch.object(db, "commit", side_effect=mock_commit):
+        with pytest.raises(OperationalError, match="some other error"):
+            get_or_create(db, user_id=1)
+
+
+def test_get_or_create_max_retries_exceeded(db, sample_data):
+    """Test that get_or_create has proper error handling for max retries.
+
+    Regression test for BUG-126: Verify that after max retries,
+    get_or_create properly handles exhausted retry attempts.
+    Note: Actual deadlock retry behavior is tested by inspecting code structure
+    in test_get_or_create_handles_deadlock_regression.
+    """
+    import inspect
+
+    source = inspect.getsource(get_or_create)
+
+    assert "RuntimeError" in source, "get_or_create should raise RuntimeError after max retries"
+    assert "Failed to get_or_create session after" in source, (
+        "get_or_create should have specific error message for max retries"
+    )

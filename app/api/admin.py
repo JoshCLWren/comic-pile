@@ -241,8 +241,9 @@ async def delete_test_data(db: Session = Depends(get_db)) -> dict[str, int]:
     for _thread_id in thread_ids:
         sessions = db.execute(select(SessionModel).where(SessionModel.user_id == 1)).scalars().all()
         for session in sessions:
+            session_id = session.id
             session_events = (
-                db.execute(select(Event).where(Event.session_id == session.id)).scalars().all()
+                db.execute(select(Event).where(Event.session_id == session_id)).scalars().all()
             )
             if all(e.thread_id in thread_ids for e in session_events if e.thread_id):
                 db.delete(session)
@@ -347,8 +348,9 @@ def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
 
     sessions = []
     for session in all_sessions:
+        session_id = session.id
         session_events = (
-            db.execute(select(Event).where(Event.session_id == session.id)).scalars().all()
+            db.execute(select(Event).where(Event.session_id == session_id)).scalars().all()
         )
         thread_ids_in_session = set()
         for event in session_events:
@@ -357,11 +359,11 @@ def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
             if event.selected_thread_id:
                 thread_ids_in_session.add(event.selected_thread_id)
         if not thread_ids_in_session or not thread_ids_in_session.issubset(test_thread_ids):
-            sessions.append(session)
+            sessions.append((session, session_id))
 
     output = io.StringIO()
 
-    for session in sessions:
+    for session, session_id in sessions:
         started_at = session.started_at.astimezone(UTC)
         ended_at = session.ended_at.astimezone(UTC) if session.ended_at else None
 
@@ -371,7 +373,7 @@ def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
         output.write("\n")
         output.write(f"Started at d{session.start_die}\n")
 
-        summary = build_narrative_summary(session.id, db)
+        summary = build_narrative_summary(session_id, db)
 
         if summary["read"]:
             output.write("\nRead:\n\n")

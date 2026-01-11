@@ -149,7 +149,8 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
     if not active_session:
         active_session = get_or_create(db, user_id=1)
 
-    active_thread = get_active_thread(active_session.id, db)
+    active_session_id = active_session.id
+    active_thread = get_active_thread(active_session_id, db)
 
     from sqlalchemy import func
 
@@ -157,21 +158,21 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
         db.execute(
             select(func.count())
             .select_from(Snapshot)
-            .where(Snapshot.session_id == active_session.id)
+            .where(Snapshot.session_id == active_session_id)
         ).scalar()
         or 0
     )
 
     return SessionResponse(
-        id=active_session.id,
+        id=active_session_id,
         started_at=active_session.started_at,
         ended_at=active_session.ended_at,
         start_die=active_session.start_die,
         manual_die=active_session.manual_die,
         user_id=active_session.user_id,
-        ladder_path=build_ladder_path(active_session.id, db),
+        ladder_path=build_ladder_path(active_session_id, db),
         active_thread=active_thread,
-        current_die=get_current_die(active_session.id, db),
+        current_die=get_current_die(active_session_id, db),
         last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,

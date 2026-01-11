@@ -27,6 +27,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
     """Roll dice and return HTML result."""
     current_session = get_or_create(db, user_id=1)
     db.refresh(current_session)
+    current_session_id = current_session.id
 
     pending_html = ""
     if current_session and current_session.pending_thread_id:
@@ -64,7 +65,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
             '<div class="text-center text-red-500 py-4">No active threads available to roll</div>'
         )
 
-    current_die = get_current_die(current_session.id, db) if current_session else 6
+    current_die = get_current_die(current_session_id, db) if current_session else 6
     pool_size = min(current_die, len(threads))
     selected_index = random.randint(0, pool_size - 1)
     selected_thread = threads[selected_index]
@@ -72,7 +73,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
 
     event = Event(
         type="roll",
-        session_id=current_session.id if current_session else None,
+        session_id=current_session_id if current_session else None,
         selected_thread_id=selected_thread.id,
         die=current_die,
         result=result_val,
@@ -233,14 +234,15 @@ def roll_dice(request: Request, db: Session = Depends(get_db)) -> RollResponse:
         )
 
     current_session = get_or_create(db, user_id=1)
-    current_die = get_current_die(current_session.id, db)
+    current_session_id = current_session.id
+    current_die = get_current_die(current_session_id, db)
     pool_size = min(current_die, len(threads))
     selected_index = random.randint(0, pool_size - 1)
     selected_thread = threads[selected_index]
 
     event = Event(
         type="roll",
-        session_id=current_session.id,
+        session_id=current_session_id,
         selected_thread_id=selected_thread.id,
         die=current_die,
         result=selected_index + 1,
@@ -274,11 +276,12 @@ def override_roll(request: OverrideRequest, db: Session = Depends(get_db)) -> Ro
         )
 
     current_session = get_or_create(db, user_id=1)
-    current_die = get_current_die(current_session.id, db)
+    current_session_id = current_session.id
+    current_die = get_current_die(current_session_id, db)
 
     event = Event(
         type="roll",
-        session_id=current_session.id,
+        session_id=current_session_id,
         selected_thread_id=thread.id,
         die=current_die,
         result=0,

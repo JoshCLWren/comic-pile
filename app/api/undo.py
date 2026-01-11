@@ -124,7 +124,7 @@ def undo_to_snapshot(
     active_thread = (
         db.execute(
             select(Event)
-            .where(Event.session_id == session.id)
+            .where(Event.session_id == session_id)
             .where(Event.type == "roll")
             .where(Event.selected_thread_id.is_not(None))
             .order_by(Event.timestamp.desc())
@@ -139,13 +139,13 @@ def undo_to_snapshot(
 
     snapshot_count = (
         db.execute(
-            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
+            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session_id)
         ).scalar()
         or 0
     )
 
     return SessionResponse(
-        id=session.id,
+        id=session_id,
         started_at=session.started_at,
         ended_at=session.ended_at,
         start_die=session.start_die,
@@ -162,7 +162,7 @@ def undo_to_snapshot(
         }
         if thread
         else None,
-        current_die=get_current_die(session.id, db),
+        current_die=get_current_die(session_id, db),
         last_rolled_result=active_thread.result if active_thread else None,
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
