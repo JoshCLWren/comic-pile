@@ -280,3 +280,58 @@ async def test_export_summary_excludes_test_only_sessions(client, db):
     content = response.content.decode("utf-8")
     assert "Test Comic" not in content
     assert "Real Comic" in content
+
+
+@pytest.mark.asyncio
+async def test_delete_test_data_clears_pending_thread_id(client, db):
+    """Regression test for BUG-131: IntegrityError when deleting test thread with pending_thread_id.
+
+    This test verifies that deleting test data that has sessions with pending_thread_id
+    set does not cause a ForeignViolation error. The fix ensures that the UPDATE
+    to clear pending_thread_id is flushed before the DELETE executes.
+    """
+    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    if user is None:
+        user = User(id=1, username="test_user")
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    test_thread = Thread(
+        title="Test Comic",
+        format="Issue",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        is_test=True,
+        user_id=user.id,
+    )
+    db.add(test_thread)
+    db.commit()
+    db.refresh(test_thread)
+
+    session = SessionModel(
+        started_at=datetime.now(UTC),
+        ended_at=None,
+        start_die=6,
+        user_id=user.id,
+        pending_thread_id=test_thread.id,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    assert session.pending_thread_id == test_thread.id
+
+    response = await client.post("/api/admin/delete-test-data/")
+
+    assert response.status_code == 200, (
+        f"Expected 200, got {response.status_code}: {response.text if hasattr(response, 'text') else ''}"
+    )
+
+    db_thread = db.get(Thread, test_thread.id)
+    assert db_thread is None
+
+    db_session = db.get(SessionModel, session.id)
+    if db_session:
+        assert db_session.pending_thread_id is None
