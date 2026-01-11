@@ -28,7 +28,9 @@ class Session(Base):
     start_die: Mapped[int] = mapped_column(Integer, default=6)
     manual_die: Mapped[int | None] = mapped_column(Integer, nullable=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    pending_thread_id: Mapped[int | None] = mapped_column(ForeignKey("threads.id"), nullable=True)
+    pending_thread_id: Mapped[int | None] = mapped_column(
+        ForeignKey("threads.id", ondelete="SET NULL"), nullable=True
+    )
     pending_thread_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

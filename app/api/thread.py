@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Session as SessionModel, Thread
+from app.models import Event, Thread
 from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
 from comic_pile import get_stale_threads
 
@@ -254,12 +254,6 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
             detail=f"Thread {thread_id} not found",
         )
 
-    db.execute(
-        update(SessionModel)
-        .where(SessionModel.pending_thread_id == thread_id)
-        .values(pending_thread_id=None)
-    )
-    db.flush()
     delete_event = Event(
         type="delete",
         timestamp=datetime.now(UTC),
@@ -291,7 +285,6 @@ def reactivate_thread(request: ReactivateRequest, db: Session = Depends(get_db))
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Must add at least 1 issue",
         )
-    from sqlalchemy import update
 
     db.execute(update(Thread).values(queue_position=Thread.queue_position + 1))
     thread.issues_remaining = request.issues_to_add
