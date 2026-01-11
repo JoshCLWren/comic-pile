@@ -469,12 +469,6 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
                     )
                     .values(thread_id=None, selected_thread_id=None)
                 )
-                db.execute(
-                    update(SessionModel)
-                    .where(SessionModel.pending_thread_id.in_(threads_to_delete))
-                    .values(pending_thread_id=None)
-                )
-                db.flush()
                 db.execute(delete(Thread).where(Thread.id.in_(threads_to_delete)))
 
             for thread_id, state in snapshot.thread_states.items():

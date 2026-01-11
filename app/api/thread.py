@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
-from app.models.session import Session as SessionModel
 from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
 from comic_pile import get_stale_threads
 
@@ -254,14 +253,6 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
         )
-
-    stmt = (
-        update(SessionModel)
-        .where(SessionModel.pending_thread_id == thread_id)
-        .values(pending_thread_id=None)
-    )
-    db.execute(stmt)
-    db.flush()
 
     delete_event = Event(
         type="delete",
