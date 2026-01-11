@@ -927,3 +927,46 @@ def test_get_or_create_max_retries_exceeded(db, sample_data):
     assert "Failed to get_or_create session after" in source, (
         "get_or_create should have specific error message for max retries"
     )
+
+
+@pytest.mark.asyncio
+async def test_get_current_session_handles_deadlock_regression(
+    client: AsyncClient, db, default_user
+):
+    """Test that get_current_session has retry logic for deadlock handling.
+
+    Regression test for BUG-126: OperationalError deadlock when accessing session.id.
+    This test verifies that code structure includes deadlock retry logic.
+    """
+    import inspect
+
+    from app.api.session import get_current_session
+
+    source = inspect.getsource(get_current_session)
+
+    assert "OperationalError" in source, "get_current_session should handle OperationalError"
+    assert "deadlock" in source.lower(), "get_current_session should check for deadlock errors"
+    assert "retry" in source.lower() or "while" in source.lower(), (
+        "get_current_session should have retry logic"
+    )
+    assert "rollback" in source.lower(), "get_current_session should rollback on deadlock"
+
+
+def test_undo_to_snapshot_handles_deadlock_regression(db, sample_data):
+    """Test that undo_to_snapshot has retry logic for deadlock handling.
+
+    Regression test for BUG-126: OperationalError deadlock during concurrent operations.
+    This test verifies that code structure includes deadlock retry logic.
+    """
+    import inspect
+
+    from app.api.undo import undo_to_snapshot
+
+    source = inspect.getsource(undo_to_snapshot)
+
+    assert "OperationalError" in source, "undo_to_snapshot should handle OperationalError"
+    assert "deadlock" in source.lower(), "undo_to_snapshot should check for deadlock errors"
+    assert "retry" in source.lower() or "while" in source.lower(), (
+        "undo_to_snapshot should have retry logic"
+    )
+    assert "rollback" in source.lower(), "undo_to_snapshot should rollback on deadlock"

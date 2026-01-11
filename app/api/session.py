@@ -124,59 +124,82 @@ def get_active_thread(session_id: int, db: Session) -> dict[str, Any] | None:
 @router.get("/current/")
 @limiter.limit("200/minute")
 def get_current_session(request: Request, db: Session = Depends(get_db)) -> SessionResponse:
-    """Get current active session."""
-    if get_current_session_cached:
-        cached = get_current_session_cached(db)
-        if cached:
-            return SessionResponse(**cached)
+    """Get current active session with deadlock retry handling."""
+    from sqlalchemy.exc import OperationalError
+    import time
 
-    active_sessions = (
-        db.execute(
-            select(SessionModel)
-            .where(SessionModel.ended_at.is_(None))
-            .order_by(SessionModel.started_at.desc())
-        )
-        .scalars()
-        .all()
-    )
+    max_retries = 3
+    initial_delay = 0.1
+    retries = 0
 
-    active_session = None
-    for session in active_sessions:
-        if is_active(session.started_at, session.ended_at, db):
-            active_session = session
-            break
+    while retries < max_retries:
+        try:
+            if get_current_session_cached:
+                cached = get_current_session_cached(db)
+                if cached:
+                    return SessionResponse(**cached)
 
-    if not active_session:
-        active_session = get_or_create(db, user_id=1)
+            active_sessions = (
+                db.execute(
+                    select(SessionModel)
+                    .where(SessionModel.ended_at.is_(None))
+                    .order_by(SessionModel.started_at.desc())
+                )
+                .scalars()
+                .all()
+            )
 
-    active_session_id = active_session.id
-    active_thread = get_active_thread(active_session_id, db)
+            active_session = None
+            for session in active_sessions:
+                if is_active(session.started_at, session.ended_at, db):
+                    active_session = session
+                    break
 
-    from sqlalchemy import func
+            if not active_session:
+                active_session = get_or_create(db, user_id=1)
 
-    snapshot_count = (
-        db.execute(
-            select(func.count())
-            .select_from(Snapshot)
-            .where(Snapshot.session_id == active_session_id)
-        ).scalar()
-        or 0
-    )
+            active_session_id = active_session.id
+            active_thread = get_active_thread(active_session_id, db)
 
-    return SessionResponse(
-        id=active_session_id,
-        started_at=active_session.started_at,
-        ended_at=active_session.ended_at,
-        start_die=active_session.start_die,
-        manual_die=active_session.manual_die,
-        user_id=active_session.user_id,
-        ladder_path=build_ladder_path(active_session_id, db),
-        active_thread=active_thread,
-        current_die=get_current_die(active_session_id, db),
-        last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
-        has_restore_point=snapshot_count > 0,
-        snapshot_count=snapshot_count,
-    )
+            from sqlalchemy import func
+
+            snapshot_count = (
+                db.execute(
+                    select(func.count())
+                    .select_from(Snapshot)
+                    .where(Snapshot.session_id == active_session_id)
+                ).scalar()
+                or 0
+            )
+
+            return SessionResponse(
+                id=active_session_id,
+                started_at=active_session.started_at,
+                ended_at=active_session.ended_at,
+                start_die=active_session.start_die,
+                manual_die=active_session.manual_die,
+                user_id=active_session.user_id,
+                ladder_path=build_ladder_path(active_session_id, db),
+                active_thread=active_thread,
+                current_die=get_current_die(active_session_id, db),
+                last_rolled_result=active_thread.get("last_rolled_result")
+                if active_thread
+                else None,
+                has_restore_point=snapshot_count > 0,
+                snapshot_count=snapshot_count,
+            )
+        except OperationalError as e:
+            if "deadlock" in str(e).lower():
+                db.rollback()
+                retries += 1
+                if retries >= max_retries:
+                    raise
+                delay = initial_delay * (2 ** (retries - 1))
+                time.sleep(delay)
+            else:
+                raise
+
+    raise RuntimeError(f"Failed to get current session after {max_retries} retries")
 
 
 @router.get("/")
