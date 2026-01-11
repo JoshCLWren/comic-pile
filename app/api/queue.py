@@ -40,53 +40,6 @@ def move_thread_position(
         )
 
     old_position = thread.queue_position
-    new_position = position_request.new_position
-
-    if old_position != new_position:
-        from comic_pile.dice_ladder import DICE_LADDER
-        if new_position not in DICE_LADDER:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid position: {new_position}. Valid positions are {DICE_LADDER}",
-            )
-
-    if old_position != new_position:
-        reorder_event = Event(
-            type="reorder",
-            thread_id=thread_id,
-            timestamp=datetime.now(UTC),
-            old_position=old_position,
-            new_position=new_position,
-        )
-        db.add(reorder_event)
-
-        thread.queue_position = new_position
-        db.commit()
-
-    if clear_cache:
-        clear_cache()
-
-    db.refresh(thread)
-
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        queue_position=thread.queue_position,
-        status=thread.status,
-        created_at=thread.created_at,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        last_review_at=thread.last_review_at,
-        review_url=thread.review_url,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        user_id=thread.user_id,
-        created_at=thread.created_at,
-    )
-
-    old_position = thread.queue_position
     move_to_position(thread_id, position_request.new_position, db)
     db.refresh(thread)
 
