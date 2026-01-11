@@ -26,6 +26,44 @@ clear_cache = None
 get_current_session_cached = None
 
 
+def get_session_with_thread_safe(
+    session_id: int, db: Session
+) -> tuple[SessionModel | None, dict[str, Any] | None]:
+    """Get session and active thread with consistent lock ordering to prevent deadlocks."""
+    session = db.get(SessionModel, session_id)
+    if not session:
+        return None, None
+
+    # Query Event table after Session to ensure consistent lock ordering
+    event = (
+        db.execute(
+            select(Event)
+            .where(Event.session_id == session_id)
+            .where(Event.type == "roll")
+            .where(Event.selected_thread_id.is_not(None))
+            .order_by(Event.timestamp.desc())
+        )
+        .scalars()
+        .first()
+    )
+
+    if not event or not event.selected_thread_id:
+        return session, None
+
+    thread = db.get(Thread, event.selected_thread_id)
+    if not thread:
+        return session, None
+
+    return session, {
+        "id": thread.id,
+        "title": thread.title,
+        "format": thread.format,
+        "issues_remaining": thread.issues_remaining,
+        "position": thread.queue_position,
+        "last_rolled_result": event.result,
+    }
+
+
 def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]]:
     """Build narrative summary categorizing session events."""
     events = (
@@ -159,7 +197,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
                 active_session = get_or_create(db, user_id=1)
 
             active_session_id = active_session.id
-            active_thread = get_active_thread(active_session_id, db)
+            _, active_thread = get_session_with_thread_safe(active_session_id, db)
 
             from sqlalchemy import func
 
