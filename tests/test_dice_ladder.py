@@ -1,6 +1,5 @@
 """Tests for dice ladder logic."""
 
-
 from comic_pile.dice_ladder import DICE_LADDER, step_down, step_up
 
 
@@ -28,9 +27,6 @@ def test_step_up_bounds():
     assert step_up(20) == 20
 
 
-
-
-
 def test_full_ladder_traversal():
     """Test step through all dice values."""
     result = step_up(4)
@@ -49,17 +45,27 @@ def test_full_ladder_traversal():
 
 
 def test_invalid_die_size_step_down():
-    """Returns same die size for invalid values."""
-    assert step_down(5) == 5
-    assert step_down(100) == 100
-    assert step_down(3) == 3
+    """Raises ValueError for invalid die sizes."""
+    import pytest
+
+    with pytest.raises(ValueError, match="Invalid die size: 5"):
+        step_down(5)
+    with pytest.raises(ValueError, match="Invalid die size: 100"):
+        step_down(100)
+    with pytest.raises(ValueError, match="Invalid die size: 3"):
+        step_down(3)
 
 
 def test_invalid_die_size_step_up():
-    """Returns same die size for invalid values."""
-    assert step_up(5) == 5
-    assert step_up(100) == 100
-    assert step_up(3) == 3
+    """Raises ValueError for invalid die sizes."""
+    import pytest
+
+    with pytest.raises(ValueError, match="Invalid die size: 5"):
+        step_up(5)
+    with pytest.raises(ValueError, match="Invalid die size: 100"):
+        step_up(100)
+    with pytest.raises(ValueError, match="Invalid die size: 3"):
+        step_up(3)
 
 
 def test_dice_ladder_constant():
