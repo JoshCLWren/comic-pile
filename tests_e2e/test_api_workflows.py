@@ -155,7 +155,7 @@ async def test_csv_export_returns_valid_csv(api_client: AsyncClient, db: Session
     db.add(thread)
     db.commit()
 
-    response = await api_client.get("/admin/export/csv/")
+    response = await api_client.get("/api/admin/export/csv/")
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
 

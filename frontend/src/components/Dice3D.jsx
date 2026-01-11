@@ -515,7 +515,6 @@ export default function Dice3D({
   sides = 6,
   value = 1,
   isRolling = false,
-  showValue = false,
   freeze = false,
   color = 0xffffff,
   onRollComplete = null,

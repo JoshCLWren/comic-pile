@@ -445,7 +445,7 @@ async def test_get_current_session_active(client: AsyncClient, db, default_user)
 
 @pytest.mark.asyncio
 async def test_get_current_session_no_active(client: AsyncClient, db, default_user):
-    """Test getting current session when no active session exists."""
+    """Test getting current session creates a new session when none is active."""
     from app.models import Session as SessionModel
 
     session = SessionModel(
@@ -458,8 +458,10 @@ async def test_get_current_session_no_active(client: AsyncClient, db, default_us
     db.commit()
 
     response = await client.get("/api/sessions/current/")
-    assert response.status_code == 404
-    assert "No active session found" in response.json()["detail"]
+    assert response.status_code == 200
+    data = response.json()
+    assert "id" in data
+    assert data["start_die"] == 6
 
 
 @pytest.mark.asyncio
