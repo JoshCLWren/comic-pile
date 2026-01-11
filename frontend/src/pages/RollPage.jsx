@@ -196,7 +196,7 @@ export default function RollPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto flex flex-col">
+      <div className="flex-1 overflow-hidden flex flex-col">
         <div className="glass-card flex-1 flex flex-col relative overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
