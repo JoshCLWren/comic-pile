@@ -223,43 +223,39 @@ function createD10Geometry(atlasInfo) {
   const uvs = [];
   const inds = [];
 
-  const faceCount = 10;
-  const ringRadius = 0.95;
-  const poleHeight = 1.2;
+  // Pentagonal trapezohedron: 7 vertices (2 apex + 5 ring)
+  const ringRadius = 1.0;
+  const poleHeight = 1.1;
 
   const top = [0, poleHeight, 0];
   const bottom = [0, -poleHeight, 0];
-  const ring = [];
 
-  for (let i = 0; i < faceCount; i++) {
-    const angle = (i * 2 * Math.PI) / faceCount;
+  const ring = [];
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * 2 * Math.PI) / 5;
     ring.push([Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius]);
   }
 
-  for (let i = 0; i < faceCount; i++) {
-    const next = (i + 1) % faceCount;
-
+  for (let i = 0; i < 10; i++) {
     const uv = getUVForNumber(i + 1, cols, rows);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.42;
-    const ry = (uv.v1 - uv.v0) * 0.42;
+    const rx = (uv.u1 - uv.u0) * 0.38;
+    const ry = (uv.v1 - uv.v0) * 0.38;
 
     const idx = verts.length / 3;
     verts.push(top[0], top[1], top[2]);
-    verts.push(ring[i][0], ring[i][1], ring[i][2]);
-    verts.push(ring[next][0], ring[next][1], ring[next][2]);
+    verts.push(ring[i % 5][0], ring[i % 5][1], ring[i % 5][2]);
+    verts.push(ring[(i + 1) % 5][0], ring[(i + 1) % 5][1], ring[(i + 1) % 5][2]);
     verts.push(bottom[0], bottom[1], bottom[2]);
 
-    const left = i % 2 === 0 ? cx - rx : cx + rx;
-    const right = i % 2 === 0 ? cx + rx : cx - rx;
+    uvs.push(cx, cy + ry * 1.2);
+    uvs.push(cx - rx, cy);
+    uvs.push(cx + rx, cy);
+    uvs.push(cx, cy - ry * 1.2);
 
-    uvs.push(cx, cy + ry * 1.1);
-    uvs.push(left, cy);
-    uvs.push(right, cy);
-    uvs.push(cx, cy - ry * 1.1);
-
-    inds.push(idx, idx + 1, idx + 2, idx, idx + 2, idx + 3);
+    inds.push(idx, idx + 1, idx + 2);
+    inds.push(idx, idx + 2, idx + 3);
   }
 
   const geometry = new THREE.BufferGeometry();
