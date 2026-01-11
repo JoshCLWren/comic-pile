@@ -262,7 +262,7 @@ def list_sessions(
     from sqlalchemy import func
 
     for session in sessions:
-        active_thread = get_active_thread(session.id, db)
+        _, active_thread = get_session_with_thread_safe(session.id, db)
 
         snapshot_count = (
             db.execute(
@@ -299,7 +299,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    active_thread = get_active_thread(session.id, db)
+    _, active_thread = get_session_with_thread_safe(session_id, db)
 
     from sqlalchemy import func
 
