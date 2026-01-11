@@ -223,40 +223,41 @@ function createD10Geometry(atlasInfo) {
   const uvs = [];
   const inds = [];
 
-  const ringRadius = 1.0;
-  const poleHeight = 1.0;
-  const beltOffset = 0.2;
-
-  const top = [0, poleHeight, 0];
-  const bottom = [0, -poleHeight, 0];
-
-  const belt = [];
+  const vertices = [0, 0, 1, 0, 0, -1];
   for (let i = 0; i < 10; i++) {
-    const angle = (i * Math.PI * 2) / 10;
-    const yOffset = beltOffset * (i % 2 ? 1 : -1);
-    belt.push([Math.cos(angle) * ringRadius, yOffset, Math.sin(angle) * ringRadius]);
+    const b = (i * Math.PI * 2) / 10;
+    vertices.push(-Math.cos(b), -Math.sin(b), 0.105 * (i % 2 ? 1 : -1));
   }
 
+  const getV = (idx) => [vertices[idx[0]], vertices[idx[1]], vertices[idx[2]]];
+
+  const getV = (idx) => [vertices[idx[0]], vertices[idx[1]], vertices[idx[2]]];
+
   for (let i = 0; i < 10; i++) {
-    const faceNumber = i + 1;
-    const uv = getUVForNumber(faceNumber, cols, rows);
+    const uv = getUVForNumber(i + 1, cols, rows);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.35;
-    const ry = (uv.v1 - uv.v0) * 0.5;
+    const rx = (uv.u1 - uv.u0) * 0.42;
+    const ry = (uv.v1 - uv.v0) * 0.42;
 
-    const v0 = top;
-    const v1 = belt[i];
-    const v2 = belt[(i + 1) % 10];
-    const v3 = bottom;
+    const top = getV(i);
+    const bottom = getV(10 + i);
+    const left = getV(2 + i);
+    const right = getV(3 + ((i + 1) % 10));
 
-    const uv0 = [cx, cy + ry];
-    const uv1 = [cx - rx, cy];
-    const uv2 = [cx + rx, cy];
-    const uv3 = [cx, cy - ry];
+    const uvTop = [cx, cy + ry];
+    const uvBottom = [cx, cy - ry];
+    const uvLeft = [cx - rx, cy];
+    const uvRight = [cx + rx, cy];
 
-    addTriangle(verts, uvs, inds, v0, v1, v2, uv0, uv1, uv2);
-    addTriangle(verts, uvs, inds, v3, v2, v1, uv3, uv2, uv1);
+    addTriangle(verts, uvs, inds, top, left, right, uvTop, uvLeft, uvRight);
+    addTriangle(verts, uvs, inds, bottom, right, left, uvBottom, uvRight, uvLeft);
+  }
+
+  for (let i = 0; i < verts.length; i++) {
+    if (!Number.isFinite(verts[i])) {
+      throw new Error(`D10 position is not finite at verts[${i}]=${verts[i]}`);
+    }
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -264,6 +265,7 @@ function createD10Geometry(atlasInfo) {
   geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
   geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
   geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
   return geometry;
 }
 
