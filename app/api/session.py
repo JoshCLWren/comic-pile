@@ -62,12 +62,16 @@ def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]
     return summary
 
 
-def build_ladder_path(session: SessionModel, db: Session) -> str:
+def build_ladder_path(session_id: int, db: Session) -> str:
     """Build narrative summary of dice ladder from session events."""
+    session = db.get(SessionModel, session_id)
+    if not session:
+        return ""
+
     events = (
         db.execute(
             select(Event)
-            .where(Event.session_id == session.id)
+            .where(Event.session_id == session_id)
             .where(Event.type == "rate")
             .order_by(Event.timestamp)
         )
@@ -86,12 +90,12 @@ def build_ladder_path(session: SessionModel, db: Session) -> str:
     return " → ".join(str(d) for d in path)
 
 
-def get_active_thread(session: SessionModel, db: Session) -> dict[str, Any] | None:
+def get_active_thread(session_id: int, db: Session) -> dict[str, Any] | None:
     """Get the most recently rolled thread for the session."""
     event = (
         db.execute(
             select(Event)
-            .where(Event.session_id == session.id)
+            .where(Event.session_id == session_id)
             .where(Event.type == "roll")
             .where(Event.selected_thread_id.is_not(None))
             .order_by(Event.timestamp.desc())
@@ -145,7 +149,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
     if not active_session:
         active_session = get_or_create(db, user_id=1)
 
-    active_thread = get_active_thread(active_session, db)
+    active_thread = get_active_thread(active_session.id, db)
 
     from sqlalchemy import func
 
@@ -165,7 +169,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
         start_die=active_session.start_die,
         manual_die=active_session.manual_die,
         user_id=active_session.user_id,
-        ladder_path=build_ladder_path(active_session, db),
+        ladder_path=build_ladder_path(active_session.id, db),
         active_thread=active_thread,
         current_die=get_current_die(active_session.id, db),
         last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
@@ -196,7 +200,7 @@ def list_sessions(
     from sqlalchemy import func
 
     for session in sessions:
-        active_thread = get_active_thread(session, db)
+        active_thread = get_active_thread(session.id, db)
 
         snapshot_count = (
             db.execute(
@@ -213,7 +217,7 @@ def list_sessions(
                 start_die=session.start_die,
                 manual_die=session.manual_die,
                 user_id=session.user_id,
-                ladder_path=build_ladder_path(session, db),
+                ladder_path=build_ladder_path(session.id, db),
                 active_thread=active_thread,
                 current_die=get_current_die(session.id, db),
                 last_rolled_result=active_thread.get("last_rolled_result")
@@ -233,7 +237,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    active_thread = get_active_thread(session, db)
+    active_thread = get_active_thread(session.id, db)
 
     from sqlalchemy import func
 
@@ -251,7 +255,7 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
         start_die=session.start_die,
         manual_die=session.manual_die,
         user_id=session.user_id,
-        ladder_path=build_ladder_path(session, db),
+        ladder_path=build_ladder_path(session.id, db),
         active_thread=active_thread,
         current_die=get_current_die(session.id, db),
         last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
@@ -310,7 +314,7 @@ def get_session_details(session_id: int, db: Session = Depends(get_db)) -> Sessi
         started_at=session_obj.started_at,
         ended_at=session_obj.ended_at,
         start_die=session_obj.start_die,
-        ladder_path=build_ladder_path(session_obj, db),
+        ladder_path=build_ladder_path(session_obj.id, db),
         narrative_summary=build_narrative_summary(session_id, db),
         current_die=get_current_die(session_obj.id, db),
         events=formatted_events,
@@ -464,7 +468,7 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
 
             from sqlalchemy import func
 
-            active_thread = get_active_thread(session, db)
+            active_thread = get_active_thread(session.id, db)
 
             snapshot_count = (
                 db.execute(
@@ -482,7 +486,7 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
                 start_die=session.start_die,
                 manual_die=session.manual_die,
                 user_id=session.user_id,
-                ladder_path=build_ladder_path(session, db),
+                ladder_path=build_ladder_path(session.id, db),
                 active_thread=active_thread,
                 current_die=get_current_die(session.id, db),
                 last_rolled_result=active_thread.get("last_rolled_result")

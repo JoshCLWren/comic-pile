@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from httpx import AsyncClient
 
-from app.api.session import get_active_thread
+from app.api.session import build_ladder_path, get_active_thread
 from app.models import Event, Session, Snapshot, Thread
 from app.models import Session as SessionModel
 from comic_pile.session import (
@@ -259,7 +259,7 @@ def test_get_active_thread_includes_last_rolled_result(db, sample_data):
     db.add(event)
     db.commit()
 
-    active_thread = get_active_thread(session, db)
+    active_thread = get_active_thread(session.id, db)
 
     assert active_thread is not None
     assert active_thread["id"] == thread.id
@@ -790,7 +790,7 @@ def test_get_or_create_handles_deadlock_regression():
     """Test that get_or_create has retry logic for deadlock handling.
 
     Regression test for BUG-158: DeadlockDetected error during concurrent operations.
-    This test verifies the code structure includes deadlock retry logic.
+    This test verifies that code structure includes deadlock retry logic.
     """
     import inspect
 
@@ -802,3 +802,33 @@ def test_get_or_create_handles_deadlock_regression():
         "get_or_create should have retry logic"
     )
     assert "rollback" in source.lower(), "get_or_create should rollback on deadlock"
+
+
+def test_get_active_thread_uses_session_id_not_object(db, sample_data):
+    """Test that get_active_thread uses session_id to avoid lazy loading deadlocks.
+
+    Regression test for BUG-126: OperationalError deadlock when accessing session.id.
+    This test verifies that get_active_thread accepts session_id (int) instead of
+    session object to prevent SQLAlchemy lazy loading that can cause deadlocks.
+    """
+    import inspect
+
+    source = inspect.getsource(get_active_thread)
+
+    assert "session_id: int" in source, "get_active_thread should accept session_id parameter"
+    assert "session.id" not in source, "get_active_thread should not access session.id"
+
+
+def test_build_ladder_path_uses_session_id_not_object(db, sample_data):
+    """Test that build_ladder_path uses session_id to avoid lazy loading deadlocks.
+
+    Regression test for BUG-126: OperationalError deadlock when accessing session.id.
+    This test verifies that build_ladder_path accepts session_id (int) instead of
+    session object to prevent SQLAlchemy lazy loading that can cause deadlocks.
+    """
+    import inspect
+
+    source = inspect.getsource(build_ladder_path)
+
+    assert "session_id: int" in source, "build_ladder_path should accept session_id parameter"
+    assert "session.id" not in source, "build_ladder_path should not access session.id"
