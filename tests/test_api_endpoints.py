@@ -697,3 +697,56 @@ async def test_delete_thread_clears_pending_thread_id(client, db: Session):
 
     db.refresh(session)
     assert session.pending_thread_id is None
+
+
+@pytest.mark.asyncio
+async def test_delete_thread_integrity_error_pending_thread_id(client, db: Session):
+    """Regression test for BUG-131: IntegrityError when deleting thread with pending_thread_id.
+
+    This test verifies that deleting a thread that has sessions with pending_thread_id
+    set does not cause a ForeignViolation error. The fix ensures that the UPDATE
+    to clear pending_thread_id is flushed before the DELETE executes.
+    """
+    from datetime import datetime
+
+    from app.models import Session as SessionModel, Thread, User
+
+    user = User(username="integrity_test_user", created_at=datetime.now())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        user_id=user.id,
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    session = SessionModel(
+        start_die=6,
+        user_id=user.id,
+        pending_thread_id=thread.id,
+        started_at=datetime.now(),
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    assert session.pending_thread_id == thread.id
+
+    response = await client.delete(f"/api/threads/{thread.id}")
+
+    assert response.status_code == 204, (
+        f"Expected 204, got {response.status_code}: {response.text if hasattr(response, 'text') else ''}"
+    )
+
+    db_thread = db.get(Thread, thread.id)
+    assert db_thread is None
+
+    db.refresh(session)
+    assert session.pending_thread_id is None

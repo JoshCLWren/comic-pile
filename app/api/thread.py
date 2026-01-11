@@ -259,6 +259,7 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
         .where(SessionModel.pending_thread_id == thread_id)
         .values(pending_thread_id=None)
     )
+    db.flush()
     delete_event = Event(
         type="delete",
         timestamp=datetime.now(UTC),
