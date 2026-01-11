@@ -223,39 +223,40 @@ function createD10Geometry(atlasInfo) {
   const uvs = [];
   const inds = [];
 
-  // Pentagonal trapezohedron: 7 vertices (2 apex + 5 ring)
   const ringRadius = 1.0;
-  const poleHeight = 1.1;
+  const poleHeight = 1.0;
+  const beltOffset = 0.2;
 
   const top = [0, poleHeight, 0];
   const bottom = [0, -poleHeight, 0];
 
-  const ring = [];
-  for (let i = 0; i < 5; i++) {
-    const angle = (i * 2 * Math.PI) / 5;
-    ring.push([Math.cos(angle) * ringRadius, 0, Math.sin(angle) * ringRadius]);
+  const belt = [];
+  for (let i = 0; i < 10; i++) {
+    const angle = (i * Math.PI * 2) / 10;
+    const yOffset = beltOffset * (i % 2 ? 1 : -1);
+    belt.push([Math.cos(angle) * ringRadius, yOffset, Math.sin(angle) * ringRadius]);
   }
 
   for (let i = 0; i < 10; i++) {
-    const uv = getUVForNumber(i + 1, cols, rows);
+    const faceNumber = i + 1;
+    const uv = getUVForNumber(faceNumber, cols, rows);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.38;
-    const ry = (uv.v1 - uv.v0) * 0.38;
+    const rx = (uv.u1 - uv.u0) * 0.35;
+    const ry = (uv.v1 - uv.v0) * 0.5;
 
-    const idx = verts.length / 3;
-    verts.push(top[0], top[1], top[2]);
-    verts.push(ring[i % 5][0], ring[i % 5][1], ring[i % 5][2]);
-    verts.push(ring[(i + 1) % 5][0], ring[(i + 1) % 5][1], ring[(i + 1) % 5][2]);
-    verts.push(bottom[0], bottom[1], bottom[2]);
+    const v0 = top;
+    const v1 = belt[i];
+    const v2 = belt[(i + 1) % 10];
+    const v3 = bottom;
 
-    uvs.push(cx, cy + ry * 1.2);
-    uvs.push(cx - rx, cy);
-    uvs.push(cx + rx, cy);
-    uvs.push(cx, cy - ry * 1.2);
+    const uv0 = [cx, cy + ry];
+    const uv1 = [cx - rx, cy];
+    const uv2 = [cx + rx, cy];
+    const uv3 = [cx, cy - ry];
 
-    inds.push(idx, idx + 1, idx + 2);
-    inds.push(idx, idx + 2, idx + 3);
+    addTriangle(verts, uvs, inds, v0, v1, v2, uv0, uv1, uv2);
+    addTriangle(verts, uvs, inds, v3, v2, v1, uv3, uv2, uv1);
   }
 
   const geometry = new THREE.BufferGeometry();

@@ -8,20 +8,19 @@
 
 ## Critical Priority (Blocking Issues)
 
-### 1. d10 Die Rendering Visibility Problem
-**Location:** `static/js/dice3d.js:13`, `static/js/dice3d.js:136-140`
-**Description:** Despite geometry fixes, d10 die may still have rendering issues (invisible or not displaying correctly)
-**Why It's Debt:**
-- Multiple fix attempts have failed (TASK-121, TASK-123)
-- Root cause unknown: geometry is correct (DecahedronGeometry), but die may not be visible
-- Blocks dice rolling functionality for d10
-- Complex issue requiring browser DevTools investigation
-**Suggested Approach:**
-- Use browser DevTools to inspect: mesh creation, scene addition, material properties, lighting, camera positioning
-- Compare d10 with working dice (d12, d20) for differences
-- Consider alternative: replace with 2D SVG dice if 3D proves too complex
-- May require refactoring entire dice3d.js library or switching to different three.js-dice implementation
-**Estimated Effort:** 4-8 hours (deep investigation) or 2-3 hours (alternative 2D approach)
+### ~~1. d10 Die Rendering Visibility Problem~~ ~~RESOLVED~~
+**Location:** `frontend/src/components/Dice3D.jsx:220` (`createD10Geometry`)
+**Status:** Fixed in January 2026
+**What Was Wrong:**
+- Original implementation used 5 ring vertices instead of 10 (pentagonal trapezohedron needs zigzag belt)
+- Incorrect triangulation created "collapsed funnel" appearance
+- UV mapping shared vertices instead of per-face unique vertices
+**What Was Fixed:**
+- Replaced geometry with proper pentagonal trapezohedron: 12 vertices (2 poles + 10 belt)
+- 10 kite faces, each split into 2 triangles (20 triangles total)
+- Per-face vertex duplication for proper UV mapping
+- Classic d10 silhouette with congruent kite faces
+**Evidence:** PR to close GitHub issue #121
 
 ---
 
