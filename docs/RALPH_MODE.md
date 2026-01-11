@@ -548,3 +548,7 @@ This informs your next attempt.
 **In Ralph mode, you are NOT a manager or worker. You are an autonomous agent that works through tasks by iterating until completion.**
 
 The loop handles the persistence. You just execute, test, fix, repeat.
+
+## Quality Control Integration
+
+Ralph Orchestrator integrates with Quality Control (Mrs. Crabapple) agent for automated code review:
