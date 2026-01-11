@@ -14,13 +14,11 @@ def test_homepage_renders_dice_ladder(page, test_server_url):
 
 
 @pytest.mark.integration
-def test_htmx_roll_dice_partial_update(page, test_server_url):
-    """Navigate to /roll, click roll button, wait for result update."""
+def test_roll_dice_navigates_to_rate(page, test_server_url):
+    """Navigate to /, click roll button, verify navigation to /rate."""
     page.goto(f"{test_server_url}/react/")
 
     page.wait_for_selector("#tap-instruction", timeout=5000)
-
-    initial_url = page.url
 
     dice_element = page.wait_for_selector("#main-die-3d", timeout=5000)
     if dice_element:
@@ -28,7 +26,7 @@ def test_htmx_roll_dice_partial_update(page, test_server_url):
 
     page.wait_for_timeout(2000)
 
-    assert page.url == initial_url
+    assert page.url.endswith("/react/rate")
 
 
 @pytest.mark.integration
