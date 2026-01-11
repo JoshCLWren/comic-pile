@@ -150,6 +150,11 @@ def db() -> Generator[Session]:
 
     if database_url.startswith("sqlite"):
         engine = create_engine(database_url, connect_args={"check_same_thread": False})
+
+        import app.models
+
+        _models = app.models.__all__
+
         Base.metadata.create_all(bind=engine)
         connection = engine.connect()
         transaction = connection.begin()
