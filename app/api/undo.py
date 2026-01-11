@@ -73,6 +73,12 @@ def undo_to_snapshot(
                     )
                     .values(thread_id=None, selected_thread_id=None)
                 )
+                db.execute(
+                    update(SessionModel)
+                    .where(SessionModel.pending_thread_id.in_(threads_to_delete))
+                    .values(pending_thread_id=None)
+                )
+                db.flush()
                 db.execute(delete(Thread).where(Thread.id.in_(threads_to_delete)))
                 db.expire_all()
 

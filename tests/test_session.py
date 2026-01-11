@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from app.api.session import build_ladder_path, get_active_thread
 from app.models import Event, Session, Snapshot, Thread
 from app.models import Session as SessionModel
+from sqlalchemy import select
 from comic_pile.session import (
     create_session_start_snapshot,
     end_session,
@@ -748,6 +749,134 @@ async def test_restore_session_start_with_deleted_threads(client: AsyncClient, d
     restored_thread = db.get(Thread, thread2.id)
     assert restored_thread is not None
     assert restored_thread.issues_remaining == 5
+
+
+@pytest.mark.asyncio
+async def test_restore_session_start_clears_pending_thread_id(
+    client: AsyncClient, db, default_user
+):
+    """Test that restore-session-start clears pending_thread_id from sessions when deleting threads.
+
+    Regression test for BUG-131: Ensures that when restoring to a snapshot where
+    threads no longer exist, sessions with pending_thread_id referencing those
+    threads have their pending_thread_id cleared to prevent ForeignViolation errors.
+    """
+    from app.models import Session as SessionModel
+
+    thread1 = Thread(
+        title="Thread 1",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    thread2 = Thread(
+        title="Thread 2",
+        format="Graphic Novel",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    db.add(thread1)
+    db.add(thread2)
+    db.commit()
+    db.refresh(thread1)
+    db.refresh(thread2)
+
+    session = SessionModel(start_die=6, user_id=default_user.id, pending_thread_id=thread2.id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    create_session_start_snapshot(db, session)
+
+    thread2.issues_remaining = 0
+    db.commit()
+
+    await client.delete(f"/api/threads/{thread2.id}")
+
+    db.refresh(session)
+    assert session.pending_thread_id is None
+
+    response = await client.post(f"/api/sessions/{session.id}/restore-session-start")
+    assert response.status_code == 200
+
+    restored_thread2 = db.get(Thread, thread2.id)
+    assert restored_thread2 is not None
+
+
+def test_undo_to_snapshot_clears_pending_thread_id(db, sample_data):
+    """Test that undo_to_snapshot clears pending_thread_id from sessions when deleting threads.
+
+    Regression test for BUG-131: Ensures that when undoing to a snapshot where
+    threads created after the snapshot need to be deleted, sessions with
+    pending_thread_id referencing those threads have their pending_thread_id cleared
+    to prevent ForeignViolation errors.
+    """
+    from app.models import Session as SessionModel, Snapshot
+
+    thread1 = Thread(
+        title="Thread 1",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        user_id=1,
+        created_at=datetime.now(UTC),
+    )
+    db.add(thread1)
+    db.commit()
+    db.refresh(thread1)
+
+    session = SessionModel(start_die=6, user_id=1)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    create_session_start_snapshot(db, session)
+
+    thread2 = Thread(
+        title="Thread 2",
+        format="Graphic Novel",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=1,
+        created_at=datetime.now(UTC),
+    )
+    db.add(thread2)
+    db.commit()
+    db.refresh(thread2)
+
+    session.pending_thread_id = thread2.id
+    db.commit()
+
+    from app.api.undo import undo_to_snapshot
+
+    snapshot = (
+        db.execute(
+            select(Snapshot)
+            .where(Snapshot.session_id == session.id)
+            .where(Snapshot.description == "Session start")
+            .order_by(Snapshot.created_at)
+        )
+        .scalars()
+        .first()
+    )
+
+    assert snapshot is not None
+
+    undo_to_snapshot(session.id, snapshot.id, db)
+
+    db.refresh(session)
+    assert session.pending_thread_id is None
+
+    restored_thread2 = db.get(Thread, thread2.id)
+    assert restored_thread2 is None
 
 
 def test_is_active_no_lazy_load(db):
