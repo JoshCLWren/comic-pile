@@ -181,7 +181,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
                 db.execute(
                     select(SessionModel)
                     .where(SessionModel.ended_at.is_(None))
-                    .order_by(SessionModel.started_at.desc())
+                    .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
                 )
                 .scalars()
                 .all()

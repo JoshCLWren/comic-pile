@@ -84,7 +84,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
     if current_session:
         current_session.pending_thread_id = selected_thread.id
         current_session.pending_thread_updated_at = datetime.now()
-        db.commit()
+    db.commit()
 
     pool_html = ""
     for i, thread in enumerate(threads[:current_die]):
