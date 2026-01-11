@@ -254,6 +254,14 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
             detail=f"Thread {thread_id} not found",
         )
 
+    from app.models import Session as SessionModel
+
+    db.execute(
+        update(SessionModel)
+        .where(SessionModel.pending_thread_id == thread_id)
+        .values(pending_thread_id=None)
+    )
+
     delete_event = Event(
         type="delete",
         timestamp=datetime.now(UTC),

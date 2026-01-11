@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.session import build_narrative_summary
@@ -237,6 +237,12 @@ async def delete_test_data(db: Session = Depends(get_db)) -> dict[str, int]:
         deleted_events += len(all_events)
         for event in all_events:
             db.delete(event)
+
+    db.execute(
+        update(SessionModel)
+        .where(SessionModel.pending_thread_id.in_(thread_ids))
+        .values(pending_thread_id=None)
+    )
 
     for _thread_id in thread_ids:
         sessions = db.execute(select(SessionModel).where(SessionModel.user_id == 1)).scalars().all()
