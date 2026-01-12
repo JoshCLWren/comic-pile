@@ -223,44 +223,69 @@ function createD10Geometry(atlasInfo) {
   const uvs = [];
   const inds = [];
 
-  const vertices = [0, 0, 1, 0, 0, -1];
-  for (let i = 0; i < 10; i++) {
-    const b = (i * Math.PI * 2) / 10;
-    vertices.push(-Math.cos(b), -Math.sin(b), 0.105 * (i % 2 ? 1 : -1));
+  // Pentagonal trapezohedron geometry
+  // 12 vertices: top apex, bottom apex, 5 upper ring, 5 lower ring
+  const R = 1;
+  const H = 0.75;
+
+  const topApex = [0, H, 0];
+  const bottomApex = [0, -H, 0];
+
+  const upperRing = [];
+  const lowerRing = [];
+
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * 2 * Math.PI) / 5;
+    upperRing.push([Math.cos(angle) * R, 0, Math.sin(angle) * R]);
+
+    const offsetAngle = angle + Math.PI / 5;
+    lowerRing.push([Math.cos(offsetAngle) * R, 0, Math.sin(offsetAngle) * R]);
   }
 
-  const faces = [
-    [0, 2, 3], [0, 3, 4], [0, 4, 5], [0, 5, 6], [0, 6, 7],
-    [0, 7, 8], [0, 8, 9], [0, 9, 10], [0, 10, 11], [0, 11, 2],
-    [1, 3, 2], [1, 4, 3], [1, 5, 4], [1, 6, 5], [1, 7, 6],
-    [1, 8, 7], [1, 9, 8], [1, 10, 9], [1, 11, 10], [1, 2, 11]
-  ];
+  // Define 10 kite faces as quads (4 vertices each)
+  // Even indices (0, 2, 4, 6, 8) are upper faces
+  // Odd indices (1, 3, 5, 7, 9) are lower faces
+  const faces = [];
 
-  for (let i = 0; i < 10; i++) {
-    const uv = getUVForNumber(i + 1, cols, rows);
+  for (let i = 0; i < 5; i++) {
+    // Upper face
+    faces.push([
+      topApex,
+      upperRing[i],
+      lowerRing[i],
+      upperRing[(i + 1) % 5]
+    ]);
+
+    // Lower face
+    faces.push([
+      bottomApex,
+      lowerRing[i],
+      upperRing[(i + 1) % 5],
+      lowerRing[(i + 1) % 5]
+    ]);
+  }
+
+  // Face numbering (alternating high/low)
+  // Opposite faces sum to 11
+  const faceNumbers = [1, 9, 2, 8, 3, 7, 4, 6, 5, 10];
+
+  // Triangulate each quad into 2 triangles
+  faces.forEach((quad, faceIndex) => {
+    const [a, b, c, d] = quad;
+    const number = faceNumbers[faceIndex];
+
+    const uv = getUVForNumber(number, cols, rows);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.12;
-    const ry = (uv.v1 - uv.v0) * 0.12;
+    const rx = (uv.u1 - uv.u0) * 0.4;
+    const ry = (uv.v1 - uv.v0) * 0.4;
 
-    const uvTop = [cx, cy - ry];
-    const uvLeft = [cx - rx, cy];
-    const uvBottom = [cx, cy + ry];
-    const uvRight = [cx + rx, cy];
+    // Triangle 1: a, b, c
+    addTriangle(verts, uvs, inds, a, b, c, [cx, cy - ry], [cx - rx, cy + ry], [cx + rx, cy + ry]);
 
-    const topFace = faces[i];
-    const top0 = [vertices[topFace[0] * 3], vertices[topFace[0] * 3 + 1], vertices[topFace[0] * 3 + 2]];
-    const top1 = [vertices[topFace[1] * 3], vertices[topFace[1] * 3 + 1], vertices[topFace[1] * 3 + 1]];
-    const top2 = [vertices[topFace[2] * 3], vertices[topFace[2] * 3 + 1], vertices[topFace[2] * 3 + 2]];
-
-    const bottomFace = faces[i + 10];
-    const bottom0 = [vertices[bottomFace[0] * 3], vertices[bottomFace[0] * 3 + 1], vertices[bottomFace[0] * 3 + 2]];
-    const bottom1 = [vertices[bottomFace[1] * 3], vertices[bottomFace[1] * 3 + 1], vertices[bottomFace[1] * 3 + 1]];
-    const bottom2 = [vertices[bottomFace[2] * 3], vertices[bottomFace[2] * 3 + 1], vertices[bottomFace[2] * 3 + 2]];
-
-    addTriangle(verts, uvs, inds, top0, top1, top2, uvLeft, uvTop, uvRight);
-    addTriangle(verts, uvs, inds, bottom0, bottom1, bottom2, uvLeft, uvBottom, uvRight);
-  }
+    // Triangle 2: a, c, d
+    addTriangle(verts, uvs, inds, a, c, d, [cx, cy - ry], [cx + rx, cy + ry], [cx + rx, cy - ry]);
+  });
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
