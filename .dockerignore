@@ -50,5 +50,6 @@ logs/
 
 # Docker
 Dockerfile*
+!Dockerfile
 docker-compose*.yml
 .dockerignore

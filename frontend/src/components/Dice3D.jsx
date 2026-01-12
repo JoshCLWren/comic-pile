@@ -229,35 +229,37 @@ function createD10Geometry(atlasInfo) {
     vertices.push(-Math.cos(b), -Math.sin(b), 0.105 * (i % 2 ? 1 : -1));
   }
 
-  const getV = (idx) => [vertices[idx[0]], vertices[idx[1]], vertices[idx[2]]];
-
-  const getV = (idx) => [vertices[idx[0]], vertices[idx[1]], vertices[idx[2]]];
+  const faces = [
+    [0, 2, 3], [0, 3, 4], [0, 4, 5], [0, 5, 6], [0, 6, 7],
+    [0, 7, 8], [0, 8, 9], [0, 9, 10], [0, 10, 11], [0, 11, 2],
+    [1, 3, 2], [1, 4, 3], [1, 5, 4], [1, 6, 5], [1, 7, 6],
+    [1, 8, 7], [1, 9, 8], [1, 10, 9], [1, 11, 10], [1, 2, 11]
+  ];
 
   for (let i = 0; i < 10; i++) {
     const uv = getUVForNumber(i + 1, cols, rows);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.42;
-    const ry = (uv.v1 - uv.v0) * 0.42;
+    const rx = (uv.u1 - uv.u0) * 0.12;
+    const ry = (uv.v1 - uv.v0) * 0.12;
 
-    const top = getV(i);
-    const bottom = getV(10 + i);
-    const left = getV(2 + i);
-    const right = getV(3 + ((i + 1) % 10));
-
-    const uvTop = [cx, cy + ry];
-    const uvBottom = [cx, cy - ry];
+    const uvTop = [cx, cy - ry];
     const uvLeft = [cx - rx, cy];
+    const uvBottom = [cx, cy + ry];
     const uvRight = [cx + rx, cy];
 
-    addTriangle(verts, uvs, inds, top, left, right, uvTop, uvLeft, uvRight);
-    addTriangle(verts, uvs, inds, bottom, right, left, uvBottom, uvRight, uvLeft);
-  }
+    const topFace = faces[i];
+    const top0 = [vertices[topFace[0] * 3], vertices[topFace[0] * 3 + 1], vertices[topFace[0] * 3 + 2]];
+    const top1 = [vertices[topFace[1] * 3], vertices[topFace[1] * 3 + 1], vertices[topFace[1] * 3 + 1]];
+    const top2 = [vertices[topFace[2] * 3], vertices[topFace[2] * 3 + 1], vertices[topFace[2] * 3 + 2]];
 
-  for (let i = 0; i < verts.length; i++) {
-    if (!Number.isFinite(verts[i])) {
-      throw new Error(`D10 position is not finite at verts[${i}]=${verts[i]}`);
-    }
+    const bottomFace = faces[i + 10];
+    const bottom0 = [vertices[bottomFace[0] * 3], vertices[bottomFace[0] * 3 + 1], vertices[bottomFace[0] * 3 + 2]];
+    const bottom1 = [vertices[bottomFace[1] * 3], vertices[bottomFace[1] * 3 + 1], vertices[bottomFace[1] * 3 + 1]];
+    const bottom2 = [vertices[bottomFace[2] * 3], vertices[bottomFace[2] * 3 + 1], vertices[bottomFace[2] * 3 + 2]];
+
+    addTriangle(verts, uvs, inds, top0, top1, top2, uvLeft, uvTop, uvRight);
+    addTriangle(verts, uvs, inds, bottom0, bottom1, bottom2, uvLeft, uvBottom, uvRight);
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -265,7 +267,6 @@ function createD10Geometry(atlasInfo) {
   geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
   geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
   geometry.computeVertexNormals();
-  geometry.computeBoundingSphere();
   return geometry;
 }
 

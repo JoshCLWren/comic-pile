@@ -50,11 +50,11 @@ COPY --chown=appuser:appuser . .
 USER appuser
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8080
 
-# Health check
+# Health check (honor Railway's PORT env if set)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f "http://localhost:${PORT:-8000}/health" || exit 1
 
-# Run application using uv
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run application using uv (bind to Railway's PORT when provided)
+CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
