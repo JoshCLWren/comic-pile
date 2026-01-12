@@ -269,22 +269,100 @@ function createD10Geometry(atlasInfo) {
   // Opposite faces sum to 11
   const faceNumbers = [1, 9, 2, 8, 3, 7, 4, 6, 5, 10];
 
-  // Triangulate each quad into 2 triangles
+  function calculateFaceCenter(quad) {
+    const [a, b, c, d] = quad;
+    const cx = (a[0] + b[0] + c[0] + d[0]) / 4;
+    const cy = (a[1] + b[1] + c[1] + d[1]) / 4;
+    const cz = (a[2] + b[2] + c[2] + d[2]) / 4;
+    return [cx, cy, cz];
+  }
+
+  function calculateFaceNormal(a, b, c) {
+    const v1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const v2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const normal = [
+      v1[1] * v2[2] - v1[2] * v2[1],
+      v1[2] * v2[0] - v1[0] * v2[2],
+      v1[0] * v2[1] - v1[1] * v2[0]
+    ];
+    const len = Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+    return [normal[0] / len, normal[1] / len, normal[2] / len];
+  }
+
+  function calculateFaceBasis(normal) {
+    let arb = [1, 0, 0];
+    if (Math.abs(normal[0]) > 0.9) {
+      arb = [0, 1, 0];
+    }
+    const cross = [
+      normal[1] * arb[2] - normal[2] * arb[1],
+      normal[2] * arb[0] - normal[0] * arb[2],
+      normal[0] * arb[1] - normal[1] * arb[0]
+    ];
+    const uAxis = [
+      normal[1] * cross[2] - normal[2] * cross[1],
+      normal[2] * cross[0] - normal[0] * cross[2],
+      normal[0] * cross[1] - normal[1] * cross[0]
+    ];
+    const vAxis = [
+      normal[1] * uAxis[2] - normal[2] * uAxis[1],
+      normal[2] * uAxis[0] - normal[0] * uAxis[2],
+      normal[0] * uAxis[1] - normal[1] * uAxis[0]
+    ];
+    return { uAxis, vAxis };
+  }
+
+  function projectVertexToPlane(vertex, center, uAxis, vAxis) {
+    const vx = vertex[0] - center[0];
+    const vy = vertex[1] - center[1];
+    const vz = vertex[2] - center[2];
+    const u = vx * uAxis[0] + vy * uAxis[1] + vz * uAxis[2];
+    const v = vx * vAxis[0] + vy * vAxis[1] + vz * vAxis[2];
+    return { u, v };
+  }
+
+  function calculateUVBounds(projA, projB, projC, projD) {
+    const uMin = Math.min(projA.u, projB.u, projC.u, projD.u);
+    const uMax = Math.max(projA.u, projB.u, projC.u, projD.u);
+    const vMin = Math.min(projA.v, projB.v, projC.v, projD.v);
+    const vMax = Math.max(projA.v, projB.v, projC.v, projD.v);
+    return { uMin, uMax, vMin, vMax };
+  }
+
+  function mapToTextureTile(u, v, bounds, tileUv) {
+    const { uMin, uMax, vMin, vMax } = bounds;
+    const uNorm = uMax > uMin ? (u - uMin) / (uMax - uMin) : 0.5;
+    const vNorm = vMax > vMin ? (v - vMin) / (vMax - vMin) : 0.5;
+    return {
+      u: tileUv.u0 + uNorm * (tileUv.u1 - tileUv.u0),
+      v: tileUv.v0 + vNorm * (tileUv.v1 - tileUv.v0)
+    };
+  }
+
+  // Triangulate each quad into 2 triangles with proper UV mapping
   faces.forEach((quad, faceIndex) => {
     const [a, b, c, d] = quad;
     const number = faceNumbers[faceIndex];
 
-    const uv = getUVForNumber(number, cols, rows);
-    const cx = (uv.u0 + uv.u1) / 2;
-    const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.4;
-    const ry = (uv.v1 - uv.v0) * 0.4;
+    const center = calculateFaceCenter(quad);
+    const normal = calculateFaceNormal(a, b, c);
+    const { uAxis, vAxis } = calculateFaceBasis(normal);
 
-    // Triangle 1: a, b, c
-    addTriangle(verts, uvs, inds, a, b, c, [cx, cy - ry], [cx - rx, cy + ry], [cx + rx, cy + ry]);
+    const projA = projectVertexToPlane(a, center, uAxis, vAxis);
+    const projB = projectVertexToPlane(b, center, uAxis, vAxis);
+    const projC = projectVertexToPlane(c, center, uAxis, vAxis);
+    const projD = projectVertexToPlane(d, center, uAxis, vAxis);
 
-    // Triangle 2: a, c, d
-    addTriangle(verts, uvs, inds, a, c, d, [cx, cy - ry], [cx + rx, cy + ry], [cx + rx, cy - ry]);
+    const bounds = calculateUVBounds(projA, projB, projC, projD);
+    const tileUv = getUVForNumber(number, cols, rows);
+
+    const uvA = mapToTextureTile(projA.u, projA.v, bounds, tileUv);
+    const uvB = mapToTextureTile(projB.u, projB.v, bounds, tileUv);
+    const uvC = mapToTextureTile(projC.u, projC.v, bounds, tileUv);
+    const uvD = mapToTextureTile(projD.u, projD.v, bounds, tileUv);
+
+    addTriangle(verts, uvs, inds, a, b, c, [uvA.u, uvA.v], [uvB.u, uvB.v], [uvC.u, uvC.v]);
+    addTriangle(verts, uvs, inds, a, c, d, [uvA.u, uvA.v], [uvC.u, uvC.v], [uvD.u, uvD.v]);
   });
 
   const geometry = new THREE.BufferGeometry();
