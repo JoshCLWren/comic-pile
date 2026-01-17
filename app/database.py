@@ -11,12 +11,19 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable must be set")
 
 if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    SYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+else:
+    ASYNC_DATABASE_URL = DATABASE_URL
+    SYNC_DATABASE_URL = DATABASE_URL
 
-engine = create_engine(DATABASE_URL)
+async_engine = create_engine(ASYNC_DATABASE_URL, pool_pre_ping=True)
+sync_engine = create_engine(SYNC_DATABASE_URL, pool_pre_ping=True)
 
+engine = sync_engine
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+AsyncSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=async_engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine)
 
 
 class Base(DeclarativeBase):
