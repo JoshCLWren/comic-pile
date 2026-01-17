@@ -44,6 +44,11 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
+
       - name: Wait for PostgreSQL
         shell: bash
         run: |
@@ -94,6 +99,11 @@ jobs:
 
       - name: Setup environment
         uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
 
       - name: Wait for PostgreSQL
         shell: bash
