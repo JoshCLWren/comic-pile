@@ -179,7 +179,7 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 @pytest.fixture(scope="session")
 def test_server_url():
-    """Launch test server for browser tests."""
+    """Launch test server for browser tests with seeded sample data."""
     from uvicorn import Config, Server
 
     original_db_url = os.environ.get("DATABASE_URL")
@@ -191,6 +191,59 @@ def test_server_url():
         connect_args={"check_same_thread": False} if test_db_url.startswith("sqlite") else {},
     )
     Base.metadata.create_all(bind=test_engine)
+
+    with test_engine.connect() as conn:
+        _ensure_default_user(Session(bind=conn))
+
+        from app.models import Event, Session as SessionModel, Thread
+
+        threads = [
+            Thread(
+                title="Superman",
+                format="Comic",
+                issues_remaining=10,
+                queue_position=1,
+                status="active",
+                user_id=1,
+            ),
+            Thread(
+                title="Batman",
+                format="Comic",
+                issues_remaining=5,
+                queue_position=2,
+                status="active",
+                user_id=1,
+            ),
+            Thread(
+                title="Wonder Woman",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=3,
+                status="completed",
+                user_id=1,
+            ),
+        ]
+        for thread in threads:
+            conn.execute(
+                text(
+                    "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id) VALUES (:title, :format, :issues_remaining, :queue_position, :status, :user_id)"
+                ),
+                {
+                    "title": thread.title,
+                    "format": thread.format,
+                    "issues_remaining": thread.issues_remaining,
+                    "queue_position": thread.queue_position,
+                    "status": thread.status,
+                    "user_id": thread.user_id,
+                },
+            )
+
+        session = SessionModel(start_die=6, user_id=1)
+        conn.execute(
+            text("INSERT INTO sessions (start_die, user_id) VALUES (:start_die, :user_id)"),
+            {"start_die": session.start_die, "user_id": session.user_id},
+        )
+        conn.commit()
 
     config = Config(app=app, host="127.0.0.1", port=TEST_SERVER_PORT, log_level="error")
     server = Server(config)
