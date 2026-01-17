@@ -1,0 +1,44 @@
+{
+  "$schema": "https://railway.app/schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
+  },
+  "env": {
+    "DATABASE_URL": {
+      "description": "PostgreSQL connection string",
+      "required": true
+    },
+    "SECRET_KEY": {
+      "description": "Secret key for security",
+      "required": true,
+      "generator": "secret"
+    },
+    "LOG_LEVEL": {
+      "description": "Log level (debug, info, warning, error)",
+      "required": false,
+      "default": "info"
+    },
+    "ENVIRONMENT": {
+      "description": "Environment (development, production)",
+      "required": false,
+      "default": "production"
+    },
+    "CORS_ORIGINS": {
+      "description": "Comma-separated list of allowed CORS origins",
+      "required": false
+    },
+    "AUTO_BACKUP_ENABLED": {
+      "description": "Enable automatic database backups on startup",
+      "required": false,
+      "default": "false"
+    }
+  }
+}

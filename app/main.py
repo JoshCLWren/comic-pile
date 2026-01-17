@@ -24,7 +24,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa
 
 from app.api import admin, error_handler, queue, rate, retros, roll, session, tasks, thread, undo  # noqa: E402
 from app.api.tasks import health_router  # noqa: E402
-from app.database import Base, engine, get_db  # noqa: E402
+from app.database import Base, engine, get_db, SessionLocal  # noqa: E402
 from app.models.session import Session as SessionModel  # noqa: E402
 from app.middleware import limiter  # noqa: E402
 
@@ -292,13 +292,33 @@ def create_app() -> FastAPI:
         return FileResponse("static/react/index.html")
 
     @app.get("/health")
-    async def health_check(db: Session = Depends(get_db)):
-        """Health check endpoint that verifies database connectivity."""
+    async def health_check():
+        """Health check endpoint that verifies basic application functionality."""
+        import os
+        from sqlalchemy import text
+
+        # Check if DATABASE_URL is set
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "status": "unhealthy",
+                    "database": "not_configured",
+                    "error": "DATABASE_URL not set",
+                },
+            )
+
+        # Try to connect to database
         try:
-            db.execute(select(SessionModel).limit(1))
-            return {"status": "healthy", "database": "connected"}
+            db = SessionLocal()
+            try:
+                db.execute(text("SELECT 1"))
+                return {"status": "healthy", "database": "connected"}
+            finally:
+                db.close()
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error(f"Health check database connection failed: {e}")
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
@@ -317,9 +337,37 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         """Initialize database on application startup."""
-        try:
-            Base.metadata.create_all(bind=engine)
-            logger.info("Database tables created successfully")
+        import time
+        from sqlalchemy import text
+
+        max_retries = 5
+        retry_delay = 5  # seconds
+
+        database_ready = False
+        for attempt in range(1, max_retries + 1):
+            try:
+                db = SessionLocal()
+                try:
+                    db.execute(text("SELECT 1"))
+                    database_ready = True
+                    logger.info("Database connection established successfully")
+                    break
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.warning(f"Database connection attempt {attempt}/{max_retries} failed: {e}")
+                if attempt < max_retries:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    logger.error("All database connection attempts failed")
+
+        if database_ready:
+            try:
+                Base.metadata.create_all(bind=engine)
+                logger.info("Database tables created successfully")
+            except Exception as e:
+                logger.error(f"Failed to create database tables: {e}")
 
             backup_enabled = os.getenv("AUTO_BACKUP_ENABLED", "true").lower() == "true"
             if backup_enabled:
@@ -341,9 +389,8 @@ def create_app() -> FastAPI:
                     logger.error(f"Database backup failed: {backup_error}")
             else:
                 logger.info("Automatic backup disabled (AUTO_BACKUP_ENABLED=false)")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
+        else:
+            logger.warning("Skipping database initialization and backups due to connection failure")
 
     return app
 

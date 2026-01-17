@@ -49,12 +49,15 @@ COPY --chown=appuser:appuser . .
 # Switch to non-root user
 USER appuser
 
-# Expose port
+# Expose port (Railway provides PORT environment variable)
 EXPOSE 8080
 
-# Health check (honor Railway's PORT env if set)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f "http://localhost:${PORT:-8000}/health" || exit 1
+# Health check optimized for Railway
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=5 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:\${PORT:-8080}/health')" || exit 1
 
-# Run application using uv (bind to Railway's PORT when provided)
-CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Run application using uv
+# - Bind to 0.0.0.0 to accept external connections
+# - Use PORT from Railway environment variable (default 8080)
+# - Set log level from environment
+CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port \${PORT:-8080} --log-level \${LOG_LEVEL:-info}"]
