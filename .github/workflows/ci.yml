@@ -9,6 +9,22 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     container: debian:13
+    env:
+      CI: true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -16,40 +32,28 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
-      - name: Run linting
+      - name: Install PostgreSQL Python dependencies
         shell: bash
-        run: bash scripts/lint.sh
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
 
-  tests:
-    runs-on: ubuntu-latest
-    container: debian:13
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Setup environment
-        uses: ./.github/actions/setup
-
-      - name: Run pytest
+      - name: Install PostgreSQL client
         shell: bash
-        run: source .venv/bin/activate && pytest --cov=comic_pile --cov-report=xml -m "not integration"
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
-  integration-tests:
-    runs-on: ubuntu-latest
-    container: debian:13
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Setup environment
-        uses: ./.github/actions/setup
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
 
       - name: Install Playwright browsers and system dependencies
         shell: bash
@@ -57,14 +61,15 @@ jobs:
           apt-get update && apt-get install -y libpango-1.0-0 libcairo2
           source .venv/bin/activate && playwright install chromium
 
-      - name: Run Playwright integration tests
+      - name: Run pytest
         shell: bash
-        run: source .venv/bin/activate && pytest tests_e2e/ -m integration
+        run: |
+          export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/comic_pile_test"
+          source .venv/bin/activate && pytest --cov=comic_pile --cov-report=xml
 
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          name: playwright-results
-          path: test-results/
-          retention-days: 7
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -3,10 +3,10 @@
 import threading
 from datetime import UTC, datetime
 
-
 from app.database import SessionLocal
 from app.models import Session as SessionModel
 from comic_pile.session import get_or_create
+from sqlalchemy import delete
 
 
 def test_get_or_create_concurrent_no_deadlock(db, sample_data):
@@ -47,8 +47,6 @@ def test_get_or_create_concurrent_no_deadlock(db, sample_data):
 
 def test_get_or_create_concurrent_no_duplicates(db):
     """Test that concurrent session creation doesn't create duplicate sessions."""
-    from sqlalchemy import delete
-
     db.execute(delete(SessionModel))
     db.commit()
 

@@ -97,7 +97,9 @@ async def test_move_to_position_invalid(client, db, sample_data):
     """Moving to invalid position caps at boundaries."""
     thread_id = sample_data["threads"][2].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 999})
+    response = await client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 999}
+    )
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -109,7 +111,9 @@ async def test_move_to_position_zero_fails_validation(client, db, sample_data):
     """Moving to position 0 fails validation."""
     thread_id = sample_data["threads"][2].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 0})
+    response = await client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 0}
+    )
     assert response.status_code == 422
 
 
@@ -419,7 +423,9 @@ async def test_jump_to_far_position(client, db, sample_data):
     """Jump from position 1 to position 5 works correctly."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 5})
+    response = await client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 5}
+    )
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -441,7 +447,9 @@ async def test_jump_to_near_position(client, db, sample_data):
     """Jump from position 5 to position 2 works correctly."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 2})
+    response = await client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 2}
+    )
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -461,7 +469,9 @@ async def test_jump_beyond_last_position(client, db, sample_data):
     """Jumping beyond last position caps at last position."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 999})
+    response = await client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 999}
+    )
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -473,7 +483,9 @@ async def test_jump_to_negative_position_fails_validation(client, db, sample_dat
     """Jumping to negative position fails validation."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": -5})
+    response = await client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": -5}
+    )
     assert response.status_code == 422
 
 
@@ -482,5 +494,60 @@ async def test_jump_to_zero_position_fails_validation(client, db, sample_data):
     """Jumping to position 0 fails validation."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/position/", json={"new_position": 0})
+    response = await client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 0}
+    )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_move_to_back_empty_queue(db):
+    """move_to_back returns early when queue is empty."""
+    from comic_pile.queue import move_to_back
+    from app.models import User, Thread
+    from sqlalchemy import delete
+
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=datetime.now(), id=1)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    db.execute(delete(Thread))
+    db.commit()
+
+    move_to_back(999, db)
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_no_other_threads(db):
+    """move_to_position when no other threads exist."""
+    from comic_pile.queue import move_to_position
+    from app.models import User, Thread
+    from sqlalchemy import delete
+
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=datetime.now(), id=1)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    db.execute(delete(Thread))
+    db.commit()
+
+    thread = Thread(
+        title="Only Thread",
+        format="Comic",
+        status="active",
+        queue_position=1,
+        user_id=user.id,
+    )
+    db.add(thread)
+    db.commit()
+
+    move_to_position(thread.id, 5, db)
+
+    thread = db.get(Thread, thread.id)
+    assert thread.queue_position == 1

@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
 import * as THREE from 'three';
+import { buildD10Faces } from './d10Geometry';
 
 function normalize(v) {
   const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -223,51 +224,7 @@ function createD10Geometry(atlasInfo) {
   const uvs = [];
   const inds = [];
 
-  // Pentagonal trapezohedron geometry
-  // 12 vertices: top apex, bottom apex, 5 upper ring, 5 lower ring
-  const R = 1;
-  const H = 0.75;
-
-  const topApex = [0, H, 0];
-  const bottomApex = [0, -H, 0];
-
-  const upperRing = [];
-  const lowerRing = [];
-
-  for (let i = 0; i < 5; i++) {
-    const angle = (i * 2 * Math.PI) / 5;
-    upperRing.push([Math.cos(angle) * R, 0, Math.sin(angle) * R]);
-
-    const offsetAngle = angle + Math.PI / 5;
-    lowerRing.push([Math.cos(offsetAngle) * R, 0, Math.sin(offsetAngle) * R]);
-  }
-
-  // Define 10 kite faces as quads (4 vertices each)
-  // Even indices (0, 2, 4, 6, 8) are upper faces
-  // Odd indices (1, 3, 5, 7, 9) are lower faces
-  const faces = [];
-
-  for (let i = 0; i < 5; i++) {
-    // Upper face
-    faces.push([
-      topApex,
-      upperRing[i],
-      lowerRing[i],
-      upperRing[(i + 1) % 5]
-    ]);
-
-    // Lower face
-    faces.push([
-      bottomApex,
-      lowerRing[i],
-      upperRing[(i + 1) % 5],
-      lowerRing[(i + 1) % 5]
-    ]);
-  }
-
-  // Face numbering (alternating high/low)
-  // Opposite faces sum to 11
-  const faceNumbers = [1, 9, 2, 8, 3, 7, 4, 6, 5, 10];
+  const { faces, faceNumbers } = buildD10Faces();
 
   function calculateFaceCenter(quad) {
     const [a, b, c, d] = quad;
@@ -287,6 +244,17 @@ function createD10Geometry(atlasInfo) {
     ];
     const len = Math.sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
     return [normal[0] / len, normal[1] / len, normal[2] / len];
+  }
+
+  function ensureOutwardQuad(quad) {
+    const center = calculateFaceCenter(quad);
+    const [a, b, c, d] = quad;
+    const normal = calculateFaceNormal(a, b, c);
+    const dot = normal[0] * center[0] + normal[1] * center[1] + normal[2] * center[2];
+    if (dot >= 0) {
+      return quad;
+    }
+    return [a, d, c, b];
   }
 
   function calculateFaceBasis(normal) {
@@ -340,7 +308,8 @@ function createD10Geometry(atlasInfo) {
   }
 
   // Triangulate each quad into 2 triangles with proper UV mapping
-  faces.forEach((quad, faceIndex) => {
+  faces.forEach((rawQuad, faceIndex) => {
+    const quad = ensureOutwardQuad(rawQuad);
     const [a, b, c, d] = quad;
     const number = faceNumbers[faceIndex];
 
@@ -769,4 +738,3 @@ export default function Dice3D({
     />
   )
 }
-

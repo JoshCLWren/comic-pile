@@ -1,5 +1,6 @@
 """Session management functions."""
 
+import threading
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -9,6 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Event, Settings, Snapshot, Thread
 from app.models import Session as SessionModel
+
+
+_session_creation_lock = threading.Lock()
 
 
 def _get_settings(db: Session) -> Settings:
@@ -123,33 +127,34 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
             if active_session:
                 return active_session
 
-            try:
-                db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
-            except Exception:
-                pass
+            with _session_creation_lock:
+                try:
+                    db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
+                except Exception:
+                    pass
 
-            active_session = (
-                db.execute(
-                    select(SessionModel)
-                    .where(SessionModel.ended_at.is_(None))
-                    .where(SessionModel.started_at >= cutoff_time)
-                    .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                active_session = (
+                    db.execute(
+                        select(SessionModel)
+                        .where(SessionModel.ended_at.is_(None))
+                        .where(SessionModel.started_at >= cutoff_time)
+                        .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                    )
+                    .scalars()
+                    .first()
                 )
-                .scalars()
-                .first()
-            )
 
-            if active_session:
-                return active_session
+                if active_session:
+                    return active_session
 
-            new_session = SessionModel(start_die=settings.start_die, user_id=user_id)
-            db.add(new_session)
-            db.commit()
-            db.refresh(new_session)
+                new_session = SessionModel(start_die=settings.start_die, user_id=user_id)
+                db.add(new_session)
+                db.commit()
+                db.refresh(new_session)
 
-            create_session_start_snapshot(db, new_session)
+                create_session_start_snapshot(db, new_session)
 
-            return new_session
+                return new_session
         except OperationalError as e:
             if "deadlock" in str(e).lower():
                 db.rollback()

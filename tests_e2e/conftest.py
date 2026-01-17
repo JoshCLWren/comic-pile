@@ -45,38 +45,45 @@ def _ensure_default_user(db: Session) -> User:
 
 
 def get_test_database_url() -> str:
-    """Get test database URL from environment or use PostgreSQL default."""
+    """Get test database URL from environment (PostgreSQL only)."""
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
         return test_db_url
     database_url = os.getenv("DATABASE_URL")
     if database_url and database_url.startswith("postgresql"):
         return database_url
-    use_sqlite = os.getenv("USE_SQLITE_FOR_TESTS", "").lower() in ("1", "true", "yes")
-    if use_sqlite:
-        return "sqlite+aiosqlite:///:memory:"
+    if os.getenv("CI") == "true":
+        return "postgresql://postgres:postgres@postgres:5432/comic_pile_test"
     raise ValueError(
         "No PostgreSQL test database configured. "
-        "Set TEST_DATABASE_URL or DATABASE_URL environment variable, "
-        "or set USE_SQLITE_FOR_TESTS=true for SQLite."
+        "Set TEST_DATABASE_URL or DATABASE_URL environment variable."
     )
 
 
 def get_sync_test_database_url() -> str:
-    """Get sync test database URL from environment or use PostgreSQL default."""
+    """Get sync test database URL from environment (PostgreSQL only)."""
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
-        return test_db_url.replace("+asyncpg", "").replace("+aiosqlite", "")
+        if test_db_url.startswith("postgresql+asyncpg://"):
+            return test_db_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        elif test_db_url.startswith("postgresql+aiosqlite://"):
+            return test_db_url.replace("postgresql+aiosqlite://", "sqlite:///", 1)
+        elif test_db_url.startswith("postgresql://"):
+            return test_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        return test_db_url
     database_url = os.getenv("DATABASE_URL")
-    if database_url and database_url.startswith("postgresql"):
-        return database_url
-    use_sqlite = os.getenv("USE_SQLITE_FOR_TESTS", "").lower() in ("1", "true", "yes")
-    if use_sqlite:
-        return "sqlite:///:memory:"
+    if database_url:
+        if database_url.startswith("postgresql://"):
+            return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        elif database_url.startswith("postgresql+asyncpg://"):
+            return database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        elif database_url.startswith("postgresql+psycopg://"):
+            return database_url
+    if os.getenv("CI") == "true":
+        return "postgresql+psycopg://postgres:postgres@postgres:5432/comic_pile_test"
     raise ValueError(
         "No PostgreSQL test database configured. "
-        "Set TEST_DATABASE_URL or DATABASE_URL environment variable, "
-        "or set USE_SQLITE_FOR_TESTS=true for SQLite."
+        "Set TEST_DATABASE_URL or DATABASE_URL environment variable."
     )
 
 
@@ -106,27 +113,20 @@ def set_skip_worktree_check():
 
 @pytest.fixture(scope="function")
 def db() -> Generator[Session]:
-    """Create test database for tests (PostgreSQL or SQLite)."""
+    """Create test database for tests (PostgreSQL only)."""
     database_url = get_sync_test_database_url()
 
-    if database_url.startswith("sqlite"):
-        engine = create_engine(database_url, connect_args={"check_same_thread": False})
-        Base.metadata.create_all(bind=engine)
-        connection = engine.connect()
-        transaction = connection.begin()
-        session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
-    else:
-        engine = create_engine(database_url, echo=False)
-        Base.metadata.create_all(bind=engine)
-        connection = engine.connect()
-        connection.execute(
-            text(
-                "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, settings, users RESTART IDENTITY CASCADE;"
-            )
+    engine = create_engine(database_url, echo=False)
+    Base.metadata.create_all(bind=engine)
+    connection = engine.connect()
+    connection.execute(
+        text(
+            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, settings, users RESTART IDENTITY CASCADE;"
         )
-        connection.commit()
-        transaction = None
-        session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
+    )
+    connection.commit()
+    transaction = None
+    session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
     try:
         _ensure_default_user(session)
@@ -147,13 +147,10 @@ def db_session(db: Session) -> Generator[Session]:
 
 @pytest_asyncio.fixture(scope="function")
 async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
-    """Create async test database with transaction rollback (PostgreSQL or SQLite)."""
+    """Create async test database with transaction rollback (PostgreSQL)."""
     database_url = get_test_database_url()
 
-    if database_url.startswith("sqlite"):
-        engine = create_async_engine(database_url, connect_args={"check_same_thread": False})
-    else:
-        engine = create_async_engine(database_url, echo=False)
+    engine = create_async_engine(database_url, echo=False)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -179,18 +176,82 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 @pytest.fixture(scope="session")
 def test_server_url():
-    """Launch test server for browser tests."""
+    """Launch test server for browser tests with seeded sample data."""
     from uvicorn import Config, Server
 
     original_db_url = os.environ.get("DATABASE_URL")
     test_db_url = get_sync_test_database_url()
     os.environ["DATABASE_URL"] = test_db_url
 
-    test_engine = create_engine(
-        test_db_url,
-        connect_args={"check_same_thread": False} if test_db_url.startswith("sqlite") else {},
-    )
+    test_engine = create_engine(test_db_url)
     Base.metadata.create_all(bind=test_engine)
+
+    with test_engine.connect() as conn:
+        _ensure_default_user(Session(bind=conn))
+
+        from app.models import Session as SessionModel, Thread
+
+        threads = [
+            Thread(
+                title="Superman",
+                format="Comic",
+                issues_remaining=10,
+                queue_position=1,
+                status="active",
+                is_test=True,
+                created_at=datetime.now(UTC),
+                user_id=1,
+            ),
+            Thread(
+                title="Batman",
+                format="Comic",
+                issues_remaining=5,
+                queue_position=2,
+                status="active",
+                is_test=True,
+                created_at=datetime.now(UTC),
+                user_id=1,
+            ),
+            Thread(
+                title="Wonder Woman",
+                format="Comic",
+                issues_remaining=0,
+                queue_position=3,
+                status="completed",
+                is_test=True,
+                created_at=datetime.now(UTC),
+                user_id=1,
+            ),
+        ]
+        for thread in threads:
+            conn.execute(
+                text(
+                    "INSERT INTO threads (title, format, issues_remaining, queue_position, status, is_test, created_at, user_id) VALUES (:title, :format, :issues_remaining, :queue_position, :status, :is_test, :created_at, :user_id)"
+                ),
+                {
+                    "title": thread.title,
+                    "format": thread.format,
+                    "issues_remaining": thread.issues_remaining,
+                    "queue_position": thread.queue_position,
+                    "status": thread.status,
+                    "is_test": thread.is_test,
+                    "created_at": thread.created_at,
+                    "user_id": thread.user_id,
+                },
+            )
+
+        session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
+        conn.execute(
+            text(
+                "INSERT INTO sessions (start_die, user_id, started_at) VALUES (:start_die, :user_id, :started_at)"
+            ),
+            {
+                "start_die": session.start_die,
+                "user_id": session.user_id,
+                "started_at": session.started_at,
+            },
+        )
+        conn.commit()
 
     config = Config(app=app, host="127.0.0.1", port=TEST_SERVER_PORT, log_level="error")
     server = Server(config)
