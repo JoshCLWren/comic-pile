@@ -97,6 +97,17 @@ include = ["app", "comic_pile", "tests"]
 exclude = ["**/node_modules", "**/__pycache__", ".venv", "alembic/versions/*.py"]
 venvPath = "."
 venv = ".venv"
+
+[tool.env]
+# Default environment variables for local development
+# Override these in .env file or shell for different configurations
+ENVIRONMENT = "development"
+DATABASE_URL = "postgresql+psycopg://comicpile:comicpile_password@localhost:5432/comicpile"
+TEST_DATABASE_URL = "postgresql+psycopg://comicpile:comicpile_password@localhost:5432/comicpile_test"
+LOG_LEVEL = "debug"
+SECRET_KEY = "dev-secret-key-change-in-production"
+AUTO_BACKUP_ENABLED = "false"
+PORT = "8000"
 typeStubPaths = []
 
 [tool.pytest.markers]
