@@ -275,14 +275,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
-    app.mount("/react/assets", StaticFiles(directory="static/react/assets"), name="react-assets")
-
-    @app.get("/react/{path:path}")
-    async def serve_react_app(path: str):
-        """Serve React app for client-side routing."""
-        from fastapi.responses import FileResponse
-
-        return FileResponse("static/react/index.html")
+    app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
 
     @app.get("/")
     async def serve_root():
@@ -292,18 +285,18 @@ def create_app() -> FastAPI:
         return FileResponse("static/react/index.html")
 
     @app.get("/react")
-    async def serve_react_no_slash():
-        """Redirect /react to /react/ for consistency."""
+    async def serve_react_redirect():
+        """Redirect /react to / for consistent routing."""
         from fastapi.responses import RedirectResponse
 
-        return RedirectResponse("/react/", status_code=301)
+        return RedirectResponse("/", status_code=301)
 
     @app.get("/react/")
-    async def serve_react_index():
-        """Serve React app index."""
-        from fastapi.responses import FileResponse
+    async def serve_react_redirect_slash():
+        """Redirect /react/ to / for consistent routing."""
+        from fastapi.responses import RedirectResponse
 
-        return FileResponse("static/react/index.html")
+        return RedirectResponse("/", status_code=301)
 
     @app.get("/health")
     async def health_check():
