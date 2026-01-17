@@ -255,3 +255,18 @@ restore-postgres:  ## Restore PostgreSQL from backup (make restore-postgres FILE
 list-postgres-backups:  ## List all PostgreSQL backups
 	@echo "Available PostgreSQL backups:"
 	@ls -lh backups/postgres/postgres_backup_*.sql.gz 2>/dev/null || echo "No PostgreSQL backups found"
+
+deploy-prod:  ## Deploy to Railway production
+	@echo "Building React frontend..."
+	@cd frontend && npm run build && cd ..
+	@echo "Committing and pushing to GitHub..."
+	@git add -A
+	@git commit -m "$$(date -u +'%Y-%m-%d %H:%M:%S') production deploy" || echo "No changes to commit"
+	@git push origin main
+	@echo "Deploying to Railway..."
+	@railway up --detach
+	@sleep 60
+	@echo "Checking deployment status..."
+	@railway status
+	@echo "Testing health endpoint..."
+	@curl -s https://app-production-72b9.up.railway.app/health || echo "Health check failed"
