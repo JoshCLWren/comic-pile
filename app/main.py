@@ -277,6 +277,13 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory="static"), name="static")
     app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
 
+    @app.get("/vite.svg")
+    async def serve_vite_svg():
+        """Serve vite favicon."""
+        from fastapi.responses import FileResponse
+
+        return FileResponse("static/vite.svg", media_type="image/svg+xml")
+
     @app.get("/")
     async def serve_root():
         """Serve React app at root URL."""
