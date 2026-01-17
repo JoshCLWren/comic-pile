@@ -291,6 +291,13 @@ def create_app() -> FastAPI:
 
         return FileResponse("static/react/index.html")
 
+    @app.get("/react")
+    async def serve_react_no_slash():
+        """Redirect /react to /react/ for consistency."""
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse("/react/", status_code=301)
+
     @app.get("/react/")
     async def serve_react_index():
         """Serve React app index."""
