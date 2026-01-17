@@ -18,3 +18,5 @@ createRoot(document.getElementById('root')).render(
     </QueryClientProvider>
   </StrictMode>,
 )
+
+document.getElementById('root').classList.add('loaded')
