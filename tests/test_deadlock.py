@@ -9,6 +9,7 @@ import pytest
 from app.database import SessionLocal
 from app.models import Session as SessionModel
 from comic_pile.session import get_or_create
+from sqlalchemy import delete
 
 
 def test_get_or_create_concurrent_no_deadlock(db, sample_data):
@@ -19,11 +20,7 @@ def test_get_or_create_concurrent_no_deadlock(db, sample_data):
     """
     if "sqlite" in os.getenv("TEST_DATABASE_URL", os.getenv("DATABASE_URL", "")):
         pytest.skip("Concurrent session creation test requires PostgreSQL advisory locks")
-    """Test that concurrent get_or_create calls don't deadlock.
 
-    Regression test for BUG-158: DeadlockDetected error during concurrent operations.
-    Multiple threads calling get_or_create simultaneously should not deadlock.
-    """
     for session in sample_data["sessions"]:
         session.ended_at = datetime.now(UTC)
     db.commit()
@@ -58,11 +55,6 @@ def test_get_or_create_concurrent_no_duplicates(db):
     """Test that concurrent session creation doesn't create duplicate sessions."""
     if "sqlite" in os.getenv("TEST_DATABASE_URL", os.getenv("DATABASE_URL", "")):
         pytest.skip("Concurrent session creation test requires PostgreSQL advisory locks")
-
-    from sqlalchemy import delete
-
-    """Test that concurrent session creation doesn't create duplicate sessions."""
-    from sqlalchemy import delete
 
     db.execute(delete(SessionModel))
     db.commit()
