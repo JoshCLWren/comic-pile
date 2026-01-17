@@ -11,7 +11,7 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable must be set")
 
 if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 engine = create_engine(DATABASE_URL)
 
