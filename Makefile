@@ -272,21 +272,38 @@ deploy-prod:  ## Deploy to Railway production
 	@curl -s https://app-production-72b9.up.railway.app/health || echo "Health check failed"
 
 dev-all:  ## Run both frontend and backend dev servers (Vite proxies /api to backend)
-	@echo "Starting backend on port 8000..."
-	@uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
-	@BACKEND_PID=$$!
-	@echo "Starting frontend on port 5173..."
-	@cd frontend && npm run dev &
-	@FRONTEND_PID=$$!
-	@echo ""
-	@echo "Backend running at http://localhost:8000 (PID: $$BACKEND_PID)"
-	@echo "Frontend running at http://localhost:5173 (PID: $$FRONTEND_PID)"
-	@echo "API requests from frontend are proxied to backend"
-	@echo ""
-	@echo "Press Ctrl+C to stop both servers"
-	@trap "kill $$BACKEND_PID $$FRONTEND_PID 2>/dev/null" EXIT
+	@echo "Checking for running servers..."
+	@BACKEND_PID=$$(lsof -t -i:8000 2>/dev/null || echo ""); \
+	if [ -n "$$BACKEND_PID" ]; then \
+		echo "Backend already running on port 8000 (PID: $$BACKEND_PID)"; \
+	else \
+		echo "Starting backend on port 8000..."; \
+		uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload & \
+		BACKEND_PID=$$!; \
+	fi; \
+	@FRONTEND_PID=$$(lsof -t -i:5173 2>/dev/null || echo ""); \
+	if [ -n "$$FRONTEND_PID" ]; then \
+		echo "Frontend already running on port 5173 (PID: $$FRONTEND_PID)"; \
+	else \
+		echo "Starting frontend on port 5173..."; \
+		cd frontend && npm run dev & \
+		FRONTEND_PID=$$!; \
+	fi; \
+	@echo ""; \
+	@echo "Backend: http://localhost:8000 (PID: $$BACKEND_PID)"; \
+	@echo "Frontend: http://localhost:5173 (PID: $$FRONTEND_PID)"; \
+	@echo ""; \
+	@echo "Press Ctrl+C to stop"; \
+	@sleep 2; \
+	@trap "kill $$BACKEND_PID 2>/dev/null; kill $$FRONTEND_PID 2>/dev/null" EXIT; \
 	@wait
 
 dev-frontend:  ## Run frontend dev server only (npm run dev in frontend/)
-	@echo "Starting Vite dev server on http://localhost:5173..."
-	@cd frontend && npm run dev
+	@echo "Checking for running servers..."
+	@FRONTEND_PID=$$(lsof -t -i:5173 2>/dev/null || echo ""); \
+	if [ -n "$$FRONTEND_PID" ]; then \
+		echo "Frontend already running on port 5173 (PID: $$FRONTEND_PID)"; \
+	else \
+		echo "Starting Vite dev server on http://localhost:5173..."; \
+		cd frontend && npm run dev; \
+	fi
