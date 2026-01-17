@@ -183,6 +183,8 @@ def test_server_url():
                 issues_remaining=10,
                 queue_position=1,
                 status="active",
+                is_test=True,
+                created_at=datetime.now(UTC),
                 user_id=1,
             ),
             Thread(
@@ -191,6 +193,8 @@ def test_server_url():
                 issues_remaining=5,
                 queue_position=2,
                 status="active",
+                is_test=True,
+                created_at=datetime.now(UTC),
                 user_id=1,
             ),
             Thread(
@@ -199,13 +203,15 @@ def test_server_url():
                 issues_remaining=0,
                 queue_position=3,
                 status="completed",
+                is_test=True,
+                created_at=datetime.now(UTC),
                 user_id=1,
             ),
         ]
         for thread in threads:
             conn.execute(
                 text(
-                    "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id) VALUES (:title, :format, :issues_remaining, :queue_position, :status, :user_id)"
+                    "INSERT INTO threads (title, format, issues_remaining, queue_position, status, is_test, created_at, user_id) VALUES (:title, :format, :issues_remaining, :queue_position, :status, :is_test, :created_at, :user_id)"
                 ),
                 {
                     "title": thread.title,
@@ -213,14 +219,22 @@ def test_server_url():
                     "issues_remaining": thread.issues_remaining,
                     "queue_position": thread.queue_position,
                     "status": thread.status,
+                    "is_test": thread.is_test,
+                    "created_at": thread.created_at,
                     "user_id": thread.user_id,
                 },
             )
 
-        session = SessionModel(start_die=6, user_id=1)
+        session = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
         conn.execute(
-            text("INSERT INTO sessions (start_die, user_id) VALUES (:start_die, :user_id)"),
-            {"start_die": session.start_die, "user_id": session.user_id},
+            text(
+                "INSERT INTO sessions (start_die, user_id, started_at) VALUES (:start_die, :user_id, :started_at)"
+            ),
+            {
+                "start_die": session.start_die,
+                "user_id": session.user_id,
+                "started_at": session.started_at,
+            },
         )
         conn.commit()
 
