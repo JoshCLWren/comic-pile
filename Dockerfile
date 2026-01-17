@@ -54,10 +54,10 @@ EXPOSE 8080
 
 # Health check optimized for Railway
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=5 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:\${PORT:-8080}/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:\$PORT/health')" || exit 1
 
 # Run application using uv
 # - Bind to 0.0.0.0 to accept external connections
-# - Use PORT from Railway environment variable (default 8080)
+# - PORT is set by Railway
 # - Set log level from environment
-CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port \${PORT:-8080} --log-level \${LOG_LEVEL:-info}"]
+CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port \$PORT --log-level \${LOG_LEVEL:-info}"]
