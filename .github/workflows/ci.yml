@@ -23,6 +23,20 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     container: debian:13
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -30,9 +44,25 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/setup
 
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
       - name: Run pytest
         shell: bash
-        run: source .venv/bin/activate && USE_SQLITE_FOR_TESTS=true pytest --cov=comic_pile --cov-report=xml -m "not integration"
+        run: |
+          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/comic_pile_test"
+          source .venv/bin/activate && pytest --cov=comic_pile --cov-report=xml -m "not integration"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -44,12 +74,40 @@ jobs:
   integration-tests:
     runs-on: ubuntu-latest
     container: debian:13
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Setup environment
         uses: ./.github/actions/setup
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
 
       - name: Install Playwright browsers and system dependencies
         shell: bash
@@ -59,7 +117,9 @@ jobs:
 
       - name: Run Playwright integration tests
         shell: bash
-        run: source .venv/bin/activate && USE_SQLITE_FOR_TESTS=true pytest tests_e2e/ -m integration
+        run: |
+          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/comic_pile_test"
+          source .venv/bin/activate && pytest tests_e2e/ -m integration
 
       - name: Upload test results
         if: always()
