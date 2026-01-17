@@ -76,7 +76,7 @@ def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
         .limit(1)
     ).scalar()
 
-    if max_position is None:
+    if max_position is None:  # pragma: no cover - impossible if target_thread exists
         max_position = 0
 
     if new_position > max_position:

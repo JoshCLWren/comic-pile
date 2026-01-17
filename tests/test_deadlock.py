@@ -1,14 +1,20 @@
 """Tests for deadlock handling in concurrent operations."""
 
+import os
 import threading
 from datetime import UTC, datetime
 
+import pytest
 
 from app.database import SessionLocal
 from app.models import Session as SessionModel
 from comic_pile.session import get_or_create
 
 
+@pytest.mark.skipif(
+    "sqlite" in os.getenv("TEST_DATABASE_URL", os.getenv("DATABASE_URL", "")),
+    reason="Concurrent session creation test requires PostgreSQL advisory locks",
+)
 def test_get_or_create_concurrent_no_deadlock(db, sample_data):
     """Test that concurrent get_or_create calls don't deadlock.
 
@@ -45,6 +51,10 @@ def test_get_or_create_concurrent_no_deadlock(db, sample_data):
     assert len(set(results)) == 1, "All threads should return the same session ID"
 
 
+@pytest.mark.skipif(
+    "sqlite" in os.getenv("TEST_DATABASE_URL", os.getenv("DATABASE_URL", "")),
+    reason="Concurrent session creation test requires PostgreSQL advisory locks",
+)
 def test_get_or_create_concurrent_no_duplicates(db):
     """Test that concurrent session creation doesn't create duplicate sessions."""
     from sqlalchemy import delete

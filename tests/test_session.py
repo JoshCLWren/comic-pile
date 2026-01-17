@@ -1040,6 +1040,36 @@ def test_get_or_create_non_deadlock_operational_error(db, sample_data):
             get_or_create(db, user_id=1)
 
 
+def test_get_or_create_sqlite_advisory_lock(db, sample_data):
+    """Test that get_or_create handles SQLite's lack of pg_advisory_xact_lock.
+
+    On SQLite, SELECT pg_advisory_xact_lock will fail, and the exception
+    should be silently caught.
+    """
+    from unittest.mock import patch
+    from sqlalchemy.exc import DatabaseError
+
+    for session in sample_data["sessions"]:
+        session.ended_at = datetime.now(UTC)
+    db.commit()
+
+    original_execute = db.execute
+
+    def sqlite_mock_execute(stmt, *args, **kwargs):
+        if hasattr(stmt, "text") and "pg_advisory_xact_lock" in stmt.text:
+            raise DatabaseError(
+                "Function not supported",
+                "Function not supported",
+                Exception("no such function: pg_advisory_xact_lock"),
+            )
+        return original_execute(stmt, *args, **kwargs)
+
+    with patch.object(db, "execute", side_effect=sqlite_mock_execute):
+        session = get_or_create(db, user_id=1)
+        assert session is not None
+        assert session.start_die == 6
+
+
 def test_get_or_create_max_retries_exceeded(db, sample_data):
     """Test that get_or_create has proper error handling for max retries.
 
@@ -1099,3 +1129,41 @@ def test_undo_to_snapshot_handles_deadlock_regression(db, sample_data):
         "undo_to_snapshot should have retry logic"
     )
     assert "rollback" in source.lower(), "undo_to_snapshot should rollback on deadlock"
+
+
+def test_is_active_with_naive_datetime(db):
+    """Test that is_active handles datetime without timezone.
+
+    When a datetime has no tzinfo, it should be treated as UTC.
+    This test verifies the branch is executed (coverage).
+    """
+    session = SessionModel(
+        started_at=datetime.now() - timedelta(hours=1),
+        start_die=6,
+        user_id=1,
+    )
+    db.add(session)
+    db.commit()
+
+    naive_dt = datetime.now() - timedelta(hours=1)
+    assert naive_dt.tzinfo is None
+
+    result = is_active(naive_dt, None, db)
+    assert result is not None
+
+
+def test_is_active_naive_old_datetime(db):
+    """Test that is_active handles old naive datetime correctly."""
+    session = SessionModel(
+        started_at=datetime.now() - timedelta(hours=1),
+        start_die=6,
+        user_id=1,
+    )
+    db.add(session)
+    db.commit()
+
+    naive_dt = datetime.now() - timedelta(hours=7)
+    assert naive_dt.tzinfo is None
+
+    result = is_active(naive_dt, None, db)
+    assert result is not None

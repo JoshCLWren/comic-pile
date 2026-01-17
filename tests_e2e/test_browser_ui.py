@@ -228,9 +228,9 @@ def test_d10_renders_geometry_correctly(page, test_server_url):
     assert "error" not in pixel_stats, f"WebGL error: {pixel_stats.get('error')}"
     assert pixel_stats.get("totalPixels", 1) > 0, "Canvas has zero dimensions"
 
-    opaqueThreshold = pixel_stats["totalPixels"] * 0.05
-    assert pixel_stats["opaqueCount"] > opaqueThreshold, (
-        f"d10 appears mostly blank: only {pixel_stats['opaqueCount']} / {pixel_stats['totalPixels']} pixels opaque (expected > {opaqueThreshold})"
+    opaque_threshold = pixel_stats["totalPixels"] * 0.05
+    assert pixel_stats["opaqueCount"] > opaque_threshold, (
+        f"d10 appears mostly blank: only {pixel_stats['opaqueCount']} / {pixel_stats['totalPixels']} pixels opaque (expected > {opaque_threshold})"
     )
 
     assert pixel_stats["variance"] > 100, (
