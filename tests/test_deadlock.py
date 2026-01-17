@@ -18,7 +18,7 @@ def test_get_or_create_concurrent_no_deadlock(db, sample_data):
     Regression test for BUG-158: DeadlockDetected error during concurrent operations.
     Multiple threads calling get_or_create simultaneously should not deadlock.
     """
-    if "sqlite" in os.getenv("TEST_DATABASE_URL", os.getenv("DATABASE_URL", "")):
+    if os.getenv("USE_SQLITE_FOR_TESTS", "").lower() in ("1", "true", "yes"):
         pytest.skip("Concurrent session creation test requires PostgreSQL advisory locks")
 
     for session in sample_data["sessions"]:
@@ -53,7 +53,7 @@ def test_get_or_create_concurrent_no_deadlock(db, sample_data):
 
 def test_get_or_create_concurrent_no_duplicates(db):
     """Test that concurrent session creation doesn't create duplicate sessions."""
-    if "sqlite" in os.getenv("TEST_DATABASE_URL", os.getenv("DATABASE_URL", "")):
+    if os.getenv("USE_SQLITE_FOR_TESTS", "").lower() in ("1", "true", "yes"):
         pytest.skip("Concurrent session creation test requires PostgreSQL advisory locks")
 
     db.execute(delete(SessionModel))
