@@ -45,7 +45,7 @@ def get_db() -> Generator[Session]:
     db = SessionLocal()
     try:
         yield db
-    except Exception as e:
+    except Exception:
         db.close()
         raise
     finally:

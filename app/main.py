@@ -9,7 +9,7 @@ import traceback
 from datetime import UTC, datetime
 
 from dotenv import load_dotenv  # noqa: E402
-from fastapi import Depends, FastAPI, Request, status  # noqa: E402
+from fastapi import FastAPI, Request, status  # noqa: E402
 
 load_dotenv()
 from fastapi.exceptions import RequestValidationError  # noqa: E402
@@ -18,14 +18,11 @@ from fastapi.responses import JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from slowapi import _rate_limit_exceeded_handler  # noqa: E402
 from slowapi.errors import RateLimitExceeded  # noqa: E402
-from sqlalchemy import select  # noqa: E402
-from sqlalchemy.orm import Session  # noqa: E402
 from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 
 from app.api import admin, error_handler, queue, rate, retros, roll, session, tasks, thread, undo  # noqa: E402
 from app.api.tasks import health_router  # noqa: E402
-from app.database import Base, engine, get_db, SessionLocal  # noqa: E402
-from app.models.session import Session as SessionModel  # noqa: E402
+from app.database import Base, engine, SessionLocal  # noqa: E402
 from app.middleware import limiter  # noqa: E402
 
 logger = logging.getLogger(__name__)
