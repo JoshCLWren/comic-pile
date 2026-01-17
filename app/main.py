@@ -284,6 +284,13 @@ def create_app() -> FastAPI:
 
         return FileResponse("static/react/index.html")
 
+    @app.get("/")
+    async def serve_root():
+        """Serve React app at root URL."""
+        from fastapi.responses import FileResponse
+
+        return FileResponse("static/react/index.html")
+
     @app.get("/react/")
     async def serve_react_index():
         """Serve React app index."""
