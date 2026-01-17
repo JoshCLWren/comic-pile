@@ -1,7 +1,7 @@
 .PHONY: help init lint pytest sync venv githook install-githook
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
-.PHONY: dev test seed migrate worktrees status test-integration
+.PHONY: dev test seed migrate worktrees status test-integration deploy-prod dev-all dev-frontend
 
 # Configuration
 PREFIX ?= /usr/local
@@ -270,3 +270,23 @@ deploy-prod:  ## Deploy to Railway production
 	@railway status
 	@echo "Testing health endpoint..."
 	@curl -s https://app-production-72b9.up.railway.app/health || echo "Health check failed"
+
+dev-all:  ## Run both frontend and backend dev servers (Vite proxies /api to backend)
+	@echo "Starting backend on port 8000..."
+	@uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+	@BACKEND_PID=$$!
+	@echo "Starting frontend on port 5173..."
+	@cd frontend && npm run dev &
+	@FRONTEND_PID=$$!
+	@echo ""
+	@echo "Backend running at http://localhost:8000 (PID: $$BACKEND_PID)"
+	@echo "Frontend running at http://localhost:5173 (PID: $$FRONTEND_PID)"
+	@echo "API requests from frontend are proxied to backend"
+	@echo ""
+	@echo "Press Ctrl+C to stop both servers"
+	@trap "kill $$BACKEND_PID $$FRONTEND_PID 2>/dev/null" EXIT
+	@wait
+
+dev-frontend:  ## Run frontend dev server only (npm run dev in frontend/)
+	@echo "Starting Vite dev server on http://localhost:5173..."
+	@cd frontend && npm run dev
