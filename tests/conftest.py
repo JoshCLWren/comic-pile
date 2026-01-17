@@ -64,38 +64,30 @@ def default_user(db: Session) -> User:
 
 
 def get_test_database_url() -> str:
-    """Get test database URL from environment or use PostgreSQL default."""
+    """Get test database URL from environment (PostgreSQL only)."""
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
         return test_db_url
     database_url = os.getenv("DATABASE_URL")
     if database_url and database_url.startswith("postgresql"):
         return database_url
-    use_sqlite = os.getenv("USE_SQLITE_FOR_TESTS", "").lower() in ("1", "true", "yes")
-    if use_sqlite:
-        return "sqlite+aiosqlite:///:memory:"
     raise ValueError(
         "No PostgreSQL test database configured. "
-        "Set TEST_DATABASE_URL or DATABASE_URL environment variable, "
-        "or set USE_SQLITE_FOR_TESTS=true for SQLite."
+        "Set TEST_DATABASE_URL or DATABASE_URL environment variable."
     )
 
 
 def get_sync_test_database_url() -> str:
-    """Get sync test database URL from environment or use PostgreSQL default."""
+    """Get sync test database URL from environment (PostgreSQL only)."""
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
         return test_db_url.replace("+asyncpg", "").replace("+aiosqlite", "")
     database_url = os.getenv("DATABASE_URL")
     if database_url and database_url.startswith("postgresql"):
         return database_url
-    use_sqlite = os.getenv("USE_SQLITE_FOR_TESTS", "").lower() in ("1", "true", "yes")
-    if use_sqlite:
-        return "sqlite:///:memory:"
     raise ValueError(
         "No PostgreSQL test database configured. "
-        "Set TEST_DATABASE_URL or DATABASE_URL environment variable, "
-        "or set USE_SQLITE_FOR_TESTS=true for SQLite."
+        "Set TEST_DATABASE_URL or DATABASE_URL environment variable."
     )
 
 
@@ -113,13 +105,10 @@ def set_skip_worktree_check():
 
 @pytest_asyncio.fixture(scope="function")
 async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
-    """Create async test database with transaction rollback (PostgreSQL or SQLite)."""
+    """Create async test database with transaction rollback (PostgreSQL)."""
     database_url = get_test_database_url()
 
-    if database_url.startswith("sqlite"):
-        engine = create_async_engine(database_url, connect_args={"check_same_thread": False})
-    else:
-        engine = create_async_engine(database_url, echo=False)
+    engine = create_async_engine(database_url, echo=False)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -145,32 +134,20 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 @pytest.fixture(scope="function")
 def db() -> Generator[Session]:
-    """Create test database with transaction rollback (SQLite) or TRUNCATE (PostgreSQL)."""
+    """Create test database with transaction rollback (PostgreSQL)."""
     database_url = get_sync_test_database_url()
 
-    if database_url.startswith("sqlite"):
-        engine = create_engine(database_url, connect_args={"check_same_thread": False})
-
-        import app.models
-
-        _models = app.models.__all__
-
-        Base.metadata.create_all(bind=engine)
-        connection = engine.connect()
-        transaction = connection.begin()
-        session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
-    else:
-        engine = create_engine(database_url, echo=False)
-        Base.metadata.create_all(bind=engine)
-        connection = engine.connect()
-        connection.execute(
-            text(
-                "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, settings, users RESTART IDENTITY CASCADE;"
-            )
+    engine = create_engine(database_url, echo=False)
+    Base.metadata.create_all(bind=engine)
+    connection = engine.connect()
+    connection.execute(
+        text(
+            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, settings, users RESTART IDENTITY CASCADE;"
         )
-        connection.commit()
-        transaction = None
-        session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
+    )
+    connection.commit()
+    transaction = None
+    session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
     try:
         _ensure_default_user(session)

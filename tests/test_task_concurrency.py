@@ -1,18 +1,15 @@
 """Test concurrent task creation to verify deadlock fix."""
 
 import inspect
-import os
-import tempfile
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.api.tasks import create_task as create_task_func
 from app.api.tasks import create_tasks_bulk as create_tasks_bulk_func
-from app.database import Base
 from app.models import Task
 
 
@@ -44,79 +41,61 @@ async def test_create_task_duplicate_id_returns_400(client: AsyncClient, db: Ses
     assert len(tasks) == 1, "Only one task should exist in database"
 
 
-def test_create_task_duplicate_handling_in_code() -> None:
+def test_create_task_duplicate_handling_in_code(db: Session) -> None:
     """Test that create_task handles IntegrityError correctly without SELECT first."""
     from app.schemas.task import CreateTaskRequest
+    from app.models import Task
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = os.path.join(tmpdir, "test.db")
-        db_url = f"sqlite:///{db_path}"
+    task_data = {
+        "task_id": "INTEGRITY-TASK-001",
+        "title": "Integrity Test Task",
+        "description": None,
+        "instructions": None,
+        "priority": "HIGH",
+        "dependencies": None,
+        "estimated_effort": "1 hour",
+        "task_type": "feature",
+    }
 
-        engine = create_engine(db_url)
-        Base.metadata.create_all(bind=engine)
-        session_local = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    request = CreateTaskRequest(**task_data)
 
-        db_session = session_local()
+    new_task = Task(
+        task_id=request.task_id,
+        title=request.title,
+        description=request.description,
+        instructions=request.instructions,
+        priority=request.priority,
+        dependencies=request.dependencies,
+        estimated_effort=request.estimated_effort,
+        task_type=request.task_type,
+        status="pending",
+        completed=False,
+    )
+    db.add(new_task)
+    db.commit()
 
-        try:
-            task_data = {
-                "task_id": "INTEGRITY-TASK-001",
-                "title": "Integrity Test Task",
-                "description": None,
-                "instructions": None,
-                "priority": "HIGH",
-                "dependencies": None,
-                "estimated_effort": "1 hour",
-                "task_type": "feature",
-            }
+    new_task2 = Task(
+        task_id=request.task_id,
+        title=request.title,
+        description=request.description,
+        instructions=request.instructions,
+        priority=request.priority,
+        dependencies=request.dependencies,
+        estimated_effort=request.estimated_effort,
+        task_type=request.task_type,
+        status="pending",
+        completed=False,
+    )
+    db.add(new_task2)
 
-            request = CreateTaskRequest(**task_data)
+    try:
+        db.commit()
+        raise AssertionError("Should have raised IntegrityError")
+    except IntegrityError:
+        db.rollback()
 
-            new_task = Task(
-                task_id=request.task_id,
-                title=request.title,
-                description=request.description,
-                instructions=request.instructions,
-                priority=request.priority,
-                dependencies=request.dependencies,
-                estimated_effort=request.estimated_effort,
-                task_type=request.task_type,
-                status="pending",
-                completed=False,
-            )
-            db_session.add(new_task)
-            db_session.commit()
-
-            new_task2 = Task(
-                task_id=request.task_id,
-                title=request.title,
-                description=request.description,
-                instructions=request.instructions,
-                priority=request.priority,
-                dependencies=request.dependencies,
-                estimated_effort=request.estimated_effort,
-                task_type=request.task_type,
-                status="pending",
-                completed=False,
-            )
-            db_session.add(new_task2)
-
-            try:
-                db_session.commit()
-                raise AssertionError("Should have raised IntegrityError")
-            except IntegrityError:
-                db_session.rollback()
-
-            tasks = (
-                db_session.execute(select(Task).where(Task.task_id == "INTEGRITY-TASK-001"))
-                .scalars()
-                .all()
-            )
-            assert len(tasks) == 1, "Only one task should exist in database"
-
-        finally:
-            db_session.close()
-            engine.dispose()
+    tasks = db.execute(select(Task).where(Task.task_id == "INTEGRITY-TASK-001")).scalars().all()
+    assert len(tasks) == 1, "Only one task should exist in database"
 
 
 def test_create_task_handles_deadlock_regression():

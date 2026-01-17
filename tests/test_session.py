@@ -1040,36 +1040,6 @@ def test_get_or_create_non_deadlock_operational_error(db, sample_data):
             get_or_create(db, user_id=1)
 
 
-def test_get_or_create_sqlite_advisory_lock(db, sample_data):
-    """Test that get_or_create handles SQLite's lack of pg_advisory_xact_lock.
-
-    On SQLite, SELECT pg_advisory_xact_lock will fail, and the exception
-    should be silently caught.
-    """
-    from unittest.mock import patch
-    from sqlalchemy.exc import DatabaseError
-
-    for session in sample_data["sessions"]:
-        session.ended_at = datetime.now(UTC)
-    db.commit()
-
-    original_execute = db.execute
-
-    def sqlite_mock_execute(stmt, *args, **kwargs):
-        if hasattr(stmt, "text") and "pg_advisory_xact_lock" in stmt.text:
-            raise DatabaseError(
-                "Function not supported",
-                "Function not supported",
-                Exception("no such function: pg_advisory_xact_lock"),
-            )
-        return original_execute(stmt, *args, **kwargs)
-
-    with patch.object(db, "execute", side_effect=sqlite_mock_execute):
-        session = get_or_create(db, user_id=1)
-        assert session is not None
-        assert session.start_die == 6
-
-
 def test_get_or_create_max_retries_exceeded(db, sample_data):
     """Test that get_or_create has proper error handling for max retries.
 
