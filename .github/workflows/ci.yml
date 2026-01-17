@@ -59,7 +59,7 @@ jobs:
 
       - name: Run Playwright integration tests
         shell: bash
-        run: source .venv/bin/activate && pytest tests_e2e/ -m integration
+        run: source .venv/bin/activate && USE_SQLITE_FOR_TESTS=true pytest tests_e2e/ -m integration
 
       - name: Upload test results
         if: always()
