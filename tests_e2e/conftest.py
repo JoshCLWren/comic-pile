@@ -195,7 +195,7 @@ def test_server_url():
     with test_engine.connect() as conn:
         _ensure_default_user(Session(bind=conn))
 
-        from app.models import Event, Session as SessionModel, Thread
+        from app.models import Session as SessionModel, Thread
 
         threads = [
             Thread(
