@@ -34,7 +34,7 @@ jobs:
 
       - name: Install PostgreSQL Python dependencies
         shell: bash
-        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg psycopg2
 
       - name: Install PostgreSQL client
         shell: bash
@@ -96,7 +96,7 @@ jobs:
 
       - name: Install PostgreSQL Python dependencies
         shell: bash
-        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg psycopg2
 
       - name: Install PostgreSQL client
         shell: bash
@@ -127,7 +127,7 @@ jobs:
         shell: bash
         run: |
           export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/comic_pile_test"
-          source .venv/bin/activate && pytest tests_e2e/ -m integration
+          source .venv/bin/activate && pytest tests_e2e/ -m integration --no-cov
 
       - name: Upload test results
         if: always()
