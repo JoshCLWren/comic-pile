@@ -52,6 +52,8 @@ def get_test_database_url() -> str:
     database_url = os.getenv("DATABASE_URL")
     if database_url and database_url.startswith("postgresql"):
         return database_url
+    if os.getenv("CI") == "true":
+        return "postgresql://postgres:postgres@postgres:5432/comic_pile_test"
     raise ValueError(
         "No PostgreSQL test database configured. "
         "Set TEST_DATABASE_URL or DATABASE_URL environment variable."
@@ -75,6 +77,10 @@ def get_sync_test_database_url() -> str:
             return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
         elif database_url.startswith("postgresql+asyncpg://"):
             return database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        elif database_url.startswith("postgresql+psycopg://"):
+            return database_url
+    if os.getenv("CI") == "true":
+        return "postgresql+psycopg://postgres:postgres@postgres:5432/comic_pile_test"
     raise ValueError(
         "No PostgreSQL test database configured. "
         "Set TEST_DATABASE_URL or DATABASE_URL environment variable."
