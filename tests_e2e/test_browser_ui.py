@@ -4,8 +4,18 @@ import pytest
 
 
 @pytest.mark.integration
-def test_homepage_renders_dice_ladder(page, test_server_url):
+def test_root_url_renders_dice_ladder(page, test_server_url):
     """Navigate to /, verify expected dice selector exists."""
+    page.goto(f"{test_server_url}/")
+    page.wait_for_selector("#die-selector", timeout=5000)
+
+    header_die = page.query_selector("#header-die-label")
+    assert header_die is not None
+
+
+@pytest.mark.integration
+def test_homepage_renders_dice_ladder(page, test_server_url):
+    """Navigate to /react/, verify expected dice selector exists (legacy URL)."""
     page.goto(f"{test_server_url}/react/")
     page.wait_for_selector("#die-selector", timeout=5000)
 
@@ -29,7 +39,7 @@ def test_roll_dice_navigates_to_rate(page, test_server_url, db):
     db.add(thread)
     db.commit()
 
-    page.goto(f"{test_server_url}/react/")
+    page.goto(f"{test_server_url}/")
 
     page.wait_for_selector("#tap-instruction", timeout=5000)
 
@@ -39,7 +49,7 @@ def test_roll_dice_navigates_to_rate(page, test_server_url, db):
 
     page.wait_for_timeout(2000)
 
-    assert page.url.endswith("/react/rate")
+    assert page.url.endswith("/rate") or page.url.endswith("/rate/")
 
 
 @pytest.mark.integration
@@ -75,7 +85,7 @@ def test_htmx_rate_comic_updates_ui(page, test_server_url, db):
     db.add(roll_event)
     db.commit()
 
-    page.goto(f"{test_server_url}/react/rate")
+    page.goto(f"{test_server_url}/rate")
     page.wait_for_selector("#rating-input", timeout=5000)
 
     page.evaluate("document.getElementById('rating-input').value = '3.5'")
@@ -101,7 +111,7 @@ def test_queue_management_ui(page, test_server_url, db):
     db.add(thread)
     db.commit()
 
-    page.goto(f"{test_server_url}/react/queue")
+    page.goto(f"{test_server_url}/queue")
     page.wait_for_selector("#queue-container", timeout=5000)
 
     queue_container = page.query_selector("#queue-container")
@@ -140,7 +150,7 @@ def test_view_history_pagination(page, test_server_url, db):
     db.add(roll_event)
     db.commit()
 
-    page.goto(f"{test_server_url}/react/history")
+    page.goto(f"{test_server_url}/history")
     page.wait_for_selector("#sessions-list", timeout=5000)
 
     sessions_list = page.query_selector("#sessions-list")
@@ -150,7 +160,7 @@ def test_view_history_pagination(page, test_server_url, db):
 @pytest.mark.integration
 def test_settings_page_renders(page, test_server_url):
     """Navigate to /settings, verify settings header exists."""
-    page.goto(f"{test_server_url}/react/settings")
+    page.goto(f"{test_server_url}/settings")
     page.wait_for_selector("text=Settings", timeout=5000)
 
 
@@ -186,7 +196,7 @@ def test_full_session_workflow(page, test_server_url, db):
     db.add(roll_event)
     db.commit()
 
-    page.goto(f"{test_server_url}/react/rate")
+    page.goto(f"{test_server_url}/rate")
     page.wait_for_selector("#rating-input", timeout=5000)
 
     rating_input = page.query_selector("#rating-input")
@@ -201,8 +211,8 @@ def test_full_session_workflow(page, test_server_url, db):
 
 @pytest.mark.integration
 def test_d10_renders_geometry_correctly(page, test_server_url):
-    """Navigate to /react/, select d10, verify d10 canvas element exists with WebGL context."""
-    page.goto(f"{test_server_url}/react/")
+    """Navigate to /, select d10, verify d10 canvas element exists with WebGL context."""
+    page.goto(f"{test_server_url}/")
     page.wait_for_selector("#die-selector", timeout=5000)
     page.wait_for_timeout(2000)
 
