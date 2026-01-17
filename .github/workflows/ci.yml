@@ -53,7 +53,7 @@ jobs:
         shell: bash
         run: |
           for i in {1..30}; do
-            if pg_isready -h localhost -p 5432 -U postgres; then
+            if pg_isready -h postgres -p 5432 -U postgres; then
               echo "PostgreSQL is ready"
               exit 0
             fi
@@ -66,7 +66,7 @@ jobs:
       - name: Run pytest
         shell: bash
         run: |
-          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/comic_pile_test"
+          export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/comic_pile_test"
           source .venv/bin/activate && pytest --cov=comic_pile --cov-report=xml -m "not integration"
 
       - name: Upload coverage to Codecov
@@ -109,7 +109,7 @@ jobs:
         shell: bash
         run: |
           for i in {1..30}; do
-            if pg_isready -h localhost -p 5432 -U postgres; then
+            if pg_isready -h postgres -p 5432 -U postgres; then
               echo "PostgreSQL is ready"
               exit 0
             fi
@@ -128,7 +128,7 @@ jobs:
       - name: Run Playwright integration tests
         shell: bash
         run: |
-          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/comic_pile_test"
+          export DATABASE_URL="postgresql://postgres:postgres@postgres:5432/comic_pile_test"
           source .venv/bin/activate && pytest tests_e2e/ -m integration
 
       - name: Upload test results
