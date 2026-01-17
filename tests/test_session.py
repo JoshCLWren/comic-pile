@@ -1,8 +1,8 @@
 """Tests for session logic."""
 
-import pytest
-
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from httpx import AsyncClient
 
@@ -1137,3 +1137,41 @@ def test_is_active_naive_old_datetime(db):
 
     result = is_active(naive_dt, None, db)
     assert result is not None
+
+
+def test_get_or_create_returns_existing_within_time_window(db, sample_data):
+    """Test that get_or_create returns existing session when one exists within time window.
+
+    This tests the early return path at line 148 where active_session is found
+    before attempting to create a new session.
+    """
+    from app.models import Session as SessionModel
+
+    existing_session = SessionModel(
+        start_die=8,
+        user_id=1,
+        started_at=datetime.now(UTC),
+    )
+    db.add(existing_session)
+    db.commit()
+    db.refresh(existing_session)
+
+    result = get_or_create(db, user_id=1)
+
+    assert result.id == existing_session.id
+    assert result.start_die == 8
+
+
+def test_move_to_position_handles_zero(db, sample_data):
+    """Test that move_to_position handles new_position=0 correctly.
+
+    This covers line 70 where new_position is set to 1 when it's < 1.
+    """
+    from comic_pile.queue import move_to_position
+
+    thread = sample_data["threads"][0]
+
+    move_to_position(thread.id, 0, db)
+
+    db.refresh(thread)
+    assert thread.queue_position == 1
