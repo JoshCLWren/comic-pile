@@ -4,6 +4,10 @@ import os
 from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from datetime import UTC, datetime
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient

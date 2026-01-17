@@ -15,6 +15,7 @@ dependencies = [
     "psycopg[binary]>=3.1.0",
     "asyncpg>=0.29.0",
     "slowapi>=0.1.9",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
