@@ -275,7 +275,21 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
     app.mount("/static", StaticFiles(directory="static"), name="static")
-    app.mount("/react", StaticFiles(directory="static/react", html=True), name="react")
+    app.mount("/react/assets", StaticFiles(directory="static/react/assets"), name="react-assets")
+
+    @app.get("/react/{path:path}")
+    async def serve_react_app(path: str):
+        """Serve React app for client-side routing."""
+        from fastapi.responses import FileResponse
+
+        return FileResponse("static/react/index.html")
+
+    @app.get("/react/")
+    async def serve_react_index():
+        """Serve React app index."""
+        from fastapi.responses import FileResponse
+
+        return FileResponse("static/react/index.html")
 
     @app.get("/health")
     async def health_check(db: Session = Depends(get_db)):

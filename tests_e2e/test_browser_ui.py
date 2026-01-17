@@ -1,5 +1,7 @@
 """Browser UI integration tests using Playwright."""
 
+import os
+
 import pytest
 
 
@@ -156,6 +158,10 @@ def test_full_session_workflow(page, test_server_url, db):
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="WebGL rendering requires GPU support not available in CI headless browsers",
+)
 def test_d10_renders_geometry_correctly(page, test_server_url):
     """Navigate to /react/, select d10, verify d10 renders non-blank geometry via WebGL."""
     page.goto(f"{test_server_url}/react/")
