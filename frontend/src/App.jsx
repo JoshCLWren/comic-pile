@@ -9,7 +9,6 @@ const QueuePage = lazy(() => import('./pages/QueuePage'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const SessionPage = lazy(() => import('./pages/SessionPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
-const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
 function App() {
   const baseUrl = import.meta.env.BASE_URL || '/'
@@ -27,7 +26,6 @@ function App() {
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/sessions/:id" element={<SessionPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Suspense>
       </main>

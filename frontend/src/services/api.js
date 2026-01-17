@@ -79,11 +79,6 @@ export const undoApi = {
   listSnapshots: (sessionId) => api.get(`/undo/${sessionId}/snapshots`),
 }
 
-export const settingsApi = {
-  get: () => api.get('/admin/settings'),
-  update: (data) => api.put('/admin/settings', data),
-}
-
 export const tasksApi = {
   getMetrics: () => api.get('/tasks/metrics'),
 }

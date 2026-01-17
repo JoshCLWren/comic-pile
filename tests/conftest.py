@@ -4,10 +4,6 @@ import os
 from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from datetime import UTC, datetime
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -153,7 +149,7 @@ def db() -> Generator[Session]:
     connection = engine.connect()
     connection.execute(
         text(
-            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, settings, users RESTART IDENTITY CASCADE;"
+            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, users RESTART IDENTITY CASCADE;"
         )
     )
     connection.commit()

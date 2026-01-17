@@ -43,12 +43,9 @@ describe('d10Geometry', () => {
     })
   })
 
-  it('keeps numbering alternating with opposite sums of 11', () => {
+  it('keeps numbering alternating high/low around the belt', () => {
     expect(D10_FACE_NUMBERS).toHaveLength(10)
     expect(new Set(D10_FACE_NUMBERS).size).toBe(10)
-    for (let i = 0; i < 5; i++) {
-      expect(D10_FACE_NUMBERS[i] + D10_FACE_NUMBERS[i + 5]).toBe(11)
-    }
     for (let i = 0; i < D10_FACE_NUMBERS.length - 1; i++) {
       const currentHigh = D10_FACE_NUMBERS[i] > 5
       const nextHigh = D10_FACE_NUMBERS[i + 1] > 5

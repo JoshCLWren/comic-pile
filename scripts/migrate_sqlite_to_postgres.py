@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.models import Event, Session, Settings, Snapshot, Task, Thread, User
+from app.models import Event, Session, Snapshot, Task, Thread, User
 
 env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
 if os.path.exists(env_file):
@@ -205,27 +205,6 @@ def migrate_tasks():
     print(f"Migrated {len(rows)} tasks")
 
 
-def migrate_settings():
-    """Migrate settings table."""
-    cursor = sqlite_conn.execute("SELECT * FROM settings")
-    rows = cursor.fetchall()
-    for row in rows:
-        settings = Settings(
-            id=row["id"],
-            session_gap_hours=row["session_gap_hours"],
-            start_die=row["start_die"],
-            rating_min=row["rating_min"],
-            rating_max=row["rating_max"],
-            rating_step=row["rating_step"],
-            rating_threshold=row["rating_threshold"],
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
-        pg_session.merge(settings)
-    pg_session.commit()
-    print(f"Migrated {len(rows)} settings")
-
-
 if __name__ == "__main__":
     try:
         print("Starting migration from SQLite to PostgreSQL...")
@@ -239,7 +218,6 @@ if __name__ == "__main__":
         migrate_events()
         migrate_snapshots()
         migrate_tasks()
-        migrate_settings()
 
         print("\nMigration complete!")
     except Exception as e:

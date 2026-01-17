@@ -1,4 +1,4 @@
-"""Admin API endpoints for data import/export and settings."""
+"""Admin API endpoints for data import/export."""
 
 import csv
 import io
@@ -12,9 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.api.session import build_narrative_summary
 from app.database import get_db
-from app.models import Event, Settings, Thread, User
+from app.models import Event, Thread, User
 from app.models import Session as SessionModel
-from app.schemas import SettingsResponse, UpdateSettingsRequest
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -405,73 +404,4 @@ def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
         io.BytesIO(output.getvalue().encode()),
         media_type="text/markdown",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
-
-
-@router.get("/settings", response_model=SettingsResponse)
-def get_settings(db: Session = Depends(get_db)) -> SettingsResponse:
-    """Get current application settings.
-
-    Returns the first (and only) settings record, creating it with defaults if needed.
-    """
-    settings = db.execute(select(Settings)).scalars().first()
-
-    if not settings:
-        settings = Settings()
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-
-    return SettingsResponse(
-        id=settings.id,
-        session_gap_hours=settings.session_gap_hours,
-        start_die=settings.start_die,
-        rating_min=settings.rating_min,
-        rating_max=settings.rating_max,
-        rating_step=settings.rating_step,
-        rating_threshold=settings.rating_threshold,
-        created_at=settings.created_at,
-        updated_at=settings.updated_at,
-    )
-
-
-@router.put("/settings")
-def update_settings(request_data: UpdateSettingsRequest, db: Session = Depends(get_db)):
-    """Update application settings.
-
-    Only updates fields that are provided in request.
-    Returns JSON response.
-    """
-    settings = db.execute(select(Settings)).scalars().first()
-
-    if not settings:
-        settings = Settings()
-        db.add(settings)
-
-    if request_data.session_gap_hours is not None:
-        settings.session_gap_hours = request_data.session_gap_hours
-    if request_data.start_die is not None:
-        settings.start_die = request_data.start_die
-    if request_data.rating_min is not None:
-        settings.rating_min = request_data.rating_min
-    if request_data.rating_max is not None:
-        settings.rating_max = request_data.rating_max
-    if request_data.rating_step is not None:
-        settings.rating_step = request_data.rating_step
-    if request_data.rating_threshold is not None:
-        settings.rating_threshold = request_data.rating_threshold
-
-    db.commit()
-    db.refresh(settings)
-
-    return SettingsResponse(
-        id=settings.id,
-        session_gap_hours=settings.session_gap_hours,
-        start_die=settings.start_die,
-        rating_min=settings.rating_min,
-        rating_max=settings.rating_max,
-        rating_step=settings.rating_step,
-        rating_threshold=settings.rating_threshold,
-        created_at=settings.created_at,
-        updated_at=settings.updated_at,
     )
