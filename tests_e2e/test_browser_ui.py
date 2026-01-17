@@ -96,8 +96,37 @@ def test_queue_management_ui(page, test_server_url, db):
 
 
 @pytest.mark.integration
-def test_view_history_pagination(page, test_server_url):
+def test_view_history_pagination(page, test_server_url, db):
     """Navigate to /history, verify history list exists."""
+    from app.models import Event, Thread
+    from app.models import Session as SessionModel
+
+    thread = Thread(
+        title="History Test Comic",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=100,
+        user_id=1,
+    )
+    db.add(thread)
+    db.commit()
+
+    session = SessionModel(start_die=6, user_id=1)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    roll_event = Event(
+        type="roll",
+        session_id=session.id,
+        selected_thread_id=thread.id,
+        die=6,
+        result=1,
+        selection_method="random",
+    )
+    db.add(roll_event)
+    db.commit()
+
     page.goto(f"{test_server_url}/react/history")
     page.wait_for_selector("#sessions-list", timeout=5000)
 
