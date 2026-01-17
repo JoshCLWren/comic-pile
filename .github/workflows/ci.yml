@@ -9,6 +9,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     container: debian:13
+    env:
+      CI: true
     services:
       postgres:
         image: postgres:16
@@ -69,6 +71,8 @@ jobs:
   integration-tests:
     runs-on: ubuntu-latest
     container: debian:13
+    env:
+      CI: true
     services:
       postgres:
         image: postgres:16
