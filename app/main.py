@@ -372,9 +372,7 @@ def create_app() -> FastAPI:
         """
         from fastapi.responses import FileResponse
 
-        blocked_prefixes = ("api", "static", "assets")
-        if not os.getenv("ENABLE_DEBUG_ROUTES", "false").lower() == "true":
-            blocked_prefixes = blocked_prefixes + ("debug",)
+        blocked_prefixes = ("api", "static", "assets", "debug")
         blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg"}
 
         if full_path in blocked_exact or full_path.startswith(blocked_prefixes):
