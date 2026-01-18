@@ -1,0 +1,21 @@
+coverage:
+  precision: 2
+  round: down
+  range: 70...100
+  status:
+    project:
+      default:
+        target: 96
+        informational: true
+    patch:
+      default:
+        target: 95
+        informational: true
+ignore:
+  - "frontend/"
+  - "static/"
+  - "scripts/"
+  - "docs/"
+  - "**/migrations/**"
+  - "**/__pycache__/**"
+  - "**/node_modules/**"
