@@ -19,6 +19,28 @@ from comic_pile.session import (
 )
 
 
+def test_int_env_returns_default_when_missing(monkeypatch):
+    import comic_pile.session as session_mod
+
+    monkeypatch.delenv("TEST_VAR", raising=False)
+
+    assert session_mod._int_env("TEST_VAR", 42) == 42
+
+
+def test_int_env_returns_value_when_set(monkeypatch):
+    import comic_pile.session as session_mod
+
+    monkeypatch.setenv("TEST_VAR", "99")
+    assert session_mod._int_env("TEST_VAR", 42) == 99
+
+
+def test_int_env_returns_default_on_invalid_value(monkeypatch):
+    import comic_pile.session as session_mod
+
+    monkeypatch.setenv("TEST_VAR", "not_an_int")
+    assert session_mod._int_env("TEST_VAR", 42) == 42
+
+
 def test_session_env_int_parsing(monkeypatch):
     """Session env parsing clamps values and ignores invalid ints."""
     import comic_pile.session as session_mod
