@@ -146,7 +146,7 @@ This section describes what can be done in parallel and what depends on what. �
 | Phase | Name | Status | Next Action |
 |-------|------|--------|-------------|
 | Phase 1 | Inventory + Baseline Tests | ✅ COMPLETE | Move to Phase 2 |
-| Phase 2 | Security and Ops Hardening | 🟡 IN PROGRESS (0/4 items) | Add env gating to dangerous endpoints |
+| Phase 2 | Security and Ops Hardening | ✅ COMPLETE | Move to Phase 3 |
 | Phase 3 | Database Migrations for Auth | ⏸️ NOT STARTED | Depends on Phase 2 |
 | Phase 4 | Auth Backend (JWT + Email/Pass) | ⏸️ NOT STARTED | Depends on Phase 3 |
 | Phase 5 | Frontend Auth + Gating | ⏸️ NOT STARTED | Depends on Phase 4 |
@@ -155,8 +155,16 @@ This section describes what can be done in parallel and what depends on what. �
 | Phase 8 | Rollout Checklist | ⏸️ NOT STARTED | Depends on all previous phases |
 
 **Current Branch:** `auth-refactor-feature-branch`
-**Recent Merge:** `chore/remove-settings-feature` (Jan 18, 2026)
-**Next Recommended Phase:** Phase 2 - Security and Ops Hardening
+**Recent Merge:** `phase/2-security-hardening` (Jan 18, 2026)
+**Next Recommended Phase:** Phase 3 - Database Migrations for Auth
+
+**Phase 2 Completion Details:**
+- Branch: `phase/2-security-hardening`
+- Commits: 9 (security hardening, fixes, CI improvements, git hooks)
+- Tests: 365 passing, 97.70% coverage
+- CI: Configured with lint and test jobs (runs on PR)
+- Git Hooks: Pre-commit (linting) and pre-push (tests with coverage)
+- Deferred Issues: 14 documented in `docs/PHASE_2_DEFERRED_ISSUES.md`
 
 ### Phase 1: Inventory + Baseline Tests
 
@@ -202,32 +210,33 @@ Purpose: avoid leaking credentials/tokens and avoid accidentally exposing intern
 Work items:
 
 - Gate internal endpoints (tasks/admin/debug) by env flag and admin auth.
-  [STATUS: NOT STARTED]
-  - `app/api/tasks.py` (lines 1-1416): Subprocess execution, worktree management endpoints have no gating
-  - `app/api/admin.py` (lines 1-408): Export/import/delete endpoints have no gating
-  - `app/main.py` (lines 354-362): Debug endpoints `/debug/5xx-stats` and `/debug/trigger-500` have no gating
-  - Required env vars: `ENABLE_DEBUG_ROUTES` (default false in production), `ENABLE_INTERNAL_OPS_ROUTES` (default false in production)
-  - Required: Add admin auth check for any remaining ops endpoints
+  [STATUS: ✅ COMPLETE]
+  - Created `app/dependencies.py` with `require_debug_routes()` and `require_internal_ops_routes()`
+  - Applied gating to `/api/tasks/*` routes (router level)
+  - Applied gating to `/api/admin/*` routes (router level)
+  - Applied gating to `/debug/*` routes (route level)
+  - Debug routes were removed; SPA handler now blocks `/debug/*` paths permanently
+  - Required env vars: `ENABLE_DEBUG_ROUTES` (default false), `ENABLE_INTERNAL_OPS_ROUTES` (default false)
 
 - Implement logging redaction for headers and sensitive JSON keys.
-  [STATUS: PARTIAL]
-  - DONE: Body redacts "password" and "secret" keys in `app/main.py` lines 63-64, 137-138
-  - MISSING: Header redaction for Authorization, Cookie, Set-Cookie (app/main.py lines 82-98, 116-156)
-  - MISSING: Redact additional sensitive keys: token, access_token, refresh_token, api_key
-  - Plan: Prefer logging body size/type rather than body content for auth-related routes
+  [STATUS: ✅ COMPLETE]
+  - Added `redact_headers()` function for Authorization, Cookie, Set-Cookie headers
+  - Added `contains_sensitive_keys()` for password, secret, token, access_token, refresh_token, api_key
+  - Added `is_auth_route()` to detect auth routes
+  - Created `_safe_get_request_body()` helper to avoid 75 lines of duplication
+  - Applied redaction in log_errors_middleware, global_exception_handler, http_exception_handler
 
 - Tighten CORS config behavior for production.
-  [STATUS: PARTIAL]
-  - DONE: `CORS_ORIGINS` env var parsing in `app/main.py` line 41
-  - MISSING: ENVIRONMENT check to require `CORS_ORIGINS` in production (currently defaults to "*")
-  - MISSING: Set `allow_credentials=False` for JWT bearer headers (currently line 45 sets to True)
+  [STATUS: ✅ COMPLETE]
+  - ENVIRONMENT check requires `CORS_ORIGINS` in production (raises RuntimeError if missing)
+  - Set `allow_credentials=False` for JWT bearer headers
+  - Development mode defaults to wildcard "*"
 
 - Remove/disable `create_all()` in production startup path.
-  [STATUS: NOT STARTED]
-  - `app/main.py` line 394: Still calls `Base.metadata.create_all(bind=engine)` unconditionally
-  - Required: Only run in development mode, skip in production
-  - Required: Production startup should only check DB connectivity
-  - Reference: Alembic migrations become the authoritative path for schema changes
+  [STATUS: ✅ COMPLETE]
+  - Conditional logic in `startup_event()` skips `create_all()` in production mode
+  - Production mode logs "Production mode: Skipping table creation (migrations required)"
+  - Development mode calls `create_all()` and logs "Database tables created successfully"
 
 Dependencies:
 
@@ -240,21 +249,26 @@ Parallelizable:
 Go/No-Go gate:
 
 - Unauthenticated requests cannot reach `/api/admin/*`, `/api/tasks/*`, `/debug/*` in production mode.
-  [STATUS: NOT MET]
-  - All three endpoint groups are currently accessible without auth
-  - Need to add ENABLE_DEBUG_ROUTES and ENABLE_INTERNAL_OPS_ROUTES env gating
-  - Need to add admin auth dependency to routes
+  [STATUS: ✅ MET]
+  - All three endpoint groups gated by env flags and return 404 when disabled
+  - Tests verify 404 responses when flags are false
+  - Tests verify 200 responses when flags are true
 
 - Headers are redacted in error handler output.
-  [STATUS: NOT MET]
-  - Only redacts "password" and "secret" in body
-  - Missing: Authorization, Cookie, Set-Cookie header redaction
-  - Missing: Additional sensitive keys (token, access_token, refresh_token, api_key)
+  [STATUS: ✅ MET]
+  - Authorization, Cookie, Set-Cookie headers redacted
+  - Sensitive keys redacted: password, secret, token, access_token, refresh_token, api_key
+  - Auth routes log only size/type, not content
 
 - App starts cleanly without relying on `create_all()` (migrations required).
-  [STATUS: NOT MET]
-  - app/main.py:394 still calls Base.metadata.create_all() unconditionally
-  - Need to conditionally run only in development mode
+  [STATUS: ✅ MET]
+  - Production mode skips `create_all()` and logs appropriate message
+  - Development mode calls `create_all()` and logs success message
+
+- App starts cleanly without relying on wildcard CORS origins in production mode.
+  [STATUS: ✅ MET]
+  - Production mode requires `CORS_ORIGINS` to be set (raises RuntimeError if missing)
+  - Development mode defaults to wildcard "*"
 
 ### Phase 3: Database Migrations for Auth
 
