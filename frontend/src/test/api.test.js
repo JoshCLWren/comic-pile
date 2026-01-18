@@ -20,7 +20,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { queueApi, settingsApi, threadsApi } from '../services/api'
+import { queueApi, threadsApi } from '../services/api'
 
 beforeEach(() => {
   get.mockResolvedValue({})
@@ -47,10 +47,3 @@ it('calls queue endpoints with expected paths', () => {
   expect(put).toHaveBeenCalledWith('/queue/threads/5/back/')
 })
 
-it('calls settings endpoints with expected paths', () => {
-  settingsApi.get()
-  settingsApi.update({ start_die: 8 })
-
-  expect(get).toHaveBeenCalledWith('/admin/settings')
-  expect(put).toHaveBeenCalledWith('/admin/settings', { start_die: 8 })
-})

@@ -42,5 +42,4 @@ test('renders navigation labels', () => {
   expect(screen.getByText('Queue')).toBeInTheDocument()
   expect(screen.getByText('History')).toBeInTheDocument()
   expect(screen.getByText('Analytics')).toBeInTheDocument()
-  expect(screen.getByText('Settings')).toBeInTheDocument()
 })

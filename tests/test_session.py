@@ -19,6 +19,67 @@ from comic_pile.session import (
 )
 
 
+def test_int_env_returns_default_when_missing(monkeypatch):
+    import comic_pile.session as session_mod
+
+    monkeypatch.delenv("TEST_VAR", raising=False)
+
+    assert session_mod._int_env("TEST_VAR", 42) == 42
+
+
+def test_int_env_returns_value_when_set(monkeypatch):
+    import comic_pile.session as session_mod
+
+    monkeypatch.setenv("TEST_VAR", "99")
+    assert session_mod._int_env("TEST_VAR", 42) == 99
+
+
+def test_int_env_returns_default_on_invalid_value(monkeypatch):
+    import comic_pile.session as session_mod
+
+    monkeypatch.setenv("TEST_VAR", "not_an_int")
+    assert session_mod._int_env("TEST_VAR", 42) == 42
+
+
+def test_session_env_int_parsing(monkeypatch):
+    """Session env parsing clamps values and ignores invalid ints."""
+    import comic_pile.session as session_mod
+
+    monkeypatch.setenv("SESSION_GAP_HOURS", "12")
+    assert session_mod._session_gap_hours() == 12
+
+    monkeypatch.setenv("SESSION_GAP_HOURS", "0")
+    assert session_mod._session_gap_hours() == 6
+
+    monkeypatch.setenv("SESSION_GAP_HOURS", "not-an-int")
+    assert session_mod._session_gap_hours() == 6
+
+    monkeypatch.setenv("START_DIE", "20")
+    assert session_mod._start_die() == 20
+
+    monkeypatch.setenv("START_DIE", "3")
+    assert session_mod._start_die() == 6
+
+    monkeypatch.setenv("START_DIE", "nope")
+    assert session_mod._start_die() == 6
+
+
+def test_get_or_create_ignores_advisory_lock_failure(db, monkeypatch):
+    """Advisory lock errors should not prevent session creation."""
+    original_execute = db.execute
+
+    def wrapped_execute(statement, *args, **kwargs):
+        if "pg_advisory_xact_lock" in str(statement):
+            raise RuntimeError("boom")
+        return original_execute(statement, *args, **kwargs)
+
+    monkeypatch.setattr(db, "execute", wrapped_execute)
+
+    session = get_or_create(db, user_id=1)
+    assert session.id is not None
+    assert session.user_id == 1
+
+
 def test_is_active_true(db):
     """Session created < 6 hours ago is active."""
     session = SessionModel(
@@ -967,10 +1028,17 @@ def test_get_or_create_deadlock_retry(db, sample_data):
     """Test that get_or_create retries on deadlock errors.
 
     Regression test for BUG-126: OperationalError deadlock.
-    This test mocks as db.commit to raise a deadlock error once,
+    This test mocks db.commit to raise a deadlock error once,
     then succeeds on retry.
+
+    It ends any existing active sessions first so get_or_create must create a new session,
+    exercising the commit/retry path.
     """
     from unittest.mock import patch
+
+    for session in sample_data["sessions"]:
+        session.ended_at = datetime.now(UTC)
+    db.commit()
 
     call_count = 0
 
@@ -990,9 +1058,9 @@ def test_get_or_create_deadlock_retry(db, sample_data):
         return original_commit()
 
     with patch.object(db, "commit", side_effect=mock_commit):
-        session = get_or_create(db, user_id=1)
-        assert session is not None
-        assert session.start_die == 6
+        new_session = get_or_create(db, user_id=1)
+        assert new_session is not None
+        assert new_session.start_die == 6
 
 
 def test_get_or_create_uses_session_id_to_prevent_lazy_load(db, sample_data):

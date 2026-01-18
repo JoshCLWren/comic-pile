@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import delete
 
 from app.database import SessionLocal
-from app.models import Event, Session, Settings, Task, Thread, User
+from app.models import Event, Session, Task, Thread, User
 
 
 def import_database():
@@ -24,7 +24,6 @@ def import_database():
         db.execute(delete(Session))
         db.execute(delete(Task))
         db.execute(delete(Thread))
-        db.execute(delete(Settings))
         db.execute(delete(User))
         db.commit()
 
@@ -127,22 +126,6 @@ def import_database():
             )
             db.add(event)
         print(f"Imported {len(events_data)} events")
-
-        settings_data = data.get("settings", [])
-        for s in settings_data:
-            settings = Settings(
-                id=s["id"],
-                session_gap_hours=s["session_gap_hours"],
-                start_die=s["start_die"],
-                rating_min=s["rating_min"],
-                rating_max=s["rating_max"],
-                rating_step=s["rating_step"],
-                rating_threshold=s["rating_threshold"],
-                created_at=datetime.fromisoformat(s["created_at"]),
-                updated_at=datetime.fromisoformat(s["updated_at"]) if s.get("updated_at") else None,
-            )
-            db.add(settings)
-        print(f"Imported {len(settings_data)} settings")
 
         db.commit()
 
