@@ -153,7 +153,7 @@ def db() -> Generator[Session]:
     connection = engine.connect()
     connection.execute(
         text(
-            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, settings, users RESTART IDENTITY CASCADE;"
+            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, users RESTART IDENTITY CASCADE;"
         )
     )
     connection.commit()

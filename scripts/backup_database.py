@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 
 from app.database import SessionLocal
-from app.models import Event, Session, Settings, Task, Thread, User
+from app.models import Event, Session, Task, Thread, User
 
 
 def datetime_converter(obj):
@@ -116,22 +116,6 @@ def backup_database(backup_dir="backups", max_backups=10, skip_if_unchanged=True
             for t in tasks
         ]
 
-        settings = db.query(Settings).all()
-        data["settings"] = [
-            {
-                "id": s.id,
-                "session_gap_hours": s.session_gap_hours,
-                "start_die": s.start_die,
-                "rating_min": s.rating_min,
-                "rating_max": s.rating_max,
-                "rating_step": s.rating_step,
-                "rating_threshold": s.rating_threshold,
-                "created_at": s.created_at,
-                "updated_at": s.updated_at,
-            }
-            for s in settings
-        ]
-
         data_hash = compute_hash(data)
 
         if skip_if_unchanged:
@@ -182,7 +166,7 @@ def backup_database(backup_dir="backups", max_backups=10, skip_if_unchanged=True
         print(
             f"Users: {len(data['users'])}, Threads: {len(data['threads'])}, "
             f"Sessions: {len(data['sessions'])}, Events: {len(data['events'])}, "
-            f"Tasks: {len(data['tasks'])}, Settings: {len(data['settings'])}"
+            f"Tasks: {len(data['tasks'])}"
         )
 
     except Exception as e:

@@ -502,7 +502,10 @@ async def test_jump_to_zero_position_fails_validation(client, db, sample_data):
 
 @pytest.mark.asyncio
 async def test_move_to_back_empty_queue(db):
-    """move_to_back returns early when queue is empty."""
+    """move_to_back returns early when queue is empty.
+
+    This covers the max_position is None branch (line 47).
+    """
     from comic_pile.queue import move_to_back
     from app.models import User, Thread
     from sqlalchemy import delete

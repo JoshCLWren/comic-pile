@@ -414,3 +414,139 @@ async def test_rate_finish_session_flag_controls_session_end(client, db):
 
     db.refresh(session)
     assert session.ended_at is None
+
+
+def test_float_env_returns_default_when_missing():
+    from app.api.rate import _float_env
+
+    import os
+
+    if "TEST_VAR" in os.environ:
+        del os.environ["TEST_VAR"]
+
+    assert _float_env("TEST_VAR", 1.5) == 1.5
+
+
+def test_float_env_returns_value_when_set():
+    from app.api.rate import _float_env
+
+    import os
+
+    os.environ["TEST_VAR"] = "3.14"
+    assert _float_env("TEST_VAR", 1.5) == 3.14
+    del os.environ["TEST_VAR"]
+
+
+def test_float_env_returns_default_on_invalid_value():
+    from app.api.rate import _float_env
+
+    import os
+
+    os.environ["TEST_VAR"] = "not_a_float"
+    assert _float_env("TEST_VAR", 1.5) == 1.5
+    del os.environ["TEST_VAR"]
+
+
+def test_rating_min_returns_default():
+    from app.api.rate import _rating_min
+
+    import os
+
+    if "RATING_MIN" in os.environ:
+        del os.environ["RATING_MIN"]
+
+    assert _rating_min() == 0.5
+
+
+def test_rating_min_returns_custom_value():
+    from app.api.rate import _rating_min
+
+    import os
+
+    os.environ["RATING_MIN"] = "1.0"
+    assert _rating_min() == 1.0
+    del os.environ["RATING_MIN"]
+
+
+def test_rating_min_clamps_to_valid_range():
+    from app.api.rate import _rating_min
+
+    import os
+
+    os.environ["RATING_MIN"] = "10.0"
+    assert _rating_min() == 0.5
+    del os.environ["RATING_MIN"]
+
+    os.environ["RATING_MIN"] = "-1.0"
+    assert _rating_min() == 0.5
+    del os.environ["RATING_MIN"]
+
+
+def test_rating_max_returns_default():
+    from app.api.rate import _rating_max
+
+    import os
+
+    if "RATING_MAX" in os.environ:
+        del os.environ["RATING_MAX"]
+
+    assert _rating_max() == 5.0
+
+
+def test_rating_max_returns_custom_value():
+    from app.api.rate import _rating_max
+
+    import os
+
+    os.environ["RATING_MAX"] = "8.0"
+    assert _rating_max() == 8.0
+    del os.environ["RATING_MAX"]
+
+
+def test_rating_max_clamps_to_valid_range():
+    from app.api.rate import _rating_max
+
+    import os
+
+    os.environ["RATING_MAX"] = "15.0"
+    assert _rating_max() == 5.0
+    del os.environ["RATING_MAX"]
+
+    os.environ["RATING_MAX"] = "-1.0"
+    assert _rating_max() == 5.0
+    del os.environ["RATING_MAX"]
+
+
+def test_rating_threshold_returns_default():
+    from app.api.rate import _rating_threshold
+
+    import os
+
+    if "RATING_THRESHOLD" in os.environ:
+        del os.environ["RATING_THRESHOLD"]
+
+    assert _rating_threshold() == 4.0
+
+
+def test_rating_threshold_returns_custom_value():
+    from app.api.rate import _rating_threshold
+
+    import os
+
+    os.environ["RATING_THRESHOLD"] = "3.5"
+    assert _rating_threshold() == 3.5
+    del os.environ["RATING_THRESHOLD"]
+
+
+def test_rating_threshold_clamps_to_valid_range():
+    from app.api.rate import _rating_threshold
+
+    import os
+
+    os.environ["RATING_THRESHOLD"] = "15.0"
+    assert _rating_threshold() == 4.0
+    del os.environ["RATING_THRESHOLD"]
+
+    os.environ["RATING_THRESHOLD"] = "-1.0"
+    assert _rating_threshold() == 4.0
+    del os.environ["RATING_THRESHOLD"]

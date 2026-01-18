@@ -1,5 +1,6 @@
 """Session management functions."""
 
+import os
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -8,28 +9,39 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app.models import Event, Settings, Snapshot, Thread
+from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 
 
 _session_creation_lock = threading.Lock()
 
 
-def _get_settings(db: Session) -> Settings:
-    """Get settings record, creating with defaults if needed."""
-    settings = db.execute(select(Settings)).scalars().first()
-    if not settings:
-        settings = Settings()
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-    return settings
+def _int_env(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+
+    return parsed
 
 
-def is_active(started_at: datetime, ended_at: datetime | None, db: Session) -> bool:
+def _session_gap_hours() -> int:
+    hours = _int_env("SESSION_GAP_HOURS", 6)
+    return hours if 1 <= hours <= 168 else 6
+
+
+def _start_die() -> int:
+    die = _int_env("START_DIE", 6)
+    return die if 4 <= die <= 20 else 6
+
+
+def is_active(started_at: datetime, ended_at: datetime | None, _db: Session) -> bool:
     """Check if session was within configured gap hours."""
-    settings = _get_settings(db)
-    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
+    cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     session_time = started_at
     if session_time.tzinfo is None:
         session_time = session_time.replace(tzinfo=UTC)
@@ -38,8 +50,7 @@ def is_active(started_at: datetime, ended_at: datetime | None, db: Session) -> b
 
 def should_start_new(db: Session) -> bool:
     """Check if no active session in configured gap hours."""
-    settings = _get_settings(db)
-    cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
+    cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     recent_sessions = (
         db.execute(
             select(SessionModel)
@@ -103,7 +114,8 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
 
     while retries < max_retries:
         try:
-            settings = _get_settings(db)
+            session_gap_hours = _session_gap_hours()
+            start_die = _start_die()
 
             user = db.get(User, user_id)
             if not user:
@@ -112,7 +124,7 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
                 db.commit()
                 db.refresh(user)
 
-            cutoff_time = datetime.now(UTC) - timedelta(hours=settings.session_gap_hours)
+            cutoff_time = datetime.now(UTC) - timedelta(hours=session_gap_hours)
             active_session = (
                 db.execute(
                     select(SessionModel)
@@ -147,7 +159,7 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
                 if active_session:
                     return active_session
 
-                new_session = SessionModel(start_die=settings.start_die, user_id=user_id)
+                new_session = SessionModel(start_die=start_die, user_id=user_id)
                 db.add(new_session)
                 db.commit()
                 db.refresh(new_session)
@@ -160,7 +172,9 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
                 db.rollback()
                 retries += 1
                 if retries >= max_retries:
-                    raise
+                    raise RuntimeError(
+                        f"Failed to get_or_create session after {max_retries} retries"
+                    ) from e
                 delay = initial_delay * (2 ** (retries - 1))
                 time.sleep(delay)
             else:
@@ -179,7 +193,7 @@ def end_session(session_id: int, db: Session) -> None:
 
 def get_current_die(session_id: int, db: Session) -> int:
     """Get current die size based on manual selection or last rating event."""
-    settings = _get_settings(db)
+    start_die = _start_die()
     session = db.get(SessionModel, session_id)
 
     if session and session.manual_die:
@@ -199,6 +213,6 @@ def get_current_die(session_id: int, db: Session) -> int:
 
     if last_rate_event:
         die_after = last_rate_event.die_after
-        return die_after if die_after is not None else settings.start_die
+        return die_after if die_after is not None else start_die
 
-    return session.start_die if session else settings.start_die
+    return session.start_die if session else start_die

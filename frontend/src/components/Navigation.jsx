@@ -28,10 +28,6 @@ export default function Navigation() {
           <span className="text-2xl mb-1" aria-hidden="true">📊</span>
           <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Analytics</span>
         </Link>
-        <Link to="/settings" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/settings') ? 'active' : 'hover:bg-white/5'}`} aria-label="Settings page">
-          <span className="text-2xl mb-1" aria-hidden="true">⚙️</span>
-          <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Settings</span>
-        </Link>
       </div>
     </nav>
   )

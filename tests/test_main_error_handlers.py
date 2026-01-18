@@ -321,3 +321,47 @@ async def test_validation_exception_handler_for_thread_create_missing_fields(
     data = response.json()
     assert "errors" in data
     assert len(data["errors"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_serve_react_spa_serves_index(client: AsyncClient) -> None:
+    """Test serve_react_spa returns React index.html for valid paths."""
+    response = await client.get("/rate")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+
+@pytest.mark.asyncio
+async def test_serve_react_spa_returns_404_for_api_paths(client: AsyncClient) -> None:
+    """Test serve_react_spa returns 404 for blocked API prefixes."""
+    response = await client.get("/api/nonexistent")
+    assert response.status_code == 404
+    data = response.json()
+    assert "detail" in data
+    assert data["detail"] == "Not Found"
+
+
+@pytest.mark.asyncio
+async def test_serve_react_spa_returns_404_for_static_paths(client: AsyncClient) -> None:
+    """Test serve_react_spa returns 404 for blocked static prefixes."""
+    response = await client.get("/static/nonexistent")
+    assert response.status_code == 404
+    data = response.json()
+    assert "detail" in data
+    assert data["detail"] == "Not Found"
+
+
+@pytest.mark.asyncio
+async def test_serve_react_spa_serves_queue_page(client: AsyncClient) -> None:
+    """Test serve_react_spa serves React app for /queue."""
+    response = await client.get("/queue")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+
+@pytest.mark.asyncio
+async def test_serve_react_spa_serves_history_page(client: AsyncClient) -> None:
+    """Test serve_react_spa serves React app for /history."""
+    response = await client.get("/history")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")

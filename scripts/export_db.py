@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 
 from app.database import SessionLocal
-from app.models import Event, Session, Settings, Task, Thread, User
+from app.models import Event, Session, Task, Thread, User
 
 
 def datetime_converter(obj):
@@ -109,22 +109,6 @@ def export_database():
             for t in tasks
         ]
 
-        settings = db.query(Settings).all()
-        data["settings"] = [
-            {
-                "id": s.id,
-                "session_gap_hours": s.session_gap_hours,
-                "start_die": s.start_die,
-                "rating_min": s.rating_min,
-                "rating_max": s.rating_max,
-                "rating_step": s.rating_step,
-                "rating_threshold": s.rating_threshold,
-                "created_at": s.created_at,
-                "updated_at": s.updated_at,
-            }
-            for s in settings
-        ]
-
         filename = "db_export.json"
         with open(filename, "w") as f:
             json.dump(data, f, default=datetime_converter, indent=2)
@@ -135,7 +119,6 @@ def export_database():
         print(f"Sessions: {len(data['sessions'])}")
         print(f"Events: {len(data['events'])}")
         print(f"Tasks: {len(data['tasks'])}")
-        print(f"Settings: {len(data['settings'])}")
 
     finally:
         db.close()

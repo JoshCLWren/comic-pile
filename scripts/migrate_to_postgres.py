@@ -35,7 +35,6 @@ def migrate():
         pg_conn.execute(text("DELETE FROM sessions"))
         pg_conn.execute(text("DELETE FROM threads"))
         pg_conn.execute(text("DELETE FROM users"))
-        pg_conn.execute(text("DELETE FROM settings"))
         print("Cleared all tables")
 
         # Migrate users
@@ -191,36 +190,6 @@ def migrate():
             )
         print(f"  Inserted {len(events)} events")
 
-        # Migrate settings
-        print("\nMigrating settings...")
-        sqlite_cur.execute("SELECT * FROM settings")
-        settings = sqlite_cur.fetchall()
-        print(f"  Found {len(settings)} settings")
-
-        for row in settings:
-            pg_conn.execute(
-                text(
-                    """INSERT INTO settings 
-                       (id, session_gap_hours, start_die, rating_min, rating_max, 
-                        rating_step, rating_threshold, created_at, updated_at) 
-                       VALUES 
-                       (:id, :session_gap_hours, :start_die, :rating_min, :rating_max, 
-                        :rating_step, :rating_threshold, :created_at, :updated_at)"""
-                ),
-                {
-                    "id": row["id"],
-                    "session_gap_hours": row["session_gap_hours"],
-                    "start_die": row["start_die"],
-                    "rating_min": row["rating_min"],
-                    "rating_max": row["rating_max"],
-                    "rating_step": row["rating_step"],
-                    "rating_threshold": row["rating_threshold"],
-                    "created_at": row["created_at"],
-                    "updated_at": row["updated_at"],
-                },
-            )
-        print(f"  Inserted {len(settings)} settings")
-
         # Migrate snapshots
         print("\nMigrating snapshots...")
         sqlite_cur.execute("SELECT * FROM snapshots")
@@ -273,8 +242,6 @@ def migrate():
         print(f"  events: {result.scalar()}")
         result = pg_conn.execute(text("SELECT COUNT(*) FROM sessions"))
         print(f"  sessions: {result.scalar()}")
-        result = pg_conn.execute(text("SELECT COUNT(*) FROM settings"))
-        print(f"  settings: {result.scalar()}")
         result = pg_conn.execute(text("SELECT COUNT(*) FROM snapshots"))
         print(f"  snapshots: {result.scalar()}")
 
