@@ -52,6 +52,11 @@ if [ -z "$VIRTUAL_ENV" ]; then
 fi
 
 STAGED_FILES=""
+STAGED_PYTHON_FILES=""
+STAGED_HTML_FILES=""
+STAGED_STATIC_JS_FILES=""
+STAGED_FRONTEND_FILES=""
+
 if [ "$MODE" = "--staged" ]; then
     STAGED_FILES=$(git diff --name-only --cached --diff-filter=ACMRT || true)
     if [ -z "$STAGED_FILES" ]; then
@@ -59,6 +64,11 @@ if [ "$MODE" = "--staged" ]; then
         echo "No staged files found; skipping lint."
         exit 0
     fi
+
+    STAGED_PYTHON_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '\\.py$' || true)
+    STAGED_HTML_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^app/templates/.*\\.html$' || true)
+    STAGED_STATIC_JS_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^static/js/.*\\.js$' || true)
+    STAGED_FRONTEND_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^frontend/' || true)
 fi
 
 should_run_python() {
@@ -66,15 +76,24 @@ should_run_python() {
         return 0
     fi
 
-    echo "$STAGED_FILES" | rg -q "\\.py$|^pyproject\\.toml$|^uv\\.lock$"
+    [ -n "$STAGED_PYTHON_FILES" ] || printf '%s\n' "$STAGED_FILES" | rg -q '^pyproject\\.toml$|^uv\\.lock$'
 }
 
-should_run_js() {
+should_run_static_js() {
     if [ "$MODE" = "--all" ]; then
         return 0
     fi
 
-    echo "$STAGED_FILES" | rg -q "^static/js/.*\\.js$"
+    [ -n "$STAGED_STATIC_JS_FILES" ]
+}
+
+should_run_frontend() {
+    if [ "$MODE" = "--all" ]; then
+        [ -d "frontend" ]
+        return
+    fi
+
+    [ -n "$STAGED_FRONTEND_FILES" ]
 }
 
 should_run_html() {
@@ -82,7 +101,7 @@ should_run_html() {
         return 0
     fi
 
-    echo "$STAGED_FILES" | rg -q "^app/templates/.*\\.html$"
+    [ -n "$STAGED_HTML_FILES" ]
 }
 
 ANY_CHECKED=0
@@ -92,24 +111,56 @@ if should_run_python; then
 
     echo ""
     echo "Checking Python syntax by compiling..."
-    python -m compileall . -q
+    if [ "$MODE" = "--staged" ] && [ -n "$STAGED_PYTHON_FILES" ]; then
+        while IFS= read -r file; do
+            python -m py_compile "$file"
+        done <<<"$STAGED_PYTHON_FILES"
+    else
+        python -m compileall . -q
+    fi
 
     echo ""
     echo "Running ruff linting..."
-    if ! ruff check .; then
-        echo ""
-        echo "${RED}ERROR: Linting failed.${NC}"
-        echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
-        exit 1
+    if [ "$MODE" = "--staged" ] && [ -n "$STAGED_PYTHON_FILES" ]; then
+        if ! xargs ruff check <<<"$STAGED_PYTHON_FILES"; then
+            echo ""
+            echo "${RED}ERROR: Linting failed.${NC}"
+            echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
+            exit 1
+        fi
+    else
+        if ! ruff check .; then
+            echo ""
+            echo "${RED}ERROR: Linting failed.${NC}"
+            echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
+            exit 1
+        fi
     fi
 
     echo ""
     echo "Checking for Any type usage..."
-    if [ -n "$(rg ': Any\\b' . --type py 2>/dev/null | grep -v 'type: ignore' | head -1)" ]; then
-        echo ""
-        echo "${RED}ERROR: Any type found in codebase.${NC}"
-        echo "${RED}Please replace Any with specific types and check CONTRIBUTING.md for guidelines.${NC}"
-        exit 1
+    if [ "$MODE" = "--staged" ] && [ -n "$STAGED_PYTHON_FILES" ]; then
+        ANY_MATCH=""
+        while IFS= read -r file; do
+            if [ -n "$(rg ': Any\\b' "$file" 2>/dev/null | rg -v 'type: ignore' | head -1)" ]; then
+                ANY_MATCH="$file"
+                break
+            fi
+        done <<<"$STAGED_PYTHON_FILES"
+
+        if [ -n "$ANY_MATCH" ]; then
+            echo ""
+            echo "${RED}ERROR: Any type found in codebase.${NC}"
+            echo "${RED}Please replace Any with specific types and check CONTRIBUTING.md for guidelines.${NC}"
+            exit 1
+        fi
+    else
+        if [ -n "$(rg ': Any\\b' . --type py 2>/dev/null | rg -v 'type: ignore' | head -1)" ]; then
+            echo ""
+            echo "${RED}ERROR: Any type found in codebase.${NC}"
+            echo "${RED}Please replace Any with specific types and check CONTRIBUTING.md for guidelines.${NC}"
+            exit 1
+        fi
     fi
 
     echo ""
@@ -122,13 +173,14 @@ if should_run_python; then
     fi
 
     if [ "$MODE" = "--staged" ]; then
-        PY_TARGETS=$(echo "$STAGED_FILES" | rg "\\.py$" || true)
-        if [ -n "$PY_TARGETS" ]; then
-            if ! xargs -d "\n" ty check --error-on-warning <<<"$PY_TARGETS"; then
-                echo ""
-                echo "${RED}ERROR: Type checking failed.${NC}"
-                exit 1
-            fi
+        if [ -n "$STAGED_PYTHON_FILES" ]; then
+            while IFS= read -r file; do
+                if ! ty check --error-on-warning "$file"; then
+                    echo ""
+                    echo "${RED}ERROR: Type checking failed.${NC}"
+                    exit 1
+                fi
+            done <<<"$STAGED_PYTHON_FILES"
         else
             echo "No staged Python files to type-check."
         fi
@@ -155,7 +207,7 @@ if [ ! -d "node_modules" ]; then
     fi
 fi
 
-if should_run_js; then
+if should_run_static_js; then
     ANY_CHECKED=1
     echo ""
     echo "Running ESLint for JavaScript..."
@@ -166,14 +218,16 @@ if should_run_js; then
         echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
         exit 1
     fi
+fi
 
-    # Also lint the React frontend if present.
-    if [ -d "frontend" ]; then
-        if ! (cd frontend && npm run lint); then
-            echo ""
-            echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"
-            exit 1
-        fi
+if should_run_frontend; then
+    ANY_CHECKED=1
+    echo ""
+    echo "Running frontend ESLint..."
+    if ! (cd frontend && npm run lint); then
+        echo ""
+        echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"
+        exit 1
     fi
 fi
 
