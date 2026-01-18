@@ -147,7 +147,9 @@ async def test_complete_task_advances_queue(api_client: AsyncClient, db: Session
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_csv_export_returns_valid_csv(api_client: AsyncClient, db: Session):
+async def test_csv_export_returns_valid_csv(
+    api_client: AsyncClient, db: Session, enable_internal_ops
+):
     """GET /export/csv, verify Content-Type and structure."""
     thread = Thread(
         title="Test Comic", format="Comic", issues_remaining=5, queue_position=1, user_id=1

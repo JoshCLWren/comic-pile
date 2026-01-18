@@ -20,6 +20,7 @@ from comic_pile.session import (
 
 
 def test_int_env_returns_default_when_missing(monkeypatch):
+    """Test _int_env returns default when env var is missing."""
     import comic_pile.session as session_mod
 
     monkeypatch.delenv("TEST_VAR", raising=False)
@@ -28,6 +29,7 @@ def test_int_env_returns_default_when_missing(monkeypatch):
 
 
 def test_int_env_returns_value_when_set(monkeypatch):
+    """Test _int_env returns value when env var is set."""
     import comic_pile.session as session_mod
 
     monkeypatch.setenv("TEST_VAR", "99")
@@ -35,6 +37,7 @@ def test_int_env_returns_value_when_set(monkeypatch):
 
 
 def test_int_env_returns_default_on_invalid_value(monkeypatch):
+    """Test _int_env returns default when env var has invalid value."""
     import comic_pile.session as session_mod
 
     monkeypatch.setenv("TEST_VAR", "not_an_int")

@@ -27,6 +27,51 @@ from app.middleware import limiter  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+MAX_LOG_BODY_SIZE = 1000
+
+
+def contains_sensitive_keys(body_json: dict) -> bool:
+    """Check if body contains sensitive keys."""
+    sensitive_keys = {"password", "secret", "token", "access_token", "refresh_token", "api_key"}
+    return any(key in body_json for key in sensitive_keys)
+
+
+def is_auth_route(path: str) -> bool:
+    """Check if path is an auth-related route."""
+    auth_paths = ("/api/auth/", "/api/login", "/api/register", "/api/logout")
+    return any(path.startswith(auth_path) for auth_path in auth_paths)
+
+
+async def _safe_get_request_body(request: Request) -> str | dict | None:
+    """Safely read and redact request body for logging."""
+    try:
+        if request.method not in ("POST", "PUT", "PATCH"):
+            return None
+
+        body = await request.body()
+        if not body:
+            return None
+
+        if is_auth_route(request.url.path):
+            content_type = request.headers.get("content-type", "unknown")
+            return f"[AUTH ROUTE: {len(body)} bytes, {content_type}]"
+
+        try:
+            body_str = body.decode("utf-8")
+            if len(body_str) <= MAX_LOG_BODY_SIZE:
+                body_json = json.loads(body_str)
+                if contains_sensitive_keys(body_json):
+                    return "[REDACTED: contains sensitive data]"
+                return body_json
+            return f"[TRUNCATED: {len(body_str)} bytes]"
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            if len(body) <= MAX_LOG_BODY_SIZE:
+                return body.decode("utf-8", errors="replace")
+            return f"[BINARY DATA: {len(body)} bytes]"
+    except Exception as e:
+        logger.debug(f"Failed to read request body: {e}")
+        return None
+
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
@@ -42,9 +87,7 @@ def create_app() -> FastAPI:
     cors_origins_raw = os.getenv("CORS_ORIGINS")
 
     if environment == "production":
-        if not cors_origins_raw:
-            raise RuntimeError("CORS_ORIGINS must be set in production mode")
-        if cors_origins_raw.strip() == "":
+        if not cors_origins_raw or not cors_origins_raw.strip():
             raise RuntimeError("CORS_ORIGINS must be set in production mode")
         cors_origins = cors_origins_raw.split(",")
     else:
@@ -69,50 +112,14 @@ def create_app() -> FastAPI:
                 redacted[key] = value
         return redacted
 
-    def contains_sensitive_keys(body_json: dict) -> bool:
-        """Check if body contains sensitive keys."""
-        sensitive_keys = {"password", "secret", "token", "access_token", "refresh_token", "api_key"}
-        return any(key in body_json for key in sensitive_keys)
-
-    def is_auth_route(path: str) -> bool:
-        """Check if path is an auth-related route."""
-        auth_paths = ("/api/auth/", "/api/login", "/api/register", "/api/logout")
-        return any(path.startswith(auth_path) for auth_path in auth_paths)
-
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
         """Log all requests with status codes >= 400."""
         start_time = time.time()
 
-        try:
-            if request.method in ("POST", "PUT", "PATCH"):
-                body = await request.body()
-                if body:
-                    if is_auth_route(request.url.path):
-                        content_type = request.headers.get("content-type", "unknown")
-                        request.state.request_body = (
-                            f"[AUTH ROUTE: {len(body)} bytes, {content_type}]"
-                        )
-                    else:
-                        try:
-                            body_str = body.decode("utf-8")
-                            if len(body_str) <= 1000:
-                                body_json = json.loads(body_str)
-                                if contains_sensitive_keys(body_json):
-                                    request.state.request_body = (
-                                        "[REDACTED: contains sensitive data]"
-                                    )
-                                else:
-                                    request.state.request_body = body_json
-                            else:
-                                request.state.request_body = f"[TRUNCATED: {len(body_str)} bytes]"
-                        except (json.JSONDecodeError, UnicodeDecodeError):
-                            if len(body) <= 1000:
-                                request.state.request_body = body.decode("utf-8", errors="replace")
-                            else:
-                                request.state.request_body = f"[BINARY DATA: {len(body)} bytes]"
-        except Exception:
-            pass
+        body = await _safe_get_request_body(request)
+        if body:
+            request.state.request_body = body
 
         response = await call_next(request)
         process_time = time.time() - start_time
@@ -168,35 +175,9 @@ def create_app() -> FastAPI:
             "level": "ERROR",
         }
 
-        try:
-            if request.method in ("POST", "PUT", "PATCH"):
-                body = await request.body()
-                if body:
-                    if is_auth_route(request.url.path):
-                        content_type = request.headers.get("content-type", "unknown")
-                        error_data["request_body"] = (
-                            f"[AUTH ROUTE: {len(body)} bytes, {content_type}]"
-                        )
-                    else:
-                        try:
-                            body_str = body.decode("utf-8")
-                            if len(body_str) <= 1000:
-                                body_json = json.loads(body_str)
-                                if contains_sensitive_keys(body_json):
-                                    error_data["request_body"] = (
-                                        "[REDACTED: contains sensitive data]"
-                                    )
-                                else:
-                                    error_data["request_body"] = body_json
-                            else:
-                                error_data["request_body"] = f"[TRUNCATED: {len(body_str)} bytes]"
-                        except (json.JSONDecodeError, UnicodeDecodeError):
-                            if len(body) <= 1000:
-                                error_data["request_body"] = body.decode("utf-8", errors="replace")
-                            else:
-                                error_data["request_body"] = f"[BINARY DATA: {len(body)} bytes]"
-        except Exception:
-            pass
+        body = await _safe_get_request_body(request)
+        if body:
+            error_data["request_body"] = body
 
         if hasattr(request.state, "user_id"):
             error_data["user_id"] = request.state.user_id
@@ -228,8 +209,9 @@ def create_app() -> FastAPI:
             "headers": redact_headers(dict(request.headers)),
         }
 
-        if hasattr(request.state, "request_body"):
-            error_data["request_body"] = request.state.request_body
+        body = await _safe_get_request_body(request)
+        if body:
+            error_data["request_body"] = body
         if hasattr(request.state, "user_id"):
             error_data["user_id"] = request.state.user_id
         if hasattr(request.state, "session_id"):
