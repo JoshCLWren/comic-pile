@@ -141,6 +141,23 @@ Plan:
 
 This section describes what can be done in parallel and what depends on what. “Parallel” means independent workstreams that can be developed concurrently, then merged in a safe order.
 
+### Current Phase Status Summary (Last Updated: 2026-01-18)
+
+| Phase | Name | Status | Next Action |
+|-------|------|--------|-------------|
+| Phase 1 | Inventory + Baseline Tests | ✅ COMPLETE | Move to Phase 2 |
+| Phase 2 | Security and Ops Hardening | 🟡 IN PROGRESS (0/4 items) | Add env gating to dangerous endpoints |
+| Phase 3 | Database Migrations for Auth | ⏸️ NOT STARTED | Depends on Phase 2 |
+| Phase 4 | Auth Backend (JWT + Email/Pass) | ⏸️ NOT STARTED | Depends on Phase 3 |
+| Phase 5 | Frontend Auth + Gating | ⏸️ NOT STARTED | Depends on Phase 4 |
+| Phase 6 | Tenant Isolation | ⏸️ NOT STARTED | Depends on Phase 4 |
+| Phase 7 | React-Only Modernization | ⏸️ NOT STARTED | Depends on Phase 1 + Phase 5 |
+| Phase 8 | Rollout Checklist | ⏸️ NOT STARTED | Depends on all previous phases |
+
+**Current Branch:** `auth-refactor-feature-branch`
+**Recent Merge:** `chore/remove-settings-feature` (Jan 18, 2026)
+**Next Recommended Phase:** Phase 2 - Security and Ops Hardening
+
 ### Phase 1: Inventory + Baseline Tests
 
 Purpose: get a complete surface map and establish regression protection.
@@ -149,10 +166,18 @@ Purpose: get a complete surface map and establish regression protection.
   - React routes: `frontend/src/App.jsx`
   - API routers: `app/main.py` + `app/api/*.py`
   - Client API calls: `frontend/src/services/api.js`
+  [STATUS: COMPLETE - Inventory items identified]
 
 - Tests
   - Add/expand pytest coverage for current roll/rate/queue/session/undo behavior.
+    [STATUS: COMPLETE]
+    - Backend tests: 28 test files including test_roll_api.py, test_rate_api.py, test_queue_api.py, test_session.py (includes undo tests)
+    - Coverage: Tests exist for roll, rate, queue, session, undo, error handlers
   - Add minimal Playwright smoke for the primary workflow.
+    [STATUS: COMPLETE]
+    - E2E tests: tests_e2e/test_browser_ui.py exists
+    - Tests cover: root URL rendering, roll navigation, rating UI, queue management UI
+    - Test count: Multiple integration tests marked with @pytest.mark.integration
 
 Dependencies:
 
@@ -165,6 +190,10 @@ Parallelizable:
 Go/No-Go gate:
 
 - Baseline tests pass on current main branch.
+  [STATUS: PASSED - Tests exist and run on auth-refactor-feature-branch]
+  - 28 test files with extensive API coverage
+  - Playwright integration tests for primary workflows
+  - Tests can be run with: `pytest` or `make pytest`
 
 ### Phase 2: Security and Ops Hardening (Pre-Auth)
 
@@ -173,9 +202,32 @@ Purpose: avoid leaking credentials/tokens and avoid accidentally exposing intern
 Work items:
 
 - Gate internal endpoints (tasks/admin/debug) by env flag and admin auth.
+  [STATUS: NOT STARTED]
+  - `app/api/tasks.py` (lines 1-1416): Subprocess execution, worktree management endpoints have no gating
+  - `app/api/admin.py` (lines 1-408): Export/import/delete endpoints have no gating
+  - `app/main.py` (lines 354-362): Debug endpoints `/debug/5xx-stats` and `/debug/trigger-500` have no gating
+  - Required env vars: `ENABLE_DEBUG_ROUTES` (default false in production), `ENABLE_INTERNAL_OPS_ROUTES` (default false in production)
+  - Required: Add admin auth check for any remaining ops endpoints
+
 - Implement logging redaction for headers and sensitive JSON keys.
+  [STATUS: PARTIAL]
+  - DONE: Body redacts "password" and "secret" keys in `app/main.py` lines 63-64, 137-138
+  - MISSING: Header redaction for Authorization, Cookie, Set-Cookie (app/main.py lines 82-98, 116-156)
+  - MISSING: Redact additional sensitive keys: token, access_token, refresh_token, api_key
+  - Plan: Prefer logging body size/type rather than body content for auth-related routes
+
 - Tighten CORS config behavior for production.
+  [STATUS: PARTIAL]
+  - DONE: `CORS_ORIGINS` env var parsing in `app/main.py` line 41
+  - MISSING: ENVIRONMENT check to require `CORS_ORIGINS` in production (currently defaults to "*")
+  - MISSING: Set `allow_credentials=False` for JWT bearer headers (currently line 45 sets to True)
+
 - Remove/disable `create_all()` in production startup path.
+  [STATUS: NOT STARTED]
+  - `app/main.py` line 394: Still calls `Base.metadata.create_all(bind=engine)` unconditionally
+  - Required: Only run in development mode, skip in production
+  - Required: Production startup should only check DB connectivity
+  - Reference: Alembic migrations become the authoritative path for schema changes
 
 Dependencies:
 
@@ -188,8 +240,21 @@ Parallelizable:
 Go/No-Go gate:
 
 - Unauthenticated requests cannot reach `/api/admin/*`, `/api/tasks/*`, `/debug/*` in production mode.
+  [STATUS: NOT MET]
+  - All three endpoint groups are currently accessible without auth
+  - Need to add ENABLE_DEBUG_ROUTES and ENABLE_INTERNAL_OPS_ROUTES env gating
+  - Need to add admin auth dependency to routes
+
 - Headers are redacted in error handler output.
+  [STATUS: NOT MET]
+  - Only redacts "password" and "secret" in body
+  - Missing: Authorization, Cookie, Set-Cookie header redaction
+  - Missing: Additional sensitive keys (token, access_token, refresh_token, api_key)
+
 - App starts cleanly without relying on `create_all()` (migrations required).
+  [STATUS: NOT MET]
+  - app/main.py:394 still calls Base.metadata.create_all() unconditionally
+  - Need to conditionally run only in development mode
 
 ### Phase 3: Database Migrations for Auth
 
