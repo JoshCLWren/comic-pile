@@ -379,3 +379,15 @@ def task_data(db: Session) -> list:
         db.refresh(task)
 
     return tasks
+
+
+@pytest.fixture(scope="function")
+def enable_internal_ops():
+    """Enable internal ops routes for tests that access admin/tasks endpoints."""
+    old_value = os.environ.get("ENABLE_INTERNAL_OPS_ROUTES")
+    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
+    yield
+    if old_value is None:
+        os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
+    else:
+        os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = old_value

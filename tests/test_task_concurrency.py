@@ -14,7 +14,9 @@ from app.models import Task
 
 
 @pytest.mark.asyncio
-async def test_create_task_duplicate_id_returns_400(client: AsyncClient, db: Session) -> None:
+async def test_create_task_duplicate_id_returns_400(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test that creating a task with duplicate task_id returns 400 error."""
     task_data = {
         "task_id": "DUPLICATE-TASK-001",

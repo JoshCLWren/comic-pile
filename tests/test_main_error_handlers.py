@@ -43,6 +43,7 @@ async def test_validation_exception_handler_invalid_task_id_type(
 async def test_validation_exception_handler_for_claim_missing_agent_name(
     client: AsyncClient,
     sample_tasks,
+    enable_internal_ops,
 ) -> None:
     """Test validation exception handler for missing agent_name field."""
     response = await client.post(
@@ -59,6 +60,7 @@ async def test_validation_exception_handler_for_claim_missing_agent_name(
 async def test_validation_exception_handler_for_claim_empty_agent_name(
     client: AsyncClient,
     sample_tasks,
+    enable_internal_ops,
 ) -> None:
     """Test validation exception handler for empty agent_name field."""
     response = await client.post(
@@ -76,6 +78,7 @@ async def test_validation_exception_handler_for_claim_empty_agent_name(
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_create_task_invalid_type(
     client: AsyncClient,
+    enable_internal_ops,
 ) -> None:
     """Test validation exception handler for invalid field type in create task."""
     response = await client.post(
@@ -98,6 +101,7 @@ async def test_validation_exception_handler_for_create_task_invalid_type(
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_create_task_invalid_priority(
     client: AsyncClient,
+    enable_internal_ops,
 ) -> None:
     """Test validation exception handler for invalid priority type (not string)."""
     response = await client.post(
@@ -121,6 +125,7 @@ async def test_validation_exception_handler_for_create_task_invalid_priority(
 async def test_validation_exception_handler_for_claim_missing_worktree(
     client: AsyncClient,
     sample_tasks,
+    enable_internal_ops,
 ) -> None:
     """Test validation exception handler for missing worktree field."""
     response = await client.post(
@@ -139,6 +144,7 @@ async def test_validation_exception_handler_for_claim_missing_worktree(
 async def test_validation_exception_handler_for_update_notes_missing_notes(
     client: AsyncClient,
     sample_tasks,
+    enable_internal_ops,
 ) -> None:
     """Test validation exception handler for missing notes field."""
     response = await client.post(
@@ -155,6 +161,7 @@ async def test_validation_exception_handler_for_update_notes_missing_notes(
 async def test_validation_exception_handler_for_set_status_invalid_status(
     client: AsyncClient,
     sample_tasks,
+    enable_internal_ops,
 ) -> None:
     """Test HTTP exception handler for invalid status value."""
     response = await client.post(
@@ -170,6 +177,7 @@ async def test_validation_exception_handler_for_set_status_invalid_status(
 @pytest.mark.asyncio
 async def test_validation_exception_handler_error_structure(
     client: AsyncClient,
+    enable_internal_ops,
 ) -> None:
     """Test that validation errors have proper structure with field, message, type."""
     response = await client.post(
@@ -195,6 +203,7 @@ async def test_validation_exception_handler_error_structure(
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_multiple_errors(
     client: AsyncClient,
+    enable_internal_ops,
 ) -> None:
     """Test validation exception handler with multiple validation errors."""
     response = await client.post(
@@ -211,6 +220,7 @@ async def test_validation_exception_handler_for_multiple_errors(
 @pytest.mark.asyncio
 async def test_validation_exception_handler_includes_body(
     client: AsyncClient,
+    enable_internal_ops,
 ) -> None:
     """Test that validation error response includes the request body."""
     response = await client.post(
@@ -231,6 +241,7 @@ async def test_validation_exception_handler_includes_body(
 @pytest.mark.asyncio
 async def test_validation_exception_handler_nested_field_error(
     client: AsyncClient,
+    enable_internal_ops,
 ) -> None:
     """Test validation exception handler for nested field errors."""
     response = await client.post(

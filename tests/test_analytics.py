@@ -5,7 +5,7 @@ from datetime import UTC
 
 
 @pytest.mark.asyncio
-async def test_get_analytics_metrics(client, db):
+async def test_get_analytics_metrics(client, db, enable_internal_ops):
     """Test GET /api/tasks/metrics returns metrics."""
     from app.models import Task as TaskModel
 
@@ -45,7 +45,7 @@ async def test_get_analytics_metrics(client, db):
 
 
 @pytest.mark.asyncio
-async def test_get_analytics_metrics_empty(client, db):
+async def test_get_analytics_metrics_empty(client, db, enable_internal_ops):
     """Test GET /api/tasks/metrics with no tasks."""
     response = await client.get("/api/tasks/metrics")
 
@@ -59,7 +59,7 @@ async def test_get_analytics_metrics_empty(client, db):
 
 
 @pytest.mark.asyncio
-async def test_get_analytics_metrics_completion_time(client, db):
+async def test_get_analytics_metrics_completion_time(client, db, enable_internal_ops):
     """Test GET /api/tasks/metrics calculates average completion time."""
     from app.models import Task as TaskModel
     from datetime import datetime
