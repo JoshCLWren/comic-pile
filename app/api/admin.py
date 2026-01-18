@@ -12,10 +12,13 @@ from sqlalchemy.orm import Session
 
 from app.api.session import build_narrative_summary
 from app.database import get_db
+from app.dependencies import require_internal_ops_routes
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/admin", tags=["admin"], dependencies=[Depends(require_internal_ops_routes)]
+)
 
 
 @router.post("/import/csv/")

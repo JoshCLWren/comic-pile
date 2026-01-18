@@ -417,6 +417,7 @@ async def test_rate_finish_session_flag_controls_session_end(client, db):
 
 
 def test_float_env_returns_default_when_missing():
+    """Test _float_env returns default when env var is missing."""
     from app.api.rate import _float_env
 
     import os
@@ -428,6 +429,7 @@ def test_float_env_returns_default_when_missing():
 
 
 def test_float_env_returns_value_when_set():
+    """Test _float_env returns value when env var is set."""
     from app.api.rate import _float_env
 
     import os
@@ -438,6 +440,7 @@ def test_float_env_returns_value_when_set():
 
 
 def test_float_env_returns_default_on_invalid_value():
+    """Test _float_env returns default when env var has invalid value."""
     from app.api.rate import _float_env
 
     import os
@@ -448,6 +451,7 @@ def test_float_env_returns_default_on_invalid_value():
 
 
 def test_rating_min_returns_default():
+    """Test _rating_min returns default value."""
     from app.api.rate import _rating_min
 
     import os
@@ -459,6 +463,7 @@ def test_rating_min_returns_default():
 
 
 def test_rating_min_returns_custom_value():
+    """Test _rating_min returns custom value when set."""
     from app.api.rate import _rating_min
 
     import os
@@ -469,6 +474,7 @@ def test_rating_min_returns_custom_value():
 
 
 def test_rating_min_clamps_to_valid_range():
+    """Test _rating_min clamps values to valid range."""
     from app.api.rate import _rating_min
 
     import os
@@ -483,6 +489,7 @@ def test_rating_min_clamps_to_valid_range():
 
 
 def test_rating_max_returns_default():
+    """Test _rating_max returns default value."""
     from app.api.rate import _rating_max
 
     import os
@@ -494,6 +501,7 @@ def test_rating_max_returns_default():
 
 
 def test_rating_max_returns_custom_value():
+    """Test _rating_max returns custom value when set."""
     from app.api.rate import _rating_max
 
     import os
@@ -504,6 +512,7 @@ def test_rating_max_returns_custom_value():
 
 
 def test_rating_max_clamps_to_valid_range():
+    """Test _rating_max clamps values to valid range."""
     from app.api.rate import _rating_max
 
     import os
@@ -518,6 +527,7 @@ def test_rating_max_clamps_to_valid_range():
 
 
 def test_rating_threshold_returns_default():
+    """Test _rating_threshold returns default value."""
     from app.api.rate import _rating_threshold
 
     import os
@@ -529,6 +539,7 @@ def test_rating_threshold_returns_default():
 
 
 def test_rating_threshold_returns_custom_value():
+    """Test _rating_threshold returns custom value when set."""
     from app.api.rate import _rating_threshold
 
     import os
@@ -539,6 +550,7 @@ def test_rating_threshold_returns_custom_value():
 
 
 def test_rating_threshold_clamps_to_valid_range():
+    """Test _rating_threshold clamps values to valid range."""
     from app.api.rate import _rating_threshold
 
     import os

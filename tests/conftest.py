@@ -4,12 +4,9 @@ import os
 from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from datetime import UTC, datetime
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import pytest
 import pytest_asyncio
+from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.ext.asyncio import (
@@ -25,6 +22,8 @@ from app.database import Base, get_db
 from app.main import app
 from app.models import Event, Task, Thread, User
 from app.models import Session as SessionModel
+
+load_dotenv()
 
 
 def _ensure_default_user(db: Session) -> User:
@@ -379,3 +378,15 @@ def task_data(db: Session) -> list:
         db.refresh(task)
 
     return tasks
+
+
+@pytest.fixture(scope="function")
+def enable_internal_ops():
+    """Enable internal ops routes for tests that access admin/tasks endpoints."""
+    old_value = os.environ.get("ENABLE_INTERNAL_OPS_ROUTES")
+    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
+    yield
+    if old_value is None:
+        os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
+    else:
+        os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = old_value

@@ -1,12 +1,26 @@
 name: CI
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
 
 jobs:
   lint:
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Run lint
+        shell: bash
+        run: bash scripts/lint.sh
+
+  test:
     runs-on: ubuntu-latest
     container: debian:13
     env:

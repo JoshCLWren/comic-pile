@@ -112,6 +112,18 @@ def set_skip_worktree_check():
 
 
 @pytest.fixture(scope="function")
+def enable_internal_ops():
+    """Enable internal ops routes for tests that access admin/tasks endpoints."""
+    old_value = os.environ.get("ENABLE_INTERNAL_OPS_ROUTES")
+    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
+    yield
+    if old_value is None:
+        os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
+    else:
+        os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = old_value
+
+
+@pytest.fixture(scope="function")
 def db() -> Generator[Session]:
     """Create test database for tests (PostgreSQL only)."""
     database_url = get_sync_test_database_url()

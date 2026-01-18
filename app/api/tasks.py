@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies import require_internal_ops_routes
 from app.middleware import limiter
 from app.models import Task
 from app.schemas.task import (
@@ -26,7 +27,9 @@ from app.schemas.task import (
     UpdateNotesRequest,
 )
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(
+    prefix="/tasks", tags=["tasks"], dependencies=[Depends(require_internal_ops_routes)]
+)
 health_router = APIRouter(tags=["health"])
 
 _manager_daemon_last_review: datetime | None = None

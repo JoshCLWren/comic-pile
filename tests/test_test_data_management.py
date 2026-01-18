@@ -34,7 +34,7 @@ def test_seed_data_marks_as_test(db):
 
 
 @pytest.mark.asyncio
-async def test_bulk_delete_test_data(client, db):
+async def test_bulk_delete_test_data(client, db, enable_internal_ops):
     """Test bulk delete of test data."""
     user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
     if user is None:
@@ -120,7 +120,7 @@ async def test_bulk_delete_test_data(client, db):
 
 
 @pytest.mark.asyncio
-async def test_export_csv_excludes_test_data(client, db):
+async def test_export_csv_excludes_test_data(client, db, enable_internal_ops):
     """Test that CSV export excludes test data."""
     user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
     if user is None:
@@ -161,7 +161,7 @@ async def test_export_csv_excludes_test_data(client, db):
 
 
 @pytest.mark.asyncio
-async def test_export_json_excludes_test_data(client, db):
+async def test_export_json_excludes_test_data(client, db, enable_internal_ops):
     """Test that JSON export excludes test data."""
     import json
 
@@ -202,7 +202,7 @@ async def test_export_json_excludes_test_data(client, db):
 
 
 @pytest.mark.asyncio
-async def test_export_summary_excludes_test_only_sessions(client, db):
+async def test_export_summary_excludes_test_only_sessions(client, db, enable_internal_ops):
     """Test that session summary export excludes sessions with only test data."""
     user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
     if user is None:
@@ -283,7 +283,7 @@ async def test_export_summary_excludes_test_only_sessions(client, db):
 
 
 @pytest.mark.asyncio
-async def test_delete_test_data_clears_pending_thread_id(client, db):
+async def test_delete_test_data_clears_pending_thread_id(client, db, enable_internal_ops):
     """Regression test for BUG-131: IntegrityError when deleting test thread with pending_thread_id.
 
     This test verifies that deleting test data that has sessions with pending_thread_id
