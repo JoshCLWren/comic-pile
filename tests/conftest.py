@@ -4,12 +4,9 @@ import os
 from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from datetime import UTC, datetime
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import pytest
 import pytest_asyncio
+from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.ext.asyncio import (
@@ -25,6 +22,8 @@ from app.database import Base, get_db
 from app.main import app
 from app.models import Event, Task, Thread, User
 from app.models import Session as SessionModel
+
+load_dotenv()
 
 
 def _ensure_default_user(db: Session) -> User:
