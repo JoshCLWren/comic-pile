@@ -16,7 +16,7 @@ def test_no_duplicate_route_handlers():
     paths = defaultdict(list)
     for route in router.routes:
         if hasattr(route, "path") and hasattr(route, "methods"):
-            key = (route.path, frozenset(route.methods))  # type: ignore[arg-type]
+            key = (str(route.path), frozenset(route.methods))
             paths[key].append(route)
 
     duplicates = [

@@ -23,6 +23,7 @@ from app.main import app
 from app.models import Event, Task, Thread, User
 from app.models import Session as SessionModel
 
+
 load_dotenv()
 
 
@@ -71,12 +72,14 @@ def get_test_database_url() -> str:
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
         return test_db_url
+
     database_url = os.getenv("DATABASE_URL")
     if database_url and database_url.startswith("postgresql"):
         return database_url
+
     raise ValueError(
         "No PostgreSQL test database configured. "
-        "Set TEST_DATABASE_URL or DATABASE_URL environment variable."
+        "Set TEST_DATABASE_URL or DATABASE_URL environment variable (or add them to .env)."
     )
 
 
@@ -86,18 +89,20 @@ def get_sync_test_database_url() -> str:
     if test_db_url:
         if test_db_url.startswith("postgresql+asyncpg://"):
             return test_db_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-        elif test_db_url.startswith("postgresql+aiosqlite://"):
-            return test_db_url.replace("postgresql+aiosqlite://", "sqlite:///", 1)
         return test_db_url
+
     database_url = os.getenv("DATABASE_URL")
     if database_url:
         if database_url.startswith("postgresql://"):
             return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-        elif database_url.startswith("postgresql+asyncpg://"):
+        if database_url.startswith("postgresql+asyncpg://"):
             return database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        if database_url.startswith("postgresql+psycopg://"):
+            return database_url
+
     raise ValueError(
         "No PostgreSQL test database configured. "
-        "Set TEST_DATABASE_URL or DATABASE_URL environment variable."
+        "Set TEST_DATABASE_URL or DATABASE_URL environment variable (or add them to .env)."
     )
 
 

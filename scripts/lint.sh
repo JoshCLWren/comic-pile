@@ -6,7 +6,27 @@ GREEN=$'\033[0;32m'
 YELLOW=$'\033[1;33m'
 NC=$'\033[0m' # No Color
 
+MODE="--all"
+if [ $# -ge 1 ]; then
+    case "$1" in
+        --all|--staged)
+            MODE="$1"
+            ;;
+        *)
+            echo "Usage: bash scripts/lint.sh [--all|--staged]"
+            exit 2
+            ;;
+    esac
+fi
+
 echo "Running code quality checks..."
+
+# Ensure we're running at repo root
+if [ ! -f "pyproject.toml" ]; then
+    echo "${RED}ERROR: Run from repository root.${NC}"
+    exit 1
+fi
+
 
 # Activate venv if not already active
 if [ -z "$VIRTUAL_ENV" ]; then
@@ -31,58 +51,94 @@ if [ -z "$VIRTUAL_ENV" ]; then
     fi
 fi
 
-# Compile check for all Python files
-echo ""
-echo "Checking Python syntax by compiling..."
-python -m compileall . -q
-
-# Run linting
-echo ""
-echo "Running ruff linting..."
-if ! ruff check .; then
-    echo ""
-    echo "${RED}ERROR: Linting failed.${NC}"
-    echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
-    exit 1
-fi
-
-# Check for Any type usage
-echo ""
-echo "Checking for Any type usage..."
-if [ -n "$(rg ': Any\b' . --type py 2>/dev/null | grep -v 'type: ignore' | head -1)" ]; then
-    echo ""
-    echo "${RED}ERROR: Any type found in codebase.${NC}"
-    echo "${RED}Please replace Any with specific types and check CONTRIBUTING.md for guidelines.${NC}"
-    exit 1
-fi
-
-# Run type checking
-echo ""
-echo "Running pyright type checking..."
-
-# Handle git worktrees: if .venv doesn't exist locally, find the main repo
-# This allows pyright to find the shared venv when working in worktrees
-PYRIGHT_ARGS="."
-if [ ! -d .venv ]; then
-    # Check if we're in a git worktree (where .git is a file, not a directory)
-    if [ -f .git ]; then
-        # Find the main repository directory using git rev-parse
-        GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
-        if [ -n "$GIT_COMMON_DIR" ]; then
-            MAIN_REPO_DIR=$(dirname "$GIT_COMMON_DIR")
-            if [ -d "$MAIN_REPO_DIR/.venv" ]; then
-                echo "Detected git worktree, using main repo venv at $MAIN_REPO_DIR"
-                PYRIGHT_ARGS="-v $MAIN_REPO_DIR ."
-            fi
-        fi
+STAGED_FILES=""
+if [ "$MODE" = "--staged" ]; then
+    STAGED_FILES=$(git diff --name-only --cached --diff-filter=ACMRT || true)
+    if [ -z "$STAGED_FILES" ]; then
+        echo ""
+        echo "No staged files found; skipping lint."
+        exit 0
     fi
 fi
 
-if ! pyright $PYRIGHT_ARGS; then
+should_run_python() {
+    if [ "$MODE" = "--all" ]; then
+        return 0
+    fi
+
+    echo "$STAGED_FILES" | rg -q "\\.py$|^pyproject\\.toml$|^uv\\.lock$"
+}
+
+should_run_js() {
+    if [ "$MODE" = "--all" ]; then
+        return 0
+    fi
+
+    echo "$STAGED_FILES" | rg -q "^static/js/.*\\.js$"
+}
+
+should_run_html() {
+    if [ "$MODE" = "--all" ]; then
+        return 0
+    fi
+
+    echo "$STAGED_FILES" | rg -q "^app/templates/.*\\.html$"
+}
+
+ANY_CHECKED=0
+
+if should_run_python; then
+    ANY_CHECKED=1
+
     echo ""
-    echo "${RED}ERROR: Type checking failed.${NC}"
-    echo "${RED}Please fix the type errors and check CONTRIBUTING.md for guidelines.${NC}"
-    exit 1
+    echo "Checking Python syntax by compiling..."
+    python -m compileall . -q
+
+    echo ""
+    echo "Running ruff linting..."
+    if ! ruff check .; then
+        echo ""
+        echo "${RED}ERROR: Linting failed.${NC}"
+        echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
+        exit 1
+    fi
+
+    echo ""
+    echo "Checking for Any type usage..."
+    if [ -n "$(rg ': Any\\b' . --type py 2>/dev/null | grep -v 'type: ignore' | head -1)" ]; then
+        echo ""
+        echo "${RED}ERROR: Any type found in codebase.${NC}"
+        echo "${RED}Please replace Any with specific types and check CONTRIBUTING.md for guidelines.${NC}"
+        exit 1
+    fi
+
+    echo ""
+    echo "Running ty type checking..."
+
+    if ! command -v ty >/dev/null 2>&1; then
+        echo "${RED}ERROR: ty is not installed in the active environment.${NC}"
+        echo "${RED}Run: uv sync --all-extras${NC}"
+        exit 1
+    fi
+
+    if [ "$MODE" = "--staged" ]; then
+        PY_TARGETS=$(echo "$STAGED_FILES" | rg "\\.py$" || true)
+        if [ -n "$PY_TARGETS" ]; then
+            if ! xargs -d "\n" ty check --error-on-warning <<<"$PY_TARGETS"; then
+                echo ""
+                echo "${RED}ERROR: Type checking failed.${NC}"
+                exit 1
+            fi
+        else
+            echo "No staged Python files to type-check."
+        fi
+    else
+        if ! ty check --error-on-warning; then
+            echo ""
+            echo "${RED}ERROR: Type checking failed.${NC}"
+            exit 1
+        fi
+    fi
 fi
 
 # Handle node_modules in git worktrees
@@ -99,24 +155,44 @@ if [ ! -d "node_modules" ]; then
     fi
 fi
 
-# JavaScript linting
-echo ""
-echo "Running ESLint for JavaScript..."
-if ! npm run lint:js; then
+if should_run_js; then
+    ANY_CHECKED=1
     echo ""
-    echo "${RED}ERROR: JavaScript linting failed.${NC}"
-    echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
-    exit 1
+    echo "Running ESLint for JavaScript..."
+
+    if ! npm run lint:js; then
+        echo ""
+        echo "${RED}ERROR: JavaScript linting failed.${NC}"
+        echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
+        exit 1
+    fi
+
+    # Also lint the React frontend if present.
+    if [ -d "frontend" ]; then
+        if ! (cd frontend && npm run lint); then
+            echo ""
+            echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"
+            exit 1
+        fi
+    fi
 fi
 
-# HTML linting
-echo ""
-echo "Running htmlhint for HTML templates..."
-if ! npm run lint:html; then
+if should_run_html; then
+    ANY_CHECKED=1
     echo ""
-    echo "${RED}ERROR: HTML linting failed.${NC}"
-    echo "${RED}Fix HTML template issues manually.${NC}"
-    exit 1
+    echo "Running htmlhint for HTML templates..."
+    if ! npm run lint:html; then
+        echo ""
+        echo "${RED}ERROR: HTML linting failed.${NC}"
+        echo "${RED}Fix HTML template issues manually.${NC}"
+        exit 1
+    fi
+fi
+
+if [ "$ANY_CHECKED" -eq 0 ]; then
+    echo ""
+    echo "No relevant staged files; skipping lint."
+    exit 0
 fi
 
 echo ""

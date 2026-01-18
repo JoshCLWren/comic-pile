@@ -5,9 +5,19 @@ set -e
 
 echo "🔧 Installing git hooks..."
 
-# Copy hooks from .git/hooks/ directory
+# Backup any existing hooks
 cp .git/hooks/pre-commit .git/hooks/pre-commit.sample 2>/dev/null || true
 cp .git/hooks/pre-push .git/hooks/pre-push.sample 2>/dev/null || true
+
+# Install from versioned hooks
+mkdir -p .git/hooks
+cp .githooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
+if [ -f .githooks/pre-push ]; then
+    cp .githooks/pre-push .git/hooks/pre-push
+    chmod +x .git/hooks/pre-push
+fi
 
 echo "✅ Git hooks installed"
 echo ""

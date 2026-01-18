@@ -32,6 +32,6 @@ if [ -n "$PYTHON_FILES" ]; then
     fi
 fi
 
-# Run the shared lint script
-bash scripts/lint.sh
+# Run the shared lint script (only for staged, relevant files)
+bash scripts/lint.sh --staged
 

@@ -25,6 +25,7 @@ dev = [
     "pytest-xdist>=3.0.0",
     "ruff>=0.1.0",
     "pyright>=1.1.0",
+    "ty>=0.0.12",
     "faker>=20.0.0",
     "httpx>=0.24.0",
     "playwright==1.48.0",
@@ -98,6 +99,22 @@ include = ["app", "comic_pile", "tests"]
 exclude = ["**/node_modules", "**/__pycache__", ".venv", "alembic/versions/*.py"]
 venvPath = "."
 venv = ".venv"
+
+[tool.ty.environment]
+python-version = "3.13"
+
+[tool.ty.src]
+include = ["app", "comic_pile", "tests"]
+exclude = ["scripts/**", "alembic/versions/**"]
+
+[tool.ty.terminal]
+error-on-warning = true
+
+[tool.ty.rules]
+deprecated = "ignore"
+invalid-argument-type = "ignore"
+invalid-assignment = "ignore"
+unused-ignore-comment = "ignore"
 
 [tool.env]
 # Default environment variables for local development
