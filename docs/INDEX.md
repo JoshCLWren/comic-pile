@@ -12,6 +12,7 @@ This index provides a comprehensive map of all documentation in the comic-pile p
 - [../prd.md](../prd.md) - Product Requirements Document (source of truth for project requirements).
 - [API.md](API.md) - Complete API documentation with endpoints, request/response schemas, and examples.
 - [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md) - React stack details, component organization, state management, and migration notes.
+- [AUTH_USERS_MULTITENANT_PLAN.md](AUTH_USERS_MULTITENANT_PLAN.md) - Step-by-step plan for JWT auth, multi-user isolation, and React-only modernization.
 - [TASK_API.md](TASK_API.md) - Task API reference for agent system - endpoints for claiming, updating, and managing tasks.
 
 ## Agent Systems

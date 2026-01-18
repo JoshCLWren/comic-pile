@@ -302,6 +302,22 @@ def create_app() -> FastAPI:
 
         return RedirectResponse("/", status_code=301)
 
+    @app.get("/{full_path:path}")
+    async def serve_react_spa(full_path: str):
+        """Serve the React SPA for non-API routes.
+
+        The React app owns routing for paths like /rate, /queue, /history, etc.
+        """
+        from fastapi.responses import FileResponse
+
+        blocked_prefixes = ("api", "static", "assets", "debug")
+        blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg"}
+
+        if full_path in blocked_exact or full_path.startswith(blocked_prefixes):
+            raise StarletteHTTPException(status_code=404, detail="Not Found")
+
+        return FileResponse("static/react/index.html")
+
     @app.get("/health")
     async def health_check():
         """Health check endpoint that verifies basic application functionality."""
