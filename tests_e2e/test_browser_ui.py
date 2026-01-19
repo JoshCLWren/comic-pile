@@ -245,3 +245,83 @@ def test_d10_renders_geometry_correctly(page, test_server_url):
     assert canvas_info.get("hasWebGL") is True, "WebGL context not available"
     assert canvas_info.get("canvasWidth", 0) > 0, "Canvas has zero width"
     assert canvas_info.get("canvasHeight", 0) > 0, "Canvas has zero height"
+
+
+@pytest.mark.integration
+def test_auth_login_roll_rate_flow(page, test_server_url):
+    """Test complete login → roll → rate flow."""
+    import time
+    import requests
+
+    test_timestamp = int(time.time() * 1000)
+    test_user = f"test_{test_timestamp}@example.com"
+
+    register_response = requests.post(
+        f"{test_server_url}/api/auth/register",
+        json={
+            "username": test_user,
+            "email": test_user,
+            "password": "testpassword",
+        },
+        timeout=10,
+    )
+    assert register_response.status_code in (200, 201)
+
+    login_response = requests.post(
+        f"{test_server_url}/api/auth/login",
+        json={"username": test_user, "password": "testpassword"},
+        timeout=10,
+    )
+    assert login_response.status_code == 200
+    access_token = login_response.json()["access_token"]
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    thread_response = requests.post(
+        f"{test_server_url}/api/threads/",
+        json={"title": "E2E Test Comic", "format": "Comic", "issues_remaining": 5},
+        headers=headers,
+        timeout=10,
+    )
+    assert thread_response.status_code in (200, 201)
+
+    page.goto(f"{test_server_url}/login")
+
+    page.wait_for_selector("#email", timeout=5000)
+    page.fill("#email", test_user)
+    page.fill("#password", "testpassword")
+
+    submit_button = page.wait_for_selector('button[type="submit"]', timeout=5000)
+    submit_button.click()
+
+    page.wait_for_url(f"{test_server_url}/", timeout=5000)
+
+    page.goto(f"{test_server_url}/")
+    page.wait_for_load_state("networkidle", timeout=5000)
+
+    page.wait_for_selector("#main-die-3d", timeout=15000)
+    die_element = page.wait_for_selector("#main-die-3d", timeout=15000)
+    die_element.click()
+
+    page.wait_for_url(f"{test_server_url}/rate", timeout=15000)
+
+    page.wait_for_selector("#rating-input", timeout=10000)
+
+    page.evaluate("document.getElementById('rating-input').value = '4.5'")
+    page.evaluate(
+        "document.getElementById('rating-input').dispatchEvent(new Event('input', { bubbles: true }))"
+    )
+    page.wait_for_timeout(500)
+
+    submit_btn = page.wait_for_selector("#submit-btn", timeout=5000)
+    submit_btn.click()
+
+    page.wait_for_url(f"{test_server_url}/", timeout=5000)
+
+    current_url = page.url
+    assert (
+        current_url.rstrip("/") == f"{test_server_url}/"
+        or current_url.rstrip("/") == test_server_url
+    )
+
+    page.evaluate("localStorage.clear()")
