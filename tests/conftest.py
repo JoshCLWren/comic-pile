@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession as SQLAlchemyAsyncSession,
 )
@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base, get_db
@@ -25,6 +26,69 @@ from app.models import Session as SessionModel
 
 
 load_dotenv()
+
+_SCHEMA_PREPARED: set[str] = set()
+
+
+def _looks_like_test_database(database_url: str) -> bool:
+    url = make_url(database_url)
+    db_name = (url.database or "").lower()
+    return "test" in db_name
+
+
+def _missing_model_columns(conn: Connection) -> bool:
+    inspector = inspect(conn)
+
+    required_table_names = {
+        "users",
+        "sessions",
+        "threads",
+        "events",
+        "tasks",
+        "snapshots",
+        "revoked_tokens",
+    }
+
+    for table_name in required_table_names:
+        if not inspector.has_table(table_name):
+            return True
+
+        existing = {str(col["name"]) for col in inspector.get_columns(table_name)}
+        expected = {col.name for col in Base.metadata.tables[table_name].columns}
+        if not expected.issubset(existing):
+            return True
+
+    return False
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_test_schema() -> None:
+    """Ensure test DB schema matches current SQLAlchemy models.
+
+    Tests use Base.metadata.create_all(), which does not alter existing tables. When a
+    persistent Postgres test DB lags behind the models (e.g., missing users.email),
+    we rebuild the schema once per run.
+
+    This is only allowed for databases whose name contains 'test'.
+    """
+
+    database_url = get_sync_test_database_url()
+    if database_url in _SCHEMA_PREPARED:
+        return
+
+    engine = create_engine(database_url, echo=False)
+    with engine.begin() as conn:
+        if _missing_model_columns(conn):
+            if not _looks_like_test_database(database_url):
+                raise RuntimeError(
+                    "Refusing to reset schema on non-test database. "
+                    f"Database '{make_url(database_url).database}' must include 'test'."
+                )
+            Base.metadata.drop_all(bind=conn)
+        Base.metadata.create_all(bind=conn)
+
+    engine.dispose()
+    _SCHEMA_PREPARED.add(database_url)
 
 
 def _ensure_default_user(db: Session) -> User:
@@ -157,7 +221,8 @@ def db() -> Generator[Session]:
     connection = engine.connect()
     connection.execute(
         text(
-            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, users RESTART IDENTITY CASCADE;"
+            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, revoked_tokens, users "
+            "RESTART IDENTITY CASCADE;"
         )
     )
     connection.commit()
