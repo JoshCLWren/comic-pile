@@ -34,7 +34,7 @@ def _ensure_default_user(db: Session) -> User:
     if not user:
         user = User(
             id=1,
-            username="test_user",
+            username="test_user@example.com",
             email="test_user@example.com",
             password_hash=hash_password("testpassword"),
             created_at=datetime.now(UTC),
@@ -42,12 +42,12 @@ def _ensure_default_user(db: Session) -> User:
         db.add(user)
         db.commit()
         db.refresh(user)
-    elif not user.password_hash or user.username != "test_user":
+    elif not user.password_hash or user.username != "test_user@example.com":
         db.delete(user)
         db.commit()
         user = User(
             id=1,
-            username="test_user",
+            username="test_user@example.com",
             email="test_user@example.com",
             password_hash=hash_password("testpassword"),
             created_at=datetime.now(UTC),
@@ -146,9 +146,7 @@ def db() -> Generator[Session]:
     Base.metadata.create_all(bind=engine)
     connection = engine.connect()
     connection.execute(
-        text(
-            "TRUNCATE TABLE users, sessions, events, tasks, threads, snapshots RESTART IDENTITY CASCADE;"
-        )
+        text("TRUNCATE TABLE sessions, events, tasks, threads, snapshots RESTART IDENTITY CASCADE;")
     )
     connection.commit()
     transaction = None
