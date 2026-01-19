@@ -1,4 +1,4 @@
-"""normalize sessions pending_thread fk
+"""Normalize sessions pending_thread FK.
 
 Revision ID: dd6f892e4e04
 Revises: e98747c899c0
@@ -6,7 +6,8 @@ Create Date: 2026-01-18 19:56:23.920240
 
 """
 
-from typing import Protocol, Sequence, Union
+from collections.abc import Sequence
+from typing import Protocol
 
 from alembic import op
 import sqlalchemy as sa
@@ -15,9 +16,9 @@ from sqlalchemy.engine import Connection
 
 # revision identifiers, used by Alembic.
 revision: str = "dd6f892e4e04"
-down_revision: Union[str, Sequence[str], None] = "e98747c899c0"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "e98747c899c0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _SESSIONS_PENDING_THREAD_FK_NAMES: tuple[str, ...] = (
@@ -90,7 +91,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
+    """Downgrade schema.
+
+    Note: The Postgres downgrade path adds the FK without ON DELETE SET NULL to
+    restore the original schema state, which differs from the upgraded state
+    (which has SET NULL). This is intentional for downgrade to restore prior
+    behavior.
+    """
     conn = op.get_bind()
     dialect = conn.dialect.name
 
