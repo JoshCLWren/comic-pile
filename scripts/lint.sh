@@ -56,6 +56,8 @@ STAGED_PYTHON_FILES=""
 STAGED_HTML_FILES=""
 STAGED_STATIC_JS_FILES=""
 STAGED_FRONTEND_FILES=""
+STAGED_ROOT_NODE_TOOLING=""
+STAGED_FRONTEND_NODE_TOOLING=""
 
 if [ "$MODE" = "--staged" ]; then
     STAGED_FILES=$(git diff --name-only --cached --diff-filter=ACMRT || true)
@@ -69,6 +71,13 @@ if [ "$MODE" = "--staged" ]; then
     STAGED_HTML_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^app/templates/.*\\.html$' || true)
     STAGED_STATIC_JS_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^static/js/.*\\.js$' || true)
     STAGED_FRONTEND_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^frontend/' || true)
+
+    STAGED_ROOT_NODE_TOOLING=$(
+        printf '%s\n' "$STAGED_FILES" | rg -e '^(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|eslint\.config\.(js|cjs|mjs))$' || true
+    )
+    STAGED_FRONTEND_NODE_TOOLING=$(
+        printf '%s\n' "$STAGED_FILES" | rg -e '^frontend/(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|eslint\.config\.(js|cjs|mjs))$' || true
+    )
 fi
 
 should_run_python() {
@@ -84,7 +93,7 @@ should_run_static_js() {
         return 0
     fi
 
-    [ -n "$STAGED_STATIC_JS_FILES" ]
+    [ -n "$STAGED_STATIC_JS_FILES" ] || [ -n "$STAGED_ROOT_NODE_TOOLING" ]
 }
 
 should_run_frontend() {
@@ -93,7 +102,7 @@ should_run_frontend() {
         return
     fi
 
-    [ -n "$STAGED_FRONTEND_FILES" ]
+    [ -n "$STAGED_FRONTEND_FILES" ] || [ -n "$STAGED_FRONTEND_NODE_TOOLING" ]
 }
 
 should_run_html() {
@@ -101,7 +110,7 @@ should_run_html() {
         return 0
     fi
 
-    [ -n "$STAGED_HTML_FILES" ]
+    [ -n "$STAGED_HTML_FILES" ] || [ -n "$STAGED_ROOT_NODE_TOOLING" ]
 }
 
 ANY_CHECKED=0
@@ -122,7 +131,9 @@ if should_run_python; then
     echo ""
     echo "Running ruff linting..."
     if [ "$MODE" = "--staged" ] && [ -n "$STAGED_PYTHON_FILES" ]; then
-        if ! xargs ruff check <<<"$STAGED_PYTHON_FILES"; then
+        mapfile -t STAGED_PYTHON_FILE_LIST <<<"$STAGED_PYTHON_FILES"
+
+        if ! ruff check "${STAGED_PYTHON_FILE_LIST[@]}"; then
             echo ""
             echo "${RED}ERROR: Linting failed.${NC}"
             echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
@@ -133,6 +144,29 @@ if should_run_python; then
             echo ""
             echo "${RED}ERROR: Linting failed.${NC}"
             echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
+            exit 1
+        fi
+    fi
+
+    echo ""
+    echo "Checking for type/linter ignores in staged files..."
+    IGNORE_PATTERN='# type:? ?ignore|# noqa|# ruff:? ?ignore|# pylint:? ?ignore'
+
+    if [ "$MODE" = "--staged" ] && [ -n "$STAGED_PYTHON_FILES" ]; then
+        IGNORES_FOUND=0
+
+        while IFS= read -r file; do
+            if git show ":$file" | rg -n "$IGNORE_PATTERN" >/dev/null; then
+                echo "${YELLOW}Found type/linter ignore in staged $file${NC}"
+                git show ":$file" | rg -n "$IGNORE_PATTERN"
+                IGNORES_FOUND=1
+            fi
+        done <<<"$STAGED_PYTHON_FILES"
+
+        if [ "$IGNORES_FOUND" -eq 1 ]; then
+            echo ""
+            echo "${RED}ERROR: Type or linter ignores found in staged files.${NC}"
+            echo "${RED}Remove these ignores before committing.${NC}"
             exit 1
         fi
     fi
