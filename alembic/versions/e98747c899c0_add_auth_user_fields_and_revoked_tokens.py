@@ -20,7 +20,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
+    """
+    Apply schema changes to add authentication fields to the users table and create a revoked_tokens table for tracking revoked tokens.
+    
+    Adds nullable `email` and `password_hash` columns and a non-nullable `is_admin` boolean (default `false`) to `users`, with a unique constraint on `email`. Creates `revoked_tokens` with an integer primary key `id`, `user_id` (foreign key to `users.id` with ON DELETE CASCADE), unique `jti`, timezone-aware `revoked_at` (default CURRENT_TIMESTAMP), `expires_at`, and indexes on `user_id` and `expires_at`.
+    """
     with op.batch_alter_table("users") as batch_op:
         batch_op.add_column(sa.Column("email", sa.String(length=255), nullable=True))
         batch_op.add_column(sa.Column("password_hash", sa.String(length=255), nullable=True))
@@ -60,7 +64,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
+    """
+    Revert the schema changes introduced by this migration.
+    
+    Drops the revoked_tokens table and its indexes, removes the unique constraint on users.email, and drops the users columns added by the upgrade (email, password_hash, is_admin).
+    """
     op.drop_index("ix_revoked_tokens_expires_at", table_name="revoked_tokens")
     op.drop_index("ix_revoked_tokens_user_id", table_name="revoked_tokens")
     op.drop_table("revoked_tokens")

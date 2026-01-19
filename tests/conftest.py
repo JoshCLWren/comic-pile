@@ -32,12 +32,29 @@ _SCHEMA_PREPARED: set[str] = set()
 
 
 def _looks_like_test_database(database_url: str) -> bool:
+    """
+    Determine whether a database URL refers to a test-like database.
+    
+    Checks the URL's database name for the substrings "test", "ci", or "dev" (case-insensitive).
+    
+    Parameters:
+        database_url (str): A database URL or DSN.
+    
+    Returns:
+        bool: `true` if the database name contains "test", "ci", or "dev" (case-insensitive), `false` otherwise.
+    """
     url = make_url(database_url)
     db_name = url.database or ""
     return bool(re.search(r"(test|ci|dev)", db_name, re.IGNORECASE))
 
 
 def _missing_model_columns(conn: Connection) -> bool:
+    """
+    Check whether any required table is missing or lacks columns defined in the SQLAlchemy models.
+    
+    Returns:
+        True if any required table is absent or missing one or more columns declared in Base.metadata, False otherwise.
+    """
     inspector = inspect(conn)
 
     required_table_names = {
@@ -64,13 +81,10 @@ def _missing_model_columns(conn: Connection) -> bool:
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_test_schema() -> None:
-    """Ensure test DB schema matches current SQLAlchemy models.
-
-    Tests use Base.metadata.create_all(), which does not alter existing tables. When a
-    persistent Postgres test DB lags behind the models (e.g., missing users.email),
-    we rebuild the schema once per run.
-
-    This is only allowed for databases whose name contains 'test'.
+    """
+    Ensure the test database schema matches the current SQLAlchemy models.
+    
+    If any required tables or columns are missing, the function drops and recreates the database schema; this destructive reset is only performed for databases whose name contains "test". Prepared database URLs are recorded to avoid repeating this work during the same test run.
     """
     database_url = get_sync_test_database_url()
     if database_url in _SCHEMA_PREPARED:
@@ -92,7 +106,14 @@ def ensure_test_schema() -> None:
 
 
 def _ensure_default_user(db: Session) -> User:
-    """Ensure default user exists in database (user_id=1 for API compatibility)."""
+    """
+    Ensure a default test user exists in the database.
+    
+    If a user with id 1 is present, that user is returned. Otherwise, attempts to find a user with username "test_user" and returns it; if none exists, creates, persists, and returns a new user with username "test_user".
+    
+    Returns:
+        User: The default test user (existing user with id=1 when present, otherwise the user with username "test_user").
+    """
     user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
     if not user:
         user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
@@ -213,7 +234,14 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 @pytest.fixture(scope="function")
 def db() -> Generator[Session]:
-    """Create test database with transaction rollback (PostgreSQL)."""
+    """
+    Provide a fresh synchronous SQLAlchemy Session connected to the test database with tables reset.
+    
+    The fixture creates the test schema if missing, truncates core test tables and restarts identities, ensures a default test user exists, then yields a Session for use in a test. After the test completes the session is closed and the engine/connection are disposed.
+    
+    Returns:
+        session (Session): A SQLAlchemy Session connected to the prepared test database.
+    """
     database_url = get_sync_test_database_url()
 
     engine = create_engine(database_url, echo=False)

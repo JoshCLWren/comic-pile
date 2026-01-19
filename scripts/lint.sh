@@ -80,6 +80,7 @@ if [ "$MODE" = "--staged" ]; then
     )
 fi
 
+# should_run_python determines whether Python-related checks should run: true if MODE is --all or if there are staged Python files or if `pyproject.toml` or `uv.lock` is staged.
 should_run_python() {
     if [ "$MODE" = "--all" ]; then
         return 0
@@ -88,6 +89,7 @@ should_run_python() {
     [ -n "$STAGED_PYTHON_FILES" ] || printf '%s\n' "$STAGED_FILES" | rg -q '^pyproject\.toml$|^uv\.lock$'
 }
 
+# should_run_static_js determines whether static JavaScript checks should run; exits with status 0 when MODE is "--all" or when there are staged static JS files or staged root Node tooling, non-zero otherwise.
 should_run_static_js() {
     if [ "$MODE" = "--all" ]; then
         return 0

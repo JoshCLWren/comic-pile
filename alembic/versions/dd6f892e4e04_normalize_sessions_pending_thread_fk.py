@@ -27,13 +27,31 @@ _SESSIONS_PENDING_THREAD_FK_NAMES: tuple[str, ...] = (
 
 
 def _fk_exists(conn: Connection, table_name: str, constraint_name: str) -> bool:
+    """
+    Checks whether a foreign key constraint with the given name exists on the specified table.
+    
+    Parameters:
+    	conn (Connection): Active SQLAlchemy connection.
+    	table_name (str): Name of the table to inspect.
+    	constraint_name (str): Name of the foreign key constraint to look for.
+    
+    Returns:
+    	`true` if a foreign key with `constraint_name` exists on `table_name`, `false` otherwise.
+    """
     inspector = sa.inspect(conn)
     fks = inspector.get_foreign_keys(table_name)
     return any(fk.get("name") == constraint_name for fk in fks)
 
 
 class _BatchOp(Protocol):
-    def drop_constraint(self, constraint_name: str, type_: str | None = None) -> None: ...
+    def drop_constraint(self, constraint_name: str, type_: str | None = None) -> None: """
+Remove a named constraint from the table being altered in this batch operation.
+
+Parameters:
+	constraint_name (str): The exact name of the constraint to drop.
+	type_ (str | None): Optional category of the constraint (for example "foreignkey" or "unique") when required by the database backend; if omitted, the backend will attempt to infer the type.
+"""
+...
 
 
 def _sqlite_safe_drop_fk(
@@ -42,12 +60,29 @@ def _sqlite_safe_drop_fk(
     table_name: str,
     constraint_name: str,
 ) -> None:
+    """
+    Drop the specified foreign key constraint from a SQLite table using the provided batch operation if the constraint exists.
+    
+    Parameters:
+        batch_op (_BatchOp): Batch alter-table operation providing drop_constraint().
+        conn (Connection): Active database connection used to inspect existing constraints.
+        table_name (str): Name of the table containing the foreign key.
+        constraint_name (str): Name of the foreign key constraint to drop.
+    """
     if _fk_exists(conn, table_name, constraint_name):
         batch_op.drop_constraint(constraint_name, type_="foreignkey")
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
+    """
+    Normalize the foreign key on sessions.pending_thread_id to reference threads(id) with ON DELETE SET NULL.
+    
+    On PostgreSQL this drops any known legacy constraints and adds a single constraint named
+    sessions_pending_thread_id_fkey with ON DELETE SET NULL. On SQLite it safely drops existing
+    constraints using a batch operation and creates the same constraint with ON DELETE SET NULL.
+    On other dialects it drops any known legacy constraints if present and creates the
+    sessions_pending_thread_id_fkey constraint with ON DELETE SET NULL.
+    """
     conn = op.get_bind()
     dialect = conn.dialect.name
 
@@ -90,7 +125,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
+    """
+    Revert the sessions.pending_thread_id foreign key to its previous database-specific configuration.
+    
+    Per dialect behavior:
+    - PostgreSQL: drops any known constraints for sessions.pending_thread_id and re-adds the foreign key constraint named `sessions_pending_thread_id_fkey` referencing threads(id) using the database default ON DELETE behavior.
+    - SQLite: drops any known constraints via a batch alter and creates `sessions_pending_thread_id_fkey` referencing threads(id) with ON DELETE NO ACTION.
+    - Other dialects: drops any known constraints if present and recreates `sessions_pending_thread_id_fkey` referencing threads(id) without an explicit ON DELETE clause.
+    """
     conn = op.get_bind()
     dialect = conn.dialect.name
 

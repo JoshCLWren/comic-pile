@@ -21,7 +21,19 @@ clear_cache = None
 def undo_to_snapshot(
     session_id: int, snapshot_id: int, db: Session = Depends(get_db)
 ) -> SessionResponse:
-    """Undo session state to a specific snapshot with deadlock retry handling."""
+    """
+    Restore a session to the state captured by a specific snapshot and return the resulting session view.
+    
+    Applies the snapshot's thread and session state to the database, commits the change, and retries on database deadlocks up to a limited number of attempts.
+    
+    Returns:
+        SessionResponse: A representation of the session after restoration, including fields such as `active_thread`, `current_die`, `last_rolled_result`, `has_restore_point`, and `snapshot_count`.
+    
+    Raises:
+        HTTPException: If the session or the specified snapshot is not found (404).
+        OperationalError: If a non-deadlock database error occurs or a deadlock is re-raised after retry attempts.
+        RuntimeError: If the undo fails after the maximum configured retry attempts.
+    """
     from sqlalchemy.exc import OperationalError
     import time
 
