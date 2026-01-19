@@ -1,6 +1,6 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
 import { expect, test, vi, beforeEach, afterEach, describe } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor } from '@testing-library/react'
 
 vi.mock('../pages/LoginPage', () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
@@ -16,16 +16,6 @@ vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="sessio
 vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
 
 import App from '../App'
-
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom')
-  return {
-    ...actual,
-    BrowserRouter: ({ children }) => {
-      return <>{children}</>
-    },
-  }
-})
 
 let currentInitialEntry = '/'
 
@@ -100,10 +90,12 @@ describe('route guards', () => {
     expect(screen.getByTestId('login-page')).toBeInTheDocument()
   })
 
-  test('allows unauthenticated users to access /register', () => {
+  test('allows unauthenticated users to access /register', async () => {
     renderApp('/register')
 
-    expect(screen.getByTestId('register-page')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('register-page')).toBeInTheDocument()
+    })
   })
 
   test('redirects authenticated users from /login to home', () => {
