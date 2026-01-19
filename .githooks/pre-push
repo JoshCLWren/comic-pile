@@ -37,6 +37,19 @@ if [ -z "$VIRTUAL_ENV" ]; then
     fi
 fi
 
+# Run lint (match CI as closely as possible)
+echo ""
+echo "🧹 Running lint..."
+if bash scripts/lint.sh; then
+    echo "✅ Lint passed"
+else
+    echo "❌ Lint failed - aborting push"
+    echo ""
+    echo "To bypass this hook (not recommended), use:"
+    echo "  git push --no-verify"
+    exit 1
+fi
+
 # Run tests
 echo ""
 echo "🧪 Running tests..."

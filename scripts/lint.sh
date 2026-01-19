@@ -67,9 +67,9 @@ if [ "$MODE" = "--staged" ]; then
         exit 0
     fi
 
-    STAGED_PYTHON_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '\\.py$' || true)
-    STAGED_HTML_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^app/templates/.*\\.html$' || true)
-    STAGED_STATIC_JS_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^static/js/.*\\.js$' || true)
+    STAGED_PYTHON_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '\.py$' || true)
+    STAGED_HTML_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^app/templates/.*\.html$' || true)
+    STAGED_STATIC_JS_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^static/js/.*\.js$' || true)
     STAGED_FRONTEND_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^frontend/' || true)
 
     STAGED_ROOT_NODE_TOOLING=$(
@@ -85,7 +85,7 @@ should_run_python() {
         return 0
     fi
 
-    [ -n "$STAGED_PYTHON_FILES" ] || printf '%s\n' "$STAGED_FILES" | rg -q '^pyproject\\.toml$|^uv\\.lock$'
+    [ -n "$STAGED_PYTHON_FILES" ] || printf '%s\n' "$STAGED_FILES" | rg -q '^pyproject\.toml$|^uv\.lock$'
 }
 
 should_run_static_js() {

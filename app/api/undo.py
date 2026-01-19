@@ -64,6 +64,12 @@ def undo_to_snapshot(
             threads_to_delete = current_thread_ids - snapshot_thread_ids
             if threads_to_delete:
                 db.execute(
+                    update(SessionModel)
+                    .where(SessionModel.id == session_id)
+                    .where(SessionModel.pending_thread_id.in_(threads_to_delete))
+                    .values(pending_thread_id=None)
+                )
+                db.execute(
                     update(Event)
                     .where(
                         or_(
