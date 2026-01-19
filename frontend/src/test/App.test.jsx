@@ -1,7 +1,20 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { expect, test, vi, beforeEach, afterEach, describe } from 'vitest'
-import { MemoryRouter } from 'react-router-dom'
+
+vi.mock('../pages/LoginPage', () => ({
+  default: () => <div data-testid="login-page">Welcome Back</div>,
+}))
+vi.mock('../pages/RegisterPage', () => ({
+  default: () => <div data-testid="register-page">Create Account</div>,
+}))
+vi.mock('../pages/RollPage', () => ({ default: () => <div data-testid="roll-page">Roll</div> }))
+vi.mock('../pages/RatePage', () => ({ default: () => <div data-testid="rate-page">Rate</div> }))
+vi.mock('../pages/QueuePage', () => ({ default: () => <div data-testid="queue-page">Queue</div> }))
+vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="history-page">History</div> }))
+vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
+vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
+
 import App from '../App'
 
 vi.mock('react-router-dom', async () => {
@@ -71,39 +84,39 @@ describe('route guards', () => {
   test('redirects unauthenticated users to /login when accessing protected routes', () => {
     renderApp('/')
 
-    expect(screen.getByText('Login page')).toBeInTheDocument()
+    expect(screen.getByTestId('login-page')).toBeInTheDocument()
   })
 
   test('allows authenticated users to access protected routes', () => {
     localStorage.setItem('auth_token', 'fake-token')
     renderApp('/')
 
-    expect(screen.queryByText('Login page')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
   })
 
   test('allows unauthenticated users to access /login', () => {
     renderApp('/login')
 
-    expect(screen.getByText('Login page')).toBeInTheDocument()
+    expect(screen.getByTestId('login-page')).toBeInTheDocument()
   })
 
   test('allows unauthenticated users to access /register', () => {
     renderApp('/register')
 
-    expect(screen.getByText('Register page')).toBeInTheDocument()
+    expect(screen.getByTestId('register-page')).toBeInTheDocument()
   })
 
   test('redirects authenticated users from /login to home', () => {
     localStorage.setItem('auth_token', 'fake-token')
     renderApp('/login')
 
-    expect(screen.queryByText('Login page')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
   })
 
   test('redirects authenticated users from /register to home', () => {
     localStorage.setItem('auth_token', 'fake-token')
     renderApp('/register')
 
-    expect(screen.queryByText('Register page')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('register-page')).not.toBeInTheDocument()
   })
 })

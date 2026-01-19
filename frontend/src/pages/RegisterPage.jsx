@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
 
 export default function RegisterPage() {
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -15,6 +16,10 @@ export default function RegisterPage() {
   }
 
   const validateForm = () => {
+    if (!username.trim()) {
+      setError('Username is required')
+      return false
+    }
     if (!email.trim()) {
       setError('Email is required')
       return false
@@ -49,7 +54,7 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.post('/auth/register', { email: email.trim(), password })
+      const response = await api.post('/auth/register', { username: username.trim(), email: email.trim(), password })
       localStorage.setItem('auth_token', response.access_token)
       navigate('/')
     } catch (err) {
@@ -75,6 +80,23 @@ export default function RegisterPage() {
 
         <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
           <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                Username
+              </label>
+              <input
+                id="username"
+                type="text"
+                name="username"
+                autoComplete="username"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                placeholder="Choose a username"
+              />
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
                 Email
