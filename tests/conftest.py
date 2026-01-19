@@ -1,7 +1,6 @@
 """Shared pytest fixtures."""
 
 import os
-import re
 from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from datetime import UTC, datetime
 
@@ -33,8 +32,17 @@ _SCHEMA_PREPARED: set[str] = set()
 
 def _looks_like_test_database(database_url: str) -> bool:
     url = make_url(database_url)
-    db_name = url.database or ""
-    return bool(re.search(r"(test|ci|dev)", db_name, re.IGNORECASE))
+    db_name = (url.database or "").lower()
+
+    allow_list = {"test", "ci", "dev"}
+    if db_name in allow_list:
+        return True
+
+    for prefix in allow_list:
+        if db_name.startswith(f"{prefix}_") or db_name.startswith(f"{prefix}-"):
+            return True
+
+    return False
 
 
 def _missing_model_columns(conn: Connection) -> bool:
