@@ -32,26 +32,21 @@ def _ensure_default_user(db: Session) -> User:
 
     user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
     if not user:
-        user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
-        if not user:
-            user = User(
-                username="test_user",
-                email="test_user@example.com",
-                password_hash=hash_password("testpassword"),
-                created_at=datetime.now(UTC),
-            )
-            db.add(user)
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
-                user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
-            else:
-                db.refresh(user)
+        user = User(
+            id=1,
+            username="test_user",
+            email="test_user@example.com",
+            password_hash=hash_password("testpassword"),
+            created_at=datetime.now(UTC),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     elif not user.password_hash or user.username != "test_user":
         db.delete(user)
         db.commit()
         user = User(
+            id=1,
             username="test_user",
             email="test_user@example.com",
             password_hash=hash_password("testpassword"),
@@ -151,7 +146,9 @@ def db() -> Generator[Session]:
     Base.metadata.create_all(bind=engine)
     connection = engine.connect()
     connection.execute(
-        text("TRUNCATE TABLE sessions, events, tasks, threads, snapshots RESTART IDENTITY CASCADE;")
+        text(
+            "TRUNCATE TABLE users, sessions, events, tasks, threads, snapshots RESTART IDENTITY CASCADE;"
+        )
     )
     connection.commit()
     transaction = None
