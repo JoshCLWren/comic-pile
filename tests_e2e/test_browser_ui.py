@@ -1,11 +1,49 @@
 """Browser UI integration tests using Playwright."""
 
+import time
 import pytest
+import requests
+
+
+def login_with_playwright(page, test_server_url, email, password="testpassword"):
+    """Helper function to login via browser using existing default test user."""
+    login_response = requests.post(
+        f"{test_server_url}/api/auth/login",
+        json={"username": email, "password": password},
+        timeout=10,
+    )
+    assert login_response.status_code == 200
+    access_token = login_response.json()["access_token"]
+
+    page.goto(f"{test_server_url}/login")
+    page.add_init_script(f"localStorage.setItem('auth_token', '{access_token}')")
+    page.goto(f"{test_server_url}/")
+    page.wait_for_load_state("networkidle", timeout=5000)
+
+
+@pytest.fixture(scope="function")
+def test_user(test_server_url):
+    """Create a fresh test user for each test."""
+    test_timestamp = int(time.time() * 1000)
+    test_email = f"test_{test_timestamp}@example.com"
+
+    register_response = requests.post(
+        f"{test_server_url}/api/auth/register",
+        json={
+            "username": test_email,
+            "email": test_email,
+            "password": "testpassword",
+        },
+        timeout=10,
+    )
+    assert register_response.status_code in (200, 201)
+    return test_email
 
 
 @pytest.mark.integration
-def test_root_url_renders_dice_ladder(page, test_server_url):
+def test_root_url_renders_dice_ladder(page, test_server_url, test_user):
     """Navigate to /, verify expected dice selector exists."""
+    login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/")
     page.wait_for_selector("#die-selector", timeout=5000)
 
@@ -14,8 +52,9 @@ def test_root_url_renders_dice_ladder(page, test_server_url):
 
 
 @pytest.mark.integration
-def test_homepage_renders_dice_ladder(page, test_server_url):
+def test_homepage_renders_dice_ladder(page, test_server_url, test_user):
     """Navigate to /react/, verify expected dice selector exists (legacy URL)."""
+    login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/react/")
     page.wait_for_selector("#die-selector", timeout=5000)
 
@@ -24,7 +63,7 @@ def test_homepage_renders_dice_ladder(page, test_server_url):
 
 
 @pytest.mark.integration
-def test_roll_dice_navigates_to_rate(page, test_server_url, db):
+def test_roll_dice_navigates_to_rate(page, test_server_url, db, test_user):
     """Navigate to /, click roll button, verify navigation to /rate."""
     from app.models import Thread
 
@@ -39,6 +78,7 @@ def test_roll_dice_navigates_to_rate(page, test_server_url, db):
     db.add(thread)
     db.commit()
 
+    login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/")
 
     page.wait_for_selector("#tap-instruction", timeout=5000)
@@ -53,7 +93,7 @@ def test_roll_dice_navigates_to_rate(page, test_server_url, db):
 
 
 @pytest.mark.integration
-def test_htmx_rate_comic_updates_ui(page, test_server_url, db):
+def test_htmx_rate_comic_updates_ui(page, test_server_url, db, test_user):
     """Navigate to /rate after a roll, update rating slider, verify it works."""
     from app.models import Event, Thread
     from app.models import Session as SessionModel
@@ -85,6 +125,7 @@ def test_htmx_rate_comic_updates_ui(page, test_server_url, db):
     db.add(roll_event)
     db.commit()
 
+    login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/rate")
     page.wait_for_selector("#rating-input", timeout=5000)
 
@@ -96,7 +137,7 @@ def test_htmx_rate_comic_updates_ui(page, test_server_url, db):
 
 
 @pytest.mark.integration
-def test_queue_management_ui(page, test_server_url, db):
+def test_queue_management_ui(page, test_server_url, db, test_user):
     """Navigate to /queue, verify queue container exists and displays data."""
     from app.models import Thread
 
@@ -111,6 +152,7 @@ def test_queue_management_ui(page, test_server_url, db):
     db.add(thread)
     db.commit()
 
+    login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/queue")
     page.wait_for_selector("#queue-container", timeout=5000)
 
@@ -119,7 +161,7 @@ def test_queue_management_ui(page, test_server_url, db):
 
 
 @pytest.mark.integration
-def test_view_history_pagination(page, test_server_url, db):
+def test_view_history_pagination(page, test_server_url, db, test_user):
     """Navigate to /history, verify history list exists."""
     from app.models import Event, Thread
     from app.models import Session as SessionModel
@@ -150,6 +192,7 @@ def test_view_history_pagination(page, test_server_url, db):
     db.add(roll_event)
     db.commit()
 
+    login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/history")
     page.wait_for_selector("#sessions-list", timeout=5000)
 
@@ -158,7 +201,7 @@ def test_view_history_pagination(page, test_server_url, db):
 
 
 @pytest.mark.integration
-def test_full_session_workflow(page, test_server_url, db):
+def test_full_session_workflow(page, test_server_url, db, test_user):
     """Setup session data, navigate to rate page, verify UI is functional."""
     from app.models import Event, Thread
     from app.models import Session as SessionModel
@@ -189,6 +232,7 @@ def test_full_session_workflow(page, test_server_url, db):
     db.add(roll_event)
     db.commit()
 
+    login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/rate")
     page.wait_for_selector("#rating-input", timeout=5000)
 
@@ -203,8 +247,9 @@ def test_full_session_workflow(page, test_server_url, db):
 
 
 @pytest.mark.integration
-def test_d10_renders_geometry_correctly(page, test_server_url):
+def test_d10_renders_geometry_correctly(page, test_server_url, test_user):
     """Navigate to /, select d10, verify d10 canvas element exists with WebGL context."""
+    login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/")
     page.wait_for_selector("#die-selector", timeout=5000)
     page.wait_for_timeout(2000)
