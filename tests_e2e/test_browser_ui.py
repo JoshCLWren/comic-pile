@@ -24,8 +24,13 @@ def login_with_playwright(page, test_server_url, email, password=None):
 
 
 @pytest.fixture(scope="function")
-def test_user(test_server_url):
+def test_user(test_server_url, db):
     """Create a fresh test user for each test."""
+    from sqlalchemy import text
+
+    db.execute(text("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))"))
+    db.commit()
+
     test_timestamp = int(time.time() * 1000)
     test_email = f"test_{test_timestamp}@example.com"
 
@@ -43,7 +48,7 @@ def test_user(test_server_url):
 
 
 @pytest.mark.integration
-def test_root_url_renders_dice_ladder(page, test_server_url, test_user):
+def test_root_url_renders_dice_ladder(page, test_server_url, db, test_user):
     """Navigate to /, verify expected dice selector exists."""
     login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/")
@@ -54,7 +59,7 @@ def test_root_url_renders_dice_ladder(page, test_server_url, test_user):
 
 
 @pytest.mark.integration
-def test_homepage_renders_dice_ladder(page, test_server_url, test_user):
+def test_homepage_renders_dice_ladder(page, test_server_url, db, test_user):
     """Navigate to /react/, verify expected dice selector exists (legacy URL)."""
     login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/react/")
@@ -249,7 +254,7 @@ def test_full_session_workflow(page, test_server_url, db, test_user):
 
 
 @pytest.mark.integration
-def test_d10_renders_geometry_correctly(page, test_server_url, test_user):
+def test_d10_renders_geometry_correctly(page, test_server_url, db, test_user):
     """Navigate to /, select d10, verify d10 canvas element exists with WebGL context."""
     login_with_playwright(page, test_server_url, test_user)
     page.goto(f"{test_server_url}/")
