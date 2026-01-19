@@ -1,6 +1,13 @@
 """Pydantic schemas for request/response validation."""
 
 from app.api.retros import GenerateRetroRequest, RetroResponse, RetroTaskItem
+from app.schemas.auth import (
+    RefreshTokenRequest,
+    TokenResponse,
+    UserLoginRequest,
+    UserRegisterRequest,
+    UserResponse,
+)
 from app.schemas.task import (
     ClaimTaskRequest,
     SetStatusRequest,
@@ -19,6 +26,11 @@ from app.schemas.thread import (
 )
 
 __all__ = [
+    "UserRegisterRequest",
+    "UserLoginRequest",
+    "TokenResponse",
+    "UserResponse",
+    "RefreshTokenRequest",
     "ThreadCreate",
     "ThreadUpdate",
     "ThreadResponse",
