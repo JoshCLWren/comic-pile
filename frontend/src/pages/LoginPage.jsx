@@ -3,23 +3,15 @@ import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
-  const validateEmail = (emailValue) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)
-  }
-
   const validateForm = () => {
-    if (!email.trim()) {
-      setError('Email is required')
-      return false
-    }
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address')
+    if (!username.trim()) {
+      setError('Username is required')
       return false
     }
     if (!password.trim()) {
@@ -44,14 +36,14 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.post('/auth/login', { username: email.trim(), password })
+      const response = await api.post('/auth/login', { username: username.trim(), password })
       localStorage.setItem('auth_token', response.access_token)
       navigate('/')
     } catch (err) {
       if (err.response?.data?.detail) {
         setError(err.response.data.detail)
       } else if (err.response?.status === 401) {
-        setError('Invalid email or password')
+        setError('Invalid username or password')
       } else {
         setError('Login failed. Please try again.')
       }
@@ -68,24 +60,24 @@ export default function LoginPage() {
           <p className="text-sm text-slate-400">Sign in to continue your journey</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                name="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
-                placeholder="you@example.com"
-              />
-            </div>
+          <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
+           <div className="space-y-4">
+             <div className="space-y-2">
+               <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                 Username
+               </label>
+               <input
+                 id="username"
+                 type="text"
+                 name="username"
+                 autoComplete="username"
+                 required
+                 value={username}
+                 onChange={(e) => setUsername(e.target.value)}
+                 className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                 placeholder="Enter your username"
+               />
+             </div>
 
             <div className="space-y-2">
               <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">

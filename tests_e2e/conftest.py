@@ -146,7 +146,10 @@ def db() -> Generator[Session]:
     Base.metadata.create_all(bind=engine)
     connection = engine.connect()
     connection.execute(
-        text("TRUNCATE TABLE sessions, events, tasks, threads, snapshots RESTART IDENTITY CASCADE;")
+        text(
+            "TRUNCATE TABLE users, sessions, events, tasks, threads, snapshots, revoked_tokens "
+            "RESTART IDENTITY CASCADE;"
+        )
     )
     connection.commit()
     transaction = None
