@@ -71,7 +71,6 @@ def ensure_test_schema() -> None:
 
     This is only allowed for databases whose name contains 'test'.
     """
-
     database_url = get_sync_test_database_url()
     if database_url in _SCHEMA_PREPARED:
         return
