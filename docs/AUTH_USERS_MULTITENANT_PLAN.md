@@ -1,6 +1,6 @@
 # Users + Auth + Multi-Tenant + React Modernization Plan
 
-Last updated: 2026-01-17
+Last updated: 2026-01-19
 
 ## Goals
 
@@ -141,13 +141,13 @@ Plan:
 
 This section describes what can be done in parallel and what depends on what. “Parallel” means independent workstreams that can be developed concurrently, then merged in a safe order.
 
-### Current Phase Status Summary (Last Updated: 2026-01-18)
+### Current Phase Status Summary (Last Updated: 2026-01-19)
 
 | Phase | Name | Status | Next Action |
 |-------|------|--------|-------------|
 | Phase 1 | Inventory + Baseline Tests | ✅ COMPLETE | Move to Phase 2 |
 | Phase 2 | Security and Ops Hardening | ✅ COMPLETE | Move to Phase 3 |
-| Phase 3 | Database Migrations for Auth | ⏸️ NOT STARTED | Depends on Phase 2 |
+| Phase 3 | Database Migrations for Auth | ✅ COMPLETE | Move to Phase 4 |
 | Phase 4 | Auth Backend (JWT + Email/Pass) | ⏸️ NOT STARTED | Depends on Phase 3 |
 | Phase 5 | Frontend Auth + Gating | ⏸️ NOT STARTED | Depends on Phase 4 |
 | Phase 6 | Tenant Isolation | ⏸️ NOT STARTED | Depends on Phase 4 |
@@ -155,8 +155,8 @@ This section describes what can be done in parallel and what depends on what. �
 | Phase 8 | Rollout Checklist | ⏸️ NOT STARTED | Depends on all previous phases |
 
 **Current Branch:** `auth-refactor-feature-branch`
-**Recent Merge:** `phase/2-security-hardening` (Jan 18, 2026)
-**Next Recommended Phase:** Phase 3 - Database Migrations for Auth
+**Recent Merge:** `phase/3-auth-db-migrations` (Jan 19, 2026)
+**Next Recommended Phase:** Phase 4 - Auth Backend
 
 **Phase 2 Completion Details:**
 - Branch: `phase/2-security-hardening`
