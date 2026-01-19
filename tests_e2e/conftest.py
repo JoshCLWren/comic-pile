@@ -28,11 +28,18 @@ from app.models import User
 
 def _ensure_default_user(db: Session) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
+    from app.auth import hash_password
+
     user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
     if not user:
         user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
         if not user:
-            user = User(username="test_user", created_at=datetime.now(UTC))
+            user = User(
+                username="test_user",
+                email="test_user@example.com",
+                password_hash=hash_password("testpassword"),
+                created_at=datetime.now(UTC),
+            )
             db.add(user)
             try:
                 db.commit()
@@ -41,6 +48,18 @@ def _ensure_default_user(db: Session) -> User:
                 user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
             else:
                 db.refresh(user)
+    elif not user.password_hash or user.username != "test_user":
+        db.delete(user)
+        db.commit()
+        user = User(
+            username="test_user",
+            email="test_user@example.com",
+            password_hash=hash_password("testpassword"),
+            created_at=datetime.now(UTC),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     return user
 
 
@@ -132,9 +151,7 @@ def db() -> Generator[Session]:
     Base.metadata.create_all(bind=engine)
     connection = engine.connect()
     connection.execute(
-        text(
-            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, users RESTART IDENTITY CASCADE;"
-        )
+        text("TRUNCATE TABLE sessions, events, tasks, threads, snapshots RESTART IDENTITY CASCADE;")
     )
     connection.commit()
     transaction = None

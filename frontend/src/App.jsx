@@ -79,7 +79,7 @@ function App() {
                 path="/login"
                 element={
                   <PublicRoute>
-                    <div className="text-center text-slate-500">Login page</div>
+                    <LoginPage />
                   </PublicRoute>
                 }
               />
@@ -87,7 +87,7 @@ function App() {
                 path="/register"
                 element={
                   <PublicRoute>
-                    <div className="text-center text-slate-500">Register page</div>
+                    <RegisterPage />
                   </PublicRoute>
                 }
               />

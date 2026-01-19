@@ -44,7 +44,7 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.post('/auth/login', { email: email.trim(), password })
+      const response = await api.post('/auth/login', { username: email.trim(), password })
       localStorage.setItem('auth_token', response.access_token)
       navigate('/')
     } catch (err) {
