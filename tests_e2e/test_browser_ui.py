@@ -5,8 +5,10 @@ import pytest
 import requests
 
 
-def login_with_playwright(page, test_server_url, email, password="testpassword"):
+def login_with_playwright(page, test_server_url, email, password=None):
     """Helper function to login via browser using existing default test user."""
+    if password is None:
+        password = "testpassword"
     login_response = requests.post(
         f"{test_server_url}/api/auth/login",
         json={"username": email, "password": password},
