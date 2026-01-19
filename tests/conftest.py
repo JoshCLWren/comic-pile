@@ -34,7 +34,7 @@ def _looks_like_test_database(database_url: str) -> bool:
     url = make_url(database_url)
     db_name = (url.database or "").lower()
 
-    allow_list = {"test", "ci", "dev"}
+    allow_list = {"test", "ci", "dev", "comic_pile_test"}
     if db_name in allow_list:
         return True
 
@@ -42,7 +42,7 @@ def _looks_like_test_database(database_url: str) -> bool:
         if db_name.startswith(f"{prefix}_") or db_name.startswith(f"{prefix}-"):
             return True
 
-    return False
+    return db_name.endswith("_test") or db_name.endswith("-test")
 
 
 def _missing_model_columns(conn: Connection) -> bool:
