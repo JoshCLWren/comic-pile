@@ -3,7 +3,8 @@
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.auth import (
@@ -11,8 +12,10 @@ from app.auth import (
     create_refresh_token,
     get_current_user,
     hash_password,
+    revoke_token,
     verify_password,
     verify_token,
+    JWTError,
 )
 from app.database import get_db
 from app.models.user import User
@@ -105,7 +108,14 @@ def refresh_access_token(
     db: Annotated[Session, Depends(get_db)],
 ) -> TokenResponse:
     """Refresh access token using refresh token."""
-    payload = verify_token(refresh_data.refresh_token)
+    try:
+        payload = verify_token(refresh_data.refresh_token)
+    except JWTError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        ) from e
+
     username = payload.get("sub")
     jti = payload.get("jti")
     token_type = payload.get("type")
@@ -146,13 +156,14 @@ def refresh_access_token(
 
 @router.post("/logout")
 def logout_user(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())],
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     """Logout user by revoking their current token."""
-    # The token is already validated in get_current_user, but we need to extract it
-    # For simplicity, we'll revoke based on the user's current tokens
-    # In a production system, you'd want to get the token from the request
+    token = credentials.credentials
+    revoke_token(db, token, current_user.id)
     return {"message": "Successfully logged out"}
 
 

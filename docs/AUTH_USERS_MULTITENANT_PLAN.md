@@ -148,8 +148,8 @@ This section describes what can be done in parallel and what depends on what. �
 | Phase 1 | Inventory + Baseline Tests | ✅ COMPLETE | Move to Phase 2 |
 | Phase 2 | Security and Ops Hardening | ✅ COMPLETE | Move to Phase 3 |
 | Phase 3 | Database Migrations for Auth | ✅ COMPLETE | Move to Phase 4 |
-| Phase 4 | Auth Backend (JWT + Email/Pass) | ⏸️ NOT STARTED | Depends on Phase 3 |
-| Phase 5 | Frontend Auth + Gating | ⏸️ NOT STARTED | Depends on Phase 4 |
+| Phase 4 | Auth Backend (JWT + Email/Pass) | ✅ COMPLETE | Ready for Phase 5 merge |
+| Phase 5 | Frontend Auth + Gating | ⏸️ NOT MERGED | Awaiting PR merge to auth-refactor-feature-branch |
 | Phase 6 | Tenant Isolation | ⏸️ NOT STARTED | Depends on Phase 4 |
 | Phase 7 | React-Only Modernization | ⏸️ NOT STARTED | Depends on Phase 1 + Phase 5 |
 | Phase 8 | Rollout Checklist | ⏸️ NOT STARTED | Depends on all previous phases |

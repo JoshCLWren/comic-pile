@@ -283,7 +283,7 @@ def create_app() -> FastAPI:
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
-    app.include_router(auth.router)
+    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(tasks.router, prefix="/api", tags=["tasks"])
     app.include_router(retros.router, prefix="/api", tags=["retros"])
     app.include_router(health_router, prefix="/api")
