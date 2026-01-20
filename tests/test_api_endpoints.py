@@ -266,19 +266,23 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
 @pytest.mark.asyncio
 async def test_get_session_current(auth_client, db):
     """Test GET /session/current/ returns active session."""
-    from app.models import Session as SessionModel
+    from datetime import UTC, datetime
 
-    session = SessionModel(id=1, start_die=6, user_id=1)
+    from app.models import Session as SessionModel, User
+
+    user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
+    session = SessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
+    db.refresh(session)
 
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
 
     session_data = response.json()
-    assert session_data["id"] == 1
+    assert session_data["id"] == session.id
     assert session_data["start_die"] == 6
-    assert session_data["user_id"] == 1
+    assert session_data["user_id"] == user.id
     assert "ladder_path" in session_data
 
 

@@ -146,7 +146,7 @@ async def test_move_completed_thread(auth_client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_move_nonexistent_thread(auth_client, db, sample_data):
+async def test_move_nonexistent_thread(auth_client):
     """Returns 404 for non-existent thread."""
     response = await auth_client.put("/api/queue/threads/999/front/")
     assert response.status_code == 404
@@ -481,7 +481,7 @@ async def test_jump_beyond_last_position(auth_client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_jump_to_negative_position_fails_validation(auth_client, db, sample_data):
+async def test_jump_to_negative_position_fails_validation(auth_client, sample_data):
     """Jumping to negative position fails validation."""
     thread_id = sample_data["threads"][4].id
 
@@ -492,7 +492,7 @@ async def test_jump_to_negative_position_fails_validation(auth_client, db, sampl
 
 
 @pytest.mark.asyncio
-async def test_jump_to_zero_position_fails_validation(auth_client, db, sample_data):
+async def test_jump_to_zero_position_fails_validation(auth_client, sample_data):
     """Jumping to position 0 fails validation."""
     thread_id = sample_data["threads"][4].id
 

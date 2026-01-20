@@ -1,6 +1,7 @@
 """Queue API routes."""
 
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -13,7 +14,6 @@ from app.middleware import limiter
 from app.models import Event, Thread, User
 from app.schemas import ThreadResponse
 from comic_pile.queue import move_to_back, move_to_front, move_to_position
-from typing import Annotated
 
 router = APIRouter()
 

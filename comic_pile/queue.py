@@ -1,6 +1,6 @@
 """Queue management functions."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -137,7 +137,7 @@ def get_roll_pool(user_id: int, db: Session) -> list[Thread]:
 
 def get_stale_threads(user_id: int, db: Session, days: int = 7) -> list[Thread]:
     """Get threads not read in specified days."""
-    cutoff_date = datetime.now() - timedelta(days=days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
     threads = (
         db.execute(

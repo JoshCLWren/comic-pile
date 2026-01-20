@@ -312,7 +312,7 @@ def get_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     if session.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=404, detail="Session not found")
 
     _, active_thread = get_session_with_thread_safe(session_id, db)
 
@@ -353,7 +353,7 @@ def get_session_details(
         raise HTTPException(status_code=404, detail="Session not found")
 
     if session_obj.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=404, detail="Session not found")
 
     events = (
         db.execute(select(Event).where(Event.session_id == session_id).order_by(Event.timestamp))
@@ -417,7 +417,7 @@ def get_session_snapshots(
         raise HTTPException(status_code=404, detail="Session not found")
 
     if session.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=404, detail="Session not found")
 
     snapshots = (
         db.execute(

@@ -364,6 +364,7 @@ def reactivate_thread(
     db.execute(
         update(Thread)
         .where(Thread.user_id == current_user.id)
+        .where(Thread.status == "active")
         .values(queue_position=Thread.queue_position + 1)
     )
     thread.issues_remaining = request.issues_to_add

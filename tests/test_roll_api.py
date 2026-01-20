@@ -58,7 +58,7 @@ async def test_roll_overflow(auth_client, db):
     from app.models import Thread
     from tests.conftest import get_or_create_user
 
-    get_or_create_user(db)
+    user = get_or_create_user(db)
 
     thread = Thread(
         title="Only Thread",
@@ -66,16 +66,17 @@ async def test_roll_overflow(auth_client, db):
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=user.id,
     )
     db.add(thread)
     db.commit()
+    db.refresh(thread)
 
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
 
     data = response.json()
-    assert data["thread_id"] == 1
+    assert data["thread_id"] == thread.id
     assert 1 <= data["result"] <= 1
 
 
@@ -219,7 +220,9 @@ async def test_clear_manual_die_with_no_manual_set(auth_client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die_returns_correct_current_die_regression(auth_client, sample_data, db):
+async def test_clear_manual_die_returns_correct_current_die_regression(
+    auth_client, sample_data, db
+):
     """Regression test for bug where clearing manual die returned wrong die value.
 
     When manual mode is disengaged by clicking auto, the endpoint should return

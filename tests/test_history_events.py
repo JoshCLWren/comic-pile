@@ -73,7 +73,7 @@ async def test_move_to_back_creates_event(auth_client, sample_data, db):
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_creates_event(auth_client, sample_data, db):
+async def test_delete_thread_creates_event(auth_client, db):
     """Test that deleting a thread creates a delete event."""
     from app.models import Event
 

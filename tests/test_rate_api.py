@@ -254,7 +254,7 @@ async def test_rate_records_event(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_no_active_session(auth_client, db):
+async def test_rate_no_active_session(auth_client):
     """Returns error if no active session."""
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400

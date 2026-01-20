@@ -74,7 +74,7 @@ async def test_move_to_position_clamps_to_max(auth_client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_clamps_to_min(auth_client, db, sample_data):
+async def test_move_to_position_clamps_to_min(auth_client, sample_data):
     """Moving to position < 1 returns validation error."""
     thread_id = sample_data["threads"][-1].id
 
