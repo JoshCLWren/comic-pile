@@ -48,12 +48,13 @@ def is_active(started_at: datetime, ended_at: datetime | None, _db: Session) -> 
     return session_time >= cutoff_time and ended_at is None
 
 
-def should_start_new(db: Session) -> bool:
+def should_start_new(db: Session, user_id: int) -> bool:
     """Check if no active session in configured gap hours."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     recent_sessions = (
         db.execute(
             select(SessionModel)
+            .where(SessionModel.user_id == user_id)
             .where(SessionModel.started_at >= cutoff_time)
             .where(SessionModel.ended_at.is_(None))
         )
@@ -66,7 +67,7 @@ def should_start_new(db: Session) -> bool:
 
 def create_session_start_snapshot(db: Session, session: SessionModel) -> None:
     """Create a snapshot of all states at session start."""
-    threads = db.execute(select(Thread)).scalars().all()
+    threads = db.execute(select(Thread).where(Thread.user_id == session.user_id)).scalars().all()
 
     thread_states = {}
     for thread in threads:
@@ -128,6 +129,7 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
             active_session = (
                 db.execute(
                     select(SessionModel)
+                    .where(SessionModel.user_id == user_id)
                     .where(SessionModel.ended_at.is_(None))
                     .where(SessionModel.started_at >= cutoff_time)
                     .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
@@ -148,6 +150,7 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
                 active_session = (
                     db.execute(
                         select(SessionModel)
+                        .where(SessionModel.user_id == user_id)
                         .where(SessionModel.ended_at.is_(None))
                         .where(SessionModel.started_at >= cutoff_time)
                         .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())

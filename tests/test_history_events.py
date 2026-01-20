@@ -5,13 +5,13 @@ from sqlalchemy import select
 
 
 @pytest.mark.asyncio
-async def test_queue_move_creates_event(client, sample_data, db):
+async def test_queue_move_creates_event(auth_client, sample_data, db):
     """Test that moving a thread in queue creates a reorder event."""
     from app.models import Event
 
     thread_id = sample_data["threads"][0].id
 
-    response = await client.put(
+    response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": 3}
     )
     assert response.status_code == 200
@@ -29,13 +29,13 @@ async def test_queue_move_creates_event(client, sample_data, db):
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_creates_event(client, sample_data, db):
+async def test_move_to_front_creates_event(auth_client, sample_data, db):
     """Test that moving thread to front creates a reorder event."""
     from app.models import Event
 
     thread_id = sample_data["threads"][1].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/front/")
+    response = await auth_client.put(f"/api/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
 
     events = (
@@ -51,13 +51,13 @@ async def test_move_to_front_creates_event(client, sample_data, db):
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_creates_event(client, sample_data, db):
+async def test_move_to_back_creates_event(auth_client, sample_data, db):
     """Test that moving thread to back creates a reorder event."""
     from app.models import Event
 
     thread_id = sample_data["threads"][2].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/back/")
+    response = await auth_client.put(f"/api/queue/threads/{thread_id}/back/")
     assert response.status_code == 200
 
     events = (
@@ -73,7 +73,7 @@ async def test_move_to_back_creates_event(client, sample_data, db):
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_creates_event(client, sample_data, db):
+async def test_delete_thread_creates_event(auth_client, sample_data, db):
     """Test that deleting a thread creates a delete event."""
     from app.models import Event
 
@@ -81,14 +81,14 @@ async def test_delete_thread_creates_event(client, sample_data, db):
         db.execute(select(Event).where(Event.type == "delete")).scalars().all()
     )
 
-    create_response = await client.post(
+    create_response = await auth_client.post(
         "/api/threads/",
         json={"title": "Test Thread", "format": "Comic", "issues_remaining": 5},
     )
     assert create_response.status_code == 201
     thread_id = create_response.json()["id"]
 
-    delete_response = await client.delete(f"/api/threads/{thread_id}")
+    delete_response = await auth_client.delete(f"/api/threads/{thread_id}")
     assert delete_response.status_code == 204
 
     final_delete_count = len(
@@ -104,7 +104,7 @@ async def test_delete_thread_creates_event(client, sample_data, db):
 
 
 @pytest.mark.asyncio
-async def test_no_duplicate_event_on_no_movement(client, sample_data, db):
+async def test_no_duplicate_event_on_no_movement(auth_client, sample_data, db):
     """Test that moving to same position does not create event."""
     from app.models import Event
 
@@ -113,7 +113,7 @@ async def test_no_duplicate_event_on_no_movement(client, sample_data, db):
         db.execute(select(Event).where(Event.thread_id == thread_id)).scalars().all()
     )
 
-    response = await client.put(
+    response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200

@@ -7,11 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from typing import Annotated
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models import Session as SessionModel
+from app.models.user import User
 from app.schemas.thread import OverrideRequest, RollResponse
 from comic_pile.queue import get_roll_pool
 from comic_pile.session import get_current_die, get_or_create
@@ -23,9 +26,13 @@ clear_cache = None
 
 @router.post("/html", response_class=HTMLResponse)
 @limiter.limit("30/minute")
-def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
+def roll_dice_html(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> str:
     """Roll dice and return HTML result."""
-    current_session = get_or_create(db, user_id=1)
+    current_session = get_or_create(db, user_id=current_user.id)
     db.refresh(current_session)
     current_session_id = current_session.id
 
@@ -36,7 +43,11 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
             current_session.pending_thread_updated_at
             and current_session.pending_thread_updated_at >= cutoff_time
         ):
-            pending_thread = db.get(Thread, current_session.pending_thread_id)
+            pending_thread = db.execute(
+                select(Thread)
+                .where(Thread.id == current_session.pending_thread_id)
+                .where(Thread.user_id == current_user.id)
+            ).scalar_one_or_none()
             if pending_thread:
                 pending_html = f"""
                 <div id="pending-thread-alert" class="mb-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4">
@@ -59,7 +70,7 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
                 </div>
                 """
 
-    threads = get_roll_pool(db)
+    threads = get_roll_pool(current_user.id, db)
     if not threads:
         return pending_html + (
             '<div class="text-center text-red-500 py-4">No active threads available to roll</div>'
@@ -224,16 +235,20 @@ def roll_dice_html(request: Request, db: Session = Depends(get_db)) -> str:
 
 @router.post("/", response_model=RollResponse)
 @limiter.limit("30/minute")
-def roll_dice(request: Request, db: Session = Depends(get_db)) -> RollResponse:
+def roll_dice(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> RollResponse:
     """Roll dice to select a thread."""
-    threads = get_roll_pool(db)
+    threads = get_roll_pool(current_user.id, db)
     if not threads:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No active threads available to roll",
         )
 
-    current_session = get_or_create(db, user_id=1)
+    current_session = get_or_create(db, user_id=current_user.id)
     current_session_id = current_session.id
     current_die = get_current_die(current_session_id, db)
     pool_size = min(current_die, len(threads))
@@ -266,16 +281,24 @@ def roll_dice(request: Request, db: Session = Depends(get_db)) -> RollResponse:
 
 
 @router.post("/override", response_model=RollResponse)
-def override_roll(request: OverrideRequest, db: Session = Depends(get_db)) -> RollResponse:
+def override_roll(
+    request: OverrideRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> RollResponse:
     """Manually select a thread."""
-    thread = db.get(Thread, request.thread_id)
+    thread = db.execute(
+        select(Thread)
+        .where(Thread.id == request.thread_id)
+        .where(Thread.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {request.thread_id} not found",
         )
 
-    current_session = get_or_create(db, user_id=1)
+    current_session = get_or_create(db, user_id=current_user.id)
     current_session_id = current_session.id
     current_die = get_current_die(current_session_id, db)
 
@@ -307,11 +330,15 @@ def override_roll(request: OverrideRequest, db: Session = Depends(get_db)) -> Ro
 
 
 @router.post("/dismiss-pending", response_class=HTMLResponse)
-def dismiss_pending(db: Session = Depends(get_db)) -> str:
+def dismiss_pending(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> str:
     """Dismiss pending thread and log as skipped."""
     current_session = (
         db.execute(
             select(SessionModel)
+            .where(SessionModel.user_id == current_user.id)
             .where(SessionModel.ended_at.is_(None))
             .order_by(SessionModel.started_at.desc())
         )
@@ -335,9 +362,13 @@ def dismiss_pending(db: Session = Depends(get_db)) -> str:
 
 
 @router.post("/set-die", response_class=HTMLResponse)
-def set_manual_die(die: int, db: Session = Depends(get_db)) -> str:
+def set_manual_die(
+    die: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> str:
     """Set manual die size for current session."""
-    current_session = get_or_create(db, user_id=1)
+    current_session = get_or_create(db, user_id=current_user.id)
 
     if die not in [4, 6, 8, 10, 12, 20]:
         raise HTTPException(
@@ -355,9 +386,12 @@ def set_manual_die(die: int, db: Session = Depends(get_db)) -> str:
 
 
 @router.post("/clear-manual-die", response_class=HTMLResponse)
-def clear_manual_die(db: Session = Depends(get_db)) -> str:
+def clear_manual_die(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> str:
     """Clear manual die size and return to automatic dice ladder mode."""
-    current_session = get_or_create(db, user_id=1)
+    current_session = get_or_create(db, user_id=current_user.id)
 
     current_session.manual_die = None
     db.commit()
@@ -371,11 +405,14 @@ def clear_manual_die(db: Session = Depends(get_db)) -> str:
 
 
 @router.post("/reroll", response_class=HTMLResponse)
-def reroll_dice(db: Session = Depends(get_db)) -> str:
+def reroll_dice(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> str:
     """Reroll dice, clearing pending thread."""
-    current_session = get_or_create(db, user_id=1)
+    current_session = get_or_create(db, user_id=current_user.id)
 
-    threads = get_roll_pool(db)
+    threads = get_roll_pool(current_user.id, db)
     if not threads:
         return (
             '<div class="text-center text-red-500 py-4">No active threads available to roll</div>'

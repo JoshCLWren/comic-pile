@@ -6,25 +6,25 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 @pytest.mark.asyncio
-async def test_http_exception_handler_404(client: AsyncClient) -> None:
+async def test_http_exception_handler_404(auth_client: AsyncClient) -> None:
     """Test HTTP exception handler with 404 status code for non-existent endpoint."""
-    response = await client.get("/api/this-endpoint-does-not-exist")
+    response = await auth_client.get("/api/this-endpoint-does-not-exist")
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_http_exception_handler_for_nonexistent_task(client: AsyncClient) -> None:
+async def test_http_exception_handler_for_nonexistent_task(auth_client: AsyncClient) -> None:
     """Test HTTP exception handler when querying non-existent task."""
-    response = await client.get("/api/tasks/TASK-NONEXISTENT")
+    response = await auth_client.get("/api/tasks/TASK-NONEXISTENT")
     assert response.status_code == 404
     data = response.json()
     assert "detail" in data
 
 
 @pytest.mark.asyncio
-async def test_http_exception_handler_for_nonexistent_thread(client: AsyncClient) -> None:
+async def test_http_exception_handler_for_nonexistent_thread(auth_client: AsyncClient) -> None:
     """Test HTTP exception handler when querying non-existent thread."""
-    response = await client.get("/api/threads/999999")
+    response = await auth_client.get("/api/threads/999999")
     assert response.status_code == 404
     data = response.json()
     assert "detail" in data
@@ -32,21 +32,21 @@ async def test_http_exception_handler_for_nonexistent_thread(client: AsyncClient
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_invalid_task_id_type(
-    client: AsyncClient,
+    auth_client: AsyncClient,
 ) -> None:
     """Test validation exception handler for invalid task_id type."""
-    response = await client.get("/api/tasks/12345")
+    response = await auth_client.get("/api/tasks/12345")
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_claim_missing_agent_name(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     sample_tasks,
     enable_internal_ops,
 ) -> None:
     """Test validation exception handler for missing agent_name field."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/TASK-101/claim",
         json={"worktree": "test-worktree"},
     )
@@ -58,12 +58,12 @@ async def test_validation_exception_handler_for_claim_missing_agent_name(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_claim_empty_agent_name(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     sample_tasks,
     enable_internal_ops,
 ) -> None:
     """Test validation exception handler for empty agent_name field."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/TASK-101/claim",
         json={"agent_name": "", "worktree": "test-worktree"},
     )
@@ -77,11 +77,11 @@ async def test_validation_exception_handler_for_claim_empty_agent_name(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_create_task_invalid_type(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     enable_internal_ops,
 ) -> None:
     """Test validation exception handler for invalid field type in create task."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/",
         json={
             "task_id": 12345,
@@ -100,11 +100,11 @@ async def test_validation_exception_handler_for_create_task_invalid_type(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_create_task_invalid_priority(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     enable_internal_ops,
 ) -> None:
     """Test validation exception handler for invalid priority type (not string)."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/",
         json={
             "task_id": "TEST-VALIDATION-PRIORITY",
@@ -123,12 +123,12 @@ async def test_validation_exception_handler_for_create_task_invalid_priority(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_claim_missing_worktree(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     sample_tasks,
     enable_internal_ops,
 ) -> None:
     """Test validation exception handler for missing worktree field."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/TASK-101/claim",
         json={"agent_name": "test-agent"},
     )
@@ -142,12 +142,12 @@ async def test_validation_exception_handler_for_claim_missing_worktree(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_update_notes_missing_notes(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     sample_tasks,
     enable_internal_ops,
 ) -> None:
     """Test validation exception handler for missing notes field."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/TASK-101/update-notes",
         json={},
     )
@@ -159,12 +159,12 @@ async def test_validation_exception_handler_for_update_notes_missing_notes(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_set_status_invalid_status(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     sample_tasks,
     enable_internal_ops,
 ) -> None:
     """Test HTTP exception handler for invalid status value."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/TASK-101/set-status",
         json={"status": "invalid_status_value"},
     )
@@ -176,11 +176,11 @@ async def test_validation_exception_handler_for_set_status_invalid_status(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_error_structure(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     enable_internal_ops,
 ) -> None:
     """Test that validation errors have proper structure with field, message, type."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/",
         json={
             "task_id": 123,
@@ -202,11 +202,11 @@ async def test_validation_exception_handler_error_structure(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_multiple_errors(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     enable_internal_ops,
 ) -> None:
     """Test validation exception handler with multiple validation errors."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/TASK-101/claim",
         json={},
     )
@@ -219,11 +219,11 @@ async def test_validation_exception_handler_for_multiple_errors(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_includes_body(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     enable_internal_ops,
 ) -> None:
     """Test that validation error response includes the request body."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/",
         json={
             "task_id": 123,
@@ -240,11 +240,11 @@ async def test_validation_exception_handler_includes_body(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_nested_field_error(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     enable_internal_ops,
 ) -> None:
     """Test validation exception handler for nested field errors."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/tasks/TASK-101/heartbeat",
         json={},
     )
@@ -321,10 +321,10 @@ async def test_http_exception_handler_various_status_codes(
 
 @pytest.mark.asyncio
 async def test_validation_exception_handler_for_thread_create_missing_fields(
-    client: AsyncClient,
+    auth_client: AsyncClient,
 ) -> None:
     """Test validation exception handler for thread creation with missing required fields."""
-    response = await client.post(
+    response = await auth_client.post(
         "/api/threads/",
         json={},
     )
@@ -335,17 +335,17 @@ async def test_validation_exception_handler_for_thread_create_missing_fields(
 
 
 @pytest.mark.asyncio
-async def test_serve_react_spa_serves_index(client: AsyncClient) -> None:
+async def test_serve_react_spa_serves_index(auth_client: AsyncClient) -> None:
     """Test serve_react_spa returns React index.html for valid paths."""
-    response = await client.get("/rate")
+    response = await auth_client.get("/rate")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
 
 
 @pytest.mark.asyncio
-async def test_serve_react_spa_returns_404_for_api_paths(client: AsyncClient) -> None:
+async def test_serve_react_spa_returns_404_for_api_paths(auth_client: AsyncClient) -> None:
     """Test serve_react_spa returns 404 for blocked API prefixes."""
-    response = await client.get("/api/nonexistent")
+    response = await auth_client.get("/api/nonexistent")
     assert response.status_code == 404
     data = response.json()
     assert "detail" in data
@@ -353,9 +353,9 @@ async def test_serve_react_spa_returns_404_for_api_paths(client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
-async def test_serve_react_spa_returns_404_for_static_paths(client: AsyncClient) -> None:
+async def test_serve_react_spa_returns_404_for_static_paths(auth_client: AsyncClient) -> None:
     """Test serve_react_spa returns 404 for blocked static prefixes."""
-    response = await client.get("/static/nonexistent")
+    response = await auth_client.get("/static/nonexistent")
     assert response.status_code == 404
     data = response.json()
     assert "detail" in data
@@ -363,16 +363,16 @@ async def test_serve_react_spa_returns_404_for_static_paths(client: AsyncClient)
 
 
 @pytest.mark.asyncio
-async def test_serve_react_spa_serves_queue_page(client: AsyncClient) -> None:
+async def test_serve_react_spa_serves_queue_page(auth_client: AsyncClient) -> None:
     """Test serve_react_spa serves React app for /queue."""
-    response = await client.get("/queue")
+    response = await auth_client.get("/queue")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
 
 
 @pytest.mark.asyncio
-async def test_serve_react_spa_serves_history_page(client: AsyncClient) -> None:
+async def test_serve_react_spa_serves_history_page(auth_client: AsyncClient) -> None:
     """Test serve_react_spa serves React app for /history."""
-    response = await client.get("/history")
+    response = await auth_client.get("/history")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")

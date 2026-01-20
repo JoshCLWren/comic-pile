@@ -6,11 +6,11 @@ from app.models import Thread
 
 
 @pytest.mark.asyncio
-async def test_move_first_to_front_no_op(client, db, sample_data):
+async def test_move_first_to_front_no_op(auth_client, db, sample_data):
     """Moving first thread to front is a no-op."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/front/")
+    response = await auth_client.put(f"/api/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
 
     data = response.json()
@@ -32,11 +32,11 @@ async def test_move_first_to_front_no_op(client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_move_last_to_back_no_op(client, db, sample_data):
+async def test_move_last_to_back_no_op(auth_client, db, sample_data):
     """Moving last thread to back is a no-op."""
     thread_id = sample_data["threads"][4].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/back/")
+    response = await auth_client.put(f"/api/queue/threads/{thread_id}/back/")
     assert response.status_code == 200
 
     data = response.json()
@@ -56,15 +56,15 @@ async def test_move_last_to_back_no_op(client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_clamps_to_max(client, db, sample_data):
+async def test_move_to_position_clamps_to_max(auth_client, db, sample_data):
     """Moving to position > max_position clamps to max."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.get("/api/threads/")
+    response = await auth_client.get("/api/threads/")
     threads = response.json()
     max_position = len(threads)
 
-    response = await client.put(
+    response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
     )
     assert response.status_code == 200
@@ -74,18 +74,18 @@ async def test_move_to_position_clamps_to_max(client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_clamps_to_min(client, db, sample_data):
+async def test_move_to_position_clamps_to_min(auth_client, db, sample_data):
     """Moving to position < 1 returns validation error."""
     thread_id = sample_data["threads"][-1].id
 
-    response = await client.put(
+    response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": 0}
     )
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_when_no_threads(client, db, default_user):
+async def test_move_to_position_when_no_threads(auth_client, db, default_user):
     """Moving to position when no threads handles gracefully."""
     from app.models import Thread as ThreadModel
 
@@ -100,7 +100,7 @@ async def test_move_to_position_when_no_threads(client, db, default_user):
     db.commit()
     db.refresh(thread)
 
-    response = await client.put(
+    response = await auth_client.put(
         f"/api/queue/threads/{thread.id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200
