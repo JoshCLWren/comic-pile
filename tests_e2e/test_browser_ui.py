@@ -3,7 +3,6 @@
 import time
 import pytest
 import requests
-from sqlalchemy import select
 
 
 def login_with_playwright(page, test_server_url, email, password=None):
@@ -26,6 +25,10 @@ def login_with_playwright(page, test_server_url, email, password=None):
 @pytest.fixture(scope="function")
 def test_user(test_server_url, db):
     """Create a fresh test user for each test."""
+    from app.auth import hash_password
+    from app.database import get_db
+    from app.main import app
+    from app.models import User
     from sqlalchemy import text
 
     db.execute(text("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))"))
@@ -34,23 +37,32 @@ def test_user(test_server_url, db):
     test_timestamp = int(time.time() * 1000)
     test_email = f"test_{test_timestamp}@example.com"
 
-    register_response = requests.post(
-        f"{test_server_url}/api/auth/register",
-        json={
-            "username": test_email,
-            "email": test_email,
-            "password": "testpassword",
-        },
-        timeout=10,
+    user = User(
+        username=test_email,
+        email=test_email,
+        password_hash=hash_password("testpassword"),
     )
-    assert register_response.status_code in (200, 201)
-    return test_email
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    yield test_email, user.id
+
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.integration
 def test_root_url_renders_dice_ladder(page, test_server_url, db, test_user):
     """Navigate to /, verify expected dice selector exists."""
-    login_with_playwright(page, test_server_url, test_user)
+    login_with_playwright(page, test_server_url, test_user[0])
     page.goto(f"{test_server_url}/")
     page.wait_for_selector("#die-selector", timeout=5000)
 
@@ -61,7 +73,7 @@ def test_root_url_renders_dice_ladder(page, test_server_url, db, test_user):
 @pytest.mark.integration
 def test_homepage_renders_dice_ladder(page, test_server_url, db, test_user):
     """Navigate to /react/, verify expected dice selector exists (legacy URL)."""
-    login_with_playwright(page, test_server_url, test_user)
+    login_with_playwright(page, test_server_url, test_user[0])
     page.goto(f"{test_server_url}/react/")
     page.wait_for_selector("#die-selector", timeout=5000)
 
@@ -75,11 +87,9 @@ def test_homepage_renders_dice_ladder(page, test_server_url, db, test_user):
 @pytest.mark.integration
 def test_roll_dice_navigates_to_rate(page, test_server_url, db, test_user):
     """Navigate to /, click roll button, verify navigation to /rate."""
-    from app.models import Thread, User
+    from app.models import Thread
 
-    user = db.execute(select(User).where(User.username == test_user)).scalar_one_or_none()
-    if not user:
-        user = db.execute(select(User).where(User.id == 1)).scalar_one()
+    test_email, user_id = test_user
 
     thread = Thread(
         title="Roll Test Comic",
@@ -87,12 +97,12 @@ def test_roll_dice_navigates_to_rate(page, test_server_url, db, test_user):
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=user.id,
+        user_id=user_id,
     )
     db.add(thread)
     db.commit()
 
-    login_with_playwright(page, test_server_url, test_user)
+    login_with_playwright(page, test_server_url, test_email)
     page.goto(f"{test_server_url}/")
 
     page.wait_for_selector("#tap-instruction", timeout=5000)
@@ -114,18 +124,20 @@ def test_queue_management_ui(page, test_server_url, db, test_user):
     """Navigate to /queue, verify queue container exists and displays data."""
     from app.models import Thread
 
+    test_email, user_id = test_user
+
     thread = Thread(
         title="Browser Test Comic",
         format="Comic",
         issues_remaining=5,
         queue_position=100,
         status="active",
-        user_id=1,
+        user_id=user_id,
     )
     db.add(thread)
     db.commit()
 
-    login_with_playwright(page, test_server_url, test_user)
+    login_with_playwright(page, test_server_url, test_email)
     page.goto(f"{test_server_url}/queue")
     page.wait_for_selector("#queue-container", timeout=5000)
 
@@ -139,17 +151,19 @@ def test_view_history_pagination(page, test_server_url, db, test_user):
     from app.models import Event, Thread
     from app.models import Session as SessionModel
 
+    test_email, user_id = test_user
+
     thread = Thread(
         title="History Test Comic",
         format="Comic",
         issues_remaining=5,
         queue_position=100,
-        user_id=1,
+        user_id=user_id,
     )
     db.add(thread)
     db.commit()
 
-    session = SessionModel(start_die=6, user_id=1)
+    session = SessionModel(start_die=6, user_id=user_id)
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -165,7 +179,7 @@ def test_view_history_pagination(page, test_server_url, db, test_user):
     db.add(roll_event)
     db.commit()
 
-    login_with_playwright(page, test_server_url, test_user)
+    login_with_playwright(page, test_server_url, test_email)
     page.goto(f"{test_server_url}/history")
     page.wait_for_selector("#sessions-list", timeout=5000)
 
@@ -179,17 +193,19 @@ def test_full_session_workflow(page, test_server_url, db, test_user):
     from app.models import Event, Thread
     from app.models import Session as SessionModel
 
+    test_email, user_id = test_user
+
     thread = Thread(
         title="Workflow Test Comic",
         format="Comic",
         issues_remaining=1,
         queue_position=100,
-        user_id=1,
+        user_id=user_id,
     )
     db.add(thread)
     db.commit()
 
-    session = SessionModel(start_die=6, user_id=1)
+    session = SessionModel(start_die=6, user_id=user_id)
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -205,7 +221,7 @@ def test_full_session_workflow(page, test_server_url, db, test_user):
     db.add(roll_event)
     db.commit()
 
-    login_with_playwright(page, test_server_url, test_user)
+    login_with_playwright(page, test_server_url, test_email)
     page.goto(f"{test_server_url}/rate")
     page.wait_for_selector("#rating-input", timeout=5000)
 
@@ -222,7 +238,7 @@ def test_full_session_workflow(page, test_server_url, db, test_user):
 @pytest.mark.integration
 def test_d10_renders_geometry_correctly(page, test_server_url, db, test_user):
     """Navigate to /, select d10, verify d10 canvas element exists with WebGL context."""
-    login_with_playwright(page, test_server_url, test_user)
+    login_with_playwright(page, test_server_url, test_user[0])
     page.goto(f"{test_server_url}/")
     page.wait_for_selector("#die-selector", timeout=5000)
     page.wait_for_timeout(2000)
