@@ -314,8 +314,8 @@ def test_auth_login_roll_rate_flow(page, test_server_url):
 
     page.goto(f"{test_server_url}/login")
 
-    page.wait_for_selector("#email", timeout=5000)
-    page.fill("#email", test_user)
+    page.wait_for_selector("#username", timeout=5000)
+    page.fill("#username", test_user)
     page.fill("#password", "testpassword")
 
     submit_button = page.wait_for_selector('button[type="submit"]', timeout=5000)

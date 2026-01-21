@@ -14,11 +14,11 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 
 const AuthContext = createContext(null)
 
-function useAuth() {
+export function useAuth() {
   return useContext(AuthContext)
 }
 
-function AuthProvider({ children }) {
+export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -28,7 +28,17 @@ function AuthProvider({ children }) {
     setIsLoading(false)
   }, [])
 
-  const value = { isAuthenticated, isLoading }
+  const login = (token) => {
+    localStorage.setItem('auth_token', token)
+    setIsAuthenticated(true)
+  }
+
+  const logout = () => {
+    localStorage.removeItem('auth_token')
+    setIsAuthenticated(false)
+  }
+
+  const value = { isAuthenticated, isLoading, login, logout }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

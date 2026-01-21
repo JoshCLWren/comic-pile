@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
+import { useAuth } from '../App'
 
 export default function LoginPage() {
+  const { login } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -37,7 +39,7 @@ export default function LoginPage() {
 
     try {
       const response = await api.post('/auth/login', { username: username.trim(), password })
-      localStorage.setItem('auth_token', response.access_token)
+      login(response.access_token)
       navigate('/')
     } catch (err) {
       if (err.response?.data?.detail) {
