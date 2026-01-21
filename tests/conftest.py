@@ -248,9 +248,8 @@ def db() -> Generator[Session]:
         engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="function")
-async def client(db: Session) -> AsyncGenerator[AsyncClient]:
-    """httpx.AsyncClient for API tests."""
+def _create_db_override(db: Session):
+    """Create dependency override for get_db using provided session."""
 
     def override_get_db():
         try:
@@ -258,9 +257,50 @@ async def client(db: Session) -> AsyncGenerator[AsyncClient]:
         finally:
             pass
 
-    app.dependency_overrides[get_db] = override_get_db
+    return override_get_db
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(db: Session) -> AsyncGenerator[AsyncClient]:
+    """httpx.AsyncClient for API tests."""
+    app.dependency_overrides[get_db] = _create_db_override(db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def auth_client(db: Session) -> AsyncGenerator[AsyncClient]:
+    """httpx.AsyncClient with authentication headers for API tests."""
+    from app.auth import create_access_token
+
+    app.dependency_overrides[get_db] = _create_db_override(db)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+        if not user:
+            user = User(username="test_user", created_at=datetime.now(UTC))
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        token = create_access_token(data={"sub": user.username, "jti": "test"})
+        ac.headers.update({"Authorization": f"Bearer {token}"})
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def safe_mode_auth_client(db: Session, safe_mode_user: User) -> AsyncGenerator[AsyncClient]:
+    """httpx.AsyncClient authenticated as safe_mode_user for safe mode tests."""
+    from app.auth import create_access_token
+
+    app.dependency_overrides[get_db] = _create_db_override(db)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        token = create_access_token(data={"sub": safe_mode_user.username, "jti": "test"})
+        ac.headers.update({"Authorization": f"Bearer {token}"})
         yield ac
     app.dependency_overrides.clear()
 

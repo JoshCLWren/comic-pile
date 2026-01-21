@@ -21,7 +21,9 @@ def safe_mode_user(db) -> User:
 
 
 @pytest.mark.asyncio
-async def test_session_response_has_restore_point_true(client: AsyncClient, db, safe_mode_user):
+async def test_session_response_has_restore_point_true(
+    safe_mode_auth_client: AsyncClient, db, safe_mode_user
+):
     """Test that SessionResponse correctly reports has_restore_point when snapshots exist."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
     db.add(session)
@@ -48,7 +50,7 @@ async def test_session_response_has_restore_point_true(client: AsyncClient, db, 
     db.add(snapshot)
     db.commit()
 
-    response = await client.get(f"/api/sessions/{session.id}")
+    response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is True
@@ -56,14 +58,16 @@ async def test_session_response_has_restore_point_true(client: AsyncClient, db, 
 
 
 @pytest.mark.asyncio
-async def test_session_response_has_restore_point_false(client: AsyncClient, db, safe_mode_user):
+async def test_session_response_has_restore_point_false(
+    safe_mode_auth_client: AsyncClient, db, safe_mode_user
+):
     """Test that SessionResponse correctly reports has_restore_point when no snapshots exist."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
     db.add(session)
     db.commit()
     db.refresh(session)
 
-    response = await client.get(f"/api/sessions/{session.id}")
+    response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is False
@@ -72,7 +76,7 @@ async def test_session_response_has_restore_point_false(client: AsyncClient, db,
 
 @pytest.mark.asyncio
 async def test_current_session_response_includes_restore_point(
-    client: AsyncClient, db, safe_mode_user
+    safe_mode_auth_client: AsyncClient, db, safe_mode_user
 ):
     """Test that /sessions/current/ includes has_restore_point field."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
@@ -99,7 +103,7 @@ async def test_current_session_response_includes_restore_point(
     db.add(snapshot)
     db.commit()
 
-    response = await client.get("/api/sessions/current/")
+    response = await safe_mode_auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "has_restore_point" in data
@@ -109,7 +113,7 @@ async def test_current_session_response_includes_restore_point(
 
 @pytest.mark.asyncio
 async def test_list_sessions_includes_restore_point_for_each(
-    client: AsyncClient, db, safe_mode_user
+    safe_mode_auth_client: AsyncClient, db, safe_mode_user
 ):
     """Test that /sessions/ includes has_restore_point for all sessions."""
     session1 = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
@@ -138,7 +142,7 @@ async def test_list_sessions_includes_restore_point_for_each(
     db.add(snapshot)
     db.commit()
 
-    response = await client.get("/api/sessions/")
+    response = await safe_mode_auth_client.get("/api/sessions/")
     assert response.status_code == 200
     sessions = response.json()
     assert len(sessions) == 2
@@ -157,7 +161,7 @@ async def test_list_sessions_includes_restore_point_for_each(
 
 @pytest.mark.asyncio
 async def test_snapshot_count_increases_with_multiple_snapshots(
-    client: AsyncClient, db, safe_mode_user
+    safe_mode_auth_client: AsyncClient, db, safe_mode_user
 ):
     """Test that snapshot_count correctly counts all snapshots."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
@@ -204,7 +208,7 @@ async def test_snapshot_count_increases_with_multiple_snapshots(
     db.add_all([snapshot1, snapshot2])
     db.commit()
 
-    response = await client.get(f"/api/sessions/{session.id}")
+    response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is True

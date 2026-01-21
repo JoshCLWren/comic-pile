@@ -1,14 +1,17 @@
 """Queue API routes."""
 
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Thread
+from app.models import Event, Thread, User
 from app.schemas import ThreadResponse
 from comic_pile.queue import move_to_back, move_to_front, move_to_position
 
@@ -29,10 +32,13 @@ def move_thread_position(
     request: Request,
     thread_id: int,
     position_request: PositionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ) -> ThreadResponse:
     """Move thread to specific position."""
-    thread = db.get(Thread, thread_id)
+    thread = db.execute(
+        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -40,7 +46,7 @@ def move_thread_position(
         )
 
     old_position = thread.queue_position
-    move_to_position(thread_id, position_request.new_position, db)
+    move_to_position(thread_id, current_user.id, position_request.new_position, db)
     db.refresh(thread)
 
     if old_position != thread.queue_position:
@@ -75,10 +81,15 @@ def move_thread_position(
 @router.put("/threads/{thread_id}/front/", response_model=ThreadResponse)
 @limiter.limit("30/minute")
 def move_thread_front(
-    request: Request, thread_id: int, db: Session = Depends(get_db)
+    request: Request,
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> ThreadResponse:
     """Move thread to front of queue."""
-    thread = db.get(Thread, thread_id)
+    thread = db.execute(
+        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -86,7 +97,7 @@ def move_thread_front(
         )
 
     old_position = thread.queue_position
-    move_to_front(thread_id, db)
+    move_to_front(thread_id, current_user.id, db)
     db.refresh(thread)
 
     if old_position != thread.queue_position:
@@ -121,10 +132,15 @@ def move_thread_front(
 @router.put("/threads/{thread_id}/back/", response_model=ThreadResponse)
 @limiter.limit("30/minute")
 def move_thread_back(
-    request: Request, thread_id: int, db: Session = Depends(get_db)
+    request: Request,
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> ThreadResponse:
     """Move thread to back of queue."""
-    thread = db.get(Thread, thread_id)
+    thread = db.execute(
+        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -132,7 +148,7 @@ def move_thread_back(
         )
 
     old_position = thread.queue_position
-    move_to_back(thread_id, db)
+    move_to_back(thread_id, current_user.id, db)
     db.refresh(thread)
 
     if old_position != thread.queue_position:

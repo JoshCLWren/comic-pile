@@ -322,3 +322,33 @@ async def api_client(db: Session) -> AsyncGenerator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def auth_api_client(db: Session) -> AsyncGenerator[AsyncClient]:
+    """API client with authentication using ASGITransport for direct app calls."""
+    from app.auth import create_access_token
+    from app.models import User
+
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        user = db.execute(
+            select(User).where(User.username == "test_user@example.com")
+        ).scalar_one_or_none()
+        if not user:
+            user = User(username="test_user@example.com", created_at=datetime.now(UTC))
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        token = create_access_token(data={"sub": user.username, "jti": "test"})
+        ac.headers.update({"Authorization": f"Bearer {token}"})
+        yield ac
+    app.dependency_overrides.clear()

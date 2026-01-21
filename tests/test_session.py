@@ -137,7 +137,7 @@ def test_should_start_new_true(db):
     db.add(old_session)
     db.commit()
 
-    result = should_start_new(db)
+    result = should_start_new(db, user_id=1)
     assert result is True
 
 
@@ -151,7 +151,7 @@ def test_should_start_new_false(db):
     db.add(active_session)
     db.commit()
 
-    result = should_start_new(db)
+    result = should_start_new(db, user_id=1)
     assert result is False
 
 
@@ -242,7 +242,7 @@ def test_should_start_new_multiple_old_sessions(db):
         db.add(old_session)
     db.commit()
 
-    result = should_start_new(db)
+    result = should_start_new(db, user_id=1)
     assert result is True
 
 
@@ -470,6 +470,7 @@ def test_session_start_snapshot_captures_manual_die(db):
 @pytest.mark.asyncio
 async def test_get_current_session_active(client: AsyncClient, db, default_user):
     """Test getting current active session."""
+    from app.auth import create_access_token
     from app.models import Session as SessionModel
 
     session = SessionModel(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
@@ -498,7 +499,10 @@ async def test_get_current_session_active(client: AsyncClient, db, default_user)
     db.add(event)
     db.commit()
 
-    response = await client.get("/api/sessions/current/")
+    token = create_access_token(data={"sub": default_user.username, "jti": "test"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await client.get("/api/sessions/current/", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == session.id
@@ -511,6 +515,7 @@ async def test_get_current_session_active(client: AsyncClient, db, default_user)
 @pytest.mark.asyncio
 async def test_get_current_session_no_active(client: AsyncClient, db, default_user):
     """Test getting current session creates a new session when none is active."""
+    from app.auth import create_access_token
     from app.models import Session as SessionModel
 
     session = SessionModel(
@@ -522,7 +527,10 @@ async def test_get_current_session_no_active(client: AsyncClient, db, default_us
     db.add(session)
     db.commit()
 
-    response = await client.get("/api/sessions/current/")
+    token = create_access_token(data={"sub": default_user.username, "jti": "test"})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = await client.get("/api/sessions/current/", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "id" in data
@@ -530,7 +538,7 @@ async def test_get_current_session_no_active(client: AsyncClient, db, default_us
 
 
 @pytest.mark.asyncio
-async def test_list_sessions(client: AsyncClient, db, default_user):
+async def test_list_sessions(auth_client: AsyncClient, db, default_user):
     """Test listing all sessions with pagination."""
     from app.models import Session as SessionModel
 
@@ -541,14 +549,14 @@ async def test_list_sessions(client: AsyncClient, db, default_user):
         db.add(session)
     db.commit()
 
-    response = await client.get("/api/sessions/?limit=3&offset=0")
+    response = await auth_client.get("/api/sessions/?limit=3&offset=0")
     assert response.status_code == 200
     sessions = response.json()
     assert len(sessions) == 3
 
 
 @pytest.mark.asyncio
-async def test_list_sessions_pagination(client: AsyncClient, db, default_user):
+async def test_list_sessions_pagination(auth_client: AsyncClient, db, default_user):
     """Test session pagination works correctly."""
     from app.models import Session as SessionModel
 
@@ -559,12 +567,12 @@ async def test_list_sessions_pagination(client: AsyncClient, db, default_user):
         db.add(session)
     db.commit()
 
-    first_page = await client.get("/api/sessions/?limit=2&offset=0")
+    first_page = await auth_client.get("/api/sessions/?limit=2&offset=0")
     assert first_page.status_code == 200
     first_sessions = first_page.json()
     assert len(first_sessions) == 2
 
-    second_page = await client.get("/api/sessions/?limit=2&offset=2")
+    second_page = await auth_client.get("/api/sessions/?limit=2&offset=2")
     assert second_page.status_code == 200
     second_sessions = second_page.json()
     assert len(second_sessions) == 2
@@ -573,7 +581,7 @@ async def test_list_sessions_pagination(client: AsyncClient, db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_get_session_by_id(client: AsyncClient, db, default_user):
+async def test_get_session_by_id(auth_client: AsyncClient, db, default_user):
     """Test getting a specific session by ID."""
     from app.models import Session as SessionModel
 
@@ -582,7 +590,7 @@ async def test_get_session_by_id(client: AsyncClient, db, default_user):
     db.commit()
     db.refresh(session)
 
-    response = await client.get(f"/api/sessions/{session.id}")
+    response = await auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == session.id
@@ -590,15 +598,15 @@ async def test_get_session_by_id(client: AsyncClient, db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_get_session_not_found(client: AsyncClient):
+async def test_get_session_not_found(auth_client: AsyncClient):
     """Test getting a non-existent session."""
-    response = await client.get("/api/sessions/9999")
+    response = await auth_client.get("/api/sessions/9999")
     assert response.status_code == 404
     assert "Session not found" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_get_session_includes_ladder_path(client: AsyncClient, db, default_user):
+async def test_get_session_includes_ladder_path(auth_client: AsyncClient, db, default_user):
     """Test session response includes dice ladder path."""
     from app.models import Session as SessionModel
 
@@ -637,14 +645,14 @@ async def test_get_session_includes_ladder_path(client: AsyncClient, db, default
     db.add(event2)
     db.commit()
 
-    response = await client.get(f"/api/sessions/{session.id}")
+    response = await auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert "6 → 8" in data["ladder_path"]
 
 
 @pytest.mark.asyncio
-async def test_get_session_includes_snapshot_info(client: AsyncClient, db, default_user):
+async def test_get_session_includes_snapshot_info(auth_client: AsyncClient, db, default_user):
     """Test session response includes snapshot count and restore point info."""
     from app.models import Session as SessionModel
 
@@ -683,7 +691,7 @@ async def test_get_session_includes_snapshot_info(client: AsyncClient, db, defau
     db.add(snapshot)
     db.commit()
 
-    response = await client.get(f"/api/sessions/{session.id}")
+    response = await auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["snapshot_count"] == 1
@@ -691,7 +699,7 @@ async def test_get_session_includes_snapshot_info(client: AsyncClient, db, defau
 
 
 @pytest.mark.asyncio
-async def test_restore_session_start(client: AsyncClient, db, default_user):
+async def test_restore_session_start(auth_client: AsyncClient, db, default_user):
     """Restore session to start state via API."""
     from app.models import Session as SessionModel
 
@@ -732,7 +740,7 @@ async def test_restore_session_start(client: AsyncClient, db, default_user):
     session.manual_die = 20
     db.commit()
 
-    response = await client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
     data = response.json()
     assert data["start_die"] == 6
@@ -748,7 +756,7 @@ async def test_restore_session_start(client: AsyncClient, db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_restore_session_start_no_snapshot(client: AsyncClient, db, default_user):
+async def test_restore_session_start_no_snapshot(auth_client: AsyncClient, db, default_user):
     """Test restoring session when no session start snapshot exists."""
     from app.models import Session as SessionModel
 
@@ -757,13 +765,15 @@ async def test_restore_session_start_no_snapshot(client: AsyncClient, db, defaul
     db.commit()
     db.refresh(session)
 
-    response = await client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 404
     assert "No session start snapshot found" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_restore_session_start_with_deleted_threads(client: AsyncClient, db, default_user):
+async def test_restore_session_start_with_deleted_threads(
+    auth_client: AsyncClient, db, default_user
+):
     """Test that restore handles threads that were deleted after snapshot."""
     from app.models import Session as SessionModel
 
@@ -801,10 +811,10 @@ async def test_restore_session_start_with_deleted_threads(client: AsyncClient, d
     thread2.issues_remaining = 0
     db.commit()
 
-    await client.delete(f"/api/threads/{thread2.id}")
+    await auth_client.delete(f"/api/threads/{thread2.id}")
     db.expire_all()
 
-    response = await client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
 
     refreshed_thread1 = db.get(Thread, thread1.id)
@@ -817,7 +827,7 @@ async def test_restore_session_start_with_deleted_threads(client: AsyncClient, d
 
 @pytest.mark.asyncio
 async def test_restore_session_start_clears_pending_thread_id(
-    client: AsyncClient, db, default_user
+    auth_client: AsyncClient, db, default_user
 ):
     """Test that restore-session-start clears pending_thread_id from sessions when deleting threads.
 
@@ -861,12 +871,12 @@ async def test_restore_session_start_clears_pending_thread_id(
     thread2.issues_remaining = 0
     db.commit()
 
-    await client.delete(f"/api/threads/{thread2.id}")
+    await auth_client.delete(f"/api/threads/{thread2.id}")
 
     db.refresh(session)
     assert session.pending_thread_id is None
 
-    response = await client.post(f"/api/sessions/{session.id}/restore-session-start")
+    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
 
     restored_thread2 = db.get(Thread, thread2.id)
@@ -934,7 +944,16 @@ def test_undo_to_snapshot_clears_pending_thread_id(db, sample_data):
 
     assert snapshot is not None
 
-    undo_to_snapshot(session.id, snapshot.id, db)
+    from app.models.user import User
+
+    user = db.get(User, 1)
+    if not user:
+        user = User(id=1, username="test_user", created_at=datetime.now(UTC))
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    undo_to_snapshot(session.id, snapshot.id, user, db)
 
     db.refresh(session)
     assert session.pending_thread_id is None
@@ -1242,7 +1261,7 @@ def test_move_to_position_handles_zero(db, sample_data):
 
     thread = sample_data["threads"][0]
 
-    move_to_position(thread.id, 0, db)
+    move_to_position(thread.id, thread.user_id, 0, db)
 
     db.refresh(thread)
     assert thread.queue_position == 1

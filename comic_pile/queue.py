@@ -1,6 +1,6 @@
 """Queue management functions."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from app.models import Thread
 
 
-def move_to_front(thread_id: int, db: Session) -> None:
+def move_to_front(thread_id: int, user_id: int, db: Session) -> None:
     """Move thread to front of queue."""
-    target_thread = db.get(Thread, thread_id)
+    target_thread = db.execute(
+        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
+    ).scalar_one_or_none()
     if not target_thread:
         return
 
@@ -20,6 +22,7 @@ def move_to_front(thread_id: int, db: Session) -> None:
 
     db.execute(
         update(Thread)
+        .where(Thread.user_id == user_id)
         .where(Thread.queue_position >= 1)
         .where(Thread.queue_position < original_position)
         .values(queue_position=Thread.queue_position + 1)
@@ -28,9 +31,11 @@ def move_to_front(thread_id: int, db: Session) -> None:
     db.commit()
 
 
-def move_to_back(thread_id: int, db: Session) -> None:
+def move_to_back(thread_id: int, user_id: int, db: Session) -> None:
     """Move thread to back of queue."""
-    target_thread = db.get(Thread, thread_id)
+    target_thread = db.execute(
+        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
+    ).scalar_one_or_none()
     if not target_thread:
         return
 
@@ -38,6 +43,7 @@ def move_to_back(thread_id: int, db: Session) -> None:
 
     max_position = db.execute(
         select(Thread.queue_position)
+        .where(Thread.user_id == user_id)
         .where(Thread.queue_position >= 1)
         .order_by(Thread.queue_position.desc())
         .limit(1)
@@ -51,6 +57,7 @@ def move_to_back(thread_id: int, db: Session) -> None:
 
     db.execute(
         update(Thread)
+        .where(Thread.user_id == user_id)
         .where(Thread.queue_position > original_position)
         .values(queue_position=Thread.queue_position - 1)
     )
@@ -58,9 +65,11 @@ def move_to_back(thread_id: int, db: Session) -> None:
     db.commit()
 
 
-def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
+def move_to_position(thread_id: int, user_id: int, new_position: int, db: Session) -> None:
     """Move thread to specific position."""
-    target_thread = db.get(Thread, thread_id)
+    target_thread = db.execute(
+        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
+    ).scalar_one_or_none()
     if not target_thread:
         return
 
@@ -71,6 +80,7 @@ def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
 
     max_position = db.execute(
         select(Thread.queue_position)
+        .where(Thread.user_id == user_id)
         .where(Thread.queue_position >= 1)
         .order_by(Thread.queue_position.desc())
         .limit(1)
@@ -88,6 +98,7 @@ def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
     if old_position < new_position:
         db.execute(
             update(Thread)
+            .where(Thread.user_id == user_id)
             .where(Thread.queue_position > old_position)
             .where(Thread.queue_position <= new_position)
             .values(queue_position=Thread.queue_position - 1)
@@ -96,6 +107,7 @@ def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
     else:
         db.execute(
             update(Thread)
+            .where(Thread.user_id == user_id)
             .where(Thread.queue_position >= new_position)
             .where(Thread.queue_position < old_position)
             .where(Thread.id != thread_id)
@@ -106,11 +118,12 @@ def move_to_position(thread_id: int, new_position: int, db: Session) -> None:
     db.commit()
 
 
-def get_roll_pool(db: Session) -> list[Thread]:
+def get_roll_pool(user_id: int, db: Session) -> list[Thread]:
     """Get all active threads ordered by position."""
     threads = (
         db.execute(
             select(Thread)
+            .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
             .where(Thread.queue_position >= 1)
             .order_by(Thread.queue_position)
@@ -122,13 +135,14 @@ def get_roll_pool(db: Session) -> list[Thread]:
     return list(threads)
 
 
-def get_stale_threads(db: Session, days: int = 7) -> list[Thread]:
+def get_stale_threads(user_id: int, db: Session, days: int = 7) -> list[Thread]:
     """Get threads not read in specified days."""
-    cutoff_date = datetime.now() - timedelta(days=days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=days)
 
     threads = (
         db.execute(
             select(Thread)
+            .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
             .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
             .order_by(Thread.last_activity_at.asc().nullsfirst())
