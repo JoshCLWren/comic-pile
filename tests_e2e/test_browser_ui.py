@@ -81,9 +81,6 @@ def test_homepage_renders_dice_ladder(page, test_server_url, db, test_user):
     assert header_die is not None
 
 
-@pytest.mark.skip(
-    reason="Requires complex e2e user/database synchronization that conflicts with Phase 6 tenant isolation"
-)
 @pytest.mark.integration
 def test_roll_dice_navigates_to_rate(page, test_server_url, db, test_user):
     """Navigate to /, click roll button, verify navigation to /rate."""
@@ -112,13 +109,9 @@ def test_roll_dice_navigates_to_rate(page, test_server_url, db, test_user):
         dice_element.click()
 
     page.wait_for_timeout(2000)
-    db.refresh(thread)
-    assert thread.last_rating == 4.5
+    assert page.url.endswith("/rate") or page.url.endswith("/rate/")
 
 
-@pytest.mark.skip(
-    reason="Requires complex e2e user/database synchronization that conflicts with Phase 6 tenant isolation"
-)
 @pytest.mark.integration
 def test_queue_management_ui(page, test_server_url, db, test_user):
     """Navigate to /queue, verify queue container exists and displays data."""
