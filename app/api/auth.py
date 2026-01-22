@@ -3,8 +3,9 @@
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.orm import Session
 
 from app.auth import (
@@ -61,8 +62,15 @@ def register_user(
         password_hash=hashed_password,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        db.commit()
+        db.refresh(user)
+    except sqlalchemy_exc.IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already registered",
+        ) from None
 
     # Create tokens
     jti = secrets.token_urlsafe(32)
@@ -128,7 +136,13 @@ def refresh_access_token(
     jti = payload.get("jti")
     token_type = payload.get("type")
 
-    if not username or not isinstance(username, str) or token_type != "refresh":
+    if (
+        not username
+        or not isinstance(username, str)
+        or not jti
+        or not isinstance(jti, str)
+        or token_type != "refresh"
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -164,7 +178,6 @@ def refresh_access_token(
 
 @router.post("/logout")
 def logout_user(
-    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())],
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
