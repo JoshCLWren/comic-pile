@@ -25,6 +25,7 @@ jobs:
     container: debian:13
     env:
       CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
     services:
       postgres:
         image: postgres:16
