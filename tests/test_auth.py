@@ -23,10 +23,9 @@ class TestAuth:
         assert response.status_code == 200
 
         data = response.json()
-        assert data["username"] == "newuser"
-        assert data["email"] == "newuser@example.com"
-        assert data["is_admin"] is False
-        assert "id" in data
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["token_type"] == "bearer"
 
         # Verify user was created in database
         user = db.query(User).filter(User.username == "newuser").first()

@@ -92,7 +92,15 @@ def get_current_user(
     """Get current authenticated user from JWT token."""
     token = credentials.credentials
 
-    payload = verify_token(token)
+    try:
+        payload = verify_token(token)
+    except JWTError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from e
+
     username = payload.get("sub")
     jti = payload.get("jti")
     token_type = payload.get("type")

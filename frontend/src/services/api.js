@@ -6,6 +6,8 @@ const api = axios.create({
   timeout: 10000,
 })
 
+let refreshTokenPromise = null
+
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('auth_token')
@@ -19,11 +21,42 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response.data,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token')
-      window.location.href = '/login'
+  async (error) => {
+    const originalRequest = error.config
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true
+
+      const refreshToken = localStorage.getItem('refresh_token')
+      if (refreshToken) {
+        try {
+          if (!refreshTokenPromise) {
+            refreshTokenPromise = api.post('/auth/refresh', {
+              refresh_token: refreshToken,
+            })
+          }
+
+          const response = await refreshTokenPromise
+          refreshTokenPromise = null
+
+          const { access_token, refresh_token: newRefreshToken } = response
+          localStorage.setItem('auth_token', access_token)
+          localStorage.setItem('refresh_token', newRefreshToken)
+
+          originalRequest.headers.Authorization = `Bearer ${access_token}`
+          return api(originalRequest)
+        } catch (refreshError) {
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('refresh_token')
+          window.location.href = '/login'
+          return Promise.reject(refreshError)
+        }
+      } else {
+        localStorage.removeItem('auth_token')
+        window.location.href = '/login'
+      }
     }
+
     console.error('API Error:', error)
     return Promise.reject(error)
   }

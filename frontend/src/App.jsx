@@ -28,13 +28,17 @@ export function AuthProvider({ children }) {
     setIsLoading(false)
   }, [])
 
-  const login = (token) => {
-    localStorage.setItem('auth_token', token)
+  const login = (accessToken, refreshToken = null) => {
+    localStorage.setItem('auth_token', accessToken)
+    if (refreshToken) {
+      localStorage.setItem('refresh_token', refreshToken)
+    }
     setIsAuthenticated(true)
   }
 
   const logout = () => {
     localStorage.removeItem('auth_token')
+    localStorage.removeItem('refresh_token')
     setIsAuthenticated(false)
   }
 

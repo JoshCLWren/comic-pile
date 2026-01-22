@@ -30,12 +30,12 @@ from app.schemas.auth import (
 router = APIRouter(tags=["auth"])
 
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register", response_model=TokenResponse)
 def register_user(
     user_data: UserRegisterRequest,
     db: Annotated[Session, Depends(get_db)],
-) -> UserResponse:
-    """Register a new user."""
+) -> TokenResponse:
+    """Register a new user and return tokens."""
     # Check if username already exists
     existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
@@ -64,11 +64,14 @@ def register_user(
     db.commit()
     db.refresh(user)
 
-    return UserResponse(
-        id=user.id,
-        username=user.username,
-        email=user.email,
-        is_admin=user.is_admin,
+    # Create tokens
+    jti = secrets.token_urlsafe(32)
+    access_token = create_access_token(data={"sub": user.username, "jti": jti})
+    refresh_token = create_refresh_token(data={"sub": user.username, "jti": jti})
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
     )
 
 
