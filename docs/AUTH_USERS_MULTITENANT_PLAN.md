@@ -345,7 +345,7 @@ Dependencies:
 
 Parallelizable:
 
-- Can be built alongside Phase 4.
+- This can be built alongside Phase 4.
 
 Go/No-Go gate:
 
@@ -449,7 +449,7 @@ Purpose: ship safely to production.
 
 ## Scope Limits (to avoid endless cleanup)
 
-We will not fully rewrite the task system; we will disable/quarantine it for production. Additionally, we will not restructure the repo or change the build artifact strategy in this phase. We will also not add OAuth in this phase.
+We will not fully rewrite the task system; we will disable/quarantine it for production. Additionally, we will not restructure the repo or change the build artifact strategy in this phase, and we will not add OAuth in this phase.
 
 ## Appendix: Known Hotspots (Files)
 
