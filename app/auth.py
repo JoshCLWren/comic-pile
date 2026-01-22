@@ -65,22 +65,20 @@ def verify_token(token: str) -> dict:
 
 def revoke_token(db: Session, token: str, user_id: int) -> None:
     """Revoke a JWT token by storing its JTI."""
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        jti = payload.get("jti")
-        if not jti:
-            return
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    jti = payload.get("jti")
+    if not jti:
+        return
 
-        expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
-        revoked_token = RevokedToken(
-            user_id=user_id,
-            jti=jti,
-            expires_at=expires_at,
-        )
+    expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
+    revoked_token = RevokedToken(
+        user_id=user_id,
+        jti=jti,
+        expires_at=expires_at,
+    )
+    try:
         db.add(revoked_token)
         db.commit()
-    except JWTError:
-        pass
     except IntegrityError:
         db.rollback()
 

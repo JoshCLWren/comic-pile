@@ -12,12 +12,17 @@ Last updated: 2026-01-20
 
 ## Explicit Decisions
 
-- Auth mechanism: JWT bearer tokens.
+- Auth mechanism: JWT bearer tokens with short-lived access tokens (15-30 minutes) and refresh token rotation.
 - Identity: email + password.
-- Token lifetime: 30 days for access tokens.
-- App access model: require login for all product pages; only `/health` remains unauthenticated.
-- Migration strategy: keep existing data attached to `users.id == 1` by claiming that row on first registration.
-- Deployment environment: Railway.
+- Token lifetime: 15-30 minutes for access tokens (short-lived to reduce token theft window).
+- Access tokens are paired with refresh tokens that rotate on each use.
+
+## Refresh Token Strategy
+
+- **Refresh token rotation**: Each time a refresh token is used to obtain a new access token, the refresh token itself is also replaced. This invalidates the old refresh token and issues a new one.
+- **Logout revocation**: When a user logs out, the current refresh token is immediately revoked and cannot be used again.
+- **Suspicious activity revocation**: Refresh tokens are revoked on suspicious activity detection (e.g., token reuse anomalies, IP changes, or abnormal usage patterns).
+- **Security benefit**: Short-lived access tokens (15-30 minutes) paired with rotating refresh tokens significantly reduce the window of opportunity for token theft. Even if an access token is compromised, it expires quickly, limiting the attacker's access time.
 
 ## Non-Goals (for this phase)
 
@@ -57,7 +62,7 @@ Additionally, the UI surface is mixed:
 ### Proposed new/updated env vars
 
 - `JWT_SECRET` (required in production)
-- `JWT_EXPIRES_DAYS` (default `30`)
+- `JWT_EXPIRES_MINUTES` (default `15`)
 - `CORS_ORIGINS` (required in production; comma-separated)
 - `ENVIRONMENT` (`development`/`production`)
 - `ENABLE_DEBUG_ROUTES` (default false in production)

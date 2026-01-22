@@ -1,5 +1,6 @@
 """Browser UI integration tests using Playwright."""
 
+import json
 import time
 import pytest
 import requests
@@ -17,7 +18,7 @@ def login_with_playwright(page, test_server_url, email, password=None):
     assert login_response.status_code == 200
     access_token = login_response.json()["access_token"]
 
-    page.add_init_script(f"localStorage.setItem('auth_token', '{access_token}')")
+    page.add_init_script(f"localStorage.setItem('auth_token', {json.dumps(access_token)})")
     page.goto(f"{test_server_url}/")
     page.wait_for_load_state("networkidle", timeout=5000)
 

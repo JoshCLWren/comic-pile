@@ -171,7 +171,13 @@ def logout_user(
 ) -> dict:
     """Logout user by revoking their current token."""
     token = credentials.credentials
-    revoke_token(db, token, current_user.id)
+    try:
+        revoke_token(db, token, current_user.id)
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to revoke token",
+        ) from err
     return {"message": "Successfully logged out"}
 
 

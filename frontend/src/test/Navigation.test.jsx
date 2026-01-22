@@ -1,9 +1,13 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { expect, test } from 'vitest'
+import { expect, test, afterEach } from 'vitest'
 import App, { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
+
+afterEach(() => {
+  localStorage.clear()
+})
 
 const renderWithAuth = () => {
   const queryClient = new QueryClient({
@@ -27,8 +31,6 @@ const renderWithoutAuth = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-
-  localStorage.clear()
 
   return render(
     <MemoryRouter initialEntries={['/']}>

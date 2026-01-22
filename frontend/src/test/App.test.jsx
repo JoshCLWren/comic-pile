@@ -2,6 +2,7 @@ import { expect, test, vi, beforeEach, afterEach, describe } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { useEffect } from 'react'
 
 vi.mock('../pages/LoginPage', () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
@@ -16,7 +17,18 @@ vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="histor
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
 vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
 
-import App from '../App'
+import App, { AuthProvider, AppRoutes, useAuth } from '../App'
+
+let authContextValue = null
+
+const TestAuthConsumer = ({ onAuth }) => {
+  const auth = useAuth()
+  useEffect(() => {
+    authContextValue = auth
+    if (onAuth) onAuth(auth)
+  }, [auth, onAuth])
+  return null
+}
 
 const renderWithAuth = (initialEntry = '/') => {
   const queryClient = new QueryClient({
@@ -30,14 +42,18 @@ const renderWithAuth = (initialEntry = '/') => {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <AuthProvider>
+          <TestAuthConsumer />
+          <AppRoutes />
+        </AuthProvider>
       </QueryClientProvider>
     </MemoryRouter>
   )
 }
 
 test('renders navigation labels', () => {
-  renderWithAuth()
+  localStorage.setItem('auth_token', 'test-token')
+  renderWithAuth('/')
 
   expect(screen.getByText('Roll')).toBeInTheDocument()
   expect(screen.getByText('Rate')).toBeInTheDocument()
@@ -55,10 +71,12 @@ describe('route guards', () => {
     localStorage.clear()
   })
 
-  test('redirects unauthenticated users to /login when accessing protected routes', () => {
+  test('redirects unauthenticated users to /login when accessing protected routes', async () => {
     renderWithAuth('/')
 
-    expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    })
   })
 
   test('allows authenticated users to access protected routes', () => {
@@ -100,6 +118,7 @@ describe('route guards', () => {
 describe('auth state race condition regression', () => {
   beforeEach(() => {
     localStorage.clear()
+    authContextValue = null
   })
 
   afterEach(() => {
@@ -113,8 +132,12 @@ describe('auth state race condition regression', () => {
       expect(screen.getByTestId('login-page')).toBeInTheDocument()
     })
 
+    await waitFor(() => {
+      expect(authContextValue).not.toBeNull()
+    })
+
     act(() => {
-      localStorage.setItem('auth_token', 'test-token')
+      authContextValue.login('test-token')
     })
 
     await waitFor(() => {
@@ -129,8 +152,12 @@ describe('auth state race condition regression', () => {
       expect(screen.getByTestId('register-page')).toBeInTheDocument()
     })
 
+    await waitFor(() => {
+      expect(authContextValue).not.toBeNull()
+    })
+
     act(() => {
-      localStorage.setItem('auth_token', 'test-token')
+      authContextValue.login('test-token')
     })
 
     await waitFor(() => {

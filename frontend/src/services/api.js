@@ -51,6 +51,7 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${access_token}`
           return api(originalRequest)
         } catch (refreshError) {
+          refreshTokenPromise = null
           localStorage.removeItem('auth_token')
           localStorage.removeItem('refresh_token')
           window.location.href = '/login'

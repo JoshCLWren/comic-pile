@@ -203,13 +203,13 @@ git push origin main
 
 ### Backend Rollback
 
-**Option 1: Railway rollback (fastest)**
+#### Option 1: Railway rollback (fastest)
 ```bash
 railway rollback
 # Reverts to previous deployed version
 ```
 
-**Option 2: Revert code and redeploy**
+#### Option 2: Revert code and redeploy
 ```bash
 git checkout <previous-commit-hash>
 git push --force origin main  # Only if safe!

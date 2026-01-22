@@ -327,7 +327,7 @@ async def api_client(db: Session) -> AsyncGenerator[AsyncClient]:
 @pytest_asyncio.fixture(scope="function")
 async def auth_api_client(db: Session) -> AsyncGenerator[AsyncClient]:
     """API client with authentication using ASGITransport for direct app calls."""
-    from app.auth import create_access_token
+    from app.auth import create_access_token, hash_password
     from app.models import User
 
     def override_get_db():
@@ -343,7 +343,12 @@ async def auth_api_client(db: Session) -> AsyncGenerator[AsyncClient]:
             select(User).where(User.username == "test_user@example.com")
         ).scalar_one_or_none()
         if not user:
-            user = User(username="test_user@example.com", created_at=datetime.now(UTC))
+            user = User(
+                username="test_user@example.com",
+                email="test_user@example.com",
+                password_hash=hash_password("testpassword"),
+                created_at=datetime.now(UTC),
+            )
             db.add(user)
             db.commit()
             db.refresh(user)

@@ -26,6 +26,16 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('auth_token')
     setIsAuthenticated(!!token)
     setIsLoading(false)
+
+    const handleStorageChange = (event) => {
+      if (event.key === 'auth_token' || event.key === null) {
+        const newToken = localStorage.getItem('auth_token')
+        setIsAuthenticated(!!newToken)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   const login = (accessToken, refreshToken = null) => {
@@ -78,88 +88,93 @@ function PublicRoute({ children }) {
   return children
 }
 
-function App() {
-  const baseUrl = import.meta.env.BASE_URL || '/'
-  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) || '/' : baseUrl
-  const detectedBase = window.location.pathname.startsWith('/react') ? '/react' : normalizedBase
-
+function AppRoutes() {
   return (
-    <BrowserRouter basename={detectedBase}>
+    <>
+      <main className="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
+        <Suspense fallback={<div className="text-center text-slate-500">Loading page...</div>}>
+          <Routes>
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <LoginPage />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <PublicRoute>
+                  <RegisterPage />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <RollPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/rate"
+              element={
+                <ProtectedRoute>
+                  <RatePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/queue"
+              element={
+                <ProtectedRoute>
+                  <QueuePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <HistoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/sessions/:id"
+              element={
+                <ProtectedRoute>
+                  <SessionPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute>
+                  <AnalyticsPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Suspense>
+      </main>
+      <Navigation />
+    </>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
       <AuthProvider>
-        <main className="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
-          <Suspense fallback={<div className="text-center text-slate-500">Loading page...</div>}>
-            <Routes>
-              <Route
-                path="/login"
-                element={
-                  <PublicRoute>
-                    <LoginPage />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/register"
-                element={
-                  <PublicRoute>
-                    <RegisterPage />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <RollPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/rate"
-                element={
-                  <ProtectedRoute>
-                    <RatePage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/queue"
-                element={
-                  <ProtectedRoute>
-                    <QueuePage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/history"
-                element={
-                  <ProtectedRoute>
-                    <HistoryPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/sessions/:id"
-                element={
-                  <ProtectedRoute>
-                    <SessionPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/analytics"
-                element={
-                  <ProtectedRoute>
-                    <AnalyticsPage />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </Suspense>
-        </main>
-        <Navigation />
+        <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
   )
 }
 
+export { AppRoutes }
 export default App
