@@ -27,6 +27,9 @@ from app.models import Session as SessionModel
 
 load_dotenv()
 
+if not os.getenv("SECRET_KEY"):
+    os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
+
 _SCHEMA_PREPARED: set[str] = set()
 
 

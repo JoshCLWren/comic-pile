@@ -7,6 +7,9 @@ from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from datetime import UTC, datetime
 from socket import socket
 
+if not os.getenv("SECRET_KEY"):
+    os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
+
 import pytest
 import pytest_asyncio
 import requests
