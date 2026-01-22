@@ -1,16 +1,20 @@
 """Rate API endpoint."""
 
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from typing import Annotated
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Settings, Snapshot, Thread
+from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
+from app.models.user import User
 from app.schemas import RateRequest, ThreadResponse
 from comic_pile.dice_ladder import DICE_LADDER, step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front
@@ -164,9 +168,9 @@ def get_rate_page(request: Request) -> str:
 </html>"""
 
 
-def snapshot_thread_states(db: Session, session_id: int, event: Event) -> None:
+def snapshot_thread_states(db: Session, session_id: int, event: Event, user_id: int) -> None:
     """Create a snapshot of all thread states for undo functionality."""
-    threads = db.execute(select(Thread)).scalars().all()
+    threads = db.execute(select(Thread).where(Thread.user_id == user_id)).scalars().all()
 
     thread_states = {}
     for thread in threads:
@@ -210,26 +214,47 @@ def snapshot_thread_states(db: Session, session_id: int, event: Event) -> None:
 clear_cache = None
 
 
-def _get_settings(db: Session) -> Settings:
-    """Get settings record, creating with defaults if needed."""
-    settings = db.execute(select(Settings)).scalars().first()
-    if not settings:
-        settings = Settings()
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
-    return settings
+def _float_env(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+
+    return parsed
+
+
+def _rating_min() -> float:
+    value = _float_env("RATING_MIN", 0.5)
+    return value if 0.0 <= value <= 5.0 else 0.5
+
+
+def _rating_max() -> float:
+    value = _float_env("RATING_MAX", 5.0)
+    return value if 0.5 <= value <= 5.0 else 5.0
+
+
+def _rating_threshold() -> float:
+    value = _float_env("RATING_THRESHOLD", 4.0)
+    return value if 0.5 <= value <= 5.0 else 4.0
 
 
 @router.post("/", response_model=ThreadResponse)
 @limiter.limit("60/minute")
 def rate_thread(
-    request: Request, rate_data: RateRequest, db: Session = Depends(get_db)
+    request: Request,
+    rate_data: RateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> ThreadResponse:
     """Rate current reading and update thread."""
     current_session = (
         db.execute(
             select(SessionModel)
+            .where(SessionModel.user_id == current_user.id)
             .where(SessionModel.ended_at.is_(None))
             .order_by(SessionModel.started_at.desc())
         )
@@ -262,7 +287,11 @@ def rate_thread(
             detail="No active thread. Please roll the dice first.",
         )
 
-    thread = db.get(Thread, last_roll_event.selected_thread_id)
+    thread = db.execute(
+        select(Thread)
+        .where(Thread.id == last_roll_event.selected_thread_id)
+        .where(Thread.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -284,19 +313,21 @@ def rate_thread(
     if last_rate_event and last_rate_event.die_after:
         current_die = last_rate_event.die_after
 
-    settings = _get_settings(db)
+    rating_min = _rating_min()
+    rating_max = _rating_max()
+    rating_threshold = _rating_threshold()
 
-    if rate_data.rating < settings.rating_min or rate_data.rating > settings.rating_max:
+    if rate_data.rating < rating_min or rate_data.rating > rating_max:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Rating must be between {settings.rating_min} and {settings.rating_max}",
+            detail=f"Rating must be between {rating_min} and {rating_max}",
         )
 
     thread.issues_remaining -= rate_data.issues_read
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now()
 
-    if rate_data.rating >= settings.rating_threshold:
+    if rate_data.rating >= rating_threshold:
         new_die = step_down(current_die)
     else:
         new_die = step_up(current_die)
@@ -314,14 +345,14 @@ def rate_thread(
     )
     db.add(event)
 
-    if rate_data.rating >= settings.rating_threshold:
-        move_to_front(thread.id, db)
+    if rate_data.rating >= rating_threshold:
+        move_to_front(thread.id, current_user.id, db)
     else:
-        move_to_back(thread.id, db)
+        move_to_back(thread.id, current_user.id, db)
 
     if rate_data.finish_session and thread.issues_remaining <= 0:
         thread.status = "completed"
-        move_to_back(thread.id, db)
+        move_to_back(thread.id, current_user.id, db)
         current_session.ended_at = datetime.now()
 
     if clear_cache:
@@ -332,7 +363,7 @@ def rate_thread(
 
     db.commit()
 
-    snapshot_thread_states(db, current_session_id, event)
+    snapshot_thread_states(db, current_session_id, event, current_user.id)
     db.refresh(thread)
 
     return ThreadResponse(

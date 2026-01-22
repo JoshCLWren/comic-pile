@@ -6,7 +6,7 @@ from app.models import Event, Session as SessionModel, Thread
 
 
 @pytest.mark.asyncio
-async def test_both_buttons_available_when_thread_complete(client, db):
+async def test_both_buttons_available_when_thread_complete(auth_client, db):
     """Both Save & Continue and Finish Session should be available even when issues_remaining is 0."""
     # Create user
     from tests.conftest import get_or_create_user
@@ -46,7 +46,7 @@ async def test_both_buttons_available_when_thread_complete(client, db):
     db.commit()
 
     # Rate the last issue (issues_remaining becomes 0)
-    response = await client.post(
+    response = await auth_client.post(
         "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
@@ -59,7 +59,7 @@ async def test_both_buttons_available_when_thread_complete(client, db):
     assert session.ended_at is None  # Session should still be active
 
     # Get current session to verify active_thread is still available
-    response = await client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert data["active_thread"]["id"] == thread.id
@@ -68,7 +68,7 @@ async def test_both_buttons_available_when_thread_complete(client, db):
 
 
 @pytest.mark.asyncio
-async def test_can_still_rate_after_thread_complete(client, db):
+async def test_can_still_rate_after_thread_complete(auth_client, db):
     """After rating last issue, should still be able to rate again if rolled."""
     # Create user
     from tests.conftest import get_or_create_user
@@ -108,7 +108,7 @@ async def test_can_still_rate_after_thread_complete(client, db):
     db.commit()
 
     # Rate the last issue (issues_remaining becomes 0)
-    response = await client.post(
+    response = await auth_client.post(
         "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
@@ -117,5 +117,5 @@ async def test_can_still_rate_after_thread_complete(client, db):
     assert thread.issues_remaining == 0
 
     # Roll again (should be able to roll thread with 0 issues)
-    response = await client.post("/api/roll/")
+    response = await auth_client.post("/api/roll/")
     assert response.status_code == 200

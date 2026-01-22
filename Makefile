@@ -32,14 +32,11 @@ init:  ## Initialize project with new name (Usage: make init NAME=your-project)
 	@echo "Project initialized as $(NAME)"
 	@echo "Run 'uv sync --all-extras' to install dependencies"
 
-lint:  ## Run code linting (ruff and pyright)
+lint:  ## Run code linting
 	bash scripts/lint.sh
 
-install-githook:  ## Install pre-commit hook for new developers
-	@mkdir -p .git/hooks
-	@cp .githooks/pre-commit .git/hooks/pre-commit
-	@chmod +x .git/hooks/pre-commit
-	@echo "Pre-commit hook installed to .git/hooks/pre-commit"
+install-githook:  ## Install git hooks for new developers
+	@bash scripts/install-git-hooks.sh
 
 githook: install-githook  ## Run lint checks manually (installs pre-commit hook if missing)
 	bash scripts/lint.sh
@@ -88,7 +85,7 @@ merge-phase1:  ## Merge Phase 1 to main
 	git merge --no-ff phase/1-cleanup-fastapi-setup && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 merge-phase2:  ## Merge Phase 2 to main
@@ -96,7 +93,7 @@ merge-phase2:  ## Merge Phase 2 to main
 	git merge --no-ff phase/2-database-models && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 merge-phase3:  ## Merge Phase 3 to main
@@ -104,7 +101,7 @@ merge-phase3:  ## Merge Phase 3 to main
 	git merge --no-ff phase/3-rest-api && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 merge-phase4:  ## Merge Phase 4 to main
@@ -112,7 +109,7 @@ merge-phase4:  ## Merge Phase 4 to main
 	git merge --no-ff phase/4-templates-views && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 merge-phase5:  ## Merge Phase 5 to main
@@ -120,7 +117,7 @@ merge-phase5:  ## Merge Phase 5 to main
 	git merge --no-ff phase/5-interactive-features && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 merge-phase6:  ## Merge Phase 6 to main
@@ -128,7 +125,7 @@ merge-phase6:  ## Merge Phase 6 to main
 	git merge --no-ff phase/6-testing && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 merge-phase7:  ## Merge Phase 7 to main
@@ -136,7 +133,7 @@ merge-phase7:  ## Merge Phase 7 to main
 	git merge --no-ff phase/7-data-import && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 merge-phase8:  ## Merge Phase 8 to main
@@ -144,7 +141,7 @@ merge-phase8:  ## Merge Phase 8 to main
 	git merge --no-ff phase/8-polish && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 merge-phase9:  ## Merge Phase 9 to main
@@ -152,7 +149,7 @@ merge-phase9:  ## Merge Phase 9 to main
 	git merge --no-ff phase/9-documentation && \
 	$(MAKE) test && \
 	$(MAKE) lint && \
-	pyright . && \
+	ty check --error-on-warning && \
 	git push origin main
 
 dev:  ## Run development server with hot reload (uvicorn app.main:app --reload)

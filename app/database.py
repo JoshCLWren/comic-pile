@@ -4,14 +4,17 @@ import logging
 import os
 from collections.abc import Generator
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable must be set")
+    raise ValueError("DATABASE_URL environment variable must be set (or provided via a .env file)")
 
 logger.info(f"Database URL configured: {DATABASE_URL.split('@')[0]}@...")
 

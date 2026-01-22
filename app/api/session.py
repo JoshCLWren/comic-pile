@@ -1,15 +1,16 @@
 """Session API endpoints."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Snapshot, Thread
+from app.models import Event, Snapshot, Thread, User
 from app.models import Session as SessionModel
 from app.schemas.thread import (
     EventDetail,
@@ -161,7 +162,11 @@ def get_active_thread(session_id: int, db: Session) -> dict[str, Any] | None:
 
 @router.get("/current/")
 @limiter.limit("200/minute")
-def get_current_session(request: Request, db: Session = Depends(get_db)) -> SessionResponse:
+def get_current_session(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SessionResponse:
     """Get current active session with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
     import time
@@ -180,6 +185,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
             active_sessions = (
                 db.execute(
                     select(SessionModel)
+                    .where(SessionModel.user_id == current_user.id)
                     .where(SessionModel.ended_at.is_(None))
                     .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
                 )
@@ -194,7 +200,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
                     break
 
             if not active_session:
-                active_session = get_or_create(db, user_id=1)
+                active_session = get_or_create(db, user_id=current_user.id)
 
             active_session_id = active_session.id
             _, active_thread = get_session_with_thread_safe(active_session_id, db)
@@ -242,6 +248,7 @@ def get_current_session(request: Request, db: Session = Depends(get_db)) -> Sess
 
 @router.get("/")
 def list_sessions(
+    current_user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -250,6 +257,7 @@ def list_sessions(
     sessions = (
         db.execute(
             select(SessionModel)
+            .where(SessionModel.user_id == current_user.id)
             .order_by(SessionModel.started_at.desc())
             .limit(limit)
             .offset(offset)
@@ -293,10 +301,17 @@ def list_sessions(
 
 
 @router.get("/{session_id}")
-def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionResponse:
+def get_session(
+    session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SessionResponse:
     """Get single session by ID."""
     session = db.get(SessionModel, session_id)
     if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
     _, active_thread = get_session_with_thread_safe(session_id, db)
@@ -327,10 +342,17 @@ def get_session(session_id: int, db: Session = Depends(get_db)) -> SessionRespon
 
 
 @router.get("/{session_id}/details")
-def get_session_details(session_id: int, db: Session = Depends(get_db)) -> SessionDetailsResponse:
+def get_session_details(
+    session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SessionDetailsResponse:
     """Get session details with all events for expanded view."""
     session_obj = db.get(SessionModel, session_id)
     if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session_obj.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
     events = (
@@ -384,10 +406,17 @@ def get_session_details(session_id: int, db: Session = Depends(get_db)) -> Sessi
 
 
 @router.get("/{session_id}/snapshots")
-def get_session_snapshots(session_id: int, db: Session = Depends(get_db)) -> SnapshotsListResponse:
+def get_session_snapshots(
+    session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SnapshotsListResponse:
     """Get session snapshots list."""
     session = db.get(SessionModel, session_id)
     if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
     snapshots = (
@@ -415,7 +444,11 @@ def get_session_snapshots(session_id: int, db: Session = Depends(get_db)) -> Sna
 
 
 @router.post("/{session_id}/restore-session-start")
-def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> SessionResponse:
+def restore_session_start(
+    session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SessionResponse:
     """Restore session to its initial state at session start."""
     from sqlalchemy.exc import OperationalError
     import time
@@ -431,6 +464,12 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Session {session_id} not found",
+                )
+
+            if session.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied",
                 )
 
             snapshot = (
@@ -454,7 +493,9 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
 
             snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
 
-            current_threads = db.execute(select(Thread)).scalars().all()
+            current_threads = (
+                db.execute(select(Thread).where(Thread.user_id == current_user.id)).scalars().all()
+            )
             current_thread_ids = {thread.id for thread in current_threads}
 
             threads_to_delete = current_thread_ids - snapshot_thread_ids
@@ -469,7 +510,11 @@ def restore_session_start(session_id: int, db: Session = Depends(get_db)) -> Ses
                     )
                     .values(thread_id=None, selected_thread_id=None)
                 )
-                db.execute(delete(Thread).where(Thread.id.in_(threads_to_delete)))
+                db.execute(
+                    delete(Thread)
+                    .where(Thread.id.in_(threads_to_delete))
+                    .where(Thread.user_id == current_user.id)
+                )
 
             for thread_id, state in snapshot.thread_states.items():
                 thread_id_int = int(thread_id)

@@ -2,6 +2,7 @@
 
 import time
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
@@ -9,19 +10,37 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
+from app.models.user import User
 from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
-from comic_pile import get_stale_threads
 
 router = APIRouter(tags=["threads"])
 
 
 @router.get("/stale", response_model=list[ThreadResponse])
-def list_stale_threads(days: int = 30, db: Session = Depends(get_db)) -> list[ThreadResponse]:
+def list_stale_threads(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+    days: int = 30,
+) -> list[ThreadResponse]:
     """List threads not read in specified days (default 30)."""
-    threads = get_stale_threads(db, days)
+    from datetime import timedelta
+
+    cutoff_date = datetime.now(UTC) - timedelta(days=days)
+    threads = (
+        db.execute(
+            select(Thread)
+            .where(Thread.user_id == current_user.id)
+            .where(Thread.status == "active")
+            .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
+            .order_by(Thread.last_activity_at.asc().nullsfirst())
+        )
+        .scalars()
+        .all()
+    )
     return [
         ThreadResponse(
             id=thread.id,
@@ -48,12 +67,24 @@ get_threads_cached = None
 
 @router.get("/", response_model=list[ThreadResponse])
 @limiter.limit("100/minute")
-def list_threads(request: Request, db: Session = Depends(get_db)) -> list[ThreadResponse]:
+def list_threads(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> list[ThreadResponse]:
     """List all threads ordered by position."""
     if get_threads_cached:
-        threads = get_threads_cached(db)
+        threads = get_threads_cached(db, current_user.id)
     else:
-        threads = db.execute(select(Thread).order_by(Thread.queue_position)).scalars().all()
+        threads = (
+            db.execute(
+                select(Thread)
+                .where(Thread.user_id == current_user.id)
+                .order_by(Thread.queue_position)
+            )
+            .scalars()
+            .all()
+        )
     return [
         ThreadResponse(
             id=thread.id,
@@ -75,11 +106,18 @@ def list_threads(request: Request, db: Session = Depends(get_db)) -> list[Thread
 
 
 @router.get("/completed", response_class=HTMLResponse)
-def list_completed_threads(request: Request, db: Session = Depends(get_db)) -> str:
+def list_completed_threads(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> str:
     """List completed threads for reactivation modal."""
     threads = (
         db.execute(
-            select(Thread).where(Thread.status == "completed").order_by(Thread.created_at.desc())
+            select(Thread)
+            .where(Thread.user_id == current_user.id)
+            .where(Thread.status == "completed")
+            .order_by(Thread.created_at.desc())
         )
         .scalars()
         .all()
@@ -92,10 +130,19 @@ def list_completed_threads(request: Request, db: Session = Depends(get_db)) -> s
 
 
 @router.get("/active", response_class=HTMLResponse)
-def list_active_threads(request: Request, db: Session = Depends(get_db)) -> str:
+def list_active_threads(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> str:
     """List active threads for override modal."""
     threads = (
-        db.execute(select(Thread).where(Thread.status == "active").order_by(Thread.queue_position))
+        db.execute(
+            select(Thread)
+            .where(Thread.user_id == current_user.id)
+            .where(Thread.status == "active")
+            .order_by(Thread.queue_position)
+        )
         .scalars()
         .all()
     )
@@ -114,7 +161,10 @@ def list_active_threads(request: Request, db: Session = Depends(get_db)) -> str:
 @router.post("/", response_model=ThreadResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("30/minute")
 def create_thread(
-    request: Request, thread_data: ThreadCreate, db: Session = Depends(get_db)
+    request: Request,
+    thread_data: ThreadCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> ThreadResponse:
     """Create a new thread."""
     max_retries = 3
@@ -125,7 +175,9 @@ def create_thread(
         try:
             max_position = (
                 db.execute(
-                    select(Thread.queue_position).order_by(Thread.queue_position.desc())
+                    select(Thread.queue_position)
+                    .where(Thread.user_id == current_user.id)
+                    .order_by(Thread.queue_position.desc())
                 ).scalar()
                 or 0
             )
@@ -134,7 +186,7 @@ def create_thread(
                 format=thread_data.format,
                 issues_remaining=thread_data.issues_remaining,
                 queue_position=max_position + 1,
-                user_id=1,
+                user_id=current_user.id,
                 notes=thread_data.notes,
                 is_test=thread_data.is_test,
             )
@@ -173,10 +225,14 @@ def create_thread(
 
 
 @router.get("/{thread_id}", response_model=ThreadResponse)
-def get_thread(thread_id: int, db: Session = Depends(get_db)) -> ThreadResponse:
+def get_thread(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> ThreadResponse:
     """Get a single thread by ID."""
     thread = db.get(Thread, thread_id)
-    if not thread:
+    if not thread or thread.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
@@ -200,11 +256,14 @@ def get_thread(thread_id: int, db: Session = Depends(get_db)) -> ThreadResponse:
 
 @router.put("/{thread_id}", response_model=ThreadResponse)
 def update_thread(
-    thread_id: int, thread_data: ThreadUpdate, db: Session = Depends(get_db)
+    thread_id: int,
+    thread_data: ThreadUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> ThreadResponse:
     """Update a thread."""
     thread = db.get(Thread, thread_id)
-    if not thread:
+    if not thread or thread.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
@@ -245,10 +304,14 @@ def update_thread(
 
 
 @router.delete("/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
+def delete_thread(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> None:
     """Delete a thread."""
     thread = db.get(Thread, thread_id)
-    if not thread:
+    if not thread or thread.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
@@ -275,10 +338,14 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)) -> None:
 
 
 @router.post("/reactivate", response_model=ThreadResponse)
-def reactivate_thread(request: ReactivateRequest, db: Session = Depends(get_db)) -> ThreadResponse:
+def reactivate_thread(
+    request: ReactivateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> ThreadResponse:
     """Reactivate a completed thread by adding more issues."""
     thread = db.get(Thread, request.thread_id)
-    if not thread:
+    if not thread or thread.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {request.thread_id} not found",
@@ -294,7 +361,12 @@ def reactivate_thread(request: ReactivateRequest, db: Session = Depends(get_db))
             detail="Must add at least 1 issue",
         )
 
-    db.execute(update(Thread).values(queue_position=Thread.queue_position + 1))
+    db.execute(
+        update(Thread)
+        .where(Thread.user_id == current_user.id)
+        .where(Thread.status == "active")
+        .values(queue_position=Thread.queue_position + 1)
+    )
     thread.issues_remaining = request.issues_to_add
     thread.status = "active"
     thread.queue_position = 1

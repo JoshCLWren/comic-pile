@@ -6,15 +6,15 @@ from app.models import Thread
 
 
 @pytest.mark.asyncio
-async def test_jump_to_position_works_for_large_distance(client, db, sample_data):
+async def test_jump_to_position_works_for_large_distance(auth_client, db, sample_data):
     """Jump from position 1 to last position works correctly."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.get("/api/threads/")
+    response = await auth_client.get("/api/threads/")
     threads = response.json()
     last_position = len(threads)
 
-    response = await client.put(
+    response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": last_position}
     )
     assert response.status_code == 200
@@ -23,14 +23,15 @@ async def test_jump_to_position_works_for_large_distance(client, db, sample_data
     assert thread.queue_position == last_position
 
 
+@pytest.mark.usefixtures("sample_data")
 @pytest.mark.asyncio
-async def test_jump_to_position_works_for_small_distance(client, db, sample_data):
+async def test_jump_to_position_works_for_small_distance(auth_client, db):
     """Jump from last position to position 1 works correctly."""
-    response = await client.get("/api/threads/")
+    response = await auth_client.get("/api/threads/")
     threads = response.json()
     last_thread_id = threads[-1]["id"]
 
-    response = await client.put(
+    response = await auth_client.put(
         f"/api/queue/threads/{last_thread_id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200
@@ -40,12 +41,12 @@ async def test_jump_to_position_works_for_small_distance(client, db, sample_data
 
 
 @pytest.mark.asyncio
-async def test_drag_and_drop_updates_position(client, db, sample_data):
+async def test_drag_and_drop_updates_position(auth_client, db, sample_data):
     """Drag and drop reordering updates position correctly."""
     thread_id = sample_data["threads"][0].id
     new_position = 3
 
-    response = await client.put(
+    response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": new_position}
     )
     assert response.status_code == 200
@@ -59,11 +60,11 @@ async def test_drag_and_drop_updates_position(client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_via_api(client, db, sample_data):
+async def test_move_to_front_via_api(auth_client, db, sample_data):
     """Move to front endpoint works correctly."""
     thread_id = sample_data["threads"][2].id
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/front/")
+    response = await auth_client.put(f"/api/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)
@@ -71,15 +72,15 @@ async def test_move_to_front_via_api(client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_via_api(client, db, sample_data):
+async def test_move_to_back_via_api(auth_client, db, sample_data):
     """Move to back endpoint works correctly."""
     thread_id = sample_data["threads"][0].id
 
-    response = await client.get("/api/threads/")
+    response = await auth_client.get("/api/threads/")
     threads = response.json()
     last_position = len(threads)
 
-    response = await client.put(f"/api/queue/threads/{thread_id}/back/")
+    response = await auth_client.put(f"/api/queue/threads/{thread_id}/back/")
     assert response.status_code == 200
 
     thread = db.get(Thread, thread_id)

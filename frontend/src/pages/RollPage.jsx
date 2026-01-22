@@ -234,8 +234,16 @@ export default function RollPage() {
             </div>
             <div className="flex-1 overflow-y-auto mt-2 space-y-2 scrollbar-thin">
               {pool.length === 0 ? (
-                <div className="text-center py-10 text-slate-600 font-black uppercase tracking-widest text-[10px]">
-                  Queue Empty
+                <div className="text-center py-10 space-y-3">
+                  <div className="text-3xl">📚</div>
+                  <p className="text-xs text-slate-500 font-black uppercase tracking-widest">Queue Empty</p>
+                  <p className="text-[10px] text-slate-600">Add comics to your queue to start rolling</p>
+                  <button
+                    onClick={() => navigate('/queue')}
+                    className="mt-2 px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-teal-400 transition-colors"
+                  >
+                    Add Thread
+                  </button>
                 </div>
               ) : (
                 pool.map((thread, index) => {

@@ -1,14 +1,17 @@
 """Undo API endpoints."""
 
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
+from app.models.user import User
 from app.schemas.thread import SessionResponse
 from comic_pile.session import get_current_die
 
@@ -19,7 +22,10 @@ clear_cache = None
 
 @router.post("/{session_id}/undo/{snapshot_id}")
 def undo_to_snapshot(
-    session_id: int, snapshot_id: int, db: Session = Depends(get_db)
+    session_id: int,
+    snapshot_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> SessionResponse:
     """Undo session state to a specific snapshot with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
@@ -33,6 +39,12 @@ def undo_to_snapshot(
         try:
             session = db.get(SessionModel, session_id, with_for_update=True)
             if not session:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Session {session_id} not found",
+                )
+
+            if session.user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Session {session_id} not found",
@@ -58,11 +70,19 @@ def undo_to_snapshot(
 
             snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
 
-            current_threads = db.execute(select(Thread)).scalars().all()
+            current_threads = (
+                db.execute(select(Thread).where(Thread.user_id == current_user.id)).scalars().all()
+            )
             current_thread_ids = {thread.id for thread in current_threads}
 
             threads_to_delete = current_thread_ids - snapshot_thread_ids
             if threads_to_delete:
+                db.execute(
+                    update(SessionModel)
+                    .where(SessionModel.id == session_id)
+                    .where(SessionModel.pending_thread_id.in_(threads_to_delete))
+                    .values(pending_thread_id=None)
+                )
                 db.execute(
                     update(Event)
                     .where(
@@ -73,7 +93,11 @@ def undo_to_snapshot(
                     )
                     .values(thread_id=None, selected_thread_id=None)
                 )
-                db.execute(delete(Thread).where(Thread.id.in_(threads_to_delete)))
+                db.execute(
+                    delete(Thread)
+                    .where(Thread.id.in_(threads_to_delete))
+                    .where(Thread.user_id == current_user.id)
+                )
                 db.expire_all()
 
             for thread_id, state in snapshot.thread_states.items():
@@ -195,10 +219,20 @@ def undo_to_snapshot(
 
 
 @router.get("/{session_id}/snapshots")
-def list_session_snapshots(session_id: int, db: Session = Depends(get_db)) -> list[dict]:
+def list_session_snapshots(
+    session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> list[dict]:
     """List all snapshots for a session."""
     session = db.get(SessionModel, session_id)
     if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found",
+        )
+
+    if session.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session {session_id} not found",

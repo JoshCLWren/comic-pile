@@ -7,6 +7,9 @@ from collections.abc import AsyncGenerator, AsyncIterator, Generator
 from datetime import UTC, datetime
 from socket import socket
 
+if not os.getenv("SECRET_KEY"):
+    os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
+
 import pytest
 import pytest_asyncio
 import requests
@@ -28,19 +31,33 @@ from app.models import User
 
 def _ensure_default_user(db: Session) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
+    from app.auth import hash_password
+
     user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
     if not user:
-        user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
-        if not user:
-            user = User(username="test_user", created_at=datetime.now(UTC))
-            db.add(user)
-            try:
-                db.commit()
-            except Exception:
-                db.rollback()
-                user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
-            else:
-                db.refresh(user)
+        user = User(
+            id=1,
+            username="test_user@example.com",
+            email="test_user@example.com",
+            password_hash=hash_password("testpassword"),
+            created_at=datetime.now(UTC),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    elif not user.password_hash or user.username != "test_user@example.com":
+        db.delete(user)
+        db.commit()
+        user = User(
+            id=1,
+            username="test_user@example.com",
+            email="test_user@example.com",
+            password_hash=hash_password("testpassword"),
+            created_at=datetime.now(UTC),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
     return user
 
 
@@ -112,6 +129,18 @@ def set_skip_worktree_check():
 
 
 @pytest.fixture(scope="function")
+def enable_internal_ops():
+    """Enable internal ops routes for tests that access admin/tasks endpoints."""
+    old_value = os.environ.get("ENABLE_INTERNAL_OPS_ROUTES")
+    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
+    yield
+    if old_value is None:
+        os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
+    else:
+        os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = old_value
+
+
+@pytest.fixture(scope="function")
 def db() -> Generator[Session]:
     """Create test database for tests (PostgreSQL only)."""
     database_url = get_sync_test_database_url()
@@ -121,7 +150,8 @@ def db() -> Generator[Session]:
     connection = engine.connect()
     connection.execute(
         text(
-            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, settings, users RESTART IDENTITY CASCADE;"
+            "TRUNCATE TABLE users, sessions, events, tasks, threads, snapshots, revoked_tokens "
+            "RESTART IDENTITY CASCADE;"
         )
     )
     connection.commit()
@@ -295,3 +325,45 @@ async def api_client(db: Session) -> AsyncGenerator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def auth_api_client(db: Session) -> AsyncGenerator[AsyncClient]:
+    """API client with authentication using ASGITransport for direct app calls."""
+    from app.auth import create_access_token, hash_password
+    from app.models import User
+
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        user = db.execute(
+            select(User).where(User.username == "test_user@example.com")
+        ).scalar_one_or_none()
+        if not user:
+            user = User(
+                username="test_user@example.com",
+                email="test_user@example.com",
+                password_hash=hash_password("testpassword"),
+                created_at=datetime.now(UTC),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        token = create_access_token(data={"sub": user.username, "jti": "test"})
+        ac.headers.update({"Authorization": f"Bearer {token}"})
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def browser_page(page):
+    """Playwright page fixture with localStorage cleared after each test."""
+    yield page
+    page.evaluate("localStorage.clear()")

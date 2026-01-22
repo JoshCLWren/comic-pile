@@ -6,18 +6,18 @@ from app.models import Event, Session as SessionModel, Thread
 
 
 @pytest.mark.asyncio
-async def test_rate_page_renders(client):
+async def test_rate_page_renders(auth_client):
     """GET /rate returns 200 and renders HTML."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     assert "<!DOCTYPE html>" in response.text
     assert "Rate Session" in response.text
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_rating_input(client):
+async def test_rate_page_contains_rating_input(auth_client):
     """Rate page contains rating slider input."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="rating-input"' in html
@@ -28,9 +28,9 @@ async def test_rate_page_contains_rating_input(client):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_submit_button(client):
+async def test_rate_page_contains_submit_button(auth_client):
     """Rate page contains Save & Continue button."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="submit-btn"' in html
@@ -39,9 +39,9 @@ async def test_rate_page_contains_submit_button(client):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_finish_button(client):
+async def test_rate_page_contains_finish_button(auth_client):
     """Rate page contains Finish Session button."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="finish-btn"' in html
@@ -50,7 +50,7 @@ async def test_rate_page_contains_finish_button(client):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_thread_info(client, db, sample_data):
+async def test_rate_page_contains_thread_info(auth_client, db, sample_data):
     """Rate page displays thread info when active session exists."""
     from tests.conftest import get_or_create_user
 
@@ -85,25 +85,25 @@ async def test_rate_page_contains_thread_info(client, db, sample_data):
     db.add(event)
     db.commit()
 
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="thread-info"' in html
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_session_safe_indicator(client, db, sample_data):
+async def test_rate_page_contains_session_safe_indicator(auth_client, db, sample_data):
     """Rate page contains session safe indicator element."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="session-safe-indicator"' in html
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_dice_preview(client, db, sample_data):
+async def test_rate_page_contains_dice_preview(auth_client, db, sample_data):
     """Rate page contains dice preview element."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="die-preview"' in html
@@ -111,18 +111,18 @@ async def test_rate_page_contains_dice_preview(client, db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_queue_effect_text(client):
+async def test_rate_page_contains_queue_effect_text(auth_client):
     """Rate page contains queue effect text display."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="queue-effect"' in html
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_error_message(client):
+async def test_rate_page_contains_error_message(auth_client):
     """Rate page contains error message element (hidden by default)."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="error-message"' in html
@@ -130,18 +130,18 @@ async def test_rate_page_contains_error_message(client):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_rating_value_display(client):
+async def test_rate_page_contains_rating_value_display(auth_client):
     """Rate page contains rating value display."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="rating-value"' in html
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_header_dice_container(client):
+async def test_rate_page_contains_header_dice_container(auth_client):
     """Rate page contains header dice container."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="header-die-container"' in html
@@ -149,9 +149,9 @@ async def test_rate_page_contains_header_dice_container(client):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_javascript_dice_ladder_constant(client):
+async def test_rate_page_javascript_dice_ladder_constant(auth_client):
     """Rate page JavaScript contains DICE_LADDER constant."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert "DICE_LADDER" in html
@@ -159,34 +159,34 @@ async def test_rate_page_javascript_dice_ladder_constant(client):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_javascript_updateui_function(client):
+async def test_rate_page_javascript_updateui_function(auth_client):
     """Rate page JavaScript contains updateUI function."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert "function updateUI(val)" in html
 
 
 @pytest.mark.asyncio
-async def test_rate_page_javascript_submitrating_function(client):
+async def test_rate_page_javascript_submitrating_function(auth_client):
     """Rate page JavaScript contains submitRating function."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert "async function submitRating(finishSession)" in html
 
 
 @pytest.mark.asyncio
-async def test_rate_page_javascript_checkrestorepoint_function(client):
+async def test_rate_page_javascript_checkrestorepoint_function(auth_client):
     """Rate page JavaScript contains checkRestorePointBeforeSubmit function."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert "async function checkRestorePointBeforeSubmit()" in html
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_thread_info(client, db):
+async def test_rate_session_api_returns_thread_info(auth_client, db):
     """GET /sessions/current/ returns active thread info for rate page."""
     from tests.conftest import get_or_create_user
 
@@ -221,7 +221,7 @@ async def test_rate_session_api_returns_thread_info(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "active_thread" in data
@@ -232,7 +232,7 @@ async def test_rate_session_api_returns_thread_info(client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_die_info(client, db):
+async def test_rate_session_api_returns_die_info(auth_client, db):
     """GET /sessions/current/ returns die info for dice preview."""
     from tests.conftest import get_or_create_user
 
@@ -267,7 +267,7 @@ async def test_rate_session_api_returns_die_info(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "current_die" in data
@@ -277,7 +277,7 @@ async def test_rate_session_api_returns_die_info(client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_has_restore_point(client, db):
+async def test_rate_session_api_returns_has_restore_point(auth_client, db):
     """GET /sessions/current/ returns has_restore_point for session safe indicator."""
     from tests.conftest import get_or_create_user
 
@@ -312,7 +312,7 @@ async def test_rate_session_api_returns_has_restore_point(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "has_restore_point" in data
@@ -320,7 +320,7 @@ async def test_rate_session_api_returns_has_restore_point(client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_invalid_rating(client, db, sample_data):
+async def test_rate_api_invalid_rating(auth_client, db, sample_data):
     """POST /rate/ with invalid rating returns 400 error."""
     from tests.conftest import get_or_create_user
 
@@ -346,12 +346,12 @@ async def test_rate_api_invalid_rating(client, db, sample_data):
     db.add(event)
     db.commit()
 
-    response = await client.post("/api/rate/", json={"rating": 6.0, "issues_read": 1})
+    response = await auth_client.post("/api/rate/", json={"rating": 6.0, "issues_read": 1})
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_rate_api_low_rating_moves_to_back(client, db):
+async def test_rate_api_low_rating_moves_to_back(auth_client, db):
     """POST /rate/ with rating < 4.0 moves thread to back of queue."""
     from tests.conftest import get_or_create_user
 
@@ -396,7 +396,7 @@ async def test_rate_api_low_rating_moves_to_back(client, db):
     db.add(event)
     db.commit()
 
-    await client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
+    await auth_client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
 
     db.refresh(thread1)
     db.refresh(thread2)
@@ -404,7 +404,7 @@ async def test_rate_api_low_rating_moves_to_back(client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_high_rating_moves_to_front(client, db):
+async def test_rate_api_high_rating_moves_to_front(auth_client, db):
     """POST /rate/ with rating >= 4.0 moves thread to front of queue."""
     from tests.conftest import get_or_create_user
 
@@ -449,7 +449,7 @@ async def test_rate_api_high_rating_moves_to_front(client, db):
     db.add(event)
     db.commit()
 
-    await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
 
     db.refresh(thread1)
     db.refresh(thread2)
@@ -457,7 +457,7 @@ async def test_rate_api_high_rating_moves_to_front(client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_updates_last_activity_at(client, db):
+async def test_rate_api_updates_last_activity_at(auth_client, db):
     """POST /rate/ updates thread last_activity_at timestamp."""
     from tests.conftest import get_or_create_user
 
@@ -494,7 +494,7 @@ async def test_rate_api_updates_last_activity_at(client, db):
     db.add(event)
     db.commit()
 
-    await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
 
     db.refresh(thread)
     assert thread.last_activity_at is not None
@@ -503,7 +503,7 @@ async def test_rate_api_updates_last_activity_at(client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_creates_snapshot(client, db):
+async def test_rate_api_creates_snapshot(auth_client, db):
     """POST /rate/ creates snapshot for undo functionality."""
     from tests.conftest import get_or_create_user
 
@@ -541,7 +541,7 @@ async def test_rate_api_creates_snapshot(client, db):
     db.add(event)
     db.commit()
 
-    await client.post("/api/rate/", json={"rating": 4.5, "issues_read": 1})
+    await auth_client.post("/api/rate/", json={"rating": 4.5, "issues_read": 1})
 
     snapshots = (
         db.execute(select(Snapshot).where(Snapshot.session_id == session.id)).scalars().all()
@@ -551,16 +551,16 @@ async def test_rate_api_creates_snapshot(client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_without_active_session(client, db):
+async def test_rate_page_without_active_session(auth_client, db):
     """Rate page renders correctly when no active session exists."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert "Rate Session" in html
 
 
 @pytest.mark.asyncio
-async def test_rate_api_with_min_rating(client, db):
+async def test_rate_api_with_min_rating(auth_client, db):
     """POST /rate/ accepts minimum rating value (0.5)."""
     from tests.conftest import get_or_create_user
 
@@ -595,12 +595,12 @@ async def test_rate_api_with_min_rating(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/api/rate/", json={"rating": 0.5, "issues_read": 1})
+    response = await auth_client.post("/api/rate/", json={"rating": 0.5, "issues_read": 1})
     assert response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_rate_api_with_max_rating(client, db):
+async def test_rate_api_with_max_rating(auth_client, db):
     """POST /rate/ accepts maximum rating value (5.0)."""
     from tests.conftest import get_or_create_user
 
@@ -635,12 +635,12 @@ async def test_rate_api_with_max_rating(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/api/rate/", json={"rating": 5.0, "issues_read": 1})
+    response = await auth_client.post("/api/rate/", json={"rating": 5.0, "issues_read": 1})
     assert response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_rate_api_clears_pending_thread(client, db):
+async def test_rate_api_clears_pending_thread(auth_client, db):
     """POST /rate/ clears pending_thread_id from session."""
     from tests.conftest import get_or_create_user
 
@@ -675,14 +675,14 @@ async def test_rate_api_clears_pending_thread(client, db):
     db.add(event)
     db.commit()
 
-    await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
 
     db.refresh(session)
     assert session.pending_thread_id is None
 
 
 @pytest.mark.asyncio
-async def test_rate_api_updates_issues_remaining(client, db):
+async def test_rate_api_updates_issues_remaining(auth_client, db):
     """POST /rate/ correctly decreases issues_remaining."""
     from tests.conftest import get_or_create_user
 
@@ -717,7 +717,7 @@ async def test_rate_api_updates_issues_remaining(client, db):
     db.add(event)
     db.commit()
 
-    response = await client.post("/api/rate/", json={"rating": 4.0, "issues_read": 2})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 2})
     assert response.status_code == 200
 
     data = response.json()
@@ -728,9 +728,9 @@ async def test_rate_api_updates_issues_remaining(client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_page_contains_explosion_layer(client):
+async def test_rate_page_contains_explosion_layer(auth_client):
     """Rate page contains explosion layer for visual effects."""
-    response = await client.get("/api/rate", follow_redirects=True)
+    response = await auth_client.get("/api/rate", follow_redirects=True)
     assert response.status_code == 200
     html = response.text
     assert 'id="explosion-layer"' in html

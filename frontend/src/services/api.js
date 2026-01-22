@@ -6,14 +6,63 @@ const api = axios.create({
   timeout: 10000,
 })
 
+let refreshTokenPromise = null
+
 api.interceptors.request.use(
-  (config) => config,
+  (config) => {
+    const token = localStorage.getItem('auth_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
   (error) => Promise.reject(error)
 )
 
 api.interceptors.response.use(
   (response) => response.data,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      const isAuthEndpoint = originalRequest.url.includes('/auth/login') || originalRequest.url.includes('/auth/register')
+      if (isAuthEndpoint) {
+        return Promise.reject(error)
+      }
+
+      originalRequest._retry = true
+
+      const refreshToken = localStorage.getItem('refresh_token')
+      if (refreshToken) {
+        try {
+          if (!refreshTokenPromise) {
+            refreshTokenPromise = api.post('/auth/refresh', {
+              refresh_token: refreshToken,
+            })
+          }
+
+          const response = await refreshTokenPromise
+          refreshTokenPromise = null
+
+          const { access_token, refresh_token: newRefreshToken } = response
+          localStorage.setItem('auth_token', access_token)
+          localStorage.setItem('refresh_token', newRefreshToken)
+
+          originalRequest.headers.Authorization = `Bearer ${access_token}`
+          return api(originalRequest)
+        } catch (refreshError) {
+          refreshTokenPromise = null
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('refresh_token')
+          window.location.href = '/login'
+          return Promise.reject(refreshError)
+        }
+      } else {
+        localStorage.removeItem('auth_token')
+        window.location.href = '/login'
+      }
+    }
+
     console.error('API Error:', error)
     return Promise.reject(error)
   }
@@ -49,10 +98,8 @@ export const threadsApi = {
 export const rollApi = {
   roll: () => api.post('/roll/'),
   override: (data) => api.post('/roll/override', data),
-  dismissPending: () => api.post('/roll/dismiss-pending'),
   setDie: (die) => api.post('/roll/set-die', null, { params: { die } }),
   clearManualDie: () => api.post('/roll/clear-manual-die'),
-  reroll: () => api.post('/roll/reroll'),
 }
 
 export const rateApi = {
@@ -77,11 +124,6 @@ export const queueApi = {
 export const undoApi = {
   undo: (sessionId, snapshotId) => api.post(`/undo/${sessionId}/undo/${snapshotId}`),
   listSnapshots: (sessionId) => api.get(`/undo/${sessionId}/snapshots`),
-}
-
-export const settingsApi = {
-  get: () => api.get('/admin/settings'),
-  update: (data) => api.put('/admin/settings', data),
 }
 
 export const tasksApi = {

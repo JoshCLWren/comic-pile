@@ -9,9 +9,9 @@ from app.models import Event
 
 
 @pytest.mark.asyncio
-async def test_roll_success(client, sample_data):
+async def test_roll_success(auth_client, sample_data):
     """POST /roll/ returns valid thread."""
-    response = await client.post("/api/roll/")
+    response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
 
     data = response.json()
@@ -27,10 +27,10 @@ async def test_roll_success(client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_roll_override(client, sample_data):
+async def test_roll_override(auth_client, sample_data):
     """POST /roll/override/ sets specific thread."""
     thread_id = 1
-    response = await client.post("/api/roll/override", json={"thread_id": thread_id})
+    response = await auth_client.post("/api/roll/override", json={"thread_id": thread_id})
     assert response.status_code == 200
 
     data = response.json()
@@ -41,24 +41,24 @@ async def test_roll_override(client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_roll_no_pool(client, db):
+async def test_roll_no_pool(auth_client, db):
     """Returns error if no active threads."""
     from tests.conftest import get_or_create_user
 
     get_or_create_user(db)
 
-    response = await client.post("/api/roll/")
+    response = await auth_client.post("/api/roll/")
     assert response.status_code == 400
     assert "No active threads" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_roll_overflow(client, db):
+async def test_roll_overflow(auth_client, db):
     """Roll works correctly when thread count < die size."""
     from app.models import Thread
     from tests.conftest import get_or_create_user
 
-    get_or_create_user(db)
+    user = get_or_create_user(db)
 
     thread = Thread(
         title="Only Thread",
@@ -66,31 +66,32 @@ async def test_roll_overflow(client, db):
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=user.id,
     )
     db.add(thread)
     db.commit()
+    db.refresh(thread)
 
-    response = await client.post("/api/roll/")
+    response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
 
     data = response.json()
-    assert data["thread_id"] == 1
+    assert data["thread_id"] == thread.id
     assert 1 <= data["result"] <= 1
 
 
 @pytest.mark.asyncio
-async def test_roll_override_nonexistent(client, sample_data):
+async def test_roll_override_nonexistent(auth_client, sample_data):
     """Override returns 404 for non-existent thread."""
-    response = await client.post("/api/roll/override", json={"thread_id": 999})
+    response = await auth_client.post("/api/roll/override", json={"thread_id": 999})
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_reroll_success(client, sample_data, db):
+async def test_reroll_success(auth_client, sample_data, db):
     """POST /roll/reroll returns new roll with reroll selection method."""
-    response = await client.post("/api/roll/reroll")
+    response = await auth_client.post("/api/roll/reroll")
     assert response.status_code == 200
     html = response.text
     assert "dice-grid" in html
@@ -105,19 +106,19 @@ async def test_reroll_success(client, sample_data, db):
 
 
 @pytest.mark.asyncio
-async def test_reroll_no_pool(client, db):
+async def test_reroll_no_pool(auth_client, db):
     """Returns error if no active threads."""
     from tests.conftest import get_or_create_user
 
     get_or_create_user(db)
 
-    response = await client.post("/api/roll/reroll")
+    response = await auth_client.post("/api/roll/reroll")
     assert response.status_code == 200
     assert "No active threads" in response.text
 
 
 @pytest.mark.asyncio
-async def test_roll_result_consistency_regression(client, sample_data):
+async def test_roll_result_consistency_regression(auth_client, sample_data):
     """Regression test for bug where roll screen shows different number than rate screen.
 
     Bug: Client-side JavaScript generated random roll value for animation,
@@ -125,7 +126,7 @@ async def test_roll_result_consistency_regression(client, sample_data):
 
     Fix: Server is single source of truth; client only displays server-provided value.
     """
-    html_response = await client.post("/api/roll/html")
+    html_response = await auth_client.post("/api/roll/html")
     assert html_response.status_code == 200
 
     html = html_response.text
@@ -135,7 +136,7 @@ async def test_roll_result_consistency_regression(client, sample_data):
 
     html_result = int(match.group(1))
 
-    session_response = await client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/sessions/current/")
     assert session_response.status_code == 200
 
     session_data = session_response.json()
@@ -148,12 +149,12 @@ async def test_roll_result_consistency_regression(client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_reroll_result_consistency_regression(client, sample_data):
+async def test_reroll_result_consistency_regression(auth_client, sample_data):
     """Regression test for reroll bug similar to initial roll.
 
     Ensures reroll endpoint also maintains consistency between HTML and API.
     """
-    html_response = await client.post("/api/roll/reroll")
+    html_response = await auth_client.post("/api/roll/reroll")
     assert html_response.status_code == 200
 
     html = html_response.text
@@ -162,7 +163,7 @@ async def test_reroll_result_consistency_regression(client, sample_data):
 
     html_result = int(match.group(1))
 
-    session_response = await client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/sessions/current/")
     assert session_response.status_code == 200
 
     session_data = session_response.json()
@@ -175,20 +176,20 @@ async def test_reroll_result_consistency_regression(client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_set_manual_die(client, sample_data, db):
+async def test_set_manual_die(auth_client, sample_data, db):
     """POST /roll/set-die sets manual_die on session."""
-    response = await client.post("/api/roll/set-die?die=20")
+    response = await auth_client.post("/api/roll/set-die?die=20")
     assert response.status_code == 200
     assert response.text == "d20"
 
-    session_response = await client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
     assert session_data["manual_die"] == 20
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die(client, sample_data, db):
+async def test_clear_manual_die(auth_client, sample_data, db):
     """POST /roll/clear-manual-die clears manual_die and returns to auto mode."""
     from app.models import Session as SessionModel
 
@@ -200,26 +201,28 @@ async def test_clear_manual_die(client, sample_data, db):
     session.manual_die = 12
     db.commit()
 
-    response = await client.post("/api/roll/clear-manual-die")
+    response = await auth_client.post("/api/roll/clear-manual-die")
     assert response.status_code == 200
     assert response.text == "d8"
 
-    session_response = await client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
     assert session_data["manual_die"] is None
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die_with_no_manual_set(client, sample_data):
+async def test_clear_manual_die_with_no_manual_set(auth_client, sample_data):
     """POST /roll/clear-manual-die works even when manual_die is not set."""
-    response = await client.post("/api/roll/clear-manual-die")
+    response = await auth_client.post("/api/roll/clear-manual-die")
     assert response.status_code == 200
     assert response.text == "d8"
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die_returns_correct_current_die_regression(client, sample_data, db):
+async def test_clear_manual_die_returns_correct_current_die_regression(
+    auth_client, sample_data, db
+):
     """Regression test for bug where clearing manual die returned wrong die value.
 
     When manual mode is disengaged by clicking auto, the endpoint should return
@@ -235,10 +238,10 @@ async def test_clear_manual_die_returns_correct_current_die_regression(client, s
     session.manual_die = 20
     db.commit()
 
-    response = await client.post("/api/roll/clear-manual-die")
+    response = await auth_client.post("/api/roll/clear-manual-die")
     assert response.status_code == 200
 
-    session_response = await client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
 

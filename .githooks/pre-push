@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Pre-push hook - runs before push to remote
+
+set -e
+
+# Intentionally do not parse .env here.
+# Environment should be provided by your shell, and Python will load `.env`
+# where appropriate via python-dotenv.
+
+echo "🚀 Running pre-push checks..."
+
+# Ensure we're running at repo root
+if [ ! -f "pyproject.toml" ]; then
+    echo "ERROR: Run from repository root."
+    exit 1
+fi
+
+# Activate venv if not already active (worktree-aware)
+if [ -z "$VIRTUAL_ENV" ]; then
+    VENV_PATH=".venv/bin/activate"
+    if [ ! -f "$VENV_PATH" ] && [ -f .git ]; then
+        GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+        if [ -n "$GIT_COMMON_DIR" ]; then
+            MAIN_REPO_DIR=$(dirname "$GIT_COMMON_DIR")
+            if [ -f "$MAIN_REPO_DIR/.venv/bin/activate" ]; then
+                VENV_PATH="$MAIN_REPO_DIR/.venv/bin/activate"
+                echo "Activating venv from main repo: $MAIN_REPO_DIR"
+            fi
+        fi
+    fi
+
+    if [ -f "$VENV_PATH" ]; then
+        source "$VENV_PATH"
+    else
+        echo "No virtual environment found. Please run 'uv venv && uv sync --all-extras' first."
+        exit 1
+    fi
+fi
+
+# Run lint (match CI as closely as possible)
+echo ""
+echo "🧹 Running lint..."
+if bash scripts/lint.sh; then
+    echo "✅ Lint passed"
+else
+    echo "❌ Lint failed - aborting push"
+    echo ""
+    echo "To bypass this hook (not recommended), use:"
+    echo "  git push --no-verify"
+    exit 1
+fi
+
+# Run tests
+echo ""
+echo "🧪 Running tests..."
+if python -m pytest --cov=comic_pile --cov-report=term-missing --cov-fail-under=96 -x; then
+    echo "✅ Tests passed"
+else
+    echo "❌ Tests failed - aborting push"
+    echo ""
+    echo "To bypass this hook (not recommended), use:"
+    echo "  git push --no-verify"
+    exit 1
+fi
+
+echo ""
+echo "✅ All pre-push checks passed"

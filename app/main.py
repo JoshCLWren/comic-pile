@@ -6,26 +6,82 @@ import os
 import subprocess
 import time
 import traceback
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import Any, cast
 
-from dotenv import load_dotenv  # noqa: E402
-from fastapi import FastAPI, Request, status  # noqa: E402
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-load_dotenv()
-from fastapi.exceptions import RequestValidationError  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
-from slowapi import _rate_limit_exceeded_handler  # noqa: E402
-from slowapi.errors import RateLimitExceeded  # noqa: E402
-from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
-
-from app.api import admin, error_handler, queue, rate, retros, roll, session, tasks, thread, undo  # noqa: E402
-from app.api.tasks import health_router  # noqa: E402
-from app.database import Base, engine, SessionLocal  # noqa: E402
-from app.middleware import limiter  # noqa: E402
+from app.api import admin, auth, queue, rate, retros, roll, session, tasks, thread, undo
+from app.api.tasks import health_router
+from app.database import Base, engine, SessionLocal
+from app.middleware import limiter
 
 logger = logging.getLogger(__name__)
+
+MAX_LOG_BODY_SIZE = 1000
+
+
+def contains_sensitive_keys(body_json: dict | list) -> bool:
+    """Check if body contains sensitive keys recursively."""
+    sensitive_keys = {"password", "secret", "token", "access_token", "refresh_token", "api_key"}
+
+    if isinstance(body_json, dict):
+        for key in body_json:
+            if key in sensitive_keys:
+                return True
+        for value in body_json.values():
+            if contains_sensitive_keys(value):
+                return True
+    elif isinstance(body_json, list):
+        for item in body_json:
+            if contains_sensitive_keys(item):
+                return True
+    return False
+
+
+def is_auth_route(path: str) -> bool:
+    """Check if path is an auth-related route."""
+    auth_paths = ("/api/auth/", "/api/login", "/api/register", "/api/logout")
+    return any(path.startswith(auth_path) for auth_path in auth_paths)
+
+
+async def _safe_get_request_body(request: Request) -> str | dict | None:
+    """Safely read and redact request body for logging."""
+    try:
+        if request.method not in ("POST", "PUT", "PATCH"):
+            return None
+
+        body = await request.body()
+        if not body:
+            return None
+
+        if is_auth_route(request.url.path):
+            content_type = request.headers.get("content-type", "unknown")
+            return f"[AUTH ROUTE: {len(body)} bytes, {content_type}]"
+
+        try:
+            body_str = body.decode("utf-8")
+            if len(body_str) <= MAX_LOG_BODY_SIZE:
+                body_json = json.loads(body_str)
+                if contains_sensitive_keys(body_json):
+                    return "[REDACTED: contains sensitive data]"
+                return body_json
+            return f"[TRUNCATED: {len(body_str)} bytes]"
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            if len(body) <= MAX_LOG_BODY_SIZE:
+                return body.decode("utf-8", errors="replace")
+            return f"[BINARY DATA: {len(body)} bytes]"
+    except Exception as e:
+        logger.debug(f"Failed to read request body: {e}")
+        return None
 
 
 def create_app() -> FastAPI:
@@ -36,43 +92,48 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(
+        RateLimitExceeded,
+        cast(Callable[[Request, Any], Awaitable[Response]], _rate_limit_exceeded_handler),
+    )
 
-    cors_origins = os.getenv("CORS_ORIGINS", "*").split(",") if os.getenv("CORS_ORIGINS") else ["*"]
+    environment = os.getenv("ENVIRONMENT", "development")
+    cors_origins_raw = os.getenv("CORS_ORIGINS")
+
+    if environment == "production":
+        if not cors_origins_raw or not cors_origins_raw.strip():
+            raise RuntimeError("CORS_ORIGINS must be set in production mode")
+        cors_origins = cors_origins_raw.split(",")
+    else:
+        cors_origins = cors_origins_raw.split(",") if cors_origins_raw else ["*"]
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    def redact_headers(headers: dict) -> dict:
+        """Redact sensitive headers from logging."""
+        sensitive_headers = {"authorization", "cookie", "set-cookie"}
+        redacted = {}
+        for key, value in headers.items():
+            if key.lower() in sensitive_headers:
+                redacted[key] = f"[REDACTED: {key}]"
+            else:
+                redacted[key] = value
+        return redacted
 
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
         """Log all requests with status codes >= 400."""
         start_time = time.time()
 
-        try:
-            if request.method in ("POST", "PUT", "PATCH"):
-                body = await request.body()
-                if body:
-                    try:
-                        body_str = body.decode("utf-8")
-                        if len(body_str) <= 1000:
-                            body_json = json.loads(body_str)
-                            if "password" in body_json or "secret" in body_json:
-                                request.state.request_body = "[REDACTED: contains sensitive data]"
-                            else:
-                                request.state.request_body = body_json
-                        else:
-                            request.state.request_body = f"[TRUNCATED: {len(body_str)} bytes]"
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        if len(body) <= 1000:
-                            request.state.request_body = body.decode("utf-8", errors="replace")
-                        else:
-                            request.state.request_body = f"[BINARY DATA: {len(body)} bytes]"
-        except Exception:
-            pass
+        body = await _safe_get_request_body(request)
+        if body:
+            request.state.request_body = body
 
         response = await call_next(request)
         process_time = time.time() - start_time
@@ -88,6 +149,7 @@ def create_app() -> FastAPI:
                 "process_time_ms": round(process_time * 1000, 2),
                 "client_host": request.client.host if request.client else None,
                 "user_agent": request.headers.get("user-agent"),
+                "headers": redact_headers(dict(request.headers)),
             }
 
             if hasattr(request.state, "request_body"):
@@ -123,37 +185,18 @@ def create_app() -> FastAPI:
             "stacktrace": traceback.format_exc(),
             "client_host": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
+            "headers": redact_headers(dict(request.headers)),
             "level": "ERROR",
         }
 
-        try:
-            if request.method in ("POST", "PUT", "PATCH"):
-                body = await request.body()
-                if body:
-                    try:
-                        body_str = body.decode("utf-8")
-                        if len(body_str) <= 1000:
-                            body_json = json.loads(body_str)
-                            if "password" in body_json or "secret" in body_json:
-                                error_data["request_body"] = "[REDACTED: contains sensitive data]"
-                            else:
-                                error_data["request_body"] = body_json
-                        else:
-                            error_data["request_body"] = f"[TRUNCATED: {len(body_str)} bytes]"
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        if len(body) <= 1000:
-                            error_data["request_body"] = body.decode("utf-8", errors="replace")
-                        else:
-                            error_data["request_body"] = f"[BINARY DATA: {len(body)} bytes]"
-        except Exception:
-            pass
+        body = await _safe_get_request_body(request)
+        if body:
+            error_data["request_body"] = body
 
         if hasattr(request.state, "user_id"):
             error_data["user_id"] = request.state.user_id
         if hasattr(request.state, "session_id"):
             error_data["session_id"] = request.state.session_id
-
-        error_handler.handle_5xx_error(exc, request)
 
         logger.error(
             f"Unhandled Exception: {type(exc).__name__}",
@@ -177,10 +220,12 @@ def create_app() -> FastAPI:
             "detail": exc.detail,
             "client_host": request.client.host if request.client else None,
             "user_agent": request.headers.get("user-agent"),
+            "headers": redact_headers(dict(request.headers)),
         }
 
-        if hasattr(request.state, "request_body"):
-            error_data["request_body"] = request.state.request_body
+        body = await _safe_get_request_body(request)
+        if body:
+            error_data["request_body"] = body
         if hasattr(request.state, "user_id"):
             error_data["user_id"] = request.state.user_id
         if hasattr(request.state, "session_id"):
@@ -188,8 +233,6 @@ def create_app() -> FastAPI:
 
         if exc.status_code >= 500:
             error_data["level"] = "ERROR"
-            mock_exc = Exception(f"HTTP {exc.status_code}: {exc.detail}")
-            error_handler.handle_5xx_error(mock_exc, request)
             logger.error(
                 f"HTTP Exception: {exc.status_code} - {exc.detail}",
                 extra=error_data,
@@ -254,6 +297,7 @@ def create_app() -> FastAPI:
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
+    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(tasks.router, prefix="/api", tags=["tasks"])
     app.include_router(retros.router, prefix="/api", tags=["retros"])
     app.include_router(health_router, prefix="/api")
@@ -335,15 +379,25 @@ def create_app() -> FastAPI:
                 content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
             )
 
-    @app.get("/debug/5xx-stats")
-    async def get_5xx_error_stats():
-        """Debug endpoint to show 5xx error statistics."""
-        return error_handler.get_error_stats()
+    @app.get("/{full_path:path}")
+    async def serve_react_spa(full_path: str):
+        """Serve the React SPA for non-API routes.
 
-    @app.get("/debug/trigger-500")
-    async def trigger_500_error():
-        """Debug endpoint to trigger a 500 error for testing."""
-        raise Exception("OperationalError: test database connection failed")
+        The React app owns routing for paths like /rate, /queue, /history, etc.
+        """
+        from fastapi.responses import FileResponse
+
+        blocked_prefixes = ("api", "static", "assets", "debug")
+        blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg"}
+
+        if (
+            full_path in blocked_exact
+            or full_path in blocked_prefixes
+            or any(full_path.startswith(prefix + "/") for prefix in blocked_prefixes)
+        ):
+            raise StarletteHTTPException(status_code=404, detail="Not Found")
+
+        return FileResponse("static/react/index.html")
 
     @app.on_event("startup")
     async def startup_event():
@@ -374,11 +428,15 @@ def create_app() -> FastAPI:
                     logger.error("All database connection attempts failed")
 
         if database_ready:
-            try:
-                Base.metadata.create_all(bind=engine)
-                logger.info("Database tables created successfully")
-            except Exception as e:
-                logger.error(f"Failed to create database tables: {e}")
+            environment = os.getenv("ENVIRONMENT", "development")
+            if environment == "production":
+                logger.info("Production mode: Skipping table creation (migrations required)")
+            else:
+                try:
+                    Base.metadata.create_all(bind=engine)
+                    logger.info("Database tables created successfully")
+                except Exception as e:
+                    logger.error(f"Failed to create database tables: {e}")
 
             backup_enabled = os.getenv("AUTO_BACKUP_ENABLED", "true").lower() == "true"
             if backup_enabled:

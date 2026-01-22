@@ -11,7 +11,7 @@ from app.models import Task
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_not_found(client: AsyncClient) -> None:
+async def test_merge_to_main_not_found(client: AsyncClient, enable_internal_ops) -> None:
     """Test merging a non-existent task returns 404."""
     response = await client.post("/api/tasks/NONEXISTENT/merge-to-main")
     assert response.status_code == 404
@@ -20,7 +20,9 @@ async def test_merge_to_main_not_found(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_invalid_status(client: AsyncClient, sample_tasks: list[Task]) -> None:
+async def test_merge_to_main_invalid_status(
+    client: AsyncClient, sample_tasks: list[Task], enable_internal_ops
+) -> None:
     """Test merging a task not in in_review status returns 400."""
     response = await client.post("/api/tasks/TASK-101/merge-to-main")
     assert response.status_code == 400
@@ -30,7 +32,9 @@ async def test_merge_to_main_invalid_status(client: AsyncClient, sample_tasks: l
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_missing_worktree(client: AsyncClient, db: Session) -> None:
+async def test_merge_to_main_missing_worktree(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test merging a task with no worktree returns 400."""
     from sqlalchemy import select
 
@@ -57,7 +61,9 @@ async def test_merge_to_main_missing_worktree(client: AsyncClient, db: Session) 
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_worktree_not_found(client: AsyncClient, db: Session) -> None:
+async def test_merge_to_main_worktree_not_found(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test merging a task with non-existent worktree path returns 400."""
     from sqlalchemy import select
 
@@ -89,7 +95,9 @@ async def test_merge_to_main_worktree_not_found(client: AsyncClient, db: Session
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_git_fetch_failure(client: AsyncClient, db: Session) -> None:
+async def test_merge_to_main_git_fetch_failure(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test merging when git fetch fails returns 500."""
     from sqlalchemy import select
 
@@ -125,7 +133,7 @@ async def test_merge_to_main_git_fetch_failure(client: AsyncClient, db: Session)
 
 @pytest.mark.asyncio
 async def test_merge_to_main_conflict_appends_status_notes(
-    client: AsyncClient, db: Session
+    client: AsyncClient, db: Session, enable_internal_ops
 ) -> None:
     """Test that merge conflicts append to existing status notes."""
     from sqlalchemy import select
@@ -176,7 +184,9 @@ async def test_merge_to_main_conflict_appends_status_notes(
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_absolute_worktree_path(client: AsyncClient, db: Session) -> None:
+async def test_merge_to_main_absolute_worktree_path(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test that absolute worktree paths are used as-is."""
     from sqlalchemy import select
 
@@ -217,7 +227,9 @@ async def test_merge_to_main_absolute_worktree_path(client: AsyncClient, db: Ses
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_relative_worktree_path(client: AsyncClient, db: Session) -> None:
+async def test_merge_to_main_relative_worktree_path(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test that relative worktree paths are resolved correctly."""
     from sqlalchemy import select
 
@@ -260,7 +272,9 @@ async def test_merge_to_main_relative_worktree_path(client: AsyncClient, db: Ses
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_conflict_output_truncated(client: AsyncClient, db: Session) -> None:
+async def test_merge_to_main_conflict_output_truncated(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test that merge conflict output is truncated to 500 characters."""
     from sqlalchemy import select
 
@@ -303,7 +317,9 @@ async def test_merge_to_main_conflict_output_truncated(client: AsyncClient, db: 
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_changes_directory(client: AsyncClient, db: Session) -> None:
+async def test_merge_to_main_changes_directory(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test that merge operation changes to worktree directory."""
     from sqlalchemy import select
 
@@ -343,7 +359,9 @@ async def test_merge_to_main_changes_directory(client: AsyncClient, db: Session)
 
 
 @pytest.mark.asyncio
-async def test_merge_to_main_runs_git_commands(client: AsyncClient, db: Session) -> None:
+async def test_merge_to_main_runs_git_commands(
+    client: AsyncClient, db: Session, enable_internal_ops
+) -> None:
     """Test that merge runs correct git commands in order."""
     from sqlalchemy import select
 

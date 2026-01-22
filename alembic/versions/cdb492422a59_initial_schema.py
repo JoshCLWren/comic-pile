@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default="CURRENT_TIMESTAMP",
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.Column(
             "started_at",
             sa.DateTime(timezone=True),
-            server_default="CURRENT_TIMESTAMP",
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),
@@ -67,7 +67,7 @@ def upgrade() -> None:
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
-            server_default="CURRENT_TIMESTAMP",
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.Column("user_id", sa.Integer(), nullable=False),
@@ -84,7 +84,7 @@ def upgrade() -> None:
         sa.Column(
             "timestamp",
             sa.DateTime(timezone=True),
-            server_default="CURRENT_TIMESTAMP",
+            server_default=sa.text("CURRENT_TIMESTAMP"),
             nullable=False,
         ),
         sa.Column("die", sa.Integer(), nullable=True),

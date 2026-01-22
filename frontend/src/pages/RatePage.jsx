@@ -116,7 +116,19 @@ export default function RatePage() {
   }
 
   if (!session || !session.active_thread) {
-    return <div className="text-center p-10 text-slate-500 font-black">Session Inactive</div>;
+    return (
+      <div className="text-center py-20">
+        <div className="text-6xl mb-4">📝</div>
+        <h2 className="text-xl font-black text-slate-300 uppercase tracking-wider mb-2">Session Inactive</h2>
+        <p className="text-sm text-slate-500 mb-6">Roll the dice to start a reading session</p>
+        <button
+          onClick={() => navigate('/')}
+          className="px-6 py-3 bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/30 rounded-xl text-sm font-bold uppercase tracking-widest text-teal-400 transition-colors"
+        >
+          Go to Roll Page
+        </button>
+      </div>
+    );
   }
 
   const thread = session.active_thread;
@@ -236,7 +248,7 @@ export default function RatePage() {
           >
             Finish Session
           </button>
-          <div id="error-message" className="text-xs text-rose-500 text-center font-bold hidden">
+          <div id="error-message" className={`text-xs text-rose-500 text-center font-bold ${errorMessage ? '' : 'hidden'}`}>
             {errorMessage}
           </div>
         </div>

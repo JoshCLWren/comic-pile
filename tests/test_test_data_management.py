@@ -33,6 +33,7 @@ def test_seed_data_marks_as_test(db):
     assert thread.is_test is True
 
 
+@pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_bulk_delete_test_data(client, db):
     """Test bulk delete of test data."""
@@ -119,6 +120,7 @@ async def test_bulk_delete_test_data(client, db):
     assert remaining_threads[0].title == "Real Comic"
 
 
+@pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_export_csv_excludes_test_data(client, db):
     """Test that CSV export excludes test data."""
@@ -160,6 +162,7 @@ async def test_export_csv_excludes_test_data(client, db):
     assert "Real Comic" in content
 
 
+@pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_export_json_excludes_test_data(client, db):
     """Test that JSON export excludes test data."""
@@ -201,6 +204,7 @@ async def test_export_json_excludes_test_data(client, db):
     assert data["threads"][0]["title"] == "Real Comic"
 
 
+@pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_export_summary_excludes_test_only_sessions(client, db):
     """Test that session summary export excludes sessions with only test data."""
@@ -282,6 +286,7 @@ async def test_export_summary_excludes_test_only_sessions(client, db):
     assert "Real Comic" in content
 
 
+@pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
 async def test_delete_test_data_clears_pending_thread_id(client, db):
     """Regression test for BUG-131: IntegrityError when deleting test thread with pending_thread_id.
