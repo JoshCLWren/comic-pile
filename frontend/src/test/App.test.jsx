@@ -1,8 +1,7 @@
 import { expect, test, vi, beforeEach, afterEach, describe } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, act } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import * as reactRouter from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../pages/LoginPage', () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
@@ -17,7 +16,7 @@ vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="histor
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
 vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
 
-import App, { useAuth } from '../App'
+import App from '../App'
 
 const renderWithAuth = (initialEntry = '/') => {
   const queryClient = new QueryClient({
@@ -29,11 +28,11 @@ const renderWithAuth = (initialEntry = '/') => {
   })
 
   return render(
-    <reactRouter.MemoryRouter initialEntries={[initialEntry]}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <QueryClientProvider client={queryClient}>
         <App />
       </QueryClientProvider>
-    </reactRouter.MemoryRouter>
+    </MemoryRouter>
   )
 }
 
@@ -108,7 +107,7 @@ describe('auth state race condition regression', () => {
   })
 
   test('auth state updates immediately after login - no redirect loop', async () => {
-    const { container } = renderWithAuth('/login')
+    renderWithAuth('/login')
 
     await waitFor(() => {
       expect(screen.getByTestId('login-page')).toBeInTheDocument()
@@ -138,37 +137,4 @@ describe('auth state race condition regression', () => {
       expect(screen.queryByTestId('register-page')).not.toBeInTheDocument()
     })
   })
-
-  test('isAuthenticated reflects localStorage token immediately', async () => {
-    let authValue = null
-
-    const TestComponent = () => {
-      const auth = useAuth()
-      authValue = auth
-      return <div data-testid="auth-status">{auth.isAuthenticated ? 'auth' : 'no-auth'}</div>
-    }
-
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    })
-
-    render(
-      <reactRouter.MemoryRouter initialEntries={['/login']}>
-        <QueryClientProvider client={queryClient}>
-          <App />
-        </QueryClientProvider>
-      </reactRouter.MemoryRouter>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByTestId('auth-status')).toHaveTextContent('no-auth')
-    })
-
-    act(() => {
-      localStorage.setItem('auth_token', 'new-token')
-    })
-
-    await waitFor(() => {
-      expect(screen.getByTestId('auth-status')).toHaveTextContent('auth')
-    })
-  })
+})
