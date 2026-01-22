@@ -95,6 +95,7 @@ exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/ver
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "D", "ANN401"]
 ignore = ["D203", "D213", "E501", "B008", "I001"]
+per-file-ignores = { "alembic/env.py" = ["F401"] }
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

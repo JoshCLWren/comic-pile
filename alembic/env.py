@@ -1,21 +1,29 @@
 """Alembic environment configuration."""
 
-import os  # noqa: E402
-from logging.config import fileConfig  # noqa: E402
-from dotenv import load_dotenv  # noqa: E402
+import os
+from logging.config import fileConfig
 
+from dotenv import load_dotenv
+
+from sqlalchemy import engine_from_config, pool
+
+from alembic import context
+
+import app.models
+from app.database import Base
+
+# Load environment variables from .env file
 load_dotenv()
-
-from sqlalchemy import engine_from_config, pool  # noqa: E402
-
-import app.models  # noqa: F401, E402
-from alembic import context  # noqa: E402
-from app.database import Base  # noqa: E402
 
 config = context.config
 
 database_url = os.getenv("DATABASE_URL")
 if database_url:
+    # Convert postgresql:// to postgresql+psycopg:// for sync connections
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    elif database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
     config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:
