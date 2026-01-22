@@ -352,3 +352,10 @@ async def auth_api_client(db: Session) -> AsyncGenerator[AsyncClient]:
         ac.headers.update({"Authorization": f"Bearer {token}"})
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def browser_page(page):
+    """Playwright page fixture with localStorage cleared after each test."""
+    yield page
+    page.evaluate("localStorage.clear()")

@@ -234,12 +234,12 @@ def _rating_min() -> float:
 
 def _rating_max() -> float:
     value = _float_env("RATING_MAX", 5.0)
-    return value if 0.0 <= value <= 10.0 else 5.0
+    return value if 0.5 <= value <= 5.0 else 5.0
 
 
 def _rating_threshold() -> float:
     value = _float_env("RATING_THRESHOLD", 4.0)
-    return value if 0.0 <= value <= 10.0 else 4.0
+    return value if 0.5 <= value <= 5.0 else 4.0
 
 
 @router.post("/", response_model=ThreadResponse)

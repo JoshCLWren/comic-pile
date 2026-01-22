@@ -74,7 +74,7 @@ def list_threads(
 ) -> list[ThreadResponse]:
     """List all threads ordered by position."""
     if get_threads_cached:
-        threads = get_threads_cached(db)
+        threads = get_threads_cached(db, current_user.id)
     else:
         threads = (
             db.execute(

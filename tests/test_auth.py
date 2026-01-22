@@ -157,6 +157,13 @@ class TestAuth:
         assert "Invalid refresh token" in response.json()["detail"]
 
     @pytest.mark.asyncio
+    async def test_refresh_token_none(self, client: AsyncClient) -> None:
+        """Test refresh with None token fails with 401 not 500."""
+        refresh_data = {"refresh_token": None}
+        response = await client.post("/api/auth/refresh", json=refresh_data)
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
     async def test_get_current_user_authenticated(self, client: AsyncClient, db: Session) -> None:
         """Test getting current user info when authenticated."""
         # Register and login user
@@ -218,3 +225,32 @@ class TestAuth:
         response = await client.post("/api/auth/logout", headers=headers)
         assert response.status_code == 200
         assert response.json() == {"message": "Successfully logged out"}
+
+    @pytest.mark.asyncio
+    async def test_logout_idempotent(self, client: AsyncClient, db: Session) -> None:
+        """Test that revoke_token is idempotent and doesn't raise on duplicate."""
+        user_data = {
+            "username": "logoutidempotentuser",
+            "email": "logoutidempotent@example.com",
+            "password": "password123",
+        }
+        response = await client.post("/api/auth/register", json=user_data)
+        assert response.status_code == 200
+
+        login_data = {
+            "username": "logoutidempotentuser",
+            "password": "password123",
+        }
+        response = await client.post("/api/auth/login", json=login_data)
+        assert response.status_code == 200
+        tokens = response.json()
+
+        from app.auth import revoke_token
+        from app.models.user import User
+
+        user = db.query(User).filter(User.username == user_data["username"]).first()
+        assert user is not None
+
+        access_token = tokens["access_token"]
+        revoke_token(db, access_token, user.id)
+        revoke_token(db, access_token, user.id)

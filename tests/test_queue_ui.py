@@ -23,8 +23,9 @@ async def test_jump_to_position_works_for_large_distance(auth_client, db, sample
     assert thread.queue_position == last_position
 
 
+@pytest.mark.usefixtures("sample_data")
 @pytest.mark.asyncio
-async def test_jump_to_position_works_for_small_distance(auth_client, db, sample_data):
+async def test_jump_to_position_works_for_small_distance(auth_client, db):
     """Jump from last position to position 1 works correctly."""
     response = await auth_client.get("/api/threads/")
     threads = response.json()

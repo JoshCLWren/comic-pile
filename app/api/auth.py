@@ -118,6 +118,11 @@ def refresh_access_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
         ) from e
+    except (AttributeError, TypeError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token format",
+        ) from e
 
     username = payload.get("sub")
     jti = payload.get("jti")

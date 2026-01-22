@@ -6,34 +6,45 @@ import os
 import subprocess
 import time
 import traceback
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import Any, cast
 
-from dotenv import load_dotenv  # noqa: E402
-from fastapi import FastAPI, Request, status  # noqa: E402
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-load_dotenv()
-from fastapi.exceptions import RequestValidationError  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
-from slowapi import _rate_limit_exceeded_handler  # noqa: E402
-from slowapi.errors import RateLimitExceeded  # noqa: E402
-from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
-
-from app.api import admin, auth, queue, rate, retros, roll, session, tasks, thread, undo  # noqa: E402
-from app.api.tasks import health_router  # noqa: E402
-from app.database import Base, engine, SessionLocal  # noqa: E402
-from app.middleware import limiter  # noqa: E402
+from app.api import admin, auth, queue, rate, retros, roll, session, tasks, thread, undo
+from app.api.tasks import health_router
+from app.database import Base, engine, SessionLocal
+from app.middleware import limiter
 
 logger = logging.getLogger(__name__)
 
 MAX_LOG_BODY_SIZE = 1000
 
 
-def contains_sensitive_keys(body_json: dict) -> bool:
-    """Check if body contains sensitive keys."""
+def contains_sensitive_keys(body_json: dict | list) -> bool:
+    """Check if body contains sensitive keys recursively."""
     sensitive_keys = {"password", "secret", "token", "access_token", "refresh_token", "api_key"}
-    return any(key in body_json for key in sensitive_keys)
+
+    if isinstance(body_json, dict):
+        for key in body_json:
+            if key in sensitive_keys:
+                return True
+        for value in body_json.values():
+            if contains_sensitive_keys(value):
+                return True
+    elif isinstance(body_json, list):
+        for item in body_json:
+            if contains_sensitive_keys(item):
+                return True
+    return False
 
 
 def is_auth_route(path: str) -> bool:
@@ -81,7 +92,10 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(
+        RateLimitExceeded,
+        cast(Callable[[Request, Any], Awaitable[Response]], _rate_limit_exceeded_handler),
+    )
 
     environment = os.getenv("ENVIRONMENT", "development")
     cors_origins_raw = os.getenv("CORS_ORIGINS")
@@ -376,7 +390,11 @@ def create_app() -> FastAPI:
         blocked_prefixes = ("api", "static", "assets", "debug")
         blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg"}
 
-        if full_path in blocked_exact or full_path.startswith(blocked_prefixes):
+        if (
+            full_path in blocked_exact
+            or full_path in blocked_prefixes
+            or any(full_path.startswith(prefix + "/") for prefix in blocked_prefixes)
+        ):
             raise StarletteHTTPException(status_code=404, detail="Not Found")
 
         return FileResponse("static/react/index.html")

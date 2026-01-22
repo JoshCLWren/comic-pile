@@ -506,8 +506,8 @@ def test_rating_max_returns_custom_value():
 
     import os
 
-    os.environ["RATING_MAX"] = "8.0"
-    assert _rating_max() == 8.0
+    os.environ["RATING_MAX"] = "4.5"
+    assert _rating_max() == 4.5
     del os.environ["RATING_MAX"]
 
 

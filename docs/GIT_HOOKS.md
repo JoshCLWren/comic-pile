@@ -14,7 +14,7 @@ Runs automatically before each commit.
 - Python syntax
 - Ruff linting
 - Any type usage (ruff ANN401)
-- Pyright type checking
+- ty type checking (ty check --error-on-warning).
 - ESLint for JavaScript
 - htmlhint for HTML templates
 
@@ -46,13 +46,13 @@ Clone the repository and run:
 bash scripts/install-git-hooks.sh
 ```
 
-This copies the hooks from `.git/hooks/` to the active git hooks directory.
+This copies the hooks from `.githooks/` to `.git/hooks/`.
 
 ## Manual Installation
 
-If you need to install hooks manually, the hooks are located at:
-- `.git/hooks/pre-commit`
-- `.git/hooks/pre-push`
+If you need to install hooks manually, copy them from `.githooks/` to `.git/hooks/`:
+- `.githooks/pre-commit` → `.git/hooks/pre-commit`
+- `.githooks/pre-push` → `.git/hooks/pre-push`
 
 Make them executable:
 ```bash

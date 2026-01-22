@@ -60,8 +60,9 @@ def test_user(test_server_url, db):
 
 
 @pytest.mark.integration
-def test_root_url_renders_dice_ladder(page, test_server_url, db, test_user):
+def test_root_url_renders_dice_ladder(browser_page, test_server_url, db, test_user):
     """Navigate to /, verify expected dice selector exists."""
+    page = browser_page
     login_with_playwright(page, test_server_url, test_user[0])
     page.goto(f"{test_server_url}/")
     page.wait_for_selector("#die-selector", timeout=5000)
@@ -71,8 +72,9 @@ def test_root_url_renders_dice_ladder(page, test_server_url, db, test_user):
 
 
 @pytest.mark.integration
-def test_homepage_renders_dice_ladder(page, test_server_url, db, test_user):
+def test_homepage_renders_dice_ladder(browser_page, test_server_url, db, test_user):
     """Navigate to /react/, verify expected dice selector exists (legacy URL)."""
+    page = browser_page
     login_with_playwright(page, test_server_url, test_user[0])
     page.goto(f"{test_server_url}/react/")
     page.wait_for_selector("#die-selector", timeout=5000)
@@ -82,8 +84,9 @@ def test_homepage_renders_dice_ladder(page, test_server_url, db, test_user):
 
 
 @pytest.mark.integration
-def test_roll_dice_navigates_to_rate(page, test_server_url, db, test_user):
+def test_roll_dice_navigates_to_rate(browser_page, test_server_url, db, test_user):
     """Navigate to /, click roll button, verify navigation to /rate."""
+    page = browser_page
     from app.models import Thread
 
     test_email, user_id = test_user
@@ -113,8 +116,9 @@ def test_roll_dice_navigates_to_rate(page, test_server_url, db, test_user):
 
 
 @pytest.mark.integration
-def test_queue_management_ui(page, test_server_url, db, test_user):
+def test_queue_management_ui(browser_page, test_server_url, db, test_user):
     """Navigate to /queue, verify queue container exists and displays data."""
+    page = browser_page
     from app.models import Thread
 
     test_email, user_id = test_user
@@ -139,8 +143,9 @@ def test_queue_management_ui(page, test_server_url, db, test_user):
 
 
 @pytest.mark.integration
-def test_view_history_pagination(page, test_server_url, db, test_user):
+def test_view_history_pagination(browser_page, test_server_url, db, test_user):
     """Navigate to /history, verify history list exists."""
+    page = browser_page
     from app.models import Event, Thread
     from app.models import Session as SessionModel
 
@@ -181,8 +186,9 @@ def test_view_history_pagination(page, test_server_url, db, test_user):
 
 
 @pytest.mark.integration
-def test_full_session_workflow(page, test_server_url, db, test_user):
+def test_full_session_workflow(browser_page, test_server_url, db, test_user):
     """Setup session data, navigate to rate page, verify UI is functional."""
+    page = browser_page
     from app.models import Event, Thread
     from app.models import Session as SessionModel
 
@@ -229,8 +235,9 @@ def test_full_session_workflow(page, test_server_url, db, test_user):
 
 
 @pytest.mark.integration
-def test_d10_renders_geometry_correctly(page, test_server_url, db, test_user):
+def test_d10_renders_geometry_correctly(browser_page, test_server_url, db, test_user):
     """Navigate to /, select d10, verify d10 canvas element exists with WebGL context."""
+    page = browser_page
     login_with_playwright(page, test_server_url, test_user[0])
     page.goto(f"{test_server_url}/")
     page.wait_for_selector("#die-selector", timeout=5000)
@@ -275,8 +282,9 @@ def test_d10_renders_geometry_correctly(page, test_server_url, db, test_user):
 
 
 @pytest.mark.integration
-def test_auth_login_roll_rate_flow(page, test_server_url):
+def test_auth_login_roll_rate_flow(browser_page, test_server_url):
     """Test complete login → roll → rate flow."""
+    page = browser_page
     import time
     import requests
 
@@ -350,5 +358,3 @@ def test_auth_login_roll_rate_flow(page, test_server_url):
         current_url.rstrip("/") == f"{test_server_url}/"
         or current_url.rstrip("/") == test_server_url
     )
-
-    page.evaluate("localStorage.clear()")
