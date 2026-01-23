@@ -60,5 +60,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=5 \
 # - Bind to 0.0.0.0 to accept external connections
 # - PORT is set by Railway
 # - Set log level from environment
-CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port \$PORT --log-level \${LOG_LEVEL:-info}"]
+CMD ["sh", "-c", ". /app/.venv/bin/activate && exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --log-level ${LOG_LEVEL:-info}"]
 # Force rebuild Thu Jan 22 08:10:05 AM CST 2026
