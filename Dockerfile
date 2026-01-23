@@ -1,33 +1,37 @@
-# Multi-stage build for production optimization
+# ============================
+# Builder stage
+# ============================
 FROM python:3.13-slim AS builder
 
-# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_CACHE_DIR=/tmp/uv-cache
+    PYTHONUNBUFFERED=1
 
-# Install system dependencies
+# System deps needed to build wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for fast dependency management
+# Copy uv binary
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Set working directory
 WORKDIR /app
 
-# Copy dependency files
+# Copy dependency metadata
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies
+# Install deps into a local venv
 RUN uv sync --frozen --no-dev
 
-# Production stage
+# ============================
+# Runtime stage
+# ============================
 FROM python:3.13-slim
 
-# Install runtime dependencies
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Runtime system deps only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
@@ -36,29 +40,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash appuser
 
-# Copy uv and dependencies from builder
-COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
-COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
-
-# Set working directory
 WORKDIR /app
 
-# Copy application code
-COPY --chown=appuser:appuser . .
+# Copy venv from builder
+COPY --from=builder /app/.venv /app/.venv
 
-# Switch to non-root user
+# Copy application code
+COPY . .
+
+# Fix ownership
+RUN chown -R appuser:appuser /app
+
 USER appuser
 
-# Expose port (Railway provides PORT environment variable)
-EXPOSE 8080
+# Railway injects PORT
+EXPOSE 8000
 
-# Health check optimized for Railway
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=5 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:\$PORT/health')" || exit 1
-
-# Run application using uv
-# - Bind to 0.0.0.0 to accept external connections
-# - PORT is set by Railway
-# - Set log level from environment
-CMD ["sh", "-c", ". /app/.venv/bin/activate && exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --log-level ${LOG_LEVEL:-info}"]
-# Force rebuild Thu Jan 22 08:10:05 AM CST 2026
+# IMPORTANT:
+# - no `activate`
+# - no PATH reliance
+# - absolute interpreter path
+CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
