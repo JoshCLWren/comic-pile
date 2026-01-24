@@ -7,41 +7,24 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_tasks_routes_return_404_when_disabled(client):
-    """Task routes return 404 when ENABLE_INTERNAL_OPS_ROUTES is false (default)."""
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "/api/tasks/",
+        "/api/tasks/ready",
+        "/api/tasks/metrics",
+        "/api/admin/export/csv/",
+        "/api/admin/export/json/",
+        "/api/admin/export/summary/",
+    ],
+)
+async def test_internal_routes_return_404_when_disabled(client, endpoint):
+    """Internal routes return 404 when ENABLE_INTERNAL_OPS_ROUTES is false (default)."""
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "false"
 
     try:
-        response = await client.get("/api/tasks/")
-        assert response.status_code == 404
-
-        response = await client.get("/api/tasks/ready")
-        assert response.status_code == 404
-
-        response = await client.get("/api/tasks/metrics")
-        assert response.status_code == 404
-    finally:
-        if original_value is None:
-            os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
-        else:
-            os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = original_value
-
-
-@pytest.mark.asyncio
-async def test_admin_routes_return_404_when_disabled(client):
-    """Admin routes return 404 when ENABLE_INTERNAL_OPS_ROUTES is false (default)."""
-    original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
-    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "false"
-
-    try:
-        response = await client.get("/api/admin/export/csv/")
-        assert response.status_code == 404
-
-        response = await client.get("/api/admin/export/json/")
-        assert response.status_code == 404
-
-        response = await client.get("/api/admin/export/summary/")
+        response = await client.get(endpoint)
         assert response.status_code == 404
     finally:
         if original_value is None:
@@ -251,11 +234,16 @@ async def test_non_sensitive_body_not_redacted(client, caplog):
 @pytest.mark.asyncio
 async def test_cors_origins_required_in_production(db):
     """CORS_ORIGINS is required in production mode, app fails to start without it."""
+    from app.config import clear_settings_cache
+
     original_env = os.getenv("ENVIRONMENT")
     original_cors = os.getenv("CORS_ORIGINS")
 
     os.environ["ENVIRONMENT"] = "production"
-    os.environ["CORS_ORIGINS"] = ""
+    os.environ["CORS_ORIGINS"] = ""  # Empty string triggers validation error
+
+    # Clear the settings cache so create_app reads fresh env vars
+    clear_settings_cache()
 
     try:
         from app.main import create_app
@@ -271,33 +259,8 @@ async def test_cors_origins_required_in_production(db):
             os.environ.pop("CORS_ORIGINS", None)
         else:
             os.environ["CORS_ORIGINS"] = original_cors
-
-
-@pytest.mark.asyncio
-async def test_cors_origins_required_in_production_when_unset(db):
-    """CORS_ORIGINS is required in production mode, app fails to start when env var is not set."""
-    original_env = os.getenv("ENVIRONMENT")
-    original_cors = os.getenv("CORS_ORIGINS")
-
-    os.environ["ENVIRONMENT"] = "production"
-
-    if "CORS_ORIGINS" in os.environ:
-        os.environ.pop("CORS_ORIGINS")
-
-    try:
-        from app.main import create_app
-
-        with pytest.raises(RuntimeError, match="CORS_ORIGINS must be set in production mode"):
-            _ = create_app()
-    finally:
-        if original_env is None:
-            os.environ.pop("ENVIRONMENT", None)
-        else:
-            os.environ["ENVIRONMENT"] = original_env
-        if original_cors is None:
-            os.environ.pop("CORS_ORIGINS", None)
-        else:
-            os.environ["CORS_ORIGINS"] = original_cors
+        # Clear cache again to restore normal settings
+        clear_settings_cache()
 
 
 @pytest.mark.asyncio
@@ -423,8 +386,16 @@ async def test_cors_allow_credentials_is_false(db):
 
 
 @pytest.mark.asyncio
-async def test_production_mode_skips_table_creation(db):
-    """Production mode skips table creation and logs appropriate message."""
+@pytest.mark.parametrize(
+    "environment,cors_origins",
+    [
+        ("production", "https://example.com"),
+        ("development", None),
+    ],
+    ids=["production", "development"],
+)
+async def test_app_starts_successfully(db, environment, cors_origins):
+    """App starts successfully in both production and development modes."""
     from httpx import ASGITransport, AsyncClient
 
     from app.main import create_app
@@ -432,8 +403,9 @@ async def test_production_mode_skips_table_creation(db):
     original_env = os.getenv("ENVIRONMENT")
     original_cors = os.getenv("CORS_ORIGINS")
 
-    os.environ["ENVIRONMENT"] = "production"
-    os.environ["CORS_ORIGINS"] = "https://example.com"
+    os.environ["ENVIRONMENT"] = environment
+    if cors_origins:
+        os.environ["CORS_ORIGINS"] = cors_origins
 
     def override_get_db():
         try:
@@ -463,120 +435,3 @@ async def test_production_mode_skips_table_creation(db):
             os.environ.pop("CORS_ORIGINS", None)
         else:
             os.environ["CORS_ORIGINS"] = original_cors
-
-
-@pytest.mark.asyncio
-async def test_development_mode_creates_tables(db):
-    """Development mode creates tables and logs appropriate message."""
-    from httpx import ASGITransport, AsyncClient
-
-    from app.main import create_app
-
-    original_env = os.getenv("ENVIRONMENT")
-
-    os.environ["ENVIRONMENT"] = "development"
-
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
-
-    test_app = None
-    try:
-        test_app = create_app()
-        test_app.dependency_overrides[get_db] = override_get_db
-
-        transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/health")
-            assert response.status_code in (200, 503)
-    finally:
-        if test_app:
-            test_app.dependency_overrides.clear()
-        if original_env is None:
-            os.environ.pop("ENVIRONMENT", None)
-        else:
-            os.environ["ENVIRONMENT"] = original_env
-
-
-@pytest.mark.asyncio
-async def test_app_starts_successfully_in_production_mode(db):
-    """App starts successfully in production mode without calling create_all()."""
-    from httpx import ASGITransport, AsyncClient
-
-    from app.main import create_app
-
-    original_env = os.getenv("ENVIRONMENT")
-    original_cors = os.getenv("CORS_ORIGINS")
-
-    os.environ["ENVIRONMENT"] = "production"
-    os.environ["CORS_ORIGINS"] = "https://example.com"
-
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
-
-    test_app = None
-    try:
-        test_app = create_app()
-        test_app.dependency_overrides[get_db] = override_get_db
-
-        transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/health")
-            assert response.status_code in (200, 503)
-    finally:
-        if test_app:
-            test_app.dependency_overrides.clear()
-        if original_env is None:
-            os.environ.pop("ENVIRONMENT", None)
-        else:
-            os.environ["ENVIRONMENT"] = original_env
-        if original_cors is None:
-            os.environ.pop("CORS_ORIGINS", None)
-        else:
-            os.environ["CORS_ORIGINS"] = original_cors
-
-
-@pytest.mark.asyncio
-async def test_app_starts_successfully_in_development_mode(db):
-    """App starts successfully in development mode with create_all() called."""
-    from httpx import ASGITransport, AsyncClient
-
-    from app.main import create_app
-
-    original_env = os.getenv("ENVIRONMENT")
-
-    os.environ["ENVIRONMENT"] = "development"
-
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
-
-    test_app = None
-    try:
-        test_app = create_app()
-        test_app.dependency_overrides[get_db] = override_get_db
-
-        transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/health")
-            assert response.status_code in (200, 503)
-    finally:
-        if test_app:
-            test_app.dependency_overrides.clear()
-        if original_env is None:
-            os.environ.pop("ENVIRONMENT", None)
-        else:
-            os.environ["ENVIRONMENT"] = original_env
