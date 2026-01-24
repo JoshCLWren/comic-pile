@@ -16,6 +16,7 @@ from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import RateRequest, ThreadResponse
+from app.api.thread import thread_to_response
 from comic_pile.dice_ladder import DICE_LADDER, step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front
 
@@ -366,18 +367,4 @@ def rate_thread(
     snapshot_thread_states(db, current_session_id, event, current_user.id)
     db.refresh(thread)
 
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        created_at=thread.created_at,
-    )
+    return thread_to_response(thread)

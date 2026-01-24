@@ -13,6 +13,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread, User
 from app.schemas import ThreadResponse
+from app.api.thread import thread_to_response
 from comic_pile.queue import move_to_back, move_to_front, move_to_position
 
 router = APIRouter()
@@ -61,21 +62,7 @@ def move_thread_position(
     if clear_cache:
         clear_cache()
 
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        created_at=thread.created_at,
-    )
+    return thread_to_response(thread)
 
 
 @router.put("/threads/{thread_id}/front/", response_model=ThreadResponse)
@@ -112,21 +99,7 @@ def move_thread_front(
     if clear_cache:
         clear_cache()
 
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        created_at=thread.created_at,
-    )
+    return thread_to_response(thread)
 
 
 @router.put("/threads/{thread_id}/back/", response_model=ThreadResponse)
@@ -163,18 +136,4 @@ def move_thread_back(
     if clear_cache:
         clear_cache()
 
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        created_at=thread.created_at,
-    )
+    return thread_to_response(thread)
