@@ -42,5 +42,8 @@ export function useRestoreSessionStart() {
       queryClient.invalidateQueries({ queryKey: ['sessions'] })
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
+    onError: (error) => {
+      console.error('Failed to restore session:', error.response?.data?.detail || error.message)
+    },
   })
 }

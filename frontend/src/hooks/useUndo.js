@@ -19,5 +19,8 @@ export function useUndo() {
       queryClient.invalidateQueries({ queryKey: ['threads'] })
       queryClient.invalidateQueries({ queryKey: ['sessions'] })
     },
+    onError: (error) => {
+      console.error('Failed to undo action:', error.response?.data?.detail || error.message)
+    },
   })
 }

@@ -1,14 +1,12 @@
 import { useAnalytics } from '../hooks/useAnalytics'
+import { formatTime24 } from '../utils/dateFormat'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function AnalyticsPage() {
   const { data: metrics, isLoading, error } = useAnalytics()
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-slate-400">Loading analytics...</div>
-      </div>
-    )
+    return <LoadingSpinner fullScreen message="Loading analytics..." />
   }
 
   if (error) {
@@ -17,14 +15,6 @@ export default function AnalyticsPage() {
         <div className="text-red-400">Failed to load analytics data</div>
       </div>
     )
-  }
-
-  const formatTime = (timestamp) => {
-    if (!timestamp) return 'N/A'
-    return new Date(timestamp).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
   }
 
   return (
@@ -192,7 +182,7 @@ export default function AnalyticsPage() {
                     <p className="text-[10px] text-slate-500 mt-1">By: {completion.completed_by}</p>
                   </div>
                   <div className="text-[10px] text-slate-400 whitespace-nowrap">
-                    {formatTime(completion.completed_at)}
+                    {formatTime24(completion.completed_at)}
                   </div>
                 </div>
               </div>

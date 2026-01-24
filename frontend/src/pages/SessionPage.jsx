@@ -1,15 +1,8 @@
 import { useParams } from 'react-router-dom'
 import { useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '../hooks/useSession'
 import { useUndo } from '../hooks/useUndo'
-
-function formatDateTime(value) {
-  if (!value) return '—'
-  const date = new Date(value)
-  return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  })}`
-}
+import { formatDateTime } from '../utils/dateFormat'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function SessionPage() {
   const { id } = useParams()
@@ -21,7 +14,7 @@ export default function SessionPage() {
   const snapshots = snapshotsData?.snapshots ?? []
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>
+    return <LoadingSpinner fullScreen />
   }
 
   if (!details) {

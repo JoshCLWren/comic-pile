@@ -1,5 +1,13 @@
 import { useState } from 'react'
 
+/**
+ * A tooltip component that displays additional information on hover/focus.
+ *
+ * @param {Object} props - Component props
+ * @param {React.ReactNode} props.children - The element that triggers the tooltip
+ * @param {string} props.content - The text content to display in the tooltip
+ * @returns {JSX.Element} The tooltip wrapper component
+ */
 export default function Tooltip({ children, content }) {
   const [isVisible, setIsVisible] = useState(false)
 
