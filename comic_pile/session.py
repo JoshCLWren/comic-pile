@@ -1,6 +1,5 @@
 """Session management functions."""
 
-import os
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -9,6 +8,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.config import get_session_settings
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 
@@ -16,27 +16,14 @@ from app.models import Session as SessionModel
 _session_creation_lock = threading.Lock()
 
 
-def _int_env(name: str, default: int) -> int:
-    value = os.getenv(name)
-    if value is None:
-        return default
-
-    try:
-        parsed = int(value)
-    except ValueError:
-        return default
-
-    return parsed
-
-
 def _session_gap_hours() -> int:
-    hours = _int_env("SESSION_GAP_HOURS", 6)
-    return hours if 1 <= hours <= 168 else 6
+    """Get session gap hours from config."""
+    return get_session_settings().session_gap_hours
 
 
 def _start_die() -> int:
-    die = _int_env("START_DIE", 6)
-    return die if 4 <= die <= 20 else 6
+    """Get starting die from config."""
+    return get_session_settings().start_die
 
 
 def is_active(started_at: datetime, ended_at: datetime | None, _db: Session) -> bool:

@@ -1,6 +1,5 @@
 """JWT authentication utilities and dependencies."""
 
-import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -11,16 +10,17 @@ from jose import JWTError, jwt
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import get_auth_settings
 from app.database import get_db
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY environment variable must be set")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+_auth_settings = get_auth_settings()
+
+SECRET_KEY = _auth_settings.secret_key
+ALGORITHM = _auth_settings.algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = _auth_settings.access_token_expire_minutes
+REFRESH_TOKEN_EXPIRE_DAYS = _auth_settings.refresh_token_expire_days
 
 security = HTTPBearer()
 

@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 import subprocess
 import time
 import traceback
@@ -20,6 +19,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import admin, auth, queue, rate, roll, session, thread, undo
+from app.config import get_app_settings
 from app.database import Base, engine, SessionLocal
 from app.middleware import limiter
 
@@ -85,6 +85,8 @@ async def _safe_get_request_body(request: Request) -> str | dict | None:
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
+    app_settings = get_app_settings()
+
     app = FastAPI(
         title="Dice-Driven Comic Tracker",
         description="API for tracking comic reading with dice rolls",
@@ -96,15 +98,8 @@ def create_app() -> FastAPI:
         cast(Callable[[Request, Any], Awaitable[Response]], _rate_limit_exceeded_handler),
     )
 
-    environment = os.getenv("ENVIRONMENT", "development")
-    cors_origins_raw = os.getenv("CORS_ORIGINS")
-
-    if environment == "production":
-        if not cors_origins_raw or not cors_origins_raw.strip():
-            raise RuntimeError("CORS_ORIGINS must be set in production mode")
-        cors_origins = cors_origins_raw.split(",")
-    else:
-        cors_origins = cors_origins_raw.split(",") if cors_origins_raw else ["*"]
+    app_settings.validate_production_cors()
+    cors_origins = app_settings.cors_origins_list
 
     app.add_middleware(
         CORSMiddleware,
@@ -345,12 +340,14 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health_check():
         """Health check endpoint that verifies basic application functionality."""
-        import os
         from sqlalchemy import text
 
-        # Check if DATABASE_URL is set
-        database_url = os.getenv("DATABASE_URL")
-        if not database_url:
+        from app.config import get_database_settings
+
+        # Check if DATABASE_URL is set (validated at config load time)
+        try:
+            get_database_settings()
+        except Exception:
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 content={
@@ -424,8 +421,7 @@ def create_app() -> FastAPI:
                     logger.error("All database connection attempts failed")
 
         if database_ready:
-            environment = os.getenv("ENVIRONMENT", "development")
-            if environment == "production":
+            if app_settings.environment == "production":
                 logger.info("Production mode: Skipping table creation (migrations required)")
             else:
                 try:
@@ -434,8 +430,7 @@ def create_app() -> FastAPI:
                 except Exception as e:
                     logger.error(f"Failed to create database tables: {e}")
 
-            backup_enabled = os.getenv("AUTO_BACKUP_ENABLED", "true").lower() == "true"
-            if backup_enabled:
+            if app_settings.auto_backup_enabled:
                 try:
                     logger.info("Starting automatic database backup...")
                     result = subprocess.run(
