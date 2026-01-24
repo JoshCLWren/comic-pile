@@ -15,7 +15,33 @@ if TYPE_CHECKING:
 
 
 class Event(Base):
-    """Event model."""
+    """Tracks discrete actions that occur during reading sessions.
+
+    Events record user interactions with the reading queue system. Each event
+    captures a specific action along with relevant metadata like dice values,
+    ratings, and thread references.
+
+    Event Types:
+        - "roll": A random thread selection. Uses `selected_thread_id` to record
+          which thread was picked, `die` for the die size, `result` for the roll
+          value, and `selection_method` (e.g., "random").
+        - "rate": User rated a reading session. Uses `thread_id` to link to the
+          rated thread, `rating` for the score, `issues_read` for progress,
+          `die` for current die, and `die_after` for the new die size.
+        - "rolled_but_skipped": User rolled but skipped reading. Uses `thread_id`
+          to record which pending thread was abandoned.
+
+    Thread ID Fields:
+        This model has two thread reference fields with different purposes:
+
+        - `selected_thread_id`: Stores the ID of a thread selected during a roll.
+          Has NO foreign key constraint, allowing historical records to persist
+          even if the thread is later deleted. Used only by "roll" events.
+
+        - `thread_id`: A proper foreign key to the threads table. Used by "rate"
+          and "rolled_but_skipped" events where we need referential integrity
+          and the relationship to the Thread model.
+    """
 
     __tablename__ = "events"
 
@@ -26,6 +52,8 @@ class Event(Base):
     )
     die: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Thread ID captured at roll time (no FK - allows historical tracking if thread deleted)
+    # Used by: "roll" events to record which thread was randomly selected
     selected_thread_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     selection_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     rating: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -33,6 +61,8 @@ class Event(Base):
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)
     die_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=True)
+    # Foreign key to threads table for events that act on a thread
+    # Used by: "rate" events (thread that was read) and "rolled_but_skipped" events
     thread_id: Mapped[int | None] = mapped_column(ForeignKey("threads.id"), nullable=True)
 
     __table_args__ = (

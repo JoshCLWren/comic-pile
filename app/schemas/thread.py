@@ -1,7 +1,6 @@
 """Pydantic schemas for request/response validation."""
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -74,6 +73,17 @@ class RateRequest(BaseModel):
     finish_session: bool = Field(default=False)
 
 
+class ActiveThreadInfo(BaseModel):
+    """Schema for active thread information in session response."""
+
+    id: int | None
+    title: str
+    format: str
+    issues_remaining: int
+    position: int
+    last_rolled_result: int | None
+
+
 class SessionResponse(BaseModel):
     """Schema for session response."""
 
@@ -84,7 +94,7 @@ class SessionResponse(BaseModel):
     manual_die: int | None
     user_id: int
     ladder_path: str
-    active_thread: dict[str, Any] | None
+    active_thread: ActiveThreadInfo | None
     current_die: int
     last_rolled_result: int | None
     has_restore_point: bool

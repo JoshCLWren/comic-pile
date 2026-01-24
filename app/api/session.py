@@ -1,7 +1,7 @@
 """Session API endpoints."""
 
 from datetime import datetime
-from typing import Any, Annotated
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -13,6 +13,7 @@ from app.middleware import limiter
 from app.models import Event, Snapshot, Thread, User
 from app.models import Session as SessionModel
 from app.schemas.thread import (
+    ActiveThreadInfo,
     EventDetail,
     SessionDetailsResponse,
     SessionResponse,
@@ -29,7 +30,7 @@ get_current_session_cached = None
 
 def get_session_with_thread_safe(
     session_id: int, db: Session
-) -> tuple[SessionModel | None, dict[str, Any] | None]:
+) -> tuple[SessionModel | None, ActiveThreadInfo | None]:
     """Get session and active thread with consistent lock ordering to prevent deadlocks."""
     session = db.get(SessionModel, session_id)
     if not session:
@@ -55,14 +56,14 @@ def get_session_with_thread_safe(
     if not thread:
         return session, None
 
-    return session, {
-        "id": thread.id,
-        "title": thread.title,
-        "format": thread.format,
-        "issues_remaining": thread.issues_remaining,
-        "position": thread.queue_position,
-        "last_rolled_result": event.result,
-    }
+    return session, ActiveThreadInfo(
+        id=thread.id,
+        title=thread.title,
+        format=thread.format,
+        issues_remaining=thread.issues_remaining,
+        position=thread.queue_position,
+        last_rolled_result=event.result,
+    )
 
 
 def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]]:
@@ -129,7 +130,7 @@ def build_ladder_path(session_id: int, db: Session) -> str:
     return " → ".join(str(d) for d in path)
 
 
-def get_active_thread(session_id: int, db: Session) -> dict[str, Any] | None:
+def get_active_thread(session_id: int, db: Session) -> ActiveThreadInfo | None:
     """Get the most recently rolled thread for the session."""
     event = (
         db.execute(
@@ -150,14 +151,14 @@ def get_active_thread(session_id: int, db: Session) -> dict[str, Any] | None:
     if not thread:
         return None
 
-    return {
-        "id": thread.id,
-        "title": thread.title,
-        "format": thread.format,
-        "issues_remaining": thread.issues_remaining,
-        "position": thread.queue_position,
-        "last_rolled_result": event.result,
-    }
+    return ActiveThreadInfo(
+        id=thread.id,
+        title=thread.title,
+        format=thread.format,
+        issues_remaining=thread.issues_remaining,
+        position=thread.queue_position,
+        last_rolled_result=event.result,
+    )
 
 
 @router.get("/current/")
@@ -226,9 +227,7 @@ def get_current_session(
                 ladder_path=build_ladder_path(active_session_id, db),
                 active_thread=active_thread,
                 current_die=get_current_die(active_session_id, db),
-                last_rolled_result=active_thread.get("last_rolled_result")
-                if active_thread
-                else None,
+                last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
             )
@@ -290,9 +289,7 @@ def list_sessions(
                 ladder_path=build_ladder_path(session.id, db),
                 active_thread=active_thread,
                 current_die=get_current_die(session.id, db),
-                last_rolled_result=active_thread.get("last_rolled_result")
-                if active_thread
-                else None,
+                last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
             )
@@ -335,7 +332,7 @@ def get_session(
         ladder_path=build_ladder_path(session.id, db),
         active_thread=active_thread,
         current_die=get_current_die(session.id, db),
-        last_rolled_result=active_thread.get("last_rolled_result") if active_thread else None,
+        last_rolled_result=active_thread.last_rolled_result if active_thread else None,
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
     )
@@ -596,9 +593,7 @@ def restore_session_start(
                 ladder_path=build_ladder_path(session.id, db),
                 active_thread=active_thread,
                 current_die=get_current_die(session.id, db),
-                last_rolled_result=active_thread.get("last_rolled_result")
-                if active_thread
-                else None,
+                last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
             )
