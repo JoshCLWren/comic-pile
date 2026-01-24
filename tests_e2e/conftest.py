@@ -130,7 +130,7 @@ def set_skip_worktree_check():
 
 @pytest.fixture(scope="function")
 def enable_internal_ops():
-    """Enable internal ops routes for tests that access admin/tasks endpoints."""
+    """Enable internal ops routes for tests that access admin endpoints."""
     old_value = os.environ.get("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
     yield
@@ -150,7 +150,7 @@ def db() -> Generator[Session]:
     connection = engine.connect()
     connection.execute(
         text(
-            "TRUNCATE TABLE users, sessions, events, tasks, threads, snapshots, revoked_tokens "
+            "TRUNCATE TABLE users, sessions, events, threads, snapshots, revoked_tokens "
             "RESTART IDENTITY CASCADE;"
         )
     )

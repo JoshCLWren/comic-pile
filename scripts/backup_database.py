@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 
 from app.database import SessionLocal
-from app.models import Event, Session, Task, Thread, User
+from app.models import Event, Session, Thread, User
 
 
 def datetime_converter(obj):
@@ -91,31 +91,6 @@ def backup_database(backup_dir="backups", max_backups=10, skip_if_unchanged=True
             for e in events
         ]
 
-        tasks = db.query(Task).all()
-        data["tasks"] = [
-            {
-                "id": t.id,
-                "task_id": t.task_id,
-                "title": t.title,
-                "description": t.description,
-                "priority": t.priority,
-                "status": t.status,
-                "dependencies": t.dependencies,
-                "assigned_agent": t.assigned_agent,
-                "worktree": t.worktree,
-                "status_notes": t.status_notes,
-                "estimated_effort": t.estimated_effort,
-                "completed": t.completed,
-                "blocked_reason": t.blocked_reason,
-                "blocked_by": t.blocked_by,
-                "last_heartbeat": t.last_heartbeat,
-                "instructions": t.instructions,
-                "created_at": t.created_at,
-                "updated_at": t.updated_at,
-            }
-            for t in tasks
-        ]
-
         data_hash = compute_hash(data)
 
         if skip_if_unchanged:
@@ -165,8 +140,7 @@ def backup_database(backup_dir="backups", max_backups=10, skip_if_unchanged=True
         print(f"Total backups: {len(all_backups)} (max: {max_backups})")
         print(
             f"Users: {len(data['users'])}, Threads: {len(data['threads'])}, "
-            f"Sessions: {len(data['sessions'])}, Events: {len(data['events'])}, "
-            f"Tasks: {len(data['tasks'])}"
+            f"Sessions: {len(data['sessions'])}, Events: {len(data['events'])}"
         )
 
     except Exception as e:

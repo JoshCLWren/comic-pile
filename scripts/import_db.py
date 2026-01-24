@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy import delete
 
 from app.database import SessionLocal
-from app.models import Event, Session, Task, Thread, User
+from app.models import Event, Session, Thread, User
 
 
 def import_database():
@@ -22,7 +22,6 @@ def import_database():
 
         db.execute(delete(Event))
         db.execute(delete(Session))
-        db.execute(delete(Task))
         db.execute(delete(Thread))
         db.execute(delete(User))
         db.commit()
@@ -63,33 +62,6 @@ def import_database():
             )
             db.add(thread)
         print(f"Imported {len(threads_data)} threads")
-
-        tasks_data = data.get("tasks", [])
-        for t in tasks_data:
-            task = Task(
-                id=t["id"],
-                task_id=t["task_id"],
-                title=t["title"],
-                description=t["description"],
-                priority=t["priority"],
-                status=t["status"],
-                dependencies=t["dependencies"],
-                assigned_agent=t["assigned_agent"],
-                worktree=t["worktree"],
-                status_notes=t["status_notes"],
-                estimated_effort=t["estimated_effort"],
-                completed=t["completed"],
-                blocked_reason=t["blocked_reason"],
-                blocked_by=t["blocked_by"],
-                last_heartbeat=datetime.fromisoformat(t["last_heartbeat"])
-                if t.get("last_heartbeat")
-                else None,
-                instructions=t["instructions"],
-                created_at=datetime.fromisoformat(t["created_at"]),
-                updated_at=datetime.fromisoformat(t["updated_at"]) if t.get("updated_at") else None,
-            )
-            db.add(task)
-        print(f"Imported {len(tasks_data)} tasks")
 
         sessions_data = data.get("sessions", [])
         for s in sessions_data:

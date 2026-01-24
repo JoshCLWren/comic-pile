@@ -19,8 +19,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import admin, auth, queue, rate, retros, roll, session, tasks, thread, undo
-from app.api.tasks import health_router
+from app.api import admin, auth, queue, rate, roll, session, thread, undo
 from app.database import Base, engine, SessionLocal
 from app.middleware import limiter
 
@@ -298,9 +297,6 @@ def create_app() -> FastAPI:
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-    app.include_router(tasks.router, prefix="/api", tags=["tasks"])
-    app.include_router(retros.router, prefix="/api", tags=["retros"])
-    app.include_router(health_router, prefix="/api")
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])

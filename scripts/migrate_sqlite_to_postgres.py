@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.models import Event, Session, Snapshot, Task, Thread, User
+from app.models import Event, Session, Snapshot, Thread, User
 
 env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
 if os.path.exists(env_file):
@@ -171,40 +171,6 @@ def migrate_snapshots():
     print(f"Migrated {len(rows)} snapshots")
 
 
-def migrate_tasks():
-    """Migrate tasks table."""
-    cursor = sqlite_conn.execute("SELECT * FROM tasks")
-    rows = cursor.fetchall()
-    for row in rows:
-        completed = row["completed"]
-        if isinstance(completed, str):
-            completed = completed.lower() == "true"
-
-        task = Task(
-            id=row["id"],
-            task_id=row["task_id"],
-            title=row["title"],
-            description=row["description"] if row["description"] else None,
-            priority=row["priority"],
-            status=row["status"],
-            dependencies=row["dependencies"] if row["dependencies"] else None,
-            assigned_agent=row["assigned_agent"] if row["assigned_agent"] else None,
-            worktree=row["worktree"] if row["worktree"] else None,
-            status_notes=row["status_notes"] if row["status_notes"] else None,
-            estimated_effort=row["estimated_effort"],
-            completed=completed,
-            blocked_reason=row["blocked_reason"] if row["blocked_reason"] else None,
-            blocked_by=row["blocked_by"] if row["blocked_by"] else None,
-            last_heartbeat=row["last_heartbeat"] if row["last_heartbeat"] else None,
-            instructions=row["instructions"] if row["instructions"] else None,
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
-        )
-        pg_session.merge(task)
-    pg_session.commit()
-    print(f"Migrated {len(rows)} tasks")
-
-
 if __name__ == "__main__":
     try:
         print("Starting migration from SQLite to PostgreSQL...")
@@ -217,7 +183,6 @@ if __name__ == "__main__":
         migrate_sessions()
         migrate_events()
         migrate_snapshots()
-        migrate_tasks()
 
         print("\nMigration complete!")
     except Exception as e:

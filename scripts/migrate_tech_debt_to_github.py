@@ -64,8 +64,8 @@ def extract_item_details(content: str, item_number: int) -> dict[str, str] | Non
     item_content = content[start_pos:end_pos]
 
     # Extract details from content
-    details = {
-        "number": item_number,
+    details: dict[str, str] = {
+        "number": str(item_number),
         "title": title,
         "priority": priority,
         "description": "",
@@ -104,22 +104,22 @@ def extract_item_details(content: str, item_number: int) -> dict[str, str] | Non
 def priority_to_github(priority: str) -> str:
     """Convert priority to GitHub label."""
     mapping = {
-        "critical": "ralph-priority:critical",
-        "high": "ralph-priority:high",
-        "medium": "ralph-priority:medium",
-        "low": "ralph-priority:low",
+        "critical": "priority:critical",
+        "high": "priority:high",
+        "medium": "priority:medium",
+        "low": "priority:low",
     }
-    return mapping.get(priority, "ralph-priority:medium")
+    return mapping.get(priority, "priority:medium")
 
 
-def create_github_issue(item: dict, dry_run: bool = False) -> str | None:
+def create_github_issue(item: dict[str, str], dry_run: bool = False) -> str | None:
     """Create GitHub issue for a debt item."""
-    task_id = f"DEBT-{item['number']:03d}"
+    task_id = f"DEBT-{int(item['number']):03d}"
     title = f"{task_id}: {item['title'][:60]}"
 
     priority_label = priority_to_github(item["priority"])
-    status_label = "ralph-status:pending"
-    labels = ["ralph-task", "code-debt", priority_label, status_label]
+    status_label = "status:pending"
+    labels = ["tech-debt", priority_label, status_label]
 
     # Build issue body
     body_parts = [

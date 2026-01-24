@@ -29,39 +29,6 @@ async def test_tasks_routes_return_404_when_disabled(client):
 
 
 @pytest.mark.asyncio
-async def test_tasks_routes_accessible_when_enabled(db):
-    """Task routes work when ENABLE_INTERNAL_OPS_ROUTES is true."""
-    from httpx import ASGITransport, AsyncClient
-
-    original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
-    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
-
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
-    from app.main import create_app
-
-    test_app = create_app()
-    test_app.dependency_overrides[get_db] = override_get_db
-
-    try:
-        transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/tasks/")
-            assert response.status_code in (200, 400)
-    finally:
-        test_app.dependency_overrides.clear()
-        if original_value is None:
-            os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
-        else:
-            os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = original_value
-
-
-@pytest.mark.asyncio
 async def test_admin_routes_return_404_when_disabled(client):
     """Admin routes return 404 when ENABLE_INTERNAL_OPS_ROUTES is false (default)."""
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
@@ -142,7 +109,7 @@ async def test_production_mode_blocks_internal_routes(client):
 @pytest.mark.asyncio
 async def test_health_routes_always_accessible(client):
     """Health routes are always accessible (not gated)."""
-    response = await client.get("/api/health")
+    response = await client.get("/health")
     assert response.status_code in (200, 503)
 
 
@@ -359,7 +326,7 @@ async def test_cors_origins_allowed_in_production_when_set(db):
     try:
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/health")
+            response = await ac.get("/health")
             assert response.status_code in (200, 503)
     finally:
         test_app.dependency_overrides.clear()
@@ -401,7 +368,7 @@ async def test_cors_defaults_to_wildcard_in_development(db):
     try:
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/health")
+            response = await ac.get("/health")
             assert response.status_code in (200, 503)
     finally:
         test_app.dependency_overrides.clear()
@@ -441,7 +408,7 @@ async def test_cors_allow_credentials_is_false(db):
     try:
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/health")
+            response = await ac.get("/health")
             assert response.status_code in (200, 503)
     finally:
         test_app.dependency_overrides.clear()
@@ -483,7 +450,7 @@ async def test_production_mode_skips_table_creation(db):
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/health")
+            response = await ac.get("/health")
             assert response.status_code in (200, 503)
     finally:
         if test_app:
@@ -524,7 +491,7 @@ async def test_development_mode_creates_tables(db):
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/health")
+            response = await ac.get("/health")
             assert response.status_code in (200, 503)
     finally:
         if test_app:
@@ -563,7 +530,7 @@ async def test_app_starts_successfully_in_production_mode(db):
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/health")
+            response = await ac.get("/health")
             assert response.status_code in (200, 503)
     finally:
         if test_app:
@@ -604,7 +571,7 @@ async def test_app_starts_successfully_in_development_mode(db):
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/health")
+            response = await ac.get("/health")
             assert response.status_code in (200, 503)
     finally:
         if test_app:

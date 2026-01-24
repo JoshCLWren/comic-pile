@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import Event, Task, Thread, User
+from app.models import Event, Thread, User
 from app.models import Session as SessionModel
 
 
@@ -56,7 +56,6 @@ def _missing_model_columns(conn: Connection) -> bool:
         "sessions",
         "threads",
         "events",
-        "tasks",
         "snapshots",
         "revoked_tokens",
     }
@@ -232,7 +231,7 @@ def db() -> Generator[Session]:
     connection = engine.connect()
     connection.execute(
         text(
-            "TRUNCATE TABLE sessions, events, tasks, threads, snapshots, revoked_tokens, users "
+            "TRUNCATE TABLE sessions, events, threads, snapshots, revoked_tokens, users "
             "RESTART IDENTITY CASCADE;"
         )
     )
@@ -312,46 +311,6 @@ async def safe_mode_auth_client(db: Session, safe_mode_user: User) -> AsyncGener
 def session(db: Session) -> Generator[Session]:
     """Get database session for tests."""
     yield db
-
-
-@pytest.fixture(scope="function")
-def sample_tasks(db: Session) -> list[Task]:
-    """Create sample tasks for testing."""
-    from app.models import Task as TaskModel
-
-    tasks = [
-        TaskModel(
-            task_id="TASK-101",
-            title="Complete Narrative Session Summaries",
-            description="Test description",
-            instructions="Test instructions",
-            priority="HIGH",
-            dependencies=None,
-            estimated_effort="4 hours",
-            status="pending",
-            completed=False,
-        ),
-        TaskModel(
-            task_id="TASK-102",
-            title="Add Staleness Awareness UI",
-            description="Test description",
-            instructions="Test instructions",
-            priority="MEDIUM",
-            dependencies=None,
-            estimated_effort="3 hours",
-            status="pending",
-            completed=False,
-        ),
-    ]
-
-    for task in tasks:
-        db.add(task)
-    db.flush()
-
-    for task in tasks:
-        db.refresh(task)
-
-    return tasks
 
 
 @pytest.fixture(scope="function")
@@ -476,34 +435,8 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
 
 
 @pytest.fixture(scope="function")
-def task_data(db: Session) -> list:
-    """Create sample tasks for testing."""
-    tasks = []
-    for i in range(1, 13):
-        task = Task(
-            task_id=f"TASK-10{i}",
-            title=f"Test Task {i}",
-            description=f"Description for test task {i}",
-            priority="HIGH" if i < 5 else "MEDIUM" if i < 9 else "LOW",
-            status="pending",
-            instructions="Test instructions",
-            estimated_effort="1 hour",
-            completed=False,
-        )
-        db.add(task)
-        tasks.append(task)
-
-    db.flush()
-
-    for task in tasks:
-        db.refresh(task)
-
-    return tasks
-
-
-@pytest.fixture(scope="function")
 def enable_internal_ops():
-    """Enable internal ops routes for tests that access admin/tasks endpoints."""
+    """Enable internal ops routes for tests that access admin endpoints."""
     old_value = os.environ.get("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
     yield

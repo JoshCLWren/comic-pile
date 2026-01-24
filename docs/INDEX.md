@@ -13,50 +13,12 @@ This index provides a comprehensive map of all documentation in the comic-pile p
 - [API.md](API.md) - Complete API documentation with endpoints, request/response schemas, and examples.
 - [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md) - React stack details, component organization, state management, and migration notes.
 - [AUTH_USERS_MULTITENANT_PLAN.md](AUTH_USERS_MULTITENANT_PLAN.md) - Step-by-step plan for JWT auth, multi-user isolation, and React-only modernization.
-- [TASK_API.md](TASK_API.md) - Task API reference for agent system - endpoints for claiming, updating, and managing tasks.
-
-## Agent Systems
-
-Documentation for the multi-agent coordination system used for automated development.
-
-- [../AGENTS.md](../AGENTS.md) - Repository guidelines, RALPH_MODE configuration, git worktree management, and agent workflows.
-- [RALPH_MODE.md](RALPH_MODE.md) - Ralph mode autonomous iteration guide - single agent workflow using GitHub Issues.
-- [RALPH_GITHUB_SETUP.md](RALPH_GITHUB_SETUP.md) - GitHub setup guide for Ralph mode - Personal Access Token configuration and usage.
-- [../MANAGER_DAEMON.md](../MANAGER_DAEMON.md) - Manager daemon responsibilities, setup, and integration with Worker Pool Manager.
-- [../WORKER_WORKFLOW.md](../WORKER_WORKFLOW.md) - Worker workflow using Task API - complete end-to-end guide from claim to merge.
-- [../MANAGER-7-PROMPT.md](../MANAGER-7-PROMPT.md) - Current manager agent coordination prompt with active monitoring and task handling.
-- [../WORKFLOW_PATTERNS.md](../WORKFLOW_PATTERNS.md) - Proven successful patterns and critical failures to avoid from manager sessions.
-- [../worker-pool-manager-prompt.txt](../worker-pool-manager-prompt.txt) - Worker Pool Manager agent prompt for automated worker spawning.
 
 ## Technical Documentation
 
 - [DATABASE_SAVE_LOAD.md](DATABASE_SAVE_LOAD.md) - Database save/load functionality, export formats, and backup procedures.
 - [rate_limiting.md](rate_limiting.md) - Rate limiting documentation - slowapi configuration and endpoint protection.
 - [SQLITE_CLEANUP.md](SQLITE_CLEANUP.md) - SQLite cleanup notes and migration considerations.
-- [OPENCODE_PERMISSIONS.md](OPENCODE_PERMISSIONS.md) - Permissions documentation for the opencode CLI tool.
-
-## Exploratory Documentation
-
-Technical explorations and research documents (may be superseded by implementation):
-
-- [ANTI_BINGE_GOAL_TRACKING_EXPLORATION.md](ANTI_BINGE_GOAL_TRACKING_EXPLORATION.md) - Anti-binge goal tracking feature exploration.
-- [SHARING_COLLABORATION_EXPLORATION.md](SHARING_COLLABORATION_EXPLORATION.md) - Sharing and collaboration feature exploration.
-
-## Retrospectives
-
-- [../retro/INDEX.md](../retro/INDEX.md) - Complete retrospective index with manager, worker, and audit retrospectives.
-- [../retro.md](../retro.md) - Meta-retrospective file with project-wide retrospective analysis.
-
-## Archived Documentation
-
-Historical documentation is organized in [../archive/](../archive/) for reference:
-
-- **archive/old-prompts/** - Superseded agent prompt files
-- **archive/phase1/** - Phase 1 agent task documentation
-- **archive/htmx-backup/** - Legacy frontend documentation (stack migrated to React)
-- **archive/sessions/** - Session handoff and context documents
-- **archive/exploration/** - Exploratory research documents (MCP, Docker, etc.)
-- **archive/historical/** - Historical summaries and audit reports
 
 ## Current Stack
 
@@ -102,5 +64,12 @@ make migrate      # Run database migrations
 - `tests/` - pytest test suite
 - `frontend/` - React frontend application
 - `docs/` - Technical documentation
-- `retro/` - Agent retrospectives
 - `migrations/` - Alembic migration files
+
+## Archived Documentation
+
+Historical documentation is organized in [../archive/](../archive/) for reference:
+
+- **archive/htmx-backup/** - Legacy frontend documentation (stack migrated to React)
+- **archive/exploration/** - Exploratory research documents (MCP, Docker, etc.)
+- **archive/historical/** - Historical summaries and audit reports
