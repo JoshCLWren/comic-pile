@@ -77,7 +77,7 @@ export default function QueuePage() {
 
     const targetThread = activeThreads.find((thread) => thread.id === threadId)
     if (targetThread) {
-      moveToPositionMutation.mutate({ id: draggedThreadId, position: targetThread.position })
+      moveToPositionMutation.mutate({ id: draggedThreadId, position: targetThread.queue_position })
     }
 
     setDraggedThreadId(null)

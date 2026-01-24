@@ -1,14 +1,19 @@
-/**
- * A reusable modal dialog component with backdrop blur effect.
- *
- * @param {Object} props - Component props
- * @param {boolean} props.isOpen - Whether the modal is currently visible
- * @param {string} props.title - The modal title displayed in the header
- * @param {Function} props.onClose - Callback function when the modal is closed
- * @param {React.ReactNode} props.children - The content to render inside the modal
- * @returns {JSX.Element|null} The modal component or null if not open
- */
+import { useEffect } from 'react'
+
 export default function Modal({ isOpen, title, onClose, children }) {
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (

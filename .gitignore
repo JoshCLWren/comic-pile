@@ -164,3 +164,6 @@ logs/
 
 # Node.js dependencies
 node_modules/
+
+# Frontend build artifacts
+static/react/assets/

@@ -1,13 +1,15 @@
 import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
-import { formatDate, formatTime } from '../utils/dateFormat'
-import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function HistoryPage() {
-  const { data: sessions, isLoading } = useSessions()
+  const { data: sessions, isLoading, error } = useSessions()
 
   if (isLoading) {
-    return <LoadingSpinner fullScreen />
+    return <div className="flex items-center justify-center h-screen">Loading...</div>
+  }
+
+  if (error) {
+    return <div className="error-message">Failed to load sessions</div>
   }
 
   if (!sessions || sessions.length === 0) {
@@ -27,6 +29,18 @@ export default function HistoryPage() {
         <div className="text-center text-slate-500">No sessions yet</div>
       </div>
     )
+  }
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
+  const formatTime = (dateStr) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
   return (

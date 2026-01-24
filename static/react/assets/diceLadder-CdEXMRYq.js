@@ -1,2 +1,0 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/Dice3D-C8Bb7Mr7.js","assets/index-DQN6gfX2.js","assets/index-CHZXFVc2.css"])))=>i.map(i=>d[i]);
-import{j as s,a as e,_ as t}from"./index-DQN6gfX2.js";const l=e.lazy(()=>t(()=>import("./Dice3D-C8Bb7Mr7.js"),__vite__mapDeps([0,1,2])));function i(a){return s.jsx(e.Suspense,{fallback:s.jsx("div",{className:"w-full h-full rounded-full bg-white/5 animate-pulse"}),children:s.jsx(l,{...a})})}const o=[4,6,8,10,12,20];export{o as D,i as L};
