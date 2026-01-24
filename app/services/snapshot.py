@@ -1,6 +1,6 @@
 """Snapshot service for undo functionality."""
 
-from datetime import datetime
+from datetime import datetime, UTC
 
 from sqlalchemy import delete, or_, update
 from sqlalchemy.orm import Session
@@ -124,7 +124,7 @@ def _create_thread_from_state(
         A new Thread instance (not yet added to session)
     """
     new_thread = Thread(
-        id=thread_id,
+        id=int(thread_id),
         title=state.get("title", "Unknown Thread"),
         format=state.get("format", "comic"),
         issues_remaining=state.get("issues_remaining", 0),
@@ -137,7 +137,7 @@ def _create_thread_from_state(
         user_id=state.get("user_id", fallback_user_id),
         created_at=datetime.fromisoformat(state["created_at"])
         if state.get("created_at")
-        else datetime.now(),
+        else datetime.now(UTC),
     )
     if state.get("last_activity_at"):
         new_thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])

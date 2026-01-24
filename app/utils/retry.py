@@ -1,29 +1,43 @@
 """Retry utilities for database operations."""
 
 import time
-from collections.abc import Generator
-from contextlib import contextmanager
+from collections.abc import Callable
+from typing import TypeVar
 
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.constants import DEADLOCK_INITIAL_DELAY, DEADLOCK_MAX_RETRIES
 
+T = TypeVar("T")
 
-@contextmanager
-def deadlock_retry(db: Session) -> Generator[None]:
-    """Context manager that retries on deadlock with exponential backoff.
+
+def with_deadlock_retry[T](db: Session, operation: Callable[[], T]) -> T:
+    """Execute a database operation with retry on deadlock.
+
+    Args:
+        db: Database session
+        operation: Callable that performs the database operation
+
+    Returns:
+        The result of the operation
+
+    Raises:
+        RuntimeError: If max retries exceeded
+        OperationalError: If error is not a deadlock
 
     Usage:
-        with deadlock_retry(db):
-            # database operations that might deadlock
+        def do_db_work():
+            # database operations
             db.commit()
+            return some_value
+
+        result = with_deadlock_retry(db, do_db_work)
     """
     retries = 0
     while True:
         try:
-            yield
-            return  # Success, exit
+            return operation()
         except OperationalError as e:
             if "deadlock" not in str(e).lower():
                 raise

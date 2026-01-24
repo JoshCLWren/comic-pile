@@ -448,8 +448,9 @@ def enable_internal_ops():
 
 @pytest.fixture(scope="function", autouse=True)
 def clear_config_cache():
-    """Clear cached settings after each test to prevent test pollution."""
+    """Clear cached settings before and after each test to prevent test pollution."""
     from app.config import clear_settings_cache
 
+    clear_settings_cache()
     yield
     clear_settings_cache()

@@ -36,7 +36,9 @@ export default function SessionPage() {
           </div>
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Ended</p>
-            <p className="text-sm font-black text-slate-100">{formatDateTime(details.ended_at)}</p>
+            <p className="text-sm font-black text-slate-100">
+              {details.ended_at ? formatDateTime(details.ended_at) : 'Active'}
+            </p>
           </div>
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Start Die</p>

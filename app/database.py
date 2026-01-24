@@ -4,6 +4,7 @@ import logging
 from collections.abc import Generator
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_database_settings
@@ -16,8 +17,11 @@ DATABASE_URL = _db_settings.database_url
 SYNC_DATABASE_URL = _db_settings.sync_url
 ASYNC_DATABASE_URL = _db_settings.async_url
 
-logger.info(f"Database URL configured: {DATABASE_URL.split('@')[0]}@...")
-logger.info(f"Sync database URL: {SYNC_DATABASE_URL.split('@')[0]}@...")
+# Log database URLs with password redacted
+_redacted_database_url = make_url(DATABASE_URL).render_as_string(hide_password=True)
+_redacted_sync_url = make_url(SYNC_DATABASE_URL).render_as_string(hide_password=True)
+logger.info(f"Database URL configured: {_redacted_database_url}")
+logger.info(f"Sync database URL: {_redacted_sync_url}")
 
 async_engine = create_engine(ASYNC_DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
 sync_engine = create_engine(SYNC_DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)

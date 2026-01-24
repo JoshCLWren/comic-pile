@@ -45,7 +45,9 @@ export default function AnalyticsPage() {
         </div>
         <div className="glass-card p-4">
           <div className="text-3xl font-bold text-amber-400">
-            {metrics.average_completion_time_hours ? `${metrics.average_completion_time_hours}h` : 'N/A'}
+            {Number.isFinite(metrics.average_completion_time_hours)
+              ? `${metrics.average_completion_time_hours}h`
+              : 'N/A'}
           </div>
           <div className="text-xs text-slate-400 uppercase tracking-widest mt-1">Avg Completion</div>
         </div>
