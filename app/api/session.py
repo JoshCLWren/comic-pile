@@ -12,7 +12,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread, User
 from app.models import Session as SessionModel
-from app.schemas.thread import (
+from app.schemas import (
     ActiveThreadInfo,
     EventDetail,
     SessionDetailsResponse,
@@ -61,7 +61,7 @@ def get_session_with_thread_safe(
         title=thread.title,
         format=thread.format,
         issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
+        queue_position=thread.queue_position,
         last_rolled_result=event.result,
     )
 
@@ -156,7 +156,7 @@ def get_active_thread(session_id: int, db: Session) -> ActiveThreadInfo | None:
         title=thread.title,
         format=thread.format,
         issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
+        queue_position=thread.queue_position,
         last_rolled_result=event.result,
     )
 

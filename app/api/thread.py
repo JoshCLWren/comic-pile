@@ -15,7 +15,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
+from app.schemas import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
 
 router = APIRouter(tags=["threads"])
 
@@ -27,7 +27,7 @@ def thread_to_response(thread: Thread) -> ThreadResponse:
         title=thread.title,
         format=thread.format,
         issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
+        queue_position=thread.queue_position,
         status=thread.status,
         last_rating=thread.last_rating,
         last_activity_at=thread.last_activity_at,

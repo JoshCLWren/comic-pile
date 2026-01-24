@@ -12,7 +12,7 @@ from app.database import get_db
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
-from app.schemas.thread import ActiveThreadInfo, SessionResponse
+from app.schemas import ActiveThreadInfo, SessionResponse
 from comic_pile.session import get_current_die
 
 router = APIRouter(tags=["undo"])
@@ -194,7 +194,7 @@ def undo_to_snapshot(
                     title=thread.title if thread else "",
                     format=thread.format if thread else "",
                     issues_remaining=thread.issues_remaining if thread else 0,
-                    position=thread.queue_position if thread else 0,
+                    queue_position=thread.queue_position if thread else 0,
                     last_rolled_result=active_thread.result if active_thread else None,
                 )
                 if thread

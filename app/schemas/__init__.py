@@ -7,29 +7,45 @@ from app.schemas.auth import (
     UserRegisterRequest,
     UserResponse,
 )
-from app.schemas.thread import (
-    OverrideRequest,
-    RateRequest,
-    ReactivateRequest,
-    RollResponse,
+from app.schemas.rate import RateRequest
+from app.schemas.roll import OverrideRequest, RollResponse
+from app.schemas.session import (
+    ActiveThreadInfo,
+    EventDetail,
+    SessionDetailsResponse,
     SessionResponse,
+)
+from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
+from app.schemas.thread import (
+    ReactivateRequest,
     ThreadCreate,
     ThreadResponse,
     ThreadUpdate,
 )
 
 __all__ = [
+    # Auth
     "UserRegisterRequest",
     "UserLoginRequest",
     "TokenResponse",
     "UserResponse",
     "RefreshTokenRequest",
+    # Thread
     "ThreadCreate",
     "ThreadUpdate",
     "ThreadResponse",
+    "ReactivateRequest",
+    # Roll
     "RollResponse",
     "OverrideRequest",
-    "ReactivateRequest",
+    # Rate
     "RateRequest",
+    # Session
     "SessionResponse",
+    "SessionDetailsResponse",
+    "ActiveThreadInfo",
+    "EventDetail",
+    # Snapshot
+    "SnapshotResponse",
+    "SnapshotsListResponse",
 ]
