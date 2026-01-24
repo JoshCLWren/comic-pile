@@ -127,5 +127,5 @@ export const undoApi = {
 }
 
 export const tasksApi = {
-  getMetrics: () => api.get('/tasks/metrics'),
+  getMetrics: () => api.get('/analytics/metrics'),
 }
