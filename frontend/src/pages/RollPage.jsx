@@ -57,7 +57,6 @@ export default function RollPage() {
 
   function setDiceStateValue(state) {
     setDiceState(state)
-    console.log('[RollPage] Dice state set to:', state)
   }
 
   function handleSetDie(die) {
