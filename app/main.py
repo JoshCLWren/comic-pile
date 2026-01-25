@@ -7,6 +7,7 @@ import time
 import traceback
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
 
 from fastapi import FastAPI, Request, status
@@ -307,8 +308,12 @@ def create_app() -> FastAPI:
         """Return a JSON 404 for unknown API routes."""
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-    app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+    # Mount static files only if directories exist (for CI/testing environments)
+    if Path("static").exists():
+        app.mount("/static", StaticFiles(directory="static"), name="static")
+
+    if Path("static/react/assets").exists():
+        app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
 
     @app.get("/vite.svg")
     async def serve_vite_svg():
