@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Modal from '../components/Modal'
+import PositionSlider from '../components/PositionSlider'
 import Tooltip from '../components/Tooltip'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
@@ -38,6 +39,7 @@ export default function QueuePage() {
   const [issuesToAdd, setIssuesToAdd] = useState(1)
   const [draggedThreadId, setDraggedThreadId] = useState(null)
   const [dragOverThreadId, setDragOverThreadId] = useState(null)
+  const [repositioningThread, setRepositioningThread] = useState(null)
 
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
@@ -171,6 +173,23 @@ export default function QueuePage() {
     setIsCreateOpen(true)
   }
 
+  const openRepositionModal = (thread) => {
+    setRepositioningThread(thread)
+  }
+
+  const handleRepositionConfirm = (targetPosition) => {
+    if (!repositioningThread) return
+
+    moveToPositionMutation.mutate(
+      { id: repositioningThread.id, position: targetPosition },
+      {
+        onSuccess: () => {
+          setRepositioningThread(null)
+        },
+      }
+    )
+  }
+
   if (isLoading) {
     return <LoadingSpinner fullScreen />
   }
@@ -262,6 +281,14 @@ export default function QueuePage() {
                       className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                     >
                       Front
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Choose a specific position in the queue.">
+                    <button
+                      onClick={() => openRepositionModal(thread)}
+                      className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                    >
+                      Reposition
                     </button>
                   </Tooltip>
                   <Tooltip content="Move this thread to the back of the queue.">
@@ -443,6 +470,21 @@ export default function QueuePage() {
             {reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate Thread'}
           </button>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={repositioningThread !== null}
+        title={`Reposition: ${repositioningThread?.title ?? ''}`}
+        onClose={() => setRepositioningThread(null)}
+      >
+        {repositioningThread && (
+          <PositionSlider
+            threads={activeThreads}
+            currentThread={repositioningThread}
+            onPositionSelect={handleRepositionConfirm}
+            onCancel={() => setRepositioningThread(null)}
+          />
+        )}
       </Modal>
     </div>
   )

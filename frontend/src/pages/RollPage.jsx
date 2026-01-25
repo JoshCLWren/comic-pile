@@ -17,6 +17,7 @@ export default function RollPage() {
   const [staleThread, setStaleThread] = useState(null)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
+  const [snoozedExpanded, setSnoozedExpanded] = useState(false)
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
@@ -311,6 +312,37 @@ export default function RollPage() {
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {session.snoozed_threads?.length > 0 && (
+            <div className="px-4 pb-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSnoozedExpanded(!snoozedExpanded)}
+                className="w-full px-4 py-2 bg-slate-500/5 border border-slate-500/10 rounded-xl flex items-center gap-2 hover:bg-slate-500/10 transition-colors"
+              >
+                <span
+                  className={`text-slate-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
+                >
+                  ▶
+                </span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Snoozed ({session.snoozed_threads.length})
+                </span>
+              </button>
+              {snoozedExpanded && (
+                <div className="mt-2 space-y-1">
+                  {session.snoozed_threads.map((thread) => (
+                    <div
+                      key={thread.id}
+                      className="px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                    >
+                      <p className="text-sm text-slate-400 truncate">{thread.title}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -30,6 +30,8 @@ class Event(Base):
           `die` for current die, and `die_after` for the new die size.
         - "rolled_but_skipped": User rolled but skipped reading. Uses `thread_id`
           to record which pending thread was abandoned.
+        - "snooze": User snoozed a thread. Uses `thread_id` to record which
+          thread was snoozed.
 
     Thread ID Fields:
         This model has two thread reference fields with different purposes:

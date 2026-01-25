@@ -941,7 +941,7 @@ def test_undo_to_snapshot_clears_pending_thread_id(db, sample_data):
     assert restored_thread2 is None
 
 
-def test_is_active_no_lazy_load(db):
+def test_is_active_no_lazy_load(db, test_session_factory):
     """Test that is_active doesn't cause lazy load of session object."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
@@ -956,9 +956,7 @@ def test_is_active_no_lazy_load(db):
     ended_at = session.ended_at
     db.expunge_all()
 
-    from app.database import SessionLocal
-
-    new_db = SessionLocal()
+    new_db = test_session_factory()
 
     try:
         result = is_active(started_at, ended_at, new_db)

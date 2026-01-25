@@ -5,6 +5,13 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class SnoozedThreadInfo(BaseModel):
+    """Schema for snoozed thread information in session response."""
+
+    id: int
+    title: str
+
+
 class ActiveThreadInfo(BaseModel):
     """Schema for active thread information in session response."""
 
@@ -31,6 +38,8 @@ class SessionResponse(BaseModel):
     last_rolled_result: int | None
     has_restore_point: bool
     snapshot_count: int
+    snoozed_thread_ids: list[int] = []
+    snoozed_threads: list[SnoozedThreadInfo] = []
 
 
 class EventDetail(BaseModel):

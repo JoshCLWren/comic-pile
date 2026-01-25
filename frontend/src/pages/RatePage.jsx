@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../components/LazyDice3D'
+import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import { DICE_LADDER } from '../components/diceLadder'
-import { rateApi, sessionApi } from '../services/api'
+import { rateApi, sessionApi, threadsApi } from '../services/api'
+import { useSnooze } from '../hooks'
 
 export default function RatePage() {
   const queryClient = useQueryClient()
@@ -16,6 +18,10 @@ export default function RatePage() {
   const [previewSides, setPreviewSides] = useState(6)
   const [rolledValue, setRolledValue] = useState(1)
   const [errorMessage, setErrorMessage] = useState('')
+  const [showCompleteModal, setShowCompleteModal] = useState(false)
+  const [showAddIssuesInput, setShowAddIssuesInput] = useState(false)
+  const [additionalIssues, setAdditionalIssues] = useState(1)
+  const [pendingRating, setPendingRating] = useState(null)
 
   const { data: session } = useQuery({
     queryKey: ['session', 'current'],
@@ -33,6 +39,15 @@ export default function RatePage() {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating')
     },
   })
+
+  const updateThreadMutation = useMutation({
+    mutationFn: ({ id, data }) => threadsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['threads'] })
+    },
+  })
+
+  const snoozeMutation = useSnooze()
 
   useEffect(() => {
     if (session) {
@@ -104,6 +119,14 @@ export default function RatePage() {
       return;
     }
 
+    // Check if this rating would complete the thread (issues_remaining - 1 <= 0)
+    // Only show modal if not already finishing session
+    if (!finishSession && thread.issues_remaining - 1 <= 0) {
+      setPendingRating(rating);
+      setShowCompleteModal(true);
+      return;
+    }
+
     if (rating >= 4.0) {
       createExplosion();
     }
@@ -113,6 +136,48 @@ export default function RatePage() {
       issues_read: 1,
       finish_session: finishSession
     });
+  }
+
+  function handleCompleteThread() {
+    setShowCompleteModal(false);
+    if (pendingRating >= 4.0) {
+      createExplosion();
+    }
+    rateMutation.mutate({
+      rating: pendingRating,
+      issues_read: 1,
+      finish_session: true
+    });
+  }
+
+  async function handleAddMoreIssues() {
+    if (additionalIssues < 1) return;
+
+    setShowCompleteModal(false);
+
+    // First update the thread with additional issues
+    const newIssuesRemaining = thread.issues_remaining + additionalIssues;
+    await updateThreadMutation.mutateAsync({
+      id: thread.id,
+      data: { issues_remaining: newIssuesRemaining }
+    });
+
+    // Then submit the rating normally (not finishing session)
+    if (pendingRating >= 4.0) {
+      createExplosion();
+    }
+    rateMutation.mutate({
+      rating: pendingRating,
+      issues_read: 1,
+      finish_session: false
+    });
+  }
+
+  function handleCloseModal() {
+    setShowCompleteModal(false);
+    setShowAddIssuesInput(false);
+    setAdditionalIssues(1);
+    setPendingRating(null);
   }
 
   if (!session || !session.active_thread) {
@@ -248,11 +313,90 @@ export default function RatePage() {
           >
             Finish Session
           </button>
+          <div className="flex justify-center pt-2">
+            <button
+              type="button"
+              onClick={() => snoozeMutation.mutate()}
+              disabled={snoozeMutation.isPending}
+              className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 rounded-lg transition-all disabled:opacity-50"
+            >
+              {snoozeMutation.isPending ? 'Snoozing...' : 'Snooze Thread'}
+            </button>
+          </div>
           <div id="error-message" className={`text-xs text-rose-500 text-center font-bold ${errorMessage ? '' : 'hidden'}`}>
             {errorMessage}
           </div>
         </div>
       </div>
+
+      <Modal isOpen={showCompleteModal} title="Thread Finished!" onClose={handleCloseModal}>
+        <div className="space-y-6">
+          <p className="text-slate-300 text-sm">
+            This thread is finished! What would you like to do?
+          </p>
+
+          {!showAddIssuesInput ? (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleCompleteThread}
+                disabled={rateMutation.isPending}
+                className="w-full py-4 glass-button text-sm font-black uppercase tracking-widest disabled:opacity-50"
+              >
+                {rateMutation.isPending ? (
+                  <span className="spinner mx-auto"></span>
+                ) : (
+                  'Complete Thread'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddIssuesInput(true)}
+                className="w-full py-3 text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-teal-400 hover:bg-teal-500/10 border border-slate-700 hover:border-teal-500/30 rounded-xl transition-all"
+              >
+                Add More Issues
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="additional-issues" className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+                  How many issues to add?
+                </label>
+                <input
+                  type="number"
+                  id="additional-issues"
+                  min="1"
+                  value={additionalIssues}
+                  onChange={(e) => setAdditionalIssues(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-slate-100 text-lg font-bold focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddIssuesInput(false)}
+                  className="flex-1 py-3 text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddMoreIssues}
+                  disabled={rateMutation.isPending || updateThreadMutation.isPending}
+                  className="flex-1 py-3 glass-button text-sm font-black uppercase tracking-widest disabled:opacity-50"
+                >
+                  {(rateMutation.isPending || updateThreadMutation.isPending) ? (
+                    <span className="spinner mx-auto"></span>
+                  ) : (
+                    'Confirm'
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

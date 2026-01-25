@@ -129,3 +129,7 @@ export const undoApi = {
 export const tasksApi = {
   getMetrics: () => api.get('/analytics/metrics'),
 }
+
+export const snoozeApi = {
+  snooze: () => api.post('/snooze/'),
+}

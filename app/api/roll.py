@@ -41,6 +41,17 @@ def roll_dice(
     current_session = get_or_create(db, user_id=current_user.id)
     current_session_id = current_session.id
     current_die = get_current_die(current_session_id, db)
+
+    # Exclude snoozed threads from the pool
+    snoozed_ids = current_session.snoozed_thread_ids or []
+    threads = [t for t in threads if t.id not in snoozed_ids]
+
+    if not threads:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active threads available to roll",
+        )
+
     pool_size = min(current_die, len(threads))
     selected_index = random.randint(0, pool_size - 1)
     selected_thread = threads[selected_index]
