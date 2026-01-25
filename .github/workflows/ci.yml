@@ -76,6 +76,11 @@ jobs:
           apt-get update && apt-get install -y libpango-1.0-0 libcairo2
           source .venv/bin/activate && playwright install chromium
 
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
       - name: Run pytest
         shell: bash
         run: |

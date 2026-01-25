@@ -21,7 +21,7 @@ async def test_move_to_position(auth_client, db, sample_data):
 
     data = response.json()
     assert data["id"] == thread_id
-    assert data["position"] == 1
+    assert data["queue_position"] == 1
 
     thread = db.get(Thread, thread_id)
     assert thread.queue_position == 1
@@ -44,7 +44,7 @@ async def test_move_to_front(auth_client, db, sample_data):
 
     data = response.json()
     assert data["id"] == thread_id
-    assert data["position"] == 1
+    assert data["queue_position"] == 1
 
     thread = db.get(Thread, thread_id)
     assert thread.queue_position == 1
@@ -63,7 +63,8 @@ async def test_move_to_back(auth_client, db, sample_data):
 
     data = response.json()
     assert data["id"] == thread_id
-    assert data["position"] == 5
+    # After moving to back, thread is at position 5 (last of 5 threads)
+    assert data["queue_position"] == 5
 
     thread = db.get(Thread, thread_id)
     assert thread.queue_position == 5
@@ -127,7 +128,7 @@ async def test_get_roll_pool(auth_client, sample_data):
     assert len(data) >= 5
 
     for i in range(len(data) - 1):
-        assert data[i]["position"] <= data[i + 1]["position"]
+        assert data[i]["queue_position"] <= data[i + 1]["queue_position"]
 
 
 @pytest.mark.asyncio
@@ -179,32 +180,32 @@ async def test_move_back_thread_forward(db, sample_data):
 
 @pytest.mark.asyncio
 async def test_move_to_front_nonexistent(db):
-    """Move to front of nonexistent thread handles gracefully."""
+    """Move to front of nonexistent thread handles gracefully (no exception raised)."""
     from comic_pile.queue import move_to_front
 
-    move_to_front(999, 1, db)
-
-    assert True
+    # Should not raise an exception
+    result = move_to_front(999, 1, db)
+    assert result is None
 
 
 @pytest.mark.asyncio
 async def test_move_to_back_nonexistent(db):
-    """Move to back of nonexistent thread handles gracefully."""
+    """Move to back of nonexistent thread handles gracefully (no exception raised)."""
     from comic_pile.queue import move_to_back
 
-    move_to_back(999, 1, db)
-
-    assert True
+    # Should not raise an exception
+    result = move_to_back(999, 1, db)
+    assert result is None
 
 
 @pytest.mark.asyncio
 async def test_move_to_position_nonexistent(db):
-    """Move to position of nonexistent thread handles gracefully."""
+    """Move to position of nonexistent thread handles gracefully (no exception raised)."""
     from comic_pile.queue import move_to_position
 
-    move_to_position(999, 1, 1, db)
-
-    assert True
+    # Should not raise an exception
+    result = move_to_position(999, 1, 1, db)
+    assert result is None
 
 
 @pytest.mark.asyncio

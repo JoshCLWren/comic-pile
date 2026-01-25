@@ -3,6 +3,13 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../App'
 import api from '../services/api'
 
+/**
+ * Main navigation component that displays a bottom navigation bar
+ * and user controls (username, logout) in the top-right corner.
+ * Only renders when the user is authenticated.
+ *
+ * @returns {JSX.Element|null} The navigation component or null if not authenticated
+ */
 export default function Navigation() {
   const location = useLocation()
   const { isAuthenticated, logout } = useAuth()

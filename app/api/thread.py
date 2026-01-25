@@ -15,9 +15,28 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas.thread import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
+from app.schemas import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
 
 router = APIRouter(tags=["threads"])
+
+
+def thread_to_response(thread: Thread) -> ThreadResponse:
+    """Convert a Thread model to ThreadResponse schema."""
+    return ThreadResponse(
+        id=thread.id,
+        title=thread.title,
+        format=thread.format,
+        issues_remaining=thread.issues_remaining,
+        queue_position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
+        review_url=thread.review_url,
+        last_review_at=thread.last_review_at,
+        notes=thread.notes,
+        is_test=thread.is_test,
+        created_at=thread.created_at,
+    )
 
 
 @router.get("/stale", response_model=list[ThreadResponse])
@@ -41,24 +60,7 @@ def list_stale_threads(
         .scalars()
         .all()
     )
-    return [
-        ThreadResponse(
-            id=thread.id,
-            title=thread.title,
-            format=thread.format,
-            issues_remaining=thread.issues_remaining,
-            position=thread.queue_position,
-            status=thread.status,
-            last_rating=thread.last_rating,
-            last_activity_at=thread.last_activity_at,
-            review_url=thread.review_url,
-            last_review_at=thread.last_review_at,
-            notes=thread.notes,
-            is_test=thread.is_test,
-            created_at=thread.created_at,
-        )
-        for thread in threads
-    ]
+    return [thread_to_response(thread) for thread in threads]
 
 
 clear_cache = None
@@ -85,24 +87,7 @@ def list_threads(
             .scalars()
             .all()
         )
-    return [
-        ThreadResponse(
-            id=thread.id,
-            title=thread.title,
-            format=thread.format,
-            issues_remaining=thread.issues_remaining,
-            position=thread.queue_position,
-            status=thread.status,
-            last_rating=thread.last_rating,
-            last_activity_at=thread.last_activity_at,
-            review_url=thread.review_url,
-            last_review_at=thread.last_review_at,
-            notes=thread.notes,
-            is_test=thread.is_test,
-            created_at=thread.created_at,
-        )
-        for thread in threads
-    ]
+    return [thread_to_response(thread) for thread in threads]
 
 
 @router.get("/completed", response_class=HTMLResponse)
@@ -195,21 +180,7 @@ def create_thread(
             db.refresh(new_thread)
             if clear_cache:
                 clear_cache()
-            return ThreadResponse(
-                id=new_thread.id,
-                title=new_thread.title,
-                format=new_thread.format,
-                issues_remaining=new_thread.issues_remaining,
-                position=new_thread.queue_position,
-                status=new_thread.status,
-                last_rating=new_thread.last_rating,
-                last_activity_at=new_thread.last_activity_at,
-                review_url=new_thread.review_url,
-                last_review_at=new_thread.last_review_at,
-                notes=new_thread.notes,
-                is_test=new_thread.is_test,
-                created_at=new_thread.created_at,
-            )
+            return thread_to_response(new_thread)
         except OperationalError as e:
             if "deadlock" in str(e).lower():
                 db.rollback()
@@ -237,21 +208,7 @@ def get_thread(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
         )
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        created_at=thread.created_at,
-    )
+    return thread_to_response(thread)
 
 
 @router.put("/{thread_id}", response_model=ThreadResponse)
@@ -286,21 +243,7 @@ def update_thread(
     db.refresh(thread)
     if clear_cache:
         clear_cache()
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        created_at=thread.created_at,
-    )
+    return thread_to_response(thread)
 
 
 @router.delete("/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -374,18 +317,4 @@ def reactivate_thread(
     db.refresh(thread)
     if clear_cache:
         clear_cache()
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        created_at=thread.created_at,
-    )
+    return thread_to_response(thread)

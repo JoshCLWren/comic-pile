@@ -15,7 +15,7 @@ async def test_move_first_to_front_no_op(auth_client, db, sample_data):
 
     data = response.json()
     assert data["id"] == thread_id
-    assert data["position"] == 1
+    assert data["queue_position"] == 1
 
     thread = db.get(Thread, thread_id)
     assert thread.queue_position == 1
@@ -41,7 +41,7 @@ async def test_move_last_to_back_no_op(auth_client, db, sample_data):
 
     data = response.json()
     assert data["id"] == thread_id
-    assert data["position"] == 5
+    assert data["queue_position"] == 5
 
     thread = db.get(Thread, thread_id)
     assert thread.queue_position == 5

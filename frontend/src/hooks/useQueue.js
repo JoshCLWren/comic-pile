@@ -9,6 +9,9 @@ export function useMoveToPosition() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
+    onError: (error) => {
+      console.error('Failed to move thread to position:', error.response?.data?.detail || error.message)
+    },
   })
 }
 
@@ -20,6 +23,9 @@ export function useMoveToFront() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
+    onError: (error) => {
+      console.error('Failed to move thread to front:', error.response?.data?.detail || error.message)
+    },
   })
 }
 
@@ -30,6 +36,9 @@ export function useMoveToBack() {
     mutationFn: (id) => queueApi.moveToBack(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['threads'] })
+    },
+    onError: (error) => {
+      console.error('Failed to move thread to back:', error.response?.data?.detail || error.message)
     },
   })
 }

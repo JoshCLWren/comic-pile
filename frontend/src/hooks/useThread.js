@@ -31,6 +31,9 @@ export function useCreateThread() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
+    onError: (error) => {
+      console.error('Failed to create thread:', error.response?.data?.detail || error.message)
+    },
   })
 }
 
@@ -43,6 +46,9 @@ export function useUpdateThread() {
       queryClient.invalidateQueries({ queryKey: ['thread', variables.id] })
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
+    onError: (error) => {
+      console.error('Failed to update thread:', error.response?.data?.detail || error.message)
+    },
   })
 }
 
@@ -54,6 +60,9 @@ export function useDeleteThread() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['threads'] })
     },
+    onError: (error) => {
+      console.error('Failed to delete thread:', error.response?.data?.detail || error.message)
+    },
   })
 }
 
@@ -64,6 +73,9 @@ export function useReactivateThread() {
     mutationFn: (data) => threadsApi.reactivate(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['threads'] })
+    },
+    onError: (error) => {
+      console.error('Failed to reactivate thread:', error.response?.data?.detail || error.message)
     },
   })
 }

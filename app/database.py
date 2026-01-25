@@ -1,34 +1,27 @@
 """Database connection and session management."""
 
 import logging
-import os
 from collections.abc import Generator
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-load_dotenv()
+from app.config import get_database_settings
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable must be set (or provided via a .env file)")
+_db_settings = get_database_settings()
 
-logger.info(f"Database URL configured: {DATABASE_URL.split('@')[0]}@...")
+DATABASE_URL = _db_settings.database_url
+SYNC_DATABASE_URL = _db_settings.sync_url
+ASYNC_DATABASE_URL = _db_settings.async_url
 
-if DATABASE_URL.startswith("postgresql://"):
-    ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-    SYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
-elif DATABASE_URL.startswith("postgres://"):
-    ASYNC_DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
-    SYNC_DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
-else:
-    ASYNC_DATABASE_URL = DATABASE_URL
-    SYNC_DATABASE_URL = DATABASE_URL
-
-logger.info(f"Sync database URL: {SYNC_DATABASE_URL.split('@')[0]}@...")
+# Log database URLs with password redacted
+_redacted_database_url = make_url(DATABASE_URL).render_as_string(hide_password=True)
+_redacted_sync_url = make_url(SYNC_DATABASE_URL).render_as_string(hide_password=True)
+logger.info(f"Database URL configured: {_redacted_database_url}")
+logger.info(f"Sync database URL: {_redacted_sync_url}")
 
 async_engine = create_engine(ASYNC_DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
 sync_engine = create_engine(SYNC_DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)

@@ -20,10 +20,10 @@ export const SessionProvider = ({ children }) => {
   )
 }
 
-export const useSession = () => {
+export const useSessionContext = () => {
   const context = useContext(SessionContext)
   if (!context) {
-    throw new Error('useSession must be used within a SessionProvider')
+    throw new Error('useSessionContext must be used within a SessionProvider')
   }
   return context
 }

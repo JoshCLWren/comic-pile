@@ -20,7 +20,7 @@ async def test_create_thread(auth_client, db):
     assert data["title"] == "Spider-Man"
     assert data["format"] == "Comic"
     assert data["issues_remaining"] == 12
-    assert data["position"] == 1
+    assert data["queue_position"] == 1
     assert data["status"] == "active"
     assert "id" in data
     assert "created_at" in data
@@ -78,7 +78,7 @@ async def test_get_thread(auth_client, sample_data):
     assert thread["title"] == "Superman"
     assert thread["format"] == "Comic"
     assert thread["issues_remaining"] == 10
-    assert thread["position"] == 1
+    assert thread["queue_position"] == 1
     assert thread["status"] == "active"
 
 

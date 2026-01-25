@@ -444,3 +444,13 @@ def enable_internal_ops():
         os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
     else:
         os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = old_value
+
+
+@pytest.fixture(scope="function", autouse=True)
+def clear_config_cache():
+    """Clear cached settings before and after each test to prevent test pollution."""
+    from app.config import clear_settings_cache
+
+    clear_settings_cache()
+    yield
+    clear_settings_cache()

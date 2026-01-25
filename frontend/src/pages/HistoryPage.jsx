@@ -2,10 +2,14 @@ import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
 
 export default function HistoryPage() {
-  const { data: sessions, isLoading } = useSessions()
+  const { data: sessions, isLoading, error } = useSessions()
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
+  }
+
+  if (error) {
+    return <div className="error-message">Failed to load sessions</div>
   }
 
   if (!sessions || sessions.length === 0) {

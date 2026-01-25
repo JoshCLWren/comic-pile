@@ -53,7 +53,7 @@ async def test_drag_and_drop_updates_position(auth_client, db, sample_data):
 
     data = response.json()
     assert data["id"] == thread_id
-    assert data["position"] == new_position
+    assert data["queue_position"] == new_position
 
     thread = db.get(Thread, thread_id)
     assert thread.queue_position == new_position

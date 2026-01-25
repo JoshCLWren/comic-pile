@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
@@ -17,6 +17,9 @@ export default function RollPage() {
   const [staleThread, setStaleThread] = useState(null)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
+
+  const rollIntervalRef = useRef(null)
+  const rollTimeoutRef = useRef(null)
 
   const { data: session } = useSession()
   const { data: threads } = useThreads()
@@ -48,16 +51,31 @@ export default function RollPage() {
 
       if (diffDays >= 7) {
         setStaleThread({ ...thread, days: diffDays })
+      } else {
+        setStaleThread(null)
       }
+    } else {
+      setStaleThread(null)
     }
   }, [staleThreads])
+
+  useEffect(() => {
+    // Cleanup timers on unmount
+    return () => {
+      if (rollIntervalRef.current) {
+        clearInterval(rollIntervalRef.current)
+      }
+      if (rollTimeoutRef.current) {
+        clearTimeout(rollTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const dieSize = session?.current_die || 6
   const pool = activeThreads.slice(0, dieSize) || []
 
   function setDiceStateValue(state) {
     setDiceState(state)
-    console.log('[RollPage] Dice state set to:', state)
   }
 
   function handleSetDie(die) {
@@ -72,19 +90,29 @@ export default function RollPage() {
   function handleRoll() {
     if (isRolling) return
 
-    setSelectedThreadId(null)
+    // Clear any existing timers
+    if (rollIntervalRef.current) {
+      clearInterval(rollIntervalRef.current)
+    }
+    if (rollTimeoutRef.current) {
+      clearTimeout(rollTimeoutRef.current)
+    }
+
     setIsRolling(true)
     setDiceStateValue('idle')
 
     let currentRollCount = 0
     const maxRolls = 10
 
-    const rollInterval = setInterval(() => {
+    rollIntervalRef.current = setInterval(() => {
       currentRollCount++
 
       if (currentRollCount >= maxRolls) {
-        clearInterval(rollInterval)
-        setTimeout(() => {
+        clearInterval(rollIntervalRef.current)
+        rollIntervalRef.current = null
+        
+        rollTimeoutRef.current = setTimeout(() => {
+          rollTimeoutRef.current = null
           rollMutation.mutate(undefined, {
             onSuccess: (response) => {
               if (response?.result) {
@@ -96,13 +124,13 @@ export default function RollPage() {
               setIsRolling(false)
               navigate('/rate')
             },
-            onError: () => setIsRolling(false),
+            onError: () => {
+              setIsRolling(false)
+            },
           })
         }, 400)
       }
     }, 80)
-
-    return () => clearInterval(rollInterval)
   }
 
   function handleRollComplete() {

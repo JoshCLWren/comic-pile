@@ -416,149 +416,48 @@ async def test_rate_finish_session_flag_controls_session_end(auth_client, db):
     assert session.ended_at is None
 
 
-def test_float_env_returns_default_when_missing():
-    """Test _float_env returns default when env var is missing."""
-    from app.api.rate import _float_env
+def test_rating_settings_returns_defaults(monkeypatch):
+    """Test rating settings return default values."""
+    from app.config import clear_settings_cache, get_rating_settings
 
-    import os
+    # Clear any cached settings and env vars
+    for var in ["RATING_MIN", "RATING_MAX", "RATING_THRESHOLD"]:
+        monkeypatch.delenv(var, raising=False)
+    clear_settings_cache()
 
-    if "TEST_VAR" in os.environ:
-        del os.environ["TEST_VAR"]
-
-    assert _float_env("TEST_VAR", 1.5) == 1.5
-
-
-def test_float_env_returns_value_when_set():
-    """Test _float_env returns value when env var is set."""
-    from app.api.rate import _float_env
-
-    import os
-
-    os.environ["TEST_VAR"] = "3.14"
-    assert _float_env("TEST_VAR", 1.5) == 3.14
-    del os.environ["TEST_VAR"]
+    settings = get_rating_settings()
+    assert settings.rating_min == 0.5
+    assert settings.rating_max == 5.0
+    assert settings.rating_threshold == 4.0
 
 
-def test_float_env_returns_default_on_invalid_value():
-    """Test _float_env returns default when env var has invalid value."""
-    from app.api.rate import _float_env
+def test_rating_settings_returns_custom_values(monkeypatch):
+    """Test rating settings return custom values when set."""
+    from app.config import clear_settings_cache, get_rating_settings
 
-    import os
+    monkeypatch.setenv("RATING_MIN", "1.0")
+    monkeypatch.setenv("RATING_MAX", "4.5")
+    monkeypatch.setenv("RATING_THRESHOLD", "3.5")
+    clear_settings_cache()
 
-    os.environ["TEST_VAR"] = "not_a_float"
-    assert _float_env("TEST_VAR", 1.5) == 1.5
-    del os.environ["TEST_VAR"]
-
-
-def test_rating_min_returns_default():
-    """Test _rating_min returns default value."""
-    from app.api.rate import _rating_min
-
-    import os
-
-    if "RATING_MIN" in os.environ:
-        del os.environ["RATING_MIN"]
-
-    assert _rating_min() == 0.5
+    settings = get_rating_settings()
+    assert settings.rating_min == 1.0
+    assert settings.rating_max == 4.5
+    assert settings.rating_threshold == 3.5
 
 
-def test_rating_min_returns_custom_value():
-    """Test _rating_min returns custom value when set."""
-    from app.api.rate import _rating_min
+def test_rating_settings_validates_range(monkeypatch):
+    """Test rating settings validate and clamp to valid range."""
+    from app.config import clear_settings_cache, get_rating_settings
 
-    import os
+    # Values outside range get clamped by validators
+    monkeypatch.setenv("RATING_MIN", "10.0")
+    monkeypatch.setenv("RATING_MAX", "15.0")
+    monkeypatch.setenv("RATING_THRESHOLD", "-1.0")
+    clear_settings_cache()
 
-    os.environ["RATING_MIN"] = "1.0"
-    assert _rating_min() == 1.0
-    del os.environ["RATING_MIN"]
-
-
-def test_rating_min_clamps_to_valid_range():
-    """Test _rating_min clamps values to valid range."""
-    from app.api.rate import _rating_min
-
-    import os
-
-    os.environ["RATING_MIN"] = "10.0"
-    assert _rating_min() == 0.5
-    del os.environ["RATING_MIN"]
-
-    os.environ["RATING_MIN"] = "-1.0"
-    assert _rating_min() == 0.5
-    del os.environ["RATING_MIN"]
-
-
-def test_rating_max_returns_default():
-    """Test _rating_max returns default value."""
-    from app.api.rate import _rating_max
-
-    import os
-
-    if "RATING_MAX" in os.environ:
-        del os.environ["RATING_MAX"]
-
-    assert _rating_max() == 5.0
-
-
-def test_rating_max_returns_custom_value():
-    """Test _rating_max returns custom value when set."""
-    from app.api.rate import _rating_max
-
-    import os
-
-    os.environ["RATING_MAX"] = "4.5"
-    assert _rating_max() == 4.5
-    del os.environ["RATING_MAX"]
-
-
-def test_rating_max_clamps_to_valid_range():
-    """Test _rating_max clamps values to valid range."""
-    from app.api.rate import _rating_max
-
-    import os
-
-    os.environ["RATING_MAX"] = "15.0"
-    assert _rating_max() == 5.0
-    del os.environ["RATING_MAX"]
-
-    os.environ["RATING_MAX"] = "-1.0"
-    assert _rating_max() == 5.0
-    del os.environ["RATING_MAX"]
-
-
-def test_rating_threshold_returns_default():
-    """Test _rating_threshold returns default value."""
-    from app.api.rate import _rating_threshold
-
-    import os
-
-    if "RATING_THRESHOLD" in os.environ:
-        del os.environ["RATING_THRESHOLD"]
-
-    assert _rating_threshold() == 4.0
-
-
-def test_rating_threshold_returns_custom_value():
-    """Test _rating_threshold returns custom value when set."""
-    from app.api.rate import _rating_threshold
-
-    import os
-
-    os.environ["RATING_THRESHOLD"] = "3.5"
-    assert _rating_threshold() == 3.5
-    del os.environ["RATING_THRESHOLD"]
-
-
-def test_rating_threshold_clamps_to_valid_range():
-    """Test _rating_threshold clamps values to valid range."""
-    from app.api.rate import _rating_threshold
-
-    import os
-
-    os.environ["RATING_THRESHOLD"] = "15.0"
-    assert _rating_threshold() == 4.0
-    del os.environ["RATING_THRESHOLD"]
-
-    os.environ["RATING_THRESHOLD"] = "-1.0"
-    assert _rating_threshold() == 4.0
-    del os.environ["RATING_THRESHOLD"]
+    settings = get_rating_settings()
+    # Validators clamp out-of-range values to defaults
+    assert settings.rating_min == 0.5
+    assert settings.rating_max == 5.0
+    assert settings.rating_threshold == 4.0
