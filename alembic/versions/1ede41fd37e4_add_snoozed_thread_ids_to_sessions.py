@@ -20,10 +20,29 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
+    """Add snoozed_thread_ids column to sessions table.
+
+    This column stores a JSON array of thread IDs that have been temporarily
+    snoozed during a reading session.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     op.add_column("sessions", sa.Column("snoozed_thread_ids", sa.JSON(), nullable=True))
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
+    """Remove snoozed_thread_ids column from sessions table.
+
+    Reverts the schema change made by upgrade().
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
     op.drop_column("sessions", "snoozed_thread_ids")

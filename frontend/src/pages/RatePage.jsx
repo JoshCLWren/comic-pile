@@ -121,7 +121,8 @@ export default function RatePage() {
 
     // Check if this rating would complete the thread (issues_remaining - 1 <= 0)
     // Only show modal if not already finishing session
-    if (!finishSession && thread.issues_remaining - 1 <= 0) {
+    // Use session.active_thread since thread variable is defined after the early return
+    if (!finishSession && session.active_thread && session.active_thread.issues_remaining - 1 <= 0) {
       setPendingRating(rating);
       setShowCompleteModal(true);
       return;
@@ -153,14 +154,25 @@ export default function RatePage() {
   async function handleAddMoreIssues() {
     if (additionalIssues < 1) return;
 
-    setShowCompleteModal(false);
+    // Use session.active_thread since thread is defined after the early return guard
+    const activeThread = session.active_thread;
+    if (!activeThread) return;
 
     // First update the thread with additional issues
-    const newIssuesRemaining = thread.issues_remaining + additionalIssues;
-    await updateThreadMutation.mutateAsync({
-      id: thread.id,
-      data: { issues_remaining: newIssuesRemaining }
-    });
+    const newIssuesRemaining = activeThread.issues_remaining + additionalIssues;
+    try {
+      await updateThreadMutation.mutateAsync({
+        id: activeThread.id,
+        data: { issues_remaining: newIssuesRemaining }
+      });
+    } catch (error) {
+      // Surface error to user and keep modal open for retry
+      setErrorMessage(error.response?.data?.detail || 'Failed to add issues. Please try again.');
+      return;
+    }
+
+    // Only close modal and submit rating on successful update
+    setShowCompleteModal(false);
 
     // Then submit the rating normally (not finishing session)
     if (pendingRating >= 4.0) {
