@@ -1,11 +1,14 @@
 """Snooze API endpoint."""
 
 import logging
+import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
+import app.api.session as session_module
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -25,10 +28,9 @@ router = APIRouter()
 clear_cache = None
 
 # Disable session cache to prevent issues in tests
-import app.api.session as session_module
-
-if hasattr(session_module, "get_current_session_cached"):
-    session_module.get_current_session_cached = None
+if os.getenv("TEST") or os.getenv("DISABLE_SESSION_CACHE"):
+    if hasattr(session_module, "get_current_session_cached"):
+        session_module.get_current_session_cached = None
 
 
 def build_ladder_path(session_id: int, db: Session) -> str:

@@ -1,13 +1,17 @@
 """Test that overriding to a snoozed thread removes it from snoozed list."""
 
+from httpx import AsyncClient
 import pytest
+from sqlalchemy.orm import Session
 
 from app.models import Event, Thread
 from app.models import Session as SessionModel
 
 
 @pytest.mark.asyncio
-async def test_override_snoozed_thread_removes_from_snoozed_list(auth_client, db):
+async def test_override_snoozed_thread_removes_from_snoozed_list(
+    auth_client: AsyncClient, db: Session
+) -> None:
     """Overriding to a snoozed thread should remove it from snoozed_thread_ids."""
     from tests.conftest import get_or_create_user
 
@@ -42,24 +46,17 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(auth_client, db
     db.commit()
     db.refresh(session)
 
-    event1 = Event(
-        type="roll",
-        die=6,
-        result=1,
-        selected_thread_id=thread1.id,
-        selection_method="random",
-        session_id=session.id,
-        thread_id=thread1.id,
-    )
-    db.add(event1)
-    session.pending_thread_id = thread1.id
-    db.commit()
+    # Roll using API to set pending thread
+    roll_response = await auth_client.post("/api/roll/")
+    assert roll_response.status_code == 200
+    roll_data = roll_response.json()
+    rolled_thread_id = roll_data["thread_id"]
 
-    # Snooze thread1
+    # Snooze the rolled thread (which should be thread1, not thread2)
     snooze_response = await auth_client.post("/api/snooze/")
     assert snooze_response.status_code == 200
     snooze_data = snooze_response.json()
-    assert thread1.id in snooze_data["snoozed_thread_ids"]
+    assert rolled_thread_id in snooze_data["snoozed_thread_ids"]
 
     # Now override to snoozed thread1
     override_response = await auth_client.post("/api/roll/override", json={"thread_id": thread1.id})

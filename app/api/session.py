@@ -1,5 +1,7 @@
 """Session API endpoints."""
 
+import logging
+import time
 from datetime import datetime
 from typing import Annotated
 
@@ -171,7 +173,6 @@ def get_current_session(
 ) -> SessionResponse:
     """Get current active session with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
-    import time
 
     max_retries = 3
     initial_delay = 0.1
@@ -476,7 +477,6 @@ def restore_session_start(
 ) -> SessionResponse:
     """Restore session to its initial state at session start."""
     from sqlalchemy.exc import OperationalError
-    import time
 
     max_retries = 3
     initial_delay = 0.1

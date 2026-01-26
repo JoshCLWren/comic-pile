@@ -1,5 +1,6 @@
 """Roll API routes."""
 
+import logging
 import random
 from datetime import datetime
 
@@ -21,6 +22,7 @@ from comic_pile.session import get_current_die, get_or_create
 router = APIRouter(tags=["roll"])
 
 clear_cache = None
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=RollResponse)
@@ -69,9 +71,10 @@ def roll_dice(
     if current_session:
         current_session.pending_thread_id = selected_thread.id
         current_session.pending_thread_updated_at = datetime.now()
-        db.commit()
-        if clear_cache:
-            clear_cache()
+
+    db.commit()
+    if clear_cache:
+        clear_cache()
 
     return RollResponse(
         thread_id=selected_thread.id,
@@ -88,16 +91,92 @@ def override_roll(
     db: Session = Depends(get_db),
 ) -> RollResponse:
     """Manually select a thread."""
-    thread = db.execute(
+    override_thread = db.execute(
         select(Thread)
         .where(Thread.id == request.thread_id)
         .where(Thread.user_id == current_user.id)
     ).scalar_one_or_none()
-    if not thread:
+    if not override_thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {request.thread_id} not found",
         )
+
+    current_session = get_or_create(db, user_id=current_user.id)
+    current_session_id = current_session.id
+    current_die = get_current_die(current_session_id, db)
+
+    event = Event(
+        type="roll",
+        session_id=current_session_id,
+        selected_thread_id=override_thread.id,
+        die=current_die,
+        result=0,
+        selection_method="override",
+    )
+    db.add(event)
+
+    if current_session:
+        current_session.pending_thread_id = override_thread.id
+        current_session.pending_thread_updated_at = datetime.now()
+
+        snoozed_ids = current_session.snoozed_thread_ids or []
+        if override_thread.id in snoozed_ids:
+            snoozed_ids.remove(override_thread.id)
+            current_session.snoozed_thread_ids = snoozed_ids
+
+        db.commit()
+        if clear_cache:
+            clear_cache()
+
+    return RollResponse(
+        thread_id=override_thread.id,
+        title=override_thread.title,
+        die_size=current_die,
+        result=0,
+    )
+
+    current_session = get_or_create(db, user_id=current_user.id)
+    current_session_id = current_session.id
+    current_die = get_current_die(current_session_id, db)
+
+    event = Event(
+        type="roll",
+        session_id=current_session_id,
+        selected_thread_id=override_thread.id,
+        die=current_die,
+        result=0,
+        selection_method="override",
+    )
+    db.add(event)
+
+    if current_session:
+        current_session.pending_thread_id = override_thread.id
+        current_session.pending_thread_updated_at = datetime.now()
+
+        snoozed_ids = current_session.snoozed_thread_ids or []
+        print(
+            f"DEBUG OVERRIDE: thread.id={override_thread.id}, snoozed_ids={snoozed_ids}, thread.id in snoozed_ids={override_thread.id in snoozed_ids}"
+        )
+        if override_thread.id in snoozed_ids:
+            snoozed_ids.remove(override_thread.id)
+            current_session.snoozed_thread_ids = snoozed_ids
+            print(
+                f"DEBUG OVERRIDE: Removed thread from snoozed list, new snoozed_ids={current_session.snoozed_thread_ids}"
+            )
+        else:
+            print(f"DEBUG OVERRIDE: Thread {override_thread.id} not in snoozed list")
+
+        db.commit()
+        if clear_cache:
+            clear_cache()
+
+    return RollResponse(
+        thread_id=override_thread.id,
+        title=override_thread.title,
+        die_size=current_die,
+        result=0,
+    )
 
     current_session = get_or_create(db, user_id=current_user.id)
     current_session_id = current_session.id
@@ -117,20 +196,19 @@ def override_roll(
         current_session.pending_thread_id = thread.id
         current_session.pending_thread_updated_at = datetime.now()
 
-        # Remove thread from snoozed list if it's there
         snoozed_ids = current_session.snoozed_thread_ids or []
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.info(f"Override: thread_id={thread.id}, snoozed_ids before={snoozed_ids}")
+        print(
+            f"DEBUG OVERRIDE: thread.id={thread.id}, snoozed_ids={snoozed_ids}, thread.id in snoozed_ids={thread.id in snoozed_ids}"
+        )
         if thread.id in snoozed_ids:
-            logger.info(f"Removing thread {thread.id} from snoozed list")
             snoozed_ids.remove(thread.id)
             current_session.snoozed_thread_ids = snoozed_ids
-        else:
-            logger.info(f"Thread {thread.id} not in snoozed list")
+            print(
+                f"DEBUG OVERRIDE: Removed thread from snoozed list, new snoozed_ids={current_session.snoozed_thread_ids}"
+            )
 
         db.commit()
+        print(f"DEBUG OVERRIDE: After commit, snoozed_ids={current_session.snoozed_thread_ids}")
         if clear_cache:
             clear_cache()
 

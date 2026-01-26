@@ -115,6 +115,8 @@ def check_position_gaps(db: Session) -> list[PositionGap]:
     expected_position = 1
 
     for actual_position in all_positions:
+        if actual_position < expected_position:
+            continue
         while actual_position > expected_position:
             gaps.append(PositionGap(expected_position, []))
             expected_position += 1

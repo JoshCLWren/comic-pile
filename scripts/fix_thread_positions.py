@@ -11,20 +11,22 @@ from app.models import Thread
 
 
 def fix_thread_positions() -> None:
-    """Fix thread positions by reorganizing them sequentially."""
+    """Fix thread positions by reorganizing them sequentially per-user."""
     print("=== Fixing Thread Positions ===")
-    print("This will reorganize all active threads to have sequential positions starting from 1.")
+    print(
+        "This will reorganize all active threads per-user to have sequential positions starting from 1."
+    )
     print()
 
     db = SessionLocal()
 
     try:
-        # Get all active threads ordered by current position (and by id as tiebreaker)
+        # Get all active threads ordered by user_id, then current position (and by id as tiebreaker)
         active_threads = (
             db.execute(
                 select(Thread)
                 .where(Thread.status == "active")
-                .order_by(Thread.queue_position, Thread.id)
+                .order_by(Thread.user_id, Thread.queue_position, Thread.id)
             )
             .scalars()
             .all()
@@ -37,11 +39,22 @@ def fix_thread_positions() -> None:
         print(f"Found {len(active_threads)} active threads to reorganize.")
         print()
 
-        # Update positions sequentially
-        for i, thread in enumerate(active_threads, 1):
-            if thread.queue_position != i:
-                print(f"Updating Thread {thread.id}: position {thread.queue_position} -> {i}")
-                db.execute(update(Thread).where(Thread.id == thread.id).values(queue_position=i))
+        # Group threads by user_id
+        from collections import defaultdict
+
+        threads_by_user = defaultdict(list)
+        for thread in active_threads:
+            threads_by_user[thread.user_id].append(thread)
+
+        # Update positions sequentially per user
+        for user_id, user_threads in threads_by_user.items():
+            print(f"Reorganizing {len(user_threads)} threads for user {user_id}")
+            for i, thread in enumerate(user_threads, 1):
+                if thread.queue_position != i:
+                    print(f"  Updating Thread {thread.id}: position {thread.queue_position} -> {i}")
+                    db.execute(
+                        update(Thread).where(Thread.id == thread.id).values(queue_position=i)
+                    )
 
         db.commit()
         print()
@@ -51,16 +64,16 @@ def fix_thread_positions() -> None:
         # Verify the fix
         print("=== Verification ===")
         duplicates_after = db.execute(
-            select(Thread.queue_position, func.count(Thread.id))
+            select(Thread.user_id, Thread.queue_position, func.count(Thread.id))
             .where(Thread.status == "active")
-            .group_by(Thread.queue_position)
+            .group_by(Thread.user_id, Thread.queue_position)
             .having(func.count(Thread.id) > 1)
         ).all()
 
         if duplicates_after:
             print("✗ Still found duplicate positions after fix:")
-            for position, count in duplicates_after:
-                print(f"  Position {position}: {count} threads")
+            for user_id, position, count in duplicates_after:
+                print(f"  User {user_id}, Position {position}: {count} threads")
         else:
             print("✓ No duplicate positions found after fix")
 

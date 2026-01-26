@@ -2,10 +2,18 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Thread Repositioning Fix Demo', () => {
   test.beforeEach(async ({ page }) => {
-    // Login before each test
+    // Get credentials from environment variables
+    const testUsername = process.env.TEST_USERNAME
+    const testPassword = process.env.TEST_PASSWORD
+
+    if (!testUsername || !testPassword) {
+      throw new Error('TEST_USERNAME and TEST_PASSWORD environment variables must be set');
+    }
+
+    // Login before each test using env vars
     await page.goto('/login');
-    await page.fill('input[name="username"]', 'testuser123');
-    await page.fill('input[name="password"]', 'testpassword');
+    await page.fill('input[name="username"]', testUsername);
+    await page.fill('input[name="password"]', testPassword);
     await page.click('button[type="submit"]');
     await page.waitForURL('**/');
   });

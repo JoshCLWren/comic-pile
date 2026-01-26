@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 
-const fakeUser = {
-  email: `user${Date.now()}@example.com`,
-  password: 'Testpass123!'
-};
-
 test.describe('MCP end-to-end flow', () => {
   test('register, login, add threads, roll, rate, snooze, navigate', async ({ page }) => {
+    // Generate unique credentials for each test run
+    const fakeUser = {
+      email: `user_${Date.now()}_${Math.random().toString(36).substring(7)}@example.com`,
+      password: 'Testpass123!'
+    };
+
     // Register new user
     await page.goto('/register');
     await page.fill('input[name="email"]', fakeUser.email);

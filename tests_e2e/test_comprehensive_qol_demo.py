@@ -165,7 +165,7 @@ def test_comprehensive_qol_features_demo(browser_page, test_server_url, test_use
         snoozed_section = page.wait_for_selector("text=Snoozed", timeout=3000)
         assert snoozed_section is not None, "Snoozed section not found"
         print("✅ Snoozed section is visible")
-    except:
+    except Exception:
         # If snoozed section is not visible, try to check if we're on roll page
         page_content = page.content()
         if "Snoozed" in page_content or "snoozed" in page_content:
@@ -196,7 +196,7 @@ def test_comprehensive_qol_features_demo(browser_page, test_server_url, test_use
             page.click("text=Snoozed")
             page.wait_for_timeout(500)
             print("✅ Snoozed section expanded")
-        except:
+        except Exception:
             print("⚠️  Could not find snoozed section to expand")
 
     # ========== Screenshot 4: Roll Page with Snoozed Expanded ==========
@@ -228,7 +228,7 @@ def test_comprehensive_qol_features_demo(browser_page, test_server_url, test_use
             print("✅ Clicked snoozed thread")
         else:
             print("⚠️ Could not find snoozed thread to click, skipping...")
-    except:
+    except Exception:
         print("⚠️ Error clicking snoozed thread, skipping...")
 
     # ========== Screenshot 5: Override Modal ==========
@@ -256,7 +256,7 @@ def test_comprehensive_qol_features_demo(browser_page, test_server_url, test_use
                 print("ℹ️ Override modal interaction completed, state may vary")
         else:
             print("ℹ️ No override modal found, thread may have been selected directly")
-    except:
+    except Exception:
         print("⚠️ Error handling override modal, continuing...")
 
     # Navigate back to roll page for dice ladder demo
@@ -501,7 +501,7 @@ def test_snooze_excludes_from_roll_pool(browser_page, test_server_url, test_user
         timeout=10,
     )
     assert session_response.status_code == 200
-    session_data = session_response.json()
+    session_response.json()
 
     # Roll first time
     roll_response_1 = requests.post(
@@ -574,7 +574,7 @@ def test_repositioning_via_api(browser_page, test_server_url, test_user_with_thr
     )
     thread_data = thread_response.json()
     assert thread_data["queue_position"] == 1
-    print(f"✅ Thread moved to position 1")
+    print("✅ Thread moved to position 1")
 
     # Test 2: Move to back
     print(f"📌 Moving thread {thread_id} to back...")
@@ -622,6 +622,6 @@ def test_repositioning_via_api(browser_page, test_server_url, test_user_with_thr
     )
     thread_data = thread_response.json()
     assert thread_data["queue_position"] == 3
-    print(f"✅ Thread moved to position 3")
+    print("✅ Thread moved to position 3")
 
     print("\n✅ All repositioning API tests passed")

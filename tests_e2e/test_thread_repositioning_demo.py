@@ -152,12 +152,15 @@ def test_thread_repositioning_fix_demo(browser_page, test_server_url, test_user_
     page.wait_for_timeout(500)
 
     # Look for reposition modal or dialog
-    modal = page.wait_for_selector(
-        '.reposition-modal, .modal, dialog, [role="dialog"]', timeout=3000
-    )
-    if not modal:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+    try:
+        modal = page.wait_for_selector(
+            '.reposition-modal, .modal, dialog, [role="dialog"]', timeout=3000
+        )
+    except PlaywrightTimeoutError:
         # Try to find any overlay or popup
-        modal = page.wait_for_selector('.overlay, .popup, [data-testid="modal"]', timeout=2000)
+        modal = page.query_selector('.overlay, .popup, [data-testid="modal"]')
 
     if modal:
         # Take screenshot of modal
@@ -273,7 +276,7 @@ def test_thread_repositioning_fix_demo(browser_page, test_server_url, test_user_
     spider_threads = [thread for thread in queue_data if thread["title"] == "Spider-Man Adventures"]
     assert len(spider_threads) == 1
     assert spider_threads[0]["queue_position"] == 11
-    print(f"✅ Verified: Spider-Man Adventures confirmed at position 11 in queue")
+    print("✅ Verified: Spider-Man Adventures confirmed at position 11 in queue")
 
     print("\n🎉 Thread repositioning fix demo completed successfully!")
     print("📋 Summary:")

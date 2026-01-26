@@ -178,27 +178,23 @@ export default function QueuePage() {
   }
 
   const handleRepositionConfirm = (targetPosition) => {
-    console.log('Repositioning Thread:', repositioningThread);
-    console.log('Target Position:', targetPosition);
     if (!repositioningThread) return
 
-    console.log('Reposition Payload Sent:', { id: repositioningThread.id, new_position: targetPosition });
     if (targetPosition < 1 || targetPosition > activeThreads.length) {
       alert('Invalid position specified. Please choose a valid position.');
       return;
     }
 
-    console.log('About to send to API:', { id: repositioningThread.id, position: targetPosition });
     moveToPositionMutation.mutate(
         { id: repositioningThread.id, position: targetPosition },
         {
             onSuccess: () => {
-                console.log('MUTATION SUCCESS, payload:', { id: repositioningThread.id, new_position: targetPosition });
                 setRepositioningThread(null);
             },
             onError: (error) => {
-                console.error('MUTATION ERROR, payload:', { id: repositioningThread.id, new_position: targetPosition }, 'Error:', error);
-                throw new Error(`DEBUG_MISMATCH Error handled: ${error.message}`)
+                console.error('Failed to reposition thread:', error);
+                setRepositioningThread(null);
+                alert('Failed to reposition thread. Please try again.');
             }
         }
     )

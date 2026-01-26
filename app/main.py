@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import subprocess
 import time
 import traceback
@@ -24,7 +25,6 @@ from app.config import get_app_settings
 from app.database import Base, engine, SessionLocal
 from app.middleware import limiter
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 MAX_LOG_BODY_SIZE = 1000
@@ -88,6 +88,10 @@ async def _safe_get_request_body(request: Request) -> str | dict | None:
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app_settings = get_app_settings()
+
+    if not logging.getLogger().hasHandlers():
+        if os.getenv("APP_ENV") == "development" or os.getenv("ENV") == "development":
+            logging.basicConfig(level=logging.DEBUG)
 
     app = FastAPI(
         title="Dice-Driven Comic Tracker",

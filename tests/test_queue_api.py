@@ -1,13 +1,17 @@
 """Tests for queue API endpoints."""
 
-import pytest
-from app.models import User
 from datetime import datetime, UTC
+
+from httpx import AsyncClient
+import pytest
 from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models import User
 
 
 @pytest.mark.asyncio
-async def test_create_threads_to_meet_20(auth_client, db):
+async def test_create_threads_to_meet_20(auth_client: AsyncClient, db: Session) -> None:
     """Create threads 18–20 programmatically."""
     # Setup: Ensure user exists and related threads match context
     user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
@@ -42,10 +46,10 @@ async def test_create_threads_to_meet_20(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_reposition_thread_with_sequential_positions(auth_client, sample_data):
+async def test_reposition_thread_with_sequential_positions(
+    auth_client: AsyncClient, sample_data: dict
+) -> None:
     """Test repositioning thread using normalized sequential positions."""
-    from app.models import Thread
-
     # Get the first thread (Superman at position 1) and move it to position 3
     superman_thread = None
     for thread in sample_data["threads"]:

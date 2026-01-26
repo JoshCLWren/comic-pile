@@ -33,7 +33,6 @@ export default function RollPage() {
   const overrideMutation = useOverrideRoll()
 
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
-  const allActiveThreads = threads?.filter((thread) => thread.status === 'active') ?? []
 
   useEffect(() => {
     if (session?.current_die) {

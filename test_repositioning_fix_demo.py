@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 """Playwright test demonstrating thread repositioning API fix working."""
 
-import requests
-import json
-import time
 import sys
+
+import requests
 
 
 def test_thread_repositioning_api():
     """Test the thread repositioning API directly to show the fix works."""
-
     # Test server URL (would normally be running)
     base_url = "http://127.0.0.1:8000"
 
@@ -105,7 +103,7 @@ def test_thread_repositioning_api():
         return False
 
     # Verify the thread is now at position 11
-    print(f"\n📍 STEP 4: Verify Spider-Man Adventures is now at position 11")
+    print("\n📍 STEP 4: Verify Spider-Man Adventures is now at position 11")
     verify_response = requests.get(
         f"{base_url}/api/threads/{thread_id}", headers=headers, timeout=10
     )
@@ -124,7 +122,7 @@ def test_thread_repositioning_api():
         return False
 
     # Check queue integrity
-    print(f"\n📍 STEP 5: Verify queue integrity")
+    print("\n📍 STEP 5: Verify queue integrity")
     queue_response = requests.get(f"{base_url}/api/threads/", headers=headers, timeout=10)
 
     if queue_response.status_code != 200:

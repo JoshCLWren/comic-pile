@@ -6,19 +6,26 @@ This test verifies that Confirm button:
 3. Is clearly visible when enabled (not "blended into background")
 """
 
-import pytest
 import time
+
+import pytest
+from app.auth import create_access_token, hash_password
 from app.models import Thread, User
-from app.auth import create_access_token
+from playwright.async_api import Page
 from sqlalchemy import text
 
 
 @pytest.fixture(scope="function")
-def test_user_with_test_threads(test_server_url, db):
-    """Create test user with multiple threads for position slider testing."""
-    from app.database import get_db
-    from app.main import app
+def test_user_with_test_threads(test_server_url, db) -> User:
+    """Create test user with multiple threads for position slider testing.
 
+    Args:
+        test_server_url: The test server URL.
+        db: Database session.
+
+    Returns:
+        The created User object with test threads.
+    """
     db.execute(text("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))"))
     db.commit()
 
@@ -61,16 +68,16 @@ def test_user_with_test_threads(test_server_url, db):
 
     db.commit()
 
+    return user
+
 
 @pytest.mark.integration
 async def test_position_slider_confirm_button_styling(
-    page, test_server_url, test_user_with_test_threads
+    page: Page, test_server_url: str, test_user_with_test_threads: User
 ):
     """Verify Confirm button styling in Position Slider matches Cancel button."""
-    from tests.conftest import get_test_database_url
-
     # Get test user and database URL
-    user = test_user_with_test_threads()
+    user = test_user_with_test_threads
     if not user:
         print("ERROR: No test user available")
         return
@@ -137,7 +144,7 @@ async def test_position_slider_confirm_button_styling(
     assert float(confirm_opacity_after) > 0.8
 
     # Screenshot 3: Confirm button disabled (return slider to position 3)
-    await page.fill("3")
+    await slider.fill("3")
     await page.wait_for_timeout(1000)
 
     await page.screenshot(path="screenshots/03-position-slider-disabled.png", full_page=False)

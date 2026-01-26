@@ -2,16 +2,17 @@
 
 ## Test User Account
 
-- **Username**: `testuser123`
-- **Password**: `ComicPileTest123!`
-- **Email**: `testuser123@example.com`
-- **User ID**: 250
+- **Username**: `<USERNAME>`
+- **Password**: `<PASSWORD>`
+- **Email**: `<EMAIL>`
+- **User ID**: `<USER_ID>`
 - **Thread count**: 20 threads (positions 1–20)
 
 ## Access Details
 
-- Use these credentials to log into the application for testing the queue position slider.
-- The account has a mix of threads to enable thorough testing of repositioning via the slider.
+- Obtain real test credentials from the approved secret manager or internal secure channel.
+- Alternatively, use environment variables (TEST_USERNAME, TEST_PASSWORD) for automated testing.
+- The test account has a mix of threads to enable thorough testing of repositioning via the slider.
 
 ## Testing Steps with Playwright MCP
 
