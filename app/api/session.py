@@ -1,6 +1,5 @@
 """Session API endpoints."""
 
-import logging
 import time
 from datetime import datetime
 from typing import Annotated
