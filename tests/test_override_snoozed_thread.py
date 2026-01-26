@@ -4,8 +4,8 @@ from httpx import AsyncClient
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models import Event, Thread
 from app.models import Session as SessionModel
+from app.models import Thread
 
 
 @pytest.mark.asyncio
