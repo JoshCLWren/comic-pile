@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -149,7 +149,6 @@ def build_session_response(session: SessionModel, db: Session) -> SessionRespons
 @router.post("/", response_model=SessionResponse)
 @limiter.limit("30/minute")
 def snooze_thread(
-    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ) -> SessionResponse:
