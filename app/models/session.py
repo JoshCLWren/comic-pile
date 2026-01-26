@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -34,6 +34,8 @@ class Session(Base):
     pending_thread_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Thread IDs temporarily excluded from roll selection during this session
+    snoozed_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
 
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),

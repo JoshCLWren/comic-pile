@@ -377,7 +377,7 @@ def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
 
         output.write(f"**Session:** {started_at.strftime('%b %d, %I:%M %p')}")
         if ended_at:
-            output.write(f" – {ended_at.strftime('%I:%M %p')}")
+            output.write(f" - {ended_at.strftime('%I:%M %p')}")
         output.write("\n")
         output.write(f"Started at d{session.start_die}\n")
 

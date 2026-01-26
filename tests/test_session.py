@@ -941,7 +941,7 @@ def test_undo_to_snapshot_clears_pending_thread_id(db, sample_data):
     assert restored_thread2 is None
 
 
-def test_is_active_no_lazy_load(db):
+def test_is_active_no_lazy_load(db, test_session_factory):
     """Test that is_active doesn't cause lazy load of session object."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
@@ -956,9 +956,7 @@ def test_is_active_no_lazy_load(db):
     ended_at = session.ended_at
     db.expunge_all()
 
-    from app.database import SessionLocal
-
-    new_db = SessionLocal()
+    new_db = test_session_factory()
 
     try:
         result = is_active(started_at, ended_at, new_db)
@@ -1135,3 +1133,98 @@ def test_move_to_position_handles_zero(db, sample_data):
 
     db.refresh(thread)
     assert thread.queue_position == 1
+
+
+def test_get_or_create_race_condition_after_lock(db, sample_data):
+    """Test that get_or_create handles race condition where session is created after lock acquisition.
+
+    This tests line 150: after acquiring the advisory lock, another thread/process may have
+    created an active session, so we check again and return it instead of creating a new one.
+    """
+    from unittest.mock import patch
+
+    for session in sample_data["sessions"]:
+        session.ended_at = datetime.now(UTC) - timedelta(hours=7)
+    db.commit()
+
+    existing_session = SessionModel(
+        start_die=10,
+        user_id=1,
+        started_at=datetime.now(UTC),
+    )
+    db.add(existing_session)
+    db.commit()
+    db.refresh(existing_session)
+
+    original_execute = db.execute
+    execute_call_count = 0
+    session_query_count = 0
+
+    class MockResult:
+        def __init__(self, result):
+            self._result = result
+
+        def scalars(self):
+            return self
+
+        def first(self):
+            nonlocal session_query_count
+            session_query_count += 1
+            if session_query_count == 1:
+                return None
+            elif session_query_count == 2:
+                return existing_session
+            return self._result.first() if self._result else None
+
+    def mock_execute(statement, *args, **kwargs):
+        nonlocal execute_call_count
+        execute_call_count += 1
+
+        stmt_str = str(statement)
+
+        if "SELECT pg_advisory_xact_lock" in str(statement):
+            return original_execute(statement, *args, **kwargs)
+
+        if "sessions" in stmt_str and "ended_at IS NULL" in stmt_str:
+            return MockResult(original_execute(statement, *args, **kwargs))
+
+        return original_execute(statement, *args, **kwargs)
+
+    with patch.object(db, "execute", side_effect=mock_execute):
+        result = get_or_create(db, user_id=1)
+
+    assert session_query_count == 2, f"Expected 2 session queries, got {session_query_count}"
+    assert result.id == existing_session.id
+    assert result.start_die == 10
+
+
+def test_get_or_create_max_retries_deadlock(db, sample_data):
+    """Test that get_or_create raises RuntimeError after max_retries on repeated deadlock.
+
+    This tests line 165: when deadlock OperationalError occurs repeatedly, after max_retries (3),
+    a RuntimeError is raised instead of continuing to retry.
+    """
+    from unittest.mock import patch
+    from sqlalchemy.exc import OperationalError
+
+    for session in sample_data["sessions"]:
+        session.ended_at = datetime.now(UTC) - timedelta(hours=7)
+    db.commit()
+
+    call_count = 0
+
+    def mock_commit(*_args, **_kwargs):
+        nonlocal call_count
+        call_count += 1
+
+        raise OperationalError(
+            "deadlock detected",
+            {},
+            Exception("psycopg.errors.DeadlockDetected: deadlock detected"),
+        )
+
+    with patch.object(db, "commit", side_effect=mock_commit):
+        with pytest.raises(RuntimeError, match="Failed to get_or_create session after 3 retries"):
+            get_or_create(db, user_id=1)
+
+    assert call_count == 3

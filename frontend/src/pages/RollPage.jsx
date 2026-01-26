@@ -17,6 +17,7 @@ export default function RollPage() {
   const [staleThread, setStaleThread] = useState(null)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
+  const [snoozedExpanded, setSnoozedExpanded] = useState(false)
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
@@ -313,6 +314,42 @@ export default function RollPage() {
               </div>
             </div>
           )}
+
+          {session.snoozed_threads?.length > 0 && (
+            <div className="px-4 pb-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => setSnoozedExpanded(!snoozedExpanded)}
+                className="w-full px-4 py-2 bg-slate-500/5 border border-slate-500/10 rounded-xl flex items-center gap-2 hover:bg-slate-500/10 transition-colors"
+              >
+                <span
+                  className={`text-slate-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
+                >
+                  ▶
+                </span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Snoozed ({session.snoozed_threads.length})
+                </span>
+              </button>
+              {snoozedExpanded && (
+                <div className="mt-2 space-y-1">
+                  {session.snoozed_threads.map((thread) => (
+                    <button
+                      key={thread.id}
+                      type="button"
+                      onClick={() => {
+                        setOverrideThreadId(String(thread.id))
+                        setIsOverrideOpen(true)
+                      }}
+                      className="w-full px-4 py-2 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left"
+                    >
+                      <p className="text-sm text-slate-400 truncate">{thread.title}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -320,7 +357,7 @@ export default function RollPage() {
 
       <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>
         <form className="space-y-4" onSubmit={handleOverrideSubmit}>
-          <p className="text-xs text-slate-400">Pick a thread to force the next roll result.</p>
+          <p className="text-xs text-slate-400">Pick a thread to force next roll result.</p>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Thread</label>
             <select
@@ -330,11 +367,22 @@ export default function RollPage() {
               required
             >
               <option value="">Select a thread...</option>
-              {activeThreads.map((thread) => (
-                <option key={thread.id} value={thread.id}>
-                  {thread.title} ({thread.format})
-                </option>
-              ))}
+              <optgroup label="Active Threads">
+                {activeThreads.map((thread) => (
+                  <option key={thread.id} value={thread.id}>
+                    {thread.title} ({thread.format})
+                  </option>
+                ))}
+              </optgroup>
+              {session.snoozed_threads?.length > 0 && (
+                <optgroup label="Snoozed Threads">
+                  {session.snoozed_threads.map((thread) => (
+                    <option key={thread.id} value={thread.id}>
+                      {thread.title} ({thread.format})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
           <button

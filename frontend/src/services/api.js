@@ -21,8 +21,17 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response.data,
-  async (error) => {
+  async   (error) => {
     const originalRequest = error.config
+
+    // Log full error details for debugging
+    if (error.response?.status === 400) {
+      console.error('API Validation Error Details:', {
+        status: error.response.status,
+        data: error.response.data,
+        config: error.config
+      })
+    }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       const isAuthEndpoint = originalRequest.url.includes('/auth/login') || originalRequest.url.includes('/auth/register')
@@ -128,4 +137,8 @@ export const undoApi = {
 
 export const tasksApi = {
   getMetrics: () => api.get('/analytics/metrics'),
+}
+
+export const snoozeApi = {
+  snooze: () => api.post('/snooze/'),
 }

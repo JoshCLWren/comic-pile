@@ -1,5 +1,6 @@
 """Session API endpoints."""
 
+import time
 from datetime import datetime
 from typing import Annotated
 
@@ -20,6 +21,7 @@ from app.schemas import (
     SnapshotResponse,
     SnapshotsListResponse,
 )
+from app.schemas.session import SnoozedThreadInfo
 from comic_pile.session import get_current_die, get_or_create, is_active
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -170,7 +172,6 @@ def get_current_session(
 ) -> SessionResponse:
     """Get current active session with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
-    import time
 
     max_retries = 3
     initial_delay = 0.1
@@ -230,6 +231,12 @@ def get_current_session(
                 last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
+                snoozed_thread_ids=active_session.snoozed_thread_ids or [],
+                snoozed_threads=[
+                    SnoozedThreadInfo(id=thread.id, title=thread.title)
+                    for thread_id in (active_session.snoozed_thread_ids or [])
+                    if (thread := db.get(Thread, thread_id))
+                ],
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -448,7 +455,6 @@ def restore_session_start(
 ) -> SessionResponse:
     """Restore session to its initial state at session start."""
     from sqlalchemy.exc import OperationalError
-    import time
 
     max_retries = 3
     initial_delay = 0.1

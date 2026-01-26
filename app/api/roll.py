@@ -1,5 +1,6 @@
 """Roll API routes."""
 
+import logging
 import random
 from datetime import datetime
 
@@ -21,6 +22,7 @@ from comic_pile.session import get_current_die, get_or_create
 router = APIRouter(tags=["roll"])
 
 clear_cache = None
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=RollResponse)
@@ -41,6 +43,17 @@ def roll_dice(
     current_session = get_or_create(db, user_id=current_user.id)
     current_session_id = current_session.id
     current_die = get_current_die(current_session_id, db)
+
+    # Exclude snoozed threads from the pool
+    snoozed_ids = current_session.snoozed_thread_ids or []
+    threads = [t for t in threads if t.id not in snoozed_ids]
+
+    if not threads:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active threads available to roll",
+        )
+
     pool_size = min(current_die, len(threads))
     selected_index = random.randint(0, pool_size - 1)
     selected_thread = threads[selected_index]
@@ -58,9 +71,10 @@ def roll_dice(
     if current_session:
         current_session.pending_thread_id = selected_thread.id
         current_session.pending_thread_updated_at = datetime.now()
-        db.commit()
-        if clear_cache:
-            clear_cache()
+
+    db.commit()
+    if clear_cache:
+        clear_cache()
 
     return RollResponse(
         thread_id=selected_thread.id,
@@ -77,12 +91,12 @@ def override_roll(
     db: Session = Depends(get_db),
 ) -> RollResponse:
     """Manually select a thread."""
-    thread = db.execute(
+    override_thread = db.execute(
         select(Thread)
         .where(Thread.id == request.thread_id)
         .where(Thread.user_id == current_user.id)
     ).scalar_one_or_none()
-    if not thread:
+    if not override_thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {request.thread_id} not found",
@@ -95,7 +109,7 @@ def override_roll(
     event = Event(
         type="roll",
         session_id=current_session_id,
-        selected_thread_id=thread.id,
+        selected_thread_id=override_thread.id,
         die=current_die,
         result=0,
         selection_method="override",
@@ -103,17 +117,23 @@ def override_roll(
     db.add(event)
 
     if current_session:
-        current_session.pending_thread_id = thread.id
+        current_session.pending_thread_id = override_thread.id
         current_session.pending_thread_updated_at = datetime.now()
+
+        snoozed_ids = (
+            list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+        )
+        if override_thread.id in snoozed_ids:
+            snoozed_ids.remove(override_thread.id)
+            current_session.snoozed_thread_ids = snoozed_ids
+
         db.commit()
         if clear_cache:
             clear_cache()
 
-    if clear_cache:
-        clear_cache()
     return RollResponse(
-        thread_id=thread.id,
-        title=thread.title,
+        thread_id=override_thread.id,
+        title=override_thread.title,
         die_size=current_die,
         result=0,
     )

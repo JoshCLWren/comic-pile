@@ -222,11 +222,9 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 
 @pytest.fixture(scope="function")
-def db() -> Generator[Session]:
+def db(test_engine) -> Generator[Session]:
     """Create test database with transaction rollback (PostgreSQL)."""
-    database_url = get_sync_test_database_url()
-
-    engine = create_engine(database_url, echo=False)
+    engine = test_engine
     Base.metadata.create_all(bind=engine)
     connection = engine.connect()
     connection.execute(
@@ -247,7 +245,25 @@ def db() -> Generator[Session]:
         if transaction is not None:
             transaction.rollback()
         connection.close()
-        engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def test_engine():
+    """Create a test database engine."""
+    database_url = get_sync_test_database_url()
+    engine = create_engine(database_url, echo=False)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def test_session_factory(test_engine):
+    """Provide a sessionmaker bound to the test database.
+
+    Use this instead of app.database.SessionLocal when tests need to create
+    additional database connections (e.g., for concurrent operation testing).
+    """
+    return sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
 
 
 def _create_db_override(db: Session):

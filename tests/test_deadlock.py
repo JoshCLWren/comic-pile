@@ -3,13 +3,12 @@
 import threading
 from datetime import UTC, datetime
 
-from app.database import SessionLocal
 from app.models import Session as SessionModel
 from comic_pile.session import get_or_create
 from sqlalchemy import delete
 
 
-def test_get_or_create_concurrent_no_deadlock(db, sample_data):
+def test_get_or_create_concurrent_no_deadlock(db, sample_data, test_session_factory):
     """Test that concurrent get_or_create calls don't deadlock.
 
     Regression test for BUG-158: DeadlockDetected error during concurrent operations.
@@ -23,7 +22,7 @@ def test_get_or_create_concurrent_no_deadlock(db, sample_data):
     exceptions = []
 
     def worker():
-        inner_db = SessionLocal()
+        inner_db = test_session_factory()
         try:
             session = get_or_create(inner_db, user_id=1)
             results.append(session.id)
@@ -45,7 +44,7 @@ def test_get_or_create_concurrent_no_deadlock(db, sample_data):
     assert len(set(results)) == 1, "All threads should return the same session ID"
 
 
-def test_get_or_create_concurrent_no_duplicates(db):
+def test_get_or_create_concurrent_no_duplicates(db, test_session_factory):
     """Test that concurrent session creation doesn't create duplicate sessions."""
     db.execute(delete(SessionModel))
     db.commit()
@@ -54,7 +53,7 @@ def test_get_or_create_concurrent_no_duplicates(db):
     exceptions = []
 
     def worker():
-        inner_db = SessionLocal()
+        inner_db = test_session_factory()
         try:
             session = get_or_create(inner_db, user_id=1)
             results.append((session.id, session.started_at))

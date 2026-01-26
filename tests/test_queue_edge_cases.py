@@ -3,6 +3,7 @@
 import pytest
 
 from app.models import Thread
+from comic_pile.queue import move_to_back, move_to_front, move_to_position
 
 
 @pytest.mark.asyncio
@@ -62,7 +63,8 @@ async def test_move_to_position_clamps_to_max(auth_client, db, sample_data):
 
     response = await auth_client.get("/api/threads/")
     threads = response.json()
-    max_position = len(threads)
+    active_threads = [t for t in threads if t["status"] == "active"]
+    max_position = len(active_threads)
 
     response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
@@ -107,3 +109,515 @@ async def test_move_to_position_when_no_threads(auth_client, db, default_user):
 
     thread = db.get(ThreadModel, thread.id)
     assert thread.queue_position == 1
+
+
+def test_move_to_front_nonexistent_thread(db, default_user, sample_data):
+    """move_to_front with non-existent thread_id returns early without error."""
+    nonexistent_thread_id = 99999
+
+    original_positions = {t.id: t.queue_position for t in sample_data["threads"]}
+
+    move_to_front(nonexistent_thread_id, default_user.id, db)
+
+    current_positions = {t.id: t.queue_position for t in sample_data["threads"]}
+
+    assert original_positions == current_positions
+
+
+def test_move_to_back_nonexistent_thread(db, default_user, sample_data):
+    """move_to_back with non-existent thread_id returns early without error."""
+    nonexistent_thread_id = 99999
+
+    original_positions = {t.id: t.queue_position for t in sample_data["threads"]}
+
+    move_to_back(nonexistent_thread_id, default_user.id, db)
+
+    current_positions = {t.id: t.queue_position for t in sample_data["threads"]}
+
+    assert original_positions == current_positions
+
+
+def test_move_to_back_no_active_threads(db, default_user):
+    """move_to_back when max_position is None (no active threads) returns early without error."""
+    from datetime import UTC, datetime
+
+    thread = Thread(
+        title="Isolated Thread",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=0,
+        status="paused",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    original_position = thread.queue_position
+
+    move_to_back(thread.id, default_user.id, db)
+
+    db.refresh(thread)
+    assert thread.queue_position == original_position
+
+
+def test_move_to_position_nonexistent_thread(db, default_user, sample_data, caplog):
+    """move_to_position with non-existent thread_id logs error and returns early."""
+    nonexistent_thread_id = 99999
+
+    original_positions = {t.id: t.queue_position for t in sample_data["threads"]}
+
+    with caplog.at_level("ERROR"):
+        move_to_position(nonexistent_thread_id, default_user.id, 1, db)
+
+    current_positions = {t.id: t.queue_position for t in sample_data["threads"]}
+
+    assert original_positions == current_positions
+    assert any(
+        f"Thread {nonexistent_thread_id} not found for user {default_user.id}" in record.message
+        for record in caplog.records
+    )
+
+
+def test_move_to_position_thread_not_in_active_list(db, default_user, caplog):
+    """move_to_position with thread having queue_position < 1 logs error and returns early."""
+    from datetime import UTC, datetime
+
+    thread = Thread(
+        title="Paused Thread",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=0,
+        status="paused",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    db.add(thread)
+    db.commit()
+    db.refresh(thread)
+
+    original_position = thread.queue_position
+
+    with caplog.at_level("ERROR"):
+        move_to_position(thread.id, default_user.id, 1, db)
+
+    db.refresh(thread)
+    assert thread.queue_position == original_position
+    assert any(
+        f"Target thread {thread.id} not found in active threads list" in record.message
+        for record in caplog.records
+    )
+
+
+def test_move_to_position_clamps_negative_position(db, default_user, sample_data, caplog):
+    """move_to_position with new_position < 1 clamps to 1."""
+    thread_id = sample_data["threads"][0].id
+
+    with caplog.at_level("WARNING"):
+        move_to_position(thread_id, default_user.id, 0, db)
+
+    thread = db.get(Thread, thread_id)
+    assert thread.queue_position == 1
+    assert any("new_position 0 < 1, setting to 1" in record.message for record in caplog.records)
+
+
+def test_get_roll_pool(db, default_user, sample_data):
+    """get_roll_pool returns all active threads ordered by position."""
+    from comic_pile.queue import get_roll_pool
+
+    pool = get_roll_pool(default_user.id, db)
+
+    active_threads = [t for t in sample_data["threads"] if t.status == "active"]
+    assert len(pool) == len(active_threads)
+
+    positions = [t.queue_position for t in pool]
+    assert positions == sorted(positions)
+
+
+def test_get_stale_threads(db, default_user):
+    """get_stale_threads returns threads not read in specified days."""
+    from datetime import UTC, datetime, timedelta
+    from comic_pile.queue import get_stale_threads
+
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=10)
+    recent_date = now - timedelta(days=2)
+
+    stale_thread = Thread(
+        title="Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        last_activity_at=stale_date,
+        created_at=now,
+    )
+    recent_thread = Thread(
+        title="Recent Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=default_user.id,
+        last_activity_at=recent_date,
+        created_at=now,
+    )
+    no_activity_thread = Thread(
+        title="No Activity Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=3,
+        status="active",
+        user_id=default_user.id,
+        last_activity_at=None,
+        created_at=now,
+    )
+
+    db.add_all([stale_thread, recent_thread, no_activity_thread])
+    db.commit()
+
+    stale_threads = get_stale_threads(default_user.id, db, days=7)
+
+    assert len(stale_threads) == 2
+    stale_thread_ids = {t.id for t in stale_threads}
+    assert stale_thread.id in stale_thread_ids
+    assert no_activity_thread.id in stale_thread_ids
+    assert recent_thread.id not in stale_thread_ids
+
+
+def test_move_to_front_from_middle_position(db, default_user):
+    """move_to_front: Moving thread from position > 1 to front shifts all preceding threads back."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_front
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread C",
+            format="Comic",
+            issues_remaining=8,
+            queue_position=3,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread D",
+            format="Comic",
+            issues_remaining=3,
+            queue_position=4,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread E",
+            format="Comic",
+            issues_remaining=6,
+            queue_position=5,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    db.add_all(threads)
+    db.commit()
+
+    for thread in threads:
+        db.refresh(thread)
+
+    thread_c = threads[2]
+    thread_c_id = thread_c.id
+
+    assert thread_c.queue_position == 3
+
+    move_to_front(thread_c_id, default_user.id, db)
+
+    db.refresh(thread_c)
+    assert thread_c.queue_position == 1
+
+    for thread in threads:
+        db.refresh(thread)
+
+    thread_a = db.get(Thread, threads[0].id)
+    thread_b = db.get(Thread, threads[1].id)
+    thread_d = db.get(Thread, threads[3].id)
+    thread_e = db.get(Thread, threads[4].id)
+
+    assert thread_a.queue_position == 2
+    assert thread_b.queue_position == 3
+    assert thread_d.queue_position == 4
+    assert thread_e.queue_position == 5
+
+
+def test_move_to_back_from_front_position(db, default_user):
+    """move_to_back: Moving thread from position < max to back shifts all following threads forward."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_back
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread C",
+            format="Comic",
+            issues_remaining=8,
+            queue_position=3,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread D",
+            format="Comic",
+            issues_remaining=3,
+            queue_position=4,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread E",
+            format="Comic",
+            issues_remaining=6,
+            queue_position=5,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    db.add_all(threads)
+    db.commit()
+
+    for thread in threads:
+        db.refresh(thread)
+
+    thread_a = threads[0]
+    thread_a_id = thread_a.id
+
+    assert thread_a.queue_position == 1
+
+    move_to_back(thread_a_id, default_user.id, db)
+
+    db.refresh(thread_a)
+    assert thread_a.queue_position == 5
+
+    for thread in threads:
+        db.refresh(thread)
+
+    thread_b = db.get(Thread, threads[1].id)
+    thread_c = db.get(Thread, threads[2].id)
+    thread_d = db.get(Thread, threads[3].id)
+    thread_e = db.get(Thread, threads[4].id)
+
+    assert thread_b.queue_position == 1
+    assert thread_c.queue_position == 2
+    assert thread_d.queue_position == 3
+    assert thread_e.queue_position == 4
+
+
+def test_move_to_position_backward_movement(db, default_user):
+    """move_to_position: Moving thread backward (current < new) shifts threads in between forward."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_position
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread C",
+            format="Comic",
+            issues_remaining=8,
+            queue_position=3,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread D",
+            format="Comic",
+            issues_remaining=3,
+            queue_position=4,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread E",
+            format="Comic",
+            issues_remaining=6,
+            queue_position=5,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    db.add_all(threads)
+    db.commit()
+
+    for thread in threads:
+        db.refresh(thread)
+
+    thread_b = threads[1]
+    thread_b_id = thread_b.id
+
+    assert thread_b.queue_position == 2
+
+    move_to_position(thread_b_id, default_user.id, 4, db)
+
+    db.refresh(thread_b)
+    assert thread_b.queue_position == 4
+
+    for thread in threads:
+        db.refresh(thread)
+
+    thread_a = db.get(Thread, threads[0].id)
+    thread_c = db.get(Thread, threads[2].id)
+    thread_d = db.get(Thread, threads[3].id)
+    thread_e = db.get(Thread, threads[4].id)
+
+    assert thread_a.queue_position == 1
+    assert thread_c.queue_position == 2
+    assert thread_d.queue_position == 3
+    assert thread_e.queue_position == 5
+
+
+def test_move_to_position_forward_movement(db, default_user):
+    """move_to_position: Moving thread forward (current > new) shifts threads in between backward."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_position
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread C",
+            format="Comic",
+            issues_remaining=8,
+            queue_position=3,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread D",
+            format="Comic",
+            issues_remaining=3,
+            queue_position=4,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread E",
+            format="Comic",
+            issues_remaining=6,
+            queue_position=5,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    db.add_all(threads)
+    db.commit()
+
+    for thread in threads:
+        db.refresh(thread)
+
+    thread_d = threads[3]
+    thread_d_id = thread_d.id
+
+    assert thread_d.queue_position == 4
+
+    move_to_position(thread_d_id, default_user.id, 2, db)
+
+    db.refresh(thread_d)
+    assert thread_d.queue_position == 2
+
+    for thread in threads:
+        db.refresh(thread)
+
+    thread_a = db.get(Thread, threads[0].id)
+    thread_b = db.get(Thread, threads[1].id)
+    thread_c = db.get(Thread, threads[2].id)
+    thread_e = db.get(Thread, threads[4].id)
+
+    assert thread_a.queue_position == 1
+    assert thread_b.queue_position == 3
+    assert thread_c.queue_position == 4
+    assert thread_e.queue_position == 5

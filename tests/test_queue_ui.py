@@ -12,7 +12,8 @@ async def test_jump_to_position_works_for_large_distance(auth_client, db, sample
 
     response = await auth_client.get("/api/threads/")
     threads = response.json()
-    last_position = len(threads)
+    active_threads = [t for t in threads if t["status"] == "active"]
+    last_position = len(active_threads)
 
     response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": last_position}
@@ -78,7 +79,8 @@ async def test_move_to_back_via_api(auth_client, db, sample_data):
 
     response = await auth_client.get("/api/threads/")
     threads = response.json()
-    last_position = len(threads)
+    active_threads = [t for t in threads if t["status"] == "active"]
+    last_position = max(t["queue_position"] for t in active_threads)
 
     response = await auth_client.put(f"/api/queue/threads/{thread_id}/back/")
     assert response.status_code == 200

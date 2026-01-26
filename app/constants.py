@@ -11,6 +11,7 @@ class EventType(StrEnum):
     REORDER = "reorder"
     DELETE = "delete"
     ROLLED_BUT_SKIPPED = "rolled_but_skipped"
+    SNOOZE = "snooze"
 
 
 class ThreadStatus(StrEnum):
