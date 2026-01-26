@@ -120,7 +120,9 @@ def override_roll(
         current_session.pending_thread_id = override_thread.id
         current_session.pending_thread_updated_at = datetime.now()
 
-        snoozed_ids = current_session.snoozed_thread_ids or []
+        snoozed_ids = (
+            list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+        )
         if override_thread.id in snoozed_ids:
             snoozed_ids.remove(override_thread.id)
             current_session.snoozed_thread_ids = snoozed_ids
