@@ -116,6 +116,20 @@ def override_roll(
     if current_session:
         current_session.pending_thread_id = thread.id
         current_session.pending_thread_updated_at = datetime.now()
+
+        # Remove thread from snoozed list if it's there
+        snoozed_ids = current_session.snoozed_thread_ids or []
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"Override: thread_id={thread.id}, snoozed_ids before={snoozed_ids}")
+        if thread.id in snoozed_ids:
+            logger.info(f"Removing thread {thread.id} from snoozed list")
+            snoozed_ids.remove(thread.id)
+            current_session.snoozed_thread_ids = snoozed_ids
+        else:
+            logger.info(f"Thread {thread.id} not in snoozed list")
+
         db.commit()
         if clear_cache:
             clear_cache()

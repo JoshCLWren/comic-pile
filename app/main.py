@@ -24,6 +24,7 @@ from app.config import get_app_settings
 from app.database import Base, engine, SessionLocal
 from app.middleware import limiter
 
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 MAX_LOG_BODY_SIZE = 1000

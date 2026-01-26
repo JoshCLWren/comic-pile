@@ -33,6 +33,7 @@ export default function RollPage() {
   const overrideMutation = useOverrideRoll()
 
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
+  const allActiveThreads = threads?.filter((thread) => thread.status === 'active') ?? []
 
   useEffect(() => {
     if (session?.current_die) {
@@ -334,12 +335,17 @@ export default function RollPage() {
               {snoozedExpanded && (
                 <div className="mt-2 space-y-1">
                   {session.snoozed_threads.map((thread) => (
-                    <div
+                    <button
                       key={thread.id}
-                      className="px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                      type="button"
+                      onClick={() => {
+                        setOverrideThreadId(String(thread.id))
+                        setIsOverrideOpen(true)
+                      }}
+                      className="w-full px-4 py-2 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left"
                     >
                       <p className="text-sm text-slate-400 truncate">{thread.title}</p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -352,7 +358,7 @@ export default function RollPage() {
 
       <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>
         <form className="space-y-4" onSubmit={handleOverrideSubmit}>
-          <p className="text-xs text-slate-400">Pick a thread to force the next roll result.</p>
+          <p className="text-xs text-slate-400">Pick a thread to force next roll result.</p>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Thread</label>
             <select
@@ -362,11 +368,22 @@ export default function RollPage() {
               required
             >
               <option value="">Select a thread...</option>
-              {activeThreads.map((thread) => (
-                <option key={thread.id} value={thread.id}>
-                  {thread.title} ({thread.format})
-                </option>
-              ))}
+              <optgroup label="Active Threads">
+                {activeThreads.map((thread) => (
+                  <option key={thread.id} value={thread.id}>
+                    {thread.title} ({thread.format})
+                  </option>
+                ))}
+              </optgroup>
+              {session.snoozed_threads?.length > 0 && (
+                <optgroup label="Snoozed Threads">
+                  {session.snoozed_threads.map((thread) => (
+                    <option key={thread.id} value={thread.id}>
+                      {thread.title} ({thread.format})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
           <button

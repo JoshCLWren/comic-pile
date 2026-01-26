@@ -1,5 +1,6 @@
 """Snooze API endpoint."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -17,9 +18,17 @@ from app.schemas.session import SnoozedThreadInfo
 from comic_pile.dice_ladder import step_up
 from comic_pile.session import get_current_die
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 clear_cache = None
+
+# Disable session cache to prevent issues in tests
+import app.api.session as session_module
+
+if hasattr(session_module, "get_current_session_cached"):
+    session_module.get_current_session_cached = None
 
 
 def build_ladder_path(session_id: int, db: Session) -> str:
@@ -180,9 +189,13 @@ def snooze_thread(
 
     # Add to snoozed_thread_ids list
     snoozed_ids = current_session.snoozed_thread_ids or []
+    logger.info(f"Snooze: pending_thread_id={pending_thread_id}, snoozed_ids before={snoozed_ids}")
     if pending_thread_id not in snoozed_ids:
         snoozed_ids.append(pending_thread_id)
         current_session.snoozed_thread_ids = snoozed_ids
+        logger.info(f"Snooze: added to snoozed list, snoozed_ids after={snoozed_ids}")
+    else:
+        logger.info(f"Snooze: thread {pending_thread_id} already in snoozed list")
 
     # Step die UP (wider pool)
     current_die = get_current_die(current_session_id, db)
@@ -209,5 +222,8 @@ def snooze_thread(
         clear_cache()
 
     db.refresh(current_session)
+    logger.info(
+        f"Snooze: after commit and refresh, snoozed_thread_ids={current_session.snoozed_thread_ids}"
+    )
 
     return build_session_response(current_session, db)

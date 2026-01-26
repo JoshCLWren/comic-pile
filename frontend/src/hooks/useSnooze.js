@@ -10,7 +10,6 @@ export function useSnooze() {
     mutationFn: () => snoozeApi.snooze(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['session', 'current'] })
       queryClient.invalidateQueries({ queryKey: ['threads'] })
       navigate('/roll')
     },

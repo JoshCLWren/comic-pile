@@ -11,6 +11,10 @@ import { useState, useMemo } from 'react'
  * @returns {JSX.Element} The position slider component
  */
 export default function PositionSlider({ threads, currentThread, onPositionSelect, onCancel }) {
+  const truncate = (text, maxLen = 20) => {
+    if (text.length <= maxLen) return text
+    return text.slice(0, maxLen - 1) + '…'
+  }
   const sortedThreads = useMemo(() => {
     return [...threads].sort((a, b) => a.queue_position - b.queue_position)
   }, [threads])
@@ -68,14 +72,10 @@ export default function PositionSlider({ threads, currentThread, onPositionSelec
   }, [sliderValue, currentIndex, maxPosition, sortedThreads, currentThread.id])
 
   const handleConfirm = () => {
-    // Convert slider index to actual queue position
-    const targetPosition = sortedThreads[sliderValue].queue_position
+    // Convert slider index to normalized position (1-based)
+    // The UI displays sequential positions (1, 2, 3...) regardless of gaps in queue_position values
+    const targetPosition = sliderValue + 1
     onPositionSelect(targetPosition)
-  }
-
-  const truncate = (text, maxLen = 20) => {
-    if (text.length <= maxLen) return text
-    return text.slice(0, maxLen - 1) + '…'
   }
 
   return (
@@ -187,6 +187,7 @@ export default function PositionSlider({ threads, currentThread, onPositionSelec
         <button
           type="button"
           onClick={onCancel}
+          data-testid="position-slider-cancel"
           className="flex-1 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-black uppercase tracking-widest text-slate-400 hover:bg-white/10 transition-all"
         >
           Cancel
@@ -195,7 +196,12 @@ export default function PositionSlider({ threads, currentThread, onPositionSelec
           type="button"
           onClick={handleConfirm}
           disabled={sliderValue === currentIndex}
-          className="flex-1 py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+          data-testid="position-slider-confirm"
+          className={`flex-1 py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-black uppercase tracking-widest transition-all hover:bg-white/10 ${
+            sliderValue === currentIndex
+              ? 'opacity-30 cursor-not-allowed'
+              : 'opacity-100 cursor-pointer'
+          }`}
         >
           Confirm
         </button>

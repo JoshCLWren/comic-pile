@@ -1,5 +1,6 @@
 """Queue API routes."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -15,6 +16,9 @@ from app.models import Event, Thread, User
 from app.schemas import ThreadResponse
 from app.api.thread import thread_to_response
 from comic_pile.queue import move_to_back, move_to_front, move_to_position
+
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter()
 
@@ -37,18 +41,33 @@ def move_thread_position(
     db: Session = Depends(get_db),
 ) -> ThreadResponse:
     """Move thread to specific position."""
+    logger.info(
+        f"API move_thread_position: thread_id={thread_id}, user_id={current_user.id}, "
+        f"new_position={position_request.new_position}, request_url={request.url}"
+    )
+
     thread = db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
     ).scalar_one_or_none()
     if not thread:
+        logger.error(f"Thread {thread_id} not found for user {current_user.id}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
         )
 
     old_position = thread.queue_position
-    move_to_position(thread_id, current_user.id, position_request.new_position, db)
-    db.refresh(thread)
+    logger.info(f"Thread {thread_id} current position: {old_position}")
+
+    try:
+        move_to_position(thread_id, current_user.id, position_request.new_position, db)
+        db.refresh(thread)
+        logger.info(f"Thread {thread_id} refreshed, new position: {thread.queue_position}")
+    except Exception as e:
+        logger.error(
+            f"Error moving thread {thread_id} to position {position_request.new_position}: {e}"
+        )
+        raise
 
     if old_position != thread.queue_position:
         reorder_event = Event(
@@ -73,7 +92,7 @@ def move_thread_front(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ) -> ThreadResponse:
-    """Move thread to front of queue."""
+    """Move thread to the front."""
     thread = db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
     ).scalar_one_or_none()
@@ -110,7 +129,7 @@ def move_thread_back(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ) -> ThreadResponse:
-    """Move thread to back of queue."""
+    """Move thread to the back."""
     thread = db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
     ).scalar_one_or_none()

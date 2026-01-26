@@ -62,7 +62,8 @@ async def test_move_to_position_clamps_to_max(auth_client, db, sample_data):
 
     response = await auth_client.get("/api/threads/")
     threads = response.json()
-    max_position = len(threads)
+    active_threads = [t for t in threads if t["status"] == "active"]
+    max_position = len(active_threads)
 
     response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
