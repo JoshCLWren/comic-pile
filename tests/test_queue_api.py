@@ -12,7 +12,7 @@ from app.models import User
 
 @pytest.mark.asyncio
 async def test_create_threads_to_meet_20(auth_client: AsyncClient, db: Session) -> None:
-    """Create threads 18–20 programmatically."""
+    """Create threads 18-20 programmatically."""
     # Setup: Ensure user exists and related threads match context
     user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
     if not user:

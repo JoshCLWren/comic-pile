@@ -1,7 +1,7 @@
 """Test that overriding to a snoozed thread removes it from snoozed list."""
 
-from httpx import AsyncClient
 import pytest
+from httpx import AsyncClient
 from sqlalchemy.orm import Session
 
 from app.models import Session as SessionModel
@@ -10,7 +10,8 @@ from app.models import Thread
 
 @pytest.mark.asyncio
 async def test_override_snoozed_thread_removes_from_snoozed_list(
-    auth_client: AsyncClient, db: Session
+    auth_client: AsyncClient,
+    db: Session,
 ) -> None:
     """Overriding to a snoozed thread should remove it from snoozed_thread_ids."""
     from tests.conftest import get_or_create_user
