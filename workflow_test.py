@@ -11,10 +11,19 @@ sys.path.insert(0, str(__file__).rsplit("/", 1)[0])
 from app.database import SessionLocal
 from app.models import Event, Thread, User
 from sqlalchemy import select
+from sqlalchemy.exc import DatabaseError, IntegrityError, OperationalError
 
 
-def simulate_complete_workflow():
-    """Simulate the complete workflow: move Spider-Man Adventures from position 62 to 11."""
+def simulate_complete_workflow() -> None:
+    """Simulate the complete workflow: move Spider-Man Adventures from position 62 to 11.
+
+    This function simulates the complete user workflow for repositioning a thread in the
+    queue, including verifying initial state, moving the thread, creating a reorder event,
+    and verifying the final state.
+
+    Returns:
+        None: This function prints results to stdout and does not return a value.
+    """
     print("🎭 SIMULATING COMPLETE USER WORKFLOW")
     print("=" * 60)
 
@@ -104,14 +113,14 @@ def simulate_complete_workflow():
                     f"❌ FAILURE: Expected position {new_position}, found {thread.queue_position}"
                 )
 
-        except Exception as e:
+        except (IntegrityError, OperationalError, DatabaseError) as e:
             print(f"❌ ERROR during move: {e}")
             import traceback
 
             traceback.print_exc()
             return
 
-    except Exception as e:
+    except (IntegrityError, OperationalError, DatabaseError) as e:
         print(f"❌ ERROR: {e}")
         import traceback
 

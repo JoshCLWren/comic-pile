@@ -1213,7 +1213,7 @@ def test_get_or_create_max_retries_deadlock(db, sample_data):
 
     call_count = 0
 
-    def mock_commit(*args, **kwargs):
+    def mock_commit(*_args, **_kwargs):
         nonlocal call_count
         call_count += 1
 

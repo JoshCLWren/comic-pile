@@ -5,12 +5,18 @@ import sys
 
 sys.path.insert(0, str(__file__).rsplit("/", 1)[0])
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.database import SessionLocal
 from app.models import Thread, User
 
 
-def test_thread_reposition():
-    """Test thread repositioning using the queue API logic."""
+def test_thread_reposition() -> None:
+    """Test thread repositioning using the queue API logic.
+
+    Returns:
+        None
+    """
     # Create database session
     db = SessionLocal()
 
@@ -72,8 +78,8 @@ def test_thread_reposition():
                 f"❌ FAILURE: Thread position is {thread.queue_position}, expected {new_position}"
             )
 
-    except Exception as e:
-        print(f"❌ ERROR: {e}")
+    except SQLAlchemyError as e:
+        print(f"❌ DATABASE ERROR: {e}")
         db.rollback()
         import traceback
 

@@ -180,7 +180,7 @@ def test_move_to_position_nonexistent_thread(db, default_user, sample_data, capl
     )
 
 
-def test_move_to_position_thread_not_in_active_list(db, default_user, sample_data, caplog):
+def test_move_to_position_thread_not_in_active_list(db, default_user, caplog):
     """move_to_position with thread having queue_position < 1 logs error and returns early."""
     from datetime import UTC, datetime
 
