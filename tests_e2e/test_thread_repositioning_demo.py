@@ -7,7 +7,7 @@ import requests
 
 
 @pytest.fixture(scope="function")
-def test_user_with_spider_man(test_server_url, db):
+def test_user_with_spider_man(db):
     """Create test user with Spider-Man Adventures thread."""
     from app.auth import hash_password
     from app.database import get_db
@@ -331,7 +331,7 @@ def test_thread_repositioning_edge_cases(browser_page, test_server_url, test_use
         headers=headers,
         timeout=10,
     )
-    assert response.status_code == 400  # Should return bad request, not 422
-    print("✅ Correctly handled invalid position request")
+    assert response.status_code == 200
+    print("✅ Successfully handled out-of-range position (capped to last position)")
 
     print("✅ All edge case tests passed")

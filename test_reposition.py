@@ -2,14 +2,11 @@
 """Test script to simulate thread repositioning with proper authentication."""
 
 import sys
-from pathlib import Path
+
+sys.path.insert(0, str(__file__).rsplit("/", 1)[0])
 
 from app.database import SessionLocal
 from app.models import Thread, User
-
-
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
 
 
 def test_thread_reposition():

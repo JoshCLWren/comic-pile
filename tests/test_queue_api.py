@@ -42,7 +42,11 @@ async def test_create_threads_to_meet_20(auth_client: AsyncClient, db: Session) 
     ]
 
     for thread in threads_data:
-        await auth_client.post("/api/threads/", json=thread)
+        resp = await auth_client.post("/api/threads/", json=thread)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert "id" in data
+        assert data["title"] == thread["title"]
 
 
 @pytest.mark.asyncio

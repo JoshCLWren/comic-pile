@@ -238,27 +238,6 @@ def get_current_session(
                     if (thread := db.get(Thread, thread_id))
                 ],
             )
-
-            return SessionResponse(
-                id=active_session_id,
-                started_at=active_session.started_at,
-                ended_at=active_session.ended_at,
-                start_die=active_session.start_die,
-                manual_die=active_session.manual_die,
-                user_id=active_session.user_id,
-                ladder_path=build_ladder_path(active_session_id, db),
-                active_thread=active_thread,
-                current_die=get_current_die(active_session_id, db),
-                last_rolled_result=active_thread.last_rolled_result if active_thread else None,
-                has_restore_point=snapshot_count > 0,
-                snapshot_count=snapshot_count,
-                snoozed_thread_ids=active_session.snoozed_thread_ids or [],
-                snoozed_threads=[
-                    SnoozedThreadInfo(id=thread.id, title=thread.title)
-                    for thread_id in (active_session.snoozed_thread_ids or [])
-                    if (thread := db.get(Thread, thread_id))
-                ],
-            )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
                 db.rollback()

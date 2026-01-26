@@ -11,7 +11,17 @@ from app.models import Thread
 
 
 def fix_thread_positions() -> None:
-    """Fix thread positions by reorganizing them sequentially per-user."""
+    """Fix thread positions by reorganizing them sequentially per-user.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If an error occurs during the database operation.
+    """
     print("=== Fixing Thread Positions ===")
     print(
         "This will reorganize all active threads per-user to have sequential positions starting from 1."

@@ -7,7 +7,7 @@ import requests
 
 
 @pytest.fixture(scope="function")
-def test_user_with_threads(test_server_url, db):
+def test_user_with_threads(db):
     """Create test user with 6 threads for comprehensive demo."""
     from app.auth import hash_password
     from app.database import get_db
@@ -501,7 +501,8 @@ def test_snooze_excludes_from_roll_pool(browser_page, test_server_url, test_user
         timeout=10,
     )
     assert session_response.status_code == 200
-    session_response.json()
+    session_data = session_response.json()
+    assert session_data is not None
 
     # Roll first time
     roll_response_1 = requests.post(

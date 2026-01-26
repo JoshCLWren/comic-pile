@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,15 @@ if os.getenv("TEST") or os.getenv("DISABLE_SESSION_CACHE"):
 
 
 def build_ladder_path(session_id: int, db: Session) -> str:
-    """Build narrative summary of dice ladder from session events."""
+    """Build narrative summary of dice ladder from session events.
+
+    Args:
+        session_id: The session primary key.
+        db: SQLAlchemy session used to load SessionModel and Event.
+
+    Returns:
+        Narrative ladder path or empty string when session not found.
+    """
     session = db.get(SessionModel, session_id)
     if not session:
         return ""
@@ -149,6 +157,7 @@ def build_session_response(session: SessionModel, db: Session) -> SessionRespons
 @router.post("/", response_model=SessionResponse)
 @limiter.limit("30/minute")
 def snooze_thread(
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ) -> SessionResponse:
@@ -161,6 +170,18 @@ def snooze_thread(
     4. Records a "snooze" event
     5. Clears pending_thread_id
     6. Returns the updated session
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse containing the updated session with snoozed_thread_ids,
+        cleared pending_thread_id, and current die state.
+
+    Raises:
+        HTTPException: If no active session exists or no pending thread to snooze.
     """
     current_session = (
         db.execute(

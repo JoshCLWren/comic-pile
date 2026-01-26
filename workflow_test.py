@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """Complete workflow test: Spider-Man Adventures repositioning.
 
-This replicates the exact user workflow that failed previously.
+This replicates exact user workflow that failed previously.
 """
 
 import sys
-from pathlib import Path
+
+sys.path.insert(0, str(__file__).rsplit("/", 1)[0])
 
 from app.database import SessionLocal
 from app.models import Event, Thread, User
 from sqlalchemy import select
-
-
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
 
 
 def simulate_complete_workflow():
