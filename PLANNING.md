@@ -39,9 +39,9 @@
 - [x] 1.3 Create `useRoll.js` hook with useState+useEffect (no RQ)
 - [x] 1.4 Create `useSnooze.js` hook with useState+useEffect (no RQ)
 - [x] 1.5 Create `useThread.js` hook with useState+useEffect (no RQ)
-- [ ] 1.6 Create `useQueue.js` hook with useState+useEffect (no RQ)
-- [ ] 1.7 Create `useUndo.js` hook with useState+useEffect (no RQ)
-- [ ] 1.8 Create `useAnalytics.js` hook with useState+useEffect (no RQ)
+- [x] 1.6 Create `useQueue.js` hook with useState+useEffect (no RQ)
+- [x] 1.7 Create `useUndo.js` hook with useState+useEffect (no RQ)
+- [x] 1.8 Create `useAnalytics.js` hook with useState+useEffect (no RQ)
 - [ ] 1.9 Update `main.jsx` to remove QueryClientProvider
 - [ ] 1.10 Update `services/api.js` to remove QueryClient export
 - [ ] 1.11 Update `RollPage.jsx` to use new hooks
