@@ -210,7 +210,9 @@ def snooze_thread(
     current_session_id = current_session.id
 
     # Add to snoozed_thread_ids list
-    snoozed_ids = current_session.snoozed_thread_ids or []
+    snoozed_ids = (
+        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    )
     logger.info(f"Snooze: pending_thread_id={pending_thread_id}, snoozed_ids before={snoozed_ids}")
     if pending_thread_id not in snoozed_ids:
         snoozed_ids.append(pending_thread_id)
@@ -248,4 +250,58 @@ def snooze_thread(
         f"Snooze: after commit and refresh, snoozed_thread_ids={current_session.snoozed_thread_ids}"
     )
 
+    return build_session_response(current_session, db)
+
+
+@router.post("/{thread_id}/unsnooze", response_model=SessionResponse)
+@limiter.limit("30/minute")
+def unsnooze_thread(
+    thread_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SessionResponse:
+    """Remove thread from snoozed list.
+
+    Args:
+        thread_id: The thread ID to remove from snoozed list.
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse containing the updated session with snoozed_thread_ids.
+
+    Raises:
+        HTTPException: If no active session exists.
+    """
+    current_session = (
+        db.execute(
+            select(SessionModel)
+            .where(SessionModel.user_id == current_user.id)
+            .where(SessionModel.ended_at.is_(None))
+            .order_by(SessionModel.started_at.desc())
+        )
+        .scalars()
+        .first()
+    )
+
+    if not current_session:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No active session",
+        )
+
+    snoozed_ids = (
+        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    )
+    if thread_id in snoozed_ids:
+        snoozed_ids.remove(thread_id)
+        current_session.snoozed_thread_ids = snoozed_ids
+        db.commit()
+
+    if clear_cache:
+        clear_cache()
+
+    db.refresh(current_session)
     return build_session_response(current_session, db)

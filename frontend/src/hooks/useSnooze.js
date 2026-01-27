@@ -11,7 +11,17 @@ export function useSnooze() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['session'] })
       queryClient.invalidateQueries({ queryKey: ['threads'] })
-      navigate('/roll')
+      navigate('/')
+    },
+  })
+}
+
+export function useUnsnooze() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (threadId) => snoozeApi.unsnooze(threadId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['session'] })
     },
   })
 }
