@@ -42,7 +42,7 @@
 - [x] 1.6 Create `useQueue.js` hook with useState+useEffect (no RQ)
 - [x] 1.7 Create `useUndo.js` hook with useState+useEffect (no RQ)
 - [x] 1.8 Create `useAnalytics.js` hook with useState+useEffect (no RQ)
-- [ ] 1.9 Update `main.jsx` to remove QueryClientProvider
+- [x] 1.9 Update `main.jsx` to remove QueryClientProvider
 - [ ] 1.10 Update `services/api.js` to remove QueryClient export
 - [ ] 1.11 Update `RollPage.jsx` to use new hooks
 - [ ] 1.12 Update `RatePage.jsx` to use new hooks
