@@ -7,9 +7,12 @@ export function useSnapshots(sessionId) {
   const [isError, setIsError] = useState(false)
 
   useEffect(() => {
+    let isActive = true
+
     if (!sessionId) {
       setData(null)
       setIsError(false)
+      setIsPending(false)
       return
     }
 
@@ -17,9 +20,19 @@ export function useSnapshots(sessionId) {
     setIsError(false)
 
     undoApi.listSnapshots(sessionId)
-      .then(setData)
-      .catch(() => setIsError(true))
-      .finally(() => setIsPending(false))
+      .then((data) => {
+        if (isActive) setData(data)
+      })
+      .catch(() => {
+        if (isActive) setIsError(true)
+      })
+      .finally(() => {
+        if (isActive) setIsPending(false)
+      })
+
+    return () => {
+      isActive = false
+    }
   }, [sessionId])
 
   return { data, isPending, isError }
