@@ -13,6 +13,7 @@ export function useMoveToPosition() {
     } catch (error) {
       setIsError(true)
       console.error('Failed to move thread to position:', error.response?.data?.detail || error.message)
+      throw error
     } finally {
       setIsPending(false)
     }
@@ -33,6 +34,7 @@ export function useMoveToFront() {
     } catch (error) {
       setIsError(true)
       console.error('Failed to move thread to front:', error.response?.data?.detail || error.message)
+      throw error
     } finally {
       setIsPending(false)
     }
@@ -53,6 +55,7 @@ export function useMoveToBack() {
     } catch (error) {
       setIsError(true)
       console.error('Failed to move thread to back:', error.response?.data?.detail || error.message)
+      throw error
     } finally {
       setIsPending(false)
     }
