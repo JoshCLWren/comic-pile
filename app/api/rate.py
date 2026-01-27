@@ -170,6 +170,7 @@ def rate_thread(
         thread.status = "completed"
         move_to_back(thread.id, current_user.id, db)
         current_session.ended_at = datetime.now()
+        current_session.snoozed_thread_ids = None
 
     if clear_cache:
         clear_cache()
