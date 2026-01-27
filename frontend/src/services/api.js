@@ -82,7 +82,9 @@ export const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
-      staleTime: 30000,
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: true,
     },
   },
   queryCache: new QueryCache({
