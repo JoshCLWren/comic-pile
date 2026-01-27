@@ -35,7 +35,7 @@
 
 #### Atomic Tasks (in order):
 - [x] 1.1 Create `useSession.js` hook with useState+useEffect (no RQ)
-- [ ] 1.2 Create `useRate.js` hook with useState+useEffect (no RQ)
+- [x] 1.2 Create `useRate.js` hook with useState+useEffect (no RQ)
 - [ ] 1.3 Create `useRoll.js` hook with useState+useEffect (no RQ)
 - [ ] 1.4 Create `useSnooze.js` hook with useState+useEffect (no RQ)
 - [ ] 1.5 Create `useThread.js` hook with useState+useEffect (no RQ)
