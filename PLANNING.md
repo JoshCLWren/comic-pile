@@ -92,3 +92,30 @@
 - ✅ Identified React Query as source of deployment cache issues
 - ✅ Confirmed backend logic is working (all rate/snooze/roll tests pass)
 - ✅ Fixed snoozed_thread_ids not cleared when session ends (app/api/rate.py:173)
+- ✅ Removed React Query from frontend (17 atomic tasks)
+- ✅ Updated all frontend tests to work with new hooks (47/47 passing)
+- ✅ Verified all critical backend tests passing
+- ✅ Verified E2E tests passing
+
+## Code Review Comments (PR Review Feedback)
+### Vetted and Confirmed Issues
+- ❌ **useAnalytics.js** - Return shape mismatch: Returns `{ data, isPending, isError }` but `AnalyticsPage.jsx` expects `{ data: metrics, isLoading, error }`
+  - **Fix needed**: Rename return object keys to match consumer expectations
+- ❌ **useQueue.js** - Mutations don't rethrow errors, so callers can't handle failures
+  - **Fix needed**: Add `throw error` after `setIsError(true)` in all catch blocks
+- ❌ **useSession.js** - params = {} causes infinite refetches; state not reset when id becomes falsy
+  - **Fix needed**: Add `EMPTY_PARAMS` constant, reset state in early return
+- ❌ **useThread.js** - When id becomes falsy, stale data remains in state
+  - **Fix needed**: Add `setData(null)`, `setIsError(false)` in early return
+- ❌ **useUndo.js** - Effect doesn't clear isPending on early return; no cancellation handling
+  - **Fix needed**: Add `setIsPending(false)` before return, add isActive flag
+- ❌ **test_dice_ladder_e2e.py** - Stale "BUG" comment in docstring; missing type annotations
+  - **Fix needed**: Remove stale comment, add type annotations (AsyncClient, Session)
+- ❌ **QueuePage.jsx** - Error handling in mutations fails (mutations swallow errors)
+  - **Fix needed**: Add `await` before `moveToPositionMutation.mutate()` calls
+
+### Not Issues (Confirmed)
+- ✅ **useRate.js** - Error rethrowing already implemented correctly
+- ✅ **useRoll.js** - Error rethrowing already implemented correctly
+- ✅ **main.jsx** - React Query properly removed, QueryClientProvider not needed
+- ✅ **test_dice_ladder_e2e.py** - Test correctly verifies bug fix
