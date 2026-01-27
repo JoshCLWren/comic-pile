@@ -141,4 +141,5 @@ export const tasksApi = {
 
 export const snoozeApi = {
   snooze: () => api.post('/snooze/'),
+  unsnooze: (threadId) => api.post(`/snooze/${threadId}/unsnooze`),
 }

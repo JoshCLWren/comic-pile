@@ -64,9 +64,7 @@ async def test_snooze_success(auth_client, db):
     # Verify snooze event was recorded
     snooze_event = (
         db.execute(
-            select(Event)
-            .where(Event.session_id == session.id)
-            .where(Event.type == "snooze")
+            select(Event).where(Event.session_id == session.id).where(Event.type == "snooze")
         )
         .scalars()
         .first()
@@ -341,3 +339,111 @@ async def test_snooze_steps_die_up_from_max(auth_client, db):
     data = response.json()
     # Die should stay at d20 (max)
     assert data["manual_die"] == 20
+
+
+@pytest.mark.asyncio
+async def test_snooze_multiple_different_threads(auth_client, db):
+    """Snoozing multiple different threads accumulates in list."""
+    from tests.conftest import get_or_create_user
+
+    user = get_or_create_user(db)
+
+    session = SessionModel(start_die=6, user_id=user.id)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+
+    thread1 = Thread(
+        title="Thread One",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    thread2 = Thread(
+        title="Thread Two",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    thread3 = Thread(
+        title="Thread Three",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+    )
+    db.add(thread1)
+    db.add(thread2)
+    db.add(thread3)
+    db.commit()
+    db.refresh(thread1)
+    db.refresh(thread2)
+    db.refresh(thread3)
+
+    # Roll and snooze thread1
+    event1 = Event(
+        type="roll",
+        die=6,
+        result=1,
+        selected_thread_id=thread1.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread1.id,
+    )
+    db.add(event1)
+    session.pending_thread_id = thread1.id
+    db.commit()
+
+    response1 = await auth_client.post("/api/snooze/")
+    assert response1.status_code == 200
+    data1 = response1.json()
+    assert thread1.id in data1["snoozed_thread_ids"]
+    assert len(data1["snoozed_thread_ids"]) == 1
+
+    # Roll and snooze thread2
+    event2 = Event(
+        type="roll",
+        die=6,
+        result=1,
+        selected_thread_id=thread2.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread2.id,
+    )
+    db.add(event2)
+    session.pending_thread_id = thread2.id
+    db.commit()
+
+    response2 = await auth_client.post("/api/snooze/")
+    assert response2.status_code == 200
+    data2 = response2.json()
+    assert thread1.id in data2["snoozed_thread_ids"]
+    assert thread2.id in data2["snoozed_thread_ids"]
+    assert len(data2["snoozed_thread_ids"]) == 2
+
+    # Roll and snooze thread3
+    event3 = Event(
+        type="roll",
+        die=6,
+        result=1,
+        selected_thread_id=thread3.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread3.id,
+    )
+    db.add(event3)
+    session.pending_thread_id = thread3.id
+    db.commit()
+
+    response3 = await auth_client.post("/api/snooze/")
+    assert response3.status_code == 200
+    data3 = response3.json()
+    assert thread1.id in data3["snoozed_thread_ids"]
+    assert thread2.id in data3["snoozed_thread_ids"]
+    assert thread3.id in data3["snoozed_thread_ids"]
+    assert len(data3["snoozed_thread_ids"]) == 3

@@ -7,6 +7,7 @@ import { DICE_LADDER } from '../components/diceLadder'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
+import { useUnsnooze } from '../hooks/useSnooze'
 
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
@@ -31,6 +32,7 @@ export default function RollPage() {
   const clearManualDieMutation = useClearManualDie()
   const rollMutation = useRoll()
   const overrideMutation = useOverrideRoll()
+  const unsnoozeMutation = useUnsnooze()
 
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
 
@@ -334,17 +336,22 @@ export default function RollPage() {
               {snoozedExpanded && (
                 <div className="mt-2 space-y-1">
                   {session.snoozed_threads.map((thread) => (
-                    <button
+                    <div
                       key={thread.id}
-                      type="button"
-                      onClick={() => {
-                        setOverrideThreadId(String(thread.id))
-                        setIsOverrideOpen(true)
-                      }}
-                      className="w-full px-4 py-2 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left"
+                      className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
                     >
-                      <p className="text-sm text-slate-400 truncate">{thread.title}</p>
-                    </button>
+                      <p className="flex-1 text-sm text-slate-400 truncate">{thread.title}</p>
+                      <button
+                        type="button"
+                        onClick={() => unsnoozeMutation.mutate(thread.id)}
+                        disabled={unsnoozeMutation.isPending}
+                        className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                        title="Unsnooze this comic"
+                        aria-label="Unsnooze this comic"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
