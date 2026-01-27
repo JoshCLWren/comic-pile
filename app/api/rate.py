@@ -18,6 +18,7 @@ from app.schemas import RateRequest, ThreadResponse
 from app.api.thread import thread_to_response
 from comic_pile.dice_ladder import step_down, step_up
 from comic_pile.queue import move_to_back, move_to_front
+from comic_pile.session import get_current_die
 
 router = APIRouter()
 
@@ -130,20 +131,7 @@ def rate_thread(
             detail=f"Thread {last_roll_event.selected_thread_id} not found",
         )
 
-    current_die = current_session.start_die
-    last_rate_event = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == current_session_id)
-            .where(Event.type == "rate")
-            .order_by(Event.timestamp.desc())
-        )
-        .scalars()
-        .first()
-    )
-
-    if last_rate_event and last_rate_event.die_after:
-        current_die = last_rate_event.die_after
+    current_die = get_current_die(current_session_id, db)
 
     rating_min, rating_max, rating_threshold = _get_rating_limits()
 
@@ -161,8 +149,6 @@ def rate_thread(
         new_die = step_down(current_die)
     else:
         new_die = step_up(current_die)
-
-    current_session.manual_die = new_die
 
     event = Event(
         type="rate",
