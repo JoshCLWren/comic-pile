@@ -110,8 +110,10 @@
   - **Fix**: Added `setData(null)`, `setIsError(false)`, `setIsPending(false)` in early return
   - **Commit**: ed4863c
   - **Status**: COMPLETED
-- ❌ **useUndo.js** - Effect doesn't clear isPending on early return; no cancellation handling
-  - **Fix needed**: Add `setIsPending(false)` before return, add isActive flag
+- ✅ **useUndo.js** - Effect doesn't clear isPending on early return; no cancellation handling
+   - **Fix**: Added `setIsPending(false)` before return, added isActive flag with cleanup
+   - **Commit**: e19b4d5
+   - **Status**: COMPLETED
 - ❌ **test_dice_ladder_e2e.py** - Stale "BUG" comment in docstring; missing type annotations
   - **Fix needed**: Remove stale comment, add type annotations (AsyncClient, Session)
 - ❌ **QueuePage.jsx** - Error handling in mutations fails (mutations swallow errors)
