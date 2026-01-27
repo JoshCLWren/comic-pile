@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { sessionApi } from '../services/api'
 
+const EMPTY_PARAMS = Object.freeze({})
+
 export function useSession() {
   const [data, setData] = useState(null)
   const [isPending, setIsPending] = useState(true)
@@ -29,18 +31,20 @@ export function useSession() {
   return { data, isPending, isError, error, refetch: fetchSession }
 }
 
-export function useSessions(params = {}) {
+export function useSessions(params = EMPTY_PARAMS) {
   const [data, setData] = useState(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState(null)
+
+  const effectiveParams = params ?? EMPTY_PARAMS
 
   const fetchSessions = useCallback(async () => {
     setIsPending(true)
     setIsError(false)
     setError(null)
     try {
-      const result = await sessionApi.list(params)
+      const result = await sessionApi.list(effectiveParams)
       setData(result)
     } catch (err) {
       setIsError(true)
@@ -48,7 +52,7 @@ export function useSessions(params = {}) {
     } finally {
       setIsPending(false)
     }
-  }, [params])
+  }, [effectiveParams])
 
   useEffect(() => {
     fetchSessions()
