@@ -170,7 +170,6 @@ async def test_dice_ladder_snooze_goes_up(auth_api_client, db):
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="Bug: snoozed_thread_ids not cleared when session ends")
 @pytest.mark.integration
 async def test_finish_session_clears_snoozed(auth_api_client, db):
     """Finishing a session should clear snoozed_thread_ids."""
