@@ -116,8 +116,9 @@
    - **Status**: COMPLETED
 - ❌ **test_dice_ladder_e2e.py** - Stale "BUG" comment in docstring; missing type annotations
   - **Fix needed**: Remove stale comment, add type annotations (AsyncClient, Session)
-- ❌ **QueuePage.jsx** - Error handling in mutations fails (mutations swallow errors)
-  - **Fix needed**: Add `await` before `moveToPositionMutation.mutate()` calls
+- ✅ **QueuePage.jsx** - Error handling in mutations fails (mutations swallow errors)
+   - **Fix**: Added `await` before `moveToPositionMutation.mutate()` call, added try/catch error handling with alert on failure (handleRepositionConfirm, lines 174-189)
+   - **Status**: COMPLETED
 
 ### Not Issues (Confirmed)
 - ✅ **useRate.js** - Error rethrowing already implemented correctly
