@@ -4,12 +4,14 @@
 
 ### 1. Finishing session doesn't clear snoozed_thread_ids
 - **Severity**: High
-- **Location**: `app/api/rate.py`
+- **Location**: `app/api/ate.py`
 - **Test**: `tests_e2e/test_dice_ladder_e2e.py::test_finish_session_clears_snoozed` (xfail)
 - **Issue**: When a session ends via `finish_session=True` in the rate endpoint, `session.snoozed_thread_ids` is never cleared. The snoozed thread list persists to the next session.
 - **Expected**: `session.snoozed_thread_ids` should be `None` or `[]` after session ends
 - **Actual**: `session.snoozed_thread_ids` retains snoozed thread IDs
 - **Fix needed**: Clear `snoozed_thread_ids` in rate endpoint when `finish_session` is true
+- **Status**: QUEUED
+
 
 ## Confirmed Working (No Bugs)
 
@@ -30,29 +32,37 @@
   - Shotgun cache invalidation
   - `staleTime: 30000` never actually used
 - **Action**: Replace `useQuery`/`useMutation` with simple `useEffect` + `useState` hooks
-- **Hooks to refactor**:
-  - `frontend/src/hooks/useSession.js`
-  - `frontend/src/hooks/useRoll.js`
-  - `frontend/src/hooks/useRate.js`
-  - `frontend/src/hooks/useSnooze.js`
-  - `frontend/src/hooks/useThread.js`
-  - `frontend/src/hooks/useUndo.js`
-  - `frontend/src/hooks/useQueue.js`
-  - `frontend/src/hooks/useAnalytics.js`
-- **Files to update**:
-  - `frontend/src/services/api.js` - Remove QueryClient, revert to plain axios
-  - `frontend/src/main.jsx` - Remove QueryClientProvider
-  - All pages that use custom hooks
+
+#### Atomic Tasks (in order):
+- [ ] 1.1 Create `useSession.js` hook with useState+useEffect (no RQ)
+- [ ] 1.2 Create `useRate.js` hook with useState+useEffect (no RQ)
+- [ ] 1.3 Create `useRoll.js` hook with useState+useEffect (no RQ)
+- [ ] 1.4 Create `useSnooze.js` hook with useState+useEffect (no RQ)
+- [ ] 1.5 Create `useThread.js` hook with useState+useEffect (no RQ)
+- [ ] 1.6 Create `useQueue.js` hook with useState+useEffect (no RQ)
+- [ ] 1.7 Create `useUndo.js` hook with useState+useEffect (no RQ)
+- [ ] 1.8 Create `useAnalytics.js` hook with useState+useEffect (no RQ)
+- [ ] 1.9 Update `main.jsx` to remove QueryClientProvider
+- [ ] 1.10 Update `services/api.js` to remove QueryClient export
+- [ ] 1.11 Update `RollPage.jsx` to use new hooks
+- [ ] 1.12 Update `RatePage.jsx` to use new hooks
+- [ ] 1.13 Update `SessionPage.jsx` to use new hooks
+- [ ] 1.14 Update `QueuePage.jsx` to use new hooks
+- [ ] 1.15 Update other pages using custom hooks
+- [ ] 1.16 Run frontend linter and fix any issues
+- [ ] 1.17 Update frontend unit tests after refactoring
 
 ### 2. Session State Duplication
 - **Location**: `frontend/src/pages/RatePage.jsx`, `frontend/src/pages/RollPage.jsx`
 - **Issue**: Managing same data in React Query state AND local useState
 - **Fix**: After React Query removal, use single source of truth with useState
+- **Status**: BLOCKED until task 1.1-1.12 complete
 
 ### 3. Remove Excessive Polling
 - **Location**: `frontend/src/hooks/useSession.js` line 8
 - **Issue**: `refetchInterval: 5000` polls API every 5 seconds
 - **Fix**: Remove polling, rely on manual refetches or navigation-based fetches
+- **Status**: BLOCKED until task 1.1 complete (new hook won't have polling)
 
 ## Notes from Session
 
@@ -66,6 +76,7 @@
 - **Current**: Tests prove dice ladder behavior works correctly
 - **Missing**: Frontend unit tests after React Query removal
 - **Action**: Update frontend tests in `frontend/src/test/` after refactoring
+- **Status**: BLOCKED until task 1.17 complete
 
 ## Completed Work
 - ✅ Created E2E tests for dice ladder behavior (tests_e2e/test_dice_ladder_e2e.py)
