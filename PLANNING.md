@@ -1,16 +1,19 @@
 # Comic Pile - Bug Tracking & Planning
 
 ## Active Bugs
+**NONE - All known bugs have been fixed!**
 
-### 1. Finishing session doesn't clear snoozed_thread_ids
+## Previously Completed Bug Fixes
+
+### 1. Finishing session doesn't clear snoozed_thread_ids (COMPLETED)
 - **Severity**: High
 - **Location**: `app/api/rate.py`
 - **Test**: `tests_e2e/test_dice_ladder_e2e.py::test_finish_session_clears_snoozed`
-- **Issue**: When a session ends via `finish_session=True` in the rate endpoint, `session.snoozed_thread_ids` is never cleared. The snoozed thread list persists to the next session.
-- **Expected**: `session.snoozed_thread_ids` should be `None` or `[]` after session ends
-- **Actual**: `session.snoozed_thread_ids` retains snoozed thread IDs
-- **Fix needed**: Clear `snoozed_thread_ids` in rate endpoint when `finish_session` is true
+- **Issue**: When a session ends via `finish_session=True` in rate endpoint, `session.snoozed_thread_ids` was never cleared.
+- **Fix**: Added `current_session.snoozed_thread_ids = None` when session ends (app/api/rate.py:173)
+- **Commit**: `a313a75 Fix: Clear snoozed_thread_ids when session ends`
 - **Status**: COMPLETED
+
 
 
 ## Confirmed Working (No Bugs)
