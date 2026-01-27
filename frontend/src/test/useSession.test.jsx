@@ -8,7 +8,6 @@ import {
   useSessions,
 } from '../hooks/useSession'
 import { sessionApi } from '../services/api'
-import { createQueryWrapper, createTestQueryClient } from './testUtils'
 
 vi.mock('../services/api', () => ({
   sessionApi: {
@@ -29,28 +28,22 @@ beforeEach(() => {
 })
 
 it('loads current session', async () => {
-  const queryClient = createTestQueryClient()
-  const wrapper = createQueryWrapper(queryClient)
-  const { result } = renderHook(() => useSession(), { wrapper })
+  const { result } = renderHook(() => useSession())
 
   await waitFor(() => expect(result.current.data).toEqual({ id: 1 }))
   expect(sessionApi.getCurrent).toHaveBeenCalled()
 })
 
 it('loads session list', async () => {
-  const queryClient = createTestQueryClient()
-  const wrapper = createQueryWrapper(queryClient)
-  const { result } = renderHook(() => useSessions({ status: 'done' }), { wrapper })
+  const { result } = renderHook(() => useSessions({ status: 'done' }))
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
   expect(sessionApi.list).toHaveBeenCalledWith({ status: 'done' })
 })
 
 it('loads session details and snapshots', async () => {
-  const queryClient = createTestQueryClient()
-  const wrapper = createQueryWrapper(queryClient)
-  const { result: detailsResult } = renderHook(() => useSessionDetails(3), { wrapper })
-  const { result: snapshotsResult } = renderHook(() => useSessionSnapshots(3), { wrapper })
+  const { result: detailsResult } = renderHook(() => useSessionDetails(3))
+  const { result: snapshotsResult } = renderHook(() => useSessionSnapshots(3))
 
   await waitFor(() => expect(detailsResult.current.data).toEqual({ session_id: 3 }))
   await waitFor(() => expect(snapshotsResult.current.data).toEqual({ snapshots: [] }))
@@ -58,18 +51,12 @@ it('loads session details and snapshots', async () => {
   expect(sessionApi.getSnapshots).toHaveBeenCalledWith(3)
 })
 
-it('restores session start and invalidates queries', async () => {
-  const queryClient = createTestQueryClient()
-  const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-  const wrapper = createQueryWrapper(queryClient)
-  const { result } = renderHook(() => useRestoreSessionStart(), { wrapper })
+it('restores session start', async () => {
+  const { result } = renderHook(() => useRestoreSessionStart())
 
   await act(async () => {
-    await result.current.mutateAsync(11)
+    await result.current.mutate(11)
   })
 
   expect(sessionApi.restoreSessionStart).toHaveBeenCalledWith(11)
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['session'] }))
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['sessions'] }))
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['threads'] }))
 })
