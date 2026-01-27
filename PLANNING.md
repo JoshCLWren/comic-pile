@@ -44,7 +44,7 @@
 - [x] 1.8 Create `useAnalytics.js` hook with useState+useEffect (no RQ)
 - [x] 1.9 Update `main.jsx` to remove QueryClientProvider
 - [x] 1.10 Update `services/api.js` to remove QueryClient export
-- [ ] 1.11 Update `RollPage.jsx` to use new hooks
+- [x] 1.11 Update `RollPage.jsx` to use new hooks
 - [ ] 1.12 Update `RatePage.jsx` to use new hooks
 - [ ] 1.13 Update `SessionPage.jsx` to use new hooks
 - [ ] 1.14 Update `QueuePage.jsx` to use new hooks
