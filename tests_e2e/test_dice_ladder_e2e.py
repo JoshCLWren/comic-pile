@@ -1,7 +1,9 @@
 """E2E integration tests for dice ladder behavior through API."""
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.models import Event, Thread
 from app.models import Session as SessionModel
@@ -9,7 +11,7 @@ from app.models import Session as SessionModel
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_dice_ladder_rating_goes_down(auth_api_client, db):
+async def test_dice_ladder_rating_goes_down(auth_api_client: AsyncClient, db: Session) -> None:
     """Rating 4+ causes session die to go DOWN (d10 → d8)."""
     from app.models import User
 
@@ -63,7 +65,7 @@ async def test_dice_ladder_rating_goes_down(auth_api_client, db):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_dice_ladder_rating_goes_up(auth_api_client, db):
+async def test_dice_ladder_rating_goes_up(auth_api_client: AsyncClient, db: Session) -> None:
     """Rating below 4 causes session die to go UP (d10 → d12)."""
     from app.models import User
 
@@ -115,7 +117,7 @@ async def test_dice_ladder_rating_goes_up(auth_api_client, db):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_dice_ladder_snooze_goes_up(auth_api_client, db):
+async def test_dice_ladder_snooze_goes_up(auth_api_client: AsyncClient, db: Session) -> None:
     """Snoozing causes session die to go UP (d6 → d8)."""
     from app.models import User
 
@@ -171,8 +173,8 @@ async def test_dice_ladder_snooze_goes_up(auth_api_client, db):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_finish_session_clears_snoozed(auth_api_client, db):
-    """Finishing a session should clear snoozed_thread_ids."""
+async def test_finish_session_clears_snoozed(auth_api_client: AsyncClient, db: Session) -> None:
+    """Verify that finishing a session clears snoozed_thread_ids."""
     from app.models import User
 
     user = db.execute(select(User).where(User.username == "test_user@example.com")).scalar_one()
@@ -229,12 +231,5 @@ async def test_finish_session_clears_snoozed(auth_api_client, db):
     assert session.ended_at is not None
 
     # Verify snoozed_thread_ids was cleared
-    # BUG: This currently FAILS because snoozed_thread_ids is NOT cleared
-    # when session ends. Test documents this expected vs actual behavior.
-    # Expected: session.snoozed_thread_ids should be None or []
-    # Actual: session.snoozed_thread_ids still contains [thread_id]
     snoozed_count = len(session.snoozed_thread_ids) if session.snoozed_thread_ids else 0
-    # This will fail, proving the bug exists
-    assert snoozed_count == 0, (
-        f"BUG: snoozed_thread_ids not cleared when session ends, found {session.snoozed_thread_ids}"
-    )
+    assert snoozed_count == 0
