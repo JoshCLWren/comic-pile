@@ -20,7 +20,7 @@ const DEFAULT_CREATE_STATE = {
 }
 
 export default function QueuePage() {
-  const { data: threads, isLoading } = useThreads()
+  const { data: threads, isPending } = useThreads()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const deleteMutation = useDeleteThread()
@@ -91,45 +91,41 @@ export default function QueuePage() {
     setDragOverThreadId(null)
   }
 
-  const handleCreateSubmit = (event) => {
+  const handleCreateSubmit = async (event) => {
     event.preventDefault()
 
-    createMutation.mutate(
-      {
+    try {
+      await createMutation.mutate({
         title: createForm.title,
         format: createForm.format,
         issues_remaining: Number(createForm.issuesRemaining),
         notes: createForm.notes || null,
-      },
-      {
-        onSuccess: () => {
-          setCreateForm(DEFAULT_CREATE_STATE)
-          setIsCreateOpen(false)
-        },
-      }
-    )
+      })
+      setCreateForm(DEFAULT_CREATE_STATE)
+      setIsCreateOpen(false)
+    } catch {
+      console.error('Failed to create thread')
+    }
   }
 
-  const handleEditSubmit = (event) => {
+  const handleEditSubmit = async (event) => {
     event.preventDefault()
     if (!editingThread) return
 
-    updateMutation.mutate(
-      {
+    try {
+      await updateMutation.mutate({
         id: editingThread.id,
         data: {
           title: editForm.title,
           format: editForm.format,
           notes: editForm.notes || null,
         },
-      },
-      {
-        onSuccess: () => {
-          setEditingThread(null)
-          setIsEditOpen(false)
-        },
-      }
-    )
+      })
+      setEditingThread(null)
+      setIsEditOpen(false)
+    } catch {
+      console.error('Failed to update thread')
+    }
   }
 
   const openEditModal = (thread) => {
@@ -149,23 +145,21 @@ export default function QueuePage() {
     setIsReactivateOpen(true)
   }
 
-  const handleReactivateSubmit = (event) => {
+  const handleReactivateSubmit = async (event) => {
     event.preventDefault()
     if (!reactivateThreadId) return
 
-    reactivateMutation.mutate(
-      {
+    try {
+      await reactivateMutation.mutate({
         thread_id: Number(reactivateThreadId),
         issues_to_add: Number(issuesToAdd),
-      },
-      {
-        onSuccess: () => {
-          setIsReactivateOpen(false)
-          setReactivateThreadId('')
-          setIssuesToAdd(1)
-        },
-      }
-    )
+      })
+      setIsReactivateOpen(false)
+      setReactivateThreadId('')
+      setIssuesToAdd(1)
+    } catch {
+      console.error('Failed to reactivate thread')
+    }
   }
 
   const openCreateModal = () => {
@@ -177,7 +171,7 @@ export default function QueuePage() {
     setRepositioningThread(thread)
   }
 
-  const handleRepositionConfirm = (targetPosition) => {
+  const handleRepositionConfirm = async (targetPosition) => {
     if (!repositioningThread) return
 
     if (targetPosition < 1 || targetPosition > activeThreads.length) {
@@ -185,22 +179,16 @@ export default function QueuePage() {
       return;
     }
 
-    moveToPositionMutation.mutate(
-        { id: repositioningThread.id, position: targetPosition },
-        {
-            onSuccess: () => {
-                setRepositioningThread(null);
-            },
-            onError: (error) => {
-                console.error('Failed to reposition thread:', error);
-                setRepositioningThread(null);
-                alert('Failed to reposition thread. Please try again.');
-            }
-        }
-    )
+    try {
+      await moveToPositionMutation.mutate({ id: repositioningThread.id, position: targetPosition })
+      setRepositioningThread(null)
+    } catch {
+      setRepositioningThread(null)
+      alert('Failed to reposition thread. Please try again.')
+    }
   }
 
-  if (isLoading) {
+  if (isPending) {
     return <LoadingSpinner fullScreen />
   }
 
