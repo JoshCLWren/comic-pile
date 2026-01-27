@@ -4,13 +4,13 @@
 
 ### 1. Finishing session doesn't clear snoozed_thread_ids
 - **Severity**: High
-- **Location**: `app/api/ate.py`
-- **Test**: `tests_e2e/test_dice_ladder_e2e.py::test_finish_session_clears_snoozed` (xfail)
+- **Location**: `app/api/rate.py`
+- **Test**: `tests_e2e/test_dice_ladder_e2e.py::test_finish_session_clears_snoozed`
 - **Issue**: When a session ends via `finish_session=True` in the rate endpoint, `session.snoozed_thread_ids` is never cleared. The snoozed thread list persists to the next session.
 - **Expected**: `session.snoozed_thread_ids` should be `None` or `[]` after session ends
 - **Actual**: `session.snoozed_thread_ids` retains snoozed thread IDs
 - **Fix needed**: Clear `snoozed_thread_ids` in rate endpoint when `finish_session` is true
-- **Status**: QUEUED
+- **Status**: COMPLETED
 
 
 ## Confirmed Working (No Bugs)
@@ -83,3 +83,4 @@
 - ✅ Created test for session bug (tests_e2e/test_dice_ladder_e2e.py::test_finish_session_clears_snoozed)
 - ✅ Identified React Query as source of deployment cache issues
 - ✅ Confirmed backend logic is working (all rate/snooze/roll tests pass)
+- ✅ Fixed snoozed_thread_ids not cleared when session ends (app/api/rate.py:173)
