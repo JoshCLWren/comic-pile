@@ -114,8 +114,10 @@
    - **Fix**: Added `setIsPending(false)` before return, added isActive flag with cleanup
    - **Commit**: e19b4d5
    - **Status**: COMPLETED
-- ❌ **test_dice_ladder_e2e.py** - Stale "BUG" comment in docstring; missing type annotations
-  - **Fix needed**: Remove stale comment, add type annotations (AsyncClient, Session)
+- ✅ **test_dice_ladder_e2e.py** - Stale "BUG" comment in docstring; missing type annotations
+   - **Fix**: Removed stale comment, added type annotations (AsyncClient, Session)
+   - **Commit**: 9faa589
+   - **Status**: COMPLETED
 - ✅ **QueuePage.jsx** - Error handling in mutations fails (mutations swallow errors)
    - **Fix**: Added `await` before `moveToPositionMutation.mutate()` call, added try/catch error handling with alert on failure (handleRepositionConfirm, lines 174-189)
    - **Status**: COMPLETED
@@ -125,3 +127,7 @@
 - ✅ **useRoll.js** - Error rethrowing already implemented correctly
 - ✅ **main.jsx** - React Query properly removed, QueryClientProvider not needed
 - ✅ **test_dice_ladder_e2e.py** - Test correctly verifies bug fix
+
+### Code Review Comments - DONE
+- **Status**: All items completed (7/7)
+- **Last commit**: 9faa589 - Fix: test_dice_ladder_e2e.py - Remove stale comment and add type annotations
