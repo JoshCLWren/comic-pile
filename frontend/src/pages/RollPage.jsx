@@ -347,6 +347,7 @@ export default function RollPage() {
                         disabled={unsnoozeMutation.isPending}
                         className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
                         title="Unsnooze this comic"
+                        aria-label="Unsnooze this comic"
                       >
                         ✕
                       </button>

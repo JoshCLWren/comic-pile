@@ -275,6 +275,7 @@ def unsnooze_thread(
     Raises:
         HTTPException: If no active session exists.
     """
+    _ = request
     current_session = (
         db.execute(
             select(SessionModel)
