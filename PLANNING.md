@@ -78,12 +78,13 @@
 - **User observation**: Session appeared to cache incorrectly between deployments
 - **Root cause**: React Query cache persistence across deployments
 - **Current mitigation**: Set `staleTime: 0` and `gcTime: 0` in frontend/src/services/api.js
-- **Better fix**: Remove React Query entirely (see refactoring section above)
+- **Better fix**: ✅ COMPLETED - Remove React Query entirely (see refactoring section above)
 
 ### Test Coverage
-- **Current**: Tests prove dice ladder behavior works correctly
-- **Frontend unit tests**: Updated after React Query removal (47/47 passing)
-- **Status**: All frontend tests updated and passing
+- **Backend tests**: 30/30 critical tests passing (rate, snooze, roll)
+- **Frontend unit tests**: 47/47 passing after React Query removal
+- **E2E tests**: 4/4 passing (dice ladder + snoozed clear bug)
+- **Status**: ✅ All tests verified and passing
 
 ## Completed Work
 - ✅ Created E2E tests for dice ladder behavior (tests_e2e/test_dice_ladder_e2e.py)
