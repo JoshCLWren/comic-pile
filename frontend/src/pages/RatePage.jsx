@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import { DICE_LADDER } from '../components/diceLadder'
-import { rateApi, sessionApi, threadsApi } from '../services/api'
-import { useSnooze } from '../hooks'
+import { useRate, useSession, useUpdateThread, useSnooze } from '../hooks'
 
 export default function RatePage() {
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
 
   const [rating, setRating] = useState(4.0)
@@ -23,29 +20,11 @@ export default function RatePage() {
   const [additionalIssues, setAdditionalIssues] = useState(1)
   const [pendingRating, setPendingRating] = useState(null)
 
-  const { data: session } = useQuery({
-    queryKey: ['session', 'current'],
-    queryFn: sessionApi.getCurrent,
-  })
+  const { data: session } = useSession()
 
-  const rateMutation = useMutation({
-    mutationFn: rateApi.rate,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-      navigate('/')
-    },
-    onError: (error) => {
-      setErrorMessage(error.response?.data?.detail || 'Failed to save rating')
-    },
-  })
+  const rateMutation = useRate()
 
-  const updateThreadMutation = useMutation({
-    mutationFn: ({ id, data }) => threadsApi.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-    },
-  })
+  const updateThreadMutation = useUpdateThread()
 
   const snoozeMutation = useSnooze()
 
@@ -136,7 +115,13 @@ export default function RatePage() {
       rating,
       issues_read: 1,
       finish_session: finishSession
-    });
+    })
+      .then(() => {
+        navigate('/');
+      })
+      .catch((error) => {
+        setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+      });
   }
 
   function handleCompleteThread() {
@@ -148,7 +133,13 @@ export default function RatePage() {
       rating: pendingRating,
       issues_read: 1,
       finish_session: true
-    });
+    })
+      .then(() => {
+        navigate('/');
+      })
+      .catch((error) => {
+        setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+      });
   }
 
   async function handleAddMoreIssues() {
@@ -182,7 +173,13 @@ export default function RatePage() {
       rating: pendingRating,
       issues_read: 1,
       finish_session: false
-    });
+    })
+      .then(() => {
+        navigate('/');
+      })
+      .catch((error) => {
+        setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+      });
   }
 
   function handleCloseModal() {
