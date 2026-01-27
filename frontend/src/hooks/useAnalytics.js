@@ -3,25 +3,25 @@ import { tasksApi } from '../services/api'
 
 export function useAnalytics() {
   const [data, setData] = useState(null)
-  const [isPending, setIsPending] = useState(true)
-  const [isError, setIsError] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function fetchMetrics() {
       try {
-        setIsPending(true)
-        setIsError(false)
+        setIsLoading(true)
+        setError(false)
         const metrics = await tasksApi.getMetrics()
         setData(metrics)
       } catch {
-        setIsError(true)
+        setError(true)
       } finally {
-        setIsPending(false)
+        setIsLoading(false)
       }
     }
 
     fetchMetrics()
   }, [])
 
-  return { data, isPending, isError }
+  return { data, isLoading, error }
 }
