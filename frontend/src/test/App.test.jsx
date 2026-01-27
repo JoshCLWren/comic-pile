@@ -1,5 +1,4 @@
 import { expect, test, vi, beforeEach, afterEach, describe } from 'vitest'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { useEffect } from 'react'
@@ -31,22 +30,12 @@ const TestAuthConsumer = ({ onAuth }) => {
 }
 
 const renderWithAuth = (initialEntry = '/') => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  })
-
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <TestAuthConsumer />
-          <AppRoutes />
-        </AuthProvider>
-      </QueryClientProvider>
+      <AuthProvider>
+        <TestAuthConsumer />
+        <AppRoutes />
+      </AuthProvider>
     </MemoryRouter>
   )
 }

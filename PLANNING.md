@@ -48,21 +48,26 @@
    - [x] 1.12 Update `RatePage.jsx` to use new hooks
    - [x] 1.13 Update `SessionPage.jsx` to use new hooks
  - [x] 1.14 Update `QueuePage.jsx` to use new hooks
-- [ ] 1.15 Update other pages using custom hooks
-- [ ] 1.16 Run frontend linter and fix any issues
-- [ ] 1.17 Update frontend unit tests after refactoring
+ - [x] 1.15 Update other pages using custom hooks
+ - [x] 1.16 Run frontend linter and fix any issues
+ - [x] 1.17 Update frontend unit tests after refactoring
 
-### 2. Session State Duplication
+### 1. Remove React Query - COMPLETED
+- **Status**: COMPLETED
+- **Completed by**: Task 1.17 (Update frontend unit tests after refactoring)
+- **Summary**: All React Query dependencies removed, hooks refactored to use useState+useEffect, all tests passing (47/47)
+
+### 2. Session State Duplication - COMPLETED
 - **Location**: `frontend/src/pages/RatePage.jsx`, `frontend/src/pages/RollPage.jsx`
 - **Issue**: Managing same data in React Query state AND local useState
 - **Fix**: After React Query removal, use single source of truth with useState
-- **Status**: BLOCKED until task 1.1-1.12 complete
+- **Status**: COMPLETED (resolved by React Query removal)
 
-### 3. Remove Excessive Polling
+### 3. Remove Excessive Polling - COMPLETED
 - **Location**: `frontend/src/hooks/useSession.js` line 8
 - **Issue**: `refetchInterval: 5000` polls API every 5 seconds
 - **Fix**: Remove polling, rely on manual refetches or navigation-based fetches
-- **Status**: BLOCKED until task 1.1 complete (new hook won't have polling)
+- **Status**: COMPLETED (resolved by React Query removal)
 
 ## Notes from Session
 
@@ -74,9 +79,8 @@
 
 ### Test Coverage
 - **Current**: Tests prove dice ladder behavior works correctly
-- **Missing**: Frontend unit tests after React Query removal
-- **Action**: Update frontend tests in `frontend/src/test/` after refactoring
-- **Status**: BLOCKED until task 1.17 complete
+- **Frontend unit tests**: Updated after React Query removal (47/47 passing)
+- **Status**: All frontend tests updated and passing
 
 ## Completed Work
 - ✅ Created E2E tests for dice ladder behavior (tests_e2e/test_dice_ladder_e2e.py)
