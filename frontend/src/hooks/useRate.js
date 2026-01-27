@@ -1,14 +1,22 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { rateApi } from '../services/api'
 
 export function useRate() {
-  const queryClient = useQueryClient()
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
 
-  return useMutation({
-    mutationFn: (data) => rateApi.rate(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-    },
-  })
+  const mutate = async (data) => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      await rateApi.rate(data)
+    } catch (error) {
+      setIsError(true)
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  return { mutate, isPending, isError }
 }
