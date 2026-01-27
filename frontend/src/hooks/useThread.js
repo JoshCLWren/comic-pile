@@ -45,6 +45,8 @@ export function useThread(id) {
 
   useEffect(() => {
     if (!id) {
+      setData(null)
+      setIsError(false)
       setIsPending(false)
       return
     }
