@@ -106,8 +106,10 @@
 - ✅ **useSession.js** - params = {} causes infinite refetches; state not reset when id becomes falsy
    - **Fix**: Added `EMPTY_PARAMS` constant, reset state in early return
    - **Commit**: fb30e59
-- ❌ **useThread.js** - When id becomes falsy, stale data remains in state
-  - **Fix needed**: Add `setData(null)`, `setIsError(false)` in early return
+- ✅ **useThread.js** - When id becomes falsy, stale data remains in state
+  - **Fix**: Added `setData(null)`, `setIsError(false)`, `setIsPending(false)` in early return
+  - **Commit**: ed4863c
+  - **Status**: COMPLETED
 - ❌ **useUndo.js** - Effect doesn't clear isPending on early return; no cancellation handling
   - **Fix needed**: Add `setIsPending(false)` before return, add isActive flag
 - ❌ **test_dice_ladder_e2e.py** - Stale "BUG" comment in docstring; missing type annotations
