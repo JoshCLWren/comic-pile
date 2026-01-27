@@ -101,8 +101,8 @@
 ### Vetted and Confirmed Issues
 - ✅ **useAnalytics.js** - Return shape mismatch: Returns `{ data, isPending, isError }` but `AnalyticsPage.jsx` expects `{ data: metrics, isLoading, error }`
   - **Fix**: Renamed return object keys to match consumer expectations (COMPLETED)
-- ❌ **useQueue.js** - Mutations don't rethrow errors, so callers can't handle failures
-  - **Fix needed**: Add `throw error` after `setIsError(true)` in all catch blocks
+- ✅ **useQueue.js** - Mutations don't rethrow errors, so callers can't handle failures
+   - **Fix**: Added `throw error` after `setIsError(true)` in all catch blocks (COMPLETED)
 - ❌ **useSession.js** - params = {} causes infinite refetches; state not reset when id becomes falsy
   - **Fix needed**: Add `EMPTY_PARAMS` constant, reset state in early return
 - ❌ **useThread.js** - When id becomes falsy, stale data remains in state
