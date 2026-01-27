@@ -280,8 +280,9 @@ async def test_rate_no_active_thread(auth_client, db):
 
 @pytest.mark.asyncio
 async def test_rate_updates_manual_die(auth_client, db):
-    """Rating updates session manual_die to die_after value."""
+    """Rating creates rate event with die_after value."""
     from tests.conftest import get_or_create_user
+    from comic_pile.session import get_current_die
 
     user = get_or_create_user(db)
 
@@ -318,13 +319,32 @@ async def test_rate_updates_manual_die(auth_client, db):
     assert response.status_code == 200
 
     db.refresh(session)
-    assert session.manual_die == 8
+    manual_die = session.manual_die
+    assert manual_die == 20
+
+    rate_event = (
+        db.execute(
+            select(Event)
+            .where(Event.session_id == session.id)
+            .where(Event.type == "rate")
+            .order_by(Event.timestamp.desc())
+        )
+        .scalars()
+        .first()
+    )
+    assert rate_event is not None
+    assert rate_event.die == 20
+    assert rate_event.die_after == 12
+
+    current_die = get_current_die(session.id, db)
+    assert current_die == 12
 
 
 @pytest.mark.asyncio
 async def test_rate_low_rating_updates_manual_die(auth_client, db):
-    """Low rating steps die up and updates manual_die."""
+    """Low rating steps die up and records die_after in rate event."""
     from tests.conftest import get_or_create_user
+    from comic_pile.session import get_current_die
 
     user = get_or_create_user(db)
 
@@ -361,7 +381,25 @@ async def test_rate_low_rating_updates_manual_die(auth_client, db):
     assert response.status_code == 200
 
     db.refresh(session)
-    assert session.manual_die == 8
+    manual_die = session.manual_die
+    assert manual_die == 6
+
+    rate_event = (
+        db.execute(
+            select(Event)
+            .where(Event.session_id == session.id)
+            .where(Event.type == "rate")
+            .order_by(Event.timestamp.desc())
+        )
+        .scalars()
+        .first()
+    )
+    assert rate_event is not None
+    assert rate_event.die == 6
+    assert rate_event.die_after == 8
+
+    current_die = get_current_die(session.id, db)
+    assert current_die == 8
 
 
 @pytest.mark.asyncio

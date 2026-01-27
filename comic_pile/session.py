@@ -186,9 +186,6 @@ def get_current_die(session_id: int, db: Session) -> int:
     start_die = _start_die()
     session = db.get(SessionModel, session_id)
 
-    if session and session.manual_die:
-        return session.manual_die
-
     last_rate_event = (
         db.execute(
             select(Event)
@@ -204,5 +201,8 @@ def get_current_die(session_id: int, db: Session) -> int:
     if last_rate_event:
         die_after = last_rate_event.die_after
         return die_after if die_after is not None else start_die
+
+    if session and session.manual_die:
+        return session.manual_die
 
     return session.start_die if session else start_die
