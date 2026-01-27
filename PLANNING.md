@@ -34,7 +34,7 @@
 - **Action**: Replace `useQuery`/`useMutation` with simple `useEffect` + `useState` hooks
 
 #### Atomic Tasks (in order):
-- [ ] 1.1 Create `useSession.js` hook with useState+useEffect (no RQ)
+- [x] 1.1 Create `useSession.js` hook with useState+useEffect (no RQ)
 - [ ] 1.2 Create `useRate.js` hook with useState+useEffect (no RQ)
 - [ ] 1.3 Create `useRoll.js` hook with useState+useEffect (no RQ)
 - [ ] 1.4 Create `useSnooze.js` hook with useState+useEffect (no RQ)
