@@ -42,12 +42,12 @@
 - [x] 1.6 Create `useQueue.js` hook with useState+useEffect (no RQ)
 - [x] 1.7 Create `useUndo.js` hook with useState+useEffect (no RQ)
 - [x] 1.8 Create `useAnalytics.js` hook with useState+useEffect (no RQ)
-- [x] 1.9 Update `main.jsx` to remove QueryClientProvider
-- [x] 1.10 Update `services/api.js` to remove QueryClient export
- - [x] 1.11 Update `RollPage.jsx` to use new hooks
- - [x] 1.12 Update `RatePage.jsx` to use new hooks
- - [ ] 1.13 Update `SessionPage.jsx` to use new hooks
-- [ ] 1.14 Update `QueuePage.jsx` to use new hooks
+  - [x] 1.9 Update `main.jsx` to remove QueryClientProvider
+  - [x] 1.10 Update `services/api.js` to remove QueryClient export
+  - [x] 1.11 Update `RollPage.jsx` to use new hooks
+   - [x] 1.12 Update `RatePage.jsx` to use new hooks
+   - [x] 1.13 Update `SessionPage.jsx` to use new hooks
+ - [x] 1.14 Update `QueuePage.jsx` to use new hooks
 - [ ] 1.15 Update other pages using custom hooks
 - [ ] 1.16 Run frontend linter and fix any issues
 - [ ] 1.17 Update frontend unit tests after refactoring
