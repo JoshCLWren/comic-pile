@@ -103,8 +103,9 @@
   - **Fix**: Renamed return object keys to match consumer expectations (COMPLETED)
 - ✅ **useQueue.js** - Mutations don't rethrow errors, so callers can't handle failures
    - **Fix**: Added `throw error` after `setIsError(true)` in all catch blocks (COMPLETED)
-- ❌ **useSession.js** - params = {} causes infinite refetches; state not reset when id becomes falsy
-  - **Fix needed**: Add `EMPTY_PARAMS` constant, reset state in early return
+- ✅ **useSession.js** - params = {} causes infinite refetches; state not reset when id becomes falsy
+   - **Fix**: Added `EMPTY_PARAMS` constant, reset state in early return
+   - **Commit**: fb30e59
 - ❌ **useThread.js** - When id becomes falsy, stale data remains in state
   - **Fix needed**: Add `setData(null)`, `setIsError(false)` in early return
 - ❌ **useUndo.js** - Effect doesn't clear isPending on early return; no cancellation handling
