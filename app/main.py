@@ -22,7 +22,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import admin, analytics, auth, queue, rate, roll, session, snooze, thread, undo
 from app.config import get_app_settings
-from app.database import Base, engine, SessionLocal
+from app.database import Base, engine, AsyncSessionLocal
 from app.middleware import limiter
 
 logger = logging.getLogger(__name__)
@@ -371,12 +371,9 @@ def create_app() -> FastAPI:
 
         # Try to connect to database
         try:
-            db = SessionLocal()
-            try:
-                db.execute(text("SELECT 1"))
+            async with AsyncSessionLocal() as db:
+                await db.execute(text("SELECT 1"))
                 return {"status": "healthy", "database": "connected"}
-            finally:
-                db.close()
         except Exception as e:
             logger.error(f"Health check database connection failed: {e}")
             return JSONResponse(
@@ -407,7 +404,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         """Initialize database on application startup."""
-        import time
+        import asyncio
         from sqlalchemy import text
 
         max_retries = 5
@@ -416,19 +413,16 @@ def create_app() -> FastAPI:
         database_ready = False
         for attempt in range(1, max_retries + 1):
             try:
-                db = SessionLocal()
-                try:
-                    db.execute(text("SELECT 1"))
+                async with AsyncSessionLocal() as db:
+                    await db.execute(text("SELECT 1"))
                     database_ready = True
                     logger.info("Database connection established successfully")
                     break
-                finally:
-                    db.close()
             except Exception as e:
                 logger.warning(f"Database connection attempt {attempt}/{max_retries} failed: {e}")
                 if attempt < max_retries:
                     logger.info(f"Retrying in {retry_delay} seconds...")
-                    time.sleep(retry_delay)
+                    await asyncio.sleep(retry_delay)
                 else:
                     logger.error("All database connection attempts failed")
 

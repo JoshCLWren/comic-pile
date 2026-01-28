@@ -1,34 +1,56 @@
 """Tests for safe mode session navigation feature."""
 
-import pytest
-from httpx import AsyncClient
-from sqlalchemy import select
-
-from app.models import Event, Session as SessionModel, Snapshot, Thread, User
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
-@pytest.fixture(scope="function")
-def safe_mode_user(db) -> User:
+from app.main import app
+from app.models import Event, Session as SessionModel, Snapshot, Thread, User
+
+
+@pytest_asyncio.fixture(scope="function")
+async def safe_mode_user(async_db) -> User:
     """Create a test user for safe mode tests."""
-    user = db.execute(select(User).where(User.username == "safe_mode_user")).scalar_one_or_none()
+    result = await async_db.execute(select(User).where(User.username == "safe_mode_user"))
+    user = result.scalar_one_or_none()
     if not user:
         user = User(username="safe_mode_user", created_at=datetime.now(UTC))
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
     return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def safe_mode_auth_client(async_db, safe_mode_user: User) -> AsyncGenerator[AsyncClient]:
+    """httpx.AsyncClient authenticated as safe_mode_user for safe mode tests."""
+    from app.auth import create_access_token
+    from app.database import get_db_async
+
+    from tests.conftest import _create_async_db_override
+
+    app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        token = create_access_token(data={"sub": safe_mode_user.username, "jti": "test"})
+        ac.headers.update({"Authorization": f"Bearer {token}"})
+        yield ac
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
 async def test_session_response_has_restore_point_true(
-    safe_mode_auth_client: AsyncClient, db, safe_mode_user
+    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
 ):
     """Test that SessionResponse correctly reports has_restore_point when snapshots exist."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -37,9 +59,9 @@ async def test_session_response_has_restore_point_true(
         queue_position=1,
         user_id=safe_mode_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -47,8 +69,8 @@ async def test_session_response_has_restore_point_true(
         thread_states={thread.id: {"issues_remaining": 10, "queue_position": 1}},
         description="Session start",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
     response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
@@ -59,13 +81,13 @@ async def test_session_response_has_restore_point_true(
 
 @pytest.mark.asyncio
 async def test_session_response_has_restore_point_false(
-    safe_mode_auth_client: AsyncClient, db, safe_mode_user
+    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
 ):
     """Test that SessionResponse correctly reports has_restore_point when no snapshots exist."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200
@@ -76,13 +98,13 @@ async def test_session_response_has_restore_point_false(
 
 @pytest.mark.asyncio
 async def test_current_session_response_includes_restore_point(
-    safe_mode_auth_client: AsyncClient, db, safe_mode_user
+    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
 ):
     """Test that /sessions/current/ includes has_restore_point field."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -91,8 +113,8 @@ async def test_current_session_response_includes_restore_point(
         queue_position=1,
         user_id=safe_mode_user.id,
     )
-    db.add(thread)
-    db.commit()
+    async_db.add(thread)
+    await async_db.commit()
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -100,8 +122,8 @@ async def test_current_session_response_includes_restore_point(
         thread_states={thread.id: {"issues_remaining": 10, "queue_position": 1}},
         description="Session start",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
     response = await safe_mode_auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
@@ -113,15 +135,15 @@ async def test_current_session_response_includes_restore_point(
 
 @pytest.mark.asyncio
 async def test_list_sessions_includes_restore_point_for_each(
-    safe_mode_auth_client: AsyncClient, db, safe_mode_user
+    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
 ):
     """Test that /sessions/ includes has_restore_point for all sessions."""
     session1 = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
     session2 = SessionModel(start_die=8, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
-    db.add_all([session1, session2])
-    db.commit()
-    db.refresh(session1)
-    db.refresh(session2)
+    async_db.add_all([session1, session2])
+    await async_db.commit()
+    await async_db.refresh(session1)
+    await async_db.refresh(session2)
 
     thread = Thread(
         title="Test Comic",
@@ -130,8 +152,8 @@ async def test_list_sessions_includes_restore_point_for_each(
         queue_position=1,
         user_id=safe_mode_user.id,
     )
-    db.add(thread)
-    db.commit()
+    async_db.add(thread)
+    await async_db.commit()
 
     snapshot = Snapshot(
         session_id=session1.id,
@@ -139,8 +161,8 @@ async def test_list_sessions_includes_restore_point_for_each(
         thread_states={thread.id: {"issues_remaining": 10, "queue_position": 1}},
         description="Session start",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
     response = await safe_mode_auth_client.get("/api/sessions/")
     assert response.status_code == 200
@@ -161,13 +183,13 @@ async def test_list_sessions_includes_restore_point_for_each(
 
 @pytest.mark.asyncio
 async def test_snapshot_count_increases_with_multiple_snapshots(
-    safe_mode_auth_client: AsyncClient, db, safe_mode_user
+    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
 ):
     """Test that snapshot_count correctly counts all snapshots."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -176,9 +198,9 @@ async def test_snapshot_count_increases_with_multiple_snapshots(
         queue_position=1,
         user_id=safe_mode_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="rate",
@@ -189,9 +211,9 @@ async def test_snapshot_count_increases_with_multiple_snapshots(
         die=6,
         die_after=4,
     )
-    db.add(event)
-    db.commit()
-    db.refresh(event)
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
 
     snapshot1 = Snapshot(
         session_id=session.id,
@@ -205,8 +227,8 @@ async def test_snapshot_count_increases_with_multiple_snapshots(
         thread_states={thread.id: {"issues_remaining": 9}},
         description="After rating",
     )
-    db.add_all([snapshot1, snapshot2])
-    db.commit()
+    async_db.add_all([snapshot1, snapshot2])
+    await async_db.commit()
 
     response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
     assert response.status_code == 200

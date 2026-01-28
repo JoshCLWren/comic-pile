@@ -2,7 +2,8 @@
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+
 
 from app.models import Session as SessionModel
 from app.models import Thread
@@ -11,12 +12,12 @@ from app.models import Thread
 @pytest.mark.asyncio
 async def test_override_snoozed_thread_removes_from_snoozed_list(
     auth_client: AsyncClient,
-    db: Session,
+    async_db: AsyncSession,
 ) -> None:
     """Overriding to a snoozed thread should remove it from snoozed_thread_ids."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     # Create two threads
     thread1 = Thread(
@@ -35,17 +36,17 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
         status="active",
         user_id=user.id,
     )
-    db.add(thread1)
-    db.add(thread2)
-    db.commit()
-    db.refresh(thread1)
-    db.refresh(thread2)
+    async_db.add(thread1)
+    async_db.add(thread2)
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
 
     # Roll and snooze thread1
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     # Roll using API to set pending thread
     roll_response = await auth_client.post("/api/roll/")

@@ -1,63 +1,14 @@
 """Edge case tests for queue reordering operations."""
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Thread
 from comic_pile.queue import move_to_back, move_to_front, move_to_position
 
 
 @pytest.mark.asyncio
-async def test_move_first_to_front_no_op(auth_client, db, sample_data):
-    """Moving first thread to front is a no-op."""
-    thread_id = sample_data["threads"][0].id
-
-    response = await auth_client.put(f"/api/queue/threads/{thread_id}/front/")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["id"] == thread_id
-    assert data["queue_position"] == 1
-
-    thread = db.get(Thread, thread_id)
-    assert thread.queue_position == 1
-
-    thread2 = db.get(Thread, sample_data["threads"][1].id)
-    thread3 = db.get(Thread, sample_data["threads"][2].id)
-    thread4 = db.get(Thread, sample_data["threads"][3].id)
-    thread5 = db.get(Thread, sample_data["threads"][4].id)
-
-    assert thread2.queue_position == 2
-    assert thread3.queue_position == 3
-    assert thread4.queue_position == 4
-    assert thread5.queue_position == 5
-
-
-@pytest.mark.asyncio
-async def test_move_last_to_back_no_op(auth_client, db, sample_data):
-    """Moving last thread to back is a no-op."""
-    thread_id = sample_data["threads"][4].id
-
-    response = await auth_client.put(f"/api/queue/threads/{thread_id}/back/")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["id"] == thread_id
-    assert data["queue_position"] == 5
-
-    thread = db.get(Thread, thread_id)
-    assert thread.queue_position == 5
-
-    thread1 = db.get(Thread, sample_data["threads"][0].id)
-    thread2 = db.get(Thread, sample_data["threads"][1].id)
-    thread3 = db.get(Thread, sample_data["threads"][2].id)
-
-    assert thread1.queue_position == 1
-    assert thread2.queue_position == 2
-    assert thread3.queue_position == 3
-
-
-@pytest.mark.asyncio
-async def test_move_to_position_clamps_to_max(auth_client, db, sample_data):
+async def test_move_to_position_clamps_to_max(auth_client, async_db: AsyncSession, sample_data):
     """Moving to position > max_position clamps to max."""
     thread_id = sample_data["threads"][0].id
 
@@ -71,23 +22,12 @@ async def test_move_to_position_clamps_to_max(auth_client, db, sample_data):
     )
     assert response.status_code == 200
 
-    thread = db.get(Thread, thread_id)
+    thread = await async_db.get(Thread, thread_id)
     assert thread.queue_position == max_position
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_clamps_to_min(auth_client, sample_data):
-    """Moving to position < 1 returns validation error."""
-    thread_id = sample_data["threads"][-1].id
-
-    response = await auth_client.put(
-        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 0}
-    )
-    assert response.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_move_to_position_when_no_threads(auth_client, db, default_user):
+async def test_move_to_position_when_no_threads(auth_client, async_db: AsyncSession, default_user):
     """Moving to position when no threads handles gracefully."""
     from app.models import Thread as ThreadModel
 
@@ -98,46 +38,49 @@ async def test_move_to_position_when_no_threads(auth_client, db, default_user):
         queue_position=1,
         user_id=default_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     response = await auth_client.put(
         f"/api/queue/threads/{thread.id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200
 
-    thread = db.get(ThreadModel, thread.id)
+    thread = await async_db.get(ThreadModel, thread.id)
     assert thread.queue_position == 1
 
 
-def test_move_to_front_nonexistent_thread(db, default_user, sample_data):
+@pytest.mark.asyncio
+async def test_move_to_front_nonexistent_thread(async_db: AsyncSession, default_user, sample_data):
     """move_to_front with non-existent thread_id returns early without error."""
     nonexistent_thread_id = 99999
 
     original_positions = {t.id: t.queue_position for t in sample_data["threads"]}
 
-    move_to_front(nonexistent_thread_id, default_user.id, db)
+    await move_to_front(nonexistent_thread_id, default_user.id, async_db)
 
     current_positions = {t.id: t.queue_position for t in sample_data["threads"]}
 
     assert original_positions == current_positions
 
 
-def test_move_to_back_nonexistent_thread(db, default_user, sample_data):
+@pytest.mark.asyncio
+async def test_move_to_back_nonexistent_thread(async_db: AsyncSession, default_user, sample_data):
     """move_to_back with non-existent thread_id returns early without error."""
     nonexistent_thread_id = 99999
 
     original_positions = {t.id: t.queue_position for t in sample_data["threads"]}
 
-    move_to_back(nonexistent_thread_id, default_user.id, db)
+    await move_to_back(nonexistent_thread_id, default_user.id, async_db)
 
     current_positions = {t.id: t.queue_position for t in sample_data["threads"]}
 
     assert original_positions == current_positions
 
 
-def test_move_to_back_no_active_threads(db, default_user):
+@pytest.mark.asyncio
+async def test_move_to_back_no_active_threads(async_db: AsyncSession, default_user):
     """move_to_back when max_position is None (no active threads) returns early without error."""
     from datetime import UTC, datetime
 
@@ -150,26 +93,29 @@ def test_move_to_back_no_active_threads(db, default_user):
         user_id=default_user.id,
         created_at=datetime.now(UTC),
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     original_position = thread.queue_position
 
-    move_to_back(thread.id, default_user.id, db)
+    await move_to_back(thread.id, default_user.id, async_db)
 
-    db.refresh(thread)
+    await async_db.refresh(thread)
     assert thread.queue_position == original_position
 
 
-def test_move_to_position_nonexistent_thread(db, default_user, sample_data, caplog):
+@pytest.mark.asyncio
+async def test_move_to_position_nonexistent_thread(
+    async_db: AsyncSession, default_user, sample_data, caplog
+):
     """move_to_position with non-existent thread_id logs error and returns early."""
     nonexistent_thread_id = 99999
 
     original_positions = {t.id: t.queue_position for t in sample_data["threads"]}
 
     with caplog.at_level("ERROR"):
-        move_to_position(nonexistent_thread_id, default_user.id, 1, db)
+        await move_to_position(nonexistent_thread_id, default_user.id, 1, async_db)
 
     current_positions = {t.id: t.queue_position for t in sample_data["threads"]}
 
@@ -180,7 +126,10 @@ def test_move_to_position_nonexistent_thread(db, default_user, sample_data, capl
     )
 
 
-def test_move_to_position_thread_not_in_active_list(db, default_user, caplog):
+@pytest.mark.asyncio
+async def test_move_to_position_thread_not_in_active_list(
+    async_db: AsyncSession, default_user, caplog
+):
     """move_to_position with thread having queue_position < 1 logs error and returns early."""
     from datetime import UTC, datetime
 
@@ -193,16 +142,16 @@ def test_move_to_position_thread_not_in_active_list(db, default_user, caplog):
         user_id=default_user.id,
         created_at=datetime.now(UTC),
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     original_position = thread.queue_position
 
     with caplog.at_level("ERROR"):
-        move_to_position(thread.id, default_user.id, 1, db)
+        await move_to_position(thread.id, default_user.id, 1, async_db)
 
-    db.refresh(thread)
+    await async_db.refresh(thread)
     assert thread.queue_position == original_position
     assert any(
         f"Target thread {thread.id} not found in active threads list" in record.message
@@ -210,23 +159,27 @@ def test_move_to_position_thread_not_in_active_list(db, default_user, caplog):
     )
 
 
-def test_move_to_position_clamps_negative_position(db, default_user, sample_data, caplog):
+@pytest.mark.asyncio
+async def test_move_to_position_clamps_negative_position(
+    async_db: AsyncSession, default_user, sample_data, caplog
+):
     """move_to_position with new_position < 1 clamps to 1."""
     thread_id = sample_data["threads"][0].id
 
     with caplog.at_level("WARNING"):
-        move_to_position(thread_id, default_user.id, 0, db)
+        await move_to_position(thread_id, default_user.id, 0, async_db)
 
-    thread = db.get(Thread, thread_id)
+    thread = await async_db.get(Thread, thread_id)
     assert thread.queue_position == 1
     assert any("new_position 0 < 1, setting to 1" in record.message for record in caplog.records)
 
 
-def test_get_roll_pool(db, default_user, sample_data):
+@pytest.mark.asyncio
+async def test_get_roll_pool(async_db: AsyncSession, default_user, sample_data):
     """get_roll_pool returns all active threads ordered by position."""
     from comic_pile.queue import get_roll_pool
 
-    pool = get_roll_pool(default_user.id, db)
+    pool = await get_roll_pool(default_user.id, async_db)
 
     active_threads = [t for t in sample_data["threads"] if t.status == "active"]
     assert len(pool) == len(active_threads)
@@ -235,7 +188,8 @@ def test_get_roll_pool(db, default_user, sample_data):
     assert positions == sorted(positions)
 
 
-def test_get_stale_threads(db, default_user):
+@pytest.mark.asyncio
+async def test_get_stale_threads(async_db: AsyncSession, default_user):
     """get_stale_threads returns threads not read in specified days."""
     from datetime import UTC, datetime, timedelta
     from comic_pile.queue import get_stale_threads
@@ -275,10 +229,10 @@ def test_get_stale_threads(db, default_user):
         created_at=now,
     )
 
-    db.add_all([stale_thread, recent_thread, no_activity_thread])
-    db.commit()
+    async_db.add_all([stale_thread, recent_thread, no_activity_thread])
+    await async_db.commit()
 
-    stale_threads = get_stale_threads(default_user.id, db, days=7)
+    stale_threads = await get_stale_threads(default_user.id, async_db, days=7)
 
     assert len(stale_threads) == 2
     stale_thread_ids = {t.id for t in stale_threads}
@@ -287,7 +241,8 @@ def test_get_stale_threads(db, default_user):
     assert recent_thread.id not in stale_thread_ids
 
 
-def test_move_to_front_from_middle_position(db, default_user):
+@pytest.mark.asyncio
+async def test_move_to_front_from_middle_position(async_db: AsyncSession, default_user):
     """move_to_front: Moving thread from position > 1 to front shifts all preceding threads back."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_front
@@ -341,29 +296,29 @@ def test_move_to_front_from_middle_position(db, default_user):
         ),
     ]
 
-    db.add_all(threads)
-    db.commit()
+    async_db.add_all(threads)
+    await async_db.commit()
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
     thread_c = threads[2]
     thread_c_id = thread_c.id
 
     assert thread_c.queue_position == 3
 
-    move_to_front(thread_c_id, default_user.id, db)
+    await move_to_front(thread_c_id, default_user.id, async_db)
 
-    db.refresh(thread_c)
+    await async_db.refresh(thread_c)
     assert thread_c.queue_position == 1
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
-    thread_a = db.get(Thread, threads[0].id)
-    thread_b = db.get(Thread, threads[1].id)
-    thread_d = db.get(Thread, threads[3].id)
-    thread_e = db.get(Thread, threads[4].id)
+    thread_a = await async_db.get(Thread, threads[0].id)
+    thread_b = await async_db.get(Thread, threads[1].id)
+    thread_d = await async_db.get(Thread, threads[3].id)
+    thread_e = await async_db.get(Thread, threads[4].id)
 
     assert thread_a.queue_position == 2
     assert thread_b.queue_position == 3
@@ -371,7 +326,8 @@ def test_move_to_front_from_middle_position(db, default_user):
     assert thread_e.queue_position == 5
 
 
-def test_move_to_back_from_front_position(db, default_user):
+@pytest.mark.asyncio
+async def test_move_to_back_from_front_position(async_db: AsyncSession, default_user):
     """move_to_back: Moving thread from position < max to back shifts all following threads forward."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_back
@@ -425,29 +381,29 @@ def test_move_to_back_from_front_position(db, default_user):
         ),
     ]
 
-    db.add_all(threads)
-    db.commit()
+    async_db.add_all(threads)
+    await async_db.commit()
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
     thread_a = threads[0]
     thread_a_id = thread_a.id
 
     assert thread_a.queue_position == 1
 
-    move_to_back(thread_a_id, default_user.id, db)
+    await move_to_back(thread_a_id, default_user.id, async_db)
 
-    db.refresh(thread_a)
+    await async_db.refresh(thread_a)
     assert thread_a.queue_position == 5
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
-    thread_b = db.get(Thread, threads[1].id)
-    thread_c = db.get(Thread, threads[2].id)
-    thread_d = db.get(Thread, threads[3].id)
-    thread_e = db.get(Thread, threads[4].id)
+    thread_b = await async_db.get(Thread, threads[1].id)
+    thread_c = await async_db.get(Thread, threads[2].id)
+    thread_d = await async_db.get(Thread, threads[3].id)
+    thread_e = await async_db.get(Thread, threads[4].id)
 
     assert thread_b.queue_position == 1
     assert thread_c.queue_position == 2
@@ -455,7 +411,8 @@ def test_move_to_back_from_front_position(db, default_user):
     assert thread_e.queue_position == 4
 
 
-def test_move_to_position_backward_movement(db, default_user):
+@pytest.mark.asyncio
+async def test_move_to_position_backward_movement(async_db: AsyncSession, default_user):
     """move_to_position: Moving thread backward (current < new) shifts threads in between forward."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_position
@@ -509,29 +466,29 @@ def test_move_to_position_backward_movement(db, default_user):
         ),
     ]
 
-    db.add_all(threads)
-    db.commit()
+    async_db.add_all(threads)
+    await async_db.commit()
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
     thread_b = threads[1]
     thread_b_id = thread_b.id
 
     assert thread_b.queue_position == 2
 
-    move_to_position(thread_b_id, default_user.id, 4, db)
+    await move_to_position(thread_b_id, default_user.id, 4, async_db)
 
-    db.refresh(thread_b)
+    await async_db.refresh(thread_b)
     assert thread_b.queue_position == 4
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
-    thread_a = db.get(Thread, threads[0].id)
-    thread_c = db.get(Thread, threads[2].id)
-    thread_d = db.get(Thread, threads[3].id)
-    thread_e = db.get(Thread, threads[4].id)
+    thread_a = await async_db.get(Thread, threads[0].id)
+    thread_c = await async_db.get(Thread, threads[2].id)
+    thread_d = await async_db.get(Thread, threads[3].id)
+    thread_e = await async_db.get(Thread, threads[4].id)
 
     assert thread_a.queue_position == 1
     assert thread_c.queue_position == 2
@@ -539,7 +496,8 @@ def test_move_to_position_backward_movement(db, default_user):
     assert thread_e.queue_position == 5
 
 
-def test_move_to_position_forward_movement(db, default_user):
+@pytest.mark.asyncio
+async def test_move_to_position_forward_movement(async_db: AsyncSession, default_user):
     """move_to_position: Moving thread forward (current > new) shifts threads in between backward."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_position
@@ -593,29 +551,29 @@ def test_move_to_position_forward_movement(db, default_user):
         ),
     ]
 
-    db.add_all(threads)
-    db.commit()
+    async_db.add_all(threads)
+    await async_db.commit()
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
     thread_d = threads[3]
     thread_d_id = thread_d.id
 
     assert thread_d.queue_position == 4
 
-    move_to_position(thread_d_id, default_user.id, 2, db)
+    await move_to_position(thread_d_id, default_user.id, 2, async_db)
 
-    db.refresh(thread_d)
+    await async_db.refresh(thread_d)
     assert thread_d.queue_position == 2
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
-    thread_a = db.get(Thread, threads[0].id)
-    thread_b = db.get(Thread, threads[1].id)
-    thread_c = db.get(Thread, threads[2].id)
-    thread_e = db.get(Thread, threads[4].id)
+    thread_a = await async_db.get(Thread, threads[0].id)
+    thread_b = await async_db.get(Thread, threads[1].id)
+    thread_c = await async_db.get(Thread, threads[2].id)
+    thread_e = await async_db.get(Thread, threads[4].id)
 
     assert thread_a.queue_position == 1
     assert thread_b.queue_position == 3

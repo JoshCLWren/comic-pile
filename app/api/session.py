@@ -6,10 +6,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.database import get_db
+from app.database import get_db_async
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread, User
 from app.models import Session as SessionModel
@@ -30,31 +30,28 @@ clear_cache = None
 get_current_session_cached = None
 
 
-def get_session_with_thread_safe(
-    session_id: int, db: Session
+async def get_session_with_thread_safe(
+    session_id: int, db: AsyncSession
 ) -> tuple[SessionModel | None, ActiveThreadInfo | None]:
     """Get session and active thread with consistent lock ordering to prevent deadlocks."""
-    session = db.get(SessionModel, session_id)
+    session = await db.get(SessionModel, session_id)
     if not session:
         return None, None
 
     # Query Event table after Session to ensure consistent lock ordering
-    event = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type == "roll")
-            .where(Event.selected_thread_id.is_not(None))
-            .order_by(Event.timestamp.desc())
-        )
-        .scalars()
-        .first()
+    event_result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id.is_not(None))
+        .order_by(Event.timestamp.desc())
     )
+    event = event_result.scalars().first()
 
     if not event or not event.selected_thread_id:
         return session, None
 
-    thread = db.get(Thread, event.selected_thread_id)
+    thread = await db.get(Thread, event.selected_thread_id)
     if not thread:
         return session, None
 
@@ -68,13 +65,12 @@ def get_session_with_thread_safe(
     )
 
 
-def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]]:
+async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str, list[str]]:
     """Build narrative summary categorizing session events."""
-    events = (
-        db.execute(select(Event).where(Event.session_id == session_id).order_by(Event.timestamp))
-        .scalars()
-        .all()
+    events_result = await db.execute(
+        select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
     )
+    events = events_result.scalars().all()
 
     summary = {
         "read": [],
@@ -87,7 +83,7 @@ def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]
     completed_titles = set()
 
     for event in events:
-        thread = db.get(Thread, event.thread_id) if event.thread_id else None
+        thread = await db.get(Thread, event.thread_id) if event.thread_id else None
         title = thread.title if thread else f"Thread #{event.thread_id}"
 
         if event.type == "rate":
@@ -104,22 +100,19 @@ def build_narrative_summary(session_id: int, db: Session) -> dict[str, list[str]
     return summary
 
 
-def build_ladder_path(session_id: int, db: Session) -> str:
+async def build_ladder_path(session_id: int, db: AsyncSession) -> str:
     """Build narrative summary of dice ladder from session events."""
-    session = db.get(SessionModel, session_id)
+    session = await db.get(SessionModel, session_id)
     if not session:
         return ""
 
-    events = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type == "rate")
-            .order_by(Event.timestamp)
-        )
-        .scalars()
-        .all()
+    events_result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "rate")
+        .order_by(Event.timestamp)
     )
+    events = events_result.scalars().all()
 
     if not events:
         return str(session.start_die)
@@ -132,24 +125,21 @@ def build_ladder_path(session_id: int, db: Session) -> str:
     return " → ".join(str(d) for d in path)
 
 
-def get_active_thread(session_id: int, db: Session) -> ActiveThreadInfo | None:
+async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadInfo | None:
     """Get the most recently rolled thread for the session."""
-    event = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type == "roll")
-            .where(Event.selected_thread_id.is_not(None))
-            .order_by(Event.timestamp.desc())
-        )
-        .scalars()
-        .first()
+    event_result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id.is_not(None))
+        .order_by(Event.timestamp.desc())
     )
+    event = event_result.scalars().first()
 
     if not event or not event.selected_thread_id:
         return None
 
-    thread = db.get(Thread, event.selected_thread_id)
+    thread = await db.get(Thread, event.selected_thread_id)
     if not thread:
         return None
 
@@ -165,10 +155,10 @@ def get_active_thread(session_id: int, db: Session) -> ActiveThreadInfo | None:
 
 @router.get("/current/")
 @limiter.limit("200/minute")
-def get_current_session(
+async def get_current_session(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> SessionResponse:
     """Get current active session with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
@@ -184,39 +174,40 @@ def get_current_session(
                 if cached:
                     return SessionResponse(**cached)
 
-            active_sessions = (
-                db.execute(
-                    select(SessionModel)
-                    .where(SessionModel.user_id == current_user.id)
-                    .where(SessionModel.ended_at.is_(None))
-                    .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
-                )
-                .scalars()
-                .all()
+            active_sessions_result = await db.execute(
+                select(SessionModel)
+                .where(SessionModel.user_id == current_user.id)
+                .where(SessionModel.ended_at.is_(None))
+                .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
             )
+            active_sessions = active_sessions_result.scalars().all()
 
             active_session = None
             for session in active_sessions:
-                if is_active(session.started_at, session.ended_at, db):
+                if await is_active(session.started_at, session.ended_at, db):
                     active_session = session
                     break
 
             if not active_session:
-                active_session = get_or_create(db, user_id=current_user.id)
+                active_session = await get_or_create(db, user_id=current_user.id)
 
             active_session_id = active_session.id
-            _, active_thread = get_session_with_thread_safe(active_session_id, db)
+            _, active_thread = await get_session_with_thread_safe(active_session_id, db)
 
             from sqlalchemy import func
 
-            snapshot_count = (
-                db.execute(
-                    select(func.count())
-                    .select_from(Snapshot)
-                    .where(Snapshot.session_id == active_session_id)
-                ).scalar()
-                or 0
+            snapshot_count_result = await db.execute(
+                select(func.count())
+                .select_from(Snapshot)
+                .where(Snapshot.session_id == active_session_id)
             )
+            snapshot_count = snapshot_count_result.scalar() or 0
+
+            snoozed_threads = []
+            for thread_id in active_session.snoozed_thread_ids or []:
+                thread = await db.get(Thread, thread_id)
+                if thread:
+                    snoozed_threads.append(SnoozedThreadInfo(id=thread.id, title=thread.title))
 
             return SessionResponse(
                 id=active_session_id,
@@ -225,22 +216,18 @@ def get_current_session(
                 start_die=active_session.start_die,
                 manual_die=active_session.manual_die,
                 user_id=active_session.user_id,
-                ladder_path=build_ladder_path(active_session_id, db),
+                ladder_path=await build_ladder_path(active_session_id, db),
                 active_thread=active_thread,
-                current_die=get_current_die(active_session_id, db),
+                current_die=await get_current_die(active_session_id, db),
                 last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
                 snoozed_thread_ids=active_session.snoozed_thread_ids or [],
-                snoozed_threads=[
-                    SnoozedThreadInfo(id=thread.id, title=thread.title)
-                    for thread_id in (active_session.snoozed_thread_ids or [])
-                    if (thread := db.get(Thread, thread_id))
-                ],
+                snoozed_threads=snoozed_threads,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
-                db.rollback()
+                await db.rollback()
                 retries += 1
                 if retries >= max_retries:
                     raise
@@ -253,37 +240,32 @@ def get_current_session(
 
 
 @router.get("/")
-def list_sessions(
+async def list_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> list[SessionResponse]:
     """List all sessions (paginated)."""
-    sessions = (
-        db.execute(
-            select(SessionModel)
-            .where(SessionModel.user_id == current_user.id)
-            .order_by(SessionModel.started_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        .scalars()
-        .all()
+    sessions_result = await db.execute(
+        select(SessionModel)
+        .where(SessionModel.user_id == current_user.id)
+        .order_by(SessionModel.started_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
+    sessions = sessions_result.scalars().all()
 
     responses = []
     from sqlalchemy import func
 
     for session in sessions:
-        _, active_thread = get_session_with_thread_safe(session.id, db)
+        _, active_thread = await get_session_with_thread_safe(session.id, db)
 
-        snapshot_count = (
-            db.execute(
-                select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
-            ).scalar()
-            or 0
+        snapshot_count_result = await db.execute(
+            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
         )
+        snapshot_count = snapshot_count_result.scalar() or 0
 
         responses.append(
             SessionResponse(
@@ -293,9 +275,9 @@ def list_sessions(
                 start_die=session.start_die,
                 manual_die=session.manual_die,
                 user_id=session.user_id,
-                ladder_path=build_ladder_path(session.id, db),
+                ladder_path=await build_ladder_path(session.id, db),
                 active_thread=active_thread,
-                current_die=get_current_die(session.id, db),
+                current_die=await get_current_die(session.id, db),
                 last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
@@ -305,29 +287,27 @@ def list_sessions(
 
 
 @router.get("/{session_id}")
-def get_session(
+async def get_session(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> SessionResponse:
     """Get single session by ID."""
-    session = db.get(SessionModel, session_id)
+    session = await db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
     if session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    _, active_thread = get_session_with_thread_safe(session_id, db)
+    _, active_thread = await get_session_with_thread_safe(session_id, db)
 
     from sqlalchemy import func
 
-    snapshot_count = (
-        db.execute(
-            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
-        ).scalar()
-        or 0
+    snapshot_count_result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
     )
+    snapshot_count = snapshot_count_result.scalar() or 0
 
     return SessionResponse(
         id=session.id,
@@ -336,9 +316,9 @@ def get_session(
         start_die=session.start_die,
         manual_die=session.manual_die,
         user_id=session.user_id,
-        ladder_path=build_ladder_path(session.id, db),
+        ladder_path=await build_ladder_path(session.id, db),
         active_thread=active_thread,
-        current_die=get_current_die(session.id, db),
+        current_die=await get_current_die(session.id, db),
         last_rolled_result=active_thread.last_rolled_result if active_thread else None,
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
@@ -346,24 +326,23 @@ def get_session(
 
 
 @router.get("/{session_id}/details")
-def get_session_details(
+async def get_session_details(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> SessionDetailsResponse:
     """Get session details with all events for expanded view."""
-    session_obj = db.get(SessionModel, session_id)
+    session_obj = await db.get(SessionModel, session_id)
     if not session_obj:
         raise HTTPException(status_code=404, detail="Session not found")
 
     if session_obj.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    events = (
-        db.execute(select(Event).where(Event.session_id == session_id).order_by(Event.timestamp))
-        .scalars()
-        .all()
+    events_result = await db.execute(
+        select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
     )
+    events = events_result.scalars().all()
 
     formatted_events = []
     for event in events:
@@ -374,7 +353,7 @@ def get_session_details(
             thread_id = event.thread_id
 
         if thread_id:
-            thread = db.get(Thread, thread_id)
+            thread = await db.get(Thread, thread_id)
             if thread:
                 thread_title = thread.title
 
@@ -402,36 +381,33 @@ def get_session_details(
         started_at=session_obj.started_at,
         ended_at=session_obj.ended_at,
         start_die=session_obj.start_die,
-        ladder_path=build_ladder_path(session_obj.id, db),
-        narrative_summary=build_narrative_summary(session_id, db),
-        current_die=get_current_die(session_obj.id, db),
+        ladder_path=await build_ladder_path(session_obj.id, db),
+        narrative_summary=await build_narrative_summary(session_id, db),
+        current_die=await get_current_die(session_obj.id, db),
         events=formatted_events,
     )
 
 
 @router.get("/{session_id}/snapshots")
-def get_session_snapshots(
+async def get_session_snapshots(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> SnapshotsListResponse:
     """Get session snapshots list."""
-    session = db.get(SessionModel, session_id)
+    session = await db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
     if session.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    snapshots = (
-        db.execute(
-            select(Snapshot)
-            .where(Snapshot.session_id == session_id)
-            .order_by(Snapshot.created_at.desc())
-        )
-        .scalars()
-        .all()
+    snapshots_result = await db.execute(
+        select(Snapshot)
+        .where(Snapshot.session_id == session_id)
+        .order_by(Snapshot.created_at.desc())
     )
+    snapshots = snapshots_result.scalars().all()
 
     return SnapshotsListResponse(
         session_id=session_id,
@@ -448,10 +424,10 @@ def get_session_snapshots(
 
 
 @router.post("/{session_id}/restore-session-start")
-def restore_session_start(
+async def restore_session_start(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> SessionResponse:
     """Restore session to its initial state at session start."""
     from sqlalchemy.exc import OperationalError
@@ -462,7 +438,7 @@ def restore_session_start(
 
     while retries < max_retries:
         try:
-            session = db.get(SessionModel, session_id, with_for_update=True)
+            session = await db.get(SessionModel, session_id)
             if not session:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -475,16 +451,13 @@ def restore_session_start(
                     detail="Access denied",
                 )
 
-            snapshot = (
-                db.execute(
-                    select(Snapshot)
-                    .where(Snapshot.session_id == session_id)
-                    .where(Snapshot.description == "Session start")
-                    .order_by(Snapshot.created_at)
-                )
-                .scalars()
-                .first()
+            snapshot_result = await db.execute(
+                select(Snapshot)
+                .where(Snapshot.session_id == session_id)
+                .where(Snapshot.description == "Session start")
+                .order_by(Snapshot.created_at)
             )
+            snapshot = snapshot_result.scalars().first()
 
             if not snapshot:
                 raise HTTPException(
@@ -496,14 +469,15 @@ def restore_session_start(
 
             snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
 
-            current_threads = (
-                db.execute(select(Thread).where(Thread.user_id == current_user.id)).scalars().all()
+            current_threads_result = await db.execute(
+                select(Thread).where(Thread.user_id == current_user.id)
             )
+            current_threads = current_threads_result.scalars().all()
             current_thread_ids = {thread.id for thread in current_threads}
 
             threads_to_delete = current_thread_ids - snapshot_thread_ids
             if threads_to_delete:
-                db.execute(
+                await db.execute(
                     update(Event)
                     .where(
                         or_(
@@ -513,7 +487,7 @@ def restore_session_start(
                     )
                     .values(thread_id=None, selected_thread_id=None)
                 )
-                db.execute(
+                await db.execute(
                     delete(Thread)
                     .where(Thread.id.in_(threads_to_delete))
                     .where(Thread.user_id == current_user.id)
@@ -521,7 +495,7 @@ def restore_session_start(
 
             for thread_id, state in snapshot.thread_states.items():
                 thread_id_int = int(thread_id)
-                thread = db.get(Thread, thread_id_int)
+                thread = await db.get(Thread, thread_id_int)
                 if thread:
                     if "title" in state:
                         thread.title = state["title"]
@@ -570,24 +544,20 @@ def restore_session_start(
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)
                 session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
 
-            db.commit()
-            db.refresh(session)
+            await db.commit()
+            await db.refresh(session)
 
             if clear_cache:
                 clear_cache()
 
             from sqlalchemy import func
 
-            active_thread = get_active_thread(session.id, db)
+            active_thread = await get_active_thread(session.id, db)
 
-            snapshot_count = (
-                db.execute(
-                    select(func.count())
-                    .select_from(Snapshot)
-                    .where(Snapshot.session_id == session.id)
-                ).scalar()
-                or 0
+            snapshot_count_result = await db.execute(
+                select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
             )
+            snapshot_count = snapshot_count_result.scalar() or 0
 
             return SessionResponse(
                 id=session.id,
@@ -596,16 +566,16 @@ def restore_session_start(
                 start_die=session.start_die,
                 manual_die=session.manual_die,
                 user_id=session.user_id,
-                ladder_path=build_ladder_path(session.id, db),
+                ladder_path=await build_ladder_path(session.id, db),
                 active_thread=active_thread,
-                current_die=get_current_die(session.id, db),
+                current_die=await get_current_die(session.id, db),
                 last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
-                db.rollback()
+                await db.rollback()
                 retries += 1
                 if retries >= max_retries:
                     raise

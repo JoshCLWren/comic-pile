@@ -7,16 +7,16 @@ from app.models import Session as SessionModel
 
 
 @pytest.mark.asyncio
-async def test_finish_session_clears_snoozed_threads(auth_client, db):
+async def test_finish_session_clears_snoozed_threads(auth_client, async_db):
     """Finishing a session clears snoozed_thread_ids from the session."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread1 = Thread(
         title="Thread One",
@@ -34,11 +34,11 @@ async def test_finish_session_clears_snoozed_threads(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread1)
-    db.add(thread2)
-    db.commit()
-    db.refresh(thread1)
-    db.refresh(thread2)
+    async_db.add(thread1)
+    async_db.add(thread2)
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
 
     # Roll thread1
     event1 = Event(
@@ -50,9 +50,9 @@ async def test_finish_session_clears_snoozed_threads(auth_client, db):
         session_id=session.id,
         thread_id=thread1.id,
     )
-    db.add(event1)
+    async_db.add(event1)
     session.pending_thread_id = thread1.id
-    db.commit()
+    await async_db.commit()
 
     # Snooze thread1 (die steps up to d8, thread1 added to snoozed list)
     snooze_response = await auth_client.post("/api/snooze/")
@@ -71,9 +71,9 @@ async def test_finish_session_clears_snoozed_threads(auth_client, db):
         session_id=session.id,
         thread_id=thread2.id,
     )
-    db.add(event2)
+    async_db.add(event2)
     session.pending_thread_id = thread2.id
-    db.commit()
+    await async_db.commit()
 
     # Rate thread2 with finish_session=True to finish the session
     rate_response = await auth_client.post(
@@ -81,7 +81,7 @@ async def test_finish_session_clears_snoozed_threads(auth_client, db):
     )
     assert rate_response.status_code == 200
 
-    db.refresh(session)
+    await async_db.refresh(session)
     # Session should be ended
     assert session.ended_at is not None
 

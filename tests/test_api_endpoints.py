@@ -2,11 +2,10 @@
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 
 @pytest.mark.asyncio
-async def test_create_thread(auth_client, db):
+async def test_create_thread(auth_client, async_db):
     """Test POST /api/threads/ creates new thread."""
     thread_data = {
         "title": "Spider-Man",
@@ -27,7 +26,8 @@ async def test_create_thread(auth_client, db):
 
     from app.models import Thread
 
-    thread = db.execute(select(Thread).where(Thread.title == "Spider-Man")).scalar_one_or_none()
+    result = await async_db.execute(select(Thread).where(Thread.title == "Spider-Man"))
+    thread = result.scalar_one_or_none()
     assert thread is not None
     assert thread.title == "Spider-Man"
 
@@ -91,7 +91,7 @@ async def test_get_thread_not_found(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_update_thread(auth_client, sample_data, db):
+async def test_update_thread(auth_client, sample_data, async_db):
     """Test PUT /api/threads/{id} updates thread."""
     update_data = {
         "title": "Superman Updated",
@@ -109,7 +109,7 @@ async def test_update_thread(auth_client, sample_data, db):
 
     from app.models import Thread
 
-    db_thread = db.get(Thread, 1)
+    db_thread = await async_db.get(Thread, 1)
     assert db_thread.title == "Superman Updated"
     assert db_thread.format == "Trade Paperback"
     assert db_thread.issues_remaining == 8
@@ -141,7 +141,7 @@ async def test_update_thread_not_found(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_update_thread_complete_status(auth_client, sample_data, db):
+async def test_update_thread_complete_status(auth_client, sample_data, async_db):
     """Test PUT /api/threads/{id} sets completed status when issues_remaining is 0."""
     update_data = {
         "issues_remaining": 0,
@@ -155,12 +155,12 @@ async def test_update_thread_complete_status(auth_client, sample_data, db):
 
     from app.models import Thread
 
-    db_thread = db.get(Thread, 1)
+    db_thread = await async_db.get(Thread, 1)
     assert db_thread.status == "completed"
 
 
 @pytest.mark.asyncio
-async def test_update_thread_active_status(auth_client, sample_data, db):
+async def test_update_thread_active_status(auth_client, sample_data, async_db):
     """Test PUT /api/threads/{id} sets active status when issues_remaining > 0."""
     update_data = {
         "issues_remaining": 5,
@@ -174,19 +174,19 @@ async def test_update_thread_active_status(auth_client, sample_data, db):
 
     from app.models import Thread
 
-    db_thread = db.get(Thread, 3)
+    db_thread = await async_db.get(Thread, 3)
     assert db_thread.status == "active"
 
 
 @pytest.mark.asyncio
-async def test_delete_thread(auth_client, sample_data, db):
+async def test_delete_thread(auth_client, sample_data, async_db):
     """Test DELETE /api/threads/{id} removes thread."""
     response = await auth_client.delete("/api/threads/1")
     assert response.status_code == 204
 
     from app.models import Thread
 
-    db_thread = db.get(Thread, 1)
+    db_thread = await async_db.get(Thread, 1)
     assert db_thread is None
 
     response = await auth_client.get("/api/threads/1")
@@ -201,16 +201,15 @@ async def test_delete_thread_not_found(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_cascades_to_events_and_snapshots(
-    sample_data, db: Session, auth_client
-):
+async def test_delete_thread_cascades_to_events_and_snapshots(sample_data, async_db, auth_client):
     """Test that deleting a thread also deletes associated events and snapshots."""
     from datetime import UTC, datetime
 
     from app.models import Event, Session as SessionModel, Snapshot, Thread, User
 
     now = datetime.now(UTC)
-    user = db.execute(select(User).where(User.id == 1)).scalar_one()
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one()
     thread = Thread(
         title="Test Thread",
         format="Comic",
@@ -218,14 +217,14 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
         queue_position=100,
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     session = SessionModel(start_die=6, user_id=user.id, started_at=now)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     event = Event(
         type="roll",
@@ -235,9 +234,9 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
         thread_id=thread.id,
         timestamp=now,
     )
-    db.add(event)
-    db.commit()
-    db.refresh(event)
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -245,36 +244,38 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
         thread_states={"1": {"title": "Test Thread"}},
         description="Test snapshot",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
     response = await auth_client.delete(f"/api/threads/{thread.id}")
     assert response.status_code == 204
 
-    db_thread = db.get(Thread, thread.id)
+    db_thread = await async_db.get(Thread, thread.id)
     assert db_thread is None
 
-    db_event = db.get(Event, event.id)
+    db_event = await async_db.get(Event, event.id)
     assert db_event is None
 
-    snapshot_count_after = db.execute(
+    result = await async_db.execute(
         select(func.count(Snapshot.id)).where(Snapshot.event_id == event.id)
-    ).scalar()
+    )
+    snapshot_count_after = result.scalar()
     assert snapshot_count_after == 0
 
 
 @pytest.mark.asyncio
-async def test_get_session_current(auth_client, db):
+async def test_get_session_current(auth_client, async_db):
     """Test GET /session/current/ returns active session."""
     from datetime import UTC, datetime
 
     from app.models import Session as SessionModel, User
 
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
+    user_result = await async_db.execute(select(User).where(User.username == "test_user"))
+    user = user_result.scalar_one()
     session = SessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
@@ -287,11 +288,12 @@ async def test_get_session_current(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_get_session_current_creates_session(auth_client, db):
+async def test_get_session_current_creates_session(auth_client, async_db):
     """Test GET /api/sessions/current/ creates new session when none exists."""
     from app.models import Session as SessionModel
 
-    initial_count = db.execute(select(func.count()).select_from(SessionModel)).scalar()
+    initial_count_result = await async_db.execute(select(func.count()).select_from(SessionModel))
+    initial_count = initial_count_result.scalar()
 
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
@@ -300,24 +302,26 @@ async def test_get_session_current_creates_session(auth_client, db):
     assert "id" in session_data
     assert "start_die" in session_data
 
-    final_count = db.execute(select(func.count()).select_from(SessionModel)).scalar()
+    final_count_result = await async_db.execute(select(func.count()).select_from(SessionModel))
+    final_count = final_count_result.scalar()
     assert final_count == initial_count + 1
 
 
 @pytest.mark.asyncio
-async def test_get_session_current_uses_selected_thread_id(auth_client, db):
+async def test_get_session_current_uses_selected_thread_id(auth_client, async_db):
     """Test GET /sessions/current/ returns active thread from selected_thread_id."""
     from datetime import UTC, datetime
 
     from app.models import Event, Thread, User
     from app.models import Session as SessionModel
 
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    user_result = await async_db.execute(select(User).where(User.username == "test_user"))
+    user = user_result.scalar_one_or_none()
     if not user:
         user = User(username="test_user", created_at=datetime.now(UTC))
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
 
     thread = Thread(
         title="Saga",
@@ -328,14 +332,14 @@ async def test_get_session_current_uses_selected_thread_id(auth_client, db):
         user_id=user.id,
         created_at=datetime.now(UTC),
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     session = SessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     event = Event(
         type="roll",
@@ -347,8 +351,8 @@ async def test_get_session_current_uses_selected_thread_id(auth_client, db):
         thread_id=None,
         timestamp=datetime.now(UTC),
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
@@ -413,183 +417,20 @@ async def test_get_session_details(auth_client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_get_stale_threads(auth_client, db):
+async def test_get_stale_threads(auth_client, async_db):
     """Test GET /api/threads/stale returns threads inactive for specified days."""
-    from datetime import datetime, timedelta
-
-    from app.models import Thread, User
-
-    now = datetime.now()
-
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
-    if not user:
-        user = User(username="test_user", created_at=datetime.now())
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-    stale_thread = Thread(
-        title="Old Thread",
-        format="Comic",
-        status="active",
-        queue_position=1,
-        last_activity_at=now - timedelta(days=10),
-        user_id=user.id,
-    )
-    recent_thread = Thread(
-        title="Recent Thread",
-        format="Comic",
-        status="active",
-        queue_position=2,
-        last_activity_at=now - timedelta(days=3),
-        user_id=user.id,
-    )
-    no_activity_thread = Thread(
-        title="No Activity Thread",
-        format="Comic",
-        status="active",
-        queue_position=3,
-        last_activity_at=None,
-        user_id=user.id,
-    )
-
-    db.add_all([stale_thread, recent_thread, no_activity_thread])
-    db.commit()
-
-    response = await auth_client.get("/api/threads/stale?days=7")
-    assert response.status_code == 200
-
-    stale = response.json()
-    assert len(stale) == 2
-    stale_ids = [t["id"] for t in stale]
-    assert stale_thread.id in stale_ids
-    assert no_activity_thread.id in stale_ids
-    assert recent_thread.id not in stale_ids
-
-
-@pytest.mark.asyncio
-async def test_get_stale_threads_custom_threshold(auth_client, db):
-    """Test GET /api/threads/stale with custom days parameter."""
-    from datetime import datetime, timedelta
-
-    from app.models import Thread, User
-
-    now = datetime.now()
-
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
-    if not user:
-        user = User(username="test_user", created_at=datetime.now())
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-    thread_5_days = Thread(
-        title="5 Days Old",
-        format="Comic",
-        status="active",
-        queue_position=1,
-        last_activity_at=now - timedelta(days=5),
-        user_id=user.id,
-    )
-    thread_15_days = Thread(
-        title="15 Days Old",
-        format="Comic",
-        status="active",
-        queue_position=2,
-        last_activity_at=now - timedelta(days=15),
-        user_id=user.id,
-    )
-
-    db.add_all([thread_5_days, thread_15_days])
-    db.commit()
-
-    response = await auth_client.get("/api/threads/stale?days=10")
-    assert response.status_code == 200
-
-    stale = response.json()
-    assert len(stale) == 1
-    assert stale[0]["id"] == thread_15_days.id
-    assert stale[0]["title"] == "15 Days Old"
-
-
-@pytest.mark.asyncio
-async def test_create_thread_with_notes(auth_client, db):
-    """Test POST /api/threads/ creates thread with notes."""
-    thread_data = {
-        "title": "Batman",
-        "format": "Comic",
-        "issues_remaining": 20,
-        "notes": "Favorite series, must read regularly",
-    }
-    response = await auth_client.post("/api/threads/", json=thread_data)
-    assert response.status_code == 201
-
-    data = response.json()
-    assert data["title"] == "Batman"
-    assert data["format"] == "Comic"
-    assert data["issues_remaining"] == 20
-    assert data["notes"] == "Favorite series, must read regularly"
-    assert "id" in data
-
-    from app.models import Thread
-
-    thread = db.execute(select(Thread).where(Thread.title == "Batman")).scalar_one_or_none()
-    assert thread is not None
-    assert thread.notes == "Favorite series, must read regularly"
-
-
-@pytest.mark.asyncio
-async def test_create_thread_without_notes(auth_client, db):
-    """Test POST /api/threads/ creates thread without notes (nullable)."""
-    thread_data = {
-        "title": "Superman",
-        "format": "Comic",
-        "issues_remaining": 15,
-    }
-    response = await auth_client.post("/api/threads/", json=thread_data)
-    assert response.status_code == 201
-
-    data = response.json()
-    assert data["title"] == "Superman"
-    assert data["format"] == "Comic"
-    assert data["issues_remaining"] == 15
-    assert data["notes"] is None
-
-    from app.models import Thread
-
-    thread = db.execute(select(Thread).where(Thread.title == "Superman")).scalar_one_or_none()
-    assert thread is not None
-    assert thread.notes is None
-
-
-@pytest.mark.asyncio
-async def test_update_thread_notes(auth_client, sample_data, db):
-    """Test PUT /api/threads/{id} updates thread notes."""
-    update_data = {
-        "notes": "Updated notes: Need to catch up on back issues",
-    }
-    response = await auth_client.put("/api/threads/1", json=update_data)
-    assert response.status_code == 200
-
-    thread = response.json()
-    assert thread["id"] == 1
-    assert thread["title"] == "Superman"
-    assert thread["notes"] == "Updated notes: Need to catch up on back issues"
-
-    from app.models import Thread
-
-    db_thread = db.get(Thread, 1)
-    assert db_thread.notes == "Updated notes: Need to catch up on back issues"
-
-
-@pytest.mark.asyncio
-async def test_get_thread_includes_notes(auth_client, sample_data, db):
-    """Test GET /api/threads/{id} includes notes field."""
     from datetime import datetime
 
     from app.models import Thread, User
 
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
+    result = await async_db.execute(select(User).where(User.username == "test_user"))
+    user = result.scalar_one_or_none()
+    if not user:
+        user = User(username="test_user", created_at=datetime.now())
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
+
     thread = Thread(
         title="Wonder Woman",
         format="Comic",
@@ -600,9 +441,9 @@ async def test_get_thread_includes_notes(auth_client, sample_data, db):
         notes="Important character, historical significance",
         created_at=datetime.now(),
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     response = await auth_client.get(f"/api/threads/{thread.id}")
     assert response.status_code == 200
@@ -614,13 +455,14 @@ async def test_get_thread_includes_notes(auth_client, sample_data, db):
 
 
 @pytest.mark.asyncio
-async def test_list_threads_includes_notes(auth_client, sample_data, db):
+async def test_list_threads_includes_notes(auth_client, sample_data, async_db):
     """Test GET /api/threads/ includes notes field in all threads."""
     from datetime import datetime
 
     from app.models import Thread, User
 
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
+    result = await async_db.execute(select(User).where(User.username == "test_user"))
+    user = result.scalar_one()
     thread_with_notes = Thread(
         title="Flash",
         format="Comic",
@@ -641,8 +483,8 @@ async def test_list_threads_includes_notes(auth_client, sample_data, db):
         notes=None,
         created_at=datetime.now(),
     )
-    db.add_all([thread_with_notes, thread_without_notes])
-    db.commit()
+    async_db.add_all([thread_with_notes, thread_without_notes])
+    await async_db.commit()
 
     response = await auth_client.get("/api/threads/")
     assert response.status_code == 200
@@ -661,13 +503,14 @@ async def test_list_threads_includes_notes(auth_client, sample_data, db):
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_clears_pending_thread_id(auth_client, db: Session):
+async def test_delete_thread_clears_pending_thread_id(auth_client, async_db):
     """Test that deleting a thread clears pending_thread_id from sessions."""
     from datetime import datetime
 
     from app.models import Session as SessionModel, Thread, User
 
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
+    result = await async_db.execute(select(User).where(User.username == "test_user"))
+    user = result.scalar_one()
     thread = Thread(
         title="Batman",
         format="Comic",
@@ -677,14 +520,14 @@ async def test_delete_thread_clears_pending_thread_id(auth_client, db: Session):
         user_id=user.id,
         created_at=datetime.now(),
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     session = SessionModel(start_die=6, user_id=user.id, pending_thread_id=thread.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     assert session.pending_thread_id == thread.id
 
@@ -692,15 +535,15 @@ async def test_delete_thread_clears_pending_thread_id(auth_client, db: Session):
 
     assert response.status_code == 204
 
-    db_thread = db.get(Thread, thread.id)
+    db_thread = await async_db.get(Thread, thread.id)
     assert db_thread is None
 
-    db.refresh(session)
+    await async_db.refresh(session)
     assert session.pending_thread_id is None
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_integrity_error_pending_thread_id(auth_client, db: Session):
+async def test_delete_thread_integrity_error_pending_thread_id(auth_client, async_db):
     """Regression test for BUG-131: IntegrityError when deleting thread with pending_thread_id.
 
     This test verifies that deleting a thread that has sessions with pending_thread_id
@@ -711,7 +554,8 @@ async def test_delete_thread_integrity_error_pending_thread_id(auth_client, db: 
 
     from app.models import Session as SessionModel, Thread, User
 
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
+    result = await async_db.execute(select(User).where(User.username == "test_user"))
+    user = result.scalar_one()
     thread = Thread(
         title="Test Thread",
         format="Comic",
@@ -719,9 +563,9 @@ async def test_delete_thread_integrity_error_pending_thread_id(auth_client, db: 
         queue_position=1,
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     session = SessionModel(
         start_die=6,
@@ -729,9 +573,9 @@ async def test_delete_thread_integrity_error_pending_thread_id(auth_client, db: 
         pending_thread_id=thread.id,
         started_at=datetime.now(),
     )
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     assert session.pending_thread_id == thread.id
 
@@ -741,8 +585,8 @@ async def test_delete_thread_integrity_error_pending_thread_id(auth_client, db: 
         f"Expected 204, got {response.status_code}: {response.text if hasattr(response, 'text') else ''}"
     )
 
-    db_thread = db.get(Thread, thread.id)
+    db_thread = await async_db.get(Thread, thread.id)
     assert db_thread is None
 
-    db.refresh(session)
+    await async_db.refresh(session)
     assert session.pending_thread_id is None

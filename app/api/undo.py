@@ -4,11 +4,11 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.database import get_db
+from app.database import get_db_async
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
@@ -21,11 +21,11 @@ clear_cache = None
 
 
 @router.post("/{session_id}/undo/{snapshot_id}")
-def undo_to_snapshot(
+async def undo_to_snapshot(
     session_id: int,
     snapshot_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> SessionResponse:
     """Undo session state to a specific snapshot with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
@@ -37,28 +37,24 @@ def undo_to_snapshot(
 
     while retries < max_retries:
         try:
-            session = db.get(SessionModel, session_id, with_for_update=True)
+            result = await db.execute(
+                select(SessionModel)
+                .where(and_(SessionModel.id == session_id, SessionModel.user_id == current_user.id))
+                .with_for_update()
+            )
+            session = result.scalar_one_or_none()
             if not session:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Session {session_id} not found",
                 )
 
-            if session.user_id != current_user.id:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Session {session_id} not found",
-                )
-
-            snapshot = (
-                db.execute(
-                    select(Snapshot)
-                    .where(Snapshot.session_id == session_id)
-                    .where(Snapshot.id == snapshot_id)
-                )
-                .scalars()
-                .first()
+            result = await db.execute(
+                select(Snapshot)
+                .where(Snapshot.session_id == session_id)
+                .where(Snapshot.id == snapshot_id)
             )
+            snapshot = result.scalars().first()
 
             if not snapshot:
                 raise HTTPException(
@@ -66,24 +62,21 @@ def undo_to_snapshot(
                     detail=f"Snapshot {snapshot_id} not found for session {session_id}",
                 )
 
-            from sqlalchemy import delete, or_, update
-
             snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
 
-            current_threads = (
-                db.execute(select(Thread).where(Thread.user_id == current_user.id)).scalars().all()
-            )
+            result = await db.execute(select(Thread).where(Thread.user_id == current_user.id))
+            current_threads = result.scalars().all()
             current_thread_ids = {thread.id for thread in current_threads}
 
             threads_to_delete = current_thread_ids - snapshot_thread_ids
             if threads_to_delete:
-                db.execute(
+                await db.execute(
                     update(SessionModel)
                     .where(SessionModel.id == session_id)
                     .where(SessionModel.pending_thread_id.in_(threads_to_delete))
                     .values(pending_thread_id=None)
                 )
-                db.execute(
+                await db.execute(
                     update(Event)
                     .where(
                         or_(
@@ -93,7 +86,7 @@ def undo_to_snapshot(
                     )
                     .values(thread_id=None, selected_thread_id=None)
                 )
-                db.execute(
+                await db.execute(
                     delete(Thread)
                     .where(Thread.id.in_(threads_to_delete))
                     .where(Thread.user_id == current_user.id)
@@ -102,7 +95,7 @@ def undo_to_snapshot(
 
             for thread_id, state in snapshot.thread_states.items():
                 thread_id_int = int(thread_id)
-                thread = db.get(Thread, thread_id_int)
+                thread = await db.get(Thread, thread_id_int)
                 if thread:
                     if "title" in state:
                         thread.title = state["title"]
@@ -151,35 +144,28 @@ def undo_to_snapshot(
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)
                 session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
 
-            db.commit()
+            await db.commit()
 
             if clear_cache:
                 clear_cache()
 
-            active_thread = (
-                db.execute(
-                    select(Event)
-                    .where(Event.session_id == session_id)
-                    .where(Event.type == "roll")
-                    .where(Event.selected_thread_id.is_not(None))
-                    .order_by(Event.timestamp.desc())
-                )
-                .scalars()
-                .first()
+            result = await db.execute(
+                select(Event)
+                .where(Event.session_id == session_id)
+                .where(Event.type == "roll")
+                .where(Event.selected_thread_id.is_not(None))
+                .order_by(Event.timestamp.desc())
             )
+            active_thread = result.scalars().first()
 
             thread = None
             if active_thread and active_thread.selected_thread_id:
-                thread = db.get(Thread, active_thread.selected_thread_id)
+                thread = await db.get(Thread, active_thread.selected_thread_id)
 
-            snapshot_count = (
-                db.execute(
-                    select(func.count())
-                    .select_from(Snapshot)
-                    .where(Snapshot.session_id == session_id)
-                ).scalar()
-                or 0
+            result = await db.execute(
+                select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session_id)
             )
+            snapshot_count = result.scalar() or 0
 
             return SessionResponse(
                 id=session_id,
@@ -199,14 +185,14 @@ def undo_to_snapshot(
                 )
                 if thread
                 else None,
-                current_die=get_current_die(session_id, db),
+                current_die=await get_current_die(session_id, db),
                 last_rolled_result=active_thread.result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
-                db.rollback()
+                await db.rollback()
                 retries += 1
                 if retries >= max_retries:
                     raise
@@ -219,13 +205,13 @@ def undo_to_snapshot(
 
 
 @router.get("/{session_id}/snapshots")
-def list_session_snapshots(
+async def list_session_snapshots(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> list[dict]:
     """List all snapshots for a session."""
-    session = db.get(SessionModel, session_id)
+    session = await db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -238,15 +224,12 @@ def list_session_snapshots(
             detail=f"Session {session_id} not found",
         )
 
-    snapshots = (
-        db.execute(
-            select(Snapshot)
-            .where(Snapshot.session_id == session_id)
-            .order_by(Snapshot.created_at.desc())
-        )
-        .scalars()
-        .all()
+    result = await db.execute(
+        select(Snapshot)
+        .where(Snapshot.session_id == session_id)
+        .order_by(Snapshot.created_at.desc())
     )
+    snapshots = result.scalars().all()
 
     return [
         {

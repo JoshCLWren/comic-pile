@@ -8,14 +8,16 @@ from sqlalchemy import select
 from app.models import Event, Session as SessionModel, Thread, User
 
 
-def test_seed_data_marks_as_test(db):
+@pytest.mark.asyncio
+async def test_seed_data_marks_as_test(async_db):
     """Test that seeded data is marked as test data."""
-    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
     if user is None:
         user = User(id=1, username="test_user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
 
     thread = Thread(
         title="Test Comic",
@@ -26,23 +28,24 @@ def test_seed_data_marks_as_test(db):
         is_test=True,
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     assert thread.is_test is True
 
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_bulk_delete_test_data(client, db):
+async def test_bulk_delete_test_data(client, async_db):
     """Test bulk delete of test data."""
-    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
     if user is None:
         user = User(id=1, username="test_user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
 
     test_thread1 = Thread(
         title="Test Comic 1",
@@ -71,11 +74,11 @@ async def test_bulk_delete_test_data(client, db):
         is_test=False,
         user_id=user.id,
     )
-    db.add_all([test_thread1, test_thread2, real_thread])
-    db.commit()
-    db.refresh(test_thread1)
-    db.refresh(test_thread2)
-    db.refresh(real_thread)
+    async_db.add_all([test_thread1, test_thread2, real_thread])
+    await async_db.commit()
+    await async_db.refresh(test_thread1)
+    await async_db.refresh(test_thread2)
+    await async_db.refresh(real_thread)
 
     session = SessionModel(
         started_at=datetime.now(UTC),
@@ -83,9 +86,9 @@ async def test_bulk_delete_test_data(client, db):
         start_die=6,
         user_id=user.id,
     )
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     event1 = Event(
         type="roll",
@@ -106,8 +109,8 @@ async def test_bulk_delete_test_data(client, db):
         thread_id=test_thread2.id,
         session_id=session.id,
     )
-    db.add_all([event1, event2])
-    db.commit()
+    async_db.add_all([event1, event2])
+    await async_db.commit()
 
     response = await client.post("/api/admin/delete-test-data/")
     assert response.status_code == 200
@@ -115,21 +118,23 @@ async def test_bulk_delete_test_data(client, db):
     assert data["deleted_threads"] == 2
     assert data["deleted_events"] >= 2
 
-    remaining_threads = db.execute(select(Thread).where(Thread.user_id == user.id)).scalars().all()
+    result = await async_db.execute(select(Thread).where(Thread.user_id == user.id))
+    remaining_threads = result.scalars().all()
     assert len(remaining_threads) == 1
     assert remaining_threads[0].title == "Real Comic"
 
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_export_csv_excludes_test_data(client, db):
+async def test_export_csv_excludes_test_data(client, async_db):
     """Test that CSV export excludes test data."""
-    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
     if user is None:
         user = User(id=1, username="test_user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
 
     test_thread = Thread(
         title="Test Comic",
@@ -149,8 +154,8 @@ async def test_export_csv_excludes_test_data(client, db):
         is_test=False,
         user_id=user.id,
     )
-    db.add_all([test_thread, real_thread])
-    db.commit()
+    async_db.add_all([test_thread, real_thread])
+    await async_db.commit()
 
     response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
@@ -164,16 +169,17 @@ async def test_export_csv_excludes_test_data(client, db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_export_json_excludes_test_data(client, db):
+async def test_export_json_excludes_test_data(client, async_db):
     """Test that JSON export excludes test data."""
     import json
 
-    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
     if user is None:
         user = User(id=1, username="test_user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
 
     test_thread = Thread(
         title="Test Comic",
@@ -193,8 +199,8 @@ async def test_export_json_excludes_test_data(client, db):
         is_test=False,
         user_id=user.id,
     )
-    db.add_all([test_thread, real_thread])
-    db.commit()
+    async_db.add_all([test_thread, real_thread])
+    await async_db.commit()
 
     response = await client.get("/api/admin/export/json/")
     assert response.status_code == 200
@@ -206,14 +212,15 @@ async def test_export_json_excludes_test_data(client, db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_export_summary_excludes_test_only_sessions(client, db):
+async def test_export_summary_excludes_test_only_sessions(client, async_db):
     """Test that session summary export excludes sessions with only test data."""
-    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
     if user is None:
         user = User(id=1, username="test_user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
 
     test_thread = Thread(
         title="Test Comic",
@@ -233,10 +240,10 @@ async def test_export_summary_excludes_test_only_sessions(client, db):
         is_test=False,
         user_id=user.id,
     )
-    db.add_all([test_thread, real_thread])
-    db.commit()
-    db.refresh(test_thread)
-    db.refresh(real_thread)
+    async_db.add_all([test_thread, real_thread])
+    await async_db.commit()
+    await async_db.refresh(test_thread)
+    await async_db.refresh(real_thread)
 
     test_session = SessionModel(
         started_at=datetime.now(UTC),
@@ -250,10 +257,10 @@ async def test_export_summary_excludes_test_only_sessions(client, db):
         start_die=6,
         user_id=user.id,
     )
-    db.add_all([test_session, real_session])
-    db.commit()
-    db.refresh(test_session)
-    db.refresh(real_session)
+    async_db.add_all([test_session, real_session])
+    await async_db.commit()
+    await async_db.refresh(test_session)
+    await async_db.refresh(real_session)
 
     test_event = Event(
         type="rate",
@@ -275,8 +282,8 @@ async def test_export_summary_excludes_test_only_sessions(client, db):
         thread_id=real_thread.id,
         session_id=real_session.id,
     )
-    db.add_all([test_event, real_event])
-    db.commit()
+    async_db.add_all([test_event, real_event])
+    await async_db.commit()
 
     response = await client.get("/api/admin/export/summary/")
     assert response.status_code == 200
@@ -288,19 +295,20 @@ async def test_export_summary_excludes_test_only_sessions(client, db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_delete_test_data_clears_pending_thread_id(client, db):
+async def test_delete_test_data_clears_pending_thread_id(client, async_db):
     """Regression test for BUG-131: IntegrityError when deleting test thread with pending_thread_id.
 
     This test verifies that deleting test data that has sessions with pending_thread_id
     set does not cause a ForeignViolation error. The fix ensures that the UPDATE
     to clear pending_thread_id is flushed before the DELETE executes.
     """
-    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
     if user is None:
         user = User(id=1, username="test_user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
 
     test_thread = Thread(
         title="Test Comic",
@@ -311,9 +319,9 @@ async def test_delete_test_data_clears_pending_thread_id(client, db):
         is_test=True,
         user_id=user.id,
     )
-    db.add(test_thread)
-    db.commit()
-    db.refresh(test_thread)
+    async_db.add(test_thread)
+    await async_db.commit()
+    await async_db.refresh(test_thread)
 
     session = SessionModel(
         started_at=datetime.now(UTC),
@@ -322,9 +330,9 @@ async def test_delete_test_data_clears_pending_thread_id(client, db):
         user_id=user.id,
         pending_thread_id=test_thread.id,
     )
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     assert session.pending_thread_id == test_thread.id
 
@@ -334,9 +342,9 @@ async def test_delete_test_data_clears_pending_thread_id(client, db):
         f"Expected 200, got {response.status_code}: {response.text if hasattr(response, 'text') else ''}"
     )
 
-    db_thread = db.get(Thread, test_thread.id)
+    db_thread = await async_db.get(Thread, test_thread.id)
     assert db_thread is None
 
-    db_session = db.get(SessionModel, session.id)
+    db_session = await async_db.get(SessionModel, session.id)
     if db_session:
         assert db_session.pending_thread_id is None

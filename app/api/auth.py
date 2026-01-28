@@ -5,8 +5,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import exc as sqlalchemy_exc
-from sqlalchemy.orm import Session
+from sqlalchemy import exc as sqlalchemy_exc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     create_access_token,
@@ -18,7 +18,7 @@ from app.auth import (
     verify_token,
     JWTError,
 )
-from app.database import get_db
+from app.database import get_db_async
 from app.models.user import User
 from app.schemas.auth import (
     RefreshTokenRequest,
@@ -32,13 +32,14 @@ router = APIRouter(tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse)
-def register_user(
+async def register_user(
     user_data: UserRegisterRequest,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db_async)],
 ) -> TokenResponse:
     """Register a new user and return tokens."""
     # Check if username already exists
-    existing_user = db.query(User).filter(User.username == user_data.username).first()
+    result = await db.execute(select(User).where(User.username == user_data.username).limit(1))
+    existing_user = result.scalar_one_or_none()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -47,7 +48,8 @@ def register_user(
 
     # Check if email already exists
     if user_data.email:
-        existing_email = db.query(User).filter(User.email == user_data.email).first()
+        result = await db.execute(select(User).where(User.email == user_data.email).limit(1))
+        existing_email = result.scalar_one_or_none()
         if existing_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -63,10 +65,10 @@ def register_user(
     )
     db.add(user)
     try:
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
     except sqlalchemy_exc.IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username or email already registered",
@@ -84,12 +86,13 @@ def register_user(
 
 
 @router.post("/login", response_model=TokenResponse)
-def login_user(
+async def login_user(
     login_data: UserLoginRequest,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db_async)],
 ) -> TokenResponse:
     """Authenticate user and return tokens."""
-    user = db.query(User).filter(User.username == login_data.username).first()
+    result = await db.execute(select(User).where(User.username == login_data.username).limit(1))
+    user = result.scalar_one_or_none()
     if not user or not user.password_hash:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -114,9 +117,9 @@ def login_user(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_access_token(
+async def refresh_access_token(
     refresh_data: RefreshTokenRequest,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db_async)],
 ) -> TokenResponse:
     """Refresh access token using refresh token."""
     try:
@@ -151,14 +154,16 @@ def refresh_access_token(
     # Check if refresh token is revoked
     from app.models.revoked_token import RevokedToken
 
-    revoked = db.query(RevokedToken).filter(RevokedToken.jti == jti).first()
+    result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti).limit(1))
+    revoked = result.scalar_one_or_none()
     if revoked:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has been revoked",
         )
 
-    user = db.query(User).filter(User.username == username).first()
+    result = await db.execute(select(User).where(User.username == username).limit(1))
+    user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -177,15 +182,15 @@ def refresh_access_token(
 
 
 @router.post("/logout")
-def logout_user(
+async def logout_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())],
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_db_async)],
 ) -> dict:
     """Logout user by revoking their current token."""
     token = credentials.credentials
     try:
-        revoke_token(db, token, current_user.id)
+        await revoke_token(db, token, current_user.id)
     except Exception as err:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -195,7 +200,7 @@ def logout_user(
 
 
 @router.get("/me", response_model=UserResponse)
-def get_current_user_info(
+async def get_current_user_info(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserResponse:
     """Get current authenticated user's information."""

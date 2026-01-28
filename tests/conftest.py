@@ -1,7 +1,7 @@
 """Shared pytest fixtures."""
 
 import os
-from collections.abc import AsyncGenerator, AsyncIterator, Generator
+from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
@@ -17,9 +17,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.engine import Connection, make_url
-from sqlalchemy.orm import Session, sessionmaker
 
-from app.database import Base, get_db
+from app.database import Base, get_db_async
 from app.main import app
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
@@ -101,44 +100,49 @@ def ensure_test_schema() -> None:
     _SCHEMA_PREPARED.add(database_url)
 
 
-def _ensure_default_user(db: Session) -> User:
+async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
-    user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+    result = await db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
     if not user:
-        user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+        result = await db.execute(select(User).where(User.username == "test_user"))
+        user = result.scalar_one_or_none()
         if not user:
             user = User(username="test_user", created_at=datetime.now(UTC))
             db.add(user)
             try:
-                db.commit()
+                await db.commit()
             except Exception:
-                db.rollback()
-                user = db.execute(select(User).where(User.username == "test_user")).scalar_one()
+                await db.rollback()
+                result = await db.execute(select(User).where(User.username == "test_user"))
+                user = result.scalar_one()
             else:
-                db.refresh(user)
+                await db.refresh(user)
     return user
 
 
-def get_or_create_user(db: Session, username: str = "test_user") -> User:
-    """Get or create user with given username."""
-    user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str = "test_user") -> User:
+    """Get or create user with given username (async)."""
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
     if not user:
         user = User(username=username, created_at=datetime.now(UTC))
         db.add(user)
         try:
-            db.commit()
+            await db.commit()
         except Exception:
-            db.rollback()
-            user = db.execute(select(User).where(User.username == username)).scalar_one()
+            await db.rollback()
+            result = await db.execute(select(User).where(User.username == username))
+            user = result.scalar_one()
         else:
-            db.refresh(user)
+            await db.refresh(user)
     return user
 
 
-@pytest.fixture(scope="function")
-def default_user(db: Session) -> User:
+@pytest_asyncio.fixture(scope="function")
+async def default_user(async_db: SQLAlchemyAsyncSession) -> User:
     """Get or create default test user."""
-    return _ensure_default_user(db)
+    return await _ensure_default_user_async(async_db)
 
 
 def get_test_database_url() -> str:
@@ -213,6 +217,13 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
         async with async_session_maker() as session:
             try:
+                await session.execute(
+                    text(
+                        "TRUNCATE TABLE sessions, events, threads, snapshots, revoked_tokens, users "
+                        "RESTART IDENTITY CASCADE;"
+                    )
+                )
+                await session.commit()
                 yield session
             finally:
                 await session.close()
@@ -221,126 +232,31 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
     await engine.dispose()
 
 
-@pytest.fixture(scope="function")
-def db(test_engine) -> Generator[Session]:
-    """Create test database with transaction rollback (PostgreSQL)."""
-    engine = test_engine
-    Base.metadata.create_all(bind=engine)
-    connection = engine.connect()
-    connection.execute(
-        text(
-            "TRUNCATE TABLE sessions, events, threads, snapshots, revoked_tokens, users "
-            "RESTART IDENTITY CASCADE;"
-        )
-    )
-    connection.commit()
-    transaction = None
-    session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
+async def _create_async_db_override(async_session: SQLAlchemyAsyncSession):
+    """Create dependency override for get_db_async using provided async session."""
 
-    try:
-        _ensure_default_user(session)
-        yield session
-    finally:
-        session.close()
-        if transaction is not None:
-            transaction.rollback()
-        connection.close()
-
-
-@pytest.fixture(scope="function")
-def test_engine():
-    """Create a test database engine."""
-    database_url = get_sync_test_database_url()
-    engine = create_engine(database_url, echo=False)
-    yield engine
-    engine.dispose()
-
-
-@pytest.fixture(scope="function")
-def test_session_factory(test_engine):
-    """Provide a sessionmaker bound to the test database.
-
-    Use this instead of app.database.SessionLocal when tests need to create
-    additional database connections (e.g., for concurrent operation testing).
-    """
-    return sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
-
-
-def _create_db_override(db: Session):
-    """Create dependency override for get_db using provided session."""
-
-    def override_get_db():
+    async def override_get_db_async():
         try:
-            yield db
+            yield async_session
         finally:
             pass
 
-    return override_get_db
+    return override_get_db_async
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client(db: Session) -> AsyncGenerator[AsyncClient]:
-    """httpx.AsyncClient for API tests."""
-    app.dependency_overrides[get_db] = _create_db_override(db)
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-    app.dependency_overrides.clear()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def auth_client(db: Session) -> AsyncGenerator[AsyncClient]:
-    """httpx.AsyncClient with authentication headers for API tests."""
-    from app.auth import create_access_token
-
-    app.dependency_overrides[get_db] = _create_db_override(db)
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
-        if not user:
-            user = User(username="test_user", created_at=datetime.now(UTC))
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-
-        token = create_access_token(data={"sub": user.username, "jti": "test"})
-        ac.headers.update({"Authorization": f"Bearer {token}"})
-        yield ac
-    app.dependency_overrides.clear()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def safe_mode_auth_client(db: Session, safe_mode_user: User) -> AsyncGenerator[AsyncClient]:
-    """httpx.AsyncClient authenticated as safe_mode_user for safe mode tests."""
-    from app.auth import create_access_token
-
-    app.dependency_overrides[get_db] = _create_db_override(db)
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        token = create_access_token(data={"sub": safe_mode_user.username, "jti": "test"})
-        ac.headers.update({"Authorization": f"Bearer {token}"})
-        yield ac
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture(scope="function")
-def session(db: Session) -> Generator[Session]:
-    """Get database session for tests."""
-    yield db
-
-
-@pytest.fixture(scope="function")
-def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User | list]:
-    """Create sample threads, sessions for testing."""
-    from datetime import UTC, datetime
-
+async def sample_data(
+    async_db: SQLAlchemyAsyncSession,
+) -> dict[str, Thread | SessionModel | Event | User | list]:
+    """Create sample threads, sessions for async testing."""
     now = datetime.now(UTC)
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    user = await async_db.execute(select(User).where(User.username == "test_user"))
+    user = user.scalar_one_or_none()
     if not user:
         user = User(username="test_user", id=1, created_at=now)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
 
     threads = [
         Thread(
@@ -391,11 +307,11 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
     ]
 
     for thread in threads:
-        db.add(thread)
-    db.flush()
+        async_db.add(thread)
+    await async_db.flush()
 
     for thread in threads:
-        db.refresh(thread)
+        await async_db.refresh(thread)
 
     sessions = [
         SessionModel(
@@ -411,11 +327,11 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
     ]
 
     for sess in sessions:
-        db.add(sess)
-    db.flush()
+        async_db.add(sess)
+    await async_db.flush()
 
     for sess in sessions:
-        db.refresh(sess)
+        await async_db.refresh(sess)
 
     events = [
         Event(
@@ -441,13 +357,45 @@ def sample_data(db: Session) -> dict[str, Thread | SessionModel | Event | User |
     ]
 
     for event in events:
-        db.add(event)
-    db.flush()
+        async_db.add(event)
+    await async_db.flush()
 
     for event in events:
-        db.refresh(event)
+        await async_db.refresh(event)
 
     return {"threads": threads, "sessions": sessions, "events": events, "user": user}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
+    """httpx.AsyncClient for API tests."""
+    app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(scope="function")
+async def auth_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
+    """httpx.AsyncClient with authentication headers for API tests."""
+    from app.auth import create_access_token
+
+    app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        result = await async_db.execute(select(User).where(User.username == "test_user"))
+        user = result.scalar_one_or_none()
+        if not user:
+            user = User(username="test_user", created_at=datetime.now(UTC))
+            async_db.add(user)
+            await async_db.commit()
+            await async_db.refresh(user)
+
+        token = create_access_token(data={"sub": user.username, "jti": "test"})
+        ac.headers.update({"Authorization": f"Bearer {token}"})
+        yield ac
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="function")

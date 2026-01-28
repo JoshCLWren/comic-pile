@@ -2,7 +2,8 @@
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+
 
 from app.models.user import User
 
@@ -11,7 +12,7 @@ class TestAuth:
     """Test authentication endpoints."""
 
     @pytest.mark.asyncio
-    async def test_register_user_success(self, client: AsyncClient, db: Session) -> None:
+    async def test_register_user_success(self, client: AsyncClient, async_db) -> None:
         """Test successful user registration."""
         user_data = {
             "username": "newuser",
@@ -28,14 +29,15 @@ class TestAuth:
         assert data["token_type"] == "bearer"
 
         # Verify user was created in database
-        user = db.query(User).filter(User.username == "newuser").first()
+        result = await async_db.execute(select(User).where(User.username == "newuser"))
+        user = result.scalar_one_or_none()
         assert user is not None
         assert user.email == "newuser@example.com"
         assert user.password_hash is not None
         assert user.password_hash != "securepassword123"  # Should be hashed
 
     @pytest.mark.asyncio
-    async def test_register_user_duplicate_username(self, client: AsyncClient, db: Session) -> None:
+    async def test_register_user_duplicate_username(self, client: AsyncClient, async_db) -> None:
         """Test registration with duplicate username fails."""
         # Create first user
         user_data = {
@@ -57,7 +59,7 @@ class TestAuth:
         assert "Username already registered" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_register_user_duplicate_email(self, client: AsyncClient, db: Session) -> None:
+    async def test_register_user_duplicate_email(self, client: AsyncClient, async_db) -> None:
         """Test registration with duplicate email fails."""
         # Create first user
         user_data = {
@@ -79,7 +81,7 @@ class TestAuth:
         assert "Email already registered" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_login_success(self, client: AsyncClient, db: Session) -> None:
+    async def test_login_success(self, client: AsyncClient, async_db) -> None:
         """Test successful user login."""
         # Register user first
         user_data = {
@@ -115,7 +117,7 @@ class TestAuth:
         assert "Incorrect username or password" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_refresh_token_success(self, client: AsyncClient, db: Session) -> None:
+    async def test_refresh_token_success(self, client: AsyncClient, async_db) -> None:
         """Test successful token refresh."""
         # Register and login user
         user_data = {
@@ -164,7 +166,7 @@ class TestAuth:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_get_current_user_authenticated(self, client: AsyncClient, db: Session) -> None:
+    async def test_get_current_user_authenticated(self, client: AsyncClient, async_db) -> None:
         """Test getting current user info when authenticated."""
         # Register and login user
         user_data = {
@@ -201,7 +203,7 @@ class TestAuth:
         assert "Not authenticated" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_logout(self, client: AsyncClient, db: Session) -> None:
+    async def test_logout(self, client: AsyncClient, async_db) -> None:
         """Test user logout."""
         # Register and login user
         user_data = {
@@ -227,7 +229,7 @@ class TestAuth:
         assert response.json() == {"message": "Successfully logged out"}
 
     @pytest.mark.asyncio
-    async def test_logout_idempotent(self, client: AsyncClient, db: Session) -> None:
+    async def test_logout_idempotent(self, client: AsyncClient, async_db) -> None:
         """Test that revoke_token is idempotent and doesn't raise on duplicate."""
         user_data = {
             "username": "logoutidempotentuser",
@@ -248,9 +250,10 @@ class TestAuth:
         from app.auth import revoke_token
         from app.models.user import User
 
-        user = db.query(User).filter(User.username == user_data["username"]).first()
+        result = await async_db.execute(select(User).where(User.username == user_data["username"]))
+        user = result.scalar_one_or_none()
         assert user is not None
 
         access_token = tokens["access_token"]
-        revoke_token(db, access_token, user.id)
-        revoke_token(db, access_token, user.id)
+        await revoke_token(async_db, access_token, user.id)
+        await revoke_token(async_db, access_token, user.id)
