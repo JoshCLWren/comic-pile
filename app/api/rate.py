@@ -4,12 +4,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
 from app.auth import get_current_user
 from app.config import get_rating_settings
-from app.database import get_db
+from app.database import get_db_async
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
@@ -23,9 +23,12 @@ from comic_pile.session import get_current_die
 router = APIRouter()
 
 
-def snapshot_thread_states(db: Session, session_id: int, event: Event, user_id: int) -> None:
+async def snapshot_thread_states(
+    db: AsyncSession, session_id: int, event: Event, user_id: int
+) -> None:
     """Create a snapshot of all thread states for undo functionality."""
-    threads = db.execute(select(Thread).where(Thread.user_id == user_id)).scalars().all()
+    result = await db.execute(select(Thread).where(Thread.user_id == user_id))
+    threads = result.scalars().all()
 
     thread_states = {}
     for thread in threads:
@@ -47,7 +50,7 @@ def snapshot_thread_states(db: Session, session_id: int, event: Event, user_id: 
             "user_id": thread.user_id,
         }
 
-    session = db.get(SessionModel, session_id)
+    session = await db.get(SessionModel, session_id)
     session_state = None
     if session:
         session_state = {
@@ -63,7 +66,7 @@ def snapshot_thread_states(db: Session, session_id: int, event: Event, user_id: 
         description=f"After rating {event.rating}/5.0",
     )
     db.add(snapshot)
-    db.commit()
+    await db.commit()
 
 
 clear_cache = None
@@ -77,23 +80,20 @@ def _get_rating_limits() -> tuple[float, float, float]:
 
 @router.post("/", response_model=ThreadResponse)
 @limiter.limit("60/minute")
-def rate_thread(
+async def rate_thread(
     request: Request,
     rate_data: RateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> ThreadResponse:
     """Rate current reading and update thread."""
-    current_session = (
-        db.execute(
-            select(SessionModel)
-            .where(SessionModel.user_id == current_user.id)
-            .where(SessionModel.ended_at.is_(None))
-            .order_by(SessionModel.started_at.desc())
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(SessionModel)
+        .where(SessionModel.user_id == current_user.id)
+        .where(SessionModel.ended_at.is_(None))
+        .order_by(SessionModel.started_at.desc())
     )
+    current_session = result.scalars().first()
 
     if not current_session:
         raise HTTPException(
@@ -102,17 +102,14 @@ def rate_thread(
         )
 
     current_session_id = current_session.id
-    last_roll_event = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == current_session_id)
-            .where(Event.type == "roll")
-            .where(Event.selected_thread_id.is_not(None))
-            .order_by(Event.timestamp.desc())
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(Event)
+        .where(Event.session_id == current_session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id.is_not(None))
+        .order_by(Event.timestamp.desc())
     )
+    last_roll_event = result.scalars().first()
 
     if not last_roll_event:
         raise HTTPException(
@@ -120,18 +117,19 @@ def rate_thread(
             detail="No active thread. Please roll the dice first.",
         )
 
-    thread = db.execute(
+    result = await db.execute(
         select(Thread)
         .where(Thread.id == last_roll_event.selected_thread_id)
         .where(Thread.user_id == current_user.id)
-    ).scalar_one_or_none()
+    )
+    thread = result.scalar_one_or_none()
     if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {last_roll_event.selected_thread_id} not found",
         )
 
-    current_die = get_current_die(current_session_id, db)
+    current_die = await get_current_die(current_session_id, db)
 
     rating_min, rating_max, rating_threshold = _get_rating_limits()
 
@@ -162,13 +160,13 @@ def rate_thread(
     db.add(event)
 
     if rate_data.rating >= rating_threshold:
-        move_to_front(thread.id, current_user.id, db)
+        await move_to_front(thread.id, current_user.id, db)
     else:
-        move_to_back(thread.id, current_user.id, db)
+        await move_to_back(thread.id, current_user.id, db)
 
     if rate_data.finish_session and thread.issues_remaining <= 0:
         thread.status = "completed"
-        move_to_back(thread.id, current_user.id, db)
+        await move_to_back(thread.id, current_user.id, db)
         current_session.ended_at = datetime.now()
         current_session.snoozed_thread_ids = None
 
@@ -178,9 +176,9 @@ def rate_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
-    db.commit()
+    await db.commit()
 
-    snapshot_thread_states(db, current_session_id, event, current_user.id)
-    db.refresh(thread)
+    await snapshot_thread_states(db, current_session_id, event, current_user.id)
+    await db.refresh(thread)
 
     return thread_to_response(thread)

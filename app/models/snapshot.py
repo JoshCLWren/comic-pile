@@ -23,7 +23,9 @@ class Snapshot(Base):
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id"), nullable=True)
     thread_states: Mapped[dict] = mapped_column(JSON, nullable=False)
     session_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.now(UTC).replace(tzinfo=None)
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (

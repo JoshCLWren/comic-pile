@@ -5,6 +5,8 @@ import os
 
 import pytest
 
+from tests.conftest import _create_async_db_override
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -34,24 +36,18 @@ async def test_internal_routes_return_404_when_disabled(client, endpoint):
 
 
 @pytest.mark.asyncio
-async def test_admin_routes_accessible_when_enabled(sample_data, db):
+async def test_admin_routes_accessible_when_enabled(sample_data, async_db):
     """Admin routes work when ENABLE_INTERNAL_OPS_ROUTES is true."""
     from httpx import ASGITransport, AsyncClient
 
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
 
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
+    from app.database import get_db_async
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -232,7 +228,7 @@ async def test_non_sensitive_body_not_redacted(client, caplog):
 
 
 @pytest.mark.asyncio
-async def test_cors_origins_required_in_production(db):
+async def test_cors_origins_required_in_production(async_db):
     """CORS_ORIGINS is required in production mode, app fails to start without it."""
     from app.config import clear_settings_cache
 
@@ -264,7 +260,7 @@ async def test_cors_origins_required_in_production(db):
 
 
 @pytest.mark.asyncio
-async def test_cors_origins_allowed_in_production_when_set(db):
+async def test_cors_origins_allowed_in_production_when_set(async_db):
     """CORS_ORIGINS is respected in production mode when set correctly."""
     from httpx import ASGITransport, AsyncClient
 
@@ -274,17 +270,11 @@ async def test_cors_origins_allowed_in_production_when_set(db):
     os.environ["ENVIRONMENT"] = "production"
     os.environ["CORS_ORIGINS"] = "https://example.com,https://app.example.com"
 
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
+    from app.database import get_db_async
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -304,7 +294,7 @@ async def test_cors_origins_allowed_in_production_when_set(db):
 
 
 @pytest.mark.asyncio
-async def test_cors_defaults_to_wildcard_in_development(db):
+async def test_cors_defaults_to_wildcard_in_development(async_db):
     """CORS defaults to wildcard in development mode when CORS_ORIGINS is not set."""
     from httpx import ASGITransport, AsyncClient
 
@@ -316,17 +306,11 @@ async def test_cors_defaults_to_wildcard_in_development(db):
     if "CORS_ORIGINS" in os.environ:
         os.environ.pop("CORS_ORIGINS")
 
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
+    from app.database import get_db_async
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -346,7 +330,7 @@ async def test_cors_defaults_to_wildcard_in_development(db):
 
 
 @pytest.mark.asyncio
-async def test_cors_allow_credentials_is_false(db):
+async def test_cors_allow_credentials_is_false(async_db):
     """CORS middleware is configured with allow_credentials=False for JWT bearer token authentication."""
     from httpx import ASGITransport, AsyncClient
 
@@ -356,17 +340,11 @@ async def test_cors_allow_credentials_is_false(db):
     os.environ["ENVIRONMENT"] = "production"
     os.environ["CORS_ORIGINS"] = "https://example.com"
 
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
+    from app.database import get_db_async
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -394,7 +372,7 @@ async def test_cors_allow_credentials_is_false(db):
     ],
     ids=["production", "development"],
 )
-async def test_app_starts_successfully(db, environment, cors_origins):
+async def test_app_starts_successfully(async_db, environment, cors_origins):
     """App starts successfully in both production and development modes."""
     from httpx import ASGITransport, AsyncClient
 
@@ -407,18 +385,12 @@ async def test_app_starts_successfully(db, environment, cors_origins):
     if cors_origins:
         os.environ["CORS_ORIGINS"] = cors_origins
 
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-
-    from app.database import get_db
+    from app.database import get_db_async
 
     test_app = None
     try:
         test_app = create_app()
-        test_app.dependency_overrides[get_db] = override_get_db
+        test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

@@ -3,6 +3,7 @@
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.models import Event, Thread, User
@@ -11,22 +12,26 @@ from app.models import Session as SessionModel
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_roll_dice_updates_session(auth_api_client: AsyncClient, db: Session):
+async def test_roll_dice_updates_session(
+    auth_api_client_async: AsyncClient, async_db: AsyncSession
+):
     """Post to /roll, verify session updated in database."""
-    user = db.execute(select(User).where(User.username == "test_user@example.com")).scalar_one()
+    result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
+    user = result.scalar_one()
     thread = Thread(
         title="Test Comic", format="Comic", issues_remaining=5, queue_position=1, user_id=user.id
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
-    response = await auth_api_client.post("/api/roll/")
+    response = await auth_api_client_async.post("/api/roll/")
     assert response.status_code == 200
 
-    session = db.execute(
+    session_result = await async_db.execute(
         select(SessionModel).where(SessionModel.ended_at.is_(None))
-    ).scalar_one_or_none()
+    )
+    session = session_result.scalar_one_or_none()
     assert session is not None
     assert session.start_die == 6
 

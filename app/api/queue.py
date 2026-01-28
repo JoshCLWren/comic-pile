@@ -7,10 +7,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.database import get_db
+from app.database import get_db_async
 from app.middleware import limiter
 from app.models import Event, Thread, User
 from app.schemas import ThreadResponse
@@ -33,12 +33,12 @@ class PositionRequest(BaseModel):
 
 @router.put("/threads/{thread_id}/position/", response_model=ThreadResponse)
 @limiter.limit("30/minute")
-def move_thread_position(
+async def move_thread_position(
     request: Request,
     thread_id: int,
     position_request: PositionRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> ThreadResponse:
     """Move thread to specific position."""
     logger.info(
@@ -46,9 +46,10 @@ def move_thread_position(
         f"new_position={position_request.new_position}, request_url={request.url}"
     )
 
-    thread = db.execute(
+    result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
-    ).scalar_one_or_none()
+    )
+    thread = result.scalar_one_or_none()
     if not thread:
         logger.error(f"Thread {thread_id} not found for user {current_user.id}")
         raise HTTPException(
@@ -60,8 +61,8 @@ def move_thread_position(
     logger.info(f"Thread {thread_id} current position: {old_position}")
 
     try:
-        move_to_position(thread_id, current_user.id, position_request.new_position, db)
-        db.refresh(thread)
+        await move_to_position(thread_id, current_user.id, position_request.new_position, db)
+        await db.refresh(thread)
         logger.info(f"Thread {thread_id} refreshed, new position: {thread.queue_position}")
     except Exception as e:
         logger.error(
@@ -76,7 +77,7 @@ def move_thread_position(
             thread_id=thread_id,
         )
         db.add(reorder_event)
-        db.commit()
+        await db.commit()
 
     if clear_cache:
         clear_cache()
@@ -86,16 +87,17 @@ def move_thread_position(
 
 @router.put("/threads/{thread_id}/front/", response_model=ThreadResponse)
 @limiter.limit("30/minute")
-def move_thread_front(
+async def move_thread_front(
     request: Request,
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> ThreadResponse:
     """Move thread to the front."""
-    thread = db.execute(
+    result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
-    ).scalar_one_or_none()
+    )
+    thread = result.scalar_one_or_none()
     if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -103,8 +105,8 @@ def move_thread_front(
         )
 
     old_position = thread.queue_position
-    move_to_front(thread_id, current_user.id, db)
-    db.refresh(thread)
+    await move_to_front(thread_id, current_user.id, db)
+    await db.refresh(thread)
 
     if old_position != thread.queue_position:
         reorder_event = Event(
@@ -113,7 +115,7 @@ def move_thread_front(
             thread_id=thread_id,
         )
         db.add(reorder_event)
-        db.commit()
+        await db.commit()
 
     if clear_cache:
         clear_cache()
@@ -123,16 +125,17 @@ def move_thread_front(
 
 @router.put("/threads/{thread_id}/back/", response_model=ThreadResponse)
 @limiter.limit("30/minute")
-def move_thread_back(
+async def move_thread_back(
     request: Request,
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db_async),
 ) -> ThreadResponse:
     """Move thread to the back."""
-    thread = db.execute(
+    result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
-    ).scalar_one_or_none()
+    )
+    thread = result.scalar_one_or_none()
     if not thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -140,8 +143,8 @@ def move_thread_back(
         )
 
     old_position = thread.queue_position
-    move_to_back(thread_id, current_user.id, db)
-    db.refresh(thread)
+    await move_to_back(thread_id, current_user.id, db)
+    await db.refresh(thread)
 
     if old_position != thread.queue_position:
         reorder_event = Event(
@@ -150,7 +153,7 @@ def move_thread_back(
             thread_id=thread_id,
         )
         db.add(reorder_event)
-        db.commit()
+        await db.commit()
 
     if clear_cache:
         clear_cache()

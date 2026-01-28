@@ -7,12 +7,16 @@ cause incorrect die ladder behavior due to manual_die not being cleared.
 from datetime import UTC, datetime
 from sqlalchemy import select
 
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.models import Thread
 from app.models import Session as SessionModel
 from comic_pile.dice_ladder import step_down, step_up
 
 
-async def test_multiple_snooze_then_rate(auth_client, db, default_user):
+@pytest.mark.asyncio
+async def test_multiple_snooze_then_rate(auth_client, async_db: AsyncSession, default_user):
     """Reproduce bug: multiple snoozes followed by rating causes incorrect die.
 
     Based on user's session log:
@@ -87,17 +91,16 @@ async def test_multiple_snooze_then_rate(auth_client, db, default_user):
     ]
 
     for thread in threads:
-        db.add(thread)
-    db.commit()
+        async_db.add(thread)
+    await async_db.commit()
 
     first_roll = await auth_client.post("/api/roll/")
     assert first_roll.status_code == 200
 
-    session = (
-        db.execute(select(SessionModel).where(SessionModel.user_id == default_user.id))
-        .scalars()
-        .first()
+    result = await async_db.execute(
+        select(SessionModel).where(SessionModel.user_id == default_user.id)
     )
+    session = result.scalars().first()
     assert session is not None
     assert session.start_die == 6
 

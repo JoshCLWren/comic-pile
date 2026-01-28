@@ -362,6 +362,39 @@ async def auth_api_client(db: Session) -> AsyncGenerator[AsyncClient]:
     app.dependency_overrides.clear()
 
 
+@pytest_asyncio.fixture(scope="function")
+async def auth_api_client_async(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
+    """API client with authentication using async DB session."""
+    from app.auth import create_access_token, hash_password
+    from app.database import get_db_async
+
+    async def override_get_db_async():
+        yield async_db
+
+    app.dependency_overrides[get_db_async] = override_get_db_async
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        result = await async_db.execute(
+            select(User).where(User.username == "test_user@example.com")
+        )
+        user = result.scalar_one_or_none()
+        if not user:
+            user = User(
+                username="test_user@example.com",
+                email="test_user@example.com",
+                password_hash=hash_password("testpassword"),
+                created_at=datetime.now(UTC),
+            )
+            async_db.add(user)
+            await async_db.commit()
+            await async_db.refresh(user)
+
+        token = create_access_token(data={"sub": user.username, "jti": "test"})
+        ac.headers.update({"Authorization": f"Bearer {token}"})
+        yield ac
+    app.dependency_overrides.clear()
+
+
 @pytest.fixture(scope="function")
 def browser_page(page):
     """Playwright page fixture with localStorage cleared after each test."""

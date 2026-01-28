@@ -8,16 +8,16 @@ from app.models import Session as SessionModel
 
 
 @pytest.mark.asyncio
-async def test_snooze_success(auth_client, db):
+async def test_snooze_success(auth_client, async_db):
     """POST /snooze/ snoozes pending thread and steps die up."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Thread",
@@ -27,9 +27,9 @@ async def test_snooze_success(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     # Create a roll event to set up pending_thread_id
     event = Event(
@@ -41,9 +41,9 @@ async def test_snooze_success(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
+    async_db.add(event)
     session.pending_thread_id = thread.id
-    db.commit()
+    await async_db.commit()
 
     response = await auth_client.post("/api/snooze/")
     assert response.status_code == 200
@@ -58,17 +58,14 @@ async def test_snooze_success(auth_client, db):
     assert "Test Thread" in snoozed_titles
 
     # Verify pending_thread_id is cleared
-    db.refresh(session)
+    await async_db.refresh(session)
     assert session.pending_thread_id is None
 
     # Verify snooze event was recorded
-    snooze_event = (
-        db.execute(
-            select(Event).where(Event.session_id == session.id).where(Event.type == "snooze")
-        )
-        .scalars()
-        .first()
+    result = await async_db.execute(
+        select(Event).where(Event.session_id == session.id).where(Event.type == "snooze")
     )
+    snooze_event = result.scalars().first()
     assert snooze_event is not None
     assert snooze_event.thread_id == thread.id
     assert snooze_event.die == 6
@@ -76,16 +73,16 @@ async def test_snooze_success(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_no_pending_thread(auth_client, db):
+async def test_snooze_no_pending_thread(auth_client, async_db):
     """POST /snooze/ returns 400 if no thread has been rolled."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     # Create session without pending_thread_id
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    db.commit()
+    async_db.add(session)
+    await async_db.commit()
 
     response = await auth_client.post("/api/snooze/")
     assert response.status_code == 400
@@ -101,16 +98,16 @@ async def test_snooze_no_session(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_snooze_excludes_from_roll(auth_client, db):
+async def test_snooze_excludes_from_roll(auth_client, async_db):
     """After snoozing a thread, it is excluded from subsequent rolls."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     # Create two threads
     thread1 = Thread(
@@ -129,11 +126,11 @@ async def test_snooze_excludes_from_roll(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread1)
-    db.add(thread2)
-    db.commit()
-    db.refresh(thread1)
-    db.refresh(thread2)
+    async_db.add(thread1)
+    async_db.add(thread2)
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
 
     # Set up pending thread and snooze it
     event = Event(
@@ -145,9 +142,9 @@ async def test_snooze_excludes_from_roll(auth_client, db):
         session_id=session.id,
         thread_id=thread1.id,
     )
-    db.add(event)
+    async_db.add(event)
     session.pending_thread_id = thread1.id
-    db.commit()
+    await async_db.commit()
 
     # Snooze thread1
     snooze_response = await auth_client.post("/api/snooze/")
@@ -163,16 +160,16 @@ async def test_snooze_excludes_from_roll(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_duplicate_thread(auth_client, db):
+async def test_snooze_duplicate_thread(auth_client, async_db):
     """Snoozing the same thread twice doesn't add duplicate to list."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Thread",
@@ -191,11 +188,11 @@ async def test_snooze_duplicate_thread(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.add(thread2)
-    db.commit()
-    db.refresh(thread)
-    db.refresh(thread2)
+    async_db.add(thread)
+    async_db.add(thread2)
+    await async_db.commit()
+    await async_db.refresh(thread)
+    await async_db.refresh(thread2)
 
     # First snooze
     event1 = Event(
@@ -207,9 +204,9 @@ async def test_snooze_duplicate_thread(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event1)
+    async_db.add(event1)
     session.pending_thread_id = thread.id
-    db.commit()
+    await async_db.commit()
 
     response1 = await auth_client.post("/api/snooze/")
     assert response1.status_code == 200
@@ -220,7 +217,7 @@ async def test_snooze_duplicate_thread(auth_client, db):
 
     # Manually set pending_thread_id back to the already-snoozed thread
     # (simulating an override select)
-    db.refresh(session)
+    await async_db.refresh(session)
     session.pending_thread_id = thread.id
     event2 = Event(
         type="roll",
@@ -231,8 +228,8 @@ async def test_snooze_duplicate_thread(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event2)
-    db.commit()
+    async_db.add(event2)
+    await async_db.commit()
 
     # Second snooze of the same thread
     response2 = await auth_client.post("/api/snooze/")
@@ -245,16 +242,16 @@ async def test_snooze_duplicate_thread(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_all_threads(auth_client, db):
+async def test_snooze_all_threads(auth_client, async_db):
     """Snoozing all threads causes roll to return 400 error."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     # Create only one thread
     thread = Thread(
@@ -265,9 +262,9 @@ async def test_snooze_all_threads(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     # Roll and snooze the only thread
     event = Event(
@@ -279,9 +276,9 @@ async def test_snooze_all_threads(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
+    async_db.add(event)
     session.pending_thread_id = thread.id
-    db.commit()
+    await async_db.commit()
 
     snooze_response = await auth_client.post("/api/snooze/")
     assert snooze_response.status_code == 200
@@ -297,16 +294,16 @@ async def test_snooze_all_threads(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_steps_die_up_from_max(auth_client, db):
+async def test_snooze_steps_die_up_from_max(auth_client, async_db):
     """Snooze at max die (d20) keeps die at d20."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=20, manual_die=20, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Thread",
@@ -316,9 +313,9 @@ async def test_snooze_steps_die_up_from_max(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -329,9 +326,9 @@ async def test_snooze_steps_die_up_from_max(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
+    async_db.add(event)
     session.pending_thread_id = thread.id
-    db.commit()
+    await async_db.commit()
 
     response = await auth_client.post("/api/snooze/")
     assert response.status_code == 200
@@ -342,16 +339,16 @@ async def test_snooze_steps_die_up_from_max(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_multiple_different_threads(auth_client, db):
+async def test_snooze_multiple_different_threads(auth_client, async_db):
     """Snoozing multiple different threads accumulates in list."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=6, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread1 = Thread(
         title="Thread One",
@@ -377,13 +374,13 @@ async def test_snooze_multiple_different_threads(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread1)
-    db.add(thread2)
-    db.add(thread3)
-    db.commit()
-    db.refresh(thread1)
-    db.refresh(thread2)
-    db.refresh(thread3)
+    async_db.add(thread1)
+    async_db.add(thread2)
+    async_db.add(thread3)
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
+    await async_db.refresh(thread3)
 
     # Roll and snooze thread1
     event1 = Event(
@@ -395,9 +392,9 @@ async def test_snooze_multiple_different_threads(auth_client, db):
         session_id=session.id,
         thread_id=thread1.id,
     )
-    db.add(event1)
+    async_db.add(event1)
     session.pending_thread_id = thread1.id
-    db.commit()
+    await async_db.commit()
 
     response1 = await auth_client.post("/api/snooze/")
     assert response1.status_code == 200
@@ -415,9 +412,9 @@ async def test_snooze_multiple_different_threads(auth_client, db):
         session_id=session.id,
         thread_id=thread2.id,
     )
-    db.add(event2)
+    async_db.add(event2)
     session.pending_thread_id = thread2.id
-    db.commit()
+    await async_db.commit()
 
     response2 = await auth_client.post("/api/snooze/")
     assert response2.status_code == 200
@@ -436,9 +433,9 @@ async def test_snooze_multiple_different_threads(auth_client, db):
         session_id=session.id,
         thread_id=thread3.id,
     )
-    db.add(event3)
+    async_db.add(event3)
     session.pending_thread_id = thread3.id
-    db.commit()
+    await async_db.commit()
 
     response3 = await auth_client.post("/api/snooze/")
     assert response3.status_code == 200
