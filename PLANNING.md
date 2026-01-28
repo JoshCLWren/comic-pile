@@ -88,7 +88,7 @@
 
 ## Completed Work
 - ✅ Created E2E tests for dice ladder behavior (tests_e2e/test_dice_ladder_e2e.py)
-- ✅ Created test for session bug (tests_e2e/test_dice_ladder_e2e.py::test_finish_session_clearsnoozed)
+- ✅ Created test for session bug (tests_e2e/test_dice_ladder_e2e.py::test_finish_session_clears_snoozed)
 - ✅ Identified React Query as source of deployment cache issues
 - ✅ Confirmed backend logic is working (all rate/snooze/roll tests pass)
 - ✅ Fixed snoozed_thread_ids not cleared when session ends (app/api/rate.py:173)
