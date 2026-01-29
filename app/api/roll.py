@@ -58,10 +58,13 @@ async def roll_dice(
     selected_index = random.randint(0, pool_size - 1)
     selected_thread = threads[selected_index]
 
+    selected_thread_id = selected_thread.id
+    selected_thread_title = selected_thread.title
+
     event = Event(
         type="roll",
         session_id=current_session_id,
-        selected_thread_id=selected_thread.id,
+        selected_thread_id=selected_thread_id,
         die=current_die,
         result=selected_index + 1,
         selection_method="random",
@@ -69,7 +72,7 @@ async def roll_dice(
     db.add(event)
 
     if current_session:
-        current_session.pending_thread_id = selected_thread.id
+        current_session.pending_thread_id = selected_thread_id
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
@@ -77,8 +80,8 @@ async def roll_dice(
         clear_cache()
 
     return RollResponse(
-        thread_id=selected_thread.id,
-        title=selected_thread.title,
+        thread_id=selected_thread_id,
+        title=selected_thread_title,
         die_size=current_die,
         result=selected_index + 1,
     )
@@ -107,10 +110,13 @@ async def override_roll(
     current_session_id = current_session.id
     current_die = await get_current_die(current_session_id, db)
 
+    override_thread_id = override_thread.id
+    override_thread_title = override_thread.title
+
     event = Event(
         type="roll",
         session_id=current_session_id,
-        selected_thread_id=override_thread.id,
+        selected_thread_id=override_thread_id,
         die=current_die,
         result=0,
         selection_method="override",
@@ -118,14 +124,14 @@ async def override_roll(
     db.add(event)
 
     if current_session:
-        current_session.pending_thread_id = override_thread.id
+        current_session.pending_thread_id = override_thread_id
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
         snoozed_ids = (
             list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
         )
-        if override_thread.id in snoozed_ids:
-            snoozed_ids.remove(override_thread.id)
+        if override_thread_id in snoozed_ids:
+            snoozed_ids.remove(override_thread_id)
             current_session.snoozed_thread_ids = snoozed_ids
 
         await db.commit()
@@ -133,8 +139,8 @@ async def override_roll(
             clear_cache()
 
     return RollResponse(
-        thread_id=override_thread.id,
-        title=override_thread.title,
+        thread_id=override_thread_id,
+        title=override_thread_title,
         die_size=current_die,
         result=0,
     )

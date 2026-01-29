@@ -733,7 +733,9 @@ async def test_restore_session_start(auth_client: AsyncClient, async_db, default
     assert data["manual_die"] == 10
 
     refreshed_thread1 = await async_db.get(Thread, thread1.id)
+    assert refreshed_thread1 is not None
     refreshed_thread2 = await async_db.get(Thread, thread2.id)
+    assert refreshed_thread2 is not None
     await async_db.refresh(session)
 
     assert refreshed_thread1.issues_remaining == 10
@@ -803,6 +805,7 @@ async def test_restore_session_start_with_deleted_threads(
     assert response.status_code == 200
 
     refreshed_thread1 = await async_db.get(Thread, thread1.id)
+    assert refreshed_thread1 is not None
     assert refreshed_thread1.issues_remaining == 10
 
     restored_thread = await async_db.get(Thread, thread2.id)
