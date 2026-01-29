@@ -110,6 +110,13 @@ async def test_session_persists_across_requests(
     """Make multiple requests with same session, verify session ID stays consistent."""
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
     user = result.scalar_one()
+
+    # Clean up any existing sessions for this user to ensure test isolation
+    from sqlalchemy import delete
+
+    await async_db.execute(delete(SessionModel).where(SessionModel.user_id == user.id))
+    await async_db.commit()
+
     thread = Thread(
         title="Test Comic", format="Comic", issues_remaining=5, queue_position=1, user_id=user.id
     )
