@@ -20,56 +20,77 @@
 
 #### Actionable Comments
 
-**1. PLANNING.md MD005/MD007**
+```text
+Fix all issues with AI agents:
+
+In `@PLANNING.md`:
 - Fix markdown list indentation in checklist/review sections
-- Priority: Medium
 
-**2. Docstrings in app/services/snapshot.py**
-- Add Returns section to restore_snapshot and update_session_from_snapshot
-- Priority: Low
+In `@app/services/snapshot.py`:
+- Add Returns section to restore_snapshot
+- Add Returns section to update_session_from_snapshot
 
-**3. Test Flakiness in tests/test_override_snoozed_thread.py**
+In `@tests/test_override_snoozed_thread.py`:
 - Make roll deterministic to avoid flaky behavior
-- Priority: Medium
 
-**4. Timezone Consistency**
-- app/api/roll.py: Use datetime.now(UTC) instead of datetime.now()
-- tests/test_api_endpoints.py: Use datetime.now(UTC)
-- Priority: Medium
+In `@app/api/roll.py`:
+- Use datetime.now(UTC) instead of datetime.now()
 
-**5. Missing Type Annotations**
-- tests/test_auth.py: Add async_db: AsyncSession type
-- tests/test_security_gating.py: Add type annotations
-- tests/test_csv_import.py: Add type annotations and docstrings
-- tests/test_history_events.py: Add type annotations and docstrings
-- tests/test_snooze_api.py: Add type annotations and docstrings
-- tests/test_queue_ui.py: Add type annotations
-- Priority: Low
+In `@tests/test_api_endpoints.py`:
+- Use datetime.now(UTC)
 
-**6. Async Sleep Issues**
-- app/api/undo.py: Use asyncio.sleep instead of time.sleep
-- app/api/thread.py: Use asyncio.sleep instead of time.sleep
-- app/api/session.py: Use asyncio.sleep instead of time.sleep
-- Priority: Low
+In `@tests/test_auth.py`:
+- Add async_db: AsyncSession type
 
-**7. Duplicate Implementation**
-- app/api/snooze.py: build_ladder_path duplicates app/api/session.py
-- Priority: Low
+In `@tests/test_security_gating.py`:
+- Add type annotations
 
-**8. app/api/analytics.py**
+In `@tests/test_csv_import.py`:
+- Add type annotations and docstrings
+
+In `@tests/test_history_events.py`:
+- Add type annotations and docstrings
+
+In `@tests/test_snooze_api.py`:
+- Add type annotations and docstrings
+
+In `@tests/test_queue_ui.py`:
+- Add type annotations
+
+In `@app/api/undo.py`:
+- Use asyncio.sleep instead of time.sleep
+
+In `@app/api/thread.py`:
+- Use asyncio.sleep instead of time.sleep
+
+In `@app/api/session.py`:
+- Use asyncio.sleep instead of time.sleep
+
+In `@app/api/snooze.py`:
+- build_ladder_path duplicates app/api/session.py
+
+In `@app/api/analytics.py`:
 - Add explicit return type and Args/Returns to get_metrics
-- Priority: Low
 
-**9. tests_e2e/test_api_workflows.py**
+In `@tests_e2e/test_api_workflows.py`:
 - Standardize on async fixtures for consistency
-- Priority: Low
+```
 
 #### Minor Comments
-- app/models/snapshot.py: Align created_at timezone handling
-- ASYNC_REFACTOR_PLAN.md: Fix Phase 4 status inconsistencies and table spacing
-- tests/test_finish_session_clears_snoozed.py: Keep roll events aligned with model semantics
-- app/api/queue.py: Rename unused request parameter to _request
-- Priority: Low
+
+```text
+In `@app/models/snapshot.py`:
+- Align created_at timezone handling
+
+In `@ASYNC_REFACTOR_PLAN.md`:
+- Fix Phase 4 status inconsistencies and table spacing
+
+In `@tests/test_finish_session_clears_snoozed.py`:
+- Keep roll events aligned with model semantics
+
+In `@app/api/queue.py`:
+- Rename unused request parameter to _request
+```
 
 #### Nitpick Comments
 - Various code quality improvements
@@ -118,7 +139,11 @@ All high and medium priority issues have been fixed:
 - ✅ E2E test infrastructure fixes complete (requires PostgreSQL in CI)
 - ✅ All changes committed and pushed to origin/fix-ladder
 
-**Commits pushed:**
+**Latest fix (commit 2311c5f):**
+- Fixed SQLAlchemy greenlet errors by extracting ORM attributes before commit
+- Added None checks for type safety in tests
+
+**Previous commits:**
 1. Fix CI/PR: Add type annotations and improve async/await handling in API and tests
 2. Fix e2e test: Filter sessions by user_id to avoid MultipleResultsFound
 3. Fix e2e test: Clean up existing sessions before test to ensure isolation
@@ -126,7 +151,7 @@ All high and medium priority issues have been fixed:
 5. Fix e2e test: Update user instead of delete/recreate to avoid unique constraint violation
 6. Fix e2e test: Delete duplicate users before updating default user
 
-Ready for CI pipeline.
+**CI Status:** In progress - monitoring at https://github.com/JoshCLWren/comic-pile/actions/runs/21480065245
 
 ## Files Changed
 

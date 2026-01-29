@@ -1,5 +1,6 @@
 """E2E integration tests for dice ladder behavior through API."""
 
+
 import pytest
 
 from httpx import AsyncClient
@@ -12,9 +13,12 @@ from app.models import Session as SessionModel
 
 @pytest.mark.asyncio
 async def test_dice_ladder_rating_goes_down(
-    auth_api_client_async: AsyncClient, async_db: SQLAlchemyAsyncSession
+    auth_api_client_async: AsyncClient,
+    async_db: SQLAlchemyAsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rating 4+ causes session die to go DOWN (d10 → d8)."""
+    monkeypatch.setattr("random.randint", lambda a, b: 0)
     from app.models import User
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
@@ -66,9 +70,12 @@ async def test_dice_ladder_rating_goes_down(
 
 @pytest.mark.asyncio
 async def test_dice_ladder_rating_goes_up(
-    auth_api_client_async: AsyncClient, async_db: SQLAlchemyAsyncSession
+    auth_api_client_async: AsyncClient,
+    async_db: SQLAlchemyAsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rating below 4 causes session die to go UP (d10 → d12)."""
+    monkeypatch.setattr("random.randint", lambda a, b: 0)
     from app.models import User
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
@@ -120,9 +127,12 @@ async def test_dice_ladder_rating_goes_up(
 
 @pytest.mark.asyncio
 async def test_dice_ladder_snooze_goes_up(
-    auth_api_client_async: AsyncClient, async_db: SQLAlchemyAsyncSession
+    auth_api_client_async: AsyncClient,
+    async_db: SQLAlchemyAsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Snoozing causes session die to go UP (d6 → d8)."""
+    monkeypatch.setattr("random.randint", lambda a, b: 0)
     from app.models import User
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
@@ -175,9 +185,12 @@ async def test_dice_ladder_snooze_goes_up(
 
 @pytest.mark.asyncio
 async def test_finish_session_clears_snoozed(
-    auth_api_client_async: AsyncClient, async_db: SQLAlchemyAsyncSession
+    auth_api_client_async: AsyncClient,
+    async_db: SQLAlchemyAsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Verify that finishing a session clears snoozed_thread_ids."""
+    monkeypatch.setattr("random.randint", lambda a, b: 0)
     from app.models import User
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))

@@ -187,7 +187,7 @@ async def test_end_session(async_db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_end_session_nonexistent(async_db, sample_data):
+async def test_end_session_nonexistent(async_db, default_user):
     """Gracefully handles ending non-existent session."""
     thread = Thread(
         title="Test Thread",
@@ -195,7 +195,7 @@ async def test_end_session_nonexistent(async_db, sample_data):
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=default_user.id,
         created_at=datetime.now(UTC),
     )
     async_db.add(thread)
@@ -872,7 +872,7 @@ async def test_restore_session_start_clears_pending_thread_id(
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot_clears_pending_thread_id(async_db, sample_data, default_user):
+async def test_undo_to_snapshot_clears_pending_thread_id(async_db, default_user):
     """Test that undo_to_snapshot clears pending_thread_id when processing.
 
     Regression test for BUG-131: Verifies that snapshot restoration works correctly.
@@ -1056,7 +1056,7 @@ async def test_is_active_naive_old_datetime(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_returns_existing_within_time_window(async_db, sample_data):
+async def test_get_or_create_returns_existing_within_time_window(async_db, default_user):
     """Test that get_or_create returns existing session when one exists within time window.
 
     This tests the early return path at line 148 where active_session is found
@@ -1066,14 +1066,14 @@ async def test_get_or_create_returns_existing_within_time_window(async_db, sampl
 
     existing_session = SessionModel(
         start_die=8,
-        user_id=1,
+        user_id=default_user.id,
         started_at=datetime.now(UTC),
     )
     async_db.add(existing_session)
     await async_db.commit()
     await async_db.refresh(existing_session)
 
-    result = await get_or_create(async_db, user_id=1)
+    result = await get_or_create(async_db, user_id=default_user.id)
 
     assert result.id == existing_session.id
     assert result.start_die == 8
