@@ -1,12 +1,24 @@
 """Tests for history event logging."""
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_queue_move_creates_event(auth_client, sample_data, async_db):
-    """Test that moving a thread in queue creates a reorder event."""
+async def test_queue_move_creates_event(
+    auth_client: AsyncClient,
+    sample_data: dict,
+    async_db: AsyncSession,
+) -> None:
+    """Test that moving a thread in queue creates a reorder event.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        sample_data: Sample data dictionary containing threads, sessions, events, user.
+        async_db: Async database session for direct database queries.
+    """
     from app.models import Event
 
     thread_id = sample_data["threads"][0].id
@@ -28,8 +40,18 @@ async def test_queue_move_creates_event(auth_client, sample_data, async_db):
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_creates_event(auth_client, sample_data, async_db):
-    """Test that moving thread to front creates a reorder event."""
+async def test_move_to_front_creates_event(
+    auth_client: AsyncClient,
+    sample_data: dict,
+    async_db: AsyncSession,
+) -> None:
+    """Test that moving thread to front creates a reorder event.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        sample_data: Sample data dictionary containing threads, sessions, events, user.
+        async_db: Async database session for direct database queries.
+    """
     from app.models import Event
 
     thread_id = sample_data["threads"][1].id
@@ -49,8 +71,18 @@ async def test_move_to_front_creates_event(auth_client, sample_data, async_db):
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_creates_event(auth_client, sample_data, async_db):
-    """Test that moving thread to back creates a reorder event."""
+async def test_move_to_back_creates_event(
+    auth_client: AsyncClient,
+    sample_data: dict,
+    async_db: AsyncSession,
+) -> None:
+    """Test that moving thread to back creates a reorder event.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        sample_data: Sample data dictionary containing threads, sessions, events, user.
+        async_db: Async database session for direct database queries.
+    """
     from app.models import Event
 
     thread_id = sample_data["threads"][2].id
@@ -70,8 +102,16 @@ async def test_move_to_back_creates_event(auth_client, sample_data, async_db):
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_creates_event(auth_client, async_db):
-    """Test that deleting a thread creates a delete event."""
+async def test_delete_thread_creates_event(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Test that deleting a thread creates a delete event.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
     from app.models import Event, Thread
 
     result = await async_db.execute(select(Event).where(Event.type == "delete"))
@@ -97,8 +137,18 @@ async def test_delete_thread_creates_event(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_no_duplicate_event_on_no_movement(auth_client, sample_data, async_db):
-    """Test that moving to same position does not create event."""
+async def test_no_duplicate_event_on_no_movement(
+    auth_client: AsyncClient,
+    sample_data: dict,
+    async_db: AsyncSession,
+) -> None:
+    """Test that moving to same position does not create event.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        sample_data: Sample data dictionary containing threads, sessions, events, user.
+        async_db: Async database session for direct database queries.
+    """
     from app.models import Event
 
     thread_id = sample_data["threads"][0].id

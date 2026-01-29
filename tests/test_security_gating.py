@@ -4,6 +4,8 @@ import logging
 import os
 
 import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.conftest import _create_async_db_override
 
@@ -20,7 +22,7 @@ from tests.conftest import _create_async_db_override
         "/api/admin/export/summary/",
     ],
 )
-async def test_internal_routes_return_404_when_disabled(client, endpoint):
+async def test_internal_routes_return_404_when_disabled(client: AsyncClient, endpoint: str) -> None:
     """Internal routes return 404 when ENABLE_INTERNAL_OPS_ROUTES is false (default)."""
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "false"
@@ -36,7 +38,10 @@ async def test_internal_routes_return_404_when_disabled(client, endpoint):
 
 
 @pytest.mark.asyncio
-async def test_admin_routes_accessible_when_enabled(sample_data, async_db):
+async def test_admin_routes_accessible_when_enabled(
+    sample_data: dict,
+    async_db: AsyncSession,
+) -> None:
     """Admin routes work when ENABLE_INTERNAL_OPS_ROUTES is true."""
     from httpx import ASGITransport, AsyncClient
 
@@ -69,7 +74,7 @@ async def test_admin_routes_accessible_when_enabled(sample_data, async_db):
 
 
 @pytest.mark.asyncio
-async def test_production_mode_blocks_internal_routes(client):
+async def test_production_mode_blocks_internal_routes(client: AsyncClient) -> None:
     """Production mode (default) blocks all internal routes."""
     os.environ["ENABLE_DEBUG_ROUTES"] = "false"
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "false"
@@ -86,14 +91,17 @@ async def test_production_mode_blocks_internal_routes(client):
 
 
 @pytest.mark.asyncio
-async def test_health_routes_always_accessible(client):
+async def test_health_routes_always_accessible(client: AsyncClient) -> None:
     """Health routes are always accessible (not gated)."""
     response = await client.get("/health")
     assert response.status_code in (200, 503)
 
 
 @pytest.mark.asyncio
-async def test_sensitive_headers_redacted_in_error_logs(client, caplog):
+async def test_sensitive_headers_redacted_in_error_logs(
+    client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Authorization, Cookie, and Set-Cookie headers are redacted in error logs."""
     with caplog.at_level(logging.WARNING):
         _ = await client.post(
@@ -132,7 +140,10 @@ async def test_sensitive_headers_redacted_in_error_logs(client, caplog):
 
 
 @pytest.mark.asyncio
-async def test_sensitive_json_keys_redacted_in_error_logs(client, caplog):
+async def test_sensitive_json_keys_redacted_in_error_logs(
+    client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Sensitive JSON keys (password, secret, token, access_token, refresh_token, api_key) are redacted."""
     sensitive_data = {
         "username": "testuser",
@@ -157,7 +168,10 @@ async def test_sensitive_json_keys_redacted_in_error_logs(client, caplog):
 
 
 @pytest.mark.asyncio
-async def test_all_sensitive_json_keys_redacted(client, caplog):
+async def test_all_sensitive_json_keys_redacted(
+    client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """All sensitive keys trigger redaction: password, secret, token, access_token, refresh_token, api_key."""
     test_cases = [
         {"password": "test123"},
@@ -185,7 +199,10 @@ async def test_all_sensitive_json_keys_redacted(client, caplog):
 
 
 @pytest.mark.asyncio
-async def test_auth_routes_log_only_size_and_type(client, caplog):
+async def test_auth_routes_log_only_size_and_type(
+    client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Auth routes (/api/auth/, /api/login, /api/register, /api/logout) log only size/type, not content."""
     auth_endpoints = ["/api/login", "/api/register", "/api/logout", "/api/auth/refresh"]
     sensitive_data = {"username": "test", "password": "secret123", "token": "abc"}
@@ -210,7 +227,10 @@ async def test_auth_routes_log_only_size_and_type(client, caplog):
 
 
 @pytest.mark.asyncio
-async def test_non_sensitive_body_not_redacted(client, caplog):
+async def test_non_sensitive_body_not_redacted(
+    client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Non-sensitive body content is not redacted in error logs."""
     safe_data = {"username": "testuser", "email": "test@example.com", "count": 5}
 
@@ -228,7 +248,7 @@ async def test_non_sensitive_body_not_redacted(client, caplog):
 
 
 @pytest.mark.asyncio
-async def test_cors_origins_required_in_production(async_db):
+async def test_cors_origins_required_in_production(async_db: AsyncSession) -> None:
     """CORS_ORIGINS is required in production mode, app fails to start without it."""
     from app.config import clear_settings_cache
 
@@ -260,7 +280,7 @@ async def test_cors_origins_required_in_production(async_db):
 
 
 @pytest.mark.asyncio
-async def test_cors_origins_allowed_in_production_when_set(async_db):
+async def test_cors_origins_allowed_in_production_when_set(async_db: AsyncSession) -> None:
     """CORS_ORIGINS is respected in production mode when set correctly."""
     from httpx import ASGITransport, AsyncClient
 
@@ -294,7 +314,7 @@ async def test_cors_origins_allowed_in_production_when_set(async_db):
 
 
 @pytest.mark.asyncio
-async def test_cors_defaults_to_wildcard_in_development(async_db):
+async def test_cors_defaults_to_wildcard_in_development(async_db: AsyncSession) -> None:
     """CORS defaults to wildcard in development mode when CORS_ORIGINS is not set."""
     from httpx import ASGITransport, AsyncClient
 
@@ -330,7 +350,7 @@ async def test_cors_defaults_to_wildcard_in_development(async_db):
 
 
 @pytest.mark.asyncio
-async def test_cors_allow_credentials_is_false(async_db):
+async def test_cors_allow_credentials_is_false(async_db: AsyncSession) -> None:
     """CORS middleware is configured with allow_credentials=False for JWT bearer token authentication."""
     from httpx import ASGITransport, AsyncClient
 
@@ -372,7 +392,11 @@ async def test_cors_allow_credentials_is_false(async_db):
     ],
     ids=["production", "development"],
 )
-async def test_app_starts_successfully(async_db, environment, cors_origins):
+async def test_app_starts_successfully(
+    async_db: AsyncSession,
+    environment: str,
+    cors_origins: str | None,
+) -> None:
     """App starts successfully in both production and development modes."""
     from httpx import ASGITransport, AsyncClient
 

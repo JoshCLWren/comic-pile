@@ -19,11 +19,20 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 async def get_metrics(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_async),
-) -> dict:
+) -> dict[
+    str,
+    int | float | dict[str, int] | list[dict[str, int | float | str | None]],
+]:
     """Get reading metrics and analytics for the current user.
 
+    Args:
+        current_user: The authenticated user making the request.
+        db: The database session for querying data.
+
     Returns:
-        Dictionary containing various reading metrics and statistics
+        Dictionary containing various reading metrics and statistics including
+        total_threads, active_threads, completed_threads, completion_rate,
+        average_session_hours, recent_sessions, event_stats, and top_rated_threads.
     """
     # Total threads
     total_threads = (

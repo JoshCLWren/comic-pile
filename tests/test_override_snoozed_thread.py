@@ -19,7 +19,7 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
 
     user = await get_or_create_user_async(async_db)
 
-    # Create two threads
+    # Create thread (single thread to ensure deterministic roll)
     thread1 = Thread(
         title="Thread One",
         format="Comic",
@@ -28,19 +28,9 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
         status="active",
         user_id=user.id,
     )
-    thread2 = Thread(
-        title="Thread Two",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=2,
-        status="active",
-        user_id=user.id,
-    )
     async_db.add(thread1)
-    async_db.add(thread2)
     await async_db.commit()
     await async_db.refresh(thread1)
-    await async_db.refresh(thread2)
 
     # Roll and snooze thread1
     session = SessionModel(start_die=6, user_id=user.id)
@@ -54,7 +44,7 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
     roll_data = roll_response.json()
     rolled_thread_id = roll_data["thread_id"]
 
-    # Snooze the rolled thread (which should be thread1, not thread2)
+    # Snooze the rolled thread (thread1)
     snooze_response = await auth_client.post("/api/snooze/")
     assert snooze_response.status_code == 200
     snooze_data = snooze_response.json()

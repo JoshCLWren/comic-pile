@@ -1,6 +1,6 @@
 """Session API endpoints."""
 
-import time
+import asyncio
 from datetime import datetime
 from typing import Annotated
 
@@ -232,7 +232,7 @@ async def get_current_session(
                 if retries >= max_retries:
                     raise
                 delay = initial_delay * (2 ** (retries - 1))
-                time.sleep(delay)
+                await asyncio.sleep(delay)
             else:
                 raise
 
@@ -580,7 +580,7 @@ async def restore_session_start(
                 if retries >= max_retries:
                     raise
                 delay = initial_delay * (2 ** (retries - 1))
-                time.sleep(delay)
+                await asyncio.sleep(delay)
             else:
                 raise
 

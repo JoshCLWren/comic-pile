@@ -1,6 +1,7 @@
 """Tests for queue UI button disabled states."""
 
 import pytest
+from httpx import AsyncClient
 
 from app.models import Thread
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,12 +25,16 @@ async def test_jump_to_position_works_for_large_distance(
     assert response.status_code == 200
 
     thread = await async_db.get(Thread, sample_data["threads"][0].id)
+    assert thread is not None
     assert thread.queue_position == last_position
 
 
 @pytest.mark.usefixtures("sample_data")
 @pytest.mark.asyncio
-async def test_jump_to_position_works_for_small_distance(auth_client, async_db):
+async def test_jump_to_position_works_for_small_distance(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
     """Jump from last position to position 1 works correctly."""
     response = await auth_client.get("/api/threads/")
     threads = response.json()
@@ -41,6 +46,7 @@ async def test_jump_to_position_works_for_small_distance(auth_client, async_db):
     assert response.status_code == 200
 
     thread = await async_db.get(Thread, last_thread_id)
+    assert thread is not None
     assert thread.queue_position == 1
 
 
@@ -60,6 +66,7 @@ async def test_drag_and_drop_updates_position(auth_client, async_db: AsyncSessio
     assert data["queue_position"] == new_position
 
     thread = await async_db.get(Thread, thread_id)
+    assert thread is not None
     assert thread.queue_position == new_position
 
 
@@ -72,6 +79,7 @@ async def test_move_to_front_via_api(auth_client, async_db: AsyncSession, sample
     assert response.status_code == 200
 
     thread = await async_db.get(Thread, thread_id)
+    assert thread is not None
     assert thread.queue_position == 1
 
 
@@ -89,4 +97,5 @@ async def test_move_to_back_via_api(auth_client, async_db: AsyncSession, sample_
     assert response.status_code == 200
 
     thread = await async_db.get(Thread, thread_id)
+    assert thread is not None
     assert thread.queue_position == last_position

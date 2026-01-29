@@ -24,7 +24,9 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.database import Base, get_db
+from app.auth import create_access_token, hash_password
+from app.config import clear_settings_cache
+from app.database import Base, get_db, get_db_async
 from app.main import app
 from app.models import User
 
@@ -133,11 +135,13 @@ def enable_internal_ops():
     """Enable internal ops routes for tests that access admin endpoints."""
     old_value = os.environ.get("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
+    clear_settings_cache()
     yield
     if old_value is None:
         os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
     else:
         os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = old_value
+    clear_settings_cache()
 
 
 @pytest.fixture(scope="function")
@@ -147,6 +151,7 @@ def db() -> Generator[Session]:
 
     engine = create_engine(database_url, echo=False)
     Base.metadata.create_all(bind=engine)
+
     connection = engine.connect()
     connection.execute(
         text(
@@ -155,7 +160,8 @@ def db() -> Generator[Session]:
         )
     )
     connection.commit()
-    transaction = None
+    connection.close()
+
     session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
     try:
@@ -163,9 +169,6 @@ def db() -> Generator[Session]:
         yield session
     finally:
         session.close()
-        if transaction is not None:
-            transaction.rollback()
-        connection.close()
         engine.dispose()
 
 
@@ -330,7 +333,6 @@ async def api_client(db: Session) -> AsyncGenerator[AsyncClient]:
 @pytest_asyncio.fixture(scope="function")
 async def auth_api_client(db: Session) -> AsyncGenerator[AsyncClient]:
     """API client with authentication using ASGITransport for direct app calls."""
-    from app.auth import create_access_token, hash_password
     from app.models import User
 
     def override_get_db():
@@ -339,7 +341,29 @@ async def auth_api_client(db: Session) -> AsyncGenerator[AsyncClient]:
         finally:
             pass
 
+    async def override_get_db_async():
+        from sqlalchemy.ext.asyncio import (
+            create_async_engine,
+            async_sessionmaker,
+            AsyncSession as SQLAlchemyAsyncSession,
+        )
+
+        test_db_url = get_test_database_url()
+        async_engine = create_async_engine(test_db_url, echo=False)
+        async_session_maker = async_sessionmaker(
+            bind=async_engine,
+            expire_on_commit=False,
+            class_=SQLAlchemyAsyncSession,
+        )
+        async with async_session_maker() as async_session:
+            try:
+                yield async_session
+            finally:
+                await async_session.close()
+        await async_engine.dispose()
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_db_async] = override_get_db_async
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         user = db.execute(
@@ -399,4 +423,7 @@ async def auth_api_client_async(async_db: SQLAlchemyAsyncSession) -> AsyncGenera
 def browser_page(page):
     """Playwright page fixture with localStorage cleared after each test."""
     yield page
-    page.evaluate("localStorage.clear()")
+    try:
+        page.evaluate("localStorage.clear()")
+    except Exception:
+        pass

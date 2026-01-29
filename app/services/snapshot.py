@@ -28,6 +28,9 @@ async def restore_threads_from_snapshot(
         snapshot: The snapshot to restore from
         user: The user whose threads to restore
         session: Optional session model (used for pending_thread_id cleanup and user_id fallback)
+
+    Returns:
+        None
     """
     snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
 
@@ -154,6 +157,9 @@ async def restore_session_state_from_snapshot(
     Args:
         session: The session to update
         snapshot: The snapshot to restore from
+
+    Returns:
+        None
     """
     if snapshot.session_state:
         session.start_die = snapshot.session_state.get("start_die", session.start_die)

@@ -5,25 +5,11 @@ import io
 import pytest
 from sqlalchemy import select
 
-from app.models import Thread, User
+from app.models import Thread
 
 
 @pytest.mark.asyncio
-async def test_import_valid_csv(client, async_db, enable_internal_ops):
-    """Test POST /admin/import/csv/ succeeds with valid data."""
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(id=1, username="admin_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
-    csv_content = """title,format,issues_remaining
-Superman,Comic,10
-Batman,Comic,5
-Wonder Woman,Trade Paperback,3"""
-    csv_file = io.BytesIO(csv_content.encode())
-    files = {"file": ("test.csv", csv_file, "text/csv")}
+async def test_import_valid_csv(client, default_user, async_db, enable_internal_ops) -> None:
     """Test POST /admin/import/csv/ succeeds with valid data."""
     csv_content = """title,format,issues_remaining
 Superman,Comic,10
@@ -57,15 +43,7 @@ Wonder Woman,Trade Paperback,3"""
 
 
 @pytest.mark.asyncio
-async def test_import_invalid_format_missing_columns(client, async_db, enable_internal_ops):
-    """Test POST /admin/import/csv/ returns error for missing required columns."""
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(id=1, username="admin_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+async def test_import_invalid_format_missing_columns(client, enable_internal_ops) -> None:
     """Test POST /admin/import/csv/ returns error for missing required columns."""
     csv_content = """title,format
 Superman,Comic
@@ -83,7 +61,9 @@ Batman,Trade"""
 
 
 @pytest.mark.asyncio
-async def test_import_invalid_format_missing_title(client, default_user, enable_internal_ops):
+async def test_import_invalid_format_missing_title(
+    client, default_user, enable_internal_ops
+) -> None:
     """Test POST /admin/import/csv/ returns error for missing title."""
     csv_content = """title,format,issues_remaining
 ,Comic,10
@@ -101,7 +81,9 @@ Batman,Comic,5"""
 
 
 @pytest.mark.asyncio
-async def test_import_invalid_format_missing_format(client, default_user, enable_internal_ops):
+async def test_import_invalid_format_missing_format(
+    client, default_user, enable_internal_ops
+) -> None:
     """Test POST /admin/import/csv/ returns error for missing format."""
     csv_content = """title,format,issues_remaining
 Superman,,10
@@ -119,7 +101,7 @@ Batman,Comic,5"""
 
 
 @pytest.mark.asyncio
-async def test_import_invalid_data_not_a_number(client, default_user, enable_internal_ops):
+async def test_import_invalid_data_not_a_number(client, default_user, enable_internal_ops) -> None:
     """Test POST /admin/import/csv/ returns error for non-integer issues_remaining."""
     csv_content = """title,format,issues_remaining
 Superman,Comic,ten
@@ -137,7 +119,9 @@ Batman,Comic,5"""
 
 
 @pytest.mark.asyncio
-async def test_import_invalid_data_negative_issues(client, default_user, enable_internal_ops):
+async def test_import_invalid_data_negative_issues(
+    client, default_user, enable_internal_ops
+) -> None:
     """Test POST /admin/import/csv/ returns error for negative issues_remaining."""
     csv_content = """title,format,issues_remaining
 Superman,Comic,-5
@@ -155,17 +139,12 @@ Batman,Comic,5"""
 
 
 @pytest.mark.asyncio
-async def test_import_zero_issues_remaining(client, async_db, enable_internal_ops):
+async def test_import_zero_issues_remaining(
+    client, default_user, async_db, enable_internal_ops
+) -> None:
     """Test POST /admin/import/csv/ allows zero issues_remaining."""
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(id=1, username="admin_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
     csv_content = """title,format,issues_remaining
- Superman,Comic,0"""
+Superman,Comic,0"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
@@ -183,7 +162,7 @@ async def test_import_zero_issues_remaining(client, async_db, enable_internal_op
 
 
 @pytest.mark.asyncio
-async def test_import_empty_file(client, default_user, enable_internal_ops):
+async def test_import_empty_file(client, default_user, enable_internal_ops) -> None:
     """Test POST /admin/import/csv/ handles empty CSV gracefully."""
     csv_content = """title,format,issues_remaining"""
     csv_file = io.BytesIO(csv_content.encode())
@@ -198,7 +177,7 @@ async def test_import_empty_file(client, default_user, enable_internal_ops):
 
 
 @pytest.mark.asyncio
-async def test_import_non_csv_file(client, default_user, enable_internal_ops):
+async def test_import_non_csv_file(client, default_user, enable_internal_ops) -> None:
     """Test POST /admin/import/csv/ returns error for non-CSV file."""
     txt_content = "This is not a CSV file"
     txt_file = io.BytesIO(txt_content.encode())
@@ -209,7 +188,7 @@ async def test_import_non_csv_file(client, default_user, enable_internal_ops):
 
 
 @pytest.mark.asyncio
-async def test_export_csv(client, sample_data, enable_internal_ops):
+async def test_export_csv(client, sample_data, enable_internal_ops) -> None:
     """Test GET /admin/export/csv/ returns valid CSV."""
     response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
@@ -225,7 +204,7 @@ async def test_export_csv(client, sample_data, enable_internal_ops):
 
 
 @pytest.mark.asyncio
-async def test_export_csv_only_active(client, sample_data, enable_internal_ops):
+async def test_export_csv_only_active(client, sample_data, enable_internal_ops) -> None:
     """Test GET /admin/export/csv/ only exports active threads."""
     response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
@@ -239,7 +218,7 @@ async def test_export_csv_only_active(client, sample_data, enable_internal_ops):
 
 
 @pytest.mark.asyncio
-async def test_export_csv_empty(client, enable_internal_ops):
+async def test_export_csv_empty(client, enable_internal_ops) -> None:
     """Test GET /admin/export/csv/ returns empty CSV when no threads."""
     response = await client.get("/api/admin/export/csv/")
     assert response.status_code == 200
@@ -251,7 +230,7 @@ async def test_export_csv_empty(client, enable_internal_ops):
 
 
 @pytest.mark.asyncio
-async def test_export_json(client, sample_data, enable_internal_ops):
+async def test_export_json(client, sample_data, enable_internal_ops) -> None:
     """Test GET /admin/export/json/ returns all data."""
     response = await client.get("/api/admin/export/json/")
     assert response.status_code == 200
@@ -274,7 +253,7 @@ async def test_export_json(client, sample_data, enable_internal_ops):
 
 
 @pytest.mark.asyncio
-async def test_export_json_includes_completed(client, sample_data, enable_internal_ops):
+async def test_export_json_includes_completed(client, sample_data, enable_internal_ops) -> None:
     """Test GET /admin/export/json/ includes completed threads."""
     response = await client.get("/api/admin/export/json/")
     assert response.status_code == 200
@@ -285,19 +264,12 @@ async def test_export_json_includes_completed(client, sample_data, enable_intern
 
 
 @pytest.mark.asyncio
-async def test_import_then_export_roundtrip(client, async_db, enable_internal_ops):
+async def test_import_then_export_roundtrip(client, default_user, enable_internal_ops) -> None:
     """Test import then export returns equivalent data."""
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(id=1, username="admin_user")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
     csv_content = """title,format,issues_remaining
- Superman,Comic,10
- Batman,Comic,5
- Wonder Woman,Trade Paperback,3"""
+Superman,Comic,10
+Batman,Comic,5
+Wonder Woman,Trade Paperback,3"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
@@ -327,7 +299,7 @@ async def test_import_then_export_roundtrip(client, async_db, enable_internal_op
 
 
 @pytest.mark.asyncio
-async def test_export_summary(client, sample_data, enable_internal_ops):
+async def test_export_summary(client, sample_data, enable_internal_ops) -> None:
     """Test GET /admin/export/summary/ returns markdown with narrative summaries."""
     response = await client.get("/api/admin/export/summary/")
     assert response.status_code == 200
@@ -342,7 +314,7 @@ async def test_export_summary(client, sample_data, enable_internal_ops):
 
 
 @pytest.mark.asyncio
-async def test_export_summary_empty(client, async_db, enable_internal_ops):
+async def test_export_summary_empty(client, enable_internal_ops) -> None:
     """Test GET /admin/export/summary/ works with no sessions."""
     response = await client.get("/api/admin/export/summary/")
     assert response.status_code == 200
@@ -350,7 +322,7 @@ async def test_export_summary_empty(client, async_db, enable_internal_ops):
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_valid_csv(client, sample_data, async_db, enable_internal_ops):
+async def test_import_reviews_valid_csv(client, sample_data, async_db, enable_internal_ops) -> None:
     """Test POST /admin/import/reviews/ succeeds with valid data."""
     result = await async_db.execute(select(Thread))
     threads = result.scalars().all()
@@ -379,7 +351,7 @@ async def test_import_reviews_valid_csv(client, sample_data, async_db, enable_in
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_missing_thread_id(client, default_user, enable_internal_ops):
+async def test_import_reviews_missing_thread_id(client, enable_internal_ops) -> None:
     """Test POST /admin/import/reviews/ returns error for missing thread_id."""
     csv_content = """thread_id,review_url,review_timestamp
 ,https://example.com/review,2024-01-15T10:30:00"""
@@ -396,7 +368,7 @@ async def test_import_reviews_missing_thread_id(client, default_user, enable_int
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_missing_review_url(client, default_user, enable_internal_ops):
+async def test_import_reviews_missing_review_url(client, enable_internal_ops) -> None:
     """Test POST /admin/import/reviews/ returns error for missing review_url."""
     csv_content = """thread_id,review_url,review_timestamp
 1,,2024-01-15T10:30:00"""
@@ -413,7 +385,7 @@ async def test_import_reviews_missing_review_url(client, default_user, enable_in
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_missing_timestamp(client, default_user, enable_internal_ops):
+async def test_import_reviews_missing_timestamp(client, enable_internal_ops) -> None:
     """Test POST /admin/import/reviews/ returns error for missing review_timestamp."""
     csv_content = """thread_id,review_url,review_timestamp
 1,https://example.com/review,"""
@@ -430,7 +402,7 @@ async def test_import_reviews_missing_timestamp(client, default_user, enable_int
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_invalid_thread_id(client, default_user, enable_internal_ops):
+async def test_import_reviews_invalid_thread_id(client, enable_internal_ops) -> None:
     """Test POST /admin/import/reviews/ returns error for non-integer thread_id."""
     csv_content = """thread_id,review_url,review_timestamp
 abc,https://example.com/review,2024-01-15T10:30:00"""
@@ -447,7 +419,7 @@ abc,https://example.com/review,2024-01-15T10:30:00"""
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_thread_not_found(client, default_user, enable_internal_ops):
+async def test_import_reviews_thread_not_found(client, enable_internal_ops) -> None:
     """Test POST /admin/import/reviews/ returns error for non-existent thread."""
     csv_content = """thread_id,review_url,review_timestamp
 99999,https://example.com/review,2024-01-15T10:30:00"""
@@ -464,7 +436,9 @@ async def test_import_reviews_thread_not_found(client, default_user, enable_inte
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_invalid_timestamp(client, sample_data, async_db, enable_internal_ops):
+async def test_import_reviews_invalid_timestamp(
+    client, sample_data, async_db, enable_internal_ops
+) -> None:
     """Test POST /admin/import/reviews/ returns error for invalid datetime format."""
     result = await async_db.execute(select(Thread))
     threads = result.scalars().all()
@@ -485,7 +459,7 @@ async def test_import_reviews_invalid_timestamp(client, sample_data, async_db, e
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_non_csv_file(client, default_user, enable_internal_ops):
+async def test_import_reviews_non_csv_file(client, enable_internal_ops) -> None:
     """Test POST /admin/import/reviews/ returns error for non-CSV file."""
     txt_content = "This is not a CSV file"
     txt_file = io.BytesIO(txt_content.encode())
@@ -496,7 +470,7 @@ async def test_import_reviews_non_csv_file(client, default_user, enable_internal
 
 
 @pytest.mark.asyncio
-async def test_import_reviews_empty_file(client, async_db, enable_internal_ops):
+async def test_import_reviews_empty_file(client, enable_internal_ops) -> None:
     """Test POST /admin/import/reviews/ handles empty CSV gracefully."""
     csv_content = """thread_id,review_url,review_timestamp"""
     csv_file = io.BytesIO(csv_content.encode())

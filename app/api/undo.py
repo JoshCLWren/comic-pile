@@ -29,7 +29,7 @@ async def undo_to_snapshot(
 ) -> SessionResponse:
     """Undo session state to a specific snapshot with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
-    import time
+    import asyncio
 
     max_retries = 3
     initial_delay = 0.1
@@ -197,7 +197,7 @@ async def undo_to_snapshot(
                 if retries >= max_retries:
                     raise
                 delay = initial_delay * (2 ** (retries - 1))
-                time.sleep(delay)
+                await asyncio.sleep(delay)
             else:
                 raise
 

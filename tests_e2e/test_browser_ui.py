@@ -1,6 +1,8 @@
 """Browser UI integration tests using Playwright."""
 
 import json
+import pathlib
+import sys
 import time
 import pytest
 import requests
@@ -31,6 +33,28 @@ def test_user(test_server_url, db):
     from app.main import app
     from app.models import User
     from sqlalchemy import text
+    from sqlalchemy import create_engine
+
+    sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+    from tests_e2e.conftest import get_test_database_url
+
+    test_db_url = get_test_database_url()
+    if test_db_url.startswith("postgresql+asyncpg://"):
+        test_db_url = test_db_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    elif test_db_url.startswith("postgresql+aiosqlite://"):
+        test_db_url = test_db_url.replace("postgresql+aiosqlite://", "sqlite:///", 1)
+    elif test_db_url.startswith("postgresql://"):
+        test_db_url = test_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+    test_engine = create_engine(test_db_url, echo=False)
+    with test_engine.connect() as server_conn:
+        server_conn.execute(
+            text(
+                "TRUNCATE TABLE users, sessions, events, threads, snapshots, revoked_tokens "
+                "RESTART IDENTITY CASCADE;"
+            )
+        )
+        server_conn.commit()
 
     db.execute(text("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))"))
     db.commit()
@@ -58,6 +82,7 @@ def test_user(test_server_url, db):
     yield test_email, user.id
 
     app.dependency_overrides.clear()
+    test_engine.dispose()
 
 
 @pytest.mark.integration

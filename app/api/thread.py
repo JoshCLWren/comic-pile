@@ -1,6 +1,6 @@
 """Thread CRUD API endpoints."""
 
-import time
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -172,7 +172,7 @@ async def create_thread(
                 if retries >= max_retries:
                     raise
                 delay = initial_delay * (2 ** (retries - 1))
-                time.sleep(delay)
+                await asyncio.sleep(delay)
             else:
                 raise
 
