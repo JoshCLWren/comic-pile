@@ -110,6 +110,7 @@ async def test_update_thread(auth_client, sample_data, async_db):
     from app.models import Thread
 
     db_thread = await async_db.get(Thread, 1)
+    assert db_thread is not None
     assert db_thread.title == "Superman Updated"
     assert db_thread.format == "Trade Paperback"
     assert db_thread.issues_remaining == 8
@@ -156,6 +157,7 @@ async def test_update_thread_complete_status(auth_client, sample_data, async_db)
     from app.models import Thread
 
     db_thread = await async_db.get(Thread, 1)
+    assert db_thread is not None
     assert db_thread.status == "completed"
 
 
@@ -175,6 +177,7 @@ async def test_update_thread_active_status(auth_client, sample_data, async_db):
     from app.models import Thread
 
     db_thread = await async_db.get(Thread, 3)
+    assert db_thread is not None
     assert db_thread.status == "active"
 
 
