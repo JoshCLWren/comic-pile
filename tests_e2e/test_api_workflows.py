@@ -119,7 +119,9 @@ async def test_session_persists_across_requests(
     await auth_api_client_async.post("/api/roll/")
 
     session1_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.ended_at.is_(None))
+        select(SessionModel)
+        .where(SessionModel.ended_at.is_(None))
+        .where(SessionModel.user_id == user.id)
     )
     session1 = session1_result.scalar_one()
     session_id = session1.id
@@ -127,7 +129,9 @@ async def test_session_persists_across_requests(
     await auth_api_client_async.post("/api/roll/")
 
     session2_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.ended_at.is_(None))
+        select(SessionModel)
+        .where(SessionModel.ended_at.is_(None))
+        .where(SessionModel.user_id == user.id)
     )
     session2 = session2_result.scalar_one()
     assert session2.id == session_id
