@@ -1,13 +1,12 @@
 """E2E integration tests for dice ladder behavior through API."""
 
-
 import pytest
 
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as SQLAlchemyAsyncSession
 
-from app.models import Event, Thread
+from app.models import Event, Thread, User
 from app.models import Session as SessionModel
 
 
@@ -18,8 +17,7 @@ async def test_dice_ladder_rating_goes_down(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rating 4+ causes session die to go DOWN (d10 → d8)."""
-    monkeypatch.setattr("random.randint", lambda a, b: 0)
-    from app.models import User
+    monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
     user = result.scalar_one_or_none()
@@ -75,8 +73,7 @@ async def test_dice_ladder_rating_goes_up(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rating below 4 causes session die to go UP (d10 → d12)."""
-    monkeypatch.setattr("random.randint", lambda a, b: 0)
-    from app.models import User
+    monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
     user = result.scalar_one_or_none()
@@ -132,8 +129,7 @@ async def test_dice_ladder_snooze_goes_up(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Snoozing causes session die to go UP (d6 → d8)."""
-    monkeypatch.setattr("random.randint", lambda a, b: 0)
-    from app.models import User
+    monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
     user = result.scalar_one_or_none()
@@ -190,8 +186,7 @@ async def test_finish_session_clears_snoozed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Verify that finishing a session clears snoozed_thread_ids."""
-    monkeypatch.setattr("random.randint", lambda a, b: 0)
-    from app.models import User
+    monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
     user = result.scalar_one_or_none()

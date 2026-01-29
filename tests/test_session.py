@@ -21,8 +21,12 @@ from comic_pile.session import (
 
 
 @pytest.mark.asyncio
-async def test_session_env_int_parsing(monkeypatch):
-    """Session env parsing clamps values and ignores invalid ints."""
+async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Session env parsing clamps values and ignores invalid ints.
+
+    Args:
+        monkeypatch: Pytest's monkeypatch fixture for modifying env vars.
+    """
     import comic_pile.session as session_mod
 
     # Clear cached settings to pick up new env vars
