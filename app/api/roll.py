@@ -2,7 +2,7 @@
 
 import logging
 import random
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
@@ -70,7 +70,7 @@ async def roll_dice(
 
     if current_session:
         current_session.pending_thread_id = selected_thread.id
-        current_session.pending_thread_updated_at = datetime.now()
+        current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
     if clear_cache:
@@ -119,7 +119,7 @@ async def override_roll(
 
     if current_session:
         current_session.pending_thread_id = override_thread.id
-        current_session.pending_thread_updated_at = datetime.now()
+        current_session.pending_thread_updated_at = datetime.now(UTC)
 
         snoozed_ids = (
             list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []

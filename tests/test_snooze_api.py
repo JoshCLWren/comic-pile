@@ -1,15 +1,25 @@
 """Tests for snooze API endpoints."""
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
 from app.models import Session as SessionModel
 
 
 @pytest.mark.asyncio
-async def test_snooze_success(auth_client, async_db):
-    """POST /snooze/ snoozes pending thread and steps die up."""
+async def test_snooze_success(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """POST /snooze/ snoozes pending thread and steps die up.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -73,8 +83,16 @@ async def test_snooze_success(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_no_pending_thread(auth_client, async_db):
-    """POST /snooze/ returns 400 if no thread has been rolled."""
+async def test_snooze_no_pending_thread(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """POST /snooze/ returns 400 if no thread has been rolled.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -90,16 +108,28 @@ async def test_snooze_no_pending_thread(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_no_session(auth_client):
-    """POST /snooze/ returns 400 if no active session exists."""
+async def test_snooze_no_session(auth_client: AsyncClient) -> None:
+    """POST /snooze/ returns 400 if no active session exists.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+    """
     response = await auth_client.post("/api/snooze/")
     assert response.status_code == 400
     assert "No active session" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_snooze_excludes_from_roll(auth_client, async_db):
-    """After snoozing a thread, it is excluded from subsequent rolls."""
+async def test_snooze_excludes_from_roll(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """After snoozing a thread, it is excluded from subsequent rolls.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -160,8 +190,16 @@ async def test_snooze_excludes_from_roll(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_duplicate_thread(auth_client, async_db):
-    """Snoozing the same thread twice doesn't add duplicate to list."""
+async def test_snooze_duplicate_thread(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Snoozing the same thread twice doesn't add duplicate to list.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -242,8 +280,16 @@ async def test_snooze_duplicate_thread(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_all_threads(auth_client, async_db):
-    """Snoozing all threads causes roll to return 400 error."""
+async def test_snooze_all_threads(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Snoozing all threads causes roll to return 400 error.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -294,8 +340,16 @@ async def test_snooze_all_threads(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_steps_die_up_from_max(auth_client, async_db):
-    """Snooze at max die (d20) keeps die at d20."""
+async def test_snooze_steps_die_up_from_max(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Snooze at max die (d20) keeps die at d20.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -339,8 +393,16 @@ async def test_snooze_steps_die_up_from_max(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_snooze_multiple_different_threads(auth_client, async_db):
-    """Snoozing multiple different threads accumulates in list."""
+async def test_snooze_multiple_different_threads(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Snoozing multiple different threads accumulates in list.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+        async_db: Async database session for direct database queries.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)

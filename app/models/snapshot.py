@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,7 +24,7 @@ class Snapshot(Base):
     thread_states: Mapped[dict] = mapped_column(JSON, nullable=False)
     session_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(UTC).replace(tzinfo=None)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 

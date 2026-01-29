@@ -23,6 +23,7 @@ async def test_move_to_position_clamps_to_max(auth_client, async_db: AsyncSessio
     assert response.status_code == 200
 
     thread = await async_db.get(Thread, thread_id)
+    assert thread is not None
     assert thread.queue_position == max_position
 
 
@@ -48,6 +49,7 @@ async def test_move_to_position_when_no_threads(auth_client, async_db: AsyncSess
     assert response.status_code == 200
 
     thread = await async_db.get(ThreadModel, thread.id)
+    assert thread is not None
     assert thread.queue_position == 1
 
 
@@ -170,6 +172,7 @@ async def test_move_to_position_clamps_negative_position(
         await move_to_position(thread_id, default_user.id, 0, async_db)
 
     thread = await async_db.get(Thread, thread_id)
+    assert thread is not None
     assert thread.queue_position == 1
     assert any("new_position 0 < 1, setting to 1" in record.message for record in caplog.records)
 
@@ -239,6 +242,56 @@ async def test_get_stale_threads(async_db: AsyncSession, default_user):
     assert stale_thread.id in stale_thread_ids
     assert no_activity_thread.id in stale_thread_ids
     assert recent_thread.id not in stale_thread_ids
+
+
+@pytest.mark.asyncio
+async def test_move_to_front_already_at_position_1(async_db: AsyncSession, default_user):
+    """move_to_front when thread is already at position 1 returns early without changes."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_front
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    for thread in threads:
+        await async_db.refresh(thread)
+
+    thread_a = threads[0]
+    thread_a_id = thread_a.id
+    original_position = thread_a.queue_position
+
+    assert original_position == 1
+
+    await move_to_front(thread_a_id, default_user.id, async_db)
+
+    await async_db.refresh(thread_a)
+    assert thread_a.queue_position == 1
+
+    thread_b = await async_db.get(Thread, threads[1].id)
+    assert thread_b is not None
+    assert thread_b.queue_position == 2
 
 
 @pytest.mark.asyncio
@@ -320,10 +373,64 @@ async def test_move_to_front_from_middle_position(async_db: AsyncSession, defaul
     thread_d = await async_db.get(Thread, threads[3].id)
     thread_e = await async_db.get(Thread, threads[4].id)
 
+    assert thread_a is not None
+    assert thread_b is not None
+    assert thread_d is not None
+    assert thread_e is not None
     assert thread_a.queue_position == 2
     assert thread_b.queue_position == 3
     assert thread_d.queue_position == 4
     assert thread_e.queue_position == 5
+
+
+@pytest.mark.asyncio
+async def test_move_to_back_already_at_max_position(async_db: AsyncSession, default_user):
+    """move_to_back when thread is already at max_position returns early without changes."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_back
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    for thread in threads:
+        await async_db.refresh(thread)
+
+    thread_b = threads[1]
+    thread_b_id = thread_b.id
+    original_position = thread_b.queue_position
+
+    assert original_position == 2
+
+    await move_to_back(thread_b_id, default_user.id, async_db)
+
+    await async_db.refresh(thread_b)
+    assert thread_b.queue_position == 2
+
+    thread_a = await async_db.get(Thread, threads[0].id)
+    assert thread_a is not None
+    assert thread_a.queue_position == 1
 
 
 @pytest.mark.asyncio
@@ -405,10 +512,78 @@ async def test_move_to_back_from_front_position(async_db: AsyncSession, default_
     thread_d = await async_db.get(Thread, threads[3].id)
     thread_e = await async_db.get(Thread, threads[4].id)
 
+    assert thread_b is not None
+    assert thread_c is not None
+    assert thread_d is not None
+    assert thread_e is not None
     assert thread_b.queue_position == 1
     assert thread_c.queue_position == 2
     assert thread_d.queue_position == 3
     assert thread_e.queue_position == 4
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_normalizes_non_sequential_positions(
+    async_db: AsyncSession, default_user
+):
+    """move_to_position normalizes non-sequential queue positions before moving."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_position
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=3,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread C",
+            format="Comic",
+            issues_remaining=8,
+            queue_position=5,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    for thread in threads:
+        await async_db.refresh(thread)
+
+    thread_b = threads[1]
+    thread_b_id = thread_b.id
+
+    assert thread_b.queue_position == 3
+
+    await move_to_position(thread_b_id, default_user.id, 1, async_db)
+
+    await async_db.refresh(thread_b)
+    assert thread_b.queue_position == 1
+
+    thread_a = await async_db.get(Thread, threads[0].id)
+    thread_c = await async_db.get(Thread, threads[2].id)
+
+    assert thread_a is not None
+    assert thread_c is not None
+    assert thread_a.queue_position == 2
+    assert thread_c.queue_position == 3
 
 
 @pytest.mark.asyncio
@@ -490,6 +665,10 @@ async def test_move_to_position_backward_movement(async_db: AsyncSession, defaul
     thread_d = await async_db.get(Thread, threads[3].id)
     thread_e = await async_db.get(Thread, threads[4].id)
 
+    assert thread_a is not None
+    assert thread_c is not None
+    assert thread_d is not None
+    assert thread_e is not None
     assert thread_a.queue_position == 1
     assert thread_c.queue_position == 2
     assert thread_d.queue_position == 3
@@ -575,6 +754,10 @@ async def test_move_to_position_forward_movement(async_db: AsyncSession, default
     thread_c = await async_db.get(Thread, threads[2].id)
     thread_e = await async_db.get(Thread, threads[4].id)
 
+    assert thread_a is not None
+    assert thread_b is not None
+    assert thread_c is not None
+    assert thread_e is not None
     assert thread_a.queue_position == 1
     assert thread_b.queue_position == 3
     assert thread_c.queue_position == 4

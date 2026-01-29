@@ -2,8 +2,7 @@
 """Migrate threads from cleaned JSON export to PostgreSQL production database."""
 
 import json
-import psycopg2
-from psycopg2.extras import execute_values
+import psycopg
 
 
 def migrate_threads_to_postgres():
@@ -27,7 +26,7 @@ def migrate_threads_to_postgres():
     print(f"Loading {len(sessions)} sessions...")
     print(f"Loading {len(events)} events...")
 
-    conn = psycopg2.connect(**db_config)
+    conn = psycopg.connect(**db_config)
     conn.autocommit = False
     cursor = conn.cursor()
 
@@ -77,14 +76,13 @@ def migrate_threads_to_postgres():
                 )
             )
 
-        execute_values(
-            cursor,
+        cursor.executemany(
             """
             INSERT INTO threads (
                 title, format, issues_remaining, queue_position, status,
                 last_rating, last_activity_at, review_url, last_review_at,
                 created_at, user_id
-            ) VALUES %s
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             thread_values,
@@ -115,13 +113,12 @@ def migrate_threads_to_postgres():
                 )
             )
 
-        execute_values(
-            cursor,
+        cursor.executemany(
             """
             INSERT INTO sessions (
                 started_at, ended_at, start_die, user_id,
                 pending_thread_id, pending_thread_updated_at, manual_die
-            ) VALUES %s
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             session_values,
         )
@@ -168,14 +165,13 @@ def migrate_threads_to_postgres():
                     )
                 )
 
-        execute_values(
-            cursor,
+        cursor.executemany(
             """
             INSERT INTO events (
                 type, timestamp, die, result, selected_thread_id,
                 selection_method, rating, issues_read, queue_move,
                 die_after, session_id, thread_id
-            ) VALUES %s
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             event_values,
         )
@@ -193,11 +189,13 @@ def migrate_threads_to_postgres():
         conn.close()
 
     print("\nVerifying import...")
-    conn = psycopg2.connect(**db_config)
+    conn = psycopg.connect(**db_config)
     cursor = conn.cursor()
 
     cursor.execute("SELECT COUNT(*) FROM threads WHERE user_id = 1")
-    thread_count = cursor.fetchone()[0]
+    row = cursor.fetchone()
+    assert row is not None
+    thread_count = row[0]
     print(f"Threads in PostgreSQL (user_id=1): {thread_count}")
 
     cursor.execute("""

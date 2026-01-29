@@ -419,14 +419,14 @@ async def test_get_session_details(auth_client, sample_data):
 @pytest.mark.asyncio
 async def test_get_stale_threads(auth_client, async_db):
     """Test GET /api/threads/stale returns threads inactive for specified days."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     from app.models import Thread, User
 
     result = await async_db.execute(select(User).where(User.username == "test_user"))
     user = result.scalar_one_or_none()
     if not user:
-        user = User(username="test_user", created_at=datetime.now())
+        user = User(username="test_user", created_at=datetime.now(UTC))
         async_db.add(user)
         await async_db.commit()
         await async_db.refresh(user)
@@ -439,7 +439,7 @@ async def test_get_stale_threads(auth_client, async_db):
         status="active",
         user_id=user.id,
         notes="Important character, historical significance",
-        created_at=datetime.now(),
+        created_at=datetime.now(UTC),
     )
     async_db.add(thread)
     await async_db.commit()
@@ -457,7 +457,7 @@ async def test_get_stale_threads(auth_client, async_db):
 @pytest.mark.asyncio
 async def test_list_threads_includes_notes(auth_client, sample_data, async_db):
     """Test GET /api/threads/ includes notes field in all threads."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     from app.models import Thread, User
 
@@ -471,7 +471,7 @@ async def test_list_threads_includes_notes(auth_client, sample_data, async_db):
         status="active",
         user_id=user.id,
         notes="Fast-paced storytelling",
-        created_at=datetime.now(),
+        created_at=datetime.now(UTC),
     )
     thread_without_notes = Thread(
         title="Aquaman",
@@ -481,7 +481,7 @@ async def test_list_threads_includes_notes(auth_client, sample_data, async_db):
         status="active",
         user_id=user.id,
         notes=None,
-        created_at=datetime.now(),
+        created_at=datetime.now(UTC),
     )
     async_db.add_all([thread_with_notes, thread_without_notes])
     await async_db.commit()

@@ -3,7 +3,7 @@
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
-
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 
@@ -37,7 +37,9 @@ class TestAuth:
         assert user.password_hash != "securepassword123"  # Should be hashed
 
     @pytest.mark.asyncio
-    async def test_register_user_duplicate_username(self, client: AsyncClient, async_db) -> None:
+    async def test_register_user_duplicate_username(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
         """Test registration with duplicate username fails."""
         # Create first user
         user_data = {
@@ -59,7 +61,9 @@ class TestAuth:
         assert "Username already registered" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_register_user_duplicate_email(self, client: AsyncClient, async_db) -> None:
+    async def test_register_user_duplicate_email(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
         """Test registration with duplicate email fails."""
         # Create first user
         user_data = {
@@ -81,7 +85,7 @@ class TestAuth:
         assert "Email already registered" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_login_success(self, client: AsyncClient, async_db) -> None:
+    async def test_login_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test successful user login."""
         # Register user first
         user_data = {
@@ -117,7 +121,7 @@ class TestAuth:
         assert "Incorrect username or password" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_refresh_token_success(self, client: AsyncClient, async_db) -> None:
+    async def test_refresh_token_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test successful token refresh."""
         # Register and login user
         user_data = {
@@ -166,7 +170,9 @@ class TestAuth:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_get_current_user_authenticated(self, client: AsyncClient, async_db) -> None:
+    async def test_get_current_user_authenticated(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
         """Test getting current user info when authenticated."""
         # Register and login user
         user_data = {
@@ -203,7 +209,7 @@ class TestAuth:
         assert "Not authenticated" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_logout(self, client: AsyncClient, async_db) -> None:
+    async def test_logout(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test user logout."""
         # Register and login user
         user_data = {
@@ -229,7 +235,7 @@ class TestAuth:
         assert response.json() == {"message": "Successfully logged out"}
 
     @pytest.mark.asyncio
-    async def test_logout_idempotent(self, client: AsyncClient, async_db) -> None:
+    async def test_logout_idempotent(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test that revoke_token is idempotent and doesn't raise on duplicate."""
         user_data = {
             "username": "logoutidempotentuser",

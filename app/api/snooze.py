@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.api.session as session_module
 
+from app.api.session import build_ladder_path
 from app.auth import get_current_user
 from app.database import get_db_async
 from app.middleware import limiter
@@ -31,39 +32,6 @@ clear_cache = None
 if os.getenv("TEST") or os.getenv("DISABLE_SESSION_CACHE"):
     if hasattr(session_module, "get_current_session_cached"):
         session_module.get_current_session_cached = None
-
-
-async def build_ladder_path(session_id: int, db: AsyncSession) -> str:
-    """Build narrative summary of dice ladder from session events.
-
-    Args:
-        session_id: The session primary key.
-        db: SQLAlchemy session used to load SessionModel and Event.
-
-    Returns:
-        Narrative ladder path or empty string when session not found.
-    """
-    session = await db.get(SessionModel, session_id)
-    if not session:
-        return ""
-
-    result = await db.execute(
-        select(Event)
-        .where(Event.session_id == session_id)
-        .where(Event.type == "rate")
-        .order_by(Event.timestamp)
-    )
-    events = result.scalars().all()
-
-    if not events:
-        return str(session.start_die)
-
-    path = [session.start_die]
-    for event in events:
-        if event.die_after:
-            path.append(event.die_after)
-
-    return " → ".join(str(d) for d in path)
 
 
 async def get_active_thread_info(
