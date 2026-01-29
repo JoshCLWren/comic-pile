@@ -1,6 +1,5 @@
 """Test that overriding to a snoozed thread removes it from snoozed list."""
 
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +18,7 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
     """Overriding to a snoozed thread should remove it from snoozed_thread_ids."""
     from tests.conftest import get_or_create_user_async
 
-    monkeypatch.setattr("random.randint", lambda a, b: 0)
+    monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     user = await get_or_create_user_async(async_db)
 

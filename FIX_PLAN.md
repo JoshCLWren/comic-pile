@@ -132,7 +132,7 @@ In `@app/api/queue.py`:
 
 ## Summary
 
-All high and medium priority issues have been fixed:
+All high- and medium-priority issues have been fixed:
 - ✅ Linting passes (ruff, type checking, eslint, htmlhint)
 - ✅ Main test suite passes (257 tests)
 - ✅ Test coverage at 96.28% (exceeds 96% threshold)
@@ -151,7 +151,7 @@ All high and medium priority issues have been fixed:
 5. Fix e2e test: Update user instead of delete/recreate to avoid unique constraint violation
 6. Fix e2e test: Delete duplicate users before updating default user
 
-**CI Status:** In progress - monitoring at https://github.com/JoshCLWren/comic-pile/actions/runs/21480065245
+**CI Status:** In progress - monitoring at <https://github.com/JoshCLWren/comic-pile/actions/runs/21480065245>
 
 ## Files Changed
 
@@ -183,5 +183,5 @@ All high and medium priority issues have been fixed:
 - tests_e2e/test_api_workflows.py: Converted 5 tests to async fixtures
 
 ### Documentation
-- PLANNING.md: Fixed markdown list indentation (MD005/MD007)
+- PLANNING.md: Fixed markdown list indentation (MD005/md007)
 - ASYNC_REFACTOR_PLAN.md: Fixed Phase 4 status inconsistency
