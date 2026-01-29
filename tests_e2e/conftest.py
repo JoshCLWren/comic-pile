@@ -52,6 +52,14 @@ def _ensure_default_user(db: Session) -> User:
         or user.username != "test_user@example.com"
         or user.email != "test_user@example.com"
     ):
+        # First, delete any other users with this email to avoid unique constraint violation
+        db.execute(select(User).where(User.email == "test_user@example.com").where(User.id != 1))
+        for other_user in db.scalars(
+            select(User).where(User.email == "test_user@example.com").where(User.id != 1)
+        ).all():
+            db.delete(other_user)
+        db.commit()
+
         user.username = "test_user@example.com"
         user.email = "test_user@example.com"
         user.password_hash = hash_password("testpassword")
