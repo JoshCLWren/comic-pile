@@ -112,9 +112,11 @@ async def test_session_persists_across_requests(
     user = result.scalar_one()
 
     # Clean up any existing sessions for this user to ensure test isolation
-    from sqlalchemy import delete
-
-    await async_db.execute(delete(SessionModel).where(SessionModel.user_id == user.id))
+    sessions_result = await async_db.execute(
+        select(SessionModel).where(SessionModel.user_id == user.id)
+    )
+    for session in sessions_result.scalars().all():
+        await async_db.delete(session)
     await async_db.commit()
 
     thread = Thread(
