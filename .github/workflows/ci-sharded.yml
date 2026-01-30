@@ -71,8 +71,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Run lint
         run: bash scripts/lint.sh
@@ -106,8 +104,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -163,8 +159,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -212,8 +206,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -262,8 +254,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -311,8 +301,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -360,8 +348,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -409,8 +395,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -458,8 +442,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -507,8 +489,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -556,8 +536,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -605,8 +583,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |

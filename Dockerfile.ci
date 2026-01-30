@@ -15,6 +15,7 @@ RUN apt-get update -qq && \
         nodejs \
         npm \
         postgresql-client \
+        tar \
         libnss3 \
         libnspr4 \
         libatk1.0-0 \
