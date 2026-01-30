@@ -143,7 +143,7 @@ jobs:
       - name: Run E2E API tests
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_api_workflows.py -v
+          source .venv/bin/activate && pytest tests_e2e/test_api_workflows.py -v --no-cov
 
   # E2E Dice Ladder tests
   test-e2e-dice-ladder:
@@ -201,7 +201,7 @@ jobs:
       - name: Run E2E dice ladder tests
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_dice_ladder_e2e.py -v
+          source .venv/bin/activate && pytest tests_e2e/test_dice_ladder_e2e.py --no-cov -v
 
   # E2E Browser UI tests - split into individual jobs
   test-e2e-browser-root:
@@ -271,7 +271,7 @@ jobs:
       - name: Run test_root_url_renders_dice_ladder
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_root_url_renders_dice_ladder -v
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_root_url_renders_dice_ladder --no-cov -v
 
   test-e2e-browser-homepage:
     name: E2E Browser - Homepage
@@ -340,7 +340,7 @@ jobs:
       - name: Run test_homepage_renders_dice_ladder
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_homepage_renders_dice_ladder -v
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_homepage_renders_dice_ladder --no-cov -v
 
   test-e2e-browser-roll:
     name: E2E Browser - Roll
@@ -409,7 +409,7 @@ jobs:
       - name: Run test_roll_dice_navigates_to_rate
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_roll_dice_navigates_to_rate -v
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_roll_dice_navigates_to_rate --no-cov -v
 
   test-e2e-browser-queue:
     name: E2E Browser - Queue
@@ -478,7 +478,7 @@ jobs:
       - name: Run test_queue_management_ui
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_queue_management_ui -v
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_queue_management_ui --no-cov -v
 
   test-e2e-browser-history:
     name: E2E Browser - History
@@ -547,7 +547,7 @@ jobs:
       - name: Run test_view_history_pagination
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_view_history_pagination -v
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_view_history_pagination --no-cov -v
 
   test-e2e-browser-workflow:
     name: E2E Browser - Full Workflow
@@ -616,7 +616,7 @@ jobs:
       - name: Run test_full_session_workflow
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_full_session_workflow -v
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_full_session_workflow --no-cov -v
 
   test-e2e-browser-d10:
     name: E2E Browser - D10 Geometry
@@ -685,7 +685,7 @@ jobs:
       - name: Run test_d10_renders_geometry_correctly
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_d10_renders_geometry_correctly -v
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_d10_renders_geometry_correctly --no-cov -v
 
   test-e2e-browser-auth:
     name: E2E Browser - Auth Flow
@@ -754,4 +754,4 @@ jobs:
       - name: Run test_auth_login_roll_rate_flow
         shell: bash
         run: |
-          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_auth_login_roll_rate_flow -v
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_auth_login_roll_rate_flow --no-cov -v
