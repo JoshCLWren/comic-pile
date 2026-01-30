@@ -55,6 +55,11 @@ jobs:
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
 
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
+
       - name: Wait for PostgreSQL
         shell: bash
         run: |
@@ -116,6 +121,11 @@ jobs:
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
 
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
+
       - name: Wait for PostgreSQL
         shell: bash
         run: |
@@ -168,6 +178,11 @@ jobs:
       - name: Install PostgreSQL Python dependencies
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
 
       - name: Wait for PostgreSQL
         shell: bash
@@ -222,6 +237,11 @@ jobs:
       - name: Install PostgreSQL Python dependencies
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
 
       - name: Install Playwright browsers and system dependencies
         shell: bash
@@ -287,6 +307,11 @@ jobs:
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
 
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
+
       - name: Install Playwright browsers and system dependencies
         shell: bash
         run: |
@@ -350,6 +375,11 @@ jobs:
       - name: Install PostgreSQL Python dependencies
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
 
       - name: Install Playwright browsers and system dependencies
         shell: bash
@@ -415,6 +445,11 @@ jobs:
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
 
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
+
       - name: Install Playwright browsers and system dependencies
         shell: bash
         run: |
@@ -478,6 +513,11 @@ jobs:
       - name: Install PostgreSQL Python dependencies
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
 
       - name: Install Playwright browsers and system dependencies
         shell: bash
@@ -543,6 +583,11 @@ jobs:
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
 
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
+
       - name: Install Playwright browsers and system dependencies
         shell: bash
         run: |
@@ -607,6 +652,11 @@ jobs:
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
 
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
+
       - name: Install Playwright browsers and system dependencies
         shell: bash
         run: |
@@ -670,6 +720,11 @@ jobs:
       - name: Install PostgreSQL Python dependencies
         shell: bash
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y -qq postgresql-client
 
       - name: Install Playwright browsers and system dependencies
         shell: bash
