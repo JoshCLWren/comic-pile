@@ -66,9 +66,13 @@ jobs:
     needs: build
     env:
       CI: true
+      PATH: "/workspace/.venv/bin:$PATH"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Run lint
         run: bash scripts/lint.sh
@@ -83,6 +87,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -100,6 +105,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -136,6 +144,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -153,6 +162,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -181,6 +193,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -198,6 +211,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -226,6 +242,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -244,6 +261,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -271,6 +291,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -289,6 +310,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -316,6 +340,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -334,6 +359,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -361,6 +389,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -379,6 +408,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -406,6 +438,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -424,6 +457,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -451,6 +487,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -469,6 +506,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -496,6 +536,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -514,6 +555,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
@@ -541,6 +585,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:$PATH"
     services:
       postgres:
         image: postgres:16
@@ -559,6 +604,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Wait for PostgreSQL
         run: |
