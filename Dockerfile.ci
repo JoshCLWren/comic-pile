@@ -43,9 +43,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Install uv and create venv
 COPY uv.lock .python-version pyproject.toml ./
-RUN pip install --no-cache-dir uv && \
-    uv venv && \
-    uv pip install --no-cache-dir uv
+RUN python3 -m venv .venv && \
+    .venv/bin/pip install --no-cache-dir uv
 
 # Stage 3: Python dependencies
 FROM python-env AS python-deps
