@@ -517,7 +517,7 @@ async def restore_session_start(
                         thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
                 else:
                     new_thread = Thread(
-                        id=thread_id,
+                        id=thread_id_int,
                         title=state.get("title", "Unknown Thread"),
                         format=state.get("format", "comic"),
                         issues_remaining=state.get("issues_remaining", 0),

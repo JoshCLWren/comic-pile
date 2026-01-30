@@ -164,11 +164,12 @@ async def rate_thread(
     else:
         await move_to_back(thread.id, current_user.id, db)
 
-    if rate_data.finish_session and thread.issues_remaining <= 0:
-        thread.status = "completed"
-        await move_to_back(thread.id, current_user.id, db)
+    if rate_data.finish_session:
         current_session.ended_at = datetime.now()
         current_session.snoozed_thread_ids = None
+        if thread.issues_remaining <= 0:
+            thread.status = "completed"
+            await move_to_back(thread.id, current_user.id, db)
 
     if clear_cache:
         clear_cache()
