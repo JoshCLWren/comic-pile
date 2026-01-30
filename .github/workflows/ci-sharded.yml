@@ -1,0 +1,675 @@
+name: CI Sharded
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Run lint
+        shell: bash
+        run: bash scripts/lint.sh
+
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Run backend tests
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests/ --cov=comic_pile --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: backend
+
+  # E2E API workflow tests (no browser)
+  test-e2e-api:
+    name: E2E API Tests
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Run E2E API tests
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_api_workflows.py -v
+
+  # E2E Dice Ladder tests
+  test-e2e-dice-ladder:
+    name: E2E Dice Ladder
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Run E2E dice ladder tests
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_dice_ladder_e2e.py -v
+
+  # E2E Browser UI tests - split into individual jobs
+  test-e2e-browser-root:
+    name: E2E Browser - Root URL
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install Playwright browsers and system dependencies
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
+      - name: Run test_root_url_renders_dice_ladder
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_root_url_renders_dice_ladder -v
+
+  test-e2e-browser-homepage:
+    name: E2E Browser - Homepage
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install Playwright browsers and system dependencies
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
+      - name: Run test_homepage_renders_dice_ladder
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_homepage_renders_dice_ladder -v
+
+  test-e2e-browser-roll:
+    name: E2E Browser - Roll
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install Playwright browsers and system dependencies
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
+      - name: Run test_roll_dice_navigates_to_rate
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_roll_dice_navigates_to_rate -v
+
+  test-e2e-browser-queue:
+    name: E2E Browser - Queue
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install Playwright browsers and system dependencies
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
+      - name: Run test_queue_management_ui
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_queue_management_ui -v
+
+  test-e2e-browser-history:
+    name: E2E Browser - History
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install Playwright browsers and system dependencies
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
+      - name: Run test_view_history_pagination
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_view_history_pagination -v
+
+  test-e2e-browser-workflow:
+    name: E2E Browser - Full Workflow
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install Playwright browsers and system dependencies
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
+      - name: Run test_full_session_workflow
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_full_session_workflow -v
+
+  test-e2e-browser-d10:
+    name: E2E Browser - D10 Geometry
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install Playwright browsers and system dependencies
+        shell: tests_e2e/test_browser_ui.py::test_auth_login_roll_rate_flow -v
+
+  test-e2e-browser-auth:
+    name: E2E Browser - Auth Flow
+    runs-on: ubuntu-latest
+    container: debian:13
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+
+      - name: Install PostgreSQL Python dependencies
+        shell: bash
+        run: source .venv/bin/activate && uv pip install asyncpg psycopg
+
+      - name: Install Playwright browsers and system dependencies
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
+      - name: Run test_auth_login_roll_rate_flow
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_auth_login_roll_rate_flow -v

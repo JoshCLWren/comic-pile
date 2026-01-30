@@ -1,5 +1,6 @@
 """Playwright integration test fixtures."""
 
+import asyncio
 import os
 import threading
 import time
@@ -309,7 +310,14 @@ def test_server_url():
 
     yield f"http://127.0.0.1:{TEST_SERVER_PORT}"
 
-    server.should_exit = True
+    async def shutdown_server():
+        server.should_exit = True
+        await server.shutdown()
+
+    try:
+        asyncio.run(shutdown_server())
+    except RuntimeError:
+        pass
     thread.join(timeout=5)
     test_engine.dispose()
 
