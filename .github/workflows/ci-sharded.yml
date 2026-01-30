@@ -608,7 +608,34 @@ jobs:
         run: source .venv/bin/activate && uv pip install asyncpg psycopg
 
       - name: Install Playwright browsers and system dependencies
-        shell: tests_e2e/test_browser_ui.py::test_auth_login_roll_rate_flow -v
+        shell: bash
+        run: |
+          apt-get update && apt-get install -y libpango-1.0-0 libcairo2
+          source .venv/bin/activate && playwright install chromium
+
+      - name: Wait for PostgreSQL
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h postgres -p 5432 -U postgres; then
+              echo "PostgreSQL is ready"
+              exit 0
+            fi
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL failed to start"
+          exit 1
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd frontend && npm run build
+
+      - name: Run test_d10_renders_geometry_correctly
+        shell: bash
+        run: |
+          source .venv/bin/activate && pytest tests_e2e/test_browser_ui.py::test_d10_renders_geometry_correctly -v
 
   test-e2e-browser-auth:
     name: E2E Browser - Auth Flow
