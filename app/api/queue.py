@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.database import get_db_async
+from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread, User
 from app.schemas import ThreadResponse
@@ -38,7 +38,7 @@ async def move_thread_position(
     thread_id: int,
     position_request: PositionRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Move thread to specific position."""
     logger.info(
@@ -91,7 +91,7 @@ async def move_thread_front(
     request: Request,
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Move thread to the front."""
     result = await db.execute(
@@ -129,7 +129,7 @@ async def move_thread_back(
     request: Request,
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Move thread to the back."""
     result = await db.execute(

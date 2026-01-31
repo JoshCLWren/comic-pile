@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_auth_settings
-from app.database import get_db_async
+from app.database import get_db
 from app.models.revoked_token import RevokedToken
 from app.models.user import User
 
@@ -92,7 +92,7 @@ async def is_token_revoked(db: AsyncSession, jti: str) -> bool:
 
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: Annotated[AsyncSession, Depends(get_db_async)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     """Get current authenticated user from JWT token."""
     token = credentials.credentials

@@ -1,10 +1,11 @@
 """Import reading orders from Google Sheets data."""
 
+import asyncio
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
 
-from app.database import SessionLocal
+from app.database import AsyncSessionLocal
 from app.models import Thread, User
 
 # Data from Google Sheets
@@ -69,7 +70,7 @@ READING_ORDERS = [
         "floppies",
         "3",
         "7",
-        "marvel two-in-one 63",
+        "marz two-in-one 63",
     ),
     ("Xforce", "Declustered X-men reading order", "floppies", "3.5", "30", "73"),
     ("Rom", "rom vlol 1", "floppies", "3.5", "6", "8"),
@@ -78,96 +79,90 @@ READING_ORDERS = [
 ]
 
 
-def import_reading_orders() -> None:
+async def import_reading_orders() -> None:
     """Clear existing threads and import reading orders from Google Sheets."""
-    db = SessionLocal()
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await db.execute(select(User).where(User.id == 1))
+            user = result.scalar_one_or_none()
 
-    try:
-        user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+            if user is None:
+                user = User(id=1, username="demo_user")
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+                print(f"Created user: {user.username}")
 
-        if user is None:
-            user = User(id=1, username="demo_user")
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            print(f"Created user: {user.username}")
+            user_id = user.id
 
-        user_id = user.id
+            await db.execute(delete(Thread).where(Thread.user_id == user_id))
+            await db.commit()
+            print(f"Deleted all existing threads for user {user_id}")
 
-        db.execute(delete(Thread).where(Thread.user_id == user_id))
-        db.commit()
-        print(f"Deleted all existing threads for user {user_id}")
+            imported_count = 0
+            skipped_count = 0
 
-        imported_count = 0
-        skipped_count = 0
+            for queue_position, entry in enumerate(READING_ORDERS, start=1):
+                title, description, format_val, last_rating_str, issues_remaining_str, _ = entry
 
-        for queue_position, entry in enumerate(READING_ORDERS, start=1):
-            title, description, format_val, last_rating_str, issues_remaining_str, _ = entry
+                if not title.strip():
+                    skipped_count += 1
+                    continue
 
-            if not title.strip():
-                skipped_count += 1
-                continue
+                last_rating = None
+                if last_rating_str.strip():
+                    try:
+                        last_rating = float(last_rating_str)
+                    except ValueError:
+                        pass
 
-            last_rating = None
-            if last_rating_str.strip():
-                try:
-                    last_rating = float(last_rating_str)
-                except ValueError:
-                    pass
+                issues_remaining = 0
+                if issues_remaining_str.strip():
+                    try:
+                        issues_remaining = int(issues_remaining_str)
+                    except ValueError:
+                        pass
 
-            issues_remaining = 0
-            if issues_remaining_str.strip():
-                try:
-                    issues_remaining = int(issues_remaining_str)
-                except ValueError:
-                    pass
+                full_title = f"{title.strip()}"
+                if description and description.strip():
+                    full_title = f"{title.strip()}: {description.strip()}"
 
-            full_title = f"{title.strip()}"
-            if description and description.strip():
-                full_title = f"{title.strip()}: {description.strip()}"
+                thread = Thread(
+                    title=full_title[:200],
+                    format=format_val.strip() if format_val.strip() else "Unknown",
+                    issues_remaining=issues_remaining,
+                    queue_position=queue_position,
+                    status="active",
+                    last_rating=last_rating,
+                    user_id=user_id,
+                    last_activity_at=datetime.now(UTC),
+                )
+                db.add(thread)
+                imported_count += 1
 
-            thread = Thread(
-                title=full_title[:200],
-                format=format_val.strip() if format_val.strip() else "Unknown",
-                issues_remaining=issues_remaining,
-                queue_position=queue_position,
-                status="active",
-                last_rating=last_rating,
-                user_id=user_id,
-                last_activity_at=datetime.now(UTC),
-            )
-            db.add(thread)
-            imported_count += 1
+            await db.commit()
 
-        db.commit()
-
-        final_threads = (
-            db.execute(
+            result = await db.execute(
                 select(Thread).where(Thread.user_id == user_id).order_by(Thread.queue_position)
             )
-            .scalars()
-            .all()
-        )
+            final_threads = result.scalars().all()
 
-        print("\n=== Import Complete ===")
-        print(f"Imported: {imported_count} threads")
-        print(f"Skipped: {skipped_count} threads (missing title)")
-        print(f"Total threads in DB: {len(final_threads)}")
+            print("\n=== Import Complete ===")
+            print(f"Imported: {imported_count} threads")
+            print(f"Skipped: {skipped_count} threads (missing title)")
+            print(f"Total threads in DB: {len(final_threads)}")
 
-        print("\n=== Imported Threads ===")
-        for thread in final_threads:
-            print(
-                f"{thread.queue_position:2d}. {thread.title[:50]:50s} | {thread.format:15s} | {thread.issues_remaining:3d} | {thread.last_rating}"
-            )
+            print("\n=== Imported Threads ===")
+            for thread in final_threads:
+                print(
+                    f"{thread.queue_position:2d}. {thread.title[:50]:50s} | {thread.format:15s} | {thread.issues_remaining:3d} | {thread.last_rating}"
+                )
 
-    except Exception as e:
-        db.rollback()
-        print(f"Error importing data: {e}")
-        raise
-
-    finally:
-        db.close()
+        except Exception as e:
+            await db.rollback()
+            print(f"Error importing data: {e}")
+            raise
 
 
 if __name__ == "__main__":
-    import_reading_orders()
+    asyncio.run(import_reading_orders())

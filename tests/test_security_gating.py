@@ -48,11 +48,11 @@ async def test_admin_routes_accessible_when_enabled(
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
 
-    from app.database import get_db_async
+    from app.database import get_db
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -290,11 +290,11 @@ async def test_cors_origins_allowed_in_production_when_set(async_db: AsyncSessio
     os.environ["ENVIRONMENT"] = "production"
     os.environ["CORS_ORIGINS"] = "https://example.com,https://app.example.com"
 
-    from app.database import get_db_async
+    from app.database import get_db
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -326,11 +326,11 @@ async def test_cors_defaults_to_wildcard_in_development(async_db: AsyncSession) 
     if "CORS_ORIGINS" in os.environ:
         os.environ.pop("CORS_ORIGINS")
 
-    from app.database import get_db_async
+    from app.database import get_db
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -360,11 +360,11 @@ async def test_cors_allow_credentials_is_false(async_db: AsyncSession) -> None:
     os.environ["ENVIRONMENT"] = "production"
     os.environ["CORS_ORIGINS"] = "https://example.com"
 
-    from app.database import get_db_async
+    from app.database import get_db
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -409,12 +409,12 @@ async def test_app_starts_successfully(
     if cors_origins:
         os.environ["CORS_ORIGINS"] = cors_origins
 
-    from app.database import get_db_async
+    from app.database import get_db
 
     test_app = None
     try:
         test_app = create_app()
-        test_app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+        test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

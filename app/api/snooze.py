@@ -12,7 +12,7 @@ import app.api.session as session_module
 
 from app.api.session import build_ladder_path
 from app.auth import get_current_user
-from app.database import get_db_async
+from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
@@ -119,7 +119,7 @@ async def build_session_response(session: SessionModel, db: AsyncSession) -> Ses
 async def snooze_thread(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     """Snooze the pending thread and step the die up.
 
@@ -216,7 +216,7 @@ async def unsnooze_thread(
     thread_id: int,
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     """Remove thread from snoozed list.
 

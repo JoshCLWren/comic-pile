@@ -29,11 +29,11 @@ async def safe_mode_user(async_db) -> User:
 async def safe_mode_auth_client(async_db, safe_mode_user: User) -> AsyncGenerator[AsyncClient]:
     """httpx.AsyncClient authenticated as safe_mode_user for safe mode tests."""
     from app.auth import create_access_token
-    from app.database import get_db_async
+    from app.database import get_db
 
     from tests.conftest import _create_async_db_override
 
-    app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         token = create_access_token(data={"sub": safe_mode_user.username, "jti": "test"})

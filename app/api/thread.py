@@ -11,7 +11,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.database import get_db_async
+from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
@@ -42,7 +42,7 @@ def thread_to_response(thread: Thread) -> ThreadResponse:
 @router.get("/stale", response_model=list[ThreadResponse])
 async def list_stale_threads(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
     days: int = 30,
 ) -> list[ThreadResponse]:
     """List threads not read in specified days (default 30)."""
@@ -69,7 +69,7 @@ get_threads_cached = None
 async def list_threads(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> list[ThreadResponse]:
     """List all threads ordered by position."""
     if get_threads_cached:
@@ -86,7 +86,7 @@ async def list_threads(
 async def list_completed_threads(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> str:
     """List completed threads for reactivation modal."""
     result = await db.execute(
@@ -107,7 +107,7 @@ async def list_completed_threads(
 async def list_active_threads(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> str:
     """List active threads for override modal."""
     result = await db.execute(
@@ -135,7 +135,7 @@ async def create_thread(
     request: Request,
     thread_data: ThreadCreate,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Create a new thread."""
     max_retries = 3
@@ -183,7 +183,7 @@ async def create_thread(
 async def get_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Get a single thread by ID."""
     thread = await db.get(Thread, thread_id)
@@ -200,7 +200,7 @@ async def update_thread(
     thread_id: int,
     thread_data: ThreadUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Update a thread."""
     thread = await db.get(Thread, thread_id)
@@ -234,7 +234,7 @@ async def update_thread(
 async def delete_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete a thread."""
     thread = await db.get(Thread, thread_id)
@@ -268,7 +268,7 @@ async def delete_thread(
 async def reactivate_thread(
     request: ReactivateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Reactivate a completed thread by adding more issues."""
     thread = await db.get(Thread, request.thread_id)

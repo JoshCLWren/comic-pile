@@ -8,7 +8,7 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.database import get_db_async
+from app.database import get_db
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
@@ -25,7 +25,7 @@ async def undo_to_snapshot(
     session_id: int,
     snapshot_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     """Undo session state to a specific snapshot with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
@@ -208,7 +208,7 @@ async def undo_to_snapshot(
 async def list_session_snapshots(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
     """List all snapshots for a session."""
     session = await db.get(SessionModel, session_id)

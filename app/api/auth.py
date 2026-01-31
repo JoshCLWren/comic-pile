@@ -18,7 +18,7 @@ from app.auth import (
     verify_token,
     JWTError,
 )
-from app.database import get_db_async
+from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
     RefreshTokenRequest,
@@ -34,7 +34,7 @@ router = APIRouter(tags=["auth"])
 @router.post("/register", response_model=TokenResponse)
 async def register_user(
     user_data: UserRegisterRequest,
-    db: Annotated[AsyncSession, Depends(get_db_async)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
     """Register a new user and return tokens."""
     # Check if username already exists
@@ -88,7 +88,7 @@ async def register_user(
 @router.post("/login", response_model=TokenResponse)
 async def login_user(
     login_data: UserLoginRequest,
-    db: Annotated[AsyncSession, Depends(get_db_async)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
     """Authenticate user and return tokens."""
     result = await db.execute(select(User).where(User.username == login_data.username).limit(1))
@@ -119,7 +119,7 @@ async def login_user(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_access_token(
     refresh_data: RefreshTokenRequest,
-    db: Annotated[AsyncSession, Depends(get_db_async)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
     """Refresh access token using refresh token."""
     try:
@@ -185,7 +185,7 @@ async def refresh_access_token(
 async def logout_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())],
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db_async)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Logout user by revoking their current token."""
     token = credentials.credentials

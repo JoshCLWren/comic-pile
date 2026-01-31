@@ -9,7 +9,7 @@ from typing import Annotated
 
 from app.auth import get_current_user
 from app.config import get_rating_settings
-from app.database import get_db_async
+from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
@@ -84,7 +84,7 @@ async def rate_thread(
     request: Request,
     rate_data: RateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
     """Rate current reading and update thread."""
     result = await db.execute(
