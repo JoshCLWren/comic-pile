@@ -1,8 +1,6 @@
 """Browser UI integration tests using Playwright."""
 
 import json
-import pathlib
-import sys
 import time
 import pytest
 import requests
@@ -34,22 +32,12 @@ async def test_user(test_server_url, async_db):
     from app.models import User
     from sqlalchemy import text
 
-    sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-    from tests_e2e.conftest import get_test_database_url
-
-    test_db_url = get_test_database_url()
-
-    from sqlalchemy.ext.asyncio import create_async_engine
-
-    test_engine = create_async_engine(test_db_url, echo=False)
-    async with test_engine.begin() as server_conn:
-        await server_conn.execute(
-            text(
-                "TRUNCATE TABLE users, sessions, events, threads, snapshots, revoked_tokens "
-                "RESTART IDENTITY CASCADE;"
-            )
+    await async_db.execute(
+        text(
+            "TRUNCATE TABLE users, sessions, events, threads, snapshots, revoked_tokens "
+            "RESTART IDENTITY CASCADE;"
         )
-
+    )
     await async_db.execute(
         text("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))")
     )
@@ -78,7 +66,6 @@ async def test_user(test_server_url, async_db):
     yield test_email, user.id
 
     app.dependency_overrides.clear()
-    await test_engine.dispose()
 
 
 @pytest.mark.integration
