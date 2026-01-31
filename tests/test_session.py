@@ -1194,3 +1194,51 @@ async def test_get_current_die_returns_manual_die(async_db, default_user):
 
     current_die = await get_current_die(session.id, async_db)
     assert current_die == 20
+
+
+@pytest.mark.asyncio
+async def test_get_current_session_after_get_or_create_no_lazy_load(
+    auth_client: AsyncClient, async_db, default_user
+):
+    """Test that accessing session.id after get_or_create doesn't cause MissingGreenlet.
+
+    Regression test for MissingGreenlet error when get_current_session creates a new
+    session via get_or_create, which commits during create_session_start_snapshot,
+    expiring the session object. Accessing .id on expired session triggers lazy load
+    which fails in async context with MissingGreenlet.
+
+    The fix ensures db.refresh() is called before accessing session.id.
+    """
+    from sqlalchemy import delete
+
+    await async_db.execute(delete(SessionModel))
+    await async_db.commit()
+
+    thread1 = Thread(
+        title="Test Thread 1",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    thread2 = Thread(
+        title="Test Thread 2",
+        format="Graphic Novel",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread1)
+    async_db.add(thread2)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/sessions/current/")
+    assert response.status_code == 200
+    data = response.json()
+    assert "id" in data
+    assert data["start_die"] == 6
+    assert data["user_id"] == default_user.id
