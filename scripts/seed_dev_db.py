@@ -41,6 +41,7 @@ async def seed_database():
                 await db.delete(session)
 
             await db.commit()
+            await db.refresh(user)
             print("Cleared existing threads and sessions")
         else:
             # Create new test user
@@ -110,6 +111,9 @@ async def seed_database():
         await db.commit()
         print(f"Created {len(threads)} threads")
 
+        # Refresh user to ensure we have the latest state
+        await db.refresh(user)
+
         # Create active session
         session = SessionModel(
             start_die=6,
@@ -124,11 +128,7 @@ async def seed_database():
         print("\nDatabase seeded successfully!")
         print("Email: test@example.com")
         print("Password: testpass123")
-        print("\nThreads created:")
-        for thread in threads:
-            print(
-                f"  - {thread.title} (#{thread.queue_position}, {thread.issues_remaining} issues remaining, {thread.status})"
-            )
+        print(f"\nCreated {len(threads)} threads and 1 active session")
 
 
 if __name__ == "__main__":
