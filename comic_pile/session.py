@@ -8,7 +8,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_session_settings
-from app.models import Event, Snapshot, Thread
+from app.models import Event, Snapshot, Thread, Session
 from app.models import Session as SessionModel
 
 
@@ -111,11 +111,11 @@ async def get_or_create(db: AsyncSession, user_id: int) -> SessionModel:
 
             cutoff_time = datetime.now(UTC) - timedelta(hours=session_gap_hours)
             result = await db.execute(
-                select(SessionModel)
-                .where(SessionModel.user_id == user_id)
-                .where(SessionModel.ended_at.is_(None))
-                .where(SessionModel.started_at >= cutoff_time)
-                .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                select(Session)
+                .where(Session.user_id == user_id)
+                .where(Session.ended_at.is_(None))
+                .where(Session.started_at >= cutoff_time)
+                .order_by(Session.started_at.desc(), Session.id.desc())
             )
             active_session = result.scalars().first()
 
@@ -129,18 +129,18 @@ async def get_or_create(db: AsyncSession, user_id: int) -> SessionModel:
                     pass
 
                 result = await db.execute(
-                    select(SessionModel)
-                    .where(SessionModel.user_id == user_id)
-                    .where(SessionModel.ended_at.is_(None))
-                    .where(SessionModel.started_at >= cutoff_time)
-                    .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                    select(Session)
+                    .where(Session.user_id == user_id)
+                    .where(Session.ended_at.is_(None))
+                    .where(Session.started_at >= cutoff_time)
+                    .order_by(Session.started_at.desc(), Session.id.desc())
                 )
                 active_session = result.scalars().first()
 
                 if active_session:
                     return active_session
 
-                new_session = SessionModel(start_die=start_die, user_id=user_id)
+                new_session = Session(start_die=start_die, user_id=user_id)
                 db.add(new_session)
                 await db.commit()
                 await db.refresh(new_session)

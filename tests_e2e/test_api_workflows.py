@@ -5,8 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Thread, User
-from app.models import Session as SessionModel
+from app.models import Event, Session, Thread, User
 
 
 @pytest.mark.asyncio
@@ -17,6 +16,13 @@ async def test_roll_dice_updates_session(
     """Post to /roll, verify session updated in database."""
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
     user = result.scalar_one()
+
+    # Clean up any existing sessions for this user to ensure test isolation
+    sessions_result = await async_db.execute(select(Session).where(Session.user_id == user.id))
+    for existing_session in sessions_result.scalars().all():
+        await async_db.delete(existing_session)
+    await async_db.commit()
+
     thread = Thread(
         title="Test Comic", format="Comic", issues_remaining=5, queue_position=1, user_id=user.id
     )
@@ -28,11 +34,11 @@ async def test_roll_dice_updates_session(
     assert response.status_code == 200
 
     session_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.ended_at.is_(None))
+        select(Session).where(Session.ended_at.is_(None)).where(Session.user_id == user.id)
     )
-    session = session_result.scalar_one_or_none()
-    assert session is not None
-    assert session.start_die == 6
+    active_session = session_result.scalar_one_or_none()
+    assert active_session is not None
+    assert active_session.start_die == 6
 
 
 @pytest.mark.asyncio
@@ -49,14 +55,14 @@ async def test_rate_comic_updates_rating(
     async_db.add(thread)
     await async_db.commit()
 
-    session = SessionModel(start_die=6, user_id=user.id)
-    async_db.add(session)
+    active_session = Session(start_die=6, user_id=user.id)
+    async_db.add(active_session)
     await async_db.commit()
-    await async_db.refresh(session)
+    await async_db.refresh(active_session)
 
     roll_event = Event(
         type="roll",
-        session_id=session.id,
+        session_id=active_session.id,
         selected_thread_id=thread.id,
         die=6,
         result=1,
@@ -112,11 +118,9 @@ async def test_session_persists_across_requests(
     user = result.scalar_one()
 
     # Clean up any existing sessions for this user to ensure test isolation
-    sessions_result = await async_db.execute(
-        select(SessionModel).where(SessionModel.user_id == user.id)
-    )
-    for session in sessions_result.scalars().all():
-        await async_db.delete(session)
+    sessions_result = await async_db.execute(select(Session).where(Session.user_id == user.id))
+    for existing_session in sessions_result.scalars().all():
+        await async_db.delete(existing_session)
     await async_db.commit()
 
     thread = Thread(
@@ -128,9 +132,7 @@ async def test_session_persists_across_requests(
     await auth_api_client_async.post("/api/roll/")
 
     session1_result = await async_db.execute(
-        select(SessionModel)
-        .where(SessionModel.ended_at.is_(None))
-        .where(SessionModel.user_id == user.id)
+        select(Session).where(Session.ended_at.is_(None)).where(Session.user_id == user.id)
     )
     session1 = session1_result.scalar_one()
     session_id = session1.id
@@ -138,9 +140,7 @@ async def test_session_persists_across_requests(
     await auth_api_client_async.post("/api/roll/")
 
     session2_result = await async_db.execute(
-        select(SessionModel)
-        .where(SessionModel.ended_at.is_(None))
-        .where(SessionModel.user_id == user.id)
+        select(Session).where(Session.ended_at.is_(None)).where(Session.user_id == user.id)
     )
     session2 = session2_result.scalar_one()
     assert session2.id == session_id
@@ -160,14 +160,14 @@ async def test_complete_task_advances_queue(
     async_db.add(thread)
     await async_db.commit()
 
-    session = SessionModel(start_die=6, user_id=user.id)
-    async_db.add(session)
+    active_session = Session(start_die=6, user_id=user.id)
+    async_db.add(active_session)
     await async_db.commit()
-    await async_db.refresh(session)
+    await async_db.refresh(active_session)
 
     roll_event = Event(
         type="roll",
-        session_id=session.id,
+        session_id=active_session.id,
         selected_thread_id=thread.id,
         die=6,
         result=1,
@@ -183,8 +183,9 @@ async def test_complete_task_advances_queue(
     assert response.status_code == 200
 
     await async_db.refresh(thread)
+    await async_db.refresh(active_session)
     assert thread.status == "completed"
-    assert session.ended_at is not None
+    assert active_session.ended_at is not None
 
 
 @pytest.mark.asyncio
