@@ -8,12 +8,10 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import UTC, datetime
 from socket import socket
 
-if not os.getenv("SECRET_KEY"):
-    os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
-
 import pytest
 import pytest_asyncio
 import requests
+from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
@@ -23,12 +21,18 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
-from app.auth import create_access_token, hash_password
 from app.config import clear_settings_cache
 from app.database import Base, get_db
 from app.main import app
 from app.models import User
+
+
+load_dotenv()
+
+if not os.getenv("SECRET_KEY"):
+    os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 
 
 async def _ensure_default_user(async_db: SQLAlchemyAsyncSession) -> User:
@@ -100,45 +104,6 @@ def _find_free_port():
 
 TEST_SERVER_PORT = _find_free_port()
 
-_test_engine = None
-_test_session_factory = None
-
-
-async def _get_global_engine():
-    """Get or create the global test engine."""
-    global _test_engine, _test_session_factory
-
-    if _test_engine is None:
-        database_url = get_test_database_url()
-        _test_engine = create_async_engine(database_url, echo=False)
-
-        # Create tables in a transaction and commit them
-        async with _test_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-        # Dispose engine to force transaction commit
-        await _test_engine.dispose()
-
-        # Recreate engine for test use
-        _test_engine = create_async_engine(database_url, echo=False)
-
-        _test_session_factory = async_sessionmaker(
-            bind=_test_engine,
-            expire_on_commit=False,
-            class_=SQLAlchemyAsyncSession,
-        )
-
-    return _test_engine
-
-
-async def _dispose_global_engine():
-    """Dispose the global test engine."""
-    global _test_engine, _test_session_factory
-    if _test_engine is not None:
-        await _test_engine.dispose()
-        _test_engine = None
-        _test_session_factory = None
-
 
 @pytest.fixture(scope="function", autouse=True)
 def set_skip_worktree_check():
@@ -166,34 +131,37 @@ def enable_internal_ops():
     clear_settings_cache()
 
 
-@pytest.fixture(scope="session", autouse=True)
-async def cleanup_global_engine():
-    """Cleanup global engine at end of test session."""
-    yield
-    await _dispose_global_engine()
-
-
 @pytest_asyncio.fixture(scope="function")
 async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
-    """Create async test database with transaction rollback (PostgreSQL)."""
-    engine = await _get_global_engine()
+    """Create isolated async test database with transaction rollback."""
+    database_url = get_test_database_url()
+
+    engine = create_async_engine(
+        database_url,
+        echo=False,
+        poolclass=NullPool,
+    )
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     connection = await engine.connect()
+    transaction = await connection.begin()
 
-    async with connection.begin():
-        async_session_maker = async_sessionmaker(
-            bind=connection,
-            expire_on_commit=False,
-            class_=SQLAlchemyAsyncSession,
-        )
+    async_session_maker = async_sessionmaker(
+        bind=connection,
+        expire_on_commit=False,
+        class_=SQLAlchemyAsyncSession,
+    )
 
-        async with async_session_maker() as session:
-            try:
-                yield session
-            finally:
-                await session.close()
-
-    await connection.close()
+    async with async_session_maker() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+            await transaction.rollback()
+            await connection.close()
+            await engine.dispose()
 
 
 @pytest.fixture(scope="function")
@@ -342,7 +310,7 @@ def test_server_url():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def api_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
+async def auth_api_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
     """API client using ASGITransport for direct app calls."""
 
     async def override_get_db():
@@ -355,41 +323,6 @@ async def api_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncCl
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
-    app.dependency_overrides.clear()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def auth_api_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
-    """API client with authentication using ASGITransport for direct app calls."""
-    from app.models import User
-
-    async def override_get_db():
-        try:
-            yield async_db
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        result = await async_db.execute(
-            select(User).where(User.username == "test_user@example.com")
-        )
-        user = result.scalar_one_or_none()
-        if not user:
-            user = User(
-                username="test_user@example.com",
-                email="test_user@example.com",
-                password_hash=hash_password("testpassword"),
-                created_at=datetime.now(UTC),
-            )
-            async_db.add(user)
-            await async_db.commit()
-            await async_db.refresh(user)
-
-        token = create_access_token(data={"sub": user.username, "jti": "test"})
-        ac.headers.update({"Authorization": f"Bearer {token}"})
-        yield ac
     app.dependency_overrides.clear()
 
 
@@ -417,7 +350,7 @@ async def auth_api_client_async(async_db: SQLAlchemyAsyncSession) -> AsyncGenera
                 created_at=datetime.now(UTC),
             )
             async_db.add(user)
-            await async_db.commit()
+            await async_db.flush()
             await async_db.refresh(user)
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
@@ -426,11 +359,11 @@ async def auth_api_client_async(async_db: SQLAlchemyAsyncSession) -> AsyncGenera
     app.dependency_overrides.clear()
 
 
-@pytest.fixture(scope="function")
-def browser_page(page):
-    """Playwright page fixture with localStorage cleared after each test."""
+@pytest_asyncio.fixture(scope="function")
+async def browser_page(page):
+    """Async Playwright page fixture with localStorage cleared after each test."""
     yield page
     try:
-        page.evaluate("localStorage.clear()")
+        await page.evaluate("localStorage.clear()")
     except Exception:
         pass

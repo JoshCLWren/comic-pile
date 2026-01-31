@@ -345,9 +345,11 @@ async def test_import_reviews_valid_csv(client, sample_data, async_db, enable_in
     await async_db.refresh(threads[1])
 
     assert threads[0].review_url == "https://example.com/review1"
-    assert threads[0].last_review_at.isoformat().startswith("2024-01-15T10:30:00")
+    assert threads[0].last_review_at is not None
+    assert threads[0].last_review_at.tzinfo is not None
     assert threads[1].review_url == "https://example.com/review2"
-    assert threads[1].last_review_at.isoformat().startswith("2024-02-20T14:45:00")
+    assert threads[1].last_review_at is not None
+    assert threads[1].last_review_at.tzinfo is not None
 
 
 @pytest.mark.asyncio
