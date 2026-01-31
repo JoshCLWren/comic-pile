@@ -293,20 +293,28 @@ def test_server_url():
         )
         conn.commit()
 
-    config = Config(app=app, host="127.0.0.1", port=TEST_SERVER_PORT, log_level="error")
+    config = Config(app=app, host="127.0.0.1", port=TEST_SERVER_PORT, log_level="warning")
     server = Server(config)
 
     thread = threading.Thread(target=server.run)
     thread.daemon = True
     thread.start()
 
-    for _ in range(50):
+    server_ready = False
+    for _ in range(100):
         try:
-            response = requests.get(f"http://127.0.0.1:{TEST_SERVER_PORT}/health", timeout=0.5)
+            response = requests.get(f"http://127.0.0.1:{TEST_SERVER_PORT}/health", timeout=1)
             if response.status_code == 200:
+                server_ready = True
                 break
         except requests.exceptions.RequestException:
-            time.sleep(0.2)
+            time.sleep(0.1)
+
+    if not server_ready:
+        raise RuntimeError(
+            f"Test server failed to start on port {TEST_SERVER_PORT}. "
+            f"Check if port is available and database is accessible."
+        )
 
     yield f"http://127.0.0.1:{TEST_SERVER_PORT}"
 
