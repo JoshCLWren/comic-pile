@@ -100,6 +100,38 @@ def _find_free_port():
 
 TEST_SERVER_PORT = _find_free_port()
 
+_test_engine = None
+_test_session_factory = None
+
+
+async def _get_global_engine():
+    """Get or create the global test engine."""
+    global _test_engine, _test_session_factory
+
+    if _test_engine is None:
+        database_url = get_test_database_url()
+        _test_engine = create_async_engine(database_url, echo=False)
+
+        async with _test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        _test_session_factory = async_sessionmaker(
+            bind=_test_engine,
+            expire_on_commit=False,
+            class_=SQLAlchemyAsyncSession,
+        )
+
+    return _test_engine
+
+
+async def _dispose_global_engine():
+    """Dispose the global test engine."""
+    global _test_engine, _test_session_factory
+    if _test_engine is not None:
+        await _test_engine.dispose()
+        _test_engine = None
+        _test_session_factory = None
+
 
 @pytest.fixture(scope="function", autouse=True)
 def set_skip_worktree_check():
@@ -127,22 +159,18 @@ def enable_internal_ops():
     clear_settings_cache()
 
 
+@pytest.fixture(scope="session", autouse=True)
+async def cleanup_global_engine():
+    """Cleanup global engine at end of test session."""
+    yield
+    await _dispose_global_engine()
+
+
 @pytest_asyncio.fixture(scope="function")
 async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
     """Create async test database with transaction rollback (PostgreSQL)."""
-    database_url = get_test_database_url()
+    engine = await _get_global_engine()
 
-    engine = create_async_engine(database_url, echo=False)
-
-    # Create tables outside of transaction
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    # Close the connection used for table creation
-    await engine.dispose()
-
-    # Create new engine for test transaction
-    engine = create_async_engine(database_url, echo=False)
     connection = await engine.connect()
 
     async with connection.begin():
@@ -159,7 +187,39 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
                 await session.close()
 
     await connection.close()
-    await engine.dispose()
+
+
+@pytest.fixture(scope="function")
+def db(async_db):
+    """Synchronous wrapper for async_db for use in non-async tests."""
+
+    class SyncDB:
+        """Synchronous wrapper for async database operations."""
+
+        def __init__(self, async_session):
+            self._async_session = async_session
+
+        def add(self, obj):
+            """Add object to session."""
+            asyncio.run(self._async_session.add(obj))
+
+        def commit(self):
+            """Commit session."""
+            asyncio.run(self._async_session.commit())
+
+        def refresh(self, obj):
+            """Refresh object."""
+            asyncio.run(self._async_session.refresh(obj))
+
+        def execute(self, stmt):
+            """Execute a statement."""
+            return asyncio.run(self._async_session.execute(stmt))
+
+        def close(self):
+            """Close session (no-op for sync wrapper)."""
+            pass
+
+    return SyncDB(async_db)
 
 
 @pytest.fixture(scope="function")
