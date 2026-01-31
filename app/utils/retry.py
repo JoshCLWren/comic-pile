@@ -1,6 +1,6 @@
 """Retry utilities for database operations."""
 
-import time
+import asyncio
 from collections.abc import Callable
 from typing import TypeVar
 
@@ -48,4 +48,4 @@ async def with_deadlock_retry[T](db: AsyncSession, operation: Callable[[], T]) -
                     f"Failed after {DEADLOCK_MAX_RETRIES} retries due to deadlock"
                 ) from e
             delay = DEADLOCK_INITIAL_DELAY * (2 ** (retries - 1))
-            time.sleep(delay)
+            await asyncio.sleep(delay)

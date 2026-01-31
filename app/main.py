@@ -19,7 +19,9 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import exc as sqlalchemy_exc
 from starlette.exceptions import HTTPException as StarletteHTTPException
+import pydantic
 
 from app.api import admin, analytics, auth, queue, rate, roll, session, snooze, thread, undo
 from app.config import get_app_settings
@@ -81,7 +83,8 @@ async def _safe_get_request_body(request: Request) -> str | dict | None:
             if len(body) <= MAX_LOG_BODY_SIZE:
                 return body.decode("utf-8", errors="replace")
             return f"[BINARY DATA: {len(body)} bytes]"
-    except Exception as e:
+    except (OSError, RuntimeError, TimeoutError) as e:
+        # Catch I/O errors (body already consumed, network issues), RuntimeError from Starlette, and timeouts
         logger.debug(f"Failed to read request body: {e}")
         return None
 
@@ -360,7 +363,7 @@ def create_app() -> FastAPI:
         # Check if DATABASE_URL is set (validated at config load time)
         try:
             get_database_settings()
-        except Exception:
+        except (pydantic.ValidationError, OSError):
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 content={
@@ -375,7 +378,8 @@ def create_app() -> FastAPI:
             async with AsyncSessionLocal() as db:
                 await db.execute(text("SELECT 1"))
                 return {"status": "healthy", "database": "connected"}
-        except Exception as e:
+        except sqlalchemy_exc.DBAPIError as e:
+            # Catch database connection and execution errors (OperationalError, InterfaceError, etc.)
             logger.error(f"Health check database connection failed: {e}")
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -419,7 +423,8 @@ def create_app() -> FastAPI:
                     database_ready = True
                     logger.info("Database connection established successfully")
                     break
-            except Exception as e:
+            except sqlalchemy_exc.DBAPIError as e:
+                # Catch database connection and execution errors (OperationalError, InterfaceError, etc.)
                 logger.warning(f"Database connection attempt {attempt}/{max_retries} failed: {e}")
                 if attempt < max_retries:
                     logger.info(f"Retrying in {retry_delay} seconds...")
@@ -437,7 +442,8 @@ def create_app() -> FastAPI:
                     async with async_engine.begin() as conn:
                         await conn.run_sync(Base.metadata.create_all)
                     logger.info("Database tables created successfully")
-                except Exception as e:
+                except sqlalchemy_exc.DBAPIError as e:
+                    # Catch database errors during table creation (OperationalError, ProgrammingError, etc.)
                     logger.error(f"Failed to create database tables: {e}")
                     sys.exit(1)
 
@@ -456,7 +462,8 @@ def create_app() -> FastAPI:
                         logger.warning(f"Database backup warning:\n{result.stderr}")
                 except subprocess.TimeoutExpired:
                     logger.error("Database backup timed out after 60 seconds")
-                except Exception as backup_error:
+                except OSError as backup_error:
+                    # Catch process creation and execution errors (FileNotFoundError, PermissionError, etc.)
                     logger.error(f"Database backup failed: {backup_error}")
             else:
                 logger.info("Automatic backup disabled (AUTO_BACKUP_ENABLED=false)")
