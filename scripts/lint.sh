@@ -274,6 +274,15 @@ if should_run_frontend; then
     ANY_CHECKED=1
     echo ""
     echo "Running frontend ESLint..."
+    
+    if [ -n "$CI" ]; then
+        echo "CI environment: Installing frontend dependencies..."
+        (cd frontend && npm ci --legacy-peer-deps) || {
+            echo "${RED}ERROR: Failed to install frontend dependencies.${NC}"
+            exit 1
+        }
+    fi
+    
     if ! (cd frontend && npm run lint); then
         echo ""
         echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"
