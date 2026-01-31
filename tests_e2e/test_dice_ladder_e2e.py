@@ -20,12 +20,7 @@ async def test_dice_ladder_rating_goes_down(
     monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(username="test_user@example.com")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = result.scalar_one()
 
     thread = Thread(
         title="Green Lantern",
@@ -76,12 +71,7 @@ async def test_dice_ladder_rating_goes_up(
     monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(username="test_user@example.com")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = result.scalar_one()
 
     thread = Thread(
         title="Shazam",
@@ -132,12 +122,7 @@ async def test_dice_ladder_snooze_goes_up(
     monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(username="test_user@example.com")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = result.scalar_one()
 
     thread = Thread(
         title="Batman Beyond",
@@ -189,12 +174,7 @@ async def test_finish_session_clears_snoozed(
     monkeypatch.setattr("random.randint", lambda _a, _b: 0)
 
     result = await async_db.execute(select(User).where(User.username == "test_user@example.com"))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(username="test_user@example.com")
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+    user = result.scalar_one()
 
     thread1 = Thread(
         title="Superman",

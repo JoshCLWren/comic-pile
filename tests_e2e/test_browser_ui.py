@@ -3,6 +3,7 @@
 import json
 import time
 import pytest
+import pytest_asyncio
 import requests
 
 
@@ -23,7 +24,7 @@ def login_with_playwright(page, test_server_url, email, password=None):
     page.wait_for_load_state("networkidle", timeout=5000)
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def test_user(test_server_url, async_db):
     """Create a fresh test user for each test."""
     from app.auth import hash_password
@@ -69,31 +70,34 @@ async def test_user(test_server_url, async_db):
 
 
 @pytest.mark.integration
-def test_root_url_renders_dice_ladder(browser_page, test_server_url, db, test_user):
+@pytest.mark.asyncio
+async def test_root_url_renders_dice_ladder(browser_page, test_server_url, async_db, test_user):
     """Navigate to /, verify expected dice selector exists."""
     page = browser_page
     login_with_playwright(page, test_server_url, test_user[0])
-    page.goto(f"{test_server_url}/")
-    page.wait_for_selector("#die-selector", timeout=5000)
+    await page.goto(f"{test_server_url}/")
+    await page.wait_for_selector("#die-selector", timeout=5000)
 
-    header_die = page.query_selector("#header-die-label")
+    header_die = await page.query_selector("#header-die-label")
     assert header_die is not None
 
 
 @pytest.mark.integration
-def test_homepage_renders_dice_ladder(browser_page, test_server_url, db, test_user):
+@pytest.mark.asyncio
+async def test_homepage_renders_dice_ladder(browser_page, test_server_url, async_db, test_user):
     """Navigate to /react/, verify expected dice selector exists (legacy URL)."""
     page = browser_page
     login_with_playwright(page, test_server_url, test_user[0])
-    page.goto(f"{test_server_url}/react/")
-    page.wait_for_selector("#die-selector", timeout=5000)
+    await page.goto(f"{test_server_url}/react/")
+    await page.wait_for_selector("#die-selector", timeout=5000)
 
-    header_die = page.query_selector("#header-die-label")
+    header_die = await page.query_selector("#header-die-label")
     assert header_die is not None
 
 
 @pytest.mark.integration
-def test_roll_dice_navigates_to_rate(browser_page, test_server_url, db, test_user):
+@pytest.mark.asyncio
+async def test_roll_dice_navigates_to_rate(browser_page, test_server_url, async_db, test_user):
     """Navigate to /, click roll button, verify navigation to /rate."""
     page = browser_page
     from app.models import Thread
@@ -108,24 +112,25 @@ def test_roll_dice_navigates_to_rate(browser_page, test_server_url, db, test_use
         status="active",
         user_id=user_id,
     )
-    db.add(thread)
-    db.commit()
+    async_db.add(thread)
+    await async_db.commit()
 
     login_with_playwright(page, test_server_url, test_email)
-    page.goto(f"{test_server_url}/")
+    await page.goto(f"{test_server_url}/")
 
-    page.wait_for_selector("#tap-instruction", timeout=5000)
+    await page.wait_for_selector("#tap-instruction", timeout=5000)
 
-    dice_element = page.wait_for_selector("#main-die-3d", timeout=5000)
+    dice_element = await page.wait_for_selector("#main-die-3d", timeout=5000)
     if dice_element:
-        dice_element.click()
+        await dice_element.click()
 
-    page.wait_for_timeout(2000)
+    await page.wait_for_timeout(2000)
     assert page.url.endswith("/rate") or page.url.endswith("/rate/")
 
 
 @pytest.mark.integration
-def test_queue_management_ui(browser_page, test_server_url, db, test_user):
+@pytest.mark.asyncio
+async def test_queue_management_ui(browser_page, test_server_url, async_db, test_user):
     """Navigate to /queue, verify queue container exists and displays data."""
     page = browser_page
     from app.models import Thread
@@ -140,19 +145,20 @@ def test_queue_management_ui(browser_page, test_server_url, db, test_user):
         status="active",
         user_id=user_id,
     )
-    db.add(thread)
-    db.commit()
+    async_db.add(thread)
+    await async_db.commit()
 
     login_with_playwright(page, test_server_url, test_email)
-    page.goto(f"{test_server_url}/queue")
-    page.wait_for_selector("#queue-container", timeout=5000)
+    await page.goto(f"{test_server_url}/queue")
+    await page.wait_for_selector("#queue-container", timeout=5000)
 
-    queue_container = page.query_selector("#queue-container")
+    queue_container = await page.query_selector("#queue-container")
     assert queue_container is not None
 
 
 @pytest.mark.integration
-def test_view_history_pagination(browser_page, test_server_url, db, test_user):
+@pytest.mark.asyncio
+async def test_view_history_pagination(browser_page, test_server_url, async_db, test_user):
     """Navigate to /history, verify history list exists."""
     page = browser_page
     from app.models import Event, Thread
@@ -167,13 +173,13 @@ def test_view_history_pagination(browser_page, test_server_url, db, test_user):
         queue_position=100,
         user_id=user_id,
     )
-    db.add(thread)
-    db.commit()
+    async_db.add(thread)
+    await async_db.commit()
 
     session = SessionModel(start_die=6, user_id=user_id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     roll_event = Event(
         type="roll",
@@ -183,19 +189,20 @@ def test_view_history_pagination(browser_page, test_server_url, db, test_user):
         result=1,
         selection_method="random",
     )
-    db.add(roll_event)
-    db.commit()
+    async_db.add(roll_event)
+    await async_db.commit()
 
     login_with_playwright(page, test_server_url, test_email)
-    page.goto(f"{test_server_url}/history")
-    page.wait_for_selector("#sessions-list", timeout=5000)
+    await page.goto(f"{test_server_url}/history")
+    await page.wait_for_selector("#sessions-list", timeout=5000)
 
-    sessions_list = page.query_selector("#sessions-list")
+    sessions_list = await page.query_selector("#sessions-list")
     assert sessions_list is not None
 
 
 @pytest.mark.integration
-def test_full_session_workflow(browser_page, test_server_url, db, test_user):
+@pytest.mark.asyncio
+async def test_full_session_workflow(browser_page, test_server_url, async_db, test_user):
     """Setup session data, navigate to rate page, verify UI is functional."""
     page = browser_page
     from app.models import Event, Thread
@@ -210,13 +217,13 @@ def test_full_session_workflow(browser_page, test_server_url, db, test_user):
         queue_position=100,
         user_id=user_id,
     )
-    db.add(thread)
-    db.commit()
+    async_db.add(thread)
+    await async_db.commit()
 
     session = SessionModel(start_die=6, user_id=user_id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     roll_event = Event(
         type="roll",
@@ -226,38 +233,39 @@ def test_full_session_workflow(browser_page, test_server_url, db, test_user):
         result=1,
         selection_method="random",
     )
-    db.add(roll_event)
-    db.commit()
+    async_db.add(roll_event)
+    await async_db.commit()
 
     login_with_playwright(page, test_server_url, test_email)
-    page.goto(f"{test_server_url}/rate")
-    page.wait_for_selector("#rating-input", timeout=5000)
+    await page.goto(f"{test_server_url}/rate")
+    await page.wait_for_selector("#rating-input", timeout=5000)
 
-    rating_input = page.query_selector("#rating-input")
+    rating_input = await page.query_selector("#rating-input")
     assert rating_input is not None
 
-    page.evaluate("document.getElementById('rating-input').value = '4.0'")
-    page.evaluate("document.getElementById('rating-input').dispatchEvent(new Event('input'))")
+    await page.evaluate("document.getElementById('rating-input').value = '4.0'")
+    await page.evaluate("document.getElementById('rating-input').dispatchEvent(new Event('input'))")
 
-    rating_value = page.evaluate("document.getElementById('rating-input').value")
+    rating_value = await page.evaluate("document.getElementById('rating-input').value")
     assert float(rating_value) == 4.0
 
 
 @pytest.mark.integration
-def test_d10_renders_geometry_correctly(browser_page, test_server_url, db, test_user):
+@pytest.mark.asyncio
+async def test_d10_renders_geometry_correctly(browser_page, test_server_url, async_db, test_user):
     """Navigate to /, select d10, verify d10 canvas element exists with WebGL context."""
     page = browser_page
     login_with_playwright(page, test_server_url, test_user[0])
-    page.goto(f"{test_server_url}/")
-    page.wait_for_selector("#die-selector", timeout=5000)
-    page.wait_for_timeout(2000)
+    await page.goto(f"{test_server_url}/")
+    await page.wait_for_selector("#die-selector", timeout=5000)
+    await page.wait_for_timeout(2000)
 
-    page.wait_for_selector('button:has-text("d10")', timeout=5000)
+    await page.wait_for_selector('button:has-text("d10")', timeout=5000)
 
-    page.wait_for_selector("#main-die-3d", timeout=5000)
-    page.wait_for_timeout(2000)
+    await page.wait_for_selector("#main-die-3d", timeout=5000)
+    await page.wait_for_timeout(2000)
 
-    canvas_info = page.evaluate("""
+    canvas_info = await page.evaluate("""
         () => {
             const container = document.querySelector('#main-die-3d');
             if (!container) return { error: 'Dice container not found' };
@@ -291,7 +299,8 @@ def test_d10_renders_geometry_correctly(browser_page, test_server_url, db, test_
 
 
 @pytest.mark.integration
-def test_auth_login_roll_rate_flow(browser_page, test_server_url):
+@pytest.mark.asyncio
+async def test_auth_login_roll_rate_flow(browser_page, test_server_url):
     """Test complete login → roll → rate flow."""
     page = browser_page
     import time
@@ -329,38 +338,38 @@ def test_auth_login_roll_rate_flow(browser_page, test_server_url):
     )
     assert thread_response.status_code in (200, 201)
 
-    page.goto(f"{test_server_url}/login")
+    await page.goto(f"{test_server_url}/login")
 
-    page.wait_for_selector("#username", timeout=5000)
-    page.fill("#username", test_user)
-    page.fill("#password", "testpassword")
+    await page.wait_for_selector("#username", timeout=5000)
+    await page.fill("#username", test_user)
+    await page.fill("#password", "testpassword")
 
-    submit_button = page.wait_for_selector('button[type="submit"]', timeout=5000)
-    submit_button.click()
+    submit_button = await page.wait_for_selector('button[type="submit"]', timeout=5000)
+    await submit_button.click()
 
-    page.wait_for_url(f"{test_server_url}/", timeout=5000)
+    await page.wait_for_url(f"{test_server_url}/", timeout=5000)
 
-    page.goto(f"{test_server_url}/")
-    page.wait_for_load_state("networkidle", timeout=5000)
+    await page.goto(f"{test_server_url}/")
+    await page.wait_for_load_state("networkidle", timeout=5000)
 
-    page.wait_for_selector("#main-die-3d", timeout=15000)
-    die_element = page.wait_for_selector("#main-die-3d", timeout=15000)
-    die_element.click()
+    await page.wait_for_selector("#main-die-3d", timeout=15000)
+    die_element = await page.wait_for_selector("#main-die-3d", timeout=15000)
+    await die_element.click()
 
-    page.wait_for_url(f"{test_server_url}/rate", timeout=15000)
+    await page.wait_for_url(f"{test_server_url}/rate", timeout=15000)
 
-    page.wait_for_selector("#rating-input", timeout=10000)
+    await page.wait_for_selector("#rating-input", timeout=10000)
 
-    page.evaluate("document.getElementById('rating-input').value = '4.5'")
-    page.evaluate(
+    await page.evaluate("document.getElementById('rating-input').value = '4.5'")
+    await page.evaluate(
         "document.getElementById('rating-input').dispatchEvent(new Event('input', { bubbles: true }))"
     )
-    page.wait_for_timeout(500)
+    await page.wait_for_timeout(500)
 
-    submit_btn = page.wait_for_selector("#submit-btn", timeout=5000)
-    submit_btn.click()
+    submit_btn = await page.wait_for_selector("#submit-btn", timeout=5000)
+    await submit_btn.click()
 
-    page.wait_for_url(f"{test_server_url}/", timeout=5000)
+    await page.wait_for_url(f"{test_server_url}/", timeout=5000)
 
     current_url = page.url
     assert (
