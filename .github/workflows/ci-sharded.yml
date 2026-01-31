@@ -657,19 +657,24 @@ jobs:
         run: cd frontend && npx playwright install --with-deps chromium
 
       - name: Start backend server
-        run: python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+        run: |
+          # Convert async DATABASE_URL to sync for uvicorn
+          export DATABASE_URL="${DATABASE_URL/asyncpg/psycopg}"
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
 
       - name: Wait for backend to be ready
         run: |
           for i in {1..30}; do
-            if curl -f http://localhost:8000/health; then
+            if curl -f http://localhost:8000/health 2>/dev/null; then
               echo "Backend is ready"
               exit 0
             fi
-            echo "Waiting for backend..."
+            echo "Waiting for backend... ($i/30)"
             sleep 2
           done
-          echo "Backend failed to start"
+          echo "Backend failed to start. Log output:"
+          cat /tmp/backend.log || true
           exit 1
 
       - name: Run Playwright tests
