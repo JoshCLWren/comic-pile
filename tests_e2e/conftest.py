@@ -162,6 +162,39 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
     await engine.dispose()
 
 
+@pytest.fixture(scope="function")
+def db(async_db):
+    """Synchronous wrapper for async_db for use in non-async tests."""
+
+    class SyncDB:
+        """Synchronous wrapper for async database operations."""
+
+        def __init__(self, async_session):
+            self._async_session = async_session
+
+        def add(self, obj):
+            """Add object to session."""
+            asyncio.run(self._async_session.add(obj))
+
+        def commit(self):
+            """Commit session."""
+            asyncio.run(self._async_session.commit())
+
+        def refresh(self, obj):
+            """Refresh object."""
+            asyncio.run(self._async_session.refresh(obj))
+
+        def execute(self, stmt):
+            """Execute a statement."""
+            return asyncio.run(self._async_session.execute(stmt))
+
+        def close(self):
+            """Close session (no-op for sync wrapper)."""
+            pass
+
+    return SyncDB(async_db)
+
+
 @pytest.fixture(scope="session")
 def test_server_url():
     """Launch test server for browser tests with seeded sample data."""
