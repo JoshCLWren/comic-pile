@@ -12,9 +12,11 @@ from app.models import Thread, User
 @pytest_asyncio.fixture(scope="function")
 async def user_a(async_db: AsyncSession) -> User:
     """Create user A for testing."""
-    user = User(username="test_user_a", created_at=None)
+    from app.auth import hash_password
+
+    user = User(username="test_user_a", password_hash=hash_password("password"), created_at=None)
     async_db.add(user)
-    await async_db.flush()
+    await async_db.commit()
     await async_db.refresh(user)
     return user
 
@@ -22,9 +24,11 @@ async def user_a(async_db: AsyncSession) -> User:
 @pytest_asyncio.fixture(scope="function")
 async def user_b(async_db: AsyncSession) -> User:
     """Create user B for testing."""
-    user = User(username="test_user_b", created_at=None)
+    from app.auth import hash_password
+
+    user = User(username="test_user_b", password_hash=hash_password("password"), created_at=None)
     async_db.add(user)
-    await async_db.flush()
+    await async_db.commit()
     await async_db.refresh(user)
     return user
 
@@ -67,15 +71,9 @@ async def user_b_thread(async_db: AsyncSession, user_b: User) -> Thread:
 
 @pytest.mark.asyncio
 async def test_thread_scoped_by_user_on_list(
-    client, async_db, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
+    client, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
 ) -> None:
     """Test list threads only returns threads for authenticated user."""
-    from app.auth import hash_password
-
-    user_a.password_hash = hash_password("password")
-    user_b.password_hash = hash_password("password")
-    await async_db.commit()
-
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )
@@ -103,15 +101,9 @@ async def test_thread_scoped_by_user_on_list(
 
 @pytest.mark.asyncio
 async def test_thread_get_returns_404_for_other_users_thread(
-    client, async_db, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
+    client, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
 ) -> None:
     """Test GET /api/threads/{id} returns 404 for other users' threads."""
-    from app.auth import hash_password
-
-    user_a.password_hash = hash_password("password")
-    user_b.password_hash = hash_password("password")
-    await async_db.commit()
-
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )
@@ -140,12 +132,6 @@ async def test_thread_update_fails_for_other_users_thread(
     client, async_db, user_a: User, user_b: User, user_b_thread: Thread
 ) -> None:
     """Test PUT /api/threads/{id} fails for other users' threads."""
-    from app.auth import hash_password
-
-    user_a.password_hash = hash_password("password")
-    user_b.password_hash = hash_password("password")
-    await async_db.commit()
-
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )
@@ -181,12 +167,6 @@ async def test_thread_delete_fails_for_other_users_thread(
     client, async_db, user_a: User, user_b: User, user_b_thread: Thread
 ) -> None:
     """Test DELETE /api/threads/{id} fails for other users' threads."""
-    from app.auth import hash_password
-
-    user_a.password_hash = hash_password("password")
-    user_b.password_hash = hash_password("password")
-    await async_db.commit()
-
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )
@@ -225,12 +205,6 @@ async def test_thread_delete_fails_for_other_users_thread(
 @pytest.mark.asyncio
 async def test_thread_creation_sets_user_id(client, async_db, user_a: User, user_b: User) -> None:
     """Test POST /api/threads/ sets user_id from authenticated user."""
-    from app.auth import hash_password
-
-    user_a.password_hash = hash_password("password")
-    user_b.password_hash = hash_password("password")
-    await async_db.commit()
-
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )
