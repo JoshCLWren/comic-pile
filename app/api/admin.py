@@ -250,18 +250,16 @@ async def delete_test_data(db: AsyncSession = Depends(get_db)) -> dict[str, int]
         .values(pending_thread_id=None)
     )
 
-    for _thread_id in thread_ids:
-        sessions_result = await db.execute(select(SessionModel).where(SessionModel.user_id == 1))
-        sessions = sessions_result.scalars().all()
-        for session in sessions:
-            session_id = session.id
-            session_events_result = await db.execute(
-                select(Event).where(Event.session_id == session_id)
-            )
-            session_events = session_events_result.scalars().all()
-            if all(e.thread_id in thread_ids for e in session_events if e.thread_id):
-                await db.delete(session)
-                deleted_sessions += 1
+    sessions_result = await db.execute(select(SessionModel).where(SessionModel.user_id == 1))
+    sessions = sessions_result.scalars().all()
+    for session in sessions:
+        session_events_result = await db.execute(
+            select(Event).where(Event.session_id == session.id)
+        )
+        session_events = session_events_result.scalars().all()
+        if all(e.thread_id in thread_ids for e in session_events if e.thread_id):
+            await db.delete(session)
+            deleted_sessions += 1
 
     for thread in test_threads:
         await db.delete(thread)
