@@ -66,7 +66,7 @@ jobs:
     needs: build
     env:
       CI: true
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -85,7 +85,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -140,7 +140,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -187,7 +187,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -234,7 +234,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -281,7 +281,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -328,7 +328,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -375,7 +375,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -422,7 +422,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -469,7 +469,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -516,7 +516,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -563,7 +563,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
@@ -612,7 +612,7 @@ jobs:
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      PATH: "/workspace/.venv/bin:$PATH"
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
