@@ -149,10 +149,9 @@ export default function RatePage() {
     const activeThread = session.active_thread;
     if (!activeThread) return;
 
-    // First update the thread with additional issues
     const newIssuesRemaining = activeThread.issues_remaining + additionalIssues;
     try {
-      await updateThreadMutation.mutateAsync({
+      await updateThreadMutation.mutate({
         id: activeThread.id,
         data: { issues_remaining: newIssuesRemaining }
       });
