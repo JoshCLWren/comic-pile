@@ -112,8 +112,15 @@ async def _get_global_engine():
         database_url = get_test_database_url()
         _test_engine = create_async_engine(database_url, echo=False)
 
+        # Create tables in a transaction and commit them
         async with _test_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+        # Dispose engine to force transaction commit
+        await _test_engine.dispose()
+
+        # Recreate engine for test use
+        _test_engine = create_async_engine(database_url, echo=False)
 
         _test_session_factory = async_sessionmaker(
             bind=_test_engine,
@@ -187,39 +194,6 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
                 await session.close()
 
     await connection.close()
-
-
-@pytest.fixture(scope="function")
-def db(async_db):
-    """Synchronous wrapper for async_db for use in non-async tests."""
-
-    class SyncDB:
-        """Synchronous wrapper for async database operations."""
-
-        def __init__(self, async_session):
-            self._async_session = async_session
-
-        def add(self, obj):
-            """Add object to session."""
-            asyncio.run(self._async_session.add(obj))
-
-        def commit(self):
-            """Commit session."""
-            asyncio.run(self._async_session.commit())
-
-        def refresh(self, obj):
-            """Refresh object."""
-            asyncio.run(self._async_session.refresh(obj))
-
-        def execute(self, stmt):
-            """Execute a statement."""
-            return asyncio.run(self._async_session.execute(stmt))
-
-        def close(self):
-            """Close session (no-op for sync wrapper)."""
-            pass
-
-    return SyncDB(async_db)
 
 
 @pytest.fixture(scope="function")
