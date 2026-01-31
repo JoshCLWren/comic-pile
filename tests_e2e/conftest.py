@@ -134,9 +134,15 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
     engine = create_async_engine(database_url, echo=False)
 
+    # Create tables outside of transaction
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Close the connection used for table creation
+    await engine.dispose()
+
+    # Create new engine for test transaction
+    engine = create_async_engine(database_url, echo=False)
     connection = await engine.connect()
 
     async with connection.begin():
