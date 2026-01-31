@@ -22,7 +22,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import admin, analytics, auth, queue, rate, roll, session, snooze, thread, undo
 from app.config import get_app_settings
-from app.database import Base, engine, AsyncSessionLocal
+from app.database import Base, AsyncSessionLocal
 from app.middleware import limiter
 
 logger = logging.getLogger(__name__)
@@ -431,7 +431,10 @@ def create_app() -> FastAPI:
                 logger.info("Production mode: Skipping table creation (migrations required)")
             else:
                 try:
-                    Base.metadata.create_all(bind=engine)
+                    from app.database import async_engine
+
+                    async with async_engine.begin() as conn:
+                        await conn.run_sync(Base.metadata.create_all)
                     logger.info("Database tables created successfully")
                 except Exception as e:
                     logger.error(f"Failed to create database tables: {e}")
