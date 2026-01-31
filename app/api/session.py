@@ -191,6 +191,7 @@ async def get_current_session(
             if not active_session:
                 active_session = await get_or_create(db, user_id=current_user.id)
 
+            await db.refresh(active_session)
             active_session_id = active_session.id
             _, active_thread = await get_session_with_thread_safe(active_session_id, db)
 
