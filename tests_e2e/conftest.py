@@ -313,7 +313,7 @@ def test_server_url():
     if not server_ready:
         raise RuntimeError(
             f"Test server failed to start on port {TEST_SERVER_PORT}. "
-            f"Check if port is available and database is accessible."
+            f"Check if database is running and accessible."
         )
 
     yield f"http://127.0.0.1:{TEST_SERVER_PORT}"
