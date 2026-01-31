@@ -26,32 +26,34 @@ def login_with_playwright(page, test_server_url, email, password=None):
 
 
 @pytest.fixture(scope="function")
-def test_user(test_server_url, db):
+async def test_user(test_server_url, async_db):
     """Create a fresh test user for each test."""
     from app.auth import hash_password
     from app.database import get_db
     from app.main import app
     from app.models import User
     from sqlalchemy import text
-    from sqlalchemy import create_engine
 
     sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-    from tests_e2e.conftest import get_sync_test_database_url
+    from tests_e2e.conftest import get_test_database_url
 
-    test_db_url = get_sync_test_database_url()
+    test_db_url = get_test_database_url()
 
-    test_engine = create_engine(test_db_url, echo=False)
-    with test_engine.connect() as server_conn:
-        server_conn.execute(
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    test_engine = create_async_engine(test_db_url, echo=False)
+    async with test_engine.begin() as server_conn:
+        await server_conn.execute(
             text(
                 "TRUNCATE TABLE users, sessions, events, threads, snapshots, revoked_tokens "
                 "RESTART IDENTITY CASCADE;"
             )
         )
-        server_conn.commit()
 
-    db.execute(text("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))"))
-    db.commit()
+    await async_db.execute(
+        text("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))")
+    )
+    await async_db.commit()
 
     test_timestamp = int(time.time() * 1000)
     test_email = f"test_{test_timestamp}@example.com"
@@ -61,13 +63,13 @@ def test_user(test_server_url, db):
         email=test_email,
         password_hash=hash_password("testpassword"),
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    async_db.add(user)
+    await async_db.commit()
+    await async_db.refresh(user)
 
-    def override_get_db():
+    async def override_get_db():
         try:
-            yield db
+            yield async_db
         finally:
             pass
 
@@ -76,7 +78,7 @@ def test_user(test_server_url, db):
     yield test_email, user.id
 
     app.dependency_overrides.clear()
-    test_engine.dispose()
+    await test_engine.dispose()
 
 
 @pytest.mark.integration

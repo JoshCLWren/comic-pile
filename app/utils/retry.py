@@ -5,14 +5,14 @@ from collections.abc import Callable
 from typing import TypeVar
 
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import DEADLOCK_INITIAL_DELAY, DEADLOCK_MAX_RETRIES
 
 T = TypeVar("T")
 
 
-def with_deadlock_retry[T](db: Session, operation: Callable[[], T]) -> T:
+async def with_deadlock_retry[T](db: AsyncSession, operation: Callable[[], T]) -> T:
     """Execute a database operation with retry on deadlock.
 
     Args:
@@ -32,7 +32,7 @@ def with_deadlock_retry[T](db: Session, operation: Callable[[], T]) -> T:
             db.commit()
             return some_value
 
-        result = with_deadlock_retry(db, do_db_work)
+        result = await with_deadlock_retry(db, do_db_work)
     """
     retries = 0
     while True:
@@ -41,7 +41,7 @@ def with_deadlock_retry[T](db: Session, operation: Callable[[], T]) -> T:
         except OperationalError as e:
             if "deadlock" not in str(e).lower():
                 raise
-            db.rollback()
+            await db.rollback()
             retries += 1
             if retries >= DEADLOCK_MAX_RETRIES:
                 raise RuntimeError(

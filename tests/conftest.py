@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy import inspect, select, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession as SQLAlchemyAsyncSession,
 )
@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.engine import Connection, make_url
 
-from app.database import Base, get_db_async
+from app.database import Base, get_db
 from app.main import app
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
@@ -71,8 +71,8 @@ def _missing_model_columns(conn: Connection) -> bool:
     return False
 
 
-@pytest.fixture(scope="session", autouse=True)
-def ensure_test_schema() -> None:
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def ensure_test_schema() -> None:
     """Ensure test DB schema matches current SQLAlchemy models.
 
     Tests use Base.metadata.create_all(), which does not alter existing tables. When a
@@ -81,22 +81,27 @@ def ensure_test_schema() -> None:
 
     This is only allowed for databases whose name contains 'test'.
     """
-    database_url = get_sync_test_database_url()
+    database_url = get_test_database_url()
     if database_url in _SCHEMA_PREPARED:
         return
 
-    engine = create_engine(database_url, echo=False)
-    with engine.begin() as conn:
-        if _missing_model_columns(conn):
-            if not _looks_like_test_database(database_url):
-                raise RuntimeError(
-                    "Refusing to reset schema on non-test database. "
-                    f"Database '{make_url(database_url).database}' must include 'test'."
-                )
-            Base.metadata.drop_all(bind=conn)
-        Base.metadata.create_all(bind=conn)
+    engine = create_async_engine(database_url, echo=False)
 
-    engine.dispose()
+    async with engine.begin() as conn:
+
+        def _check_and_drop(conn):
+            if _missing_model_columns(conn):
+                if not _looks_like_test_database(database_url):
+                    raise RuntimeError(
+                        "Refusing to reset schema on non-test database. "
+                        f"Database '{make_url(database_url).database}' must include 'test'."
+                    )
+                Base.metadata.drop_all(bind=conn)
+            Base.metadata.create_all(bind=conn)
+
+        await conn.run_sync(_check_and_drop)
+
+    await engine.dispose()
     _SCHEMA_PREPARED.add(database_url)
 
 
@@ -161,29 +166,6 @@ def get_test_database_url() -> str:
     )
 
 
-def get_sync_test_database_url() -> str:
-    """Get sync test database URL from environment (PostgreSQL only)."""
-    test_db_url = os.getenv("TEST_DATABASE_URL")
-    if test_db_url:
-        if test_db_url.startswith("postgresql+asyncpg://"):
-            return test_db_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-        return test_db_url
-
-    database_url = os.getenv("DATABASE_URL")
-    if database_url:
-        if database_url.startswith("postgresql://"):
-            return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-        if database_url.startswith("postgresql+asyncpg://"):
-            return database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
-        if database_url.startswith("postgresql+psycopg://"):
-            return database_url
-
-    raise ValueError(
-        "No PostgreSQL test database configured. "
-        "Set TEST_DATABASE_URL or DATABASE_URL environment variable (or add them to .env)."
-    )
-
-
 @pytest.fixture(scope="function", autouse=True)
 def set_skip_worktree_check():
     """Skip worktree validation in tests."""
@@ -233,15 +215,15 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 
 async def _create_async_db_override(async_session: SQLAlchemyAsyncSession):
-    """Create dependency override for get_db_async using provided async session."""
+    """Create dependency override for get_db using provided async session."""
 
-    async def override_get_db_async():
+    async def override_get_db():
         try:
             yield async_session
         finally:
             pass
 
-    return override_get_db_async
+    return override_get_db
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -369,7 +351,7 @@ async def sample_data(
 @pytest_asyncio.fixture(scope="function")
 async def client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
     """httpx.AsyncClient for API tests."""
-    app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -381,7 +363,7 @@ async def auth_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncC
     """httpx.AsyncClient with authentication headers for API tests."""
     from app.auth import create_access_token
 
-    app.dependency_overrides[get_db_async] = await _create_async_db_override(async_db)
+    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         result = await async_db.execute(select(User).where(User.username == "test_user"))

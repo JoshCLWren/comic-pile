@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.database import get_db_async
+from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread, User
 from app.models import Session as SessionModel
@@ -158,7 +158,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
 async def get_current_session(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     """Get current active session with deadlock retry handling."""
     from sqlalchemy.exc import OperationalError
@@ -244,7 +244,7 @@ async def list_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> list[SessionResponse]:
     """List all sessions (paginated)."""
     sessions_result = await db.execute(
@@ -290,7 +290,7 @@ async def list_sessions(
 async def get_session(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     """Get single session by ID."""
     session = await db.get(SessionModel, session_id)
@@ -329,7 +329,7 @@ async def get_session(
 async def get_session_details(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionDetailsResponse:
     """Get session details with all events for expanded view."""
     session_obj = await db.get(SessionModel, session_id)
@@ -392,7 +392,7 @@ async def get_session_details(
 async def get_session_snapshots(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> SnapshotsListResponse:
     """Get session snapshots list."""
     session = await db.get(SessionModel, session_id)
@@ -427,7 +427,7 @@ async def get_session_snapshots(
 async def restore_session_start(
     session_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     """Restore session to its initial state at session start."""
     from sqlalchemy.exc import OperationalError

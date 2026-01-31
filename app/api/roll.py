@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
 from app.auth import get_current_user
-from app.database import get_db_async
+from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 async def roll_dice(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> RollResponse:
     """Roll dice to select a thread."""
     threads = await get_roll_pool(current_user.id, db)
@@ -91,7 +91,7 @@ async def roll_dice(
 async def override_roll(
     request: OverrideRequest,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> RollResponse:
     """Manually select a thread."""
     result = await db.execute(
@@ -150,7 +150,7 @@ async def override_roll(
 async def set_manual_die(
     die: int,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> str:
     """Set manual die size for current session."""
     current_session = await get_or_create(db, user_id=current_user.id)
@@ -173,7 +173,7 @@ async def set_manual_die(
 @router.post("/clear-manual-die", response_class=HTMLResponse)
 async def clear_manual_die(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> str:
     """Clear manual die size and return to automatic dice ladder mode."""
     current_session = await get_or_create(db, user_id=current_user.id)

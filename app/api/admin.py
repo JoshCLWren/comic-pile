@@ -11,7 +11,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import build_narrative_summary
-from app.database import get_db_async
+from app.database import get_db
 from app.dependencies import require_internal_ops_routes
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
@@ -23,7 +23,7 @@ router = APIRouter(
 
 @router.post("/import/csv/")
 async def import_csv(
-    file: UploadFile = File(...), db: AsyncSession = Depends(get_db_async)
+    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
 ) -> dict[str, int | list[str]]:
     """Import threads from CSV file.
 
@@ -97,7 +97,7 @@ async def import_csv(
 
 
 @router.get("/export/csv/")
-async def export_csv(db: AsyncSession = Depends(get_db_async)) -> StreamingResponse:
+async def export_csv(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
     """Export active threads as CSV file.
 
     Format matches Google Sheets: title, format, issues_remaining
@@ -130,7 +130,7 @@ async def export_csv(db: AsyncSession = Depends(get_db_async)) -> StreamingRespo
 
 
 @router.get("/export/json/")
-async def export_json(db: AsyncSession = Depends(get_db_async)) -> StreamingResponse:
+async def export_json(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
     """Export full database as JSON for backups.
 
     Includes all data: users, threads, sessions, events (excludes test data)
@@ -213,7 +213,7 @@ async def export_json(db: AsyncSession = Depends(get_db_async)) -> StreamingResp
 
 
 @router.post("/delete-test-data/")
-async def delete_test_data(db: AsyncSession = Depends(get_db_async)) -> dict[str, int]:
+async def delete_test_data(db: AsyncSession = Depends(get_db)) -> dict[str, int]:
     """Delete all test data (threads, sessions, events marked as test).
 
     Returns count of deleted items.
@@ -277,7 +277,7 @@ async def delete_test_data(db: AsyncSession = Depends(get_db_async)) -> dict[str
 
 @router.post("/import/reviews/")
 async def import_reviews(
-    file: UploadFile = File(...), db: AsyncSession = Depends(get_db_async)
+    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
 ) -> dict[str, int | list[str]]:
     """Import review timestamps from CSV file.
 
@@ -347,7 +347,7 @@ async def import_reviews(
 
 
 @router.get("/export/summary/")
-async def export_summary(db: AsyncSession = Depends(get_db_async)) -> StreamingResponse:
+async def export_summary(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
     """Export narrative session summaries as markdown file.
 
     Formats all sessions with read, skipped, and completed lists per PRD Section 11.

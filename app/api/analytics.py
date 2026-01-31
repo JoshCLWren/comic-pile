@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.database import get_db_async
+from app.database import get_db
 from app.models import Event, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 @router.get("/metrics")
 async def get_metrics(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_async),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[
     str,
     int | float | dict[str, int] | list[dict[str, int | float | str | None]],
