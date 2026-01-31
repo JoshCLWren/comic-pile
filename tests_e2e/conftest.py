@@ -350,7 +350,7 @@ async def auth_api_client_async(async_db: SQLAlchemyAsyncSession) -> AsyncGenera
                 created_at=datetime.now(UTC),
             )
             async_db.add(user)
-            await async_db.flush()
+            await async_db.commit()
             await async_db.refresh(user)
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
