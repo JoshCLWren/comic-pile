@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 import time
 import traceback
 from collections.abc import Awaitable, Callable
@@ -438,6 +439,7 @@ def create_app() -> FastAPI:
                     logger.info("Database tables created successfully")
                 except Exception as e:
                     logger.error(f"Failed to create database tables: {e}")
+                    sys.exit(1)
 
             if app_settings.auto_backup_enabled:
                 try:
