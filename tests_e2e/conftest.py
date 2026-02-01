@@ -35,6 +35,27 @@ if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 
 
+def pytest_configure(config):
+    """Pytest hook to create database tables at test session start.
+
+    This hook runs before any tests are collected, ensuring tables exist
+    before any fixtures are resolved. This is more reliable than async fixtures
+    for CI environments where tests run in separate processes.
+    """
+    import asyncio
+
+    async def create_tables_if_not_exist():
+        database_url = get_test_database_url()
+        engine = create_async_engine(database_url, echo=False)
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(create_tables_if_not_exist())
+
+
 async def _ensure_default_user(async_db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
     from app.auth import hash_password
@@ -103,25 +124,6 @@ def _find_free_port():
 
 
 TEST_SERVER_PORT = _find_free_port()
-
-
-@pytest.fixture(scope="module", autouse=True)
-async def setup_e2e_database():
-    """Ensure database tables exist before running E2E tests.
-
-    This module-level fixture runs once before any tests in the module,
-    creating tables if they don't exist. This prevents race conditions
-    when multiple tests try to create tables simultaneously.
-    """
-    database_url = get_test_database_url()
-    engine = create_async_engine(database_url, echo=False)
-
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    finally:
-        await engine.dispose()
-    yield
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -227,18 +229,19 @@ def test_server_url():
     os.environ["DATABASE_URL"] = test_db_url
 
     async def setup_test_data():
-        """Setup test database with sample data."""
+        """Setup test database with sample data.
+
+        Note: Tables are created by pytest_configure hook, so this only seeds data.
+        """
         test_engine = create_async_engine(test_db_url)
 
-        async with test_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        async_session_maker = async_sessionmaker(
+            bind=test_engine,
+            expire_on_commit=False,
+            class_=SQLAlchemyAsyncSession,
+        )
 
-            async_session_maker = async_sessionmaker(
-                bind=test_engine,
-                expire_on_commit=False,
-                class_=SQLAlchemyAsyncSession,
-            )
-
+        async with test_engine.begin():
             async with async_session_maker() as session:
                 await _ensure_default_user(session)
 
@@ -286,12 +289,7 @@ def test_server_url():
 
         await test_engine.dispose()
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(setup_test_data())
-    finally:
-        loop.close()
+    asyncio.run(setup_test_data())
 
     config = Config(app=app, host="127.0.0.1", port=TEST_SERVER_PORT, log_level="warning")
     server = Server(config)
