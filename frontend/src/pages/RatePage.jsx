@@ -84,20 +84,7 @@ export default function RatePage() {
     }
   }
 
-  function checkRestorePointBeforeSubmit() {
-    if (!session || !session.has_restore_point) {
-      const confirmed = window.confirm('⚠️ No restore point available!\n\nYou are about to make a destructive action that cannot be undone. Continue anyway?');
-      return confirmed;
-    }
-    return true;
-  }
-
   async function handleSubmitRating(finishSession = false) {
-    const canProceed = checkRestorePointBeforeSubmit();
-    if (!canProceed) {
-      return;
-    }
-
     // Check if this rating would complete the thread (issues_remaining - 1 <= 0)
     // Only show modal if not already finishing session
     // Use session.active_thread since thread variable is defined after the early return

@@ -85,7 +85,7 @@
           "column": 6,
           "specs": [
             {
-              "title": "should roll dice and navigate to rate page",
+              "title": "regression: roll API response should be handled and navigation should complete",
               "ok": false,
               "tags": [],
               "tests": [
@@ -100,125 +100,125 @@
                       "workerIndex": 0,
                       "parallelIndex": 0,
                       "status": "failed",
-                      "duration": 10592,
+                      "duration": 8580,
                       "error": {
-                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mpage\u001b[39m\u001b[2m).\u001b[22mtoHaveURL\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nExpected: \u001b[32m\"http://localhost:8000/\u001b[7m**/rate\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"http://localhost:8000/\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveURL\" with timeout 5000ms\u001b[22m\n\u001b[2m    9 × unexpected value \"http://localhost:8000/\"\u001b[22m\n",
-                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mpage\u001b[39m\u001b[2m).\u001b[22mtoHaveURL\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nExpected: \u001b[32m\"http://localhost:8000/\u001b[7m**/rate\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"http://localhost:8000/\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveURL\" with timeout 5000ms\u001b[22m\n\u001b[2m    9 × unexpected value \"http://localhost:8000/\"\u001b[22m\n\n    at /mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts:29:24",
+                        "message": "TimeoutError: page.waitForURL: Timeout 5000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/rate\" until \"load\"\n============================================================",
+                        "stack": "TimeoutError: page.waitForURL: Timeout 5000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/rate\" until \"load\"\n============================================================\n    at /mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts:52:16",
                         "location": {
                           "file": "/mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts",
-                          "column": 24,
-                          "line": 29
+                          "column": 16,
+                          "line": 52
                         },
-                        "snippet": "  27 |     await page.waitForTimeout(2000);\n  28 |\n> 29 |     await expect(page).toHaveURL('**/rate');\n     |                        ^\n  30 |     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();\n  31 |   });\n  32 |"
+                        "snippet": "  50 |\n  51 |     // Wait for navigation to complete (should happen within 3 seconds)\n> 52 |     await page.waitForURL('**/rate', { timeout: 5000 });\n     |                ^\n  53 |\n  54 |     // Verify we're on the rate page with the rating input visible\n  55 |     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });"
                       },
                       "errors": [
                         {
                           "location": {
                             "file": "/mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts",
-                            "column": 24,
-                            "line": 29
+                            "column": 16,
+                            "line": 52
                           },
-                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mpage\u001b[39m\u001b[2m).\u001b[22mtoHaveURL\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nExpected: \u001b[32m\"http://localhost:8000/\u001b[7m**/rate\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"http://localhost:8000/\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveURL\" with timeout 5000ms\u001b[22m\n\u001b[2m    9 × unexpected value \"http://localhost:8000/\"\u001b[22m\n\n\n  27 |     await page.waitForTimeout(2000);\n  28 |\n> 29 |     await expect(page).toHaveURL('**/rate');\n     |                        ^\n  30 |     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();\n  31 |   });\n  32 |\n    at /mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts:29:24"
+                          "message": "TimeoutError: page.waitForURL: Timeout 5000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/rate\" until \"load\"\n============================================================\n\n  50 |\n  51 |     // Wait for navigation to complete (should happen within 3 seconds)\n> 52 |     await page.waitForURL('**/rate', { timeout: 5000 });\n     |                ^\n  53 |\n  54 |     // Verify we're on the rate page with the rating input visible\n  55 |     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });\n    at /mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts:52:16"
                         }
                       ],
                       "stdout": [],
                       "stderr": [],
                       "retry": 0,
-                      "startTime": "2026-02-01T14:53:55.533Z",
+                      "startTime": "2026-02-01T14:59:22.842Z",
                       "annotations": [],
                       "attachments": [
                         {
                           "name": "screenshot",
                           "contentType": "image/png",
-                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-sho-d8a29-e-and-navigate-to-rate-page-chromium/test-failed-1.png"
+                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-reg-78fd7--navigation-should-complete-chromium/test-failed-1.png"
                         },
                         {
                           "name": "video",
                           "contentType": "video/webm",
-                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-sho-d8a29-e-and-navigate-to-rate-page-chromium/video.webm"
+                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-reg-78fd7--navigation-should-complete-chromium/video.webm"
                         },
                         {
                           "name": "error-context",
                           "contentType": "text/markdown",
-                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-sho-d8a29-e-and-navigate-to-rate-page-chromium/error-context.md"
+                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-reg-78fd7--navigation-should-complete-chromium/error-context.md"
                         },
                         {
                           "name": "trace",
                           "contentType": "application/zip",
-                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-sho-d8a29-e-and-navigate-to-rate-page-chromium/trace.zip"
+                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-reg-78fd7--navigation-should-complete-chromium/trace.zip"
                         }
                       ],
                       "errorLocation": {
                         "file": "/mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts",
-                        "column": 24,
-                        "line": 29
+                        "column": 16,
+                        "line": 52
                       }
                     },
                     {
                       "workerIndex": 1,
                       "parallelIndex": 0,
                       "status": "failed",
-                      "duration": 10551,
+                      "duration": 8452,
                       "error": {
-                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mpage\u001b[39m\u001b[2m).\u001b[22mtoHaveURL\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nExpected: \u001b[32m\"http://localhost:8000/\u001b[7m**/rate\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"http://localhost:8000/\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveURL\" with timeout 5000ms\u001b[22m\n\u001b[2m    9 × unexpected value \"http://localhost:8000/\"\u001b[22m\n",
-                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mpage\u001b[39m\u001b[2m).\u001b[22mtoHaveURL\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nExpected: \u001b[32m\"http://localhost:8000/\u001b[7m**/rate\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"http://localhost:8000/\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveURL\" with timeout 5000ms\u001b[22m\n\u001b[2m    9 × unexpected value \"http://localhost:8000/\"\u001b[22m\n\n    at /mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts:29:24",
+                        "message": "TimeoutError: page.waitForURL: Timeout 5000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/rate\" until \"load\"\n============================================================",
+                        "stack": "TimeoutError: page.waitForURL: Timeout 5000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/rate\" until \"load\"\n============================================================\n    at /mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts:52:16",
                         "location": {
                           "file": "/mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts",
-                          "column": 24,
-                          "line": 29
+                          "column": 16,
+                          "line": 52
                         },
-                        "snippet": "  27 |     await page.waitForTimeout(2000);\n  28 |\n> 29 |     await expect(page).toHaveURL('**/rate');\n     |                        ^\n  30 |     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();\n  31 |   });\n  32 |"
+                        "snippet": "  50 |\n  51 |     // Wait for navigation to complete (should happen within 3 seconds)\n> 52 |     await page.waitForURL('**/rate', { timeout: 5000 });\n     |                ^\n  53 |\n  54 |     // Verify we're on the rate page with the rating input visible\n  55 |     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });"
                       },
                       "errors": [
                         {
                           "location": {
                             "file": "/mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts",
-                            "column": 24,
-                            "line": 29
+                            "column": 16,
+                            "line": 52
                           },
-                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mpage\u001b[39m\u001b[2m).\u001b[22mtoHaveURL\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nExpected: \u001b[32m\"http://localhost:8000/\u001b[7m**/rate\u001b[27m\"\u001b[39m\nReceived: \u001b[31m\"http://localhost:8000/\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveURL\" with timeout 5000ms\u001b[22m\n\u001b[2m    9 × unexpected value \"http://localhost:8000/\"\u001b[22m\n\n\n  27 |     await page.waitForTimeout(2000);\n  28 |\n> 29 |     await expect(page).toHaveURL('**/rate');\n     |                        ^\n  30 |     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();\n  31 |   });\n  32 |\n    at /mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts:29:24"
+                          "message": "TimeoutError: page.waitForURL: Timeout 5000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/rate\" until \"load\"\n============================================================\n\n  50 |\n  51 |     // Wait for navigation to complete (should happen within 3 seconds)\n> 52 |     await page.waitForURL('**/rate', { timeout: 5000 });\n     |                ^\n  53 |\n  54 |     // Verify we're on the rate page with the rating input visible\n  55 |     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });\n    at /mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts:52:16"
                         }
                       ],
                       "stdout": [],
                       "stderr": [],
                       "retry": 1,
-                      "startTime": "2026-02-01T14:54:08.078Z",
+                      "startTime": "2026-02-01T14:59:33.134Z",
                       "annotations": [],
                       "attachments": [
                         {
                           "name": "screenshot",
                           "contentType": "image/png",
-                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-sho-d8a29-e-and-navigate-to-rate-page-chromium-retry1/test-failed-1.png"
+                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-reg-78fd7--navigation-should-complete-chromium-retry1/test-failed-1.png"
                         },
                         {
                           "name": "video",
                           "contentType": "video/webm",
-                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-sho-d8a29-e-and-navigate-to-rate-page-chromium-retry1/video.webm"
+                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-reg-78fd7--navigation-should-complete-chromium-retry1/video.webm"
                         },
                         {
                           "name": "error-context",
                           "contentType": "text/markdown",
-                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-sho-d8a29-e-and-navigate-to-rate-page-chromium-retry1/error-context.md"
+                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-reg-78fd7--navigation-should-complete-chromium-retry1/error-context.md"
                         },
                         {
                           "name": "trace",
                           "contentType": "application/zip",
-                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-sho-d8a29-e-and-navigate-to-rate-page-chromium-retry1/trace.zip"
+                          "path": "/mnt/extra/josh/code/comic-pile/frontend/test-results/roll-Roll-Dice-Feature-reg-78fd7--navigation-should-complete-chromium-retry1/trace.zip"
                         }
                       ],
                       "errorLocation": {
                         "file": "/mnt/extra/josh/code/comic-pile/frontend/src/test/roll.spec.ts",
-                        "column": 24,
-                        "line": 29
+                        "column": 16,
+                        "line": 52
                       }
                     }
                   ],
                   "status": "unexpected"
                 }
               ],
-              "id": "5039c2a8022bdcdd05f3-04630987b294553a4fb7",
+              "id": "5039c2a8022bdcdd05f3-f545067d345668640573",
               "file": "roll.spec.ts",
-              "line": 12,
+              "line": 33,
               "column": 3
             }
           ]
@@ -228,8 +228,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-02-01T14:53:54.067Z",
-    "duration": 24963.873,
+    "startTime": "2026-02-01T14:59:21.229Z",
+    "duration": 20725.176,
     "expected": 0,
     "skipped": 0,
     "unexpected": 1,
