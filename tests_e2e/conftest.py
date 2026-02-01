@@ -200,6 +200,7 @@ def db(async_db):
 @pytest.fixture(scope="session")
 def test_server_url():
     """Launch test server for browser tests with seeded sample data."""
+    import asyncio
     from uvicorn import Config, Server
 
     original_db_url = os.environ.get("DATABASE_URL")
@@ -266,7 +267,12 @@ def test_server_url():
 
         await test_engine.dispose()
 
-    asyncio.run(setup_test_data())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(setup_test_data())
+    finally:
+        loop.close()
 
     config = Config(app=app, host="127.0.0.1", port=TEST_SERVER_PORT, log_level="warning")
     server = Server(config)
@@ -297,10 +303,14 @@ def test_server_url():
         server.should_exit = True
         await server.shutdown()
 
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        asyncio.run(shutdown_server())
+        loop.run_until_complete(shutdown_server())
     except RuntimeError:
         pass
+    finally:
+        loop.close()
     thread.join(timeout=5)
 
     if original_db_url is None:

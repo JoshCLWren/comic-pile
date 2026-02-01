@@ -172,8 +172,20 @@ status:  ## Show current task status
 	@cat TASKS.md | head -100
 
 test-integration:  ## Run Playwright integration tests
-	@echo "Running Playwright integration tests..."
-	@pytest tests_e2e/ -m integration --headed=false --video=retain-on-failure
+	@echo "Running e2e API workflow tests..."
+	@echo "Note: Browser tests require a running test database and web server."
+	@echo "For browser tests, use: make test-e2e-browser"
+	@echo ""
+	@pytest tests_e2e/test_api_workflows.py --no-cov -v
+
+test-e2e-browser:  ## Run Playwright browser tests (requires test database and web server)
+	@echo "Running Playwright browser tests..."
+	@echo "Note: Ensure test database is running: docker start comic-pile-test-001-db"
+	@bash -c 'set -a; source .env; set +a; pytest tests_e2e/test_browser_ui.py -m integration -v'
+
+test-e2e-api:  ## Run e2e API tests (no browser/server needed)
+	@echo "Running e2e API tests..."
+	@pytest tests_e2e/test_api_workflows.py --no-cov -v
  
 save-db:  ## Save database to JSON (python -m scripts.export_db)
 	@echo "Exporting database to db_export.json..."
