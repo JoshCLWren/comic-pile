@@ -5,21 +5,25 @@ from datetime import datetime, UTC
 from httpx import AsyncClient
 import pytest
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+
+from sqlalchemy.ext.asyncio import AsyncSession as SQLAlchemyAsyncSession
 
 from app.models import User
 
 
 @pytest.mark.asyncio
-async def test_create_threads_to_meet_20(auth_client: AsyncClient, db: Session) -> None:
+async def test_create_threads_to_meet_20(
+    auth_client: AsyncClient, async_db: SQLAlchemyAsyncSession
+) -> None:
     """Create threads 18-20 programmatically."""
     # Setup: Ensure user exists and related threads match context
-    user = db.execute(select(User).where(User.username == "test_user")).scalar_one_or_none()
+    user = await async_db.execute(select(User).where(User.username == "test_user"))
+    user = user.scalar_one_or_none()
     if not user:
         user = User(username="test_user", created_at=datetime.now(UTC), id=123)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
     threads_data = [
         {
             "title": "Arrow Reborn",

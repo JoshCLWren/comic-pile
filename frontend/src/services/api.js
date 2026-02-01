@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { QueryClient, QueryCache } from '@tanstack/react-query'
 
 const api = axios.create({
   baseURL: '/api',
@@ -76,21 +75,6 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
-
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 30000,
-    },
-  },
-  queryCache: new QueryCache({
-    onError: (error) => {
-      console.error('Query error:', error)
-    },
-  }),
-})
 
 export default api
 

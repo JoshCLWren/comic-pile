@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   useClearManualDie,
@@ -9,7 +9,6 @@ import {
   useSetDie,
 } from '../hooks/useRoll'
 import { rollApi } from '../services/api'
-import { createQueryWrapper, createTestQueryClient } from './testUtils'
 
 vi.mock('../services/api', () => ({
   rollApi: {
@@ -22,19 +21,12 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-const setupMutation = async (hook, args, expectedInvalidations) => {
-  const queryClient = createTestQueryClient()
-  const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-  const wrapper = createQueryWrapper(queryClient)
-  const { result } = renderHook(() => hook(), { wrapper })
+const setupMutation = async (hook, args) => {
+  const { result } = renderHook(() => hook())
 
   await act(async () => {
-    await result.current.mutateAsync(args)
+    await result.current.mutate(args)
   })
-
-  for (const invalidation of expectedInvalidations) {
-    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: invalidation }))
-  }
 }
 
 beforeEach(() => {
@@ -46,32 +38,32 @@ beforeEach(() => {
   rollApi.reroll.mockResolvedValue({})
 })
 
-it('calls roll mutation and invalidates queries', async () => {
-  await setupMutation(useRoll, undefined, [['session'], ['session', 'current'], ['threads']])
+it('calls roll mutation', async () => {
+  await setupMutation(useRoll, undefined)
   expect(rollApi.roll).toHaveBeenCalled()
 })
 
-it('calls override mutation and invalidates queries', async () => {
-  await setupMutation(useOverrideRoll, { thread_id: 9 }, [['session'], ['session', 'current'], ['threads']])
+it('calls override mutation', async () => {
+  await setupMutation(useOverrideRoll, { thread_id: 9 })
   expect(rollApi.override).toHaveBeenCalledWith({ thread_id: 9 })
 })
 
-it('calls dismiss pending mutation and invalidates session', async () => {
-  await setupMutation(useDismissPending, undefined, [['session']])
+it('calls dismiss pending mutation', async () => {
+  await setupMutation(useDismissPending, undefined)
   expect(rollApi.dismissPending).toHaveBeenCalled()
 })
 
-it('calls set die mutation and invalidates session', async () => {
-  await setupMutation(useSetDie, 12, [['session']])
+it('calls set die mutation', async () => {
+  await setupMutation(useSetDie, 12)
   expect(rollApi.setDie).toHaveBeenCalledWith(12)
 })
 
-it('calls clear manual die mutation and invalidates session', async () => {
-  await setupMutation(useClearManualDie, undefined, [['session']])
+it('calls clear manual die mutation', async () => {
+  await setupMutation(useClearManualDie, undefined)
   expect(rollApi.clearManualDie).toHaveBeenCalled()
 })
 
-it('calls reroll mutation and invalidates queries', async () => {
-  await setupMutation(useReroll, undefined, [['session'], ['session', 'current'], ['threads']])
+it('calls reroll mutation', async () => {
+  await setupMutation(useReroll, undefined)
   expect(rollApi.reroll).toHaveBeenCalled()
 })

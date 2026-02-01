@@ -3,31 +3,31 @@
 from comic_pile.dice_ladder import DICE_LADDER, step_down, step_up
 
 
-def test_step_down():
+def test_dice_ladder_step_down() -> None:
     """Verify dice steps down (d10 -> d8, d8 -> d6)."""
     assert step_down(10) == 8
     assert step_down(8) == 6
     assert step_down(12) == 10
 
 
-def test_step_up():
+def test_dice_ladder_step_up() -> None:
     """Verify dice steps up (d6 -> d8, d8 -> d10)."""
     assert step_up(6) == 8
     assert step_up(8) == 10
     assert step_up(10) == 12
 
 
-def test_step_down_bounds():
+def test_dice_ladder_step_down_bounds() -> None:
     """Returns same when at d4 (minimum)."""
     assert step_down(4) == 4
 
 
-def test_step_up_bounds():
+def test_dice_ladder_step_up_bounds() -> None:
     """Returns same when at d20 (maximum)."""
     assert step_up(20) == 20
 
 
-def test_full_ladder_traversal():
+def test_dice_ladder_full_traversal() -> None:
     """Test step through all dice values."""
     result = step_up(4)
     for expected in [6, 8, 10, 12, 20]:
@@ -44,7 +44,7 @@ def test_full_ladder_traversal():
     assert step_down(4) == 4
 
 
-def test_invalid_die_size_step_down():
+def test_dice_ladder_invalid_die_size_step_down() -> None:
     """Raises ValueError for invalid die sizes."""
     import pytest
 
@@ -56,7 +56,7 @@ def test_invalid_die_size_step_down():
         step_down(3)
 
 
-def test_invalid_die_size_step_up():
+def test_dice_ladder_invalid_die_size_step_up() -> None:
     """Raises ValueError for invalid die sizes."""
     import pytest
 
@@ -68,7 +68,7 @@ def test_invalid_die_size_step_up():
         step_up(3)
 
 
-def test_dice_ladder_constant():
+def test_dice_ladder_constant_values() -> None:
     """Verify DICE_LADDER contains expected values."""
     assert DICE_LADDER == [4, 6, 8, 10, 12, 20]
     assert len(DICE_LADDER) == 6

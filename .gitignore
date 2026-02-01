@@ -167,3 +167,4 @@ node_modules/
 
 # Frontend build artifacts
 static/react/assets/
+frontend/test-results/

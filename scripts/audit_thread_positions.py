@@ -9,13 +9,13 @@ This script checks for:
 - Sequential position verification
 """
 
+import asyncio
 from datetime import datetime
 from typing import NamedTuple
 
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.database import AsyncSessionLocal
 from app.models import Thread, User
 
 
@@ -41,14 +41,16 @@ class PositionGap(NamedTuple):
     actual_positions: list[int]
 
 
-def get_thread_210_details(db: Session) -> ThreadAuditResult | None:
+async def get_thread_210_details(db) -> ThreadAuditResult | None:
     """Get detailed information about thread 210."""
-    thread = db.execute(select(Thread).where(Thread.id == 210)).scalar_one_or_none()
+    result = await db.execute(select(Thread).where(Thread.id == 210))
+    thread = result.scalar_one_or_none()
 
     if not thread:
         return None
 
-    user = db.execute(select(User).where(User.id == thread.user_id)).scalar_one()
+    result = await db.execute(select(User).where(User.id == thread.user_id))
+    user = result.scalar_one()
 
     return ThreadAuditResult(
         thread_id=thread.id,
@@ -64,20 +66,18 @@ def get_thread_210_details(db: Session) -> ThreadAuditResult | None:
     )
 
 
-def get_testuser123_threads(db: Session) -> list[ThreadAuditResult]:
+async def get_testuser123_threads(db) -> list[ThreadAuditResult]:
     """Get all threads for testuser123 with their details."""
-    testuser = db.execute(select(User).where(User.username == "testuser123")).scalar_one_or_none()
+    result = await db.execute(select(User).where(User.username == "testuser123"))
+    testuser = result.scalar_one_or_none()
 
     if not testuser:
         return []
 
-    threads = (
-        db.execute(
-            select(Thread).where(Thread.user_id == testuser.id).order_by(Thread.queue_position)
-        )
-        .scalars()
-        .all()
+    result = await db.execute(
+        select(Thread).where(Thread.user_id == testuser.id).order_by(Thread.queue_position)
     )
+    threads = result.scalars().all()
 
     return [
         ThreadAuditResult(
@@ -96,17 +96,14 @@ def get_testuser123_threads(db: Session) -> list[ThreadAuditResult]:
     ]
 
 
-def check_position_gaps(db: Session) -> list[PositionGap]:
+async def check_position_gaps(db) -> list[PositionGap]:
     """Check for gaps in queue positions across all threads."""
-    all_positions = (
-        db.execute(
-            select(Thread.queue_position)
-            .where(Thread.status == "active")
-            .order_by(Thread.queue_position)
-        )
-        .scalars()
-        .all()
+    result = await db.execute(
+        select(Thread.queue_position)
+        .where(Thread.status == "active")
+        .order_by(Thread.queue_position)
     )
+    all_positions = result.scalars().all()
 
     if not all_positions:
         return []
@@ -125,58 +122,56 @@ def check_position_gaps(db: Session) -> list[PositionGap]:
     return gaps
 
 
-def get_thread_statistics(db: Session) -> dict[str, int | dict[str, int]]:
+async def get_thread_statistics(db) -> dict[str, int | dict[str, int]]:
     """Get overall thread statistics."""
     stats = {}
 
     # Total threads
-    stats["total_threads"] = db.execute(select(func.count(Thread.id))).scalar()
+    result = await db.execute(select(func.count(Thread.id)))
+    stats["total_threads"] = result.scalar()
 
     # Active threads
-    stats["active_threads"] = db.execute(
-        select(func.count(Thread.id)).where(Thread.status == "active")
-    ).scalar()
+    result = await db.execute(select(func.count(Thread.id)).where(Thread.status == "active"))
+    stats["active_threads"] = result.scalar()
 
     # Test threads
-    stats["test_threads"] = db.execute(select(func.count(Thread.id)).where(Thread.is_test)).scalar()
+    result = await db.execute(select(func.count(Thread.id)).where(Thread.is_test))
+    stats["test_threads"] = result.scalar()
 
     # Production threads
     stats["production_threads"] = (stats["total_threads"] or 0) - (stats["test_threads"] or 0)
 
     # Threads by user
-    user_thread_counts = db.execute(
+    result = await db.execute(
         select(User.username, func.count(Thread.id))
         .join(Thread)
         .group_by(User.username)
         .order_by(func.count(Thread.id).desc())
-    ).all()
+    )
+    user_thread_counts = result.all()
 
     stats["threads_by_user"] = {row[0]: row[1] for row in user_thread_counts}
 
     return stats
 
 
-def check_position_duplicates(db: Session) -> dict[int, list[int]]:
+async def check_position_duplicates(db) -> dict[int, list[int]]:
     """Check for duplicate queue positions."""
     duplicates = {}
 
-    positions_with_counts = db.execute(
+    result = await db.execute(
         select(Thread.queue_position, func.count(Thread.id))
         .where(Thread.status == "active")
         .group_by(Thread.queue_position)
         .having(func.count(Thread.id) > 1)
-    ).all()
+    )
+    positions_with_counts = result.all()
 
     for position, _count in positions_with_counts:
-        thread_ids = (
-            db.execute(
-                select(Thread.id).where(
-                    Thread.queue_position == position, Thread.status == "active"
-                )
-            )
-            .scalars()
-            .all()
+        result = await db.execute(
+            select(Thread.id).where(Thread.queue_position == position, Thread.status == "active")
         )
+        thread_ids = result.scalars().all()
         duplicates[position] = thread_ids
 
     return duplicates
@@ -196,152 +191,148 @@ def print_thread_details(thread: ThreadAuditResult, title_prefix: str = "") -> N
     print()
 
 
-def main() -> None:
+async def main() -> None:
     """Run the thread audit."""
     print("=== Thread Queue Audit ===")
     print(f"Audit started at: {datetime.now()}")
     print()
 
-    db = SessionLocal()
-
-    try:
-        # 1. Thread 210 details
-        print("1. THREAD 210 DETAILS")
-        print("-" * 30)
-        thread_210 = get_thread_210_details(db)
-        if thread_210:
-            print_thread_details(thread_210, "✓ ")
-        else:
-            print("✗ Thread 210 not found")
-        print()
-
-        # 2. testuser123 threads
-        print("2. TESTUSER123 THREADS")
-        print("-" * 30)
-        testuser_threads = get_testuser123_threads(db)
-        if testuser_threads:
-            print(f"✓ Found {len(testuser_threads)} threads for testuser123:")
+    async with AsyncSessionLocal() as db:
+        try:
+            # 1. Thread 210 details
+            print("1. THREAD 210 DETAILS")
+            print("-" * 30)
+            thread_210 = await get_thread_210_details(db)
+            if thread_210:
+                print_thread_details(thread_210, "✓ ")
+            else:
+                print("✗ Thread 210 not found")
             print()
-            for thread in testuser_threads:
-                print_thread_details(thread)
-        else:
-            print("✗ No threads found for testuser123 (user may not exist)")
-        print()
 
-        # 3. Position gaps
-        print("3. POSITION GAP ANALYSIS")
-        print("-" * 30)
-        gaps = check_position_gaps(db)
-        if gaps:
-            print(f"✗ Found {len(gaps)} gaps in position numbering:")
-            for gap in gaps:
-                print(f"  Missing position: {gap.expected_position}")
-        else:
-            print("✓ No gaps found in active thread positions")
-        print()
+            # 2. testuser123 threads
+            print("2. TESTUSER123 THREADS")
+            print("-" * 30)
+            testuser_threads = await get_testuser123_threads(db)
+            if testuser_threads:
+                print(f"✓ Found {len(testuser_threads)} threads for testuser123:")
+                print()
+                for thread in testuser_threads:
+                    print_thread_details(thread)
+            else:
+                print("✗ No threads found for testuser123 (user may not exist)")
+            print()
 
-        # 4. Position duplicates
-        print("4. POSITION DUPLICATE ANALYSIS")
-        print("-" * 30)
-        duplicates = check_position_duplicates(db)
-        if duplicates:
-            print(f"✗ Found {len(duplicates)} positions with duplicates:")
-            for position, thread_ids in duplicates.items():
-                print(f"  Position {position}: Threads {thread_ids}")
-        else:
-            print("✓ No duplicate positions found")
-        print()
+            # 3. Position gaps
+            print("3. POSITION GAP ANALYSIS")
+            print("-" * 30)
+            gaps = await check_position_gaps(db)
+            if gaps:
+                print(f"✗ Found {len(gaps)} gaps in position numbering:")
+                for gap in gaps:
+                    print(f"  Missing position: {gap.expected_position}")
+            else:
+                print("✓ No gaps found in active thread positions")
+            print()
 
-        # 5. Thread statistics
-        print("5. THREAD STATISTICS")
-        print("-" * 30)
-        stats = get_thread_statistics(db)
-        print(f"Total threads: {stats['total_threads']}")
-        print(f"Active threads: {stats['active_threads']}")
-        print(f"Test threads: {stats['test_threads']}")
-        print(f"Production threads: {stats['production_threads']}")
-        print()
-        print("Threads by user:")
-        for username, count in stats["threads_by_user"].items():
-            print(f"  {username}: {count}")
-        print()
+            # 4. Position duplicates
+            print("4. POSITION DUPLICATE ANALYSIS")
+            print("-" * 30)
+            duplicates = await check_position_duplicates(db)
+            if duplicates:
+                print(f"✗ Found {len(duplicates)} positions with duplicates:")
+                for position, thread_ids in duplicates.items():
+                    print(f"  Position {position}: Threads {thread_ids}")
+            else:
+                print("✓ No duplicate positions found")
+            print()
 
-        # 6. Position sequence validation
-        print("6. POSITION SEQUENCE VALIDATION")
-        print("-" * 30)
-        active_threads = (
-            db.execute(
+            # 5. Thread statistics
+            print("5. THREAD STATISTICS")
+            print("-" * 30)
+            stats = await get_thread_statistics(db)
+            print(f"Total threads: {stats['total_threads']}")
+            print(f"Active threads: {stats['active_threads']}")
+            print(f"Test threads: {stats['test_threads']}")
+            print(f"Production threads: {stats['production_threads']}")
+            print()
+            print("Threads by user:")
+            threads_by_user = stats.get("threads_by_user")
+            if isinstance(threads_by_user, dict):
+                for username, count in threads_by_user.items():
+                    print(f"  {username}: {count}")
+            print()
+
+            # 6. Position sequence validation
+            print("6. POSITION SEQUENCE VALIDATION")
+            print("-" * 30)
+            result = await db.execute(
                 select(Thread).where(Thread.status == "active").order_by(Thread.queue_position)
             )
-            .scalars()
-            .all()
-        )
+            active_threads = result.scalars().all()
 
-        if active_threads:
-            expected_position = 1
-            issues_found = []
+            if active_threads:
+                expected_position = 1
+                issues_found = []
 
-            for thread in active_threads:
-                if thread.queue_position != expected_position:
-                    issues_found.append(
-                        f"Thread {thread.id} at position {thread.queue_position} "
-                        f"(expected {expected_position})"
-                    )
-                expected_position += 1
+                for thread in active_threads:
+                    if thread.queue_position != expected_position:
+                        issues_found.append(
+                            f"Thread {thread.id} at position {thread.queue_position} "
+                            f"(expected {expected_position})"
+                        )
+                    expected_position += 1
 
-            if issues_found:
-                print("✗ Position sequence issues found:")
-                for issue in issues_found:
-                    print(f"  {issue}")
-            else:
-                print("✓ All active threads are in correct sequential positions")
-        else:
-            print("✗ No active threads found")
-        print()
-
-        # 7. Summary and recommendations
-        print("7. AUDIT SUMMARY")
-        print("-" * 30)
-
-        issues = []
-        if not thread_210:
-            issues.append("Thread 210 not found")
-        if gaps:
-            issues.append(f"{len(gaps)} position gaps found")
-        if duplicates:
-            issues.append(f"{len(duplicates)} position duplicates found")
-
-        if issues:
-            print("✗ Issues found that need attention:")
-            for issue in issues:
-                print(f"  - {issue}")
-            print()
-            print("Recommendations:")
-            if thread_210 and thread_210.queue_position > 11:
-                print("  - Thread 210 is at position > 11, move should be possible")
-            elif thread_210:
-                print(
-                    "  - Thread 210 is at or before position 11, check target position availability"
-                )
-            if gaps:
-                print("  - Reorganize positions to eliminate gaps")
-            if duplicates:
-                print("  - Resolve duplicate positions before moving threads")
-        else:
-            print("✓ No issues found - queue consistency is good")
-            if thread_210:
-                print(f"✓ Thread 210 is at position {thread_210.queue_position}")
-                if thread_210.queue_position > 11:
-                    print("✓ Moving to position 11 should be possible")
+                if issues_found:
+                    print("✗ Position sequence issues found:")
+                    for issue in issues_found:
+                        print(f"  {issue}")
                 else:
-                    print("✗ Moving to position 11 may conflict with existing thread")
+                    print("✓ All active threads are in correct sequential positions")
+            else:
+                print("✗ No active threads found")
+            print()
 
-    except Exception as e:
-        print(f"✗ Audit failed with error: {e}")
-        raise
-    finally:
-        db.close()
+            # 7. Summary and recommendations
+            print("7. AUDIT SUMMARY")
+            print("-" * 30)
+
+            issues = []
+            if not thread_210:
+                issues.append("Thread 210 not found")
+            if gaps:
+                issues.append(f"{len(gaps)} position gaps found")
+            if duplicates:
+                issues.append(f"{len(duplicates)} position duplicates found")
+
+            if issues:
+                print("✗ Issues found that need attention:")
+                for issue in issues:
+                    print(f"  - {issue}")
+                print()
+                print("Recommendations:")
+                if thread_210 and thread_210.queue_position > 11:
+                    print("  - Thread 210 is at position > 11, move should be possible")
+                elif thread_210:
+                    print(
+                        "  - Thread 210 is at or before position 11, check target position availability"
+                    )
+                if gaps:
+                    print("  - Reorganize positions to eliminate gaps")
+                if duplicates:
+                    print("  - Resolve duplicate positions before moving threads")
+            else:
+                print("✓ No issues found - queue consistency is good")
+                if thread_210:
+                    print(f"✓ Thread 210 is at position {thread_210.queue_position}")
+                    if thread_210.queue_position > 11:
+                        print("✓ Moving to position 11 should be possible")
+                    else:
+                        print("✗ Moving to position 11 may conflict with existing thread")
+
+        except Exception as e:
+            print(f"✗ Audit failed with error: {e}")
+            raise
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

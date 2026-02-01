@@ -2,11 +2,34 @@
 
 Guidelines for AI agents working in this codebase.
 
+## Agent Ownership Policy
+
+All AI agents working in this codebase are **high-ownership agents**.
+
+**Key Principle**: If you find a bug (pre-existing or new), it is your responsibility to fix it. You are not a lazy AI that ignores problems and pushes them to human reviewers.
+
+**Requirements**:
+- **Never use `--no-verify` or bypass hooks** to avoid fixing issues
+- **Never say "this is pre-existing" and walk away** - fix it anyway
+- **Fix all test failures** before committing, even if the failure appears to be pre-existing
+- **Write regression tests** for bugs you find and fix
+- **Update documentation** when you find gaps or outdated information
+
+**If a test fails**:
+1. Investigate why it fails
+2. Fix the root cause (even if "pre-existing")
+3. Verify the fix works
+4. Add a regression test if applicable
+
+**If you find documentation gaps**:
+1. Update the relevant documentation
+2. Add examples if helpful
+
 ## Project Overview
 
 Comic Pile is a dice-driven comic reading tracker built with:
 - **Backend**: Python 3.13, FastAPI, SQLAlchemy, PostgreSQL
-- **Frontend**: React 19, Vite, Tailwind CSS, React Query
+- **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `npm` (frontend)
 
 ## Build/Lint/Test Commands
@@ -82,7 +105,7 @@ Models in `app/models/` use `Mapped` type annotations:
 ```python
 class Thread(Base):
     __tablename__ = "threads"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     last_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -121,17 +144,55 @@ def test_db_example(db):
 ## Frontend Code Style
 
 - Functional components with hooks
-- React Query for server state
+- Custom hooks with useState/useEffect for server state
 - React Router for navigation
 
 ```jsx
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { api } from '../services/api'
+
+export function useResource(id) {
+  const [data, setData] = useState(null)
+  const [isPending, setIsPending] = useState(true)
+  const [isError, setIsError] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchData = useCallback(async () => {
+    if (!id) {
+      setIsPending(false)
+      return
+    }
+    setIsPending(true)
+    setIsError(false)
+    setError(null)
+    try {
+      const result = await api.getResource(id)
+      setData(result)
+    } catch (err) {
+      setIsError(true)
+      setError(err)
+    } finally {
+      setIsPending(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  return { data, isPending, isError, error, refetch: fetchData }
+}
 
 export default function ExamplePage() {
+  const { id } = useParams()
   const navigate = useNavigate()
-  const { data } = useQuery({ queryKey: ['key'], queryFn: fetchFn })
-  // ...
+  const { data, isPending, isError } = useResource(id)
+
+  if (isPending) return <div>Loading...</div>
+  if (isError) return <div>Error loading resource</div>
+
+  return <div>{data?.name}</div>
 }
 ```
 
