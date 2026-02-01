@@ -216,15 +216,27 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
 
 
 async def _create_async_db_override(
-    async_session: SQLAlchemyAsyncSession,
+    async_session: SQLAlchemyAsyncSession | None = None,
 ) -> Callable[[], AsyncIterator[SQLAlchemyAsyncSession]]:
-    """Create dependency override for get_db using provided async session."""
+    """Create dependency override for get_db using provided async session or fresh session."""
 
     async def override_get_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
-        try:
+        if async_session is not None:
             yield async_session
-        finally:
-            pass
+            return
+
+        database_url = get_test_database_url()
+        engine = create_async_engine(database_url, echo=False, pool_size=1, max_overflow=0)
+        connection = await engine.connect()
+        async_session_maker = async_sessionmaker(
+            bind=connection,
+            expire_on_commit=False,
+            class_=SQLAlchemyAsyncSession,
+        )
+        async with async_session_maker() as session:
+            yield session
+        await connection.close()
+        await engine.dispose()
 
     return override_get_db
 

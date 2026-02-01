@@ -49,14 +49,10 @@ async def test_admin_routes_accessible_when_enabled(
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
 
-    from app.database import get_db
-    from app.main import create_app
-
-    test_app = create_app()
-    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+    from app.main import app
 
     try:
-        transport = ASGITransport(app=test_app)
+        transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.get("/api/admin/export/csv/")
             assert response.status_code == 200
@@ -67,7 +63,6 @@ async def test_admin_routes_accessible_when_enabled(
             response = await ac.get("/api/admin/export/summary/")
             assert response.status_code == 200
     finally:
-        test_app.dependency_overrides.clear()
         if original_value is None:
             os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
         else:
@@ -296,7 +291,7 @@ async def test_cors_origins_allowed_in_production_when_set(async_db: AsyncSessio
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+    test_app.dependency_overrides[get_db] = await _create_async_db_override(None)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -332,7 +327,7 @@ async def test_cors_defaults_to_wildcard_in_development(async_db: AsyncSession) 
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+    test_app.dependency_overrides[get_db] = await _create_async_db_override(None)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -366,7 +361,7 @@ async def test_cors_allow_credentials_is_false(async_db: AsyncSession) -> None:
     from app.main import create_app
 
     test_app = create_app()
-    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+    test_app.dependency_overrides[get_db] = await _create_async_db_override(None)
 
     try:
         transport = ASGITransport(app=test_app)
@@ -416,7 +411,7 @@ async def test_app_starts_successfully(
     test_app = None
     try:
         test_app = create_app()
-        test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+        test_app.dependency_overrides[get_db] = await _create_async_db_override(None)
 
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
