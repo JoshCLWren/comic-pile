@@ -12,6 +12,7 @@ jobs:
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
+    container: debian:13
     permissions:
       contents: read
       packages: write

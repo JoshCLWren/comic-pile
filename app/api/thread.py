@@ -1,7 +1,7 @@
 """Thread CRUD API endpoints."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -62,8 +62,6 @@ async def list_stale_threads(
     Returns:
         List of ThreadResponse objects for stale threads.
     """
-    from datetime import timedelta
-
     cutoff_date = datetime.now(UTC) - timedelta(days=days)
     result = await db.execute(
         select(Thread)
