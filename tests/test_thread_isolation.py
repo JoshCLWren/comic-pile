@@ -74,6 +74,10 @@ async def test_thread_scoped_by_user_on_list(
     client, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
 ) -> None:
     """Test list threads only returns threads for authenticated user."""
+    _ = user_a
+    _ = user_b
+    _ = user_a_thread
+    _ = user_b_thread
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )
