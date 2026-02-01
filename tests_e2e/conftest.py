@@ -105,6 +105,24 @@ def _find_free_port():
 TEST_SERVER_PORT = _find_free_port()
 
 
+@pytest.fixture(scope="module", autouse=True)
+async def setup_e2e_database():
+    """Ensure database tables exist before running E2E tests.
+
+    This module-level fixture runs once before any tests in the module,
+    creating tables if they don't exist. This prevents race conditions
+    when multiple tests try to create tables simultaneously.
+    """
+    database_url = get_test_database_url()
+    engine = create_async_engine(database_url, echo=False)
+
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    finally:
+        await engine.dispose()
+
+
 @pytest.fixture(scope="function", autouse=True)
 def set_skip_worktree_check():
     """Skip worktree validation in tests."""
