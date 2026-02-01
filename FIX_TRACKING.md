@@ -14,10 +14,10 @@
 ## Progress Summary
 | State | Count |
 |-------|-------|
-| TODO | 33 |
+| TODO | 32 |
 | IN_PROGRESS | 0 |
 | REVIEW | 0 |
-| DONE | 6 |
+| DONE | 7 |
 | FAILED | 0 |
 
 ---
@@ -124,13 +124,16 @@
 
 ### [HIGH-005] `app/api/admin.py:215-263` - Session deletion ignores `selected_thread_id`
 - **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
-- **Error**: Deletion logic only checks `event.thread_id` and ignores `event.selected_thread_id`, causing incorrect session deletions
-- **Fix Required**: Update deletion predicate to consider both `thread_id` and `selected_thread_id` (treating None as non-matching)
-- **Attempts**: 0
-- **Verification**: pytest, manual test of delete_test_data endpoint
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e9403d8effe06F7anZarGhNzD
+- **Reviewer**: ses_3e93ef4afffewJKy7TmNUc0pOF
+- **Error**: Deletion logic only checks `event.thread_id`, ignoring `event.selected_thread_id` (used by roll events)
+- **Fix Required**: Added `is_test_event()` helper to check both fields safely
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Passed all checks (ruff, ty, pytest)
+- **Completed**: 2026-02-01
+- **Test Added**: `test_delete_test_data_with_selected_thread_id` validates fix
 
 ---
 
