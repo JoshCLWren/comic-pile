@@ -490,6 +490,7 @@ async def test_get_current_session_active(
         format="comic",
         issues_remaining=10,
         queue_position=1,
+        status="active",
         user_id=default_user.id,
     )
     async_db.add(thread)
@@ -636,6 +637,7 @@ async def test_get_session_includes_ladder_path(
         format="comic",
         issues_remaining=10,
         queue_position=1,
+        status="active",
         user_id=default_user.id,
     )
     async_db.add(thread)
@@ -685,6 +687,7 @@ async def test_get_session_includes_snapshot_info(
         format="comic",
         issues_remaining=10,
         queue_position=1,
+        status="active",
         user_id=default_user.id,
     )
     async_db.add(thread)
