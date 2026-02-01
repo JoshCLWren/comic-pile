@@ -80,6 +80,7 @@ async def test_roll_overflow(auth_client, async_db):
 @pytest.mark.asyncio
 async def test_roll_override_nonexistent(auth_client, sample_data):
     """Override returns 404 for non-existent thread."""
+    _ = sample_data
     response = await auth_client.post("/api/roll/override", json={"thread_id": 999})
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
@@ -88,6 +89,8 @@ async def test_roll_override_nonexistent(auth_client, sample_data):
 @pytest.mark.asyncio
 async def test_set_manual_die(auth_client, sample_data, async_db):
     """POST /roll/set-die sets manual_die on session."""
+    _ = sample_data
+    _ = async_db
     response = await auth_client.post("/api/roll/set-die?die=20")
     assert response.status_code == 200
     assert response.text == "d20"
@@ -101,6 +104,7 @@ async def test_set_manual_die(auth_client, sample_data, async_db):
 @pytest.mark.asyncio
 async def test_clear_manual_die(auth_client, sample_data, async_db):
     """POST /roll/clear-manual-die clears manual_die and returns to auto mode."""
+    _ = sample_data
     from app.models import Session as SessionModel
 
     result = await async_db.execute(select(SessionModel).where(SessionModel.ended_at.is_(None)))
@@ -123,6 +127,7 @@ async def test_clear_manual_die(auth_client, sample_data, async_db):
 @pytest.mark.asyncio
 async def test_clear_manual_die_with_no_manual_set(auth_client, sample_data):
     """POST /roll/clear-manual-die works even when manual_die is not set."""
+    _ = sample_data
     response = await auth_client.post("/api/roll/clear-manual-die")
     assert response.status_code == 200
     assert response.text == "d8"
@@ -137,6 +142,7 @@ async def test_clear_manual_die_returns_correct_current_die_regression(
     When manual mode is disengaged by clicking auto, the endpoint should return
     the correct current die from the dice ladder, not a stale cached value.
     """
+    _ = sample_data
     from app.models import Session as SessionModel
 
     result = await async_db.execute(select(SessionModel).where(SessionModel.ended_at.is_(None)))
