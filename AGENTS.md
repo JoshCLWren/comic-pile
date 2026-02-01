@@ -6,7 +6,7 @@ Guidelines for AI agents working in this codebase.
 
 Comic Pile is a dice-driven comic reading tracker built with:
 - **Backend**: Python 3.13, FastAPI, SQLAlchemy, PostgreSQL
-- **Frontend**: React 19, Vite, Tailwind CSS, React Query
+- **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `npm` (frontend)
 
 ## Build/Lint/Test Commands
@@ -121,16 +121,49 @@ def test_db_example(db):
 ## Frontend Code Style
 
 - Functional components with hooks
-- React Query for server state
+- Custom hooks with useState/useEffect for server state
 - React Router for navigation
 
 ```jsx
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { api } from '../services/api'
+
+export function useResource(id) {
+  const [data, setData] = useState(null)
+  const [isPending, setIsPending] = useState(true)
+  const [isError, setIsError] = useState(false)
+  const [error, setError] = useState(null)
+
+  const fetchData = useCallback(async () => {
+    if (!id) {
+      setIsPending(false)
+      return
+    }
+    setIsPending(true)
+    setIsError(false)
+    setError(null)
+    try {
+      const result = await api.getResource(id)
+      setData(result)
+    } catch (err) {
+      setIsError(true)
+      setError(err)
+    } finally {
+      setIsPending(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  return { data, isPending, isError, error, refetch: fetchData }
+}
 
 export default function ExamplePage() {
   const navigate = useNavigate()
-  const { data } = useQuery({ queryKey: ['key'], queryFn: fetchFn })
+  const { data, isPending, isError } = useResource(id)
   // ...
 }
 ```

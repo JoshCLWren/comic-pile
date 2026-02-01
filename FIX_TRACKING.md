@@ -1,8 +1,8 @@
 # CodeRabbit Fix Tracking
 
 **PR**: #164 - "Fix ladder"
-**Total Issues Requiring Fixes**: 29
-**Last Updated**: 2026-01-31
+**Total Issues Requiring Fixes**: 39
+**Last Updated**: 2026-01-31 20:30 UTC
 
 ## Fix Workflow States
 - `TODO` - Not started
@@ -14,10 +14,10 @@
 ## Progress Summary
 | State | Count |
 |-------|-------|
-| TODO | 25 |
+| TODO | 33 |
 | IN_PROGRESS | 0 |
 | REVIEW | 0 |
-| DONE | 4 |
+| DONE | 6 |
 | FAILED | 0 |
 
 ---
@@ -59,6 +59,19 @@
 - **Last Error**: None
 - **Verification**: ✅ Passed all checks (npm test, lint)
 - **Completed**: 2026-01-31
+
+### [CRIT-004] `app/utils/retry.py:3-51` - Missing await on async operation in retry loop
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e95665c7ffeo6hTJxjy0ACjJy
+- **Reviewer**: ses_3e9550a47ffe1TMZBW4alkcZwW
+- **Error**: Previous fix for CRIT-001 had `return operation()` which returns coroutine, bypassing retry logic
+- **Fix Required**: Changed to `return await operation()` and updated type to `Callable[[], Awaitable[T]]`
+- **Attempts**: 1
+- **Last Error**: None - Previous peer review was lazy and missed this bug
+- **Verification**: ✅ Passed all checks (ruff, ty, pytest)
+- **Completed**: 2026-02-01
+- **Note**: This was a bug in CRIT-001 fix that lazy peer review missed
 
 ---
 
@@ -109,6 +122,16 @@
 - **Attempts**: 0
 - **Verification**: CI workflow runs without hardcoded secrets
 
+### [HIGH-005] `app/api/admin.py:215-263` - Session deletion ignores `selected_thread_id`
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: Deletion logic only checks `event.thread_id` and ignores `event.selected_thread_id`, causing incorrect session deletions
+- **Fix Required**: Update deletion predicate to consider both `thread_id` and `selected_thread_id` (treating None as non-matching)
+- **Attempts**: 0
+- **Verification**: pytest, manual test of delete_test_data endpoint
+
 ---
 
 ## 🟡 MEDIUM PRIORITY
@@ -146,7 +169,7 @@
 - **File**: `app/api/queue.py`
 - **State**: `TODO`
 - **Assigned To**: None
-- **Reviewer**: None**
+- **Reviewer**: None
 - **Fix Required**: Move Depends() to function body
 - **Attempts**: 0
 - **Verification**: ruff check
@@ -161,6 +184,56 @@
 - **Attempts**: 0
 - **Verification**: ruff check, pytest
 
+### [MED-006] `app/api/session.py:427-585` - Use UTC-aware timestamps
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: `datetime.now()` produces naive timestamp; models store timezone-aware datetimes
+- **Fix Required**: Change `datetime.now()` to `datetime.now(UTC)` and add `from datetime import UTC`
+- **Attempts**: 0
+- **Verification**: pytest, manual test
+
+### [MED-007] `comic_pile/session.py:126-129` - Silent exception swallowing in advisory lock
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: Bare `except Exception: pass` silently swallows ALL exceptions
+- **Fix Required**: Replace with narrow exception handling and logging (catch DB errors, log with logger.exception)
+- **Attempts**: 0
+- **Verification**: pytest, manual test of advisory lock failure
+
+### [MED-008] `scripts/dev-all.sh:1-39` - Two process management issues
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: (1) pkill -f kills unrelated Vite/Uvicorn processes, (2) hardcoded ports (8000, 5173)
+- **Fix Required**: (1) Save PIDs to variables and kill specific PIDs, (2) Make ports configurable via BACKEND_PORT/FRONTEND_PORT env vars
+- **Attempts**: 0
+- **Verification**: Run dev-all.sh and verify only correct processes are killed
+
+### [MED-009] `scripts/seed_dev_db.py:15-16` - Missing return type annotation
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: `async def seed_database` lacks return type annotation
+- **Fix Required**: Change to `async def seed_database() -> None:`
+- **Attempts**: 0
+- **Verification**: ty check
+
+### [MED-010] `SUB_AGENT_PROTOCOL.md:25-36` - Two formatting issues
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: (1) Fenced code block lacks language specifier, (2) "## Current Assignments" table is malformed
+- **Fix Required**: (1) Change ``` to ```text, (2) Add blank line after heading, fix table pipe alignment
+- **Attempts**: 0
+- **Verification**: markdownlint, visual check
+
 ---
 
 ## 🟢 LOW PRIORITY
@@ -171,9 +244,63 @@
 - **Fix Required**: Fix list indentation, markdownlint violations
 - **Verification**: markdownlint
 
+### [LOW-002] `CODERABBIT_AUDIT.md:440` - Typo "typpos"
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: Text contains typo "typpos" should be "typos"
+- **Fix Required**: Change "typpos" to "typos" in line 440
+- **Attempts**: 0
+- **Verification**: Manual review
+
+### [LOW-003] `FIX_TRACKING.md:149` - Stray Markdown bold marker
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: Line 149 has "**Reviewer**: None**" with trailing bold marker
+- **Fix Required**: Remove trailing "**" so line reads "**Reviewer**: None"
+- **Attempts**: 0
+- **Verification**: Manual review, markdownlint
+
+### [LOW-004] `frontend/src/pages/RatePage.jsx:114-124` - Mutation chaining pattern
+- **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
+- **State**: `TODO`
+- **Assigned To**: None
+- **Reviewer**: None
+- **Error**: Uses `.then()/.catch()` chaining on `mutate()` which is fragile if hook changes
+- **Fix Required**: Consider using try/catch with await for consistency
+- **Attempts**: 0
+- **Verification**: npm test
+
 ---
 
 ## Change Log
+
+### 2026-01-31 20:30 UTC
+- 🆕 **NEW CodeRabbit review received** (review-3733435337)
+- **10 NEW issues identified**:
+  - CRIT-004: Missing await on async operation in retry loop (app/utils/retry.py)
+  - HIGH-005: Session deletion ignores selected_thread_id (app/api/admin.py)
+  - MED-006: Use UTC-aware timestamps (app/api/session.py)
+  - MED-007: Silent exception swallowing in advisory lock (comic_pile/session.py)
+  - MED-008: Process management issues in dev-all.sh (2 issues)
+  - MED-009: Missing return type annotation (scripts/seed_dev_db.py)
+  - MED-010: Two formatting issues (SUB_AGENT_PROTOCOL.md)
+  - LOW-002: Typo "typpos" (CODERABBIT_AUDIT.md)
+  - LOW-003: Stray bold marker (FIX_TRACKING.md)
+  - LOW-004: Mutation chaining pattern (frontend/src/pages/RatePage.jsx)
+- **Total issues updated**: 29 → 39
+- **Progress**: 5 of 39 completed (12.8%)
+
+### 2026-01-31 14:30 UTC
+- ✅ CRIT-001 DONE: Fixed blocking time.sleep() in retry.py (commit: 4cff4b0)
+- ✅ CRIT-002 DONE: Fixed all BLE001 violations in main.py (commit: 4cff4b0)
+- ✅ CRIT-003 DONE: Fixed mutateAsync() bug in RatePage.jsx (commit: 4cff4b0)
+- ✅ HIGH-002 DONE: Fixed redundant loop in admin.py (commit: 1ac4d4c)
+- Pushed all fixes to origin/fix-ladder
+- **4 of 29 issues completed (13.8%)**
 
 ### 2026-01-31
 - Initial tracking file created with 29 issues requiring fixes
