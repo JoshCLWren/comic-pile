@@ -348,3 +348,137 @@ async def test_delete_test_data_clears_pending_thread_id(client, async_db):
     db_session = await async_db.get(SessionModel, session.id)
     if db_session:
         assert db_session.pending_thread_id is None
+
+
+@pytest.mark.usefixtures("enable_internal_ops")
+@pytest.mark.asyncio
+async def test_delete_test_data_with_selected_thread_id(client, async_db):
+    """Regression test for HIGH-005: Session deletion must check both thread_id and selected_thread_id.
+
+    This test verifies that sessions with roll events (which use selected_thread_id)
+    are properly identified as test sessions and deleted. The bug was that the deletion
+    logic only checked thread_id, missing roll events that selected test threads.
+    """
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(id=1, username="test_user")
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
+
+    test_thread = Thread(
+        title="Test Comic",
+        format="Issue",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        is_test=True,
+        user_id=user.id,
+    )
+    real_thread = Thread(
+        title="Real Comic",
+        format="Issue",
+        issues_remaining=15,
+        queue_position=2,
+        status="active",
+        is_test=False,
+        user_id=user.id,
+    )
+    async_db.add_all([test_thread, real_thread])
+    await async_db.commit()
+    await async_db.refresh(test_thread)
+    await async_db.refresh(real_thread)
+
+    test_session = SessionModel(
+        started_at=datetime.now(UTC),
+        ended_at=datetime.now(UTC),
+        start_die=6,
+        user_id=user.id,
+    )
+    mixed_session = SessionModel(
+        started_at=datetime.now(UTC),
+        ended_at=datetime.now(UTC),
+        start_die=6,
+        user_id=user.id,
+    )
+    real_session = SessionModel(
+        started_at=datetime.now(UTC),
+        ended_at=datetime.now(UTC),
+        start_die=6,
+        user_id=user.id,
+    )
+    async_db.add_all([test_session, mixed_session, real_session])
+    await async_db.commit()
+    await async_db.refresh(test_session)
+    await async_db.refresh(mixed_session)
+    await async_db.refresh(real_session)
+
+    test_session_roll_event = Event(
+        type="roll",
+        timestamp=datetime.now(UTC),
+        die=6,
+        result=1,
+        selected_thread_id=test_thread.id,
+        selection_method="dice",
+        session_id=test_session.id,
+    )
+    mixed_session_roll_event = Event(
+        type="roll",
+        timestamp=datetime.now(UTC),
+        die=6,
+        result=1,
+        selected_thread_id=test_thread.id,
+        selection_method="dice",
+        session_id=mixed_session.id,
+    )
+    mixed_session_rate_event = Event(
+        type="rate",
+        timestamp=datetime.now(UTC),
+        rating=5.0,
+        issues_read=1,
+        queue_move="front",
+        die_after=6,
+        thread_id=real_thread.id,
+        session_id=mixed_session.id,
+    )
+    real_session_event = Event(
+        type="rate",
+        timestamp=datetime.now(UTC),
+        rating=5.0,
+        issues_read=1,
+        queue_move="front",
+        die_after=6,
+        thread_id=real_thread.id,
+        session_id=real_session.id,
+    )
+    async_db.add_all(
+        [
+            test_session_roll_event,
+            mixed_session_roll_event,
+            mixed_session_rate_event,
+            real_session_event,
+        ]
+    )
+    await async_db.commit()
+
+    response = await client.post("/api/admin/delete-test-data/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["deleted_threads"] == 1
+    assert data["deleted_events"] >= 2
+    assert data["deleted_sessions"] == 1
+
+    result = await async_db.execute(select(Thread).where(Thread.user_id == user.id))
+    remaining_threads = result.scalars().all()
+    assert len(remaining_threads) == 1
+    assert remaining_threads[0].title == "Real Comic"
+
+    test_session_deleted = await async_db.get(SessionModel, test_session.id)
+    assert test_session_deleted is None, "Test-only session should be deleted"
+
+    mixed_session_kept = await async_db.get(SessionModel, mixed_session.id)
+    assert mixed_session_kept is not None, "Mixed session should NOT be deleted"
+
+    real_session_kept = await async_db.get(SessionModel, real_session.id)
+    assert real_session_kept is not None, "Real session should NOT be deleted"

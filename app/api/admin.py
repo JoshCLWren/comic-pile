@@ -257,7 +257,16 @@ async def delete_test_data(db: AsyncSession = Depends(get_db)) -> dict[str, int]
             select(Event).where(Event.session_id == session.id)
         )
         session_events = session_events_result.scalars().all()
-        if all(e.thread_id in thread_ids for e in session_events if e.thread_id):
+
+        def is_test_event(event: Event) -> bool:
+            """Check if an event belongs to a test thread (via either thread_id or selected_thread_id)."""
+            thread_is_test = event.thread_id in thread_ids if event.thread_id else False
+            selected_is_test = (
+                event.selected_thread_id in thread_ids if event.selected_thread_id else False
+            )
+            return thread_is_test or selected_is_test
+
+        if all(is_test_event(e) for e in session_events):
             await db.delete(session)
             deleted_sessions += 1
 
