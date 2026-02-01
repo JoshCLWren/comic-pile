@@ -35,11 +35,11 @@ if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 
 
-@pytest_asyncio.fixture(scope="module", autouse=True)
+@pytest_asyncio.fixture(scope="session", autouse=True)
 async def _create_database_tables():
     """Create database tables using asyncpg (ASYNC ONLY - no sync psycopg2).
 
-    This module-scoped async fixture runs before any tests in the module,
+    This session-scoped async fixture runs once per test session,
     creating tables if they don't exist. Uses asyncpg ONLY.
     """
     database_url = get_test_database_url()
@@ -227,12 +227,16 @@ def test_server_url():
     os.environ["DATABASE_URL"] = test_db_url
 
     async def setup_test_data():
-        """Setup test database with sample data.
+        """Setup test database with sample data using asyncpg.
 
-        Note: Tables are created by module-scoped _create_database_tables
-        fixture using asyncpg (async-only). This only seeds data.
+        Creates tables using asyncpg (async-only, NO sync psycopg2),
+        then seeds sample data for E2E tests.
         """
         test_engine = create_async_engine(test_db_url)
+
+        # Create tables using asyncpg (async-only)
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
         async_session_maker = async_sessionmaker(
             bind=test_engine,
