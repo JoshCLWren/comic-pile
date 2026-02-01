@@ -4,12 +4,13 @@ import { rollApi } from '../services/api'
 export function useRoll() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
-  
+
   const mutate = async () => {
     setIsPending(true)
     setIsError(false)
     try {
-      await rollApi.roll()
+      const response = await rollApi.roll()
+      return response
     } catch (error) {
       setIsError(true)
       throw error
@@ -17,19 +18,20 @@ export function useRoll() {
       setIsPending(false)
     }
   }
-  
+
   return { mutate, isPending, isError }
 }
 
 export function useOverrideRoll() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
-  
+
   const mutate = async (data) => {
     setIsPending(true)
     setIsError(false)
     try {
-      await rollApi.override(data)
+      const response = await rollApi.override(data)
+      return response
     } catch (error) {
       setIsError(true)
       throw error
@@ -37,7 +39,7 @@ export function useOverrideRoll() {
       setIsPending(false)
     }
   }
-  
+
   return { mutate, isPending, isError }
 }
 
