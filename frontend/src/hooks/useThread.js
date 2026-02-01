@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { threadsApi } from '../services/api'
 
 export function useThreads() {
@@ -6,36 +6,24 @@ export function useThreads() {
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
-  useEffect(() => {
-    let isMounted = true
-
-    const fetchData = async () => {
-      setIsPending(true)
-      setIsError(false)
-      try {
-        const result = await threadsApi.list()
-        if (isMounted) {
-          setData(result)
-        }
-      } catch {
-        if (isMounted) {
-          setIsError(true)
-        }
-      } finally {
-        if (isMounted) {
-          setIsPending(false)
-        }
-      }
-    }
-
-    fetchData()
-
-    return () => {
-      isMounted = false
+  const fetchData = useCallback(async () => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      const result = await threadsApi.list()
+      setData(result)
+    } catch {
+      setIsError(true)
+    } finally {
+      setIsPending(false)
     }
   }, [])
 
-  return { data, isPending, isError }
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  return { data, isPending, isError, refetch: fetchData }
 }
 
 export function useThread(id) {
