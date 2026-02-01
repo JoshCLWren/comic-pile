@@ -116,8 +116,8 @@ export default function RollPage() {
         
         rollTimeoutRef.current = setTimeout(() => {
           rollTimeoutRef.current = null
-          rollMutation.mutate(undefined, {
-            onSuccess: (response) => {
+          rollMutation.mutate()
+            .then((response) => {
               if (response?.result) {
                 setRolledResult(response.result)
               }
@@ -126,11 +126,10 @@ export default function RollPage() {
               }
               setIsRolling(false)
               navigate('/rate')
-            },
-            onError: () => {
+            })
+            .catch(() => {
               setIsRolling(false)
-            },
-          })
+            })
         }, 400)
       }
     }, 80)
@@ -144,16 +143,16 @@ export default function RollPage() {
     event.preventDefault()
     if (!overrideThreadId) return
 
-    overrideMutation.mutate(
-      { thread_id: Number(overrideThreadId) },
-      {
-        onSuccess: () => {
-          setIsOverrideOpen(false)
-          setOverrideThreadId('')
-          navigate('/rate')
-        },
-      }
-    )
+    overrideMutation
+      .mutate({ thread_id: Number(overrideThreadId) })
+      .then(() => {
+        setIsOverrideOpen(false)
+        setOverrideThreadId('')
+        navigate('/rate')
+      })
+      .catch(() => {
+        // Handle error if needed
+      })
   }
 
   if (!session) {
