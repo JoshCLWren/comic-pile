@@ -100,10 +100,10 @@ const api = axios.create({
 
 ### Custom Hooks Pattern
 
-Custom hooks manage server state using useState/useEffect with isMounted flags to prevent memory leaks:
+Custom hooks manage server state using useState/useEffect with proper cleanup to prevent memory leaks:
 
 ```javascript
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../services/api'
 
 export function useThreads() {
@@ -111,28 +111,35 @@ export function useThreads() {
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState(null)
+  const isMounted = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
 
   const fetchData = useCallback(async () => {
-    let isMounted = true
-    setIsPending(true)
-    setIsError(false)
-    setError(null)
+    if (isMounted.current) {
+      setIsPending(true)
+      setIsError(false)
+      setError(null)
+    }
     try {
       const result = await api.getThreads()
-      if (isMounted) {
+      if (isMounted.current) {
         setData(result)
       }
     } catch (err) {
-      if (isMounted) {
+      if (isMounted.current) {
         setIsError(true)
         setError(err)
       }
     } finally {
-      if (isMounted) {
+      if (isMounted.current) {
         setIsPending(false)
       }
     }
-    return () => { isMounted = false }
   }, [])
 
   useEffect(() => {
@@ -146,29 +153,36 @@ export function useCreateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState(null)
+  const isMounted = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
 
   const createThread = useCallback(async (threadData) => {
-    let isMounted = true
-    setIsPending(true)
-    setIsError(false)
-    setError(null)
+    if (isMounted.current) {
+      setIsPending(true)
+      setIsError(false)
+      setError(null)
+    }
     try {
       const result = await api.createThread(threadData)
-      if (isMounted) {
+      if (isMounted.current) {
         return result
       }
     } catch (err) {
-      if (isMounted) {
+      if (isMounted.current) {
         setIsError(true)
         setError(err)
-        throw err
       }
+      throw err
     } finally {
-      if (isMounted) {
+      if (isMounted.current) {
         setIsPending(false)
       }
     }
-    return () => { isMounted = false }
   }, [])
 
   return { createThread, isPending, isError, error }

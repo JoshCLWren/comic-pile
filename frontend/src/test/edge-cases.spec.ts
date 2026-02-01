@@ -210,7 +210,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await expect(page.locator(SELECTORS.threadList.container)).toBeVisible();
   });
 
-  test('should handling losing network connection', async ({ page }) => {
+  test('should handle losing network connection', async ({ page }) => {
     const user = generateTestUser();
     await registerUser(page, user);
     await loginUser(page, user);
@@ -250,6 +250,7 @@ test.describe('Edge Cases & Error Handling', () => {
     const page = await context.newPage();
 
     await page.goto('/register');
+    await page.fill(SELECTORS.auth.usernameInput, user.username);
     await page.fill(SELECTORS.auth.emailInput, user.email);
     await page.fill(SELECTORS.auth.passwordInput, user.password);
     await page.fill(SELECTORS.auth.confirmPasswordInput, user.password);
@@ -268,6 +269,7 @@ test.describe('Edge Cases & Error Handling', () => {
     const page = await context.newPage();
 
     await page.goto('/register');
+    await page.fill(SELECTORS.auth.usernameInput, user.username);
     await page.fill(SELECTORS.auth.emailInput, user.email);
     await page.fill(SELECTORS.auth.passwordInput, user.password);
     await page.fill(SELECTORS.auth.confirmPasswordInput, user.password);

@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from typing import Annotated
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +24,7 @@ router = APIRouter(
 
 @router.post("/import/csv/")
 async def import_csv(
-    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
+    file: Annotated[UploadFile, File(...)], db: Annotated[AsyncSession, Depends(get_db)]
 ) -> dict[str, int | list[str]]:
     """Import threads from CSV file.
 
@@ -107,7 +108,7 @@ async def import_csv(
 
 
 @router.get("/export/csv/")
-async def export_csv(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
+async def export_csv(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export active threads as CSV file.
 
     Format matches Google Sheets: title, format, issues_remaining
@@ -146,7 +147,7 @@ async def export_csv(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
 
 
 @router.get("/export/json/")
-async def export_json(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
+async def export_json(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export full database as JSON for backups.
 
     Includes all data: users, threads, sessions, events (excludes test data)
@@ -235,7 +236,7 @@ async def export_json(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
 
 
 @router.post("/delete-test-data/")
-async def delete_test_data(db: AsyncSession = Depends(get_db)) -> dict[str, int]:
+async def delete_test_data(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, int]:
     """Delete all test data (threads, sessions, events marked as test).
 
     Args:
@@ -285,7 +286,14 @@ async def delete_test_data(db: AsyncSession = Depends(get_db)) -> dict[str, int]
         session_events = session_events_result.scalars().all()
 
         def is_test_event(event: Event) -> bool:
-            """Check if an event belongs to a test thread (via either thread_id or selected_thread_id)."""
+            """Check if an event belongs to a test thread (via either thread_id or selected_thread_id).
+
+            Args:
+                event: Event to check.
+
+            Returns:
+                True if event belongs to a test thread.
+            """
             thread_is_test = event.thread_id in thread_ids if event.thread_id else False
             selected_is_test = (
                 event.selected_thread_id in thread_ids if event.selected_thread_id else False
@@ -310,7 +318,7 @@ async def delete_test_data(db: AsyncSession = Depends(get_db)) -> dict[str, int]
 
 @router.post("/import/reviews/")
 async def import_reviews(
-    file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
+    file: Annotated[UploadFile, File(...)], db: Annotated[AsyncSession, Depends(get_db)]
 ) -> dict[str, int | list[str]]:
     """Import review timestamps from CSV file.
 
@@ -390,7 +398,7 @@ async def import_reviews(
 
 
 @router.get("/export/summary/")
-async def export_summary(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
+async def export_summary(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export narrative session summaries as markdown file.
 
     Formats all sessions with read, skipped, and completed lists per PRD Section 11.

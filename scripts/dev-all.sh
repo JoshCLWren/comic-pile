@@ -66,6 +66,53 @@ cd frontend && npm run dev &
 FRONTEND_PID=$!
 echo "$FRONTEND_PID" >> "$PID_FILE"
 
+# Health check function
+wait_for_server() {
+    local url=$1
+    local name=$2
+    local max_attempts=30
+    local attempt=1
+
+    echo "Waiting for $name to start..."
+
+    while [[ $attempt -le $max_attempts ]]; do
+        if curl -s -o /dev/null -w "%{http_code}" "$url" 2>/dev/null | grep -q "200\|404"; then
+            echo "✓ $name is responding"
+            return 0
+        fi
+
+        # Check if process is still running
+        local pid_var="${name^^}_PID"
+        pid_var="${pid_var// /_}"
+        local pid
+        pid=$(eval echo "\$$pid_var")
+
+        if ! kill -0 "$pid" 2>/dev/null; then
+            echo "✗ $name process died during startup (PID: $pid)"
+            return 1
+        fi
+
+        sleep 1
+        ((attempt++))
+    done
+
+    echo "✗ $name failed to start within ${max_attempts}s"
+    return 1
+}
+
+# Wait for servers to start and verify they're responding
+if ! wait_for_server "http://localhost:${BACKEND_PORT}/docs" "backend"; then
+    echo "ERROR: Backend failed to start. Check logs above."
+    cleanup
+    exit 1
+fi
+
+if ! wait_for_server "http://localhost:${FRONTEND_PORT}" "frontend"; then
+    echo "ERROR: Frontend failed to start. Check logs above."
+    cleanup
+    exit 1
+fi
+
 echo ""
 echo "Backend: http://localhost:${BACKEND_PORT} (PID: $BACKEND_PID)"
 echo "Frontend: http://localhost:${FRONTEND_PORT} (PID: $FRONTEND_PID)"

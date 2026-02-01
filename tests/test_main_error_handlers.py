@@ -1,8 +1,7 @@
 """Tests for error handlers in app/main.py."""
 
-from typing import Any
-
 import pytest
+from fastapi import FastAPI
 from httpx import AsyncClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -24,10 +23,8 @@ async def test_http_exception_handler_for_nonexistent_thread(auth_client: AsyncC
 
 
 @pytest.fixture
-def test_app_with_error_routes() -> None:
+def test_app_with_error_routes() -> FastAPI:
     """Create a test app with routes that trigger specific exceptions."""
-    from fastapi import FastAPI
-
     test_app = FastAPI()
 
     @test_app.get("/test-404")
@@ -54,7 +51,9 @@ def test_app_with_error_routes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_http_exception_handler_various_status_codes(test_app_with_error_routes: Any) -> None:
+async def test_http_exception_handler_various_status_codes(
+    test_app_with_error_routes: FastAPI,
+) -> None:
     """Test HTTP exception handler with various status codes."""
     from httpx import ASGITransport, AsyncClient
 

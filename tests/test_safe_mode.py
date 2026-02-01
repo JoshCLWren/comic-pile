@@ -15,7 +15,7 @@ from app.models import Event, Session as SessionModel, Snapshot, Thread, User
 
 
 @pytest_asyncio.fixture(scope="function")
-async def safe_mode_user(async_db) -> User:
+async def safe_mode_user(async_db: AsyncSession) -> User:
     """Create a test user for safe mode tests."""
     result = await async_db.execute(select(User).where(User.username == "safe_mode_user"))
     user = result.scalar_one_or_none()
@@ -28,7 +28,9 @@ async def safe_mode_user(async_db) -> User:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def safe_mode_auth_client(async_db, safe_mode_user: User) -> AsyncGenerator[AsyncClient]:
+async def safe_mode_auth_client(
+    async_db: AsyncSession, safe_mode_user: User
+) -> AsyncGenerator[AsyncClient]:
     """httpx.AsyncClient authenticated as safe_mode_user for safe mode tests."""
     from app.auth import create_access_token
     from app.database import get_db
