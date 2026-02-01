@@ -47,6 +47,7 @@ async def test_create_thread_validation(auth_client):
 @pytest.mark.asyncio
 async def test_list_threads(auth_client, sample_data):
     """Test GET /api/threads/ returns all threads."""
+    _ = sample_data
     response = await auth_client.get("/api/threads/")
     assert response.status_code == 200
 
@@ -70,6 +71,7 @@ async def test_list_threads_empty(auth_client):
 @pytest.mark.asyncio
 async def test_get_thread(auth_client, sample_data):
     """Test GET /api/threads/{id} returns single thread."""
+    _ = sample_data
     response = await auth_client.get("/api/threads/1")
     assert response.status_code == 200
 
@@ -93,6 +95,7 @@ async def test_get_thread_not_found(auth_client):
 @pytest.mark.asyncio
 async def test_update_thread(auth_client, sample_data, async_db):
     """Test PUT /api/threads/{id} updates thread."""
+    _ = sample_data
     update_data = {
         "title": "Superman Updated",
         "format": "Trade Paperback",
@@ -119,6 +122,7 @@ async def test_update_thread(auth_client, sample_data, async_db):
 @pytest.mark.asyncio
 async def test_update_thread_partial(auth_client, sample_data):
     """Test PUT /api/threads/{id} with partial data."""
+    _ = sample_data
     update_data = {
         "title": "Batman Updated",
     }
@@ -144,6 +148,7 @@ async def test_update_thread_not_found(auth_client):
 @pytest.mark.asyncio
 async def test_update_thread_complete_status(auth_client, sample_data, async_db):
     """Test PUT /api/threads/{id} sets completed status when issues_remaining is 0."""
+    _ = sample_data
     update_data = {
         "issues_remaining": 0,
     }
@@ -164,6 +169,7 @@ async def test_update_thread_complete_status(auth_client, sample_data, async_db)
 @pytest.mark.asyncio
 async def test_update_thread_active_status(auth_client, sample_data, async_db):
     """Test PUT /api/threads/{id} sets active status when issues_remaining > 0."""
+    _ = sample_data
     update_data = {
         "issues_remaining": 5,
     }
@@ -184,6 +190,7 @@ async def test_update_thread_active_status(auth_client, sample_data, async_db):
 @pytest.mark.asyncio
 async def test_delete_thread(auth_client, sample_data, async_db):
     """Test DELETE /api/threads/{id} removes thread."""
+    _ = sample_data
     response = await auth_client.delete("/api/threads/1")
     assert response.status_code == 204
 
@@ -206,6 +213,7 @@ async def test_delete_thread_not_found(auth_client):
 @pytest.mark.asyncio
 async def test_delete_thread_cascades_to_events_and_snapshots(sample_data, async_db, auth_client):
     """Test that deleting a thread also deletes associated events and snapshots."""
+    _ = sample_data
     from datetime import UTC, datetime
 
     from app.models import Event, Session as SessionModel, Snapshot, Thread, User
@@ -368,6 +376,7 @@ async def test_get_session_current_uses_selected_thread_id(auth_client, async_db
 @pytest.mark.asyncio
 async def test_get_sessions(auth_client, sample_data):
     """Test GET /sessions/ lists all sessions."""
+    _ = sample_data
     response = await auth_client.get("/api/sessions/")
     assert response.status_code == 200
 
@@ -379,6 +388,7 @@ async def test_get_sessions(auth_client, sample_data):
 @pytest.mark.asyncio
 async def test_get_sessions_pagination(auth_client, sample_data):
     """Test GET /sessions/ with pagination."""
+    _ = sample_data
     response = await auth_client.get("/api/sessions/?limit=1&offset=0")
     assert response.status_code == 200
 
@@ -389,6 +399,7 @@ async def test_get_sessions_pagination(auth_client, sample_data):
 @pytest.mark.asyncio
 async def test_get_session(auth_client, sample_data):
     """Test GET /sessions/{id} returns single session."""
+    _ = sample_data
     response = await auth_client.get("/api/sessions/1")
     assert response.status_code == 200
 
@@ -410,6 +421,7 @@ async def test_get_session_not_found(auth_client):
 @pytest.mark.asyncio
 async def test_get_session_details(auth_client, sample_data):
     """Test GET /sessions/{id}/details returns events as JSON."""
+    _ = sample_data
     response = await auth_client.get("/api/sessions/1/details")
     assert response.status_code == 200
 
@@ -460,6 +472,7 @@ async def test_get_stale_threads(auth_client, async_db):
 @pytest.mark.asyncio
 async def test_list_threads_includes_notes(auth_client, sample_data, async_db):
     """Test GET /api/threads/ includes notes field in all threads."""
+    _ = sample_data
     from datetime import UTC, datetime
 
     from app.models import Thread, User
