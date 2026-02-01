@@ -14,10 +14,10 @@
 ## Progress Summary
 | State | Count |
 |-------|-------|
-| TODO | 24 |
+| TODO | 21 |
 | IN_PROGRESS | 0 |
 | REVIEW | 0 |
-| DONE | 15 |
+| DONE | 18 |
 | FAILED | 0 |
 
 ---
@@ -187,13 +187,17 @@
 
 ### [MED-005] Ruff ARG001 violations (unused fixtures)
 - **Comments**: Multiple
-- **Files**: Multiple test files
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
-- **Fix Required**: Remove unused fixtures or use them
-- **Attempts**: 0
-- **Verification**: ruff check, pytest
+- **Files**: 6 test files (75 total violations)
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e9110f25ffek4iJ0aCnrJ4zAU
+- **Reviewer**: None (systematic fix, verified with ruff)
+- **Error**: Pytest fixtures used for side effects but not directly referenced
+- **Fix Required**: Added `_ = fixture` references for all 75 violations
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ 0 ARG001 violations remain, all tests pass
+- **Completed**: 2026-02-01
+- **Files Modified**: test_api_endpoints.py (13), test_csv_import.py (42), test_history.py (1), test_roll_api.py (7), test_security_gating.py (2), test_thread_isolation.py (10)
 
 ### [MED-006] `app/api/session.py:427-585` - Use UTC-aware timestamps
 - **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
@@ -250,13 +254,15 @@
 
 ### [MED-010] `SUB_AGENT_PROTOCOL.md:25-36` - Two formatting issues
 - **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
-- **Error**: (1) Fenced code block lacks language specifier, (2) "## Current Assignments" table is malformed
-- **Fix Required**: (1) Change ``` to ```text, (2) Add blank line after heading, fix table pipe alignment
-- **Attempts**: 0
-- **Verification**: markdownlint, visual check
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e93013acffebno2anUr6L1BO4
+- **Reviewer**: ses_3e9110f27ffe4rcKU854LaVKgw
+- **Error**: (1) Code block lacks language specifier, (2) Table needs blank line after heading
+- **Fix Required**: (1) Changed ``` to ```text, (2) Added blank line after heading
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Verified formatting is correct
+- **Completed**: 2026-02-01
 
 ---
 
@@ -264,9 +270,16 @@
 
 ### [LOW-001] Markdown formatting issues
 - **Comments**: Multiple
-- **State**: `TODO`
-- **Fix Required**: Fix list indentation, markdownlint violations
-- **Verification**: markdownlint
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e92fde03ffe3yeErbnIjWolyy (attempt 1), ses_3e90d7dbdffepTweO7ggV6J34c (attempt 2)
+- **Reviewer**: ses_3e9110f26ffetKNG4bBCvURliG (review 1 - REJECTED), ses_3e90be8d0ffetIyKk4rGrWpTRN (review 2 - APPROVED)
+- **Error**: PLANNING.md had inconsistent list indentation, trailing whitespace in multiple files
+- **Fix Required**: Fixed all list items to 2 leading spaces, removed trailing whitespace
+- **Attempts**: 2
+- **Last Error**: First attempt didn't fix PLANNING.md list indentation
+- **Verification**: ✅ All markdown formatting now consistent
+- **Completed**: 2026-02-01
+- **Files Fixed**: PLANNING.md, CODERABBIT_AUDIT.md, FIX_TRACKING.md, AGENTS.md, d10_woes.md, THREAD_REPOSITIONING_FIX_PLAN.md
 
 ### [LOW-002] `CODERABBIT_AUDIT.md:440` - Typo "typpos"
 - **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)

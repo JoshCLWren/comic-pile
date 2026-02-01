@@ -82,7 +82,7 @@ Models in `app/models/` use `Mapped` type annotations:
 ```python
 class Thread(Base):
     __tablename__ = "threads"
-    
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     last_rating: Mapped[float | None] = mapped_column(Float, nullable=True)

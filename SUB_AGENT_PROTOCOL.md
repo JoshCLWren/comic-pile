@@ -22,7 +22,7 @@ Peer reviewer must check:
 4. Are there edge cases not handled?
 
 ## State Transitions
-```
+```text
 TODO → IN_PROGRESS (assign to sub-agent)
 IN_PROGRESS → REVIEW (sub-agent claims fix is done)
 REVIEW → DONE (peer reviewer approves + linters/tests pass)
@@ -31,6 +31,7 @@ FAILED → IN_PROGRESS (retry with feedback)
 ```
 
 ## Current Assignments
+
 | Issue ID | Sub-Agent | Reviewer | Status |
 |----------|-----------|----------|--------|
 | None | None | None | Ready to start |

@@ -381,7 +381,7 @@
 #### High Priority
 2. **`app/main.py:378`** - BLE001 violation in health check (review-3731198888)
    - Change `except Exception` to `except SQLAlchemyError`
-   
+
 3. **`app/main.py:440`** - Another BLE001 violation (review-3731288575)
    - Same fix as above
 
