@@ -121,6 +121,7 @@ async def setup_e2e_database():
             await conn.run_sync(Base.metadata.create_all)
     finally:
         await engine.dispose()
+    yield
 
 
 @pytest.fixture(scope="function", autouse=True)
