@@ -1,6 +1,6 @@
 """Rate API endpoint."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -165,7 +165,7 @@ async def rate_thread(
 
     thread.issues_remaining -= rate_data.issues_read
     thread.last_rating = rate_data.rating
-    thread.last_activity_at = datetime.now()
+    thread.last_activity_at = datetime.now(UTC)
 
     if rate_data.rating >= rating_threshold:
         new_die = step_down(current_die)
@@ -189,7 +189,7 @@ async def rate_thread(
         await move_to_back(thread.id, current_user.id, db)
 
     if rate_data.finish_session:
-        current_session.ended_at = datetime.now()
+        current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
         if thread.issues_remaining <= 0:
             thread.status = "completed"
