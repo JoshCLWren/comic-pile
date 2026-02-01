@@ -40,7 +40,21 @@ async def move_thread_position(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ThreadResponse:
-    """Move thread to specific position."""
+    """Move thread to specific position.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        thread_id: The ID of the thread to move.
+        position_request: Request containing the new position.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with the updated thread information.
+
+    Raises:
+        HTTPException: If thread not found or position invalid.
+    """
     logger.info(
         f"API move_thread_position: thread_id={thread_id}, user_id={current_user.id}, "
         f"new_position={position_request.new_position}, request_url={request.url}"
@@ -93,7 +107,20 @@ async def move_thread_front(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ThreadResponse:
-    """Move thread to the front."""
+    """Move thread to the front.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        thread_id: The ID of the thread to move.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with the updated thread information.
+
+    Raises:
+        HTTPException: If thread not found.
+    """
     result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
     )
@@ -131,7 +158,20 @@ async def move_thread_back(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ThreadResponse:
-    """Move thread to the back."""
+    """Move thread to the back.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        thread_id: The ID of the thread to move.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with the updated thread information.
+
+    Raises:
+        HTTPException: If thread not found.
+    """
     result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == current_user.id)
     )

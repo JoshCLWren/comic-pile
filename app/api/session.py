@@ -33,7 +33,15 @@ get_current_session_cached = None
 async def get_session_with_thread_safe(
     session_id: int, db: AsyncSession
 ) -> tuple[SessionModel | None, ActiveThreadInfo | None]:
-    """Get session and active thread with consistent lock ordering to prevent deadlocks."""
+    """Get session and active thread with consistent lock ordering to prevent deadlocks.
+
+    Args:
+        session_id: The session ID to query.
+        db: Database session.
+
+    Returns:
+        Tuple of (session or None, active_thread or None).
+    """
     session = await db.get(SessionModel, session_id)
     if not session:
         return None, None
@@ -66,7 +74,16 @@ async def get_session_with_thread_safe(
 
 
 async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str, list[str]]:
-    """Build narrative summary categorizing session events."""
+    """Build narrative summary categorizing session events.
+
+    Args:
+        session_id: The session ID to build summary for.
+        db: Database session.
+
+    Returns:
+        Dictionary with keys "read", "skipped", and "completed", each containing
+        a list of formatted strings.
+    """
     events_result = await db.execute(
         select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
     )
@@ -101,7 +118,15 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
 
 
 async def build_ladder_path(session_id: int, db: AsyncSession) -> str:
-    """Build narrative summary of dice ladder from session events."""
+    """Build narrative summary of dice ladder from session events.
+
+    Args:
+        session_id: The session ID to build ladder path for.
+        db: Database session.
+
+    Returns:
+        String representation of dice ladder path (e.g., "d4 → d6 → d8").
+    """
     session = await db.get(SessionModel, session_id)
     if not session:
         return ""
@@ -126,7 +151,15 @@ async def build_ladder_path(session_id: int, db: AsyncSession) -> str:
 
 
 async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadInfo | None:
-    """Get the most recently rolled thread for the session."""
+    """Get the most recently rolled thread for the session.
+
+    Args:
+        session_id: The session ID to query.
+        db: Database session.
+
+    Returns:
+        ActiveThreadInfo if found, None otherwise.
+    """
     event_result = await db.execute(
         select(Event)
         .where(Event.session_id == session_id)
@@ -160,7 +193,19 @@ async def get_current_session(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Get current active session with deadlock retry handling."""
+    """Get current active session with deadlock retry handling.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse with current session details.
+
+    Raises:
+        RuntimeError: If failed after max retries.
+    """
     from sqlalchemy.exc import OperationalError
 
     max_retries = 3
@@ -247,7 +292,17 @@ async def list_sessions(
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> list[SessionResponse]:
-    """List all sessions (paginated)."""
+    """List all sessions (paginated).
+
+    Args:
+        current_user: The authenticated user making the request.
+        limit: Maximum number of sessions to return.
+        offset: Number of sessions to skip.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        List of SessionResponse objects.
+    """
     sessions_result = await db.execute(
         select(SessionModel)
         .where(SessionModel.user_id == current_user.id)
@@ -293,7 +348,19 @@ async def get_session(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Get single session by ID."""
+    """Get single session by ID.
+
+    Args:
+        session_id: The session ID to retrieve.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse with session details.
+
+    Raises:
+        HTTPException: If session not found.
+    """
     session = await db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -332,7 +399,19 @@ async def get_session_details(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionDetailsResponse:
-    """Get session details with all events for expanded view."""
+    """Get session details with all events for expanded view.
+
+    Args:
+        session_id: The session ID to retrieve details for.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionDetailsResponse with events and narrative summary.
+
+    Raises:
+        HTTPException: If session not found.
+    """
     session_obj = await db.get(SessionModel, session_id)
     if not session_obj:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -395,7 +474,19 @@ async def get_session_snapshots(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SnapshotsListResponse:
-    """Get session snapshots list."""
+    """Get session snapshots list.
+
+    Args:
+        session_id: The session ID to get snapshots for.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SnapshotsListResponse with list of snapshots.
+
+    Raises:
+        HTTPException: If session not found.
+    """
     session = await db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -430,7 +521,20 @@ async def restore_session_start(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Restore session to its initial state at session start."""
+    """Restore session to its initial state at session start.
+
+    Args:
+        session_id: The session ID to restore.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse with restored session details.
+
+    Raises:
+        HTTPException: If session or snapshot not found.
+        RuntimeError: If failed after max retries.
+    """
     from sqlalchemy.exc import OperationalError
 
     max_retries = 3
