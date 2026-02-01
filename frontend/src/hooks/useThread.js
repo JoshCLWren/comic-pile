@@ -111,7 +111,7 @@ export function useCreateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async (data) => {
+  const mutate = useCallback(async (data) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -123,7 +123,7 @@ export function useCreateThread() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { mutate, isPending, isError }
 }
@@ -132,7 +132,7 @@ export function useUpdateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async ({ id, data }) => {
+  const mutate = useCallback(async ({ id, data }) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -144,7 +144,7 @@ export function useUpdateThread() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { mutate, isPending, isError }
 }
@@ -153,7 +153,7 @@ export function useDeleteThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async (id) => {
+  const mutate = useCallback(async (id) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -165,7 +165,7 @@ export function useDeleteThread() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { mutate, isPending, isError }
 }
@@ -174,7 +174,7 @@ export function useReactivateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async (data) => {
+  const mutate = useCallback(async (data) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -186,7 +186,7 @@ export function useReactivateThread() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { mutate, isPending, isError }
 }

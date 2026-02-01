@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { queueApi } from '../services/api'
 
 export function useMoveToPosition() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async ({ id, position }) => {
+  const mutate = useCallback(async ({ id, position }) => {
     try {
       setIsPending(true)
       setIsError(false)
@@ -17,7 +17,7 @@ export function useMoveToPosition() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { mutate, isPending, isError }
 }
@@ -26,7 +26,7 @@ export function useMoveToFront() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async (id) => {
+  const mutate = useCallback(async (id) => {
     try {
       setIsPending(true)
       setIsError(false)
@@ -38,7 +38,7 @@ export function useMoveToFront() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { mutate, isPending, isError }
 }
@@ -47,7 +47,7 @@ export function useMoveToBack() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async (id) => {
+  const mutate = useCallback(async (id) => {
     try {
       setIsPending(true)
       setIsError(false)
@@ -59,7 +59,7 @@ export function useMoveToBack() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { mutate, isPending, isError }
 }

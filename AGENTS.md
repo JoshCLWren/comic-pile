@@ -126,7 +126,7 @@ def test_db_example(db):
 
 ```jsx
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../services/api'
 
 export function useResource(id) {
@@ -162,9 +162,14 @@ export function useResource(id) {
 }
 
 export default function ExamplePage() {
+  const { id } = useParams()
   const navigate = useNavigate()
   const { data, isPending, isError } = useResource(id)
-  // ...
+
+  if (isPending) return <div>Loading...</div>
+  if (isError) return <div>Error loading resource</div>
+
+  return <div>{data?.name}</div>
 }
 ```
 

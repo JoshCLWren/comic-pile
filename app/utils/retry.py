@@ -27,9 +27,9 @@ async def with_deadlock_retry[T](db: AsyncSession, operation: Callable[[], Await
         OperationalError: If error is not a deadlock
 
     Usage:
-        def do_db_work():
+        async def do_db_work():
             # database operations
-            db.commit()
+            await db.commit()
             return some_value
 
         result = await with_deadlock_retry(db, do_db_work)
