@@ -159,6 +159,7 @@ async def undo_to_snapshot(
                 session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
 
             await db.commit()
+            await db.refresh(session)
 
             if clear_cache:
                 clear_cache()
