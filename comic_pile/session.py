@@ -1,6 +1,7 @@
 """Session management functions."""
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, text
@@ -12,6 +13,7 @@ from app.models import Event, Snapshot, Thread, Session
 from app.models import Session as SessionModel
 
 
+logger = logging.getLogger(__name__)
 _session_creation_lock = asyncio.Lock()
 
 
@@ -125,8 +127,12 @@ async def get_or_create(db: AsyncSession, user_id: int) -> SessionModel:
             async with _session_creation_lock:
                 try:
                     await db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(
+                        f"Advisory lock failed: {e}. "
+                        "Continuing with asyncio.Lock protection only. "
+                        "This may increase risk of race conditions in multi-instance deployments."
+                    )
 
                 result = await db.execute(
                     select(Session)

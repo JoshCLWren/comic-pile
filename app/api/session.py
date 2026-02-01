@@ -1,7 +1,7 @@
 """Session API endpoints."""
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -531,7 +531,7 @@ async def restore_session_start(
                         user_id=state.get("user_id", session.user_id),
                         created_at=datetime.fromisoformat(state["created_at"])
                         if state.get("created_at")
-                        else datetime.now(),
+                        else datetime.now(UTC),
                     )
                     if state.get("last_activity_at"):
                         new_thread.last_activity_at = datetime.fromisoformat(
