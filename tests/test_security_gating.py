@@ -43,6 +43,7 @@ async def test_admin_routes_accessible_when_enabled(
     async_db: AsyncSession,
 ) -> None:
     """Admin routes work when ENABLE_INTERNAL_OPS_ROUTES is true."""
+    _ = sample_data
     from httpx import ASGITransport, AsyncClient
 
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
