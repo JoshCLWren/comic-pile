@@ -28,6 +28,26 @@ All AI agents working in this codebase are **high-ownership agents**.
 ## Project Overview
 
 Comic Pile is a dice-driven comic reading tracker built with:
+
+## CRITICAL: Async PostgreSQL Only - NO Sync psycopg2
+
+**This project uses asyncpg (async PostgreSQL) ONLY. NEVER use synchronous psycopg2.**
+
+**Database Access Rules**:
+- ✅ **USE**: `asyncpg` (async), `create_async_engine()`, `AsyncSession`
+- ❌ **NEVER USE**: `psycopg2`, `psycopg`, `create_engine()` (sync), `Session` (sync)
+
+**Why async-only?**
+- Weeks of refactoring converted entire codebase to async
+- Mixing sync/async causes event loop conflicts and greenlet errors
+- Sync code WILL BREAK the application
+
+**If you need to create tables in tests**:
+- Use module-scoped `@pytest_asyncio.fixture` with `create_async_engine()`
+- Call `await conn.run_sync(Base.metadata.create_all)`
+- See `tests_e2e/conftest.py:_create_database_tables` for example
+
+**Violating this rule will undo weeks of work and break the application.**
 - **Backend**: Python 3.13, FastAPI, SQLAlchemy, PostgreSQL
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `npm` (frontend)

@@ -38,13 +38,13 @@ if not os.getenv("SECRET_KEY"):
 @pytest_asyncio.fixture(scope="module", autouse=True)
 async def _create_database_tables():
     """Create database tables using asyncpg (ASYNC ONLY - no sync psycopg2).
-    
+
     This module-scoped async fixture runs before any tests in the module,
     creating tables if they don't exist. Uses asyncpg ONLY.
     """
     database_url = get_test_database_url()
     engine = create_async_engine(database_url, echo=False)
-    
+
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -153,7 +153,8 @@ def enable_internal_ops():
 async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
     """Create isolated async test database with transaction rollback.
 
-    Note: Tables are created by _create_database_tables fixture.
+    Uses asyncpg ONLY (async PostgreSQL). Tables created by module-scoped
+    _create_database_tables fixture.
     """
     database_url = get_test_database_url()
 
