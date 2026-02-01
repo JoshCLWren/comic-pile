@@ -30,6 +30,36 @@ test.describe('Roll Dice Feature', () => {
     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
   });
 
+  test('regression: roll API response should be handled and navigation should complete', async ({ page }) => {
+    // Regression test for bug where useRoll hook didn't return API response,
+    // causing infinite dice animation and no navigation
+    const user = generateTestUser();
+    await registerUser(page, user);
+    await loginUser(page, user);
+
+    // Create multiple threads to ensure roll has options
+    await createThread(page, { title: 'Thread A', format: 'Comic', issues_remaining: 3 });
+    await createThread(page, { title: 'Thread B', format: 'TPB', issues_remaining: 5 });
+    await createThread(page, { title: 'Thread C', format: 'OGN', issues_remaining: 2 });
+
+    await page.goto('/');
+    await page.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+
+    // Click to roll
+    await page.click(SELECTORS.roll.mainDie);
+
+    // Wait for navigation to complete (should happen within 3 seconds)
+    await page.waitForURL('**/rate', { timeout: 5000 });
+
+    // Verify we're on the rate page with the rating input visible
+    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
+
+    // Verify the URL is correct (not stuck on home page)
+    const currentUrl = page.url();
+    expect(currentUrl).toMatch(/\/rate\/?$/);
+    expect(currentUrl).not.toMatch(/\/$/); // Should not be home page
+  });
+
   test('should show tap instruction on first visit', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
 
