@@ -35,6 +35,27 @@ if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 
 
+def pytest_configure(config):
+    """Synchronous hook to create database tables before any fixtures run.
+    
+    This uses synchronous PostgreSQL driver to create tables, avoiding
+    pytest-asyncio event loop issues with session-scoped async fixtures.
+    """
+    from sqlalchemy import create_engine
+    
+    test_db_url = get_test_database_url()
+    # Convert asyncpg URL to psycopg sync URL
+    sync_url = test_db_url.replace("+asyncpg", "").replace("postgresql+asyncpg", "postgresql")
+
+    engine = create_engine(sync_url, echo=False)
+
+    try:
+        with engine.begin() as conn:
+            Base.metadata.create_all(bind=conn)
+    finally:
+        engine.dispose()
+
+
 async def _ensure_default_user(async_db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
     from app.auth import hash_password
@@ -133,7 +154,10 @@ def enable_internal_ops():
 
 @pytest_asyncio.fixture(scope="function")
 async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
-    """Create isolated async test database with transaction rollback."""
+    """Create isolated async test database with transaction rollback.
+
+    Note: Tables are created by _create_database_tables fixture.
+    """
     database_url = get_test_database_url()
 
     engine = create_async_engine(
@@ -141,9 +165,6 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
         echo=False,
         poolclass=NullPool,
     )
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
     connection = await engine.connect()
     transaction = await connection.begin()
@@ -209,7 +230,7 @@ def test_server_url():
 
     async def setup_test_data():
         """Setup test database with sample data.
-        
+
         Note: Tables are created by async_db fixture, so this only seeds data.
         """
         test_engine = create_async_engine(test_db_url)
