@@ -99,8 +99,16 @@ async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str
     skipped_titles = set()
     completed_titles = set()
 
+    thread_ids = {event.thread_id for event in events if event.thread_id}
+    threads_result = await db.execute(
+        select(Thread).where(Thread.id.in_(thread_ids))
+        if thread_ids
+        else select(Thread).where(Thread.id == -1)
+    )
+    threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
+
     for event in events:
-        thread = await db.get(Thread, event.thread_id) if event.thread_id else None
+        thread = threads_dict.get(event.thread_id) if event.thread_id else None
         title = thread.title if thread else f"Thread #{event.thread_id}"
 
         if event.type == "rate":
@@ -250,10 +258,13 @@ async def get_current_session(
             snapshot_count = snapshot_count_result.scalar() or 0
 
             snoozed_threads = []
-            for thread_id in active_session.snoozed_thread_ids or []:
-                thread = await db.get(Thread, thread_id)
-                if thread:
-                    snoozed_threads.append(SnoozedThreadInfo(id=thread.id, title=thread.title))
+            snoozed_ids = active_session.snoozed_thread_ids or []
+            if snoozed_ids:
+                snoozed_result = await db.execute(select(Thread).where(Thread.id.in_(snoozed_ids)))
+                snoozed_threads = [
+                    SnoozedThreadInfo(id=thread.id, title=thread.title)
+                    for thread in snoozed_result.scalars().all()
+                ]
 
             return SessionResponse(
                 id=active_session_id,
@@ -303,6 +314,8 @@ async def list_sessions(
     Returns:
         List of SessionResponse objects.
     """
+    from sqlalchemy import func
+
     sessions_result = await db.execute(
         select(SessionModel)
         .where(SessionModel.user_id == current_user.id)
@@ -312,16 +325,104 @@ async def list_sessions(
     )
     sessions = sessions_result.scalars().all()
 
+    if not sessions:
+        return []
+
+    session_ids = [s.id for s in sessions]
+
+    active_threads_result = await db.execute(
+        select(Event)
+        .where(Event.session_id.in_(session_ids))
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id.is_not(None))
+        .distinct(Event.session_id)
+        .order_by(Event.session_id, Event.timestamp.desc())
+    )
+    active_thread_events = active_threads_result.scalars().all()
+
+    snapshot_count_result = await db.execute(
+        select(Snapshot.session_id, func.count())
+        .where(Snapshot.session_id.in_(session_ids))
+        .group_by(Snapshot.session_id)
+    )
+    snapshot_counts = {row[0]: row[1] for row in snapshot_count_result.all()}
+
+    ladder_events_result = await db.execute(
+        select(Event)
+        .where(Event.session_id.in_(session_ids))
+        .where(Event.type == "rate")
+        .order_by(Event.session_id, Event.timestamp)
+    )
+    ladder_events = ladder_events_result.scalars().all()
+
+    die_events_result = await db.execute(
+        select(Event)
+        .where(Event.session_id.in_(session_ids))
+        .where(Event.type == "rate")
+        .order_by(Event.session_id, Event.timestamp.desc())
+    )
+    die_events = die_events_result.scalars().all()
+
+    ladder_paths: dict[int, str] = {}
+    for sid in session_ids:
+        sid_events = [e for e in ladder_events if e.session_id == sid]
+        session = next(s for s in sessions if s.id == sid)
+        if not sid_events:
+            ladder_paths[sid] = str(session.start_die)
+            continue
+        path = [session.start_die]
+        for event in sid_events:
+            if event.die_after:
+                path.append(event.die_after)
+        ladder_paths[sid] = " → ".join(str(d) for d in path)
+
+    current_die: dict[int, int] = {}
+    for sid in session_ids:
+        session = next(s for s in sessions if s.id == sid)
+        if session.manual_die:
+            current_die[sid] = session.manual_die
+            continue
+
+        sid_events = [e for e in die_events if e.session_id == sid]
+        if sid_events:
+            current_die[sid] = (
+                sid_events[0].die_after if sid_events[0].die_after else session.start_die
+            )
+        else:
+            current_die[sid] = session.start_die
+
+    thread_ids = set()
+    for event in active_thread_events:
+        if event.selected_thread_id:
+            thread_ids.add(event.selected_thread_id)
+
+    active_threads_dict: dict[int, ActiveThreadInfo | None] = {}
+    if thread_ids:
+        threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+        threads_by_id = {t.id: t for t in threads_result.scalars().all()}
+
+        for sid in session_ids:
+            sid_events = [e for e in active_thread_events if e.session_id == sid]
+            if sid_events and sid_events[0].selected_thread_id:
+                thread = threads_by_id.get(sid_events[0].selected_thread_id)
+                if thread:
+                    active_threads_dict[sid] = ActiveThreadInfo(
+                        id=thread.id,
+                        title=thread.title,
+                        format=thread.format,
+                        issues_remaining=thread.issues_remaining,
+                        queue_position=thread.queue_position,
+                        last_rolled_result=sid_events[0].result,
+                    )
+                else:
+                    active_threads_dict[sid] = None
+            else:
+                active_threads_dict[sid] = None
+
     responses = []
-    from sqlalchemy import func
-
     for session in sessions:
-        _, active_thread = await get_session_with_thread_safe(session.id, db)
-
-        snapshot_count_result = await db.execute(
-            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
-        )
-        snapshot_count = snapshot_count_result.scalar() or 0
+        active_thread = active_threads_dict.get(session.id)
+        snapshot_count = snapshot_counts.get(session.id, 0)
 
         responses.append(
             SessionResponse(
@@ -331,9 +432,9 @@ async def list_sessions(
                 start_die=session.start_die,
                 manual_die=session.manual_die,
                 user_id=session.user_id,
-                ladder_path=await build_ladder_path(session.id, db),
+                ladder_path=ladder_paths[session.id],
                 active_thread=active_thread,
-                current_die=await get_current_die(session.id, db),
+                current_die=current_die[session.id],
                 last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
@@ -424,6 +525,20 @@ async def get_session_details(
     )
     events = events_result.scalars().all()
 
+    thread_ids = set()
+    for event in events:
+        if event.type == "roll":
+            thread_id = event.selected_thread_id
+        else:
+            thread_id = event.thread_id
+        if thread_id:
+            thread_ids.add(thread_id)
+
+    threads_dict = {}
+    if thread_ids:
+        threads_result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+        threads_dict = {thread.id: thread for thread in threads_result.scalars().all()}
+
     formatted_events = []
     for event in events:
         thread_title = None
@@ -433,7 +548,7 @@ async def get_session_details(
             thread_id = event.thread_id
 
         if thread_id:
-            thread = await db.get(Thread, thread_id)
+            thread = threads_dict.get(thread_id)
             if thread:
                 thread_title = thread.title
 

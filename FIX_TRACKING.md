@@ -1,8 +1,8 @@
 # CodeRabbit Fix Tracking
 
 **PR**: #164 - "Fix ladder"
-**Total Issues Requiring Fixes**: 59
-**Last Updated**: 2026-02-01 02:30 UTC
+**Total Issues Requiring Fixes**: 77
+**Last Updated**: 2026-02-01 02:32 UTC
 
 ## Fix Workflow States
 - `TODO` - Not started
@@ -14,10 +14,10 @@
 ## Progress Summary
 | State | Count |
 |-------|-------|
-| TODO | 33 |
+| TODO | 46 |
 | IN_PROGRESS | 0 |
 | REVIEW | 0 |
-| DONE | 26 |
+| DONE | 31 |
 | FAILED | 0 |
 
 ---
@@ -139,6 +139,31 @@
 - **Verification**: ✅ Passed all checks (ruff, ty, pytest)
 - **Completed**: 2026-02-01
 - **Test Added**: `test_delete_test_data_with_selected_thread_id` validates fix
+
+### [HIGH-006] `app/api/thread.py:83-107` - Missing await on get_threads_cached
+- **Comment ID**: review-DOQxSQh87emLaW (2026-02-01T02:31:58Z)
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8e3a547ffeqzJq6hqgbzsE5m
+- **Reviewer**: ses_3e8e057d1ffe1wxRu3beVtQtdh
+- **Error**: get_threads_cached() called without await, returns coroutine instead of threads
+- **Fix Required**: Added await before get_threads_cached() call
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Passed all checks (ruff, ty, pytest)
+- **Completed**: 2026-02-01
+
+### [HIGH-007] `app/api/session.py:76-117, 288-342` - N+1 query patterns
+- **Comment ID**: review-DOQxSQh87emLaW (2026-02-01T02:31:58Z)
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8e3a547ffdgP1rroOm1rSbIM
+- **Reviewer**: ses_3e8e057d1ffe1wxRu3beVtQtdh
+- **Error**: Fetches threads individually in loop, multiple queries per session
+- **Fix Required**: Batch queries with IN clauses, restructured to minimize round-trips
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Passed all checks (ruff, ty, pytest)
+- **Completed**: 2026-02-01
+- **Performance**: Reduced from 90+ to 8 queries for typical scenario (~91% reduction)
 
 ---
 
@@ -372,6 +397,43 @@
 - **Verification**: ✅ Example code now correct
 - **Completed**: 2026-02-01
 
+### [MED-020] `FIX_TRACKING.md:14-21` - Progress summary count mismatch
+- **Comment ID**: review-DOQxSQh87emLaW (2026-02-01T02:31:58Z)
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8e3a547ffcUPHZcaADkiuCSn
+- **Reviewer**: None (documentation fix)
+- **Error**: Progress summary showed DONE=21 but actual count was 25
+- **Fix Required**: Updated progress table to show DONE=25, TODO=13 (was inverted)
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Counts now accurate
+- **Completed**: 2026-02-01
+
+### [MED-021] `tests/conftest.py:218-227` - ANN401 violation (Any type)
+- **Comment ID**: review-DOQxSQh87emLaW (2026-02-01T02:31:58Z)
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8e3a547ffbQlK3LeZnUvJF7i (attempt 1), ses_3e8defa94ffeE20W8jKNInXXM5 (attempt 2 - import fix)
+- **Reviewer**: ses_3e8e057d1ffe1wxRu3beVtQtdh (review 1 - REJECTED), ses_3e8de122fffe0AJETsi5vApGFj (review 2 - APPROVED)
+- **Error**: _create_async_db_override returns typing.Any instead of proper type
+- **Fix Required**: Changed to Callable[[], AsyncIterator[SQLAlchemyAsyncSession]], fixed imports
+- **Attempts**: 2
+- **Last Error**: First attempt had wrong import source (typing instead of collections.abc)
+- **Verification**: ✅ Passed all checks (ruff, ty, pytest)
+- **Completed**: 2026-02-01
+
+### [MED-022] `tests/conftest.py:109-127` - Broad exception handling
+- **Comment ID**: review-DOQxSQh87emLaW (2026-02-01T02:31:58Z)
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8e3a547ffaEWNmlJFXFAGrf0
+- **Reviewer**: ses_3e8e057d1ffe1wxRu3beVtQtdh
+- **Error**: _ensure_default_user_async catches all Exceptions too broadly
+- **Fix Required**: Narrowed to IntegrityError only (handles unique constraint violations)
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Passed all checks (ruff, pytest)
+- **Completed**: 2026-02-01
+- **Also Fixed**: get_or_create_user_async has same issue, also fixed
+
 ---
 
 ## 🟢 LOW PRIORITY
@@ -497,7 +559,7 @@
   - **MEDIUM (9)**: Test name mismatch, hook pattern inconsistency, silent error swallowing, missing startup verification, redundant import, inconsistent docstring example, missing Args/Returns in admin.py, B008 violations in admin.py, broken code example in AGENTS.md
   - **LOW (11)**: Markdown table formatting, capitalization, documentation contradictions, missing CI timeouts, improper unmount guard example
 - **Total issues updated**: 39 → 59
-- **Progress**: 18 of 59 completed (30.5%)
+- **Progress**: 25 of 59 completed (42.4%)
 - **Already fixed**: LOW-004 (mutation chaining pattern)
 
 ### 2026-01-31 20:30 UTC

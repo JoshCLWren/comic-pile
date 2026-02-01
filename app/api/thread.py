@@ -98,7 +98,7 @@ async def list_threads(
         List of ThreadResponse objects ordered by queue_position.
     """
     if get_threads_cached:
-        threads = get_threads_cached(db, current_user.id)
+        threads = await get_threads_cached(db, current_user.id)
     else:
         result = await db.execute(
             select(Thread).where(Thread.user_id == current_user.id).order_by(Thread.queue_position)
