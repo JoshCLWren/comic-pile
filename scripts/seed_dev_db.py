@@ -12,7 +12,7 @@ from app.database import AsyncSessionLocal
 from app.models import Session as SessionModel, Thread, User
 
 
-async def seed_database():
+async def seed_database() -> None:
     """Create test user with sample threads and session."""
     settings = get_database_settings()
 
