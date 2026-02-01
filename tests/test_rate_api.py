@@ -1,7 +1,5 @@
 """Tests for rate API endpoints."""
 
-from typing import Any
-
 import pytest
 from sqlalchemy import select
 
@@ -453,7 +451,7 @@ async def test_rate_finish_session_flag_controls_session_end(
     assert session.ended_at is None
 
 
-def test_rating_settings_returns_defaults(monkeypatch: Any) -> None:
+def test_rating_settings_returns_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test rating settings return default values."""
     from app.config import clear_settings_cache, get_rating_settings
 
@@ -468,7 +466,7 @@ def test_rating_settings_returns_defaults(monkeypatch: Any) -> None:
     assert settings.rating_threshold == 4.0
 
 
-def test_rating_settings_returns_custom_values(monkeypatch: Any) -> None:
+def test_rating_settings_returns_custom_values(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test rating settings return custom values when set."""
     from app.config import clear_settings_cache, get_rating_settings
 
@@ -483,7 +481,7 @@ def test_rating_settings_returns_custom_values(monkeypatch: Any) -> None:
     assert settings.rating_threshold == 3.5
 
 
-def test_rating_settings_validates_range(monkeypatch: Any) -> None:
+def test_rating_settings_validates_range(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test rating settings validate and clamp to valid range."""
     from app.config import clear_settings_cache, get_rating_settings
 
