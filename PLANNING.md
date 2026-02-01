@@ -37,23 +37,23 @@
 - **Action**: Replace `useQuery`/`useMutation` with simple `useEffect` + `useState` hooks
 
 #### Atomic Tasks (in order):
-- [x] 1.1 Create `useSession.js` hook with useState+useEffect (no RQ)
-- [x] 1.2 Create `useRate.js` hook with useState+useEffect (no RQ)
-- [x] 1.3 Create `useRoll.js` hook with useState+useEffect (no RQ)
-- [x] 1.4 Create `useSnooze.js` hook with useState+useEffect (no RQ)
-- [x] 1.5 Create `useThread.js` hook with useState+useEffect (no RQ)
-- [x] 1.6 Create `useQueue.js` hook with useState+useEffect (no RQ)
-- [x] 1.7 Create `useUndo.js` hook with useState+useEffect (no RQ)
-- [x] 1.8 Create `useAnalytics.js` hook with useState+useEffect (no RQ)
+  - [x] 1.1 Create `useSession.js` hook with useState+useEffect (no RQ)
+  - [x] 1.2 Create `useRate.js` hook with useState+useEffect (no RQ)
+  - [x] 1.3 Create `useRoll.js` hook with useState+useEffect (no RQ)
+  - [x] 1.4 Create `useSnooze.js` hook with useState+useEffect (no RQ)
+  - [x] 1.5 Create `useThread.js` hook with useState+useEffect (no RQ)
+  - [x] 1.6 Create `useQueue.js` hook with useState+useEffect (no RQ)
+  - [x] 1.7 Create `useUndo.js` hook with useState+useEffect (no RQ)
+  - [x] 1.8 Create `useAnalytics.js` hook with useState+useEffect (no RQ)
   - [x] 1.9 Update `main.jsx` to remove QueryClientProvider
   - [x] 1.10 Update `services/api.js` to remove QueryClient export
   - [x] 1.11 Update `RollPage.jsx` to use new hooks
   - [x] 1.12 Update `RatePage.jsx` to use new hooks
   - [x] 1.13 Update `SessionPage.jsx` to use new hooks
   - [x] 1.14 Update `QueuePage.jsx` to use new hooks
- - [x] 1.15 Update other pages using custom hooks
- - [x] 1.16 Run frontend linter and fix any issues
- - [x] 1.17 Update frontend unit tests after refactoring
+  - [x] 1.15 Update other pages using custom hooks
+  - [x] 1.16 Run frontend linter and fix any issues
+  - [x] 1.17 Update frontend unit tests after refactoring
 
 ### 1. Remove React Query - COMPLETED
 - **Status**: COMPLETED
@@ -112,26 +112,26 @@
 ### Vetted and Confirmed Issues
 - ✅ **useAnalytics.js** - Return shape mismatch: Returns `{ data, isPending, isError }` but `AnalyticsPage.jsx` expects `{ data: metrics, isLoading, error }`
   - **Fix**: Renamed return object keys to match consumer expectations (COMPLETED)
-- ✅ **useQueue.js** - Mutations don't rethrow errors, so callers can't handle failures
-   - **Fix**: Added `throw error` after `setIsError(true)` in all catch blocks (COMPLETED)
-- ✅ **useSession.js** - params = {} causes infinite refetches; state not reset when id becomes falsy
-   - **Fix**: Added `EMPTY_PARAMS` constant, reset state in early return
-   - **Commit**: fb30e59
+ - ✅ **useQueue.js** - Mutations don't rethrow errors, so callers can't handle failures
+  - **Fix**: Added `throw error` after `setIsError(true)` in all catch blocks (COMPLETED)
+ - ✅ **useSession.js** - params = {} causes infinite refetches; state not reset when id becomes falsy
+  - **Fix**: Added `EMPTY_PARAMS` constant, reset state in early return
+  - **Commit**: fb30e59
 - ✅ **useThread.js** - When id becomes falsy, stale data remains in state
   - **Fix**: Added `setData(null)`, `setIsError(false)`, `setIsPending(false)` in early return
   - **Commit**: ed4863c
   - **Status**: COMPLETED
-- ✅ **useUndo.js** - Effect doesn't clear isPending on early return; no cancellation handling
-   - **Fix**: Added `setIsPending(false)` before return, added isActive flag with cleanup
-   - **Commit**: e19b4d5
-   - **Status**: COMPLETED
-- ✅ **test_dice_ladder_e2e.py** - Stale "BUG" comment in docstring; missing type annotations
-   - **Fix**: Removed stale comment, added type annotations (AsyncClient, Session)
-   - **Commit**: 9faa589
-   - **Status**: COMPLETED
-- ✅ **QueuePage.jsx** - Error handling in mutations fails (mutations swallow errors)
-   - **Fix**: Added `await` before `moveToPositionMutation.mutate()` call, added try/catch error handling with alert on failure (handleRepositionConfirm, lines 174-189)
-   - **Status**: COMPLETED
+ - ✅ **useUndo.js** - Effect doesn't clear isPending on early return; no cancellation handling
+  - **Fix**: Added `setIsPending(false)` before return, added isActive flag with cleanup
+  - **Commit**: e19b4d5
+  - **Status**: COMPLETED
+ - ✅ **test_dice_ladder_e2e.py** - Stale "BUG" comment in docstring; missing type annotations
+  - **Fix**: Removed stale comment, added type annotations (AsyncClient, Session)
+  - **Commit**: 9faa589
+  - **Status**: COMPLETED
+ - ✅ **QueuePage.jsx** - Error handling in mutations fails (mutations swallow errors)
+  - **Fix**: Added `await` before `moveToPositionMutation.mutate()` call, added try/catch error handling with alert on failure (handleRepositionConfirm, lines 174-189)
+  - **Status**: COMPLETED
 
 ### Not Issues (Confirmed)
 - ✅ **useRate.js** - Error rethrowing already implemented correctly

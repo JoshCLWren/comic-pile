@@ -108,6 +108,8 @@ async def test_thread_get_returns_404_for_other_users_thread(
     client, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
 ) -> None:
     """Test GET /api/threads/{id} returns 404 for other users' threads."""
+    _ = user_a
+    _ = user_b
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )
@@ -136,6 +138,8 @@ async def test_thread_update_fails_for_other_users_thread(
     client, async_db, user_a: User, user_b: User, user_b_thread: Thread
 ) -> None:
     """Test PUT /api/threads/{id} fails for other users' threads."""
+    _ = user_a
+    _ = user_b
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )
@@ -171,6 +175,8 @@ async def test_thread_delete_fails_for_other_users_thread(
     client, async_db, user_a: User, user_b: User, user_b_thread: Thread
 ) -> None:
     """Test DELETE /api/threads/{id} fails for other users' threads."""
+    _ = user_a
+    _ = user_b
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
     )

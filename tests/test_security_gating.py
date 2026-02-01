@@ -251,6 +251,7 @@ async def test_non_sensitive_body_not_redacted(
 @pytest.mark.asyncio
 async def test_cors_origins_required_in_production(async_db: AsyncSession) -> None:
     """CORS_ORIGINS is required in production mode, app fails to start without it."""
+    _ = async_db
     from app.config import clear_settings_cache
 
     original_env = os.getenv("ENVIRONMENT")
