@@ -1,5 +1,7 @@
 """Tests for error handlers in app/main.py."""
 
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -22,39 +24,37 @@ async def test_http_exception_handler_for_nonexistent_thread(auth_client: AsyncC
 
 
 @pytest.fixture
-def test_app_with_error_routes():
+def test_app_with_error_routes() -> None:
     """Create a test app with routes that trigger specific exceptions."""
     from fastapi import FastAPI
 
     test_app = FastAPI()
 
     @test_app.get("/test-404")
-    async def test_404():
+    async def test_404() -> None:
         raise StarletteHTTPException(status_code=404, detail="Not found")
 
     @test_app.get("/test-403")
-    async def test_403():
+    async def test_403() -> None:
         raise StarletteHTTPException(status_code=403, detail="Forbidden")
 
     @test_app.get("/test-401")
-    async def test_401():
+    async def test_401() -> None:
         raise StarletteHTTPException(status_code=401, detail="Unauthorized")
 
     @test_app.get("/test-400")
-    async def test_400():
+    async def test_400() -> None:
         raise StarletteHTTPException(status_code=400, detail="Bad request")
 
     @test_app.get("/test-500")
-    async def test_500():
+    async def test_500() -> None:
         raise StarletteHTTPException(status_code=500, detail="Server error")
 
     return test_app
 
 
 @pytest.mark.asyncio
-async def test_http_exception_handler_various_status_codes(
-    test_app_with_error_routes,
-) -> None:
+async def test_http_exception_handler_various_status_codes(test_app_with_error_routes: Any) -> None:
     """Test HTTP exception handler with various status codes."""
     from httpx import ASGITransport, AsyncClient
 

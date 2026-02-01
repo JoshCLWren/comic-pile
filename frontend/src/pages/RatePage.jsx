@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import { DICE_LADDER } from '../components/diceLadder'
-import { rateApi, sessionApi, threadsApi } from '../services/api'
-import { useSnooze } from '../hooks'
+import { useRate, useSession, useUpdateThread, useSnooze } from '../hooks'
 
 export default function RatePage() {
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
 
   const [rating, setRating] = useState(4.0)
@@ -23,29 +20,11 @@ export default function RatePage() {
   const [additionalIssues, setAdditionalIssues] = useState(1)
   const [pendingRating, setPendingRating] = useState(null)
 
-  const { data: session } = useQuery({
-    queryKey: ['session', 'current'],
-    queryFn: sessionApi.getCurrent,
-  })
+  const { data: session } = useSession()
 
-  const rateMutation = useMutation({
-    mutationFn: rateApi.rate,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-      navigate('/')
-    },
-    onError: (error) => {
-      setErrorMessage(error.response?.data?.detail || 'Failed to save rating')
-    },
-  })
+  const rateMutation = useRate()
 
-  const updateThreadMutation = useMutation({
-    mutationFn: ({ id, data }) => threadsApi.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-    },
-  })
+  const updateThreadMutation = useUpdateThread()
 
   const snoozeMutation = useSnooze()
 
@@ -113,7 +92,7 @@ export default function RatePage() {
     return true;
   }
 
-  function handleSubmitRating(finishSession = false) {
+  async function handleSubmitRating(finishSession = false) {
     const canProceed = checkRestorePointBeforeSubmit();
     if (!canProceed) {
       return;
@@ -132,23 +111,33 @@ export default function RatePage() {
       createExplosion();
     }
 
-    rateMutation.mutate({
-      rating,
-      issues_read: 1,
-      finish_session: finishSession
-    });
+    try {
+      await rateMutation.mutate({
+        rating,
+        issues_read: 1,
+        finish_session: finishSession
+      });
+      navigate('/');
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    }
   }
 
-  function handleCompleteThread() {
+  async function handleCompleteThread() {
     setShowCompleteModal(false);
     if (pendingRating >= 4.0) {
       createExplosion();
     }
-    rateMutation.mutate({
-      rating: pendingRating,
-      issues_read: 1,
-      finish_session: true
-    });
+    try {
+      await rateMutation.mutate({
+        rating: pendingRating,
+        issues_read: 1,
+        finish_session: true
+      });
+      navigate('/');
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    }
   }
 
   async function handleAddMoreIssues() {
@@ -158,10 +147,9 @@ export default function RatePage() {
     const activeThread = session.active_thread;
     if (!activeThread) return;
 
-    // First update the thread with additional issues
     const newIssuesRemaining = activeThread.issues_remaining + additionalIssues;
     try {
-      await updateThreadMutation.mutateAsync({
+      await updateThreadMutation.mutate({
         id: activeThread.id,
         data: { issues_remaining: newIssuesRemaining }
       });
@@ -178,11 +166,16 @@ export default function RatePage() {
     if (pendingRating >= 4.0) {
       createExplosion();
     }
-    rateMutation.mutate({
-      rating: pendingRating,
-      issues_read: 1,
-      finish_session: false
-    });
+    try {
+      await rateMutation.mutate({
+        rating: pendingRating,
+        issues_read: 1,
+        finish_session: false
+      });
+      navigate('/');
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    }
   }
 
   function handleCloseModal() {

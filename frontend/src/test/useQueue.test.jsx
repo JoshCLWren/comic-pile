@@ -1,8 +1,7 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
 import { queueApi } from '../services/api'
-import { createQueryWrapper, createTestQueryClient } from './testUtils'
 
 vi.mock('../services/api', () => ({
   queueApi: {
@@ -18,36 +17,27 @@ beforeEach(() => {
   queueApi.moveToBack.mockResolvedValue({})
 })
 
-it('moves queue position and invalidates threads', async () => {
-  const queryClient = createTestQueryClient()
-  const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-  const wrapper = createQueryWrapper(queryClient)
-  const { result } = renderHook(() => useMoveToPosition(), { wrapper })
+it('moves queue position', async () => {
+  const { result } = renderHook(() => useMoveToPosition())
 
   await act(async () => {
-    await result.current.mutateAsync({ id: 4, position: 2 })
+    await result.current.mutate({ id: 4, position: 2 })
   })
 
   expect(queueApi.moveToPosition).toHaveBeenCalledWith(4, 2)
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['threads'] }))
 })
 
 it('moves thread to front and back', async () => {
-  const queryClient = createTestQueryClient()
-  const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-  const wrapper = createQueryWrapper(queryClient)
-
-  const { result: frontResult } = renderHook(() => useMoveToFront(), { wrapper })
+  const { result: frontResult } = renderHook(() => useMoveToFront())
   await act(async () => {
-    await frontResult.current.mutateAsync(8)
+    await frontResult.current.mutate(8)
   })
 
-  const { result: backResult } = renderHook(() => useMoveToBack(), { wrapper })
+  const { result: backResult } = renderHook(() => useMoveToBack())
   await act(async () => {
-    await backResult.current.mutateAsync(9)
+    await backResult.current.mutate(9)
   })
 
   expect(queueApi.moveToFront).toHaveBeenCalledWith(8)
   expect(queueApi.moveToBack).toHaveBeenCalledWith(9)
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['threads'] }))
 })

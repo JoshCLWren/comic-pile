@@ -10,7 +10,6 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import { threadsApi } from '../services/api'
-import { createQueryWrapper, createTestQueryClient } from './testUtils'
 
 vi.mock('../services/api', () => ({
   threadsApi: {
@@ -35,19 +34,15 @@ beforeEach(() => {
 })
 
 it('loads threads data', async () => {
-  const queryClient = createTestQueryClient()
-  const wrapper = createQueryWrapper(queryClient)
-  const { result } = renderHook(() => useThreads(), { wrapper })
+  const { result } = renderHook(() => useThreads())
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
   expect(threadsApi.list).toHaveBeenCalled()
 })
 
 it('loads thread details and stale list', async () => {
-  const queryClient = createTestQueryClient()
-  const wrapper = createQueryWrapper(queryClient)
-  const { result: threadResult } = renderHook(() => useThread(2), { wrapper })
-  const { result: staleResult } = renderHook(() => useStaleThreads(7), { wrapper })
+  const { result: threadResult } = renderHook(() => useThread(2))
+  const { result: staleResult } = renderHook(() => useStaleThreads(7))
 
   await waitFor(() => expect(threadResult.current.data).toEqual({ id: 2 }))
   await waitFor(() => expect(staleResult.current.data).toEqual([{ id: 3 }]))
@@ -56,34 +51,28 @@ it('loads thread details and stale list', async () => {
 })
 
 it('creates, updates, deletes, and reactivates threads', async () => {
-  const queryClient = createTestQueryClient()
-  const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
-  const wrapper = createQueryWrapper(queryClient)
-
-  const { result: createResult } = renderHook(() => useCreateThread(), { wrapper })
+  const { result: createResult } = renderHook(() => useCreateThread())
   await act(async () => {
-    await createResult.current.mutateAsync({ title: 'New' })
+    await createResult.current.mutate({ title: 'New' })
   })
 
-  const { result: updateResult } = renderHook(() => useUpdateThread(), { wrapper })
+  const { result: updateResult } = renderHook(() => useUpdateThread())
   await act(async () => {
-    await updateResult.current.mutateAsync({ id: 7, data: { title: 'Updated' } })
+    await updateResult.current.mutate({ id: 7, data: { title: 'Updated' } })
   })
 
-  const { result: deleteResult } = renderHook(() => useDeleteThread(), { wrapper })
+  const { result: deleteResult } = renderHook(() => useDeleteThread())
   await act(async () => {
-    await deleteResult.current.mutateAsync(7)
+    await deleteResult.current.mutate(7)
   })
 
-  const { result: reactivateResult } = renderHook(() => useReactivateThread(), { wrapper })
+  const { result: reactivateResult } = renderHook(() => useReactivateThread())
   await act(async () => {
-    await reactivateResult.current.mutateAsync({ thread_id: 7, issues_to_add: 3 })
+    await reactivateResult.current.mutate({ thread_id: 7, issues_to_add: 3 })
   })
 
   expect(threadsApi.create).toHaveBeenCalledWith({ title: 'New' })
   expect(threadsApi.update).toHaveBeenCalledWith(7, { title: 'Updated' })
   expect(threadsApi.delete).toHaveBeenCalledWith(7)
   expect(threadsApi.reactivate).toHaveBeenCalledWith({ thread_id: 7, issues_to_add: 3 })
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['threads'] }))
-  await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['thread', 7] }))
 })

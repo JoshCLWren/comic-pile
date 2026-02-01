@@ -20,7 +20,7 @@ const DEFAULT_CREATE_STATE = {
 }
 
 export default function QueuePage() {
-  const { data: threads, isLoading } = useThreads()
+  const { data: threads, isPending, refetch } = useThreads()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const deleteMutation = useDeleteThread()
@@ -46,16 +46,16 @@ export default function QueuePage() {
 
   const handleDelete = (threadId) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
-      deleteMutation.mutate(threadId)
+      deleteMutation.mutate(threadId).then(() => refetch()).catch(() => {})
     }
   }
 
   const handleMoveToFront = (threadId) => {
-    moveToFrontMutation.mutate(threadId)
+    moveToFrontMutation.mutate(threadId).then(() => refetch()).catch(() => {})
   }
 
   const handleMoveToBack = (threadId) => {
-    moveToBackMutation.mutate(threadId)
+    moveToBackMutation.mutate(threadId).then(() => refetch()).catch(() => {})
   }
 
   const handleDragStart = (threadId) => (event) => {
@@ -80,6 +80,8 @@ export default function QueuePage() {
     const targetThread = activeThreads.find((thread) => thread.id === threadId)
     if (targetThread) {
       moveToPositionMutation.mutate({ id: draggedThreadId, position: targetThread.queue_position })
+        .then(() => refetch())
+        .catch(() => {})
     }
 
     setDraggedThreadId(null)
@@ -91,45 +93,43 @@ export default function QueuePage() {
     setDragOverThreadId(null)
   }
 
-  const handleCreateSubmit = (event) => {
+  const handleCreateSubmit = async (event) => {
     event.preventDefault()
 
-    createMutation.mutate(
-      {
+    try {
+      await createMutation.mutate({
         title: createForm.title,
         format: createForm.format,
         issues_remaining: Number(createForm.issuesRemaining),
         notes: createForm.notes || null,
-      },
-      {
-        onSuccess: () => {
-          setCreateForm(DEFAULT_CREATE_STATE)
-          setIsCreateOpen(false)
-        },
-      }
-    )
+      })
+      setCreateForm(DEFAULT_CREATE_STATE)
+      setIsCreateOpen(false)
+      refetch()
+    } catch {
+      console.error('Failed to create thread')
+    }
   }
 
-  const handleEditSubmit = (event) => {
+  const handleEditSubmit = async (event) => {
     event.preventDefault()
     if (!editingThread) return
 
-    updateMutation.mutate(
-      {
+    try {
+      await updateMutation.mutate({
         id: editingThread.id,
         data: {
           title: editForm.title,
           format: editForm.format,
           notes: editForm.notes || null,
         },
-      },
-      {
-        onSuccess: () => {
-          setEditingThread(null)
-          setIsEditOpen(false)
-        },
-      }
-    )
+      })
+      setEditingThread(null)
+      setIsEditOpen(false)
+      refetch()
+    } catch {
+      console.error('Failed to update thread')
+    }
   }
 
   const openEditModal = (thread) => {
@@ -149,23 +149,22 @@ export default function QueuePage() {
     setIsReactivateOpen(true)
   }
 
-  const handleReactivateSubmit = (event) => {
+  const handleReactivateSubmit = async (event) => {
     event.preventDefault()
     if (!reactivateThreadId) return
 
-    reactivateMutation.mutate(
-      {
+    try {
+      await reactivateMutation.mutate({
         thread_id: Number(reactivateThreadId),
         issues_to_add: Number(issuesToAdd),
-      },
-      {
-        onSuccess: () => {
-          setIsReactivateOpen(false)
-          setReactivateThreadId('')
-          setIssuesToAdd(1)
-        },
-      }
-    )
+      })
+      setIsReactivateOpen(false)
+      setReactivateThreadId('')
+      setIssuesToAdd(1)
+      refetch()
+    } catch {
+      console.error('Failed to reactivate thread')
+    }
   }
 
   const openCreateModal = () => {
@@ -177,7 +176,7 @@ export default function QueuePage() {
     setRepositioningThread(thread)
   }
 
-  const handleRepositionConfirm = (targetPosition) => {
+  const handleRepositionConfirm = async (targetPosition) => {
     if (!repositioningThread) return
 
     if (targetPosition < 1 || targetPosition > activeThreads.length) {
@@ -185,22 +184,17 @@ export default function QueuePage() {
       return;
     }
 
-    moveToPositionMutation.mutate(
-        { id: repositioningThread.id, position: targetPosition },
-        {
-            onSuccess: () => {
-                setRepositioningThread(null);
-            },
-            onError: (error) => {
-                console.error('Failed to reposition thread:', error);
-                setRepositioningThread(null);
-                alert('Failed to reposition thread. Please try again.');
-            }
-        }
-    )
+    try {
+      await moveToPositionMutation.mutate({ id: repositioningThread.id, position: targetPosition })
+      setRepositioningThread(null)
+      refetch()
+    } catch {
+      setRepositioningThread(null)
+      alert('Failed to reposition thread. Please try again.')
+    }
   }
 
-  if (isLoading) {
+  if (isPending) {
     return <LoadingSpinner fullScreen />
   }
 
