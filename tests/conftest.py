@@ -189,29 +189,22 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    connection = await engine.connect()
+    async_session_maker = async_sessionmaker(
+        bind=engine,
+        expire_on_commit=False,
+        class_=SQLAlchemyAsyncSession,
+    )
 
-    async with connection.begin():
-        async_session_maker = async_sessionmaker(
-            bind=connection,
-            expire_on_commit=False,
-            class_=SQLAlchemyAsyncSession,
+    async with async_session_maker() as session:
+        await session.execute(
+            text(
+                "TRUNCATE TABLE sessions, events, threads, snapshots, revoked_tokens, users "
+                "RESTART IDENTITY CASCADE;"
+            )
         )
+        await session.commit()
+        yield session
 
-        async with async_session_maker() as session:
-            try:
-                await session.execute(
-                    text(
-                        "TRUNCATE TABLE sessions, events, threads, snapshots, revoked_tokens, users "
-                        "RESTART IDENTITY CASCADE;"
-                    )
-                )
-                await session.commit()
-                yield session
-            finally:
-                await session.close()
-
-    await connection.close()
     await engine.dispose()
 
 
@@ -366,7 +359,7 @@ async def sample_data(
 @pytest_asyncio.fixture(scope="function")
 async def client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
     """httpx.AsyncClient for API tests."""
-    app.dependency_overrides[get_db] = await _create_async_db_override(None)
+    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -378,7 +371,7 @@ async def auth_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncC
     """httpx.AsyncClient with authentication headers for API tests."""
     from app.auth import create_access_token
 
-    app.dependency_overrides[get_db] = await _create_async_db_override(None)
+    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         result = await async_db.execute(select(User).where(User.username == "test_user"))
