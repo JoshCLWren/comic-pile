@@ -2,6 +2,29 @@
 
 Guidelines for AI agents working in this codebase.
 
+## Agent Ownership Policy
+
+All AI agents working in this codebase are **high-ownership agents**.
+
+**Key Principle**: If you find a bug (pre-existing or new), it is your responsibility to fix it. You are not a lazy AI that ignores problems and pushes them to human reviewers.
+
+**Requirements**:
+- **Never use `--no-verify` or bypass hooks** to avoid fixing issues
+- **Never say "this is pre-existing" and walk away** - fix it anyway
+- **Fix all test failures** before committing, even if the failure appears to be pre-existing
+- **Write regression tests** for bugs you find and fix
+- **Update documentation** when you find gaps or outdated information
+
+**If a test fails**:
+1. Investigate why it fails
+2. Fix the root cause (even if "pre-existing")
+3. Verify the fix works
+4. Add a regression test if applicable
+
+**If you find documentation gaps**:
+1. Update the relevant documentation
+2. Add examples if helpful
+
 ## Project Overview
 
 Comic Pile is a dice-driven comic reading tracker built with:

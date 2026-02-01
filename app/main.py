@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-from fastapi import FastAPI, Request, status
+from fastapi import Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -20,12 +20,12 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import exc as sqlalchemy_exc
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
-import pydantic
 
 from app.api import admin, analytics, auth, queue, rate, roll, session, snooze, thread, undo
 from app.config import get_app_settings
-from app.database import Base, AsyncSessionLocal
+from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
 
 logger = logging.getLogger(__name__)
@@ -440,8 +440,8 @@ def create_app() -> FastAPI:
 
         return RedirectResponse("/", status_code=301)
 
-    @app.get("/health")
-    async def health_check():
+    @app.get("/health", response_model=None)
+    async def health_check(db: AsyncSession = Depends(get_db)) -> dict | JSONResponse:
         """Health check endpoint that verifies basic application functionality.
 
         Returns:
@@ -449,28 +449,10 @@ def create_app() -> FastAPI:
         """
         from sqlalchemy import text
 
-        from app.config import get_database_settings
-
-        # Check if DATABASE_URL is set (validated at config load time)
         try:
-            get_database_settings()
-        except (pydantic.ValidationError, OSError):
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={
-                    "status": "unhealthy",
-                    "database": "not_configured",
-                    "error": "DATABASE_URL not set",
-                },
-            )
-
-        # Try to connect to database
-        try:
-            async with AsyncSessionLocal() as db:
-                await db.execute(text("SELECT 1"))
-                return {"status": "healthy", "database": "connected"}
+            await db.execute(text("SELECT 1"))
+            return {"status": "healthy", "database": "connected"}
         except sqlalchemy_exc.DBAPIError as e:
-            # Catch database connection and execution errors (OperationalError, InterfaceError, etc.)
             logger.error(f"Health check database connection failed: {e}")
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

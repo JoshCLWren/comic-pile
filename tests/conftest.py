@@ -366,7 +366,7 @@ async def sample_data(
 @pytest_asyncio.fixture(scope="function")
 async def client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
     """httpx.AsyncClient for API tests."""
-    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+    app.dependency_overrides[get_db] = await _create_async_db_override(None)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -378,7 +378,7 @@ async def auth_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncC
     """httpx.AsyncClient with authentication headers for API tests."""
     from app.auth import create_access_token
 
-    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+    app.dependency_overrides[get_db] = await _create_async_db_override(None)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         result = await async_db.execute(select(User).where(User.username == "test_user"))
