@@ -33,7 +33,7 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
 export async function loginUser(page: Page, user: TestUser): Promise<string> {
   const response = await page.request.post('/api/auth/login', {
     data: {
-      username: user.email,
+      username: user.username,
       password: user.password,
     },
   });
@@ -56,10 +56,13 @@ export async function createThread(
   page: Page,
   threadData: { title: string; format: string; issues_remaining: number }
 ): Promise<void> {
+  const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+
   const response = await page.request.post('/api/threads/', {
     data: threadData,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     },
   });
 
