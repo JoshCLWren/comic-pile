@@ -2,11 +2,15 @@
 
 import pytest
 
+from httpx import AsyncClient
 from app.models import Event, Session as SessionModel, Thread
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_thread_info(auth_client, async_db):
+async def test_rate_session_api_returns_thread_info(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """GET /sessions/current/ returns active thread info for rate page."""
     from tests.conftest import get_or_create_user_async
 
@@ -52,7 +56,9 @@ async def test_rate_session_api_returns_thread_info(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_die_info(auth_client, async_db):
+async def test_rate_session_api_returns_die_info(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """GET /sessions/current/ returns die info for dice preview."""
     from tests.conftest import get_or_create_user_async
 
@@ -97,7 +103,9 @@ async def test_rate_session_api_returns_die_info(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_has_restore_point(auth_client, async_db):
+async def test_rate_session_api_returns_has_restore_point(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """GET /sessions/current/ returns has_restore_point for session safe indicator."""
     from tests.conftest import get_or_create_user_async
 
@@ -140,7 +148,9 @@ async def test_rate_session_api_returns_has_restore_point(auth_client, async_db)
 
 
 @pytest.mark.asyncio
-async def test_rate_api_invalid_rating(auth_client, async_db, sample_data):
+async def test_rate_api_invalid_rating(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """POST /rate/ with invalid rating returns 400 error."""
     from tests.conftest import get_or_create_user_async
 
@@ -171,7 +181,9 @@ async def test_rate_api_invalid_rating(auth_client, async_db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_low_rating_moves_to_back(auth_client, async_db):
+async def test_rate_api_low_rating_moves_to_back(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ with rating < 4.0 moves thread to back of queue."""
     from tests.conftest import get_or_create_user_async
 
@@ -224,7 +236,9 @@ async def test_rate_api_low_rating_moves_to_back(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_high_rating_moves_to_front(auth_client, async_db):
+async def test_rate_api_high_rating_moves_to_front(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ with rating >= 4.0 moves thread to front of queue."""
     from tests.conftest import get_or_create_user_async
 
@@ -277,7 +291,9 @@ async def test_rate_api_high_rating_moves_to_front(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_updates_last_activity_at(auth_client, async_db):
+async def test_rate_api_updates_last_activity_at(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ updates thread last_activity_at timestamp."""
     from tests.conftest import get_or_create_user_async
 
@@ -323,7 +339,7 @@ async def test_rate_api_updates_last_activity_at(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_creates_snapshot(auth_client, async_db):
+async def test_rate_api_creates_snapshot(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """POST /rate/ creates snapshot for undo functionality."""
     from tests.conftest import get_or_create_user_async
 
@@ -366,11 +382,11 @@ async def test_rate_api_creates_snapshot(auth_client, async_db):
     result = await async_db.execute(select(Snapshot).where(Snapshot.session_id == session.id))
     snapshots = result.scalars().all()
     assert len(snapshots) >= 1
-    assert any("4.5" in s.description for s in snapshots)
+    assert any(s.description is not None and "4.5" in s.description for s in snapshots)
 
 
 @pytest.mark.asyncio
-async def test_rate_api_with_min_rating(auth_client, async_db):
+async def test_rate_api_with_min_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """POST /rate/ accepts minimum rating value (0.5)."""
     from tests.conftest import get_or_create_user_async
 
@@ -410,7 +426,7 @@ async def test_rate_api_with_min_rating(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_with_max_rating(auth_client, async_db):
+async def test_rate_api_with_max_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """POST /rate/ accepts maximum rating value (5.0)."""
     from tests.conftest import get_or_create_user_async
 
@@ -450,7 +466,9 @@ async def test_rate_api_with_max_rating(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_clears_pending_thread(auth_client, async_db):
+async def test_rate_api_clears_pending_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ clears pending_thread_id from session."""
     from tests.conftest import get_or_create_user_async
 
@@ -492,7 +510,9 @@ async def test_rate_api_clears_pending_thread(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_updates_issues_remaining(auth_client, async_db):
+async def test_rate_api_updates_issues_remaining(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ correctly decreases issues_remaining."""
     from tests.conftest import get_or_create_user_async
 

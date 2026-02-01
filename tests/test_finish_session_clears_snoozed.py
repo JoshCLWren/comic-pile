@@ -3,11 +3,13 @@
 import pytest
 
 from app.models import Event, Thread
+from httpx import AsyncClient
 from app.models import Session as SessionModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_finish_session_clears_snoozed_threads(auth_client, async_db):
+async def test_finish_session_clears_snoozed_threads(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Finishing a session clears snoozed_thread_ids from the session."""
     from tests.conftest import get_or_create_user_async
 

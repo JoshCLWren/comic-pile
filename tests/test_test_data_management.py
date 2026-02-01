@@ -5,11 +5,13 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import select
 
+from httpx import AsyncClient
 from app.models import Event, Session as SessionModel, Thread, User
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_seed_data_marks_as_test(async_db):
+async def test_seed_data_marks_as_test(async_db: AsyncSession) -> None:
     """Test that seeded data is marked as test data."""
     result = await async_db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
@@ -37,7 +39,7 @@ async def test_seed_data_marks_as_test(async_db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_bulk_delete_test_data(client, async_db):
+async def test_bulk_delete_test_data(client: AsyncClient, async_db: AsyncSession) -> None:
     """Test bulk delete of test data."""
     result = await async_db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
@@ -126,7 +128,7 @@ async def test_bulk_delete_test_data(client, async_db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_export_csv_excludes_test_data(client, async_db):
+async def test_export_csv_excludes_test_data(client: AsyncClient, async_db: AsyncSession) -> None:
     """Test that CSV export excludes test data."""
     result = await async_db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
@@ -169,7 +171,7 @@ async def test_export_csv_excludes_test_data(client, async_db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_export_json_excludes_test_data(client, async_db):
+async def test_export_json_excludes_test_data(client: AsyncClient, async_db: AsyncSession) -> None:
     """Test that JSON export excludes test data."""
     import json
 
@@ -212,7 +214,7 @@ async def test_export_json_excludes_test_data(client, async_db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_export_summary_excludes_test_only_sessions(client, async_db):
+async def test_export_summary_excludes_test_only_sessions(client: AsyncClient, async_db: AsyncSession) -> None:
     """Test that session summary export excludes sessions with only test data."""
     result = await async_db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
@@ -295,7 +297,7 @@ async def test_export_summary_excludes_test_only_sessions(client, async_db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_delete_test_data_clears_pending_thread_id(client, async_db):
+async def test_delete_test_data_clears_pending_thread_id(client: AsyncClient, async_db: AsyncSession) -> None:
     """Regression test for BUG-131: IntegrityError when deleting test thread with pending_thread_id.
 
     This test verifies that deleting test data that has sessions with pending_thread_id
@@ -352,7 +354,7 @@ async def test_delete_test_data_clears_pending_thread_id(client, async_db):
 
 @pytest.mark.usefixtures("enable_internal_ops")
 @pytest.mark.asyncio
-async def test_delete_test_data_with_selected_thread_id(client, async_db):
+async def test_delete_test_data_with_selected_thread_id(client: AsyncClient, async_db: AsyncSession) -> None:
     """Regression test for HIGH-005: Session deletion must check both thread_id and selected_thread_id.
 
     This test verifies that sessions with roll events (which use selected_thread_id)

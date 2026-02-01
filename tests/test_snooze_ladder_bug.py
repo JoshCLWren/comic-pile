@@ -11,12 +11,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Thread
-from app.models import Session as SessionModel
+from app.models import Session as SessionModel, User
+from httpx import AsyncClient
 from comic_pile.dice_ladder import step_down, step_up
 
 
 @pytest.mark.asyncio
-async def test_multiple_snooze_then_rate(auth_client, async_db: AsyncSession, default_user):
+async def test_multiple_snooze_then_rate(auth_client: AsyncClient, async_db: AsyncSession, default_user: User) -> None:
     """Reproduce bug: multiple snoozes followed by rating causes incorrect die.
 
     Based on user's session log:

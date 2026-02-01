@@ -1,6 +1,8 @@
 """Tests for safe mode session navigation feature."""
 
 from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import UTC, datetime
 
 import pytest
@@ -44,8 +46,8 @@ async def safe_mode_auth_client(async_db, safe_mode_user: User) -> AsyncGenerato
 
 @pytest.mark.asyncio
 async def test_session_response_has_restore_point_true(
-    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
-):
+    safe_mode_auth_client: AsyncClient, async_db: AsyncSession, safe_mode_user: User
+) -> None:
     """Test that SessionResponse correctly reports has_restore_point when snapshots exist."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
@@ -81,8 +83,8 @@ async def test_session_response_has_restore_point_true(
 
 @pytest.mark.asyncio
 async def test_session_response_has_restore_point_false(
-    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
-):
+    safe_mode_auth_client: AsyncClient, async_db: AsyncSession, safe_mode_user: User
+) -> None:
     """Test that SessionResponse correctly reports has_restore_point when no snapshots exist."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
@@ -98,8 +100,8 @@ async def test_session_response_has_restore_point_false(
 
 @pytest.mark.asyncio
 async def test_current_session_response_includes_restore_point(
-    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
-):
+    safe_mode_auth_client: AsyncClient, async_db: AsyncSession, safe_mode_user: User
+) -> None:
     """Test that /sessions/current/ includes has_restore_point field."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
     async_db.add(session)
@@ -135,8 +137,8 @@ async def test_current_session_response_includes_restore_point(
 
 @pytest.mark.asyncio
 async def test_list_sessions_includes_restore_point_for_each(
-    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
-):
+    safe_mode_auth_client: AsyncClient, async_db: AsyncSession, safe_mode_user: User
+) -> None:
     """Test that /sessions/ includes has_restore_point for all sessions."""
     session1 = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
     session2 = SessionModel(start_die=8, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
@@ -183,8 +185,8 @@ async def test_list_sessions_includes_restore_point_for_each(
 
 @pytest.mark.asyncio
 async def test_snapshot_count_increases_with_multiple_snapshots(
-    safe_mode_auth_client: AsyncClient, async_db, safe_mode_user
-):
+    safe_mode_auth_client: AsyncClient, async_db: AsyncSession, safe_mode_user: User
+) -> None:
     """Test that snapshot_count correctly counts all snapshots."""
     session = SessionModel(start_die=6, user_id=safe_mode_user.id, started_at=datetime.now(UTC))
     async_db.add(session)

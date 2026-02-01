@@ -6,10 +6,11 @@ import pytest
 from app.models import Session as SessionModel, Snapshot
 from comic_pile.session import get_or_create
 from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_sequential(async_db):
+async def test_get_or_create_sequential(async_db: AsyncSession) -> None:
     """Test that sequential get_or_create calls work correctly.
 
     This verifies that session creation logic works properly when called
@@ -37,7 +38,7 @@ async def test_get_or_create_sequential(async_db):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_after_end_session(async_db):
+async def test_get_or_create_after_end_session(async_db: AsyncSession) -> None:
     """Test that get_or_create creates new session after previous one ends.
 
     Regression test for BUG-158: Verifies proper session management.

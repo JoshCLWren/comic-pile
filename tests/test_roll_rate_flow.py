@@ -5,14 +5,13 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Thread
+from app.models import Thread, User
+from httpx import AsyncClient
 from comic_pile.dice_ladder import step_down
 
 
 @pytest.mark.asyncio
-async def test_roll_rate_history_consistency(
-    auth_client, async_db: AsyncSession, default_user
-) -> None:
+async def test_roll_rate_history_consistency(auth_client: AsyncClient, async_db: AsyncSession, default_user: User) -> None:
     """Verify roll and rate operations maintain consistent session state across history."""
     now = datetime.now(UTC)
     threads = [
