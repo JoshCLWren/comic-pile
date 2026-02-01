@@ -23,7 +23,7 @@ _redacted_async_url = make_url(ASYNC_DATABASE_URL).render_as_string(hide_passwor
 logger.info(f"Database URL configured: {_redacted_database_url}")
 logger.info(f"Async database URL: {_redacted_async_url}")
 
-async_engine = create_async_engine(ASYNC_DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
+async_engine = create_async_engine(ASYNC_DATABASE_URL, pool_recycle=3600)
 
 AsyncSessionLocal = async_sessionmaker(async_engine, autocommit=False, autoflush=False)
 

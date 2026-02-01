@@ -35,11 +35,11 @@ async def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
             user = result.scalar_one_or_none()
 
             if user is None:
-                user = User(id=1, username="demo_user")
+                user = User(username="demo_user")
                 db.add(user)
+                await db.flush()
+                print(f"Created user: {user.username} (ID: {user.id})")
                 await db.commit()
-                await db.refresh(user)
-                print(f"Created user: {user.username}")
 
             result = await db.execute(select(Thread).where(Thread.user_id == user.id))
             existing_threads = result.scalars().all()

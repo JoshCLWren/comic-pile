@@ -3,8 +3,7 @@
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import exc as sqlalchemy_exc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -216,31 +215,40 @@ async def refresh_access_token(
 
 @router.post("/logout")
 async def logout_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())],
-    current_user: Annotated[User, Depends(get_current_user)],
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Logout user by revoking their current token.
+    """Logout user by revoking their current token if valid.
 
     Args:
-        credentials: HTTP Bearer token credentials.
-        current_user: The authenticated user making the request.
+        request: FastAPI Request object for accessing authorization header.
         db: SQLAlchemy session for database operations.
 
     Returns:
         Dictionary with success message.
 
-    Raises:
-        HTTPException: If token revocation fails.
+    Note:
+        This endpoint allows logout even with invalid/expired tokens to enable
+        clients to clear local storage and redirect to login.
     """
-    token = credentials.credentials
-    try:
-        await revoke_token(db, token, current_user.id)
-    except Exception as err:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to revoke token",
-        ) from err
+    # Try to get and revoke token, but don't fail if token is invalid
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            # Verify token to get user ID
+            payload = verify_token(token)
+            username = payload.get("sub")
+            if username:
+                # Get user from database
+                result = await db.execute(select(User).where(User.username == username).limit(1))
+                user = result.scalar_one_or_none()
+                if user:
+                    await revoke_token(db, token, user.id)
+        except (JWTError, AttributeError, TypeError):
+            # Token is invalid/expired - that's ok, just return success
+            pass
+
     return {"message": "Successfully logged out"}
 
 

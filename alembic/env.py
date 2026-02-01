@@ -19,8 +19,10 @@ config = context.config
 
 database_url = os.getenv("DATABASE_URL")
 if database_url:
-    # Convert postgresql:// to postgresql+psycopg:// for sync connections
-    if database_url.startswith("postgresql://"):
+    # Convert to sync driver for alembic migrations
+    if database_url.startswith("postgresql+asyncpg://"):
+        database_url = database_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    elif database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     elif database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
