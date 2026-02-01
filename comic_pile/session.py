@@ -9,8 +9,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_session_settings
-from app.models import Event, Snapshot, Thread, Session
-from app.models import Session as SessionModel
+from app.models import Event, Session, Snapshot, Thread
 
 
 logger = logging.getLogger(__name__)
@@ -40,17 +39,17 @@ async def should_start_new(db: AsyncSession, user_id: int) -> bool:
     """Check if no active session in configured gap hours."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     result = await db.execute(
-        select(SessionModel)
-        .where(SessionModel.user_id == user_id)
-        .where(SessionModel.started_at >= cutoff_time)
-        .where(SessionModel.ended_at.is_(None))
+        select(Session)
+        .where(Session.user_id == user_id)
+        .where(Session.started_at >= cutoff_time)
+        .where(Session.ended_at.is_(None))
     )
     recent_sessions = result.scalars().all()
 
     return len(recent_sessions) == 0
 
 
-async def create_session_start_snapshot(db: AsyncSession, session: SessionModel) -> None:
+async def create_session_start_snapshot(db: AsyncSession, session: Session) -> None:
     """Create a snapshot of all states at session start."""
     result = await db.execute(select(Thread).where(Thread.user_id == session.user_id))
     threads = result.scalars().all()
@@ -91,7 +90,7 @@ async def create_session_start_snapshot(db: AsyncSession, session: SessionModel)
     await db.commit()
 
 
-async def get_or_create(db: AsyncSession, user_id: int) -> SessionModel:
+async def get_or_create(db: AsyncSession, user_id: int) -> Session:
     """Get active session or create new one."""
     from app.models import User
 
@@ -172,7 +171,7 @@ async def get_or_create(db: AsyncSession, user_id: int) -> SessionModel:
 
 async def end_session(session_id: int, db: AsyncSession) -> None:
     """Mark session as ended."""
-    session = await db.get(SessionModel, session_id)
+    session = await db.get(Session, session_id)
     if session:
         session.ended_at = datetime.now(UTC)
         await db.commit()
@@ -181,7 +180,7 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
 async def get_current_die(session_id: int, db: AsyncSession) -> int:
     """Get current die size based on manual selection or last rating event."""
     start_die = _start_die()
-    session = await db.get(SessionModel, session_id)
+    session = await db.get(Session, session_id)
 
     result = await db.execute(
         select(Event)

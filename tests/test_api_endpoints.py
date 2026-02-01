@@ -95,7 +95,9 @@ async def test_get_thread_not_found(auth_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_thread(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
+async def test_update_thread(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
     """Test PUT /api/threads/{id} updates thread."""
     _ = sample_data
     update_data = {
@@ -148,7 +150,9 @@ async def test_update_thread_not_found(auth_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_update_thread_complete_status(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
+async def test_update_thread_complete_status(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
     """Test PUT /api/threads/{id} sets completed status when issues_remaining is 0."""
     _ = sample_data
     update_data = {
@@ -169,7 +173,9 @@ async def test_update_thread_complete_status(auth_client: AsyncClient, sample_da
 
 
 @pytest.mark.asyncio
-async def test_update_thread_active_status(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
+async def test_update_thread_active_status(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
     """Test PUT /api/threads/{id} sets active status when issues_remaining > 0."""
     _ = sample_data
     update_data = {
@@ -190,7 +196,9 @@ async def test_update_thread_active_status(auth_client: AsyncClient, sample_data
 
 
 @pytest.mark.asyncio
-async def test_delete_thread(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
+async def test_delete_thread(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
     """Test DELETE /api/threads/{id} removes thread."""
     _ = sample_data
     response = await auth_client.delete("/api/threads/1")
@@ -213,7 +221,9 @@ async def test_delete_thread_not_found(auth_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_cascades_to_events_and_snapshots(sample_data: dict, async_db: AsyncSession, auth_client: AsyncClient) -> None:
+async def test_delete_thread_cascades_to_events_and_snapshots(
+    sample_data: dict, async_db: AsyncSession, auth_client: AsyncClient
+) -> None:
     """Test that deleting a thread also deletes associated events and snapshots."""
     _ = sample_data
     from datetime import UTC, datetime
@@ -301,7 +311,9 @@ async def test_get_session_current(auth_client: AsyncClient, async_db: AsyncSess
 
 
 @pytest.mark.asyncio
-async def test_get_session_current_creates_session(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_get_session_current_creates_session(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """Test GET /api/sessions/current/ creates new session when none exists."""
     from app.models import Session as SessionModel
 
@@ -321,7 +333,9 @@ async def test_get_session_current_creates_session(auth_client: AsyncClient, asy
 
 
 @pytest.mark.asyncio
-async def test_get_session_current_uses_selected_thread_id(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_get_session_current_uses_selected_thread_id(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """Test GET /sessions/current/ returns active thread from selected_thread_id."""
     from datetime import UTC, datetime
 
@@ -434,8 +448,8 @@ async def test_get_session_details(auth_client: AsyncClient, sample_data: dict) 
 
 
 @pytest.mark.asyncio
-async def test_get_stale_threads(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Test GET /api/threads/stale returns threads inactive for specified days."""
+async def test_get_thread_with_notes(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    """Test GET /api/threads/{id} returns thread with notes field."""
     from datetime import UTC, datetime
 
     from app.models import Thread, User
@@ -472,7 +486,9 @@ async def test_get_stale_threads(auth_client: AsyncClient, async_db: AsyncSessio
 
 
 @pytest.mark.asyncio
-async def test_list_threads_includes_notes(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
+async def test_list_threads_includes_notes(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
     """Test GET /api/threads/ includes notes field in all threads."""
     _ = sample_data
     from datetime import UTC, datetime
@@ -521,7 +537,9 @@ async def test_list_threads_includes_notes(auth_client: AsyncClient, sample_data
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_clears_pending_thread_id(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_delete_thread_clears_pending_thread_id(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """Test that deleting a thread clears pending_thread_id from sessions."""
     from datetime import datetime
 
@@ -561,7 +579,9 @@ async def test_delete_thread_clears_pending_thread_id(auth_client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_integrity_error_pending_thread_id(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_delete_thread_integrity_error_pending_thread_id(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """Regression test for BUG-131: IntegrityError when deleting thread with pending_thread_id.
 
     This test verifies that deleting a thread that has sessions with pending_thread_id

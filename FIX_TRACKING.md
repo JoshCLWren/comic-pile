@@ -14,10 +14,10 @@
 ## Progress Summary
 | State | Count |
 |-------|-------|
-| TODO | 38 |
+| TODO | 33 |
 | IN_PROGRESS | 0 |
 | REVIEW | 0 |
-| DONE | 21 |
+| DONE | 26 |
 | FAILED | 0 |
 
 ---
@@ -273,23 +273,28 @@
 
 ### [MED-011] `tests/test_api_endpoints.py:434-470` - Test name mismatch
 - **Comment ID**: review-3734486499 (2026-02-01T00:19:41Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8fa7bd4ffeGbdi6xpIKvsS0s
+- **Reviewer**: ses_3e8f81d28ffeUR3AvRnIkl4364
 - **Error**: `test_get_stale_threads()` doesn't test /api/threads/stale endpoint
-- **Fix Required**: Rename to `test_get_thread_with_notes()` or update test behavior
-- **Attempts**: 0
-- **Verification**: pytest tests/test_api_endpoints.py -v
+- **Fix Required**: Renamed to `test_get_thread_with_notes` to match actual behavior
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Test passes
+- **Completed**: 2026-02-01
 
 ### [MED-012] `frontend/src/hooks/useThread.js:114-126` - Inconsistent hook pattern
 - **Comment ID**: review-3734486499 (2026-02-01T00:19:41Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8fa76bdffebDdhPwbJARx7A
+- **Reviewer**: ses_3e8f81d28ffeUR3AvRnIkl4364
 - **Error**: `mutate` functions not wrapped in useCallback (other hooks do)
-- **Fix Required**: Wrap mutate functions in useCallback for consistency
-- **Attempts**: 0
-- **Verification**: npm test, frontend lint
+- **Fix Required**: Wrapped mutate functions in useCallback for consistency
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Frontend tests pass, lint passes
+- **Completed**: 2026-02-01
+- **Files Fixed**: useThread.js (4 hooks), useQueue.js (3 hooks)
 
 ### [MED-013] `frontend/src/pages/QueuePage.jsx:82-84` - Silent error swallowing
 - **Comment ID**: review-3734486499 (2026-02-01T00:19:41Z)
@@ -313,23 +318,27 @@
 
 ### [MED-015] `comic_pile/session.py:12-13` - Redundant import
 - **Comment ID**: review-3734486499 (2026-02-01T00:19:41Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8fa70abffedst24h1ScH59Uq
+- **Reviewer**: ses_3e8f81d28ffeUR3AvRnIkl4364
 - **Error**: Session imported twice (once with alias)
-- **Fix Required**: Remove redundant import
-- **Attempts**: 0
-- **Verification**: ruff check comic_pile/session.py, pytest tests/test_session.py -v
+- **Fix Required**: Removed redundant import, updated all SessionModel references to Session
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Passed all checks (ruff, ty, pytest)
+- **Completed**: 2026-02-01
 
 ### [MED-016] `app/utils/retry.py:29-35` - Docstring example inconsistent
 - **Comment ID**: review-3734486499 (2026-02-01T00:19:41Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8f6a73ffenv4S3A4XJwyWQr
+- **Reviewer**: ses_3e8f81d28ffeUR3AvRnIkl4364
 - **Error**: Example shows sync def do_db_work() but operation must be async
-- **Fix Required**: Update docstring example to use async def
-- **Attempts**: 0
-- **Verification**: ruff check, manual review of docstring
+- **Fix Required**: Updated docstring example to use async def
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Passed all checks (ruff)
+- **Completed**: 2026-02-01
 
 ### [MED-017] `app/api/admin.py` - Missing Google-style Args/Returns
 - **Comment ID**: review-3734543041 (2026-02-01T01:58:32Z)
@@ -353,13 +362,15 @@
 
 ### [MED-019] `AGENTS.md:128-166` - ExamplePage undefined id bug
 - **Comment ID**: review-3734543041 (2026-02-01T01:58:32Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e8fa6276ffeZ9e911JewBjUWh
+- **Reviewer**: ses_3e8f81d28ffeUR3AvRnIkl4364
 - **Error**: ExamplePage calls useResource(id) but id is never defined
-- **Fix Required**: Fix example code to define id or remove the call
-- **Attempts**: 0
-- **Verification**: Manual review of documentation example
+- **Fix Required**: Fixed example code to define id from useParams()
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Example code now correct
+- **Completed**: 2026-02-01
 
 ---
 
