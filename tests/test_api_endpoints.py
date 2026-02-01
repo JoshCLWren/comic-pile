@@ -238,6 +238,7 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
         format="Comic",
         issues_remaining=10,
         queue_position=100,
+        status="active",
         user_id=user.id,
     )
     async_db.add(thread)
@@ -541,7 +542,7 @@ async def test_delete_thread_clears_pending_thread_id(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
     """Test that deleting a thread clears pending_thread_id from sessions."""
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     from app.models import Session as SessionModel, Thread, User
 
@@ -554,13 +555,15 @@ async def test_delete_thread_clears_pending_thread_id(
         queue_position=1,
         status="active",
         user_id=user.id,
-        created_at=datetime.now(),
+        created_at=datetime.now(UTC),
     )
     async_db.add(thread)
     await async_db.commit()
     await async_db.refresh(thread)
 
-    session = SessionModel(start_die=6, user_id=user.id, pending_thread_id=thread.id)
+    session = SessionModel(
+        start_die=6, user_id=user.id, pending_thread_id=thread.id, started_at=datetime.now(UTC)
+    )
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
@@ -588,7 +591,7 @@ async def test_delete_thread_integrity_error_pending_thread_id(
     set does not cause a ForeignViolation error. The fix ensures that the UPDATE
     to clear pending_thread_id is flushed before the DELETE executes.
     """
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     from app.models import Session as SessionModel, Thread, User
 
@@ -599,6 +602,7 @@ async def test_delete_thread_integrity_error_pending_thread_id(
         format="Comic",
         issues_remaining=10,
         queue_position=1,
+        status="active",
         user_id=user.id,
     )
     async_db.add(thread)
@@ -609,7 +613,7 @@ async def test_delete_thread_integrity_error_pending_thread_id(
         start_die=6,
         user_id=user.id,
         pending_thread_id=thread.id,
-        started_at=datetime.now(),
+        started_at=datetime.now(UTC),
     )
     async_db.add(session)
     await async_db.commit()
