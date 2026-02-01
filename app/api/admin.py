@@ -33,6 +33,16 @@ async def import_csv(
     - issues_remaining: Number of issues remaining (required, integer)
 
     Threads are inserted at position 1 (front of queue).
+
+    Args:
+        file: CSV file to import.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with "imported" count and "errors" list.
+
+    Raises:
+        HTTPException: If file is not a CSV.
     """
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
@@ -101,6 +111,12 @@ async def export_csv(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
     """Export active threads as CSV file.
 
     Format matches Google Sheets: title, format, issues_remaining
+
+    Args:
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        StreamingResponse with CSV file attachment.
     """
     result = await db.execute(
         select(Thread)
@@ -134,6 +150,12 @@ async def export_json(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
     """Export full database as JSON for backups.
 
     Includes all data: users, threads, sessions, events (excludes test data)
+
+    Args:
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        StreamingResponse with JSON file attachment.
     """
     users_result = await db.execute(select(User))
     users = users_result.scalars().all()
@@ -216,7 +238,11 @@ async def export_json(db: AsyncSession = Depends(get_db)) -> StreamingResponse:
 async def delete_test_data(db: AsyncSession = Depends(get_db)) -> dict[str, int]:
     """Delete all test data (threads, sessions, events marked as test).
 
-    Returns count of deleted items.
+    Args:
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with counts of deleted threads, sessions, and events.
     """
     test_threads_result = await db.execute(select(Thread).where(Thread.is_test.is_(True)))
     test_threads = test_threads_result.scalars().all()
@@ -294,6 +320,16 @@ async def import_reviews(
     - review_timestamp: ISO format datetime (required)
 
     Updates thread's last_review_at and review_url fields.
+
+    Args:
+        file: CSV file to import.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with "imported" count and "errors" list.
+
+    Raises:
+        HTTPException: If file is not a CSV.
     """
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
@@ -359,6 +395,12 @@ async def export_summary(db: AsyncSession = Depends(get_db)) -> StreamingRespons
 
     Formats all sessions with read, skipped, and completed lists per PRD Section 11.
     Excludes sessions that only involve test threads.
+
+    Args:
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        StreamingResponse with markdown file attachment.
     """
     all_sessions_result = await db.execute(
         select(SessionModel).order_by(SessionModel.started_at.desc())

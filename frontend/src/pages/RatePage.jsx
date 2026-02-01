@@ -92,7 +92,7 @@ export default function RatePage() {
     return true;
   }
 
-  function handleSubmitRating(finishSession = false) {
+  async function handleSubmitRating(finishSession = false) {
     const canProceed = checkRestorePointBeforeSubmit();
     if (!canProceed) {
       return;
@@ -111,35 +111,33 @@ export default function RatePage() {
       createExplosion();
     }
 
-    rateMutation.mutate({
-      rating,
-      issues_read: 1,
-      finish_session: finishSession
-    })
-      .then(() => {
-        navigate('/');
-      })
-      .catch((error) => {
-        setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    try {
+      await rateMutation.mutate({
+        rating,
+        issues_read: 1,
+        finish_session: finishSession
       });
+      navigate('/');
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    }
   }
 
-  function handleCompleteThread() {
+  async function handleCompleteThread() {
     setShowCompleteModal(false);
     if (pendingRating >= 4.0) {
       createExplosion();
     }
-    rateMutation.mutate({
-      rating: pendingRating,
-      issues_read: 1,
-      finish_session: true
-    })
-      .then(() => {
-        navigate('/');
-      })
-      .catch((error) => {
-        setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    try {
+      await rateMutation.mutate({
+        rating: pendingRating,
+        issues_read: 1,
+        finish_session: true
       });
+      navigate('/');
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    }
   }
 
   async function handleAddMoreIssues() {
@@ -168,17 +166,16 @@ export default function RatePage() {
     if (pendingRating >= 4.0) {
       createExplosion();
     }
-    rateMutation.mutate({
-      rating: pendingRating,
-      issues_read: 1,
-      finish_session: false
-    })
-      .then(() => {
-        navigate('/');
-      })
-      .catch((error) => {
-        setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    try {
+      await rateMutation.mutate({
+        rating: pendingRating,
+        issues_read: 1,
+        finish_session: false
       });
+      navigate('/');
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    }
   }
 
   function handleCloseModal() {

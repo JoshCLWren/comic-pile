@@ -27,7 +27,21 @@ async def undo_to_snapshot(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Undo session state to a specific snapshot with deadlock retry handling."""
+    """Undo session state to a specific snapshot with deadlock retry handling.
+
+    Args:
+        session_id: The session ID to undo.
+        snapshot_id: The snapshot ID to restore to.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse with restored session details.
+
+    Raises:
+        HTTPException: If session or snapshot not found.
+        RuntimeError: If failed after max retries.
+    """
     from sqlalchemy.exc import OperationalError
     import asyncio
 
@@ -210,7 +224,19 @@ async def list_session_snapshots(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> list[dict]:
-    """List all snapshots for a session."""
+    """List all snapshots for a session.
+
+    Args:
+        session_id: The session ID to list snapshots for.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        List of snapshot dictionaries with id, created_at, description, and event_id.
+
+    Raises:
+        HTTPException: If session not found.
+    """
     session = await db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(

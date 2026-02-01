@@ -33,7 +33,11 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
-    """Get async database session."""
+    """Get async database session.
+
+    Yields:
+        AsyncSession: Database session for use in dependency injection.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -42,7 +46,11 @@ async def get_db() -> AsyncIterator[AsyncSession]:
 
 
 async def test_database_connection() -> bool:
-    """Test database connection."""
+    """Test database connection.
+
+    Returns:
+        True if connection successful, False otherwise.
+    """
     try:
         async with AsyncSessionLocal() as session:
             await session.execute(text("SELECT 1"))

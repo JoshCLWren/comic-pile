@@ -34,7 +34,14 @@ MAX_LOG_BODY_SIZE = 1000
 
 
 def contains_sensitive_keys(body_json: dict | list) -> bool:
-    """Check if body contains sensitive keys recursively."""
+    """Check if body contains sensitive keys recursively.
+
+    Args:
+        body_json: JSON body to check (dict or list).
+
+    Returns:
+        True if sensitive keys found, False otherwise.
+    """
     sensitive_keys = {"password", "secret", "token", "access_token", "refresh_token", "api_key"}
 
     if isinstance(body_json, dict):
@@ -52,13 +59,27 @@ def contains_sensitive_keys(body_json: dict | list) -> bool:
 
 
 def is_auth_route(path: str) -> bool:
-    """Check if path is an auth-related route."""
+    """Check if path is an auth-related route.
+
+    Args:
+        path: Request path to check.
+
+    Returns:
+        True if path is auth-related, False otherwise.
+    """
     auth_paths = ("/api/auth/", "/api/login", "/api/register", "/api/logout")
     return any(path.startswith(auth_path) for auth_path in auth_paths)
 
 
 async def _safe_get_request_body(request: Request) -> str | dict | None:
-    """Safely read and redact request body for logging."""
+    """Safely read and redact request body for logging.
+
+    Args:
+        request: FastAPI request object.
+
+    Returns:
+        Redacted body as string or dict, or None if not applicable.
+    """
     try:
         if request.method not in ("POST", "PUT", "PATCH"):
             return None
@@ -90,7 +111,11 @@ async def _safe_get_request_body(request: Request) -> str | dict | None:
 
 
 def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
+    """Create and configure the FastAPI application.
+
+    Returns:
+        Configured FastAPI application instance.
+    """
     app_settings = get_app_settings()
 
     if not logging.getLogger().hasHandlers():
@@ -120,7 +145,14 @@ def create_app() -> FastAPI:
     )
 
     def redact_headers(headers: dict) -> dict:
-        """Redact sensitive headers from logging."""
+        """Redact sensitive headers from logging.
+
+        Args:
+            headers: Dictionary of HTTP headers.
+
+        Returns:
+            Dictionary with sensitive headers redacted.
+        """
         sensitive_headers = {"authorization", "cookie", "set-cookie"}
         redacted = {}
         for key, value in headers.items():
@@ -132,7 +164,15 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):
-        """Log all requests with status codes >= 400."""
+        """Log all requests with status codes >= 400.
+
+        Args:
+            request: FastAPI request object.
+            call_next: Next middleware/route handler.
+
+        Returns:
+            HTTP response from the next handler.
+        """
         start_time = time.time()
 
         body = await _safe_get_request_body(request)
@@ -178,7 +218,15 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        """Handle all unhandled exceptions with full stacktrace logging."""
+        """Handle all unhandled exceptions with full stacktrace logging.
+
+        Args:
+            request: FastAPI request object.
+            exc: Exception that was raised.
+
+        Returns:
+            JSON response with 500 status code.
+        """
         error_data = {
             "timestamp": datetime.now(UTC).isoformat(),
             "method": request.method,
@@ -214,7 +262,15 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-        """Handle HTTP exceptions with contextual logging."""
+        """Handle HTTP exceptions with contextual logging.
+
+        Args:
+            request: FastAPI request object.
+            exc: HTTP exception that was raised.
+
+        Returns:
+            JSON response with exception status code.
+        """
         error_data = {
             "timestamp": datetime.now(UTC).isoformat(),
             "method": request.method,
@@ -255,7 +311,15 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
-        """Handle validation errors with detailed logging."""
+        """Handle validation errors with detailed logging.
+
+        Args:
+            request: FastAPI request object.
+            exc: Validation error that was raised.
+
+        Returns:
+            JSON response with 422 status code and validation errors.
+        """
         errors = []
         for error in exc.errors():
             field_path = ".".join(str(loc) for loc in error["loc"])
@@ -315,7 +379,14 @@ def create_app() -> FastAPI:
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     )
     async def api_not_found(path: str) -> JSONResponse:
-        """Return a JSON 404 for unknown API routes."""
+        """Return a JSON 404 for unknown API routes.
+
+        Args:
+            path: API path that was not found.
+
+        Returns:
+            JSON response with 404 status code.
+        """
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
     # Mount static files only if directories exist (for CI/testing environments)
@@ -327,35 +398,55 @@ def create_app() -> FastAPI:
 
     @app.get("/vite.svg")
     async def serve_vite_svg():
-        """Serve vite favicon."""
+        """Serve vite favicon.
+
+        Returns:
+            FileResponse with vite.svg file.
+        """
         from fastapi.responses import FileResponse
 
         return FileResponse("static/vite.svg", media_type="image/svg+xml")
 
     @app.get("/")
     async def serve_root():
-        """Serve React app at root URL."""
+        """Serve React app at root URL.
+
+        Returns:
+            FileResponse with React index.html.
+        """
         from fastapi.responses import FileResponse
 
         return FileResponse("static/react/index.html")
 
     @app.get("/react")
     async def serve_react_redirect():
-        """Redirect /react to / for consistent routing."""
+        """Redirect /react to / for consistent routing.
+
+        Returns:
+            RedirectResponse to root URL.
+        """
         from fastapi.responses import RedirectResponse
 
         return RedirectResponse("/", status_code=301)
 
     @app.get("/react/")
     async def serve_react_redirect_slash():
-        """Redirect /react/ to / for consistent routing."""
+        """Redirect /react/ to / for consistent routing.
+
+        Returns:
+            RedirectResponse to root URL.
+        """
         from fastapi.responses import RedirectResponse
 
         return RedirectResponse("/", status_code=301)
 
     @app.get("/health")
     async def health_check():
-        """Health check endpoint that verifies basic application functionality."""
+        """Health check endpoint that verifies basic application functionality.
+
+        Returns:
+            JSON response with health status and database connection state.
+        """
         from sqlalchemy import text
 
         from app.config import get_database_settings
@@ -391,6 +482,15 @@ def create_app() -> FastAPI:
         """Serve the React SPA for non-API routes.
 
         The React app owns routing for paths like /rate, /queue, /history, etc.
+
+        Args:
+            full_path: The path to serve.
+
+        Returns:
+            FileResponse with React index.html.
+
+        Raises:
+            StarletteHTTPException: If path is blocked.
         """
         from fastapi.responses import FileResponse
 
@@ -408,7 +508,11 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup_event():
-        """Initialize database on application startup."""
+        """Initialize database on application startup.
+
+        Attempts to connect to database and optionally creates tables
+        in non-production environments.
+        """
         import asyncio
         from sqlalchemy import text
 

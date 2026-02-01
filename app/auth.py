@@ -27,17 +27,40 @@ security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
+    """Hash a password using bcrypt.
+
+    Args:
+        password: Plain text password to hash.
+
+    Returns:
+        Hashed password string.
+    """
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash."""
+    """Verify a password against its hash.
+
+    Args:
+        plain_password: Plain text password to verify.
+        hashed_password: Hashed password to compare against.
+
+    Returns:
+        True if password matches hash, False otherwise.
+    """
     return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Create JWT access token."""
+    """Create JWT access token.
+
+    Args:
+        data: Data to encode in token (e.g., {"sub": username, "jti": token_id}).
+        expires_delta: Optional custom expiration time.
+
+    Returns:
+        Encoded JWT access token string.
+    """
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
@@ -50,7 +73,14 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 def create_refresh_token(data: dict) -> str:
-    """Create JWT refresh token."""
+    """Create JWT refresh token.
+
+    Args:
+        data: Data to encode in token (e.g., {"sub": username, "jti": token_id}).
+
+    Returns:
+        Encoded JWT refresh token string.
+    """
     to_encode = data.copy()
     expire = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh"})
@@ -59,13 +89,29 @@ def create_refresh_token(data: dict) -> str:
 
 
 def verify_token(token: str) -> dict:
-    """Verify and decode JWT token. Raises JWTError on failure."""
+    """Verify and decode JWT token. Raises JWTError on failure.
+
+    Args:
+        token: JWT token string to verify.
+
+    Returns:
+        Decoded token payload as dictionary.
+
+    Raises:
+        JWTError: If token is invalid or expired.
+    """
     payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     return payload
 
 
 async def revoke_token(db: AsyncSession, token: str, user_id: int) -> None:
-    """Revoke a JWT token by storing its JTI."""
+    """Revoke a JWT token by storing its JTI.
+
+    Args:
+        db: SQLAlchemy session for database operations.
+        token: JWT token to revoke.
+        user_id: User ID associated with the token.
+    """
     payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     jti = payload.get("jti")
     if not jti:
@@ -85,7 +131,15 @@ async def revoke_token(db: AsyncSession, token: str, user_id: int) -> None:
 
 
 async def is_token_revoked(db: AsyncSession, jti: str) -> bool:
-    """Check if a token JTI is revoked."""
+    """Check if a token JTI is revoked.
+
+    Args:
+        db: SQLAlchemy session for database operations.
+        jti: JWT ID to check.
+
+    Returns:
+        True if token is revoked, False otherwise.
+    """
     result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti).limit(1))
     return result.scalar_one_or_none() is not None
 
@@ -94,7 +148,18 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
-    """Get current authenticated user from JWT token."""
+    """Get current authenticated user from JWT token.
+
+    Args:
+        credentials: HTTP Bearer token credentials.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Authenticated User object.
+
+    Raises:
+        HTTPException: If token is invalid, expired, or user not found.
+    """
     token = credentials.credentials
 
     try:

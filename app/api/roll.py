@@ -32,7 +32,19 @@ async def roll_dice(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> RollResponse:
-    """Roll dice to select a thread."""
+    """Roll dice to select a thread.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        RollResponse with selected thread and die result.
+
+    Raises:
+        HTTPException: If no active threads available.
+    """
     threads = await get_roll_pool(current_user.id, db)
     if not threads:
         raise HTTPException(
@@ -93,7 +105,19 @@ async def override_roll(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> RollResponse:
-    """Manually select a thread."""
+    """Manually select a thread.
+
+    Args:
+        request: Override request containing thread_id.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        RollResponse with selected thread.
+
+    Raises:
+        HTTPException: If thread not found.
+    """
     result = await db.execute(
         select(Thread)
         .where(Thread.id == request.thread_id)
@@ -152,7 +176,19 @@ async def set_manual_die(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> str:
-    """Set manual die size for current session."""
+    """Set manual die size for current session.
+
+    Args:
+        die: The die size to set (must be 4, 6, 8, 10, 12, or 20).
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        HTML string with the die size.
+
+    Raises:
+        HTTPException: If die size is invalid.
+    """
     current_session = await get_or_create(db, user_id=current_user.id)
 
     if die not in [4, 6, 8, 10, 12, 20]:
@@ -175,7 +211,15 @@ async def clear_manual_die(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> str:
-    """Clear manual die size and return to automatic dice ladder mode."""
+    """Clear manual die size and return to automatic dice ladder mode.
+
+    Args:
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        HTML string with the current die size.
+    """
     current_session = await get_or_create(db, user_id=current_user.id)
 
     current_session.manual_die = None

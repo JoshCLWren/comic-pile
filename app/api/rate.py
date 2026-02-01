@@ -26,7 +26,14 @@ router = APIRouter()
 async def snapshot_thread_states(
     db: AsyncSession, session_id: int, event: Event, user_id: int
 ) -> None:
-    """Create a snapshot of all thread states for undo functionality."""
+    """Create a snapshot of all thread states for undo functionality.
+
+    Args:
+        db: SQLAlchemy session for database operations.
+        session_id: The session ID to create snapshot for.
+        event: The event that triggered the snapshot.
+        user_id: The user ID to snapshot threads for.
+    """
     result = await db.execute(select(Thread).where(Thread.user_id == user_id))
     threads = result.scalars().all()
 
@@ -73,7 +80,11 @@ clear_cache = None
 
 
 def _get_rating_limits() -> tuple[float, float, float]:
-    """Get rating min, max, and threshold from config."""
+    """Get rating min, max, and threshold from config.
+
+    Returns:
+        Tuple of (rating_min, rating_max, rating_threshold).
+    """
     settings = get_rating_settings()
     return settings.rating_min, settings.rating_max, settings.rating_threshold
 
@@ -86,7 +97,20 @@ async def rate_thread(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
-    """Rate current reading and update thread."""
+    """Rate current reading and update thread.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        rate_data: Rating request data.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with updated thread details.
+
+    Raises:
+        HTTPException: If no active session, invalid rating, or thread not found.
+    """
     result = await db.execute(
         select(SessionModel)
         .where(SessionModel.user_id == current_user.id)

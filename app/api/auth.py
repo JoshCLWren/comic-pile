@@ -36,7 +36,18 @@ async def register_user(
     user_data: UserRegisterRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
-    """Register a new user and return tokens."""
+    """Register a new user and return tokens.
+
+    Args:
+        user_data: User registration data (username, email, password).
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        TokenResponse with access and refresh tokens.
+
+    Raises:
+        HTTPException: If username or email already exists.
+    """
     # Check if username already exists
     result = await db.execute(select(User).where(User.username == user_data.username).limit(1))
     existing_user = result.scalar_one_or_none()
@@ -90,7 +101,18 @@ async def login_user(
     login_data: UserLoginRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
-    """Authenticate user and return tokens."""
+    """Authenticate user and return tokens.
+
+    Args:
+        login_data: User login data (username, password).
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        TokenResponse with access and refresh tokens.
+
+    Raises:
+        HTTPException: If credentials are invalid.
+    """
     result = await db.execute(select(User).where(User.username == login_data.username).limit(1))
     user = result.scalar_one_or_none()
     if not user or not user.password_hash:
@@ -121,7 +143,18 @@ async def refresh_access_token(
     refresh_data: RefreshTokenRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
-    """Refresh access token using refresh token."""
+    """Refresh access token using refresh token.
+
+    Args:
+        refresh_data: Refresh token request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        TokenResponse with new access and refresh tokens.
+
+    Raises:
+        HTTPException: If refresh token is invalid or revoked.
+    """
     try:
         payload = verify_token(refresh_data.refresh_token)
     except JWTError as e:
@@ -187,7 +220,19 @@ async def logout_user(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Logout user by revoking their current token."""
+    """Logout user by revoking their current token.
+
+    Args:
+        credentials: HTTP Bearer token credentials.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with success message.
+
+    Raises:
+        HTTPException: If token revocation fails.
+    """
     token = credentials.credentials
     try:
         await revoke_token(db, token, current_user.id)
@@ -203,7 +248,14 @@ async def logout_user(
 async def get_current_user_info(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> UserResponse:
-    """Get current authenticated user's information."""
+    """Get current authenticated user's information.
+
+    Args:
+        current_user: The authenticated user making the request.
+
+    Returns:
+        UserResponse with user details.
+    """
     return UserResponse(
         id=current_user.id,
         username=current_user.username,
