@@ -229,13 +229,10 @@ def test_server_url():
     async def setup_test_data():
         """Setup test database with sample data.
 
-        Creates tables using asyncpg (async-only, NO sync psycopg2),
-        then seeds sample data for E2E tests.
+        Note: Tables are created by module-scoped _create_database_tables
+        fixture using asyncpg (async-only). This only seeds data.
         """
         test_engine = create_async_engine(test_db_url)
-
-        async with test_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
 
         async_session_maker = async_sessionmaker(
             bind=test_engine,
