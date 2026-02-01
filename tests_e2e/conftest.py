@@ -35,27 +35,6 @@ if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 
 
-def pytest_configure(config):
-    """Pytest hook to create database tables at test session start.
-
-    This hook runs before any tests are collected, ensuring tables exist
-    before any fixtures are resolved. This is more reliable than async fixtures
-    for CI environments where tests run in separate processes.
-    """
-    import asyncio
-
-    async def create_tables_if_not_exist():
-        database_url = get_test_database_url()
-        engine = create_async_engine(database_url, echo=False)
-        try:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-        finally:
-            await engine.dispose()
-
-    asyncio.run(create_tables_if_not_exist())
-
-
 async def _ensure_default_user(async_db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
     from app.auth import hash_password
@@ -230,8 +209,8 @@ def test_server_url():
 
     async def setup_test_data():
         """Setup test database with sample data.
-
-        Note: Tables are created by pytest_configure hook, so this only seeds data.
+        
+        Note: Tables are created by async_db fixture, so this only seeds data.
         """
         test_engine = create_async_engine(test_db_url)
 
