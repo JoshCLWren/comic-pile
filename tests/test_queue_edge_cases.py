@@ -1,7 +1,5 @@
 """Edge case tests for queue reordering operations."""
 
-from typing import Any
-
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,7 +118,7 @@ async def test_move_to_back_no_active_threads(async_db: AsyncSession, default_us
 
 @pytest.mark.asyncio
 async def test_move_to_position_nonexistent_thread(
-    async_db: AsyncSession, default_user: User, sample_data: dict, caplog: Any
+    async_db: AsyncSession, default_user: User, sample_data: dict, caplog: pytest.LogCaptureFixture
 ) -> None:
     """move_to_position with non-existent thread_id logs error and returns early."""
     nonexistent_thread_id = 99999
@@ -141,7 +139,7 @@ async def test_move_to_position_nonexistent_thread(
 
 @pytest.mark.asyncio
 async def test_move_to_position_thread_not_in_active_list(
-    async_db: AsyncSession, default_user: User, caplog: Any
+    async_db: AsyncSession, default_user: User, caplog: pytest.LogCaptureFixture
 ) -> None:
     """move_to_position with thread having queue_position < 1 logs error and returns early."""
     from datetime import UTC, datetime
@@ -174,7 +172,7 @@ async def test_move_to_position_thread_not_in_active_list(
 
 @pytest.mark.asyncio
 async def test_move_to_position_clamps_negative_position(
-    async_db: AsyncSession, default_user: User, sample_data: dict, caplog: Any
+    async_db: AsyncSession, default_user: User, sample_data: dict, caplog: pytest.LogCaptureFixture
 ) -> None:
     """move_to_position with new_position < 1 clamps to 1."""
     thread_id = sample_data["threads"][0].id

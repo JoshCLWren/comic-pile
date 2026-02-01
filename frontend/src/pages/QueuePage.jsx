@@ -40,28 +40,36 @@ export default function QueuePage() {
   const [draggedThreadId, setDraggedThreadId] = useState(null)
   const [dragOverThreadId, setDragOverThreadId] = useState(null)
   const [repositioningThread, setRepositioningThread] = useState(null)
+  const [reorderError, setReorderError] = useState(null)
 
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
 
   const handleDelete = (threadId) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
-      deleteMutation.mutate(threadId).then(() => refetch()).catch(() => {})
+      deleteMutation.mutate(threadId).then(() => refetch()).catch(() => {
+        alert('Failed to delete thread. Please try again.')
+      })
     }
   }
 
   const handleMoveToFront = (threadId) => {
-    moveToFrontMutation.mutate(threadId).then(() => refetch()).catch(() => {})
+    moveToFrontMutation.mutate(threadId).then(() => refetch()).catch(() => {
+      alert('Failed to move thread to front. Please try again.')
+    })
   }
 
   const handleMoveToBack = (threadId) => {
-    moveToBackMutation.mutate(threadId).then(() => refetch()).catch(() => {})
+    moveToBackMutation.mutate(threadId).then(() => refetch()).catch(() => {
+      alert('Failed to move thread to back. Please try again.')
+    })
   }
 
   const handleDragStart = (threadId) => (event) => {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', String(threadId))
     setDraggedThreadId(threadId)
+    setReorderError(null)
   }
 
   const handleDragOver = (threadId) => (event) => {
@@ -77,11 +85,17 @@ export default function QueuePage() {
       return
     }
 
+    setReorderError(null)
     const targetThread = activeThreads.find((thread) => thread.id === threadId)
     if (targetThread) {
       moveToPositionMutation.mutate({ id: draggedThreadId, position: targetThread.queue_position })
-        .then(() => refetch())
-        .catch(() => {})
+        .then(() => {
+          refetch()
+          setReorderError(null)
+        })
+        .catch((error) => {
+          setReorderError(error.response?.data?.detail || 'Failed to reorder thread. Please try again.')
+        })
     }
 
     setDraggedThreadId(null)
@@ -217,7 +231,13 @@ export default function QueuePage() {
       {activeThreads.length === 0 ? (
         <div className="text-center text-slate-500">No active threads in queue</div>
       ) : (
-        <div
+        <>
+          {reorderError && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
+              {reorderError}
+            </div>
+          )}
+          <div
           data-testid="queue-thread-list"
           id="queue-container"
           role="list"
@@ -309,6 +329,7 @@ export default function QueuePage() {
             )
           })}
         </div>
+        </>
       )}
 
       <section className="space-y-4">

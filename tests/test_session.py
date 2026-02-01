@@ -1,7 +1,6 @@
 """Tests for session logic."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import pytest
 
@@ -55,7 +54,7 @@ async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_get_or_create_ignores_advisory_lock_failure(
-    async_db: AsyncSession, monkeypatch: Any
+    async_db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Advisory lock errors should not prevent session creation."""
     original_execute = async_db.execute

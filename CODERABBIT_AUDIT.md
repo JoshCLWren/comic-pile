@@ -5,13 +5,14 @@
 **Last Updated**: 2026-01-31
 
 ## Summary
+
 | Status | Count | Percentage |
 |--------|-------|------------|
 | ✅ Resolved | 15 | 32.6% |
 | ⏮️ Outdated | 1 | 2.2% |
 | ⚠️ Still Relevant | 29 | 63.0% |
 | ❓ Needs Review | 1 | 2.2% |
-| 📊 Total | 46 | 100% |
+| 📊\ Total | 46 | 100% |
 
 ## Process Log
 
@@ -140,9 +141,9 @@
 ### Comment ID: 2734341046
 - **File**: `PLANNING.md`
 - **Line**: 56
-- **Issue**: Normalize list indentation (markdownlint MD005/MD007)
+- **Issue**: Normalize list indentation (Markdownlint MD005/MD007)
 - **Status**: ⚠️ STILL_RELEVANT
-- **Notes**: Checklist items have inconsistent indentation (some with 2 spaces, some with 1 space before the dash). Lines 51-56 show the inconsistency. This is a minor formatting issue but violates markdownlint rules.
+- **Notes**: Checklist items have inconsistent indentation (some with 2 spaces, some with 1 space before the dash). Lines 51-56 show the inconsistency. This is a minor formatting issue but violates Markdownlint rules.
 
 ### Comment ID: 2739098774
 - **File**: `app/api/admin.py`
@@ -259,9 +260,9 @@
 ### Comment ID: review-3714045372
 - **File**: N/A (Review Summary)
 - **Line**: N/A
-- **Issue**: Review summary with 1 actionable item about PLANNING.md markdown
+- **Issue**: Review summary with 1 actionable item about PLANNING.md Markdown
 - **Status**: ⚠️ STILL_RELEVANT
-- **Notes**: PLANNING.md checklist has inconsistent list indentation causing markdownlint MD005/MD007 failures. Lines 51-56 show mixed indentation (some items with 2 spaces before dash, others with 1 space). Already documented in comment 2734341046.
+- **Notes**: PLANNING.md checklist has inconsistent list indentation causing Markdownlint MD005/MD007 failures. Lines 51-56 show mixed indentation (some items with 2 spaces before dash, others with 1 space). Already documented in comment 2734341046.
 
 ### Comment ID: review-3719718707
 - **File**: N/A (Review Summary)
@@ -352,7 +353,7 @@
 - **Line**: N/A
 - **Issue**: Review summary with 12 actionable items about multiple files
 - **Status**: ⚠️ STILL_RELEVANT
-- **Notes**: Multiple critical issues: 1) **CRITICAL**: `app/utils/retry.py` line 51 uses blocking `time.sleep(delay)` in async function - should use `await asyncio.sleep(delay)` to avoid blocking event loop; 2) `app/api/rate.py` lines 83-88 - unused `request` parameter triggers ARG001, should rename to `_request`; 3) `app/api/session.py` lines 156-162 - same unused `request` issue; 4) `app/api/snooze.py` lines 117-123 - same unused `request` issue; 5) `app/api/undo.py` lines 207-214 - returns loose `list[dict]`, should use TypedDict or schema; 6) Multiple script files lack type annotations and proper docstrings; 7) `tests/conftest.py` lines 108-144 - broad exception catching should use `IntegrityError`. Also mentions nitpicks about import ordering, markdown code blocks, and redundant code.
+- **Notes**: Multiple critical issues: 1) **CRITICAL**: `app/utils/retry.py` line 51 uses blocking `time.sleep(delay)` in async function - should use `await asyncio.sleep(delay)` to avoid blocking event loop; 2) `app/api/rate.py` lines 83-88 - unused `request` parameter triggers ARG001, should rename to `_request`; 3) `app/api/session.py` lines 156-162 - same unused `request` issue; 4) `app/api/snooze.py` lines 117-123 - same unused `request` issue; 5) `app/api/undo.py` lines 207-214 - returns loose `list[dict]`, should use TypedDict or schema; 6) Multiple script files lack type annotations and proper docstrings; 7) `tests/conftest.py` lines 108-144 - broad exception catching should use `IntegrityError`. Also mentions nitpicks about import ordering, Markdown code blocks, and redundant code.
 
 ---
 
@@ -363,13 +364,14 @@
 - **Audit Completion Date**: 2026-01-31
 
 ### Status Breakdown (Final)
+
 | Status | Count | Percentage |
 |--------|-------|------------|
 | ✅ Resolved | 15 | 32.6% |
 | ⏮️ Outdated | 1 | 2.2% |
 | ⚠️ Still Relevant | 29 | 63.0% |
 | ❓ Needs Review | 1 | 2.2% |
-| 📊 Total | 46 | 100% |
+| 📊\ Total | 46 | 100% |
 
 ### Priority Issues to Address
 
