@@ -1,11 +1,13 @@
 """Tests for roll API endpoints."""
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_roll_success(auth_client, sample_data):
+async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None:
     """POST /roll/ returns valid thread."""
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
@@ -23,7 +25,7 @@ async def test_roll_success(auth_client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_roll_override(auth_client, sample_data):
+async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> None:
     """POST /roll/override/ sets specific thread."""
     _ = sample_data
     thread_id = 1
@@ -38,7 +40,7 @@ async def test_roll_override(auth_client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_roll_no_pool(auth_client, async_db):
+async def test_roll_no_pool(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Returns error if no active threads."""
     from tests.conftest import get_or_create_user_async
 
@@ -50,7 +52,7 @@ async def test_roll_no_pool(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_roll_overflow(auth_client, async_db):
+async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Roll works correctly when thread count < die size."""
     from app.models import Thread
     from tests.conftest import get_or_create_user_async
@@ -78,7 +80,7 @@ async def test_roll_overflow(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_roll_override_nonexistent(auth_client, sample_data):
+async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: dict) -> None:
     """Override returns 404 for non-existent thread."""
     _ = sample_data
     response = await auth_client.post("/api/roll/override", json={"thread_id": 999})
@@ -87,7 +89,7 @@ async def test_roll_override_nonexistent(auth_client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_set_manual_die(auth_client, sample_data, async_db):
+async def test_set_manual_die(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
     """POST /roll/set-die sets manual_die on session."""
     _ = sample_data
     _ = async_db
@@ -102,7 +104,7 @@ async def test_set_manual_die(auth_client, sample_data, async_db):
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die(auth_client, sample_data, async_db):
+async def test_clear_manual_die(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
     """POST /roll/clear-manual-die clears manual_die and returns to auto mode."""
     _ = sample_data
     from app.models import Session as SessionModel
@@ -125,7 +127,7 @@ async def test_clear_manual_die(auth_client, sample_data, async_db):
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die_with_no_manual_set(auth_client, sample_data):
+async def test_clear_manual_die_with_no_manual_set(auth_client: AsyncClient, sample_data: dict) -> None:
     """POST /roll/clear-manual-die works even when manual_die is not set."""
     _ = sample_data
     response = await auth_client.post("/api/roll/clear-manual-die")
@@ -134,9 +136,7 @@ async def test_clear_manual_die_with_no_manual_set(auth_client, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die_returns_correct_current_die_regression(
-    auth_client, sample_data, async_db
-):
+async def test_clear_manual_die_returns_correct_current_die_regression(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
     """Regression test for bug where clearing manual die returned wrong die value.
 
     When manual mode is disengaged by clicking auto, the endpoint should return

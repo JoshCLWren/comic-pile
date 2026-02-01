@@ -1,8 +1,9 @@
 """Shared pytest fixtures."""
 
 import os
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -89,7 +90,7 @@ async def ensure_test_schema() -> None:
 
     async with engine.begin() as conn:
 
-        def _check_and_drop(conn):
+        def _check_and_drop(conn: Connection) -> None:
             if _missing_model_columns(conn):
                 if not _looks_like_test_database(database_url):
                     raise RuntimeError(
@@ -167,7 +168,7 @@ def get_test_database_url() -> str:
 
 
 @pytest.fixture(scope="function", autouse=True)
-def set_skip_worktree_check():
+def set_skip_worktree_check() -> Iterator[None]:
     """Skip worktree validation in tests."""
     original_value = os.getenv("SKIP_WORKTREE_CHECK")
     os.environ["SKIP_WORKTREE_CHECK"] = "true"
@@ -214,10 +215,10 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
     await engine.dispose()
 
 
-async def _create_async_db_override(async_session: SQLAlchemyAsyncSession):
+async def _create_async_db_override(async_session: SQLAlchemyAsyncSession) -> Any:
     """Create dependency override for get_db using provided async session."""
 
-    async def override_get_db():
+    async def override_get_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
         try:
             yield async_session
         finally:
@@ -381,7 +382,7 @@ async def auth_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncC
 
 
 @pytest.fixture(scope="function")
-def enable_internal_ops():
+def enable_internal_ops() -> Iterator[None]:
     """Enable internal ops routes for tests that access admin endpoints."""
     old_value = os.environ.get("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
@@ -393,7 +394,7 @@ def enable_internal_ops():
 
 
 @pytest.fixture(scope="function", autouse=True)
-def clear_config_cache():
+def clear_config_cache() -> Iterator[None]:
     """Clear cached settings before and after each test to prevent test pollution."""
     from app.config import clear_settings_cache
 

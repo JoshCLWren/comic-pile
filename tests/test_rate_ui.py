@@ -2,11 +2,13 @@
 
 import pytest
 
+from httpx import AsyncClient
 from app.models import Event, Session as SessionModel, Thread
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_both_buttons_available_when_thread_complete(auth_client, async_db):
+async def test_both_buttons_available_when_thread_complete(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Both Save & Continue and Finish Session should be available even when issues_remaining is 0."""
     # Create user
     from tests.conftest import get_or_create_user_async
@@ -68,7 +70,7 @@ async def test_both_buttons_available_when_thread_complete(auth_client, async_db
 
 
 @pytest.mark.asyncio
-async def test_can_still_rate_after_thread_complete(auth_client, async_db):
+async def test_can_still_rate_after_thread_complete(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """After rating last issue, should still be able to rate again if rolled."""
     # Create user
     from tests.conftest import get_or_create_user_async

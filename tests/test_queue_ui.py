@@ -8,9 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_jump_to_position_works_for_large_distance(
-    auth_client, async_db: AsyncSession, sample_data
-):
+async def test_jump_to_position_works_for_large_distance(auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict) -> None:
     """Jump from position 1 to last position works correctly."""
     thread_id = sample_data["threads"][0].id
 
@@ -51,7 +49,7 @@ async def test_jump_to_position_works_for_small_distance(
 
 
 @pytest.mark.asyncio
-async def test_drag_and_drop_updates_position(auth_client, async_db: AsyncSession, sample_data):
+async def test_drag_and_drop_updates_position(auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict) -> None:
     """Drag and drop reordering updates position correctly."""
     thread_id = sample_data["threads"][0].id
     new_position = 3
@@ -71,7 +69,7 @@ async def test_drag_and_drop_updates_position(auth_client, async_db: AsyncSessio
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_via_api(auth_client, async_db: AsyncSession, sample_data):
+async def test_move_to_front_via_api(auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict) -> None:
     """Move to front endpoint works correctly."""
     thread_id = sample_data["threads"][2].id
 
@@ -84,7 +82,7 @@ async def test_move_to_front_via_api(auth_client, async_db: AsyncSession, sample
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_via_api(auth_client, async_db: AsyncSession, sample_data):
+async def test_move_to_back_via_api(auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict) -> None:
     """Move to back endpoint works correctly."""
     thread_id = sample_data["threads"][0].id
 

@@ -1,14 +1,18 @@
 """Tests for rate API endpoints."""
 
+from typing import Any
+
 import pytest
 from sqlalchemy import select
 
 from app.models import Event, Thread
+from httpx import AsyncClient
 from app.models import Session as SessionModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_rate_success(auth_client, async_db):
+async def test_rate_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """POST /rate/ updates thread correctly."""
     from tests.conftest import get_or_create_user_async
 
@@ -56,7 +60,7 @@ async def test_rate_success(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_low_rating(auth_client, async_db):
+async def test_rate_low_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Rating=3.0, die_size steps up."""
     from tests.conftest import get_or_create_user_async
 
@@ -103,7 +107,7 @@ async def test_rate_low_rating(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_high_rating(auth_client, async_db):
+async def test_rate_high_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Rating=4.0, die_size steps down."""
     from tests.conftest import get_or_create_user_async
 
@@ -150,7 +154,7 @@ async def test_rate_high_rating(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_completes_thread(auth_client, async_db):
+async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Issues <= 0, moves to back of queue, session ends only with finish_session=True."""
     from tests.conftest import get_or_create_user_async
 
@@ -203,7 +207,7 @@ async def test_rate_completes_thread(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_records_event(auth_client, async_db):
+async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Event saved with rating and issues_read."""
     from tests.conftest import get_or_create_user_async
 
@@ -251,7 +255,7 @@ async def test_rate_records_event(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_no_active_session(auth_client):
+async def test_rate_no_active_session(auth_client: AsyncClient) -> None:
     """Returns error if no active session."""
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
@@ -259,7 +263,7 @@ async def test_rate_no_active_session(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_rate_no_active_thread(auth_client, async_db):
+async def test_rate_no_active_thread(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Returns error if no active thread in session."""
     from tests.conftest import get_or_create_user_async
 
@@ -276,7 +280,7 @@ async def test_rate_no_active_thread(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_updates_manual_die(auth_client, async_db):
+async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Rating creates rate event with die_after value."""
     from tests.conftest import get_or_create_user_async
     from comic_pile.session import get_current_die
@@ -335,7 +339,9 @@ async def test_rate_updates_manual_die(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_low_rating_updates_manual_die(auth_client, async_db):
+async def test_rate_low_rating_updates_manual_die(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """Low rating steps die up and records die_after in rate event."""
     from tests.conftest import get_or_create_user_async
     from comic_pile.session import get_current_die
@@ -394,7 +400,9 @@ async def test_rate_low_rating_updates_manual_die(auth_client, async_db):
 
 
 @pytest.mark.asyncio
-async def test_rate_finish_session_flag_controls_session_end(auth_client, async_db):
+async def test_rate_finish_session_flag_controls_session_end(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """finish_session=False keeps session active even when thread completes."""
     from tests.conftest import get_or_create_user_async
 
@@ -445,7 +453,7 @@ async def test_rate_finish_session_flag_controls_session_end(auth_client, async_
     assert session.ended_at is None
 
 
-def test_rating_settings_returns_defaults(monkeypatch):
+def test_rating_settings_returns_defaults(monkeypatch: Any) -> None:
     """Test rating settings return default values."""
     from app.config import clear_settings_cache, get_rating_settings
 
@@ -460,7 +468,7 @@ def test_rating_settings_returns_defaults(monkeypatch):
     assert settings.rating_threshold == 4.0
 
 
-def test_rating_settings_returns_custom_values(monkeypatch):
+def test_rating_settings_returns_custom_values(monkeypatch: Any) -> None:
     """Test rating settings return custom values when set."""
     from app.config import clear_settings_cache, get_rating_settings
 
@@ -475,7 +483,7 @@ def test_rating_settings_returns_custom_values(monkeypatch):
     assert settings.rating_threshold == 3.5
 
 
-def test_rating_settings_validates_range(monkeypatch):
+def test_rating_settings_validates_range(monkeypatch: Any) -> None:
     """Test rating settings validate and clamp to valid range."""
     from app.config import clear_settings_cache, get_rating_settings
 

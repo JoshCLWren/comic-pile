@@ -1,16 +1,18 @@
 """Tests for session logic."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import get_active_thread
 from app.config import clear_settings_cache
-from app.models import Event, Session, Snapshot, Thread
+from app.models import Event, Session, Snapshot, Thread, User
 from app.models import Session as SessionModel
-from sqlalchemy import select
 from comic_pile.session import (
     create_session_start_snapshot,
     end_session,
@@ -52,7 +54,9 @@ async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_ignores_advisory_lock_failure(async_db, monkeypatch):
+async def test_get_or_create_ignores_advisory_lock_failure(
+    async_db: AsyncSession, monkeypatch: Any
+) -> None:
     """Advisory lock errors should not prevent session creation."""
     original_execute = async_db.execute
 
@@ -69,7 +73,7 @@ async def test_get_or_create_ignores_advisory_lock_failure(async_db, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_is_active_true(async_db, default_user):
+async def test_is_active_true(async_db: AsyncSession, default_user: User) -> None:
     """Session created < 6 hours ago is active."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
@@ -84,7 +88,7 @@ async def test_is_active_true(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_is_active_false_old(async_db, default_user):
+async def test_is_active_false_old(async_db: AsyncSession, default_user: User) -> None:
     """Session created > 6 hours ago is inactive."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=7),
@@ -99,7 +103,7 @@ async def test_is_active_false_old(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_is_active_false_ended(async_db, default_user):
+async def test_is_active_false_ended(async_db: AsyncSession, default_user: User) -> None:
     """Session that has ended is inactive."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
@@ -115,7 +119,7 @@ async def test_is_active_false_ended(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_should_start_new_true(async_db, default_user):
+async def test_should_start_new_true(async_db: AsyncSession, default_user: User) -> None:
     """No active session in last 6 hours."""
     old_session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=7),
@@ -131,7 +135,7 @@ async def test_should_start_new_true(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_should_start_new_false(async_db, default_user):
+async def test_should_start_new_false(async_db: AsyncSession, default_user: User) -> None:
     """Active session exists."""
     active_session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
@@ -146,7 +150,7 @@ async def test_should_start_new_false(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_existing(async_db, sample_data):
+async def test_get_or_create_existing(async_db: AsyncSession, sample_data: dict) -> None:
     """Returns existing active session (< 6 hours old)."""
     # End all sample sessions first
     for session in sample_data["sessions"]:
@@ -167,7 +171,7 @@ async def test_get_or_create_existing(async_db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_new(async_db, sample_data):
+async def test_get_or_create_new(async_db: AsyncSession, sample_data: dict) -> None:
     """Creates new session when none active."""
     for session in sample_data["sessions"]:
         session.ended_at = datetime.now(UTC)
@@ -179,7 +183,7 @@ async def test_get_or_create_new(async_db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_end_session(async_db, sample_data):
+async def test_end_session(async_db: AsyncSession, sample_data: dict) -> None:
     """Marks session as ended."""
     session = sample_data["sessions"][0]
     assert session.ended_at is None
@@ -191,7 +195,7 @@ async def test_end_session(async_db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_end_session_nonexistent(async_db, default_user):
+async def test_end_session_nonexistent(async_db: AsyncSession, default_user: User) -> None:
     """Gracefully handles ending non-existent session."""
     thread = Thread(
         title="Test Thread",
@@ -211,7 +215,7 @@ async def test_end_session_nonexistent(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_is_active_exactly_6_hours(async_db, default_user):
+async def test_is_active_exactly_6_hours(async_db: AsyncSession, default_user: User) -> None:
     """Session created exactly 6 hours ago is considered active."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=5, minutes=59),
@@ -226,7 +230,9 @@ async def test_is_active_exactly_6_hours(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_should_start_new_multiple_old_sessions(async_db, default_user):
+async def test_should_start_new_multiple_old_sessions(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """Multiple old sessions still return true."""
     for i in range(3):
         old_session = SessionModel(
@@ -243,7 +249,9 @@ async def test_should_start_new_multiple_old_sessions(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_returns_most_recent(async_db, default_user):
+async def test_get_or_create_returns_most_recent(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """Returns most recent active session when multiple exist."""
     recent_session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
@@ -265,7 +273,7 @@ async def test_get_or_create_returns_most_recent(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_creates_default_user(async_db):
+async def test_get_or_create_creates_default_user(async_db: AsyncSession) -> None:
     """BUG-141: Creates default user when user_id doesn't exist."""
     from app.models import User
 
@@ -285,7 +293,7 @@ async def test_get_or_create_creates_default_user(async_db):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_creates_user_id_1(async_db):
+async def test_get_or_create_creates_user_id_1(async_db: AsyncSession) -> None:
     """BUG-142: Creates default user when user_id=1 doesn't exist."""
     from app.models import User
     from sqlalchemy import delete
@@ -308,7 +316,9 @@ async def test_get_or_create_creates_user_id_1(async_db):
 
 
 @pytest.mark.asyncio
-async def test_get_active_thread_includes_last_rolled_result(async_db, sample_data):
+async def test_get_active_thread_includes_last_rolled_result(
+    async_db: AsyncSession, sample_data: dict
+) -> None:
     """Get active thread includes last rolled result value."""
     session = sample_data["sessions"][0]
     thread = sample_data["threads"][0]
@@ -332,7 +342,7 @@ async def test_get_active_thread_includes_last_rolled_result(async_db, sample_da
 
 
 @pytest.mark.asyncio
-async def test_session_start_snapshot_created(async_db, default_user):
+async def test_session_start_snapshot_created(async_db: AsyncSession, default_user: User) -> None:
     """A snapshot is created when a new session starts."""
     threads = []
     for i in range(3):
@@ -371,7 +381,9 @@ async def test_session_start_snapshot_created(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_session_start_snapshot_captures_thread_states(async_db, default_user):
+async def test_session_start_snapshot_captures_thread_states(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """Snapshot captures all thread states at session start."""
     thread1 = Thread(
         title="Thread 1",
@@ -423,7 +435,9 @@ async def test_session_start_snapshot_captures_thread_states(async_db, default_u
 
 
 @pytest.mark.asyncio
-async def test_session_start_snapshot_captures_manual_die(async_db, default_user):
+async def test_session_start_snapshot_captures_manual_die(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """Snapshot captures session manual die state."""
     thread = Thread(
         title="Test Thread",
@@ -452,13 +466,17 @@ async def test_session_start_snapshot_captures_manual_die(async_db, default_user
     )
     snapshot = result.scalars().first()
 
-    assert snapshot is not None
+    assert snapshot is not None, "Snapshot should not be None"
+    if snapshot.session_state is None:
+        raise AssertionError("session_state should not be None")
     assert snapshot.session_state["start_die"] == 6
     assert snapshot.session_state["manual_die"] == 20
 
 
 @pytest.mark.asyncio
-async def test_get_current_session_active(client: AsyncClient, async_db, default_user):
+async def test_get_current_session_active(
+    client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test getting current active session."""
     from app.auth import create_access_token
     from app.models import Session as SessionModel
@@ -503,7 +521,9 @@ async def test_get_current_session_active(client: AsyncClient, async_db, default
 
 
 @pytest.mark.asyncio
-async def test_get_current_session_no_active(client: AsyncClient, async_db, default_user):
+async def test_get_current_session_no_active(
+    client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test getting current session creates a new session when none is active."""
     from app.auth import create_access_token
     from app.models import Session as SessionModel
@@ -528,7 +548,9 @@ async def test_get_current_session_no_active(client: AsyncClient, async_db, defa
 
 
 @pytest.mark.asyncio
-async def test_list_sessions(auth_client: AsyncClient, async_db, default_user):
+async def test_list_sessions(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test listing all sessions with pagination."""
     from app.models import Session as SessionModel
 
@@ -546,7 +568,9 @@ async def test_list_sessions(auth_client: AsyncClient, async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_list_sessions_pagination(auth_client: AsyncClient, async_db, default_user):
+async def test_list_sessions_pagination(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test session pagination works correctly."""
     from app.models import Session as SessionModel
 
@@ -571,7 +595,9 @@ async def test_list_sessions_pagination(auth_client: AsyncClient, async_db, defa
 
 
 @pytest.mark.asyncio
-async def test_get_session_by_id(auth_client: AsyncClient, async_db, default_user):
+async def test_get_session_by_id(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test getting a specific session by ID."""
     from app.models import Session as SessionModel
 
@@ -588,7 +614,7 @@ async def test_get_session_by_id(auth_client: AsyncClient, async_db, default_use
 
 
 @pytest.mark.asyncio
-async def test_get_session_not_found(auth_client: AsyncClient):
+async def test_get_session_not_found(auth_client: AsyncClient) -> None:
     """Test getting a non-existent session."""
     response = await auth_client.get("/api/sessions/9999")
     assert response.status_code == 404
@@ -596,7 +622,9 @@ async def test_get_session_not_found(auth_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_session_includes_ladder_path(auth_client: AsyncClient, async_db, default_user):
+async def test_get_session_includes_ladder_path(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test session response includes dice ladder path."""
     from app.models import Session as SessionModel
 
@@ -642,7 +670,9 @@ async def test_get_session_includes_ladder_path(auth_client: AsyncClient, async_
 
 
 @pytest.mark.asyncio
-async def test_get_session_includes_snapshot_info(auth_client: AsyncClient, async_db, default_user):
+async def test_get_session_includes_snapshot_info(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test session response includes snapshot count and restore point info."""
     from app.models import Session as SessionModel
 
@@ -689,7 +719,9 @@ async def test_get_session_includes_snapshot_info(auth_client: AsyncClient, asyn
 
 
 @pytest.mark.asyncio
-async def test_restore_session_start(auth_client: AsyncClient, async_db, default_user):
+async def test_restore_session_start(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Restore session to start state via API."""
     from app.models import Session as SessionModel
 
@@ -748,7 +780,9 @@ async def test_restore_session_start(auth_client: AsyncClient, async_db, default
 
 
 @pytest.mark.asyncio
-async def test_restore_session_start_no_snapshot(auth_client: AsyncClient, async_db, default_user):
+async def test_restore_session_start_no_snapshot(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test restoring session when no session start snapshot exists."""
     from app.models import Session as SessionModel
 
@@ -764,8 +798,8 @@ async def test_restore_session_start_no_snapshot(auth_client: AsyncClient, async
 
 @pytest.mark.asyncio
 async def test_restore_session_start_with_deleted_threads(
-    auth_client: AsyncClient, async_db, default_user
-):
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test that restore handles threads that were deleted after snapshot."""
     from app.models import Session as SessionModel
 
@@ -819,8 +853,8 @@ async def test_restore_session_start_with_deleted_threads(
 
 @pytest.mark.asyncio
 async def test_restore_session_start_clears_pending_thread_id(
-    auth_client: AsyncClient, async_db, default_user
-):
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test that restore-session-start clears pending_thread_id from sessions when deleting threads.
 
     Regression test for BUG-131: Ensures that when restoring to a snapshot where
@@ -876,7 +910,9 @@ async def test_restore_session_start_clears_pending_thread_id(
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot_clears_pending_thread_id(async_db, default_user):
+async def test_undo_to_snapshot_clears_pending_thread_id(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """Test that undo_to_snapshot clears pending_thread_id when processing.
 
     Regression test for BUG-131: Verifies that snapshot restoration works correctly.
@@ -926,7 +962,7 @@ async def test_undo_to_snapshot_clears_pending_thread_id(async_db, default_user)
 
 
 @pytest.mark.asyncio
-async def test_is_active_no_lazy_load(async_db, default_user):
+async def test_is_active_no_lazy_load(async_db: AsyncSession, default_user: User) -> None:
     """Test that is_active doesn't cause lazy load of session object."""
     session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
@@ -955,7 +991,9 @@ async def test_is_active_no_lazy_load(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_deadlock_retry(async_db, sample_data, default_user):
+async def test_get_or_create_deadlock_retry(
+    async_db: AsyncSession, sample_data: dict, default_user: User
+) -> None:
     """Test that get_or_create creates new session when no active one exists.
 
     Regression test for BUG-126: OperationalError deadlock handling.
@@ -972,8 +1010,8 @@ async def test_get_or_create_deadlock_retry(async_db, sample_data, default_user)
 
 @pytest.mark.asyncio
 async def test_get_or_create_uses_session_id_to_prevent_lazy_load(
-    async_db, sample_data, default_user
-):
+    async_db: AsyncSession, sample_data: dict, default_user: User
+) -> None:
     """Test that get_or_create session object doesn't cause lazy loading issues.
 
     Regression test for BUG-126: Verify that session returned from get_or_create
@@ -991,7 +1029,9 @@ async def test_get_or_create_uses_session_id_to_prevent_lazy_load(
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_non_deadlock_operational_error(async_db, sample_data):
+async def test_get_or_create_non_deadlock_operational_error(
+    async_db: AsyncSession, sample_data: dict
+) -> None:
     """Test that get_or_create raises non-deadlock OperationalError.
 
     Regression test for BUG-126: Verify that non-deadlock OperationalErrors
@@ -1020,7 +1060,7 @@ async def test_get_or_create_non_deadlock_operational_error(async_db, sample_dat
 
 
 @pytest.mark.asyncio
-async def test_is_active_with_naive_datetime(async_db, default_user):
+async def test_is_active_with_naive_datetime(async_db: AsyncSession, default_user: User) -> None:
     """Test that is_active handles datetime without timezone.
 
     When a datetime has no tzinfo, it should be treated as UTC.
@@ -1042,7 +1082,7 @@ async def test_is_active_with_naive_datetime(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_is_active_naive_old_datetime(async_db, default_user):
+async def test_is_active_naive_old_datetime(async_db: AsyncSession, default_user: User) -> None:
     """Test that is_active handles old naive datetime correctly."""
     session = SessionModel(
         started_at=datetime.now() - timedelta(hours=1),
@@ -1060,7 +1100,9 @@ async def test_is_active_naive_old_datetime(async_db, default_user):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_returns_existing_within_time_window(async_db, default_user):
+async def test_get_or_create_returns_existing_within_time_window(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """Test that get_or_create returns existing session when one exists within time window.
 
     This tests the early return path at line 148 where active_session is found
@@ -1084,7 +1126,7 @@ async def test_get_or_create_returns_existing_within_time_window(async_db, defau
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_handles_zero(async_db, sample_data):
+async def test_move_to_position_handles_zero(async_db: AsyncSession, sample_data: dict) -> None:
     """Test that move_to_position handles new_position=0 correctly.
 
     This covers line 70 where new_position is set to 1 when it's < 1.
@@ -1100,7 +1142,9 @@ async def test_move_to_position_handles_zero(async_db, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_race_condition_after_lock(async_db, sample_data, default_user):
+async def test_get_or_create_race_condition_after_lock(
+    async_db: AsyncSession, sample_data: dict, default_user: User
+) -> None:
     """Test that get_or_create returns existing session when found.
 
     This tests the path where an active session already exists and is returned.
@@ -1124,7 +1168,9 @@ async def test_get_or_create_race_condition_after_lock(async_db, sample_data, de
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_deadlock_retries_with_backoff(async_db, sample_data, default_user):
+async def test_get_or_create_deadlock_retries_with_backoff(
+    async_db: AsyncSession, sample_data: dict, default_user: User
+) -> None:
     """Test that get_or_create returns existing session found after lock."""
     from app.models import Session as SessionModel
 
@@ -1147,7 +1193,9 @@ async def test_get_or_create_deadlock_retries_with_backoff(async_db, sample_data
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_returns_existing_after_lock(async_db, sample_data, default_user):
+async def test_get_or_create_returns_existing_after_lock(
+    async_db: AsyncSession, sample_data: dict, default_user: User
+) -> None:
     """Test that get_or_create returns session found after acquiring lock.
 
     This tests the code path at line 141 where active_session is found
@@ -1174,7 +1222,9 @@ async def test_get_or_create_returns_existing_after_lock(async_db, sample_data, 
 
 
 @pytest.mark.asyncio
-async def test_get_current_die_returns_manual_die(async_db, default_user):
+async def test_get_current_die_returns_manual_die(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """Test that get_current_die returns manual_die when set.
 
     This tests line 194 where session.manual_die is returned.
@@ -1198,8 +1248,8 @@ async def test_get_current_die_returns_manual_die(async_db, default_user):
 
 @pytest.mark.asyncio
 async def test_get_current_session_after_get_or_create_no_lazy_load(
-    auth_client: AsyncClient, async_db, default_user
-):
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Test that accessing session.id after get_or_create doesn't cause MissingGreenlet.
 
     Regression test for MissingGreenlet error when get_current_session creates a new

@@ -1,14 +1,19 @@
 """Edge case tests for queue reordering operations."""
 
+from typing import Any
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Thread
+from app.models import Thread, User
+from httpx import AsyncClient
 from comic_pile.queue import move_to_back, move_to_front, move_to_position
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_clamps_to_max(auth_client, async_db: AsyncSession, sample_data):
+async def test_move_to_position_clamps_to_max(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """Moving to position > max_position clamps to max."""
     thread_id = sample_data["threads"][0].id
 
@@ -28,7 +33,9 @@ async def test_move_to_position_clamps_to_max(auth_client, async_db: AsyncSessio
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_when_no_threads(auth_client, async_db: AsyncSession, default_user):
+async def test_move_to_position_when_no_threads(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Moving to position when no threads handles gracefully."""
     from app.models import Thread as ThreadModel
 
@@ -54,7 +61,9 @@ async def test_move_to_position_when_no_threads(auth_client, async_db: AsyncSess
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_nonexistent_thread(async_db: AsyncSession, default_user, sample_data):
+async def test_move_to_front_nonexistent_thread(
+    async_db: AsyncSession, default_user: User, sample_data: dict
+) -> None:
     """move_to_front with non-existent thread_id returns early without error."""
     nonexistent_thread_id = 99999
 
@@ -68,7 +77,9 @@ async def test_move_to_front_nonexistent_thread(async_db: AsyncSession, default_
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_nonexistent_thread(async_db: AsyncSession, default_user, sample_data):
+async def test_move_to_back_nonexistent_thread(
+    async_db: AsyncSession, default_user: User, sample_data: dict
+) -> None:
     """move_to_back with non-existent thread_id returns early without error."""
     nonexistent_thread_id = 99999
 
@@ -82,7 +93,7 @@ async def test_move_to_back_nonexistent_thread(async_db: AsyncSession, default_u
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_no_active_threads(async_db: AsyncSession, default_user):
+async def test_move_to_back_no_active_threads(async_db: AsyncSession, default_user: User) -> None:
     """move_to_back when max_position is None (no active threads) returns early without error."""
     from datetime import UTC, datetime
 
@@ -109,8 +120,8 @@ async def test_move_to_back_no_active_threads(async_db: AsyncSession, default_us
 
 @pytest.mark.asyncio
 async def test_move_to_position_nonexistent_thread(
-    async_db: AsyncSession, default_user, sample_data, caplog
-):
+    async_db: AsyncSession, default_user: User, sample_data: dict, caplog: Any
+) -> None:
     """move_to_position with non-existent thread_id logs error and returns early."""
     nonexistent_thread_id = 99999
 
@@ -130,8 +141,8 @@ async def test_move_to_position_nonexistent_thread(
 
 @pytest.mark.asyncio
 async def test_move_to_position_thread_not_in_active_list(
-    async_db: AsyncSession, default_user, caplog
-):
+    async_db: AsyncSession, default_user: User, caplog: Any
+) -> None:
     """move_to_position with thread having queue_position < 1 logs error and returns early."""
     from datetime import UTC, datetime
 
@@ -163,8 +174,8 @@ async def test_move_to_position_thread_not_in_active_list(
 
 @pytest.mark.asyncio
 async def test_move_to_position_clamps_negative_position(
-    async_db: AsyncSession, default_user, sample_data, caplog
-):
+    async_db: AsyncSession, default_user: User, sample_data: dict, caplog: Any
+) -> None:
     """move_to_position with new_position < 1 clamps to 1."""
     thread_id = sample_data["threads"][0].id
 
@@ -178,7 +189,7 @@ async def test_move_to_position_clamps_negative_position(
 
 
 @pytest.mark.asyncio
-async def test_get_roll_pool(async_db: AsyncSession, default_user, sample_data):
+async def test_get_roll_pool(async_db: AsyncSession, default_user: User, sample_data: dict) -> None:
     """get_roll_pool returns all active threads ordered by position."""
     from comic_pile.queue import get_roll_pool
 
@@ -192,7 +203,7 @@ async def test_get_roll_pool(async_db: AsyncSession, default_user, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_get_stale_threads(async_db: AsyncSession, default_user):
+async def test_get_stale_threads(async_db: AsyncSession, default_user: User) -> None:
     """get_stale_threads returns threads not read in specified days."""
     from datetime import UTC, datetime, timedelta
     from comic_pile.queue import get_stale_threads
@@ -245,7 +256,9 @@ async def test_get_stale_threads(async_db: AsyncSession, default_user):
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_already_at_position_1(async_db: AsyncSession, default_user):
+async def test_move_to_front_already_at_position_1(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """move_to_front when thread is already at position 1 returns early without changes."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_front
@@ -295,7 +308,9 @@ async def test_move_to_front_already_at_position_1(async_db: AsyncSession, defau
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_from_middle_position(async_db: AsyncSession, default_user):
+async def test_move_to_front_from_middle_position(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """move_to_front: Moving thread from position > 1 to front shifts all preceding threads back."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_front
@@ -384,7 +399,9 @@ async def test_move_to_front_from_middle_position(async_db: AsyncSession, defaul
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_already_at_max_position(async_db: AsyncSession, default_user):
+async def test_move_to_back_already_at_max_position(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """move_to_back when thread is already at max_position returns early without changes."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_back
@@ -434,7 +451,7 @@ async def test_move_to_back_already_at_max_position(async_db: AsyncSession, defa
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_from_front_position(async_db: AsyncSession, default_user):
+async def test_move_to_back_from_front_position(async_db: AsyncSession, default_user: User) -> None:
     """move_to_back: Moving thread from position < max to back shifts all following threads forward."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_back
@@ -524,8 +541,8 @@ async def test_move_to_back_from_front_position(async_db: AsyncSession, default_
 
 @pytest.mark.asyncio
 async def test_move_to_position_normalizes_non_sequential_positions(
-    async_db: AsyncSession, default_user
-):
+    async_db: AsyncSession, default_user: User
+) -> None:
     """move_to_position normalizes non-sequential queue positions before moving."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_position
@@ -587,7 +604,9 @@ async def test_move_to_position_normalizes_non_sequential_positions(
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_backward_movement(async_db: AsyncSession, default_user):
+async def test_move_to_position_backward_movement(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """move_to_position: Moving thread backward (current < new) shifts threads in between forward."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_position
@@ -676,7 +695,9 @@ async def test_move_to_position_backward_movement(async_db: AsyncSession, defaul
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_forward_movement(async_db: AsyncSession, default_user):
+async def test_move_to_position_forward_movement(
+    async_db: AsyncSession, default_user: User
+) -> None:
     """move_to_position: Moving thread forward (current > new) shifts threads in between backward."""
     from datetime import UTC, datetime
     from comic_pile.queue import move_to_position
