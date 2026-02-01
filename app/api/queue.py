@@ -92,6 +92,7 @@ async def move_thread_position(
         )
         db.add(reorder_event)
         await db.commit()
+        await db.refresh(thread)
 
     if clear_cache:
         clear_cache()
@@ -143,6 +144,7 @@ async def move_thread_front(
         )
         db.add(reorder_event)
         await db.commit()
+        await db.refresh(thread)
 
     if clear_cache:
         clear_cache()
@@ -194,6 +196,7 @@ async def move_thread_back(
         )
         db.add(reorder_event)
         await db.commit()
+        await db.refresh(thread)
 
     if clear_cache:
         clear_cache()

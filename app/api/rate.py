@@ -111,9 +111,10 @@ async def rate_thread(
     Raises:
         HTTPException: If no active session, invalid rating, or thread not found.
     """
+    user_id = current_user.id
     result = await db.execute(
         select(SessionModel)
-        .where(SessionModel.user_id == current_user.id)
+        .where(SessionModel.user_id == user_id)
         .where(SessionModel.ended_at.is_(None))
         .order_by(SessionModel.started_at.desc())
     )
@@ -144,7 +145,7 @@ async def rate_thread(
     result = await db.execute(
         select(Thread)
         .where(Thread.id == last_roll_event.selected_thread_id)
-        .where(Thread.user_id == current_user.id)
+        .where(Thread.user_id == user_id)
     )
     thread = result.scalar_one_or_none()
     if not thread:
@@ -184,16 +185,16 @@ async def rate_thread(
     db.add(event)
 
     if rate_data.rating >= rating_threshold:
-        await move_to_front(thread.id, current_user.id, db)
+        await move_to_front(thread.id, user_id, db)
     else:
-        await move_to_back(thread.id, current_user.id, db)
+        await move_to_back(thread.id, user_id, db)
 
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
         if thread.issues_remaining <= 0:
             thread.status = "completed"
-            await move_to_back(thread.id, current_user.id, db)
+            await move_to_back(thread.id, user_id, db)
 
     if clear_cache:
         clear_cache()
@@ -203,7 +204,7 @@ async def rate_thread(
 
     await db.commit()
 
-    await snapshot_thread_states(db, current_session_id, event, current_user.id)
+    await snapshot_thread_states(db, current_session_id, event, user_id)
     await db.refresh(thread)
 
     return thread_to_response(thread)
