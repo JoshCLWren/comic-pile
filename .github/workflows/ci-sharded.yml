@@ -88,7 +88,7 @@ jobs:
     container:
       image: ${{ needs.build.outputs.image-tag }}
     needs: build
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
@@ -144,7 +144,7 @@ jobs:
     container:
       image: ${{ needs.build.outputs.image-tag }}
     needs: build
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
@@ -192,7 +192,7 @@ jobs:
     container:
       image: ${{ needs.build.outputs.image-tag }}
     needs: build
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
@@ -259,7 +259,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -306,7 +306,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -353,7 +353,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -400,7 +400,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -447,7 +447,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -494,7 +494,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -541,7 +541,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -588,7 +588,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -637,7 +637,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
