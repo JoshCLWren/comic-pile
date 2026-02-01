@@ -1,15 +1,15 @@
 """Shared pytest fixtures."""
 
 import os
-from collections.abc import AsyncGenerator, AsyncIterator, Iterator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 from datetime import UTC, datetime
-from typing import Any
 
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import inspect, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncSession as SQLAlchemyAsyncSession,
 )
@@ -118,7 +118,7 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
             db.add(user)
             try:
                 await db.commit()
-            except Exception:
+            except IntegrityError:
                 await db.rollback()
                 result = await db.execute(select(User).where(User.username == "test_user"))
                 user = result.scalar_one()
@@ -136,7 +136,7 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str = "
         db.add(user)
         try:
             await db.commit()
-        except Exception:
+        except IntegrityError:
             await db.rollback()
             result = await db.execute(select(User).where(User.username == username))
             user = result.scalar_one()
@@ -215,7 +215,9 @@ async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
     await engine.dispose()
 
 
-async def _create_async_db_override(async_session: SQLAlchemyAsyncSession) -> Any:
+async def _create_async_db_override(
+    async_session: SQLAlchemyAsyncSession,
+) -> Callable[[], AsyncIterator[SQLAlchemyAsyncSession]]:
     """Create dependency override for get_db using provided async session."""
 
     async def override_get_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
