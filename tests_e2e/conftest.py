@@ -35,25 +35,22 @@ if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 
 
-def pytest_configure(config):
-    """Synchronous hook to create database tables before any fixtures run.
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _create_database_tables():
+    """Create database tables using asyncpg (ASYNC ONLY - no sync psycopg2).
     
-    This uses synchronous PostgreSQL driver to create tables, avoiding
-    pytest-asyncio event loop issues with session-scoped async fixtures.
+    This module-scoped async fixture runs before any tests in the module,
+    creating tables if they don't exist. Uses asyncpg ONLY.
     """
-    from sqlalchemy import create_engine
+    database_url = get_test_database_url()
+    engine = create_async_engine(database_url, echo=False)
     
-    test_db_url = get_test_database_url()
-    # Convert asyncpg URL to psycopg sync URL
-    sync_url = test_db_url.replace("+asyncpg", "").replace("postgresql+asyncpg", "postgresql")
-
-    engine = create_engine(sync_url, echo=False)
-
     try:
-        with engine.begin() as conn:
-            Base.metadata.create_all(bind=conn)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     finally:
-        engine.dispose()
+        await engine.dispose()
+    yield
 
 
 async def _ensure_default_user(async_db: SQLAlchemyAsyncSession) -> User:
@@ -231,9 +228,13 @@ def test_server_url():
     async def setup_test_data():
         """Setup test database with sample data.
 
-        Note: Tables are created by async_db fixture, so this only seeds data.
+        Creates tables using asyncpg (async-only, NO sync psycopg2),
+        then seeds sample data for E2E tests.
         """
         test_engine = create_async_engine(test_db_url)
+
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
         async_session_maker = async_sessionmaker(
             bind=test_engine,
