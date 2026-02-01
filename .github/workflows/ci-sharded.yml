@@ -1,11 +1,5 @@
 name: CI Sharded
 
-# SECURITY: The following secrets must be configured in GitHub repository settings:
-# Settings > Secrets and variables > Actions > New repository secret
-# - SECRET_KEY: Application secret key for session encryption
-# - DATABASE_URL: PostgreSQL connection string (e.g., postgresql+asyncpg://postgres:PASSWORD@postgres:5432/comic_pile_test)
-# - POSTGRES_PASSWORD: PostgreSQL database password
-
 on:
   pull_request:
   workflow_dispatch:
@@ -91,15 +85,15 @@ jobs:
     timeout-minutes: 15
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -147,15 +141,15 @@ jobs:
     timeout-minutes: 15
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -195,15 +189,15 @@ jobs:
     timeout-minutes: 15
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -242,15 +236,15 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -289,15 +283,15 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -336,15 +330,15 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -383,15 +377,15 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -430,15 +424,15 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -477,15 +471,15 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -524,15 +518,15 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -571,15 +565,15 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
@@ -619,16 +613,16 @@ jobs:
     needs: build
     env:
       CI: true
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      TEST_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: comic_pile_test
         ports:
           - 5432:5432
