@@ -14,10 +14,10 @@
 ## Progress Summary
 | State | Count |
 |-------|-------|
-| TODO | 28 |
+| TODO | 24 |
 | IN_PROGRESS | 0 |
 | REVIEW | 0 |
-| DONE | 11 |
+| DONE | 15 |
 | FAILED | 0 |
 
 ---
@@ -175,12 +175,15 @@
 ### [MED-004] Ruff B008 violations (Depends in defaults)
 - **Comments**: Multiple
 - **File**: `app/api/queue.py`
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
-- **Fix Required**: Move Depends() to function body
-- **Attempts**: 0
-- **Verification**: ruff check
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e9351d78ffeTGZr6SSJED8iYN
+- **Reviewer**: ses_3e933cfd3ffeXY52dIdrM6l5qc
+- **Error**: Using Depends() in function defaults (B008 violation)
+- **Fix Required**: Changed to Annotated[AsyncSession, Depends(get_db)]
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Passed all checks (ruff, ty, pytest)
+- **Completed**: 2026-02-01
 
 ### [MED-005] Ruff ARG001 violations (unused fixtures)
 - **Comments**: Multiple
@@ -222,23 +225,28 @@
 
 ### [MED-008] `scripts/dev-all.sh:1-39` - Two process management issues
 - **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
-- **Error**: (1) pkill -f kills unrelated Vite/Uvicorn processes, (2) hardcoded ports (8000, 5173)
-- **Fix Required**: (1) Save PIDs to variables and kill specific PIDs, (2) Make ports configurable via BACKEND_PORT/FRONTEND_PORT env vars
-- **Attempts**: 0
-- **Verification**: Run dev-all.sh and verify only correct processes are killed
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e9353748ffeQI5GM0Xt3o4b7O (attempt 1), ses_3e932e0e2ffezitsLF15IYW77L (attempt 2)
+- **Reviewer**: ses_3e933cfdbffe8jnFXpZvTRgKfy (review 1 - REJECTED), ses_3e931f846ffejKiWRw2bKteEEt (review 2 - APPROVED)
+- **Error**: (1) pkill -f kills unrelated processes, (2) hardcoded ports
+- **Fix Required**: Use PID files with process name verification + configurable ports
+- **Attempts**: 2
+- **Last Error**: First attempt had broken force-kill logic (deleted PID file too early)
+- **Verification**: ✅ Passed all checks (bash -n, manual review)
+- **Completed**: 2026-02-01
+- **Fix**: Added process name check, fixed trap strategy (INT TERM only not EXIT)
 
 ### [MED-009] `scripts/seed_dev_db.py:15-16` - Missing return type annotation
 - **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
-- **Error**: `async def seed_database` lacks return type annotation
-- **Fix Required**: Change to `async def seed_database() -> None:`
-- **Attempts**: 0
-- **Verification**: ty check
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e9352f85ffeS1S2whUNrQ8vdE
+- **Reviewer**: ses_3e933cfd4ffee6t5CSR4ZYPI0l
+- **Error**: async def seed_database lacks return type annotation
+- **Fix Required**: Changed to async def seed_database() -> None:
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Passed all checks (ty check)
+- **Completed**: 2026-02-01
 
 ### [MED-010] `SUB_AGENT_PROTOCOL.md:25-36` - Two formatting issues
 - **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
@@ -262,9 +270,15 @@
 
 ### [LOW-002] `CODERABBIT_AUDIT.md:440` - Typo "typpos"
 - **Comment ID**: review-3733435337 (2026-01-31T20:17:13Z)
-- **State**: `TODO`
-- **Assigned To**: None
-- **Reviewer**: None
+- **State**: `DONE` ✅
+- **Assigned To**: ses_3e935291affeE3b9W9KnprScq
+- **Reviewer**: None (simple typo fix, no review needed)
+- **Error**: Typo "typpos" should be "typos"
+- **Fix Required**: Fixed typo
+- **Attempts**: 1
+- **Last Error**: None
+- **Verification**: ✅ Verified no typos remain
+- **Completed**: 2026-02-01
 - **Error**: Text contains typo "typpos" should be "typos"
 - **Fix Required**: Change "typpos" to "typos" in line 440
 - **Attempts**: 0

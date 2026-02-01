@@ -437,7 +437,7 @@
 2. **Short-term Actions** (This Sprint)
    - Add type annotations to all test functions
    - Complete docstring updates for public functions
-   - Fix high-priority test issues (typpos, missing fields)
+    - Fix high-priority test issues (typos, missing fields)
    - Address Ruff B008 violations with `Depends()` pattern
 
 3. **Medium-term Actions** (Next Sprint)
