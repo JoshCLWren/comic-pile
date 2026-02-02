@@ -115,13 +115,15 @@ jobs:
 
       - name: Wait for PostgreSQL
         run: |
-          for i in {1..30}; do
+          i=1
+          while [ $i -le 30 ]; do
             if pg_isready -h postgres -p 5432 -U postgres; then
               echo "PostgreSQL is ready"
               exit 0
             fi
             echo "Waiting for PostgreSQL..."
             sleep 2
+            i=$((i + 1))
           done
           echo "PostgreSQL failed to start"
           exit 1
@@ -171,13 +173,15 @@ jobs:
 
       - name: Wait for PostgreSQL
         run: |
-          for i in {1..30}; do
+          i=1
+          while [ $i -le 30 ]; do
             if pg_isready -h postgres -p 5432 -U postgres; then
               echo "PostgreSQL is ready"
               exit 0
             fi
             echo "Waiting for PostgreSQL..."
             sleep 2
+            i=$((i + 1))
           done
           echo "PostgreSQL failed to start"
           exit 1
@@ -219,13 +223,15 @@ jobs:
 
       - name: Wait for PostgreSQL
         run: |
-          for i in {1..30}; do
+          i=1
+          while [ $i -le 30 ]; do
             if pg_isready -h postgres -p 5432 -U postgres; then
               echo "PostgreSQL is ready"
               exit 0
             fi
             echo "Waiting for PostgreSQL..."
             sleep 2
+            i=$((i + 1))
           done
           echo "PostgreSQL failed to start"
           exit 1
@@ -274,13 +280,15 @@ jobs:
 
       - name: Wait for PostgreSQL
         run: |
-          for i in {1..30}; do
+          i=1
+          while [ $i -le 30 ]; do
             if pg_isready -h postgres -p 5432 -U postgres; then
               echo "PostgreSQL is ready"
               exit 0
             fi
             echo "Waiting for PostgreSQL..."
             sleep 2
+            i=$((i + 1))
           done
           echo "PostgreSQL failed to start"
           exit 1
@@ -300,13 +308,15 @@ jobs:
 
       - name: Wait for backend to be ready
         run: |
-          for i in {1..30}; do
+          i=1
+          while [ $i -le 30 ]; do
             if curl -f http://localhost:8000/health 2>/dev/null; then
               echo "Backend is ready"
               exit 0
             fi
             echo "Waiting for backend... ($i/30)"
             sleep 2
+            i=$((i + 1))
           done
           echo "Backend failed to start. Log output:"
           cat /tmp/backend.log || true
