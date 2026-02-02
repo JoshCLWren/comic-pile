@@ -2,17 +2,11 @@
 
 import asyncio
 import os
-import signal
-import subprocess
-import threading
-import time
 from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import UTC, datetime
-from socket import socket
 
 import pytest
 import pytest_asyncio
-import requests
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
