@@ -141,7 +141,33 @@ if not thread or thread.user_id != current_user.id:
     )
 ```
 
-## Testing Patterns
+ ## Testing Patterns
+
+ ### Browser UI Tests
+
+ **Use TypeScript Playwright tests** (in `frontend/src/test/`) for browser automation.
+
+ **Python Playwright tests are NOT supported** due to fundamental event loop conflicts:
+ - pytest-asyncio requires managing the event loop for async tests
+ - Playwright's async fixtures need their own event loop
+ - These two systems cannot coexist in the same test suite
+ - Multiple attempts to fix this have failed (9+ commits, all reverted)
+
+ **TypeScript Playwright Configuration**:
+ - File: `frontend/playwright.config.ts`
+ - Automatically starts Uvicorn via `webServer` config
+ - Tests run in isolated environment
+ - All browser tests work correctly
+
+ **Running TypeScript Browser Tests**:
+ ```bash
+ cd frontend
+ npx playwright test --project=chromium
+ ```
+
+ ### API Tests
+
+API tests use in-memory SQLite for fast unit testing:
 
 - Tests in `tests/` directory, test files: `test_*.py`, functions: `test_*`
 - Use `@pytest.mark.asyncio` for async tests
@@ -149,7 +175,7 @@ if not thread or thread.user_id != current_user.id:
 - Write regression tests for bug fixes
 - Maintain 96% coverage threshold
 
-### Key Fixtures (from `tests/conftest.py`)
+**Key Fixtures (from `tests/conftest.py`)**:
 ```python
 # Authenticated HTTP client
 async def test_example(auth_client, sample_data):
@@ -160,6 +186,43 @@ async def test_example(auth_client, sample_data):
 def test_db_example(db):
     thread = db.get(Thread, 1)
 ```
+
+ ## Docker Test Environment
+
+ ### Docker Compose Test Configuration
+
+ File: `docker-compose.test.yml`
+
+ **Purpose**: Provides isolated PostgreSQL database and API server for testing
+
+ **Services**:
+ - `postgres-test`: PostgreSQL 16 on port 5437
+ - `api-test`: FastAPI application on port 8000 (optional, for manual testing)
+
+ **Usage**:
+ ```bash
+ # Start test environment
+ make docker-test-up
+
+ # Check health
+ make docker-test-health
+
+ # View logs
+ make docker-test-logs
+
+ # Stop test environment
+ make docker-test-down
+ ```
+
+ **Environment File**: `.env.test`
+ - Contains `DATABASE_URL` pointing to localhost:5437
+ - Contains test `SECRET_KEY`
+ - Source with: `source .env.test`
+
+ **Port Conflicts**:
+ - Dev PostgreSQL: port 5435 (from docker-compose.yml)
+ - Test PostgreSQL: port 5437 (from docker-compose.test.yml)
+ - CI PostgreSQL: port 5432 (GitHub Actions service)
 
 ## Frontend Code Style
 

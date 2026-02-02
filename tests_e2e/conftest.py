@@ -2,6 +2,8 @@
 
 import asyncio
 import os
+import signal
+import subprocess
 import threading
 import time
 from collections.abc import AsyncGenerator, AsyncIterator
@@ -111,18 +113,6 @@ def get_test_database_url() -> str:
     )
 
 
-def _find_free_port():
-    """Find a free port to run the test server on."""
-    with socket() as s:
-        s.bind(("", 0))
-        s.listen(1)
-        port = s.getsockname()[1]
-    return port
-
-
-TEST_SERVER_PORT = _find_free_port()
-
-
 @pytest.fixture(scope="function", autouse=True)
 def set_skip_worktree_check():
     """Skip worktree validation in tests."""
@@ -216,129 +206,6 @@ def db(async_db):
     return SyncDB(async_db)
 
 
-@pytest.fixture(scope="session")
-def test_server_url():
-    """Launch test server for browser tests with seeded sample data."""
-    import asyncio
-    from uvicorn import Config, Server
-
-    original_db_url = os.environ.get("DATABASE_URL")
-    test_db_url = get_test_database_url()
-    os.environ["DATABASE_URL"] = test_db_url
-
-    async def setup_test_data():
-        """Setup test database with sample data using asyncpg.
-
-        Creates tables using asyncpg (async-only, NO sync psycopg2),
-        then seeds sample data for E2E tests.
-        """
-        test_engine = create_async_engine(test_db_url)
-
-        # Create tables using asyncpg (async-only)
-        async with test_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-        async_session_maker = async_sessionmaker(
-            bind=test_engine,
-            expire_on_commit=False,
-            class_=SQLAlchemyAsyncSession,
-        )
-
-        async with test_engine.begin():
-            async with async_session_maker() as session:
-                await _ensure_default_user(session)
-
-                from app.models import Session as SessionModel, Thread
-
-                threads = [
-                    Thread(
-                        title="Superman",
-                        format="Comic",
-                        issues_remaining=10,
-                        queue_position=1,
-                        status="active",
-                        is_test=True,
-                        created_at=datetime.now(UTC),
-                        user_id=1,
-                    ),
-                    Thread(
-                        title="Batman",
-                        format="Comic",
-                        issues_remaining=5,
-                        queue_position=2,
-                        status="active",
-                        is_test=True,
-                        created_at=datetime.now(UTC),
-                        user_id=1,
-                    ),
-                    Thread(
-                        title="Wonder Woman",
-                        format="Comic",
-                        issues_remaining=0,
-                        queue_position=3,
-                        status="completed",
-                        is_test=True,
-                        created_at=datetime.now(UTC),
-                        user_id=1,
-                    ),
-                ]
-                for thread in threads:
-                    session.add(thread)
-                await session.flush()
-
-                session_obj = SessionModel(start_die=6, user_id=1, started_at=datetime.now(UTC))
-                session.add(session_obj)
-                await session.commit()
-
-        await test_engine.dispose()
-
-    asyncio.run(setup_test_data())
-
-    config = Config(app=app, host="127.0.0.1", port=TEST_SERVER_PORT, log_level="warning")
-    server = Server(config)
-
-    thread = threading.Thread(target=server.run)
-    thread.daemon = True
-    thread.start()
-
-    server_ready = False
-    for _ in range(100):
-        try:
-            response = requests.get(f"http://127.0.0.1:{TEST_SERVER_PORT}/health", timeout=1)
-            if response.status_code == 200:
-                server_ready = True
-                break
-        except requests.exceptions.RequestException:
-            time.sleep(0.1)
-
-    if not server_ready:
-        raise RuntimeError(
-            f"Test server failed to start on port {TEST_SERVER_PORT}. "
-            f"Check if database is running and accessible."
-        )
-
-    yield f"http://127.0.0.1:{TEST_SERVER_PORT}"
-
-    async def shutdown_server():
-        server.should_exit = True
-        await server.shutdown()
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(shutdown_server())
-    except RuntimeError:
-        pass
-    finally:
-        loop.close()
-    thread.join(timeout=5)
-
-    if original_db_url is None:
-        os.environ.pop("DATABASE_URL", None)
-    else:
-        os.environ["DATABASE_URL"] = original_db_url
-
-
 @pytest_asyncio.fixture(scope="function")
 async def auth_api_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
     """API client using ASGITransport for direct app calls."""
@@ -387,13 +254,3 @@ async def auth_api_client_async(async_db: SQLAlchemyAsyncSession) -> AsyncGenera
         ac.headers.update({"Authorization": f"Bearer {token}"})
         yield ac
     app.dependency_overrides.clear()
-
-
-@pytest_asyncio.fixture(scope="function")
-async def browser_page(page):
-    """Async Playwright page fixture with localStorage cleared after each test."""
-    yield page
-    try:
-        await page.evaluate("localStorage.clear()")
-    except Exception:
-        pass

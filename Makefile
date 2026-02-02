@@ -2,6 +2,7 @@
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev test seed migrate worktrees status test-integration deploy-prod dev-all dev-frontend
+.PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
 
 # Configuration
 PREFIX ?= /usr/local
@@ -16,7 +17,7 @@ LIBDIR ?= $(PREFIX)/lib
 PORT ?= 8000
 
 help:  ## Show this help message
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 init:  ## Initialize project with new name (Usage: make init NAME=your-project)
 	@if [ -z "$(NAME)" ]; then echo "Usage: make init NAME=your-project"; exit 1; fi
@@ -292,3 +293,44 @@ dev-frontend:  ## Run frontend dev server only (npm run dev in frontend/)
 		echo "Starting Vite dev server on http://localhost:5173..."; \
 		cd frontend && npm run dev; \
 	fi
+
+# Docker test environment for Python Playwright tests
+docker-test-up:  ## Start Docker test environment (PostgreSQL + API)
+	@echo "Starting Docker test environment..."
+	docker compose -f docker-compose.test.yml up -d --build
+	@echo "Waiting for services to be ready..."
+	@(for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45; do \
+		if curl -f http://localhost:8000/health 2>/dev/null >/dev/null; then \
+			echo "✓ API server is ready on port 8000"; \
+			exit 0; \
+		fi; \
+		echo "Waiting for API server... ($$i/45)"; \
+		sleep 1; \
+	done; \
+	echo "✗ API server failed to start"; \
+	exit 1)
+
+docker-test-down:  ## Stop Docker test environment
+	@echo "Stopping Docker test environment..."
+	docker compose -f docker-compose.test.yml down -v
+
+docker-test-logs:  ## Show Docker test environment logs
+	docker compose -f docker-compose.test.yml logs -f postgres-test
+
+docker-test-health:  ## Check Docker test environment health
+	@echo "Checking Docker test environment..."
+	@docker compose -f docker-compose.test.yml ps
+
+# Python Playwright browser tests with Docker
+test-e2e-browser-docker:  ## Run Python Playwright tests with Docker (starts and stops Docker)
+	@echo "Starting Docker test environment..."
+	$(MAKE) docker-test-up
+	@echo "Running Python Playwright tests..."
+	@pytest tests_e2e/test_browser_ui.py -v --no-cov || ($(MAKE) docker-test-down && exit 1)
+	@echo "Stopping Docker test environment..."
+	$(MAKE) docker-test-down
+	@echo "✓ Tests completed"
+
+test-e2e-browser-quick:  ## Run Python Playwright tests (Docker must already be running)
+	@echo "Running Python Playwright tests (assumes Docker is running)..."
+	@pytest tests_e2e/test_browser_ui.py -v --no-cov
