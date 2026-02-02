@@ -4,9 +4,9 @@
 
 **Location**: `frontend/src/test/`
 
-**Status**: ❌ **DISABLED IN CI**
+**Status**: ✅ **FIXED AND RUNNING IN CI**
 
-**Reason**: Frontend infrastructure issues (vitest conflicts, babel decorator syntax)
+**Fix**: Added `testMatch: '**/*.spec.ts'` to playwright.config.ts to exclude vitest unit tests (*.test.jsx)
 
 ### Test Coverage
 
