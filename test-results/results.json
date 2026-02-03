@@ -1,0 +1,2930 @@
+{
+  "config": {
+    "configFile": "/mnt/extra/josh/code/comic-pile/frontend/playwright.config.ts",
+    "rootDir": "/mnt/extra/josh/code/comic-pile/frontend/src/test",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {},
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/mnt/extra/josh/code/comic-pile/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 1,
+        "metadata": {},
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/mnt/extra/josh/code/comic-pile/frontend/src/test",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never",
+          "outputFolder": "../playwright-report"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "../test-results/results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.0",
+    "workers": 6,
+    "webServer": {
+      "command": "cd .. && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
+      "port": 8000,
+      "reuseExistingServer": true,
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "accessibility.spec.ts",
+      "file": "accessibility.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Accessibility Tests",
+          "file": "accessibility.spec.ts",
+          "line": 5,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should have no accessibility violations on home page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-f095d5f48a2de04959ed",
+              "file": "accessibility.spec.ts",
+              "line": 6,
+              "column": 3
+            },
+            {
+              "title": "should have no accessibility violations on register page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-699d1ca8d13fc6fad0c4",
+              "file": "accessibility.spec.ts",
+              "line": 16,
+              "column": 3
+            },
+            {
+              "title": "should have no accessibility violations on login page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-21be0c72ce5290f247a2",
+              "file": "accessibility.spec.ts",
+              "line": 26,
+              "column": 3
+            },
+            {
+              "title": "should have no accessibility violations on threads page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-57704c63f258a39a5906",
+              "file": "accessibility.spec.ts",
+              "line": 36,
+              "column": 3
+            },
+            {
+              "title": "should have no accessibility violations on queue page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-5b0eefdc92f18980f122",
+              "file": "accessibility.spec.ts",
+              "line": 46,
+              "column": 3
+            },
+            {
+              "title": "should have no accessibility violations on rate page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-4d64bd3eb9365887f098",
+              "file": "accessibility.spec.ts",
+              "line": 56,
+              "column": 3
+            },
+            {
+              "title": "should have no accessibility violations on analytics page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-ca290bfbb14202a75064",
+              "file": "accessibility.spec.ts",
+              "line": 79,
+              "column": 3
+            },
+            {
+              "title": "should have no accessibility violations on history page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-5a08e10b7d9375d748c5",
+              "file": "accessibility.spec.ts",
+              "line": 89,
+              "column": 3
+            },
+            {
+              "title": "should have proper ARIA labels on interactive elements",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-427a087bfc40a548614a",
+              "file": "accessibility.spec.ts",
+              "line": 99,
+              "column": 3
+            },
+            {
+              "title": "should have proper heading hierarchy",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-6743550d6f8da32f6c0d",
+              "file": "accessibility.spec.ts",
+              "line": 119,
+              "column": 3
+            },
+            {
+              "title": "should have sufficient color contrast for text",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-438da7f629322321fbdd",
+              "file": "accessibility.spec.ts",
+              "line": 139,
+              "column": 3
+            },
+            {
+              "title": "should have focus indicators on all interactive elements",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-6486af976280268ad0af",
+              "file": "accessibility.spec.ts",
+              "line": 154,
+              "column": 3
+            },
+            {
+              "title": "should support keyboard navigation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-5285c0e56331422aca39",
+              "file": "accessibility.spec.ts",
+              "line": 180,
+              "column": 3
+            },
+            {
+              "title": "should have descriptive link text",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-e0d6bf7c26fff61e95dd",
+              "file": "accessibility.spec.ts",
+              "line": 201,
+              "column": 3
+            },
+            {
+              "title": "should have proper form labels",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-38b57b8b3cadf5ce75b1",
+              "file": "accessibility.spec.ts",
+              "line": 217,
+              "column": 3
+            },
+            {
+              "title": "should announce dynamic content changes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "ddd864604af8a6a0198f-b9ee50b6bb7b099e7874",
+              "file": "accessibility.spec.ts",
+              "line": 248,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "analytics.spec.ts",
+      "file": "analytics.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Analytics Dashboard",
+          "file": "analytics.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should display analytics page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-d50cb4e4ddb7b5dc886f",
+              "file": "analytics.spec.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "should show reading statistics",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-a8fb4bf380b876cc34f6",
+              "file": "analytics.spec.ts",
+              "line": 11,
+              "column": 3
+            },
+            {
+              "title": "should display charts or graphs",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-3b9875124d3681f34911",
+              "file": "analytics.spec.ts",
+              "line": 28,
+              "column": 3
+            },
+            {
+              "title": "should show total threads count",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-36b51b6e416ad1237e31",
+              "file": "analytics.spec.ts",
+              "line": 43,
+              "column": 3
+            },
+            {
+              "title": "should show active vs completed threads",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-0f75fb6dacd1cce6b67a",
+              "file": "analytics.spec.ts",
+              "line": 63,
+              "column": 3
+            },
+            {
+              "title": "should display rating distribution",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-6524b3f618307e15cb4f",
+              "file": "analytics.spec.ts",
+              "line": 80,
+              "column": 3
+            },
+            {
+              "title": "should filter by date range",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-463ac83005724e511daa",
+              "file": "analytics.spec.ts",
+              "line": 97,
+              "column": 3
+            },
+            {
+              "title": "should export analytics data",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-25703af395793eb2ae4b",
+              "file": "analytics.spec.ts",
+              "line": 112,
+              "column": 3
+            },
+            {
+              "title": "should show session history summary",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-c88c0c888dd1f351af68",
+              "file": "analytics.spec.ts",
+              "line": 131,
+              "column": 3
+            },
+            {
+              "title": "should be accessible via navigation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-6fecee0369f61cef1469",
+              "file": "analytics.spec.ts",
+              "line": 148,
+              "column": 3
+            },
+            {
+              "title": "should handle empty data gracefully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-029067ddcb1fc868a91b",
+              "file": "analytics.spec.ts",
+              "line": 160,
+              "column": 3
+            },
+            {
+              "title": "should load data asynchronously",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "634c82c6846b68aa8d60-dfa4d696924bd05e796d",
+              "file": "analytics.spec.ts",
+              "line": 171,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "auth.spec.ts",
+      "file": "auth.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Authentication Flow",
+          "file": "auth.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should register a new user successfully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-c1f7fb06f3779f5e6fd5",
+              "file": "auth.spec.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "should show validation error for mismatched passwords",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-f5608ae76ecd9686e30f",
+              "file": "auth.spec.ts",
+              "line": 19,
+              "column": 3
+            },
+            {
+              "title": "should show validation error for weak password",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-00ba1dd03774fffa1f6c",
+              "file": "auth.spec.ts",
+              "line": 33,
+              "column": 3
+            },
+            {
+              "title": "should login with valid credentials",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-9aa3fd5f971f9fd61180",
+              "file": "auth.spec.ts",
+              "line": 46,
+              "column": 3
+            },
+            {
+              "title": "should show error for invalid credentials",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-05954164880eaca3a0f9",
+              "file": "auth.spec.ts",
+              "line": 66,
+              "column": 3
+            },
+            {
+              "title": "should persist auth token across page reloads",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-88f8289fc6274bb1ec58",
+              "file": "auth.spec.ts",
+              "line": 78,
+              "column": 3
+            },
+            {
+              "title": "should logout and clear local storage",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "d748ac400d08b85935ef-1e44acd7b186a0a9a686",
+              "file": "auth.spec.ts",
+              "line": 86,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "edge-cases.spec.ts",
+      "file": "edge-cases.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Edge Cases & Error Handling",
+          "file": "edge-cases.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should handle empty form submission",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-5f3083155fb982ef4b7b",
+              "file": "edge-cases.spec.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "should handle very long thread titles",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-9c59c1b2e9901d8e0955",
+              "file": "edge-cases.spec.ts",
+              "line": 14,
+              "column": 3
+            },
+            {
+              "title": "should handle special characters in input",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-8ab91770fb6e1a28d6c4",
+              "file": "edge-cases.spec.ts",
+              "line": 32,
+              "column": 3
+            },
+            {
+              "title": "should handle rapid button clicks",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-b1c6130c9552b1a92bdf",
+              "file": "edge-cases.spec.ts",
+              "line": 55,
+              "column": 3
+            },
+            {
+              "title": "should handle browser back button",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-282e783bb8687917cd87",
+              "file": "edge-cases.spec.ts",
+              "line": 67,
+              "column": 3
+            },
+            {
+              "title": "should handle browser forward button",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-f068bba8220dc1b5b808",
+              "file": "edge-cases.spec.ts",
+              "line": 79,
+              "column": 3
+            },
+            {
+              "title": "should handle page refresh during form submission",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-dab13f625884fea0a024",
+              "file": "edge-cases.spec.ts",
+              "line": 93,
+              "column": 3
+            },
+            {
+              "title": "should handle concurrent tab sessions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-d1999df9829387aa6bb8",
+              "file": "edge-cases.spec.ts",
+              "line": 111,
+              "column": 3
+            },
+            {
+              "title": "should handle extremely large issues_remaining",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-bca3504211dd82702e9b",
+              "file": "edge-cases.spec.ts",
+              "line": 148,
+              "column": 3
+            },
+            {
+              "title": "should handle negative issues_remaining",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-41d28c267bb3d9dae7a6",
+              "file": "edge-cases.spec.ts",
+              "line": 164,
+              "column": 3
+            },
+            {
+              "title": "should handle zero issues_remaining",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-2d1e69e8c4d0d0cd60d6",
+              "file": "edge-cases.spec.ts",
+              "line": 180,
+              "column": 3
+            },
+            {
+              "title": "should handle bookmarking/direct URL access",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-8d989c6cb23ec619776d",
+              "file": "edge-cases.spec.ts",
+              "line": 197,
+              "column": 3
+            },
+            {
+              "title": "should handle losing network connection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-7621688fc6307f06149c",
+              "file": "edge-cases.spec.ts",
+              "line": 213,
+              "column": 3
+            },
+            {
+              "title": "should handle regaining network connection",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-b0a22b7b88c5de564476",
+              "file": "edge-cases.spec.ts",
+              "line": 232,
+              "column": 3
+            },
+            {
+              "title": "should handle browser storage disabled",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-16f9073aa0ab70a37625",
+              "file": "edge-cases.spec.ts",
+              "line": 247,
+              "column": 3
+            },
+            {
+              "title": "should handle cookies disabled",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-e26fc2230b6b74b9b43b",
+              "file": "edge-cases.spec.ts",
+              "line": 265,
+              "column": 3
+            },
+            {
+              "title": "should handle rapid page navigations",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-d055d3c76d4a36aa5be9",
+              "file": "edge-cases.spec.ts",
+              "line": 284,
+              "column": 3
+            },
+            {
+              "title": "should handle very slow network",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-d6e065a554ba9e10acee",
+              "file": "edge-cases.spec.ts",
+              "line": 297,
+              "column": 3
+            },
+            {
+              "title": "should handle session timeout",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-cb02ffbd5f07d9ac1f9f",
+              "file": "edge-cases.spec.ts",
+              "line": 319,
+              "column": 3
+            },
+            {
+              "title": "should handle duplicate thread creation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "db200a91ff2226597e25-526861979f219d1bb63c",
+              "file": "edge-cases.spec.ts",
+              "line": 338,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "history.spec.ts",
+      "file": "history.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "History Page",
+          "file": "history.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should display history page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-888ff63813fb15494b59",
+              "file": "history.spec.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "should list past sessions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-14d7b70727e26c9f687b",
+              "file": "history.spec.ts",
+              "line": 11,
+              "column": 3
+            },
+            {
+              "title": "should show session details including die size and threads",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-3ce5d47ae8ec4c394e92",
+              "file": "history.spec.ts",
+              "line": 41,
+              "column": 3
+            },
+            {
+              "title": "should support pagination if many sessions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-0971315dce15d8625697",
+              "file": "history.spec.ts",
+              "line": 67,
+              "column": 3
+            },
+            {
+              "title": "should filter sessions by date",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-6d50feece795f6231b21",
+              "file": "history.spec.ts",
+              "line": 82,
+              "column": 3
+            },
+            {
+              "title": "should allow expanding session details",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-7c1165e0a5198b6ee932",
+              "file": "history.spec.ts",
+              "line": 97,
+              "column": 3
+            },
+            {
+              "title": "should show ratings for each session",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-c01d2bf9f6dd269a0152",
+              "file": "history.spec.ts",
+              "line": 122,
+              "column": 3
+            },
+            {
+              "title": "should handle empty history gracefully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-71fefaef2923640fac22",
+              "file": "history.spec.ts",
+              "line": 152,
+              "column": 3
+            },
+            {
+              "title": "should be accessible via navigation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-5d93a2b678ccabec929a",
+              "file": "history.spec.ts",
+              "line": 163,
+              "column": 3
+            },
+            {
+              "title": "should show session duration",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-6127c7aadea5345b3d4f",
+              "file": "history.spec.ts",
+              "line": 175,
+              "column": 3
+            },
+            {
+              "title": "should allow deleting session history",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-ffae5bde09c12c8a7c38",
+              "file": "history.spec.ts",
+              "line": 190,
+              "column": 3
+            },
+            {
+              "title": "should load more sessions on scroll",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "61dfc145f2d790550676-27113423e06930772836",
+              "file": "history.spec.ts",
+              "line": 214,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "network.spec.ts",
+      "file": "network.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Network & API Tests",
+          "file": "network.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should make successful API call to create thread",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-98e14f75820654dd7121",
+              "file": "network.spec.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "should handle API errors gracefully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-be5d55428c2d9bb7132b",
+              "file": "network.spec.ts",
+              "line": 23,
+              "column": 3
+            },
+            {
+              "title": "should include auth token in API requests",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-c96d0339db4d6d91a98f",
+              "file": "network.spec.ts",
+              "line": 39,
+              "column": 3
+            },
+            {
+              "title": "should retry failed requests",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-814ec6f8c16659869bfd",
+              "file": "network.spec.ts",
+              "line": 62,
+              "column": 3
+            },
+            {
+              "title": "should handle network timeouts",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-d0188d48c981fde6ede5",
+              "file": "network.spec.ts",
+              "line": 83,
+              "column": 3
+            },
+            {
+              "title": "should cache responses appropriately",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-722564744690e1ca3e92",
+              "file": "network.spec.ts",
+              "line": 102,
+              "column": 3
+            },
+            {
+              "title": "should validate request payload",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-693a0384db453ad10c7f",
+              "file": "network.spec.ts",
+              "line": 128,
+              "column": 3
+            },
+            {
+              "title": "should handle concurrent requests",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-5413f68bff3a2af1f40c",
+              "file": "network.spec.ts",
+              "line": 153,
+              "column": 3
+            },
+            {
+              "title": "should respect rate limiting",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-90ea6c9331b47386daa5",
+              "file": "network.spec.ts",
+              "line": 178,
+              "column": 3
+            },
+            {
+              "title": "should handle CORS correctly",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-2058922cfe6c6892cb13",
+              "file": "network.spec.ts",
+              "line": 201,
+              "column": 3
+            },
+            {
+              "title": "should compress large responses",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-3c0d06f6db8a1b9293e0",
+              "file": "network.spec.ts",
+              "line": 212,
+              "column": 3
+            },
+            {
+              "title": "should sanitize user input in requests",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-b4232b96b3493ebbcf68",
+              "file": "network.spec.ts",
+              "line": 238,
+              "column": 3
+            },
+            {
+              "title": "should include proper error messages in API responses",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-44775d6e97adbadb903b",
+              "file": "network.spec.ts",
+              "line": 261,
+              "column": 3
+            },
+            {
+              "title": "should handle websocket connections if present",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5567a9004528a7a67849-e32ebe7484376f8e7491",
+              "file": "network.spec.ts",
+              "line": 279,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "rate.spec.ts",
+      "file": "rate.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Rate Thread Feature",
+          "file": "rate.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should display rating input on rate page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-536dda5e14e47955e794",
+              "file": "rate.spec.ts",
+              "line": 22,
+              "column": 3
+            },
+            {
+              "title": "should submit rating and return to home",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-88d67717c25a4495b296",
+              "file": "rate.spec.ts",
+              "line": 27,
+              "column": 3
+            },
+            {
+              "title": "should validate rating range (0-5)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-29dc4932f85739e23d2f",
+              "file": "rate.spec.ts",
+              "line": 35,
+              "column": 3
+            },
+            {
+              "title": "should accept decimal ratings",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-22555cf53d156373e807",
+              "file": "rate.spec.ts",
+              "line": 43,
+              "column": 3
+            },
+            {
+              "title": "should display snooze button",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-12134a084980fd487976",
+              "file": "rate.spec.ts",
+              "line": 58,
+              "column": 3
+            },
+            {
+              "title": "should snooze thread and advance die size",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-383dd5c12e814d75982d",
+              "file": "rate.spec.ts",
+              "line": 62,
+              "column": 3
+            },
+            {
+              "title": "should update thread rating in database",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-fcb6b6a267f2facec7c4",
+              "file": "rate.spec.ts",
+              "line": 74,
+              "column": 3
+            },
+            {
+              "title": "should show thread title on rate page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-78b9b85a178513bea066",
+              "file": "rate.spec.ts",
+              "line": 85,
+              "column": 3
+            },
+            {
+              "title": "should allow adjusting issues read",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-557800e81be44ae67439",
+              "file": "rate.spec.ts",
+              "line": 90,
+              "column": 3
+            },
+            {
+              "title": "should handle finish session option",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-8de10df35721b1f15c71",
+              "file": "rate.spec.ts",
+              "line": 101,
+              "column": 3
+            },
+            {
+              "title": "should show validation for missing rating",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-fbb182854420e142e656",
+              "file": "rate.spec.ts",
+              "line": 117,
+              "column": 3
+            },
+            {
+              "title": "should be accessible via keyboard",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-403a98e102bd63d91bc6",
+              "file": "rate.spec.ts",
+              "line": 124,
+              "column": 3
+            },
+            {
+              "title": "should preserve form data on validation error",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-332569b49f3d7bc48e23",
+              "file": "rate.spec.ts",
+              "line": 134,
+              "column": 3
+            },
+            {
+              "title": "should show thread metadata (format, issues remaining)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-a0b71523574afe78426f",
+              "file": "rate.spec.ts",
+              "line": 144,
+              "column": 3
+            },
+            {
+              "title": "should allow re-rating if page revisited",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-10557ca7404791b652cc",
+              "file": "rate.spec.ts",
+              "line": 152,
+              "column": 3
+            },
+            {
+              "title": "should handle network errors gracefully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "76bc31e8f347f5b4bb60-d221e2304164803588cf",
+              "file": "rate.spec.ts",
+              "line": 167,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "roll.spec.ts",
+      "file": "roll.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Roll Dice Feature",
+          "file": "roll.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should display die selector on home page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-a54319c9b08ef2b62bd7",
+              "file": "roll.spec.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "should roll dice and navigate to rate page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-04630987b294553a4fb7",
+              "file": "roll.spec.ts",
+              "line": 12,
+              "column": 3
+            },
+            {
+              "title": "regression: roll API response should be handled and navigation should complete",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-f545067d345668640573",
+              "file": "roll.spec.ts",
+              "line": 33,
+              "column": 3
+            },
+            {
+              "title": "should show tap instruction on first visit",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-3747153778ebf722b7c4",
+              "file": "roll.spec.ts",
+              "line": 63,
+              "column": 3
+            },
+            {
+              "title": "should support different die sizes (d4, d6, d8, d10, d12, d20)",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-3961b81faef8e1f1232f",
+              "file": "roll.spec.ts",
+              "line": 69,
+              "column": 3
+            },
+            {
+              "title": "should display 3D dice canvas",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-2273fe3773afdd5200ae",
+              "file": "roll.spec.ts",
+              "line": 80,
+              "column": 3
+            },
+            {
+              "title": "should handle roll with empty queue gracefully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-38bb94b316212c090fa9",
+              "file": "roll.spec.ts",
+              "line": 107,
+              "column": 3
+            },
+            {
+              "title": "should update session state after roll",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-e7803235af1d2f2ffe19",
+              "file": "roll.spec.ts",
+              "line": 122,
+              "column": 3
+            },
+            {
+              "title": "should show loading state during roll animation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-65d34051cddcd3d84ffd",
+              "file": "roll.spec.ts",
+              "line": 153,
+              "column": 3
+            },
+            {
+              "title": "should be accessible via keyboard navigation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-8aec75299014fec2e048",
+              "file": "roll.spec.ts",
+              "line": 177,
+              "column": 3
+            },
+            {
+              "title": "should prevent multiple rapid rolls",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "5039c2a8022bdcdd05f3-59189301f1e36658ad30",
+              "file": "roll.spec.ts",
+              "line": 192,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "threads.spec.ts",
+      "file": "threads.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Thread Management",
+          "file": "threads.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should create a new thread successfully",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "13523e6b9c1cd8c1c09d-deba86a1e63d9e3f3eef",
+              "file": "threads.spec.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "should create multiple threads",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "13523e6b9c1cd8c1c09d-c7d3163432e2915eaddb",
+              "file": "threads.spec.ts",
+              "line": 20,
+              "column": 3
+            },
+            {
+              "title": "should validate thread title is required",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "13523e6b9c1cd8c1c09d-b78265e598d29f4d3f2d",
+              "file": "threads.spec.ts",
+              "line": 46,
+              "column": 3
+            },
+            {
+              "title": "should validate thread format is required",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "13523e6b9c1cd8c1c09d-ab6e7eddd3304c9b3915",
+              "file": "threads.spec.ts",
+              "line": 56,
+              "column": 3
+            },
+            {
+              "title": "should display thread queue in correct order",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "13523e6b9c1cd8c1c09d-1b312f454e66db38adb8",
+              "file": "threads.spec.ts",
+              "line": 67,
+              "column": 3
+            },
+            {
+              "title": "should edit existing thread",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "13523e6b9c1cd8c1c09d-fe3404d4bc523011035f",
+              "file": "threads.spec.ts",
+              "line": 96,
+              "column": 3
+            },
+            {
+              "title": "should delete thread",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "13523e6b9c1cd8c1c09d-73ca71951a6158ea0ab3",
+              "file": "threads.spec.ts",
+              "line": 119,
+              "column": 3
+            },
+            {
+              "title": "should show validation error for negative issues remaining",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "13523e6b9c1cd8c1c09d-c9aebeb62b2ff20f9e39",
+              "file": "threads.spec.ts",
+              "line": 141,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "visual.spec.ts",
+      "file": "visual.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Visual Regression Tests",
+          "file": "visual.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should match screenshot of home page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-54c2a6cddc0a34080541",
+              "file": "visual.spec.ts",
+              "line": 5,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of register page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-1fea0d75ad606a48c447",
+              "file": "visual.spec.ts",
+              "line": 15,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of login page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-c2426389dc86cef612de",
+              "file": "visual.spec.ts",
+              "line": 23,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of threads/queue page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-3ac688921ef41a04bd52",
+              "file": "visual.spec.ts",
+              "line": 31,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of rate page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-72921640d72dc4b7ae78",
+              "file": "visual.spec.ts",
+              "line": 39,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of analytics page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-b35abc15ba893749d284",
+              "file": "visual.spec.ts",
+              "line": 60,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of history page",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-0373c0359c3b05c50a96",
+              "file": "visual.spec.ts",
+              "line": 68,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of die selector with d10",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-75d40d5a696ac540f256",
+              "file": "visual.spec.ts",
+              "line": 76,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of die selector with different sizes",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-8dd41984b3879fe43cbe",
+              "file": "visual.spec.ts",
+              "line": 90,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of 3D dice animation",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-2c92e65628017a3e659e",
+              "file": "visual.spec.ts",
+              "line": 110,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of thread list with multiple threads",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-54c1598629876d78da00",
+              "file": "visual.spec.ts",
+              "line": 132,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of rating form",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-c26ee844dc8da103bc74",
+              "file": "visual.spec.ts",
+              "line": 153,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot on mobile viewport",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-e6e2f9bd183728e18d1b",
+              "file": "visual.spec.ts",
+              "line": 174,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot on tablet viewport",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-e8b9737bb39e08b98c4c",
+              "file": "visual.spec.ts",
+              "line": 184,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of error state",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-d51e75000986cfa899bc",
+              "file": "visual.spec.ts",
+              "line": 194,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of empty state",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-daba3fc3dc5b556cab4a",
+              "file": "visual.spec.ts",
+              "line": 213,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of loading state",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-0e42889f80119f1bde37",
+              "file": "visual.spec.ts",
+              "line": 221,
+              "column": 3
+            },
+            {
+              "title": "should match screenshot of dark mode if supported",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [],
+                  "status": "skipped"
+                }
+              ],
+              "id": "8324bb52c49185e48ff4-f6d44ff18f1539973968",
+              "file": "visual.spec.ts",
+              "line": 243,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-02-03T00:12:21.567Z",
+    "duration": 445.61400000000003,
+    "expected": 0,
+    "skipped": 134,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}
