@@ -26,7 +26,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres-test:5432/comic_pile_test
       SECRET_KEY: test-secret-key-for-testing-only
     ports:
-      - "8000:8000"
+      - "8002:8000"
     depends_on:
       postgres-test:
         condition: service_healthy

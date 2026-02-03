@@ -13,7 +13,7 @@ export default defineConfig({
     ['list'],
   ],
   use: {
-    baseURL: 'http://localhost:8000',
+    baseURL: process.env.BASE_URL || 'http://localhost:8000',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -31,8 +31,8 @@ export default defineConfig({
   ],
   webServer: {
     command: 'cd .. && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000',
-    port: 8000,
-    reuseExistingServer: true,
+    port: parseInt(process.env.API_PORT || '8000'),
+    reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
     timeout: 120000,
   },
 });

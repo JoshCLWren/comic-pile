@@ -1,4 +1,4 @@
-import { test as base, type Page, type APIRequestContext, type Expect } from '@playwright/test';
+import { test as base, type Page } from '@playwright/test';
 
 type TestFixtures = {
   authenticatedPage: Page;
@@ -8,42 +8,21 @@ type TestFixtures = {
     username: string;
     accessToken?: string;
   };
-  request: APIRequestContext;
 };
 
-let sharedUser: { email: string; password: string; username: string; accessToken?: string } | null = null;
-let userSetupLock = false;
-
-async function getOrCreateSharedUser(request: APIRequestContext) {
-  if (sharedUser) {
-    return sharedUser;
-  }
-
-  while (userSetupLock) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-
-  if (sharedUser) {
-    return sharedUser;
-  }
-
-  userSetupLock = true;
-  try {
+export const test = base.extend<TestFixtures>({
+  authenticatedPage: async ({ page, request }, use) => {
     const timestamp = Date.now();
     const counter = Math.floor(Math.random() * 10000);
     const testUser = {
-      username: `shared_test_${timestamp}_${counter}`,
-      email: `shared_test_${timestamp}_${counter}@example.com`,
+      username: `auth_test_${timestamp}_${counter}`,
+      email: `auth_test_${timestamp}_${counter}@example.com`,
       password: 'TestPass123!',
     };
 
-    const registerResponse = await request.post('/api/auth/register', {
+    await request.post('/api/auth/register', {
       data: testUser,
     });
-
-    if (!registerResponse.ok()) {
-      throw new Error(`Shared user registration failed: ${registerResponse.status()}`);
-    }
 
     const loginResponse = await request.post('/api/auth/login', {
       data: {
@@ -53,26 +32,15 @@ async function getOrCreateSharedUser(request: APIRequestContext) {
     });
 
     if (!loginResponse.ok()) {
-      throw new Error(`Shared user login failed: ${loginResponse.status()}`);
+      throw new Error(`Login failed: ${loginResponse.status()}`);
     }
 
     const loginData = await loginResponse.json();
-    testUser.accessToken = loginData.access_token;
-    sharedUser = testUser;
-
-    return sharedUser;
-  } finally {
-    userSetupLock = false;
-  }
-}
-
-export const test = base.extend<TestFixtures>({
-  authenticatedPage: async ({ page, request }, use) => {
-    const testUser = await getOrCreateSharedUser(request);
+    const accessToken = loginData.access_token;
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
-    }, testUser.accessToken!);
+    }, accessToken);
 
     await page.goto('/');
 
