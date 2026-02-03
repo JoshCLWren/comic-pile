@@ -265,6 +265,7 @@ export default function RatePage() {
               step="0.5"
               value={rating}
               className="w-full h-4"
+              aria-label="Rating from 0.5 to 5.0 in steps of 0.5"
               onChange={(e) => updateUI(e.target.value)}
             />
           </div>

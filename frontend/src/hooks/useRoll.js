@@ -10,12 +10,12 @@ export function useRoll() {
     setIsError(false)
     try {
       const response = await rollApi.roll()
+      setIsPending(false)
       return response
     } catch (error) {
+      setIsPending(false)
       setIsError(true)
       throw error
-    } finally {
-      setIsPending(false)
     }
   }
 

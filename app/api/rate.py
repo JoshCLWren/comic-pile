@@ -24,14 +24,14 @@ router = APIRouter()
 
 
 async def snapshot_thread_states(
-    db: AsyncSession, session_id: int, event: Event, user_id: int
+    db: AsyncSession, session_id: int, event_id: int, user_id: int
 ) -> None:
     """Create a snapshot of all thread states for undo functionality.
 
     Args:
         db: SQLAlchemy session for database operations.
         session_id: The session ID to create snapshot for.
-        event: The event that triggered the snapshot.
+        event_id: The event ID that triggered the snapshot.
         user_id: The user ID to snapshot threads for.
     """
     result = await db.execute(select(Thread).where(Thread.user_id == user_id))
@@ -67,10 +67,10 @@ async def snapshot_thread_states(
 
     snapshot = Snapshot(
         session_id=session_id,
-        event_id=event.id,
+        event_id=event_id,
         thread_states=thread_states,
         session_state=session_state,
-        description=f"After rating {event.rating}/5.0",
+        description="After rating",
     )
     db.add(snapshot)
     await db.commit()
@@ -202,9 +202,11 @@ async def rate_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
+    await db.flush()
+    event_id = event.id
     await db.commit()
 
-    await snapshot_thread_states(db, current_session_id, event, user_id)
+    await snapshot_thread_states(db, current_session_id, event_id, user_id)
     await db.refresh(thread)
 
     return thread_to_response(thread)

@@ -5,7 +5,7 @@ test.describe('Analytics Dashboard', () => {
   test('should display analytics page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/analytics');
 
-    await expect(authenticatedPage.locator('text=Analytics|Reading Stats')).toBeVisible();
+    await expect(authenticatedPage.locator('h1:has-text("Analytics")')).toBeVisible();
   });
 
   test('should show reading statistics', async ({ page }) => {
@@ -21,8 +21,8 @@ test.describe('Analytics Dashboard', () => {
 
     await page.goto('/analytics');
 
-    const statsContainer = page.locator('.statistics, .stats, .metrics');
-    await expect(statsContainer.first()).toBeVisible({ timeout: 5000 });
+    const glassCards = page.locator('.glass-card');
+    await expect(glassCards.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should display charts or graphs', async ({ page }) => {
@@ -72,9 +72,11 @@ test.describe('Analytics Dashboard', () => {
     });
 
     await page.goto('/analytics');
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1000);
 
-    const statusText = page.locator('text=active|completed|finished');
-    await expect(statusText.first()).toBeVisible();
+    const activeThreadsLabel = page.locator('text=Active Threads');
+    await expect(activeThreadsLabel.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should display rating distribution', async ({ page }) => {
@@ -90,8 +92,8 @@ test.describe('Analytics Dashboard', () => {
 
     await page.goto('/analytics');
 
-    const ratingElement = page.locator('text=rating|average|stars');
-    await expect(ratingElement.first()).toBeVisible();
+    const completionRate = page.locator('text=Completion Rate');
+    await expect(completionRate).toBeVisible();
   });
 
   test('should filter by date range', async ({ page }) => {
@@ -141,8 +143,8 @@ test.describe('Analytics Dashboard', () => {
 
     await page.goto('/analytics');
 
-    const sessionSummary = page.locator('text=session|rolling|dice');
-    await expect(sessionSummary.first()).toBeVisible();
+    const recentSessions = page.locator('text=Recent Sessions');
+    await expect(recentSessions).toBeVisible();
   });
 
   test('should be accessible via navigation', async ({ authenticatedPage }) => {
@@ -153,7 +155,7 @@ test.describe('Analytics Dashboard', () => {
 
     if (hasLink) {
       await analyticsLink.first().click();
-      await expect(authenticatedPage).toHaveURL('**/analytics');
+      await expect(authenticatedPage).toHaveURL('http://localhost:8002/analytics');
     }
   });
 

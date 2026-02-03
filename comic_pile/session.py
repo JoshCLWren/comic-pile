@@ -88,6 +88,7 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
     snapshot.session_state = session_state
     db.add(snapshot)
     await db.commit()
+    await db.refresh(session)
 
 
 async def get_or_create(db: AsyncSession, user_id: int) -> Session:
@@ -103,7 +104,8 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
             session_gap_hours = _session_gap_hours()
             start_die = _start_die()
 
-            user = await db.get(User, user_id)
+            user_result = await db.execute(select(User).where(User.id == user_id))
+            user = user_result.scalar_one_or_none()
             if not user:
                 user = User(id=user_id, username="default_user")
                 db.add(user)
@@ -121,6 +123,7 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
             active_session = result.scalars().first()
 
             if active_session:
+                await db.refresh(active_session)
                 return active_session
 
             async with _session_creation_lock:
@@ -143,14 +146,15 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 active_session = result.scalars().first()
 
                 if active_session:
+                    await db.refresh(active_session)
                     return active_session
 
                 new_session = Session(start_die=start_die, user_id=user_id)
                 db.add(new_session)
-                await db.commit()
-                await db.refresh(new_session)
+                await db.flush()
 
                 await create_session_start_snapshot(db, new_session)
+                await db.refresh(new_session)
 
                 return new_session
         except OperationalError as e:
@@ -171,7 +175,8 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
 
 async def end_session(session_id: int, db: AsyncSession) -> None:
     """Mark session as ended."""
-    session = await db.get(Session, session_id)
+    session_result = await db.execute(select(Session).where(Session.id == session_id))
+    session = session_result.scalar_one_or_none()
     if session:
         session.ended_at = datetime.now(UTC)
         await db.commit()
@@ -180,7 +185,8 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
 async def get_current_die(session_id: int, db: AsyncSession) -> int:
     """Get current die size based on manual selection or last rating event."""
     start_die = _start_die()
-    session = await db.get(Session, session_id)
+    session_result = await db.execute(select(Session).where(Session.id == session_id))
+    session = session_result.scalar_one_or_none()
 
     result = await db.execute(
         select(Event)

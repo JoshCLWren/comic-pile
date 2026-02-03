@@ -12,7 +12,8 @@ test.describe('Authentication Flow', () => {
     await page.fill(SELECTORS.auth.confirmPasswordInput, user.password);
     await page.click(SELECTORS.auth.submitButton);
 
-    await expect(page).toHaveURL('**/');
+    await page.waitForURL('/', { timeout: 5000 });
+    await expect(page).toHaveURL('/');
     await expect(page.locator(SELECTORS.navigation.homeLink)).toBeVisible();
   });
 
@@ -43,7 +44,8 @@ test.describe('Authentication Flow', () => {
     await expect(page.locator('text=Password must')).toBeVisible({ timeout: 3000 });
   });
 
-  test('should login with valid credentials', async ({ page }) => {
+  test.describe.serial('should login with valid credentials', () => {
+    test('login test', async ({ page }) => {
     const user = generateTestUser();
 
     await page.goto('/register');
@@ -52,7 +54,7 @@ test.describe('Authentication Flow', () => {
     await page.fill(SELECTORS.auth.passwordInput, user.password);
     await page.fill(SELECTORS.auth.confirmPasswordInput, user.password);
     await page.click(SELECTORS.auth.submitButton);
-    await page.waitForURL('**/');
+    await page.waitForURL('/', { timeout: 5000 });
 
     await page.evaluate(() => localStorage.clear());
     await page.goto('/login');
@@ -60,7 +62,9 @@ test.describe('Authentication Flow', () => {
     await page.fill(SELECTORS.auth.passwordInput, user.password);
     await page.click(SELECTORS.auth.submitButton);
 
-    await expect(page).toHaveURL('**/');
+    await page.waitForURL('/', { timeout: 5000 });
+    await expect(page).toHaveURL('/');
+    });
   });
 
   test('should show error for invalid credentials', async ({ page }) => {
@@ -71,7 +75,7 @@ test.describe('Authentication Flow', () => {
     await page.fill(SELECTORS.auth.passwordInput, 'WrongPassword123!');
     await page.click(SELECTORS.auth.submitButton);
 
-    const errorMessage = page.locator('text=Invalid');
+    const errorMessage = page.locator('text=Incorrect username or password');
     await expect(errorMessage).toBeVisible({ timeout: 3000 });
   });
 

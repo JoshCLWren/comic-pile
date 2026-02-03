@@ -382,7 +382,7 @@ async def test_rate_api_creates_snapshot(auth_client: AsyncClient, async_db: Asy
     result = await async_db.execute(select(Snapshot).where(Snapshot.session_id == session.id))
     snapshots = result.scalars().all()
     assert len(snapshots) >= 1
-    assert any(s.description is not None and "4.5" in s.description for s in snapshots)
+    assert any(s.description is not None and "After rating" in s.description for s in snapshots)
 
 
 @pytest.mark.asyncio

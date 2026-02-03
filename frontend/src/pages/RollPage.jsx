@@ -93,7 +93,6 @@ export default function RollPage() {
   function handleRoll() {
     if (isRolling) return
 
-    // Clear any existing timers
     if (rollIntervalRef.current) {
       clearInterval(rollIntervalRef.current)
     }
@@ -114,25 +113,31 @@ export default function RollPage() {
         clearInterval(rollIntervalRef.current)
         rollIntervalRef.current = null
         
-        rollTimeoutRef.current = setTimeout(() => {
+        rollTimeoutRef.current = setTimeout(async () => {
           rollTimeoutRef.current = null
-          rollMutation.mutate()
-            .then((response) => {
-              if (response?.result) {
-                setRolledResult(response.result)
-              }
-              if (response?.thread_id) {
-                setSelectedThreadId(response.thread_id)
-              }
-              setIsRolling(false)
-              navigate('/rate')
-            })
-            .catch(() => {
-              setIsRolling(false)
-            })
+          try {
+            const response = await rollMutation.mutate()
+            if (response?.result) {
+              setRolledResult(response.result)
+            }
+            if (response?.thread_id) {
+              setSelectedThreadId(response.thread_id)
+            }
+            setIsRolling(false)
+            navigate('/rate')
+          } catch {
+            setIsRolling(false)
+          }
         }, 400)
       }
     }, 80)
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      handleRoll()
+    }
   }
 
   function handleRollComplete() {
@@ -233,6 +238,10 @@ export default function RollPage() {
           <div
             id="main-die-3d"
             onClick={handleRoll}
+            onKeyDown={handleKeyDown}
+            role="button"
+            tabIndex={0}
+            aria-label="Roll the dice"
             className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all`}
             style={{ width: '200px', height: '200px', margin: '0 auto' }}
           >

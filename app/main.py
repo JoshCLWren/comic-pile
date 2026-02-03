@@ -127,11 +127,14 @@ def create_app() -> FastAPI:
         description="API for tracking comic reading with dice rolls",
         version="0.1.0",
     )
+
+    # Register rate limiter (will be no-op in test environments)
     app.state.limiter = limiter
-    app.add_exception_handler(
-        RateLimitExceeded,
-        cast(Callable[[Request, Any], Awaitable[Response]], _rate_limit_exceeded_handler),
-    )
+    if os.getenv("TEST_ENVIRONMENT") != "true":
+        app.add_exception_handler(
+            RateLimitExceeded,
+            cast(Callable[[Request, Any], Awaitable[Response]], _rate_limit_exceeded_handler),
+        )
 
     app_settings.validate_production_cors()
     cors_origins = app_settings.cors_origins_list

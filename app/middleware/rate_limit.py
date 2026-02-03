@@ -1,6 +1,30 @@
 """Rate limiting middleware using slowapi."""
 
+import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-limiter = Limiter(key_func=get_remote_address)
+TEST_MODE = os.getenv("TEST_ENVIRONMENT") == "true"
+
+if TEST_MODE:
+    # In test mode, create a limiter but override the limit method to do nothing
+    _real_limiter = Limiter(key_func=lambda: "test", default_limits=["1000000/second"])
+
+    class NoOpLimiter:
+        """No-op limiter for test mode that bypasses rate limiting."""
+
+        def __getattr__(self, name):
+            """Proxy all other attributes to real limiter."""
+            return getattr(_real_limiter, name)
+
+        def limit(self, limit_value: str):
+            """Return a decorator that does nothing (bypasses rate limiting)."""
+
+            def decorator(func):
+                return func
+
+            return decorator
+
+    limiter = NoOpLimiter()
+else:
+    limiter = Limiter(key_func=get_remote_address)

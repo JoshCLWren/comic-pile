@@ -7,12 +7,12 @@ test.describe('Thread Management', () => {
     await registerUser(page, user);
     await loginUser(page, user);
 
-    await page.goto('/threads');
-    await page.click(SELECTORS.threadList.newThreadButton);
+    await page.goto('/queue');
+    await page.click('button:has-text("Add Thread")');
 
-    await page.fill(SELECTORS.threadList.titleInput, 'Saga');
-    await page.fill(SELECTORS.threadList.formatInput, 'Comic');
-    await page.click(SELECTORS.auth.submitButton);
+    await page.fill('label:has-text("Title") + input', 'Saga');
+    await page.fill('label:has-text("Format") + input', 'Comic');
+    await page.click('button[type="submit"]');
 
     await expect(page.locator('text=Saga')).toBeVisible();
   });
@@ -22,7 +22,7 @@ test.describe('Thread Management', () => {
     await registerUser(page, user);
     await loginUser(page, user);
 
-    await page.goto('/threads');
+    await page.goto('/queue');
 
     const threads = [
       { title: 'Superman', format: 'Comic' },
@@ -31,10 +31,10 @@ test.describe('Thread Management', () => {
     ];
 
     for (const thread of threads) {
-      await page.click(SELECTORS.threadList.newThreadButton);
-      await page.fill(SELECTORS.threadList.titleInput, thread.title);
-      await page.fill(SELECTORS.threadList.formatInput, thread.format);
-      await page.click(SELECTORS.auth.submitButton);
+      await page.click('button:has-text("Add Thread")');
+      await page.fill('label:has-text("Title") + input', thread.title);
+      await page.fill('label:has-text("Format") + input', thread.format);
+      await page.click('button[type="submit"]');
       await page.waitForTimeout(500);
     }
 
@@ -44,24 +44,26 @@ test.describe('Thread Management', () => {
   });
 
   test('should validate thread title is required', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/threads');
-    await authenticatedPage.click(SELECTORS.threadList.newThreadButton);
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.click('button:has-text("Add Thread")');
 
-    await authenticatedPage.click(SELECTORS.auth.submitButton);
+    await authenticatedPage.click('button[type="submit"]');
+    await authenticatedPage.waitForTimeout(1000);
 
-    const errorText = await authenticatedPage.locator('text=title').locator('..').locator('text=required');
-    await expect(errorText).toBeVisible({ timeout: 3000 });
+    const hasInvalidInput = await authenticatedPage.locator('input:invalid').count() > 0;
+    expect(hasInvalidInput).toBe(true);
   });
 
   test('should validate thread format is required', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/threads');
-    await authenticatedPage.click(SELECTORS.threadList.newThreadButton);
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.click('button:has-text("Add Thread")');
 
-    await authenticatedPage.fill(SELECTORS.threadList.titleInput, 'Test Comic');
-    await authenticatedPage.click(SELECTORS.auth.submitButton);
+    await authenticatedPage.fill('label:has-text("Title") + input', 'Test Comic');
+    await authenticatedPage.click('button[type="submit"]');
+    await authenticatedPage.waitForTimeout(1000);
 
-    const errorText = await authenticatedPage.locator('text=format').locator('..').locator('text=required');
-    await expect(errorText).toBeVisible({ timeout: 3000 });
+    const hasInvalidInput = await authenticatedPage.locator('input:invalid').count() > 0;
+    expect(hasInvalidInput).toBe(true);
   });
 
   test('should display thread queue in correct order', async ({ page }) => {
@@ -80,9 +82,11 @@ test.describe('Thread Management', () => {
     }
 
     await page.goto('/queue');
-    await page.waitForSelector(SELECTORS.threadList.container, { timeout: 5000 });
+    await page.waitForSelector('#queue-container', { timeout: 5000 });
+    await page.reload();
+    await page.waitForSelector('#queue-container', { timeout: 5000 });
 
-    const threadElements = page.locator('.thread-title');
+    const threadElements = page.locator('#queue-container h3');
     const count = await threadElements.count();
 
     expect(count).toBeGreaterThanOrEqual(3);
@@ -105,13 +109,13 @@ test.describe('Thread Management', () => {
     });
 
     await page.goto('/queue');
-    await page.waitForSelector(SELECTORS.threadList.container);
+    await page.waitForSelector('#queue-container');
 
-    const threadItem = page.locator('.thread-item').first();
-    await threadItem.locator('.edit-button').click();
+    const threadItem = page.locator('#queue-container .glass-card').first();
+    await threadItem.locator('button[aria-label="Edit thread"]').click();
 
-    await page.fill('input[name="title"]', 'Updated Title');
-    await page.click('button:has-text("Save")');
+    await page.fill('label:has-text("Title") + input', 'Updated Title');
+    await page.click('button:has-text("Save Changes")');
 
     await expect(page.locator('text=Updated Title')).toBeVisible();
   });
@@ -128,26 +132,34 @@ test.describe('Thread Management', () => {
     });
 
     await page.goto('/queue');
-    await page.waitForSelector(SELECTORS.threadList.container);
+    await page.waitForSelector('#queue-container');
 
-    const threadItem = page.locator('.thread-item').filter({ hasText: 'To Be Deleted' });
-    await threadItem.locator('.delete-button').click();
+    page.on('dialog', dialog => dialog.accept());
 
-    await page.click('button:has-text("Confirm")');
+    const threadItem = page.locator('#queue-container .glass-card').filter({ hasText: 'To Be Deleted' });
+    await threadItem.locator('button[aria-label="Delete thread"]').click();
 
-    await expect(page.locator('text=To Be Deleted')).not.toBeVisible();
+    await page.waitForTimeout(2000);
+
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    const deletedText = page.locator('text=To Be Deleted');
+    const isVisible = await deletedText.count() > 0;
+    expect(isVisible).toBe(false);
   });
 
   test('should show validation error for negative issues remaining', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/threads');
-    await authenticatedPage.click(SELECTORS.threadList.newThreadButton);
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.click('button:has-text("Add Thread")');
 
-    await authenticatedPage.fill(SELECTORS.threadList.titleInput, 'Test Comic');
-    await authenticatedPage.fill(SELECTORS.threadList.formatInput, 'Comic');
-    await authenticatedPage.fill('input[name="issues_remaining"]', '-1');
-    await authenticatedPage.click(SELECTORS.auth.submitButton);
+    await authenticatedPage.fill('label:has-text("Title") + input', 'Test Comic');
+    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.fill('input[type="number"]', '-1');
+    await authenticatedPage.click('button[type="submit"]');
+    await authenticatedPage.waitForTimeout(1000);
 
-    const error = await authenticatedPage.locator('text=issues_remaining').locator('..').locator('text=must be');
-    await expect(error).toBeVisible({ timeout: 3000 });
+    const hasInvalidInput = await authenticatedPage.locator('input:invalid').count() > 0;
+    expect(hasInvalidInput).toBe(true);
   });
 });

@@ -92,6 +92,20 @@ export async function cleanupTestUser(page: Page, user: TestUser): Promise<void>
   });
 }
 
+export async function setRangeInput(page: Page, selector: string, value: string): Promise<void> {
+  await page.evaluate(
+    ({ selector, value }) => {
+      const input = document.querySelector(selector) as HTMLInputElement;
+      if (input) {
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    },
+    { selector, value }
+  );
+}
+
 export const SELECTORS = {
   auth: {
     usernameInput: 'input[name="username"]',
@@ -103,9 +117,10 @@ export const SELECTORS = {
   threadList: {
     container: '#queue-container',
     threadItem: '.thread-item',
-    newThreadButton: 'button:has-text("new thread")',
-    titleInput: 'input[name="title"]',
-    formatInput: 'input[name="format"]',
+    newThreadButton: 'button:has-text("Add Thread")',
+    titleInput: 'label:has-text("Title") + input',
+    formatInput: 'label:has-text("Format") + input',
+    issuesRemainingInput: 'label:has-text("Issues Remaining") + input, label:has-text("Issues") + input',
   },
   roll: {
     dieSelector: '#die-selector',
@@ -117,7 +132,7 @@ export const SELECTORS = {
   rate: {
     ratingInput: '#rating-input',
     submitButton: '#submit-btn',
-    snoozeButton: 'button[aria-label="snooze"]',
+    snoozeButton: 'button:has-text("Snooze Thread")',
   },
   navigation: {
     homeLink: 'a[href="/"]',

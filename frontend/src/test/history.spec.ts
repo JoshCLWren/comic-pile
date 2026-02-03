@@ -1,11 +1,11 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS } from './helpers';
+import { generateTestUser, registerUser, loginUser, createThread, SELECTORS, setRangeInput } from './helpers';
 
 test.describe('History Page', () => {
   test('should display history page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/history');
 
-    await expect(authenticatedPage.locator('text=History|Past Sessions')).toBeVisible();
+    await expect(authenticatedPage.locator('h1:has-text("History")')).toBeVisible();
   });
 
   test('should list past sessions', async ({ page }) => {
@@ -24,9 +24,9 @@ test.describe('History Page', () => {
     await page.click(SELECTORS.roll.mainDie);
     await page.waitForTimeout(2000);
 
-    await page.fill(SELECTORS.rate.ratingInput, '4.0');
+    await setRangeInput(page, SELECTORS.rate.ratingInput, '4.0');
     await page.click(SELECTORS.rate.submitButton);
-    await page.waitForURL('**/');
+    await page.waitForURL('http://localhost:8002/', { timeout: 5000 });
 
     await page.goto('/history');
 
@@ -135,7 +135,7 @@ test.describe('History Page', () => {
     await page.click(SELECTORS.roll.mainDie);
     await page.waitForTimeout(2000);
 
-    await page.fill(SELECTORS.rate.ratingInput, '4.5');
+    await setRangeInput(page, SELECTORS.rate.ratingInput, '4.5');
     await page.click(SELECTORS.rate.submitButton);
     await page.waitForURL('**/');
 
@@ -168,7 +168,7 @@ test.describe('History Page', () => {
 
     if (hasLink) {
       await historyLink.first().click();
-      await expect(authenticatedPage).toHaveURL('**/history');
+      await expect(authenticatedPage).toHaveURL('http://localhost:8002/history');
     }
   });
 
