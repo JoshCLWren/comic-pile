@@ -83,7 +83,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await page.waitForTimeout(500);
     await page.goBack();
 
-    await expect(page).toHaveURL('http://localhost:8002/');
+    await expect(page).toHaveURL('http://localhost:8000/');
   });
 
   test('should handle browser forward button', async ({ page }) => {
@@ -97,7 +97,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await page.waitForTimeout(500);
     await page.goForward();
 
-    await expect(page).toHaveURL('http://localhost:8002/queue');
+    await expect(page).toHaveURL('http://localhost:8000/queue');
   });
 
   test('should handle page refresh during form submission', async ({ page }) => {

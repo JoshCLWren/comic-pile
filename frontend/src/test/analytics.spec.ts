@@ -155,7 +155,7 @@ test.describe('Analytics Dashboard', () => {
 
     if (hasLink) {
       await analyticsLink.first().click();
-      await expect(authenticatedPage).toHaveURL('http://localhost:8002/analytics');
+      await expect(authenticatedPage).toHaveURL('http://localhost:8000/analytics');
     }
   });
 

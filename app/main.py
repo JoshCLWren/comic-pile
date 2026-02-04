@@ -501,8 +501,8 @@ def create_app() -> FastAPI:
         import asyncio
         from sqlalchemy import text
 
-        max_retries = 5
-        retry_delay = 5  # seconds
+        max_retries = 3
+        retry_delay = 1
 
         database_ready = False
         for attempt in range(1, max_retries + 1):

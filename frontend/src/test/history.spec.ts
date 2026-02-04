@@ -26,7 +26,7 @@ test.describe('History Page', () => {
 
     await setRangeInput(page, SELECTORS.rate.ratingInput, '4.0');
     await page.click(SELECTORS.rate.submitButton);
-    await page.waitForURL('http://localhost:8002/', { timeout: 5000 });
+    await page.waitForURL('http://localhost:8000/', { timeout: 5000 });
 
     await page.goto('/history');
 
@@ -168,7 +168,7 @@ test.describe('History Page', () => {
 
     if (hasLink) {
       await historyLink.first().click();
-      await expect(authenticatedPage).toHaveURL('http://localhost:8002/history');
+      await expect(authenticatedPage).toHaveURL('http://localhost:8000/history');
     }
   });
 
