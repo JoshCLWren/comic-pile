@@ -20,9 +20,16 @@ export const test = base.extend<TestFixtures>({
       password: 'TestPass123!',
     };
 
-    await request.post('/api/auth/register', {
+    const registerResponse = await request.post('/api/auth/register', {
       data: testUser,
     });
+
+    if (!registerResponse.ok()) {
+      const bodyText = await registerResponse.text();
+      throw new Error(
+        `Fixture registration failed for ${testUser.username}: ${registerResponse.status()} ${registerResponse.statusText()}. Response: ${bodyText}`
+      );
+    }
 
     const loginResponse = await request.post('/api/auth/login', {
       data: {
@@ -32,7 +39,10 @@ export const test = base.extend<TestFixtures>({
     });
 
     if (!loginResponse.ok()) {
-      throw new Error(`Login failed: ${loginResponse.status()}`);
+      const bodyText = await loginResponse.text();
+      throw new Error(
+        `Fixture login failed for ${testUser.username}: ${loginResponse.status()} ${loginResponse.statusText()}. Response: ${bodyText}`
+      );
     }
 
     const loginData = await loginResponse.json();

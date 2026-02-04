@@ -1,4 +1,5 @@
 import { type Page } from '@playwright/test';
+import type { Violation } from '@axe-core/playwright';
 
 type TestUser = {
   email: string;
@@ -27,7 +28,15 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
   await page.fill('input[name="confirmPassword"]', user.password);
   await page.click('button[type="submit"]');
 
-  await page.waitForURL('**/', { timeout: 5000 });
+  try {
+    await page.waitForURL('**/', { timeout: 5000 });
+  } catch (error) {
+    const url = page.url();
+    const bodyText = await page.locator('body').textContent();
+    throw new Error(
+      `Registration failed for user ${user.username}. URL: ${url}. Page content: ${bodyText?.slice(0, 200)}...`
+    );
+  }
 }
 
 export async function loginUser(page: Page, user: TestUser): Promise<string> {
@@ -39,7 +48,10 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
   });
 
   if (!response.ok()) {
-    throw new Error(`Login failed: ${response.status()}`);
+    const bodyText = await response.text();
+    throw new Error(
+      `Login failed for user ${user.username}: ${response.status()} ${response.statusText()}. Response: ${bodyText}`
+    );
   }
 
   const data = await response.json();
@@ -67,7 +79,10 @@ export async function createThread(
   });
 
   if (!response.ok()) {
-    throw new Error(`Failed to create thread: ${response.status()}`);
+    const bodyText = await response.text();
+    throw new Error(
+      `Failed to create thread "${threadData.title}": ${response.status()} ${response.statusText()}. Response: ${bodyText}`
+    );
   }
 }
 
@@ -104,6 +119,13 @@ export async function setRangeInput(page: Page, selector: string, value: string)
     },
     { selector, value }
   );
+}
+
+export function formatA11yViolations(violations: Violation[]): string {
+  if (violations.length === 0) return '';
+  return violations
+    .map((v) => `  - ${v.id}: ${v.description} (impact: ${v.impact})\n    Targets: ${v.nodes.map((n) => n.target.join(', ')).join('; ')}`)
+    .join('\n');
 }
 
 export const SELECTORS = {

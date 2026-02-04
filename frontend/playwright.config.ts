@@ -7,11 +7,18 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 4 : undefined,
-  reporter: [
-    ['html', { open: 'never', outputFolder: '../playwright-report' }],
-    ['json', { outputFile: '../test-results/results.json' }],
-    ['list'],
-  ],
+  reporter: process.env.CI
+    ? [
+        ['github'],
+        ['list', { printSteps: true }],
+        ['html', { open: 'never', outputFolder: '../playwright-report' }],
+        ['json', { outputFile: '../test-results/results.json' }],
+      ]
+    : [
+        ['html', { open: 'never', outputFolder: '../playwright-report' }],
+        ['json', { outputFile: '../test-results/results.json' }],
+        ['list'],
+      ],
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:8000',
     trace: 'retain-on-failure',

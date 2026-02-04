@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS } from './helpers';
+import { generateTestUser, registerUser, loginUser, createThread, SELECTORS, formatA11yViolations } from './helpers';
 import { AxeBuilder } from '@axe-core/playwright';
 
 test.describe('Accessibility Tests', () => {
@@ -10,7 +10,7 @@ test.describe('Accessibility Tests', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
   test('should have no accessibility violations on register page', async ({ page }) => {
@@ -20,7 +20,7 @@ test.describe('Accessibility Tests', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
   test('should have no accessibility violations on login page', async ({ page }) => {
@@ -30,7 +30,7 @@ test.describe('Accessibility Tests', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
   test('should have no accessibility violations on threads page', async ({ authenticatedPage }) => {
@@ -40,7 +40,7 @@ test.describe('Accessibility Tests', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
   test('should have no accessibility violations on queue page', async ({ authenticatedPage }) => {
@@ -50,7 +50,7 @@ test.describe('Accessibility Tests', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
   test('should have no accessibility violations on rate page', async ({ page }) => {
@@ -74,7 +74,7 @@ test.describe('Accessibility Tests', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
   test('should have no accessibility violations on analytics page', async ({ authenticatedPage }) => {
@@ -84,7 +84,7 @@ test.describe('Accessibility Tests', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
   test('should have no accessibility violations on history page', async ({ authenticatedPage }) => {
@@ -94,7 +94,7 @@ test.describe('Accessibility Tests', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
       .analyze();
 
-    expect(accessibilityScanResults.violations).toEqual([]);
+    expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
   test('should have proper ARIA labels on interactive elements', async ({ authenticatedPage }) => {
@@ -149,7 +149,7 @@ test.describe('Accessibility Tests', () => {
       (v) => v.id === 'color-contrast'
     );
 
-    expect(contrastViolations).toEqual([]);
+    expect(contrastViolations.length, `Color contrast violations found:\n${formatA11yViolations(contrastViolations)}`).toBe(0);
   });
 
   test('should have focus indicators on all interactive elements', async ({ authenticatedPage }) => {

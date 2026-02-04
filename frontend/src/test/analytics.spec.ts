@@ -5,7 +5,7 @@ test.describe('Analytics Dashboard', () => {
   test('should display analytics page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/analytics');
 
-    await expect(authenticatedPage.locator('h1:has-text("Analytics")')).toBeVisible();
+    await expect(authenticatedPage.locator('h1:has-text("Analytics")'), 'Analytics page h1 not found').toBeVisible();
   });
 
   test('should show reading statistics', async ({ page }) => {
@@ -22,7 +22,8 @@ test.describe('Analytics Dashboard', () => {
     await page.goto('/analytics');
 
     const glassCards = page.locator('.glass-card');
-    await expect(glassCards.first()).toBeVisible({ timeout: 5000 });
+    const count = await glassCards.count();
+    await expect(glassCards.first(), `Expected .glass-card elements but found ${count}`).toBeVisible({ timeout: 5000 });
   });
 
   test('should display charts or graphs', async ({ page }) => {
