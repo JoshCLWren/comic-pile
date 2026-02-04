@@ -31,21 +31,6 @@ jobs:
       - name: Remove .env file to prevent CI database override
         run: rm -f .env .env.backup .envrc .env.local .env.production 2>/dev/null || true
 
-      - name: Wait for PostgreSQL
-        run: |
-          i=1
-          while [ $i -le 30 ]; do
-            if pg_isready -h postgres -p 5432 -U postgres; then
-              echo "PostgreSQL is ready"
-              exit 0
-            fi
-            echo "Waiting for PostgreSQL..."
-            sleep 2
-            i=$((i + 1))
-          done
-          echo "PostgreSQL failed to start"
-          exit 1
-
       - name: Run backend tests
         run: pytest tests/ --cov=comic_pile --cov-report=xml
 
