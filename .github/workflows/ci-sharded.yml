@@ -322,7 +322,7 @@ jobs:
           exit 1
 
       - name: Run Playwright tests
-        run: cd frontend && npx playwright test --project=chromium
+        run: cd frontend && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium
 
       - name: Upload Playwright test results
         if: always()
