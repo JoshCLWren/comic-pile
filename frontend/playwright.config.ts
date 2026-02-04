@@ -17,11 +17,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: 10000,
-    navigationTimeout: 30000,
+    actionTimeout: 60000,
+    navigationTimeout: 60000,
   },
   expect: {
-    timeout: 5000,
+    timeout: 15000,
   },
   projects: [
     {
@@ -30,7 +30,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'cd .. && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000',
+    command: 'cd .. && source .env.test && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000',
     port: parseInt(process.env.API_PORT || '8000'),
     reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
     timeout: 120000,

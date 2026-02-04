@@ -40,6 +40,7 @@ class Session(Base):
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),
         Index("ix_session_ended_at", "ended_at"),
+        Index("ix_session_user_ended_started", "user_id", "ended_at", "started_at"),
     )
 
     user: Mapped["User"] = relationship("User", back_populates="sessions")

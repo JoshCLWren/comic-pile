@@ -47,6 +47,15 @@ export const test = base.extend<TestFixtures>({
     await use(page);
 
     await page.evaluate(() => localStorage.clear());
+
+    try {
+      await request.delete('/api/auth/logout', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+    } catch (e) {
+    }
   },
 
   testUser: async ({}, use) => {

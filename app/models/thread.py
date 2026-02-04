@@ -41,6 +41,7 @@ class Thread(Base):
         Index("ix_thread_position", "queue_position"),
         Index("ix_thread_status", "status"),
         Index("ix_thread_last_activity", "last_activity_at"),
+        Index("ix_thread_user_status_position", "user_id", "status", "queue_position"),
     )
 
     user: Mapped["User"] = relationship("User", back_populates="threads")
