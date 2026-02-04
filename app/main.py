@@ -20,15 +20,21 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import exc as sqlalchemy_exc
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import admin, analytics, auth, queue, rate, roll, session, snooze, thread, undo
-from app.config import get_app_settings
+from app.config import get_app_settings, get_database_settings
 from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
 
 logger = logging.getLogger(__name__)
+
+# Log database URL at startup (with password redacted)
+_db_settings = get_database_settings()
+_redacted_url = make_url(_db_settings.database_url).render_as_string(hide_password=True)
+logger.info(f"Starting with DATABASE_URL: {_redacted_url}")
 
 MAX_LOG_BODY_SIZE = 1000
 
