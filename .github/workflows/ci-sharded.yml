@@ -59,6 +59,10 @@ jobs:
     container:
       image: ${{ needs.build.outputs.image-tag }}
     needs: build
+    env:
+      CI: true
+      SECRET_KEY: test-secret-key-for-testing-only
+      DATABASE_URL: sqlite:///./test.db
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -241,6 +245,7 @@ jobs:
         run: cd frontend && npx playwright install --with-deps chromium
 
       - name: Start backend server
+        shell: bash
         run: |
           # Disable auto backup in tests to avoid schema mismatch errors
           export AUTO_BACKUP_ENABLED=false
