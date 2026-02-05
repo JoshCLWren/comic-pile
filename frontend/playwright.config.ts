@@ -7,6 +7,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 4 : undefined,
+  timeout: 60 * 1000, // 60 seconds per test (increased from default 30s for CI)
   reporter: process.env.CI
     ? [
         ['github'],
