@@ -285,8 +285,8 @@ jobs:
           echo "DATABASE_URL: ${DATABASE_URL:0:50}..."
           echo "TEST_DATABASE_URL: ${TEST_DATABASE_URL:0:50}..."
           echo "PGUSER: $PGUSER"
-          # Start backend
-          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --log-level debug > /tmp/backend.log 2>&1 &
+          # Start backend (single worker for Playwright tests to avoid resource contention)
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug > /tmp/backend.log 2>&1 &
           echo $! > /tmp/backend.pid
 
       - name: Wait for backend to be ready
