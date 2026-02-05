@@ -37,7 +37,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'bash -c "cd .. && export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5437/comic_pile_test && export SECRET_KEY=test-secret-key-for-testing-only && export AUTO_BACKUP_ENABLED=false && export SKIP_WORKTREE_CHECK=true && export TEST_ENVIRONMENT=true && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"',
+    command: 'bash -c "cd .. && export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5437/comic_pile_test && export SECRET_KEY=test-secret-key-for-testing-only && export AUTO_BACKUP_ENABLED=false && export SKIP_WORKTREE_CHECK=true && export TEST_ENVIRONMENT=true && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"',
     port: parseInt(process.env.API_PORT || '8000'),
     reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
     timeout: 120000,
