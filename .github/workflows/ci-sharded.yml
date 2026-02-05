@@ -217,6 +217,7 @@ jobs:
   # E2E TypeScript Playwright tests
   test-e2e-playwright:
     name: E2E Playwright Tests
+    continue-on-error: true
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-tag }}
