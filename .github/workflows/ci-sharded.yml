@@ -80,7 +80,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        command: postgres -c max_connections=200
     steps:
       - name: Check out repository
       - uses: actions/checkout@v4
@@ -141,7 +140,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        command: postgres -c max_connections=200
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -192,7 +190,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        command: postgres -c max_connections=200
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -245,7 +242,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        command: postgres -c max_connections=200
     timeout-minutes: 30
     steps:
       - name: Check out repository
