@@ -128,10 +128,12 @@ test.describe('Rate Thread Feature', () => {
   });
 
 test('should preserve form data on validation error', async ({ page }) => {
+    const ratingInput = page.locator(SELECTORS.rate.ratingInput);
+    await ratingInput.waitFor({ state: 'visible' });
     await setRangeInput(page, SELECTORS.rate.ratingInput, '3.5');
     await page.waitForTimeout(500);
 
-    const ratingValue = await page.inputValue(SELECTORS.rate.ratingInput);
+    const ratingValue = await ratingInput.inputValue();
     expect(parseFloat(ratingValue)).toBe(3.5);
   });
 

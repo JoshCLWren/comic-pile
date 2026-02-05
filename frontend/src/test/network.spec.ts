@@ -43,7 +43,7 @@ test.describe('Network & API Tests', () => {
       },
     });
 
-    expect(response.status()).toBeGreaterThanOrEqual(400);
+    expect([422, 400]).toContain(response.status());
   });
 
   test('should include auth token in API requests', async ({ page }) => {
@@ -266,9 +266,7 @@ test.describe('Network & API Tests', () => {
     });
 
     const corsHeader = response.headers()['access-control-allow-origin'];
-    if (corsHeader) {
-      expect(corsHeader).toBeDefined();
-    }
+    expect(corsHeader).toBeDefined();
   });
 
   test('should compress large responses', async ({ page }) => {
@@ -296,9 +294,7 @@ test.describe('Network & API Tests', () => {
     const contentEncoding = response.headers()['content-encoding'];
     const hasCompression = contentEncoding?.includes('gzip') || contentEncoding?.includes('br');
 
-    if (hasCompression) {
-      expect(hasCompression).toBe(true);
-    }
+    expect(hasCompression).toBe(true);
   });
 
   test('should sanitize user input in requests', async ({ page }) => {
@@ -317,11 +313,6 @@ test.describe('Network & API Tests', () => {
     });
 
     expect(response.status()).toBeGreaterThanOrEqual(400);
-
-    if (response.status() >= 200 && response.status() < 300) {
-      const data = await response.json();
-      expect(data.title).not.toContain('<script>');
-    }
   });
 
   test('should include proper error messages in API responses', async ({ page }) => {
@@ -336,10 +327,9 @@ test.describe('Network & API Tests', () => {
       },
     });
 
-    if (response.status() >= 400) {
-      const data = await response.json();
-      expect(data.detail || data.error || data.message).toBeDefined();
-    }
+    expect(response.status()).toBeGreaterThanOrEqual(400);
+    const data = await response.json();
+    expect(data.detail || data.error || data.message).toBeDefined();
   });
 
   test('should handle websocket connections if present', async ({ page }) => {
@@ -357,8 +347,6 @@ test.describe('Network & API Tests', () => {
 
     await page.waitForTimeout(2000);
 
-    if (wsConnected) {
-      expect(wsConnected).toBe(true);
-    }
+    expect(wsConnected).toBe(true);
   });
 });

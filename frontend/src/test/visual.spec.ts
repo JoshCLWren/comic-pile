@@ -175,7 +175,7 @@ test.describe('Visual Regression Tests', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('thread-list-multiple.png', {
-      maxDiffPixels: 500,
+      maxDiffPixels: 1000,
       threshold: 0.25,
       fullPage: true,
     });

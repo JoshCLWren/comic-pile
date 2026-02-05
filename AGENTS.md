@@ -159,11 +159,92 @@ if not thread or thread.user_id != current_user.id:
  - Tests run in isolated environment
  - All browser tests work correctly
 
- **Running TypeScript Browser Tests**:
- ```bash
- cd frontend
- npx playwright test --project=chromium
- ```
+ **Running E2E Tests Locally**
+
+ **Option 1: With Docker (Recommended if Docker works)**
+
+  This approach uses Docker for the test database and lets Playwright start the API server automatically.
+
+  ```bash
+  # 1. Start just the PostgreSQL test container (if not already running)
+  docker compose -f docker-compose.test.yml up -d postgres-test
+
+  # 2. Build the frontend (required for API to serve static files)
+  cd frontend && npm run build && cd ..
+
+  # 3. Run the Playwright tests (will auto-start API server on port 8000)
+  cd frontend && npx playwright test --project=chromium
+
+  # 4. Optional: Stop PostgreSQL when done
+  docker compose -f docker-compose.test.yml down
+  ```
+
+   **Option 2: Without Docker (Manual Setup)**
+
+   If Docker is not available, you can run tests by manually starting the API server:
+
+   ```bash
+   # 1. Ensure PostgreSQL is running and database exists
+   # (The test database should be accessible on localhost:5437)
+
+   # 2. Build the frontend
+   cd frontend && npm run build && cd ..
+
+   # 3. Set environment variables and start the API server manually
+   export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5437/comic_pile_test
+   export SECRET_KEY=test-secret-key-for-testing-only
+   export AUTO_BACKUP_ENABLED=false
+   export SKIP_WORKTREE_CHECK=true
+   export TEST_ENVIRONMENT=true
+   .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+   # 4. In another terminal, run the tests (REUSE_EXISTING_SERVER=true prevents Playwright from starting a second server)
+   cd frontend
+   REUSE_EXISTING_SERVER=true npx playwright test --project=chromium
+   ```
+
+  **Common Commands**:
+
+  ```bash
+  # Run all tests
+  npx playwright test --project=chromium
+
+  # Run specific test file
+  npx playwright test roll.spec.ts --project=chromium
+
+  # Run specific test by name
+  npx playwright test --grep "should display die selector" --project=chromium
+
+  # Run tests in UI mode (interactive)
+  npx playwright test --ui
+
+  # Run tests with browser visible (headed mode)
+  npx playwright test --headed
+
+  # Debug tests with inspector
+  npx playwright test --debug
+
+  # List all available tests
+  npx playwright test --list
+  ```
+
+   **Troubleshooting**:
+
+   - **"No module named uvicorn"**: Ensure the virtual environment is activated or the webServer command uses `.venv/bin/python3`
+   - **404 errors for assets**: Run `npm run build` in the frontend directory to build static files
+   - **Database connection errors**: Ensure PostgreSQL container is running on port 5437 (`docker compose -f docker-compose.test.yml ps`)
+   - **Tests timeout**: Increase timeout in playwright.config.ts if needed
+   - **Port already in error**: If you manually started the API server, use `REUSE_EXISTING_SERVER=true npx playwright test` to prevent Playwright from starting a second server
+
+   **How It Works**:
+
+   The Playwright config (`frontend/playwright.config.ts`) includes a `webServer` section that:
+   1. Sets required environment variables (DATABASE_URL, SECRET_KEY, etc.)
+   2. Starts the FastAPI server using `.venv/bin/python3 -m uvicorn app.main:app`
+   3. Waits for the server to be ready before running tests
+   4. Automatically shuts down the server when tests complete
+
+   The `reuseExistingServer` option (controlled by `REUSE_EXISTING_SERVER` env var) allows you to manually start the server and have Playwright use it instead of starting its own. This is useful for debugging or when Docker isn't available.
 
  ### API Tests
 

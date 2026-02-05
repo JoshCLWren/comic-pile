@@ -28,12 +28,9 @@ test.describe('Roll Dice Feature', () => {
       },
     });
 
-    if (rollResponse.ok()) {
-      await page.goto('/rate');
-      await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
-    } else {
-      expect(rollResponse.status()).toBe(400);
-    }
+    expect(rollResponse.ok()).toBeTruthy();
+    await page.goto('/rate');
+    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
   });
 
   test('regression: roll API response should be handled and navigation should complete', async ({ page }) => {

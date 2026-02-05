@@ -1,4 +1,4 @@
-import { type Page } from '@playwright/test';
+import { type Page, expect } from '@playwright/test';
 import type { Violation } from '@axe-core/playwright';
 
 type TestUser = {
@@ -47,13 +47,7 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
     },
   });
 
-  if (!response.ok()) {
-    const bodyText = await response.text();
-    throw new Error(
-      `Login failed for user ${user.username}: ${response.status()} ${response.statusText()}. Response: ${bodyText}`
-    );
-  }
-
+  expect(response.ok()).toBeTruthy();
   const data = await response.json();
   user.accessToken = data.access_token;
 
@@ -78,12 +72,7 @@ export async function createThread(
     },
   });
 
-  if (!response.ok()) {
-    const bodyText = await response.text();
-    throw new Error(
-      `Failed to create thread "${threadData.title}": ${response.status()} ${response.statusText()}. Response: ${bodyText}`
-    );
-  }
+  expect(response.ok()).toBeTruthy();
 }
 
 export async function setupAuthenticatedPage(

@@ -47,20 +47,22 @@ async def register_user(
     Raises:
         HTTPException: If username or email already exists.
     """
-    # Check if username already exists
-    result = await db.execute(select(User).where(User.username == user_data.username).limit(1))
-    existing_user = result.scalar_one_or_none()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered",
-        )
-
-    # Check if email already exists
+    # Check if username or email already exists (single query)
+    conditions = [User.username == user_data.username]
     if user_data.email:
-        result = await db.execute(select(User).where(User.email == user_data.email).limit(1))
-        existing_email = result.scalar_one_or_none()
-        if existing_email:
+        conditions.append(User.email == user_data.email)
+
+    from sqlalchemy import or_
+
+    result = await db.execute(select(User).where(or_(*conditions)).limit(1))
+    existing = result.scalar_one_or_none()
+    if existing:
+        if existing.username == user_data.username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already registered",
+            )
+        if existing.email == user_data.email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered",

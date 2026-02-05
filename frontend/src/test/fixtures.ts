@@ -10,6 +10,48 @@ type TestFixtures = {
   };
 };
 
+async function registerWithRetry(request: any, testUser: any, maxRetries = 3): Promise<{ accessToken: string }> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const registerResponse = await request.post('/api/auth/register', {
+        data: testUser,
+        timeout: 10000,
+      });
+
+      if (!registerResponse.ok()) {
+        const bodyText = await registerResponse.text();
+        throw new Error(
+          `Fixture registration failed for ${testUser.username}: ${registerResponse.status()} ${registerResponse.statusText()}. Response: ${bodyText}`
+        );
+      }
+
+      const loginResponse = await request.post('/api/auth/login', {
+        data: {
+          username: testUser.username,
+          password: testUser.password,
+        },
+        timeout: 10000,
+      });
+
+      if (!loginResponse.ok()) {
+        const bodyText = await loginResponse.text();
+        throw new Error(
+          `Fixture login failed for ${testUser.username}: ${loginResponse.status()} ${loginResponse.statusText()}. Response: ${bodyText}`
+        );
+      }
+
+      const loginData = await loginResponse.json();
+      return { accessToken: loginData.access_token };
+    } catch (e) {
+      if (attempt === maxRetries - 1) {
+        throw e;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+  throw new Error('Registration retry failed');
+}
+
 export const test = base.extend<TestFixtures>({
   authenticatedPage: async ({ page, request }, use) => {
     const timestamp = Date.now();
@@ -20,33 +62,7 @@ export const test = base.extend<TestFixtures>({
       password: 'TestPass123!',
     };
 
-    const registerResponse = await request.post('/api/auth/register', {
-      data: testUser,
-    });
-
-    if (!registerResponse.ok()) {
-      const bodyText = await registerResponse.text();
-      throw new Error(
-        `Fixture registration failed for ${testUser.username}: ${registerResponse.status()} ${registerResponse.statusText()}. Response: ${bodyText}`
-      );
-    }
-
-    const loginResponse = await request.post('/api/auth/login', {
-      data: {
-        username: testUser.username,
-        password: testUser.password,
-      },
-    });
-
-    if (!loginResponse.ok()) {
-      const bodyText = await loginResponse.text();
-      throw new Error(
-        `Fixture login failed for ${testUser.username}: ${loginResponse.status()} ${loginResponse.statusText()}. Response: ${bodyText}`
-      );
-    }
-
-    const loginData = await loginResponse.json();
-    const accessToken = loginData.access_token;
+    const { accessToken } = await registerWithRetry(request, testUser);
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
@@ -59,7 +75,7 @@ export const test = base.extend<TestFixtures>({
     await page.evaluate(() => localStorage.clear());
 
     try {
-      await request.delete('/api/auth/logout', {
+      await request.post('/api/auth/logout', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
