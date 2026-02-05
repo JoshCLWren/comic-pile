@@ -89,17 +89,21 @@ test.describe('Authentication Flow', () => {
 
   test('should logout and clear local storage', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
-    
-    const hasTokenBefore = await authenticatedPage.evaluate(() => 
+
+    const hasTokenBefore = await authenticatedPage.evaluate(() =>
       !!localStorage.getItem('auth_token')
     );
     expect(hasTokenBefore).toBe(true);
 
-    await authenticatedPage.evaluate(() => {
-      localStorage.removeItem('auth_token');
-    });
+    await authenticatedPage.click('button:has-text("Log Out")');
 
-    await authenticatedPage.reload();
-    await expect(authenticatedPage.locator(SELECTORS.roll.dieSelector)).not.toBeVisible();
+    await authenticatedPage.waitForURL('/login', { timeout: 5000 });
+
+    const hasTokenAfter = await authenticatedPage.evaluate(() =>
+      !!localStorage.getItem('auth_token')
+    );
+    expect(hasTokenAfter).toBe(false);
+
+    await expect(authenticatedPage).toHaveURL('/login');
   });
 });
