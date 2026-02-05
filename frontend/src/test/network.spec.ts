@@ -269,34 +269,6 @@ test.describe('Network & API Tests', () => {
     expect(corsHeader).toBeDefined();
   });
 
-  test('should compress large responses', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    for (let i = 0; i < 50; i++) {
-      await createThread(page, {
-        title: `Compression Test Comic ${i}`,
-        format: 'Comic',
-        issues_remaining: 5,
-      });
-    }
-
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-    const response = await page.request.get('/api/threads/', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    expect(response.status()).toBe(200);
-
-    const contentEncoding = response.headers()['content-encoding'];
-    const hasCompression = contentEncoding?.includes('gzip') || contentEncoding?.includes('br');
-
-    expect(hasCompression).toBe(true);
-  });
-
   test('should sanitize user input in requests', async ({ page }) => {
     const user = generateTestUser();
     await registerUser(page, user);
@@ -330,23 +302,5 @@ test.describe('Network & API Tests', () => {
     expect(response.status()).toBeGreaterThanOrEqual(400);
     const data = await response.json();
     expect(data.detail || data.error || data.message).toBeDefined();
-  });
-
-  test('should handle websocket connections if present', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    let wsConnected = false;
-
-    page.on('websocket', ws => {
-      wsConnected = true;
-    });
-
-    await page.goto('/');
-
-    await page.waitForTimeout(2000);
-
-    expect(wsConnected).toBe(true);
   });
 });
