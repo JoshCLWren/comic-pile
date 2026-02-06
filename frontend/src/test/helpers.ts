@@ -22,6 +22,7 @@ export function generateTestUser(): TestUser {
 
 export async function registerUser(page: Page, user: TestUser): Promise<void> {
   await page.goto('/register');
+  await page.waitForLoadState('networkidle');
   await page.fill('input[name="username"]', user.username);
   await page.fill('input[name="email"]', user.email);
   await page.fill('input[name="password"]', user.password);
