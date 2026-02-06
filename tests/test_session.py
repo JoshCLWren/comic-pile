@@ -288,7 +288,7 @@ async def test_get_or_create_creates_default_user(async_db: AsyncSession) -> Non
 
     user = await async_db.get(User, non_existent_user_id)
     assert user is not None
-    assert user.username == "default_user"
+    assert user.username == f"user_{non_existent_user_id}"
 
 
 @pytest.mark.asyncio
@@ -311,7 +311,7 @@ async def test_get_or_create_creates_user_id_1(async_db: AsyncSession) -> None:
 
     user = await async_db.get(User, 1)
     assert user is not None
-    assert user.username == "default_user"
+    assert user.username == "user_1"
 
 
 @pytest.mark.asyncio
