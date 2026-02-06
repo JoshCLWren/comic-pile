@@ -203,6 +203,7 @@ async def rate_thread(
     current_session.pending_thread_updated_at = None
 
     await db.flush()
+    await db.refresh(event)
     event_id = event.id
     await db.commit()
 

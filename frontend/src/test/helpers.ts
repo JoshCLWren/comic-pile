@@ -65,15 +65,34 @@ export async function createThread(
 ): Promise<void> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token'));
 
-  const response = await page.request.post('/api/threads/', {
-    data: threadData,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    },
-  });
+  let success = false;
+  let attempts = 0;
+  const maxAttempts = 7;
 
-  expect(response.ok()).toBeTruthy();
+  while (!success && attempts < maxAttempts) {
+    const response = await page.request.post('/api/threads/', {
+      data: threadData,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (response.ok()) {
+      success = true;
+    } else if (response.status() === 429) {
+      attempts++;
+      const jitter = Math.random() * 1000;
+      const backoffMs = Math.min(3000 * Math.pow(1.5, attempts - 1) + jitter, 20000);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    } else {
+      throw new Error(`Failed to create thread: ${response.status()} ${response.statusText()}`);
+    }
+  }
+
+  if (!success) {
+    throw new Error(`Failed to create thread after ${maxAttempts} attempts`);
+  }
 }
 
 export async function setupAuthenticatedPage(

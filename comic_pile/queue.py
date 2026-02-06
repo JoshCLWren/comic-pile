@@ -203,15 +203,23 @@ async def move_to_position(
         )
 
 
-async def get_roll_pool(user_id: int, db: AsyncSession) -> list[Thread]:
+async def get_roll_pool(
+    user_id: int, db: AsyncSession, snoozed_ids: list[int] | None = None
+) -> list[Thread]:
     """Get all active threads ordered by position."""
-    result = await db.execute(
+    query = (
         select(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
         .where(Thread.queue_position >= 1)
-        .order_by(Thread.queue_position)
     )
+
+    if snoozed_ids:
+        query = query.where(Thread.id.not_in(snoozed_ids))
+
+    query = query.order_by(Thread.queue_position)
+
+    result = await db.execute(query)
     threads = result.scalars().all()
 
     return list(threads)

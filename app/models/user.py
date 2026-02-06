@@ -30,11 +30,11 @@ class User(Base):
     )
 
     sessions: Mapped[list["Session"]] = relationship(
-        "Session", back_populates="user", cascade="all, delete-orphan"
+        "Session", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
     threads: Mapped[list["Thread"]] = relationship(
-        "Thread", back_populates="user", cascade="all, delete-orphan"
+        "Thread", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
     revoked_tokens: Mapped[list["RevokedToken"]] = relationship(
-        "RevokedToken", back_populates="user", cascade="all, delete-orphan"
+        "RevokedToken", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )

@@ -59,7 +59,7 @@ export default function HistoryPage() {
 
       <div id="sessions-list" className="space-y-4" role="list" aria-label="Session history">
         {sessions.map((session) => (
-          <div key={session.id} className="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
+          <div key={session.id} role="listitem" className="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
             <div className="flex justify-between items-start gap-6 relative z-10">
               <div className="space-y-4 flex-1 min-w-0">
                 <div className="flex items-center gap-3">

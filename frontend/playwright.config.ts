@@ -6,7 +6,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 6 : 4,
-  workers: process.env.CI ? 2 : undefined,  // Reduced from 4 to reduce backend load in CI
+  workers: process.env.CI ? 2 : 4,  // Reduced from 6 to 4 to reduce rate limiting pressure
   timeout: 60 * 1000, // 60 seconds per test (increased from default 30s for CI)
   reporter: process.env.CI
     ? [

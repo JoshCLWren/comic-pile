@@ -44,7 +44,7 @@ class Thread(Base):
         Index("ix_thread_user_status_position", "user_id", "status", "queue_position"),
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="threads")
+    user: Mapped["User"] = relationship("User", back_populates="threads", lazy="raise")
     events: Mapped[list["Event"]] = relationship(
-        "Event", back_populates="thread", cascade="all, delete-orphan"
+        "Event", back_populates="thread", cascade="all, delete-orphan", lazy="raise"
     )

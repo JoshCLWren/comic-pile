@@ -120,10 +120,13 @@ test.describe('Accessibility Tests', () => {
   test('should have proper heading hierarchy', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
 
-    const headings = await authenticatedPage.locator('h1, h2, h3, h4, h5, h6').all();
+    await authenticatedPage.waitForLoadState('networkidle');
+    const headingsLocator = authenticatedPage.locator('h1, h2, h3, h4, h5, h6');
+    const headingCount = await headingsLocator.count();
     const levels: number[] = [];
 
-    for (const heading of headings) {
+    for (let i = 0; i < headingCount; i++) {
+      const heading = headingsLocator.nth(i);
       const isVisible = await heading.isVisible();
       if (isVisible) {
         const tag = await heading.evaluate((el) => el.tagName);
@@ -185,15 +188,17 @@ test.describe('Accessibility Tests', () => {
       document.body?.focus();
     });
 
-    const focusableElements = await authenticatedPage.locator(
+    await authenticatedPage.waitForLoadState('networkidle');
+    const focusableElementsLocator = authenticatedPage.locator(
       'button, a, input, [tabindex]:not([tabindex="-1"])'
-    ).all();
+    );
+    const elementCount = await focusableElementsLocator.count();
 
     let tabPresses = 0;
     const maxTabPresses = 5;
 
-    for (let i = 0; i < Math.min(focusableElements.length, maxTabPresses); i++) {
-      const element = focusableElements[i];
+    for (let i = 0; i < Math.min(elementCount, maxTabPresses); i++) {
+      const element = focusableElementsLocator.nth(i);
       const isVisible = await element.isVisible();
       
       if (isVisible) {
@@ -216,9 +221,12 @@ test.describe('Accessibility Tests', () => {
   test('should have descriptive link text', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
 
-    const links = await authenticatedPage.locator('a').all();
+    await authenticatedPage.waitForLoadState('networkidle');
+    const linksLocator = authenticatedPage.locator('a');
+    const linkCount = await linksLocator.count();
 
-    for (const link of links) {
+    for (let i = 0; i < linkCount; i++) {
+      const link = linksLocator.nth(i);
       const isVisible = await link.isVisible();
       if (isVisible) {
         const text = await link.textContent();
@@ -232,9 +240,12 @@ test.describe('Accessibility Tests', () => {
   test('should have proper form labels', async ({ page }) => {
     await page.goto('/register');
 
-    const inputs = await page.locator('input').all();
+    await page.waitForLoadState('networkidle');
+    const inputsLocator = page.locator('input');
+    const inputCount = await inputsLocator.count();
 
-    for (const input of inputs) {
+    for (let i = 0; i < inputCount; i++) {
+      const input = inputsLocator.nth(i);
       const isVisible = await input.isVisible();
       if (isVisible) {
         const hasLabel = await input.evaluate((el: HTMLInputElement) => {
@@ -279,7 +290,7 @@ test.describe('Accessibility Tests', () => {
 
     if (hasLiveRegions) {
       await page.click(SELECTORS.roll.mainDie);
-      await page.waitForTimeout(2000);
+      await page.waitForURL("**/rate", { timeout: 5000 });
 
       for (const region of liveRegions) {
         const isVisible = await region.isVisible();

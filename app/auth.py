@@ -204,4 +204,5 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    _ = user.id  # Preload ID in async context to avoid MissingGreenlet
     return user

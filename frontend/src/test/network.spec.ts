@@ -1,14 +1,10 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS } from './helpers';
+import { createThread, SELECTORS } from './helpers';
 
 test.describe('Network & API Tests', () => {
-  test('should make successful API call to create thread', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-    const response = await page.request.post('/api/threads/', {
+  test('should make successful API call to create thread', async ({ authenticatedPage }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -25,13 +21,9 @@ test.describe('Network & API Tests', () => {
     expect(data.title).toBe('API Test Comic');
   });
 
-  test('should handle API errors gracefully', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-    const response = await page.request.post('/api/threads/', {
+  test('should handle API errors gracefully', async ({ authenticatedPage }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -46,22 +38,12 @@ test.describe('Network & API Tests', () => {
     expect([422, 400]).toContain(response.status());
   });
 
-  test('should include auth token in API requests', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    await createThread(page, {
-      title: 'Auth Test Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
-
-    await page.goto('/');
+  test('should include auth token in API requests', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
 
     const [request] = await Promise.all([
-      page.waitForRequest(req => req.url().includes('/api/')),
-      page.click(SELECTORS.roll.mainDie),
+      authenticatedWithThreadsPage.waitForRequest(req => req.url().includes('/api/')),
+      authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie),
     ]);
 
     const authHeader = request.headers()['authorization'];
@@ -69,9 +51,9 @@ test.describe('Network & API Tests', () => {
     expect(authHeader).toMatch(/Bearer .+/);
   });
 
-  test('should retry failed requests', async ({ page }) => {
+  test('should retry failed requests', async ({ authenticatedPage }) => {
     let attemptCount = 0;
-    await page.route('**/api/threads/**', async route => {
+    await authenticatedPage.route('**/api/threads/**', async route => {
       attemptCount++;
       if (attemptCount < 3) {
         await route.abort('failed');
@@ -80,47 +62,44 @@ test.describe('Network & API Tests', () => {
       }
     });
 
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForLoadState("networkidle");
 
-    await page.goto('/queue');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(3000);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
 
     // Ensure we trigger enough requests to test retry logic
     if (attemptCount < 2) {
-      await page.reload();
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(2000);
+      await authenticatedPage.reload();
+      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(async () => {
+        const hasRetry = attemptCount >= 2;
+        expect(hasRetry).toBe(true);
+      }).toPass({ timeout: 5000 });
     }
 
     // If still no retries, manually trigger to verify the routing works
     if (attemptCount < 2) {
-      await page.request.get('/api/threads/', {
+      await authenticatedPage.request.get('/api/threads/', {
         headers: {
-          'Authorization': `Bearer ${user.accessToken}`,
+          'Authorization': `Bearer ${token}`,
         },
       });
-      await page.waitForTimeout(1000);
+      await authenticatedPage.waitForLoadState("networkidle");
     }
 
     const hasRetry = attemptCount >= 2;
     expect(hasRetry).toBe(true);
   });
 
-  test('should handle network timeouts', async ({ page }) => {
-    await page.route('**/api/threads/**', async route => {
+  test('should handle network timeouts', async ({ authenticatedPage }) => {
+    await authenticatedPage.route('**/api/threads/**', async route => {
       await new Promise(resolve => setTimeout(resolve, 30000));
     });
 
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+    await authenticatedPage.goto('/threads');
 
-    await page.goto('/threads');
-
-    const timeoutMessage = page.locator('text=timeout|took too long|try again');
+    const timeoutMessage = authenticatedPage.locator('text=timeout|took too long|try again');
     const hasTimeout = await timeoutMessage.count({ timeout: 35000 }).then(count => count > 0);
 
     if (hasTimeout) {
@@ -128,64 +107,57 @@ test.describe('Network & API Tests', () => {
     }
   });
 
-  test('should cache responses appropriately', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    await createThread(page, {
+  test('should cache responses appropriately', async ({ authenticatedPage }) => {
+    await createThread(authenticatedPage, {
       title: 'Cache Test Comic',
       format: 'Comic',
       issues_remaining: 5,
     });
 
     let requestCount = 0;
-    await page.route('**/api/threads/**', route => {
+    await authenticatedPage.route('**/api/threads/**', route => {
       requestCount++;
       return route.continue();
     });
 
-    await page.goto('/queue');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForLoadState("networkidle");
 
     const countAfterFirstLoad = requestCount;
     expect(countAfterFirstLoad).toBeGreaterThan(0);
 
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
+    await authenticatedPage.reload();
+    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForLoadState("networkidle");
 
     expect(requestCount).toBeGreaterThanOrEqual(countAfterFirstLoad);
   });
 
-  test('should validate request payload', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
+  test('should validate request payload', async ({ authenticatedPage }) => {
     let capturedPayload: any = null;
-    await page.route('**/api/threads/**', async route => {
+    await authenticatedPage.route('**/api/threads/**', async route => {
       if (route.request().method() === 'POST') {
         capturedPayload = route.request().postDataJSON();
       }
       await route.continue();
     });
 
-    await page.goto('/queue');
-    
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+
+    await authenticatedPage.goto('/queue');
+
     try {
-      await page.click(SELECTORS.threadList.newThreadButton, { timeout: 5000 });
-      await page.fill(SELECTORS.threadList.titleInput, 'Payload Test');
-      await page.fill(SELECTORS.threadList.formatInput, 'Comic');
-      await page.click(SELECTORS.auth.submitButton);
-      await page.waitForTimeout(1000);
+      await authenticatedPage.click(SELECTORS.threadList.newThreadButton, { timeout: 5000 });
+      await authenticatedPage.fill(SELECTORS.threadList.titleInput, 'Payload Test');
+      await authenticatedPage.fill(SELECTORS.threadList.formatInput, 'Comic');
+      await authenticatedPage.click(SELECTORS.auth.submitButton);
+      await authenticatedPage.waitForLoadState("networkidle");
     } catch (e) {
-      // If UI elements don't exist, just verify via API
-      await page.request.post('/api/threads/', {
+      await authenticatedPage.request.post('/api/threads/', {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.accessToken}`,
+          'Authorization': `Bearer ${token}`,
         },
         data: {
           title: 'Payload Test',
@@ -201,16 +173,12 @@ test.describe('Network & API Tests', () => {
     }
   });
 
-  test('should handle concurrent requests', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+  test('should handle concurrent requests', async ({ authenticatedPage }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
     const promises = [];
     for (let i = 0; i < 5; i++) {
       promises.push(
-        page.request.post('/api/threads/', {
+        authenticatedPage.request.post('/api/threads/', {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
@@ -231,15 +199,11 @@ test.describe('Network & API Tests', () => {
     }
   });
 
-  test('should respect rate limiting', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+  test('should respect rate limiting', async ({ authenticatedPage }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
     const responses = [];
     for (let i = 0; i < 20; i++) {
-      const response = await page.request.post('/api/threads/', {
+      const response = await authenticatedPage.request.post('/api/threads/', {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
@@ -269,14 +233,10 @@ test.describe('Network & API Tests', () => {
     expect(corsHeader).toBeDefined();
   });
 
-  test('should sanitize user input in requests', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
+  test('should sanitize user input in requests', async ({ authenticatedPage }) => {
     const maliciousInput = '<script>alert("xss")</script>';
 
-    const response = await page.request.post('/api/threads/', {
+    const response = await authenticatedPage.request.post('/api/threads/', {
       data: {
         title: maliciousInput,
         format: 'Comic',
@@ -287,12 +247,8 @@ test.describe('Network & API Tests', () => {
     expect(response.status()).toBeGreaterThanOrEqual(400);
   });
 
-  test('should include proper error messages in API responses', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    const response = await page.request.post('/api/threads/', {
+  test('should include proper error messages in API responses', async ({ authenticatedPage }) => {
+    const response = await authenticatedPage.request.post('/api/threads/', {
       data: {
         title: '',
         format: '',

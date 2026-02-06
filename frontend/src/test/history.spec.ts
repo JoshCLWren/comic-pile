@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS, setRangeInput } from './helpers';
+import { createThread, SELECTORS, setRangeInput } from './helpers';
 
 test.describe('History Page', () => {
   test('should display history page', async ({ authenticatedPage }) => {
@@ -8,227 +8,178 @@ test.describe('History Page', () => {
     await expect(authenticatedPage.locator('h1:has-text("History")')).toBeVisible();
   });
 
-  test('should list past sessions', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should list past sessions', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
 
-    await createThread(page, {
-      title: 'History Test Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
+    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+    await authenticatedWithThreadsPage.waitForURL('http://localhost:8000/', { timeout: 5000 });
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
-    await page.click(SELECTORS.roll.mainDie);
-    await page.waitForTimeout(2000);
+    await authenticatedWithThreadsPage.goto('/history');
 
-    await setRangeInput(page, SELECTORS.rate.ratingInput, '4.0');
-    await page.click(SELECTORS.rate.submitButton);
-    await page.waitForURL('http://localhost:8000/', { timeout: 5000 });
-
-    await page.goto('/history');
-
-    const sessionsList = page.locator(SELECTORS.history.sessionsList);
-    const hasList = await sessionsList.count() > 0;
-
-    if (hasList) {
-      await expect(sessionsList.first()).toBeVisible({ timeout: 5000 });
-    }
+    const sessionsList = authenticatedWithThreadsPage.locator(SELECTORS.history.sessionsList);
+    await expect(async () => {
+      const count = await sessionsList.count();
+      if (count > 0) {
+        await expect(sessionsList.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should show session details including die size and threads', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should show session details including die size and threads', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
 
-    await createThread(page, {
-      title: 'Session Detail Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
+    await authenticatedWithThreadsPage.goto('/history');
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
-    await page.click(SELECTORS.roll.mainDie);
-    await page.waitForTimeout(2000);
-
-    await page.goto('/history');
-
-    const sessionItem = page.locator('.session-item, .history-item');
-    const hasSessions = await sessionItem.count() > 0;
-
-    if (hasSessions) {
-      await expect(sessionItem.first()).toBeVisible();
-    }
+    const sessionItem = authenticatedWithThreadsPage.locator('.session-item, .history-item');
+    await expect(async () => {
+      const count = await sessionItem.count();
+      if (count > 0) {
+        await expect(sessionItem.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should support pagination if many sessions', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should support pagination if many sessions', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/history');
 
-    await page.goto('/history');
-
-    const pagination = page.locator('.pagination, button:has-text("Next"), button:has-text("Load More")');
-    const hasPagination = await pagination.count() > 0;
-
-    if (hasPagination) {
-      await expect(pagination.first()).toBeVisible();
-    }
+    const pagination = authenticatedPage.locator('.pagination, button:has-text("Next"), button:has-text("Load More")');
+    await expect(async () => {
+      const count = await pagination.count();
+      if (count > 0) {
+        await expect(pagination.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should filter sessions by date', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should filter sessions by date', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/history');
 
-    await page.goto('/history');
-
-    const dateFilter = page.locator('input[type="date"], .date-filter, .filter-by-date');
-    const hasFilter = await dateFilter.count() > 0;
-
-    if (hasFilter) {
-      await expect(dateFilter.first()).toBeVisible();
-    }
+    const dateFilter = authenticatedPage.locator('input[type="date"], .date-filter, .filter-by-date');
+    await expect(async () => {
+      const count = await dateFilter.count();
+      if (count > 0) {
+        await expect(dateFilter.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should allow expanding session details', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should allow expanding session details', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/history');
 
-    await createThread(page, {
-      title: 'Expandable Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
+    const expandButton = authenticatedWithThreadsPage.locator('button:has-text("Details"), button:has-text("Expand"), .expand-btn');
+    await expect(async () => {
+      const count = await expandButton.count();
+      if (count > 0) {
+        await expandButton.first().click();
+        await authenticatedWithThreadsPage.waitForLoadState("networkidle");
 
-    await page.goto('/history');
-
-    const expandButton = page.locator('button:has-text("Details"), button:has-text("Expand"), .expand-btn');
-    const hasExpand = await expandButton.count() > 0;
-
-    if (hasExpand) {
-      await expandButton.first().click();
-      await page.waitForTimeout(500);
-
-      const details = page.locator('.session-details, .expanded-content');
-      await expect(details.first()).toBeVisible();
-    }
+        const details = authenticatedWithThreadsPage.locator('.session-details, .expanded-content');
+        await expect(details.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should show ratings for each session', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should show ratings for each session', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
 
-    await createThread(page, {
-      title: 'Rated Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
+    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+    await authenticatedWithThreadsPage.waitForURL('**/');
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
-    await page.click(SELECTORS.roll.mainDie);
-    await page.waitForTimeout(2000);
+    await authenticatedWithThreadsPage.goto('/history');
 
-    await setRangeInput(page, SELECTORS.rate.ratingInput, '4.5');
-    await page.click(SELECTORS.rate.submitButton);
-    await page.waitForURL('**/');
-
-    await page.goto('/history');
-
-    const ratingDisplay = page.locator('text=stars|rating|⭐');
-    const hasRatings = await ratingDisplay.count() > 0;
-
-    if (hasRatings) {
-      await expect(ratingDisplay.first()).toBeVisible();
-    }
+    const ratingDisplay = authenticatedWithThreadsPage.locator('text=stars|rating|⭐');
+    await expect(async () => {
+      const count = await ratingDisplay.count();
+      if (count > 0) {
+        await expect(ratingDisplay.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
   test('should handle empty history gracefully', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/history');
 
     const emptyState = authenticatedPage.locator('text=no sessions|start rolling|empty');
-    const hasEmptyState = await emptyState.count() > 0;
-
-    if (hasEmptyState) {
-      await expect(emptyState.first()).toBeVisible();
-    }
+    await expect(async () => {
+      const count = await emptyState.count();
+      if (count > 0) {
+        await expect(emptyState.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
   test('should be accessible via navigation', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
 
     const historyLink = authenticatedPage.locator(SELECTORS.navigation.historyLink);
-    const hasLink = await historyLink.count() > 0;
-
-    if (hasLink) {
-      await historyLink.first().click();
-      await expect(authenticatedPage).toHaveURL('http://localhost:8000/history');
-    }
-  });
-
-  test('should show session duration', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    await page.goto('/history');
-
-    const duration = page.locator('text=minutes|duration|time');
-    const hasDuration = await duration.count() > 0;
-
-    if (hasDuration) {
-      await expect(duration.first()).toBeVisible();
-    }
-  });
-
-  test('should allow deleting session history', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    await page.goto('/history');
-
-    const deleteButton = page.locator('button:has-text("Delete"), button:has-text("Remove"), .delete-btn');
-    const hasDelete = await deleteButton.count() > 0;
-
-    if (hasDelete) {
-      const initialCount = await page.locator('.session-item, .history-item').count();
-
-      if (initialCount > 0) {
-        page.on('dialog', dialog => dialog.accept());
-        await deleteButton.first().click();
-        await page.waitForTimeout(1000);
-
-        const newCount = await page.locator('.session-item, .history-item').count();
-        expect(newCount).toBeLessThanOrEqual(initialCount);
+    await expect(async () => {
+      const count = await historyLink.count();
+      if (count > 0) {
+        await historyLink.first().click();
+        await expect(authenticatedPage).toHaveURL('http://localhost:8000/history');
       }
-    }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should load more sessions on scroll', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should show session duration', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/history');
 
-    await page.goto('/history');
+    const duration = authenticatedPage.locator('text=minutes|duration|time');
+    await expect(async () => {
+      const count = await duration.count();
+      if (count > 0) {
+        await expect(duration.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
+  });
 
-    const sessionsList = page.locator(SELECTORS.history.sessionsList);
-    const hasList = await sessionsList.count() > 0;
+  test('should allow deleting session history', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/history');
 
-    if (hasList) {
-      const initialCount = await page.locator('.session-item').count();
+    const deleteButton = authenticatedPage.locator('button:has-text("Delete"), button:has-text("Remove"), .delete-btn');
+    await expect(async () => {
+      const count = await deleteButton.count();
+      if (count > 0) {
+        const initialCount = await authenticatedPage.locator('.session-item, .history-item').count();
 
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.waitForTimeout(2000);
+        if (initialCount > 0) {
+          authenticatedPage.on('dialog', dialog => dialog.accept());
+          await deleteButton.first().click();
+          await authenticatedPage.waitForLoadState("networkidle");
 
-      const newCount = await page.locator('.session-item').count();
-      expect(newCount).toBeGreaterThanOrEqual(initialCount);
-    }
+          const newCount = await authenticatedPage.locator('.session-item, .history-item').count();
+          expect(newCount).toBeLessThanOrEqual(initialCount);
+        }
+      }
+    }).toPass({ timeout: 5000 });
+  });
+
+  test('should load more sessions on scroll', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/history');
+
+    const sessionsList = authenticatedPage.locator(SELECTORS.history.sessionsList);
+    await expect(async () => {
+      const count = await sessionsList.count();
+      if (count > 0) {
+        const initialCount = await authenticatedPage.locator('.session-item').count();
+
+        await authenticatedPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await authenticatedPage.waitForLoadState('networkidle');
+
+        const newCount = await authenticatedPage.locator('.session-item').count();
+        expect(newCount).toBeGreaterThanOrEqual(initialCount);
+      }
+    }).toPass({ timeout: 5000 });
   });
 });

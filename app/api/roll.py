@@ -45,21 +45,15 @@ async def roll_dice(
     Raises:
         HTTPException: If no active threads available.
     """
-    threads = await get_roll_pool(current_user.id, db)
-    if not threads:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active threads available to roll",
-        )
-
-    current_session = await get_or_create(db, user_id=current_user.id)
+    user_id = current_user.id
+    current_session = await get_or_create(db, user_id=user_id)
     current_session_id = current_session.id
     current_die = await get_current_die(current_session_id, db)
 
     # Exclude snoozed threads from the pool
     snoozed_ids = current_session.snoozed_thread_ids or []
-    threads = [t for t in threads if t.id not in snoozed_ids]
 
+    threads = await get_roll_pool(user_id, db, snoozed_ids)
     if not threads:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

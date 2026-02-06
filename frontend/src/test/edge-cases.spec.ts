@@ -11,15 +11,11 @@ test.describe('Edge Cases & Error Handling', () => {
     await expect(errors.first()).toBeVisible({ timeout: 3000 });
   });
 
-  test('should handle very long thread titles', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
+  test('should handle very long thread titles', async ({ authenticatedPage }) => {
     const longTitle = 'A'.repeat(500);
 
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-    const response = await page.request.post('/api/threads/', {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -35,22 +31,18 @@ test.describe('Edge Cases & Error Handling', () => {
     expect([400, 422, 500]).toContain(status);
   });
 
-  test('should handle special characters in input', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
+  test('should handle special characters in input', async ({ authenticatedPage }) => {
     const specialTitle = 'Test\'s "Comic" & More! @#$%^&*()';
 
-    await createThread(page, {
+    await createThread(authenticatedPage, {
       title: specialTitle,
       format: 'Comic',
       issues_remaining: 5,
     });
 
-    await page.goto('/queue');
+    await authenticatedPage.goto('/queue');
 
-    const escapedTitle = page.locator(`text=${specialTitle.replace(/"/g, '\\"')}`);
+    const escapedTitle = authenticatedPage.locator(`text=${specialTitle.replace(/"/g, '\\"')}`);
     const isPresent = await escapedTitle.count() > 0;
 
     if (isPresent) {
@@ -64,7 +56,7 @@ test.describe('Edge Cases & Error Handling', () => {
     for (let i = 0; i < 10; i++) {
       try {
         await authenticatedPage.click('button:has-text("Add Thread")', { timeout: 1000 });
-        await authenticatedPage.waitForTimeout(50);
+        // Removed small delay for rapid click test
       } catch {
         // Modal might already be open
       }
@@ -74,47 +66,35 @@ test.describe('Edge Cases & Error Handling', () => {
     expect(modalCount).toBeLessThanOrEqual(2);
   });
 
-  test('should handle browser back button', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should handle browser back button', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState("networkidle");
+    await authenticatedPage.goBack();
 
-    await page.goto('/queue');
-    await page.waitForTimeout(500);
-    await page.goBack();
-
-    await expect(page).toHaveURL('http://localhost:8000/');
+    await expect(authenticatedPage).toHaveURL('http://localhost:8000/');
   });
 
-  test('should handle browser forward button', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should handle browser forward button', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState("networkidle");
+    await authenticatedPage.goBack();
+    await authenticatedPage.waitForLoadState("networkidle");
+    await authenticatedPage.goForward();
 
-    await page.goto('/queue');
-    await page.waitForTimeout(500);
-    await page.goBack();
-    await page.waitForTimeout(500);
-    await page.goForward();
-
-    await expect(page).toHaveURL('http://localhost:8000/queue');
+    await expect(authenticatedPage).toHaveURL('http://localhost:8000/queue');
   });
 
-  test('should handle page refresh during form submission', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should handle page refresh during form submission', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.click('button:has-text("Add Thread")');
+    await authenticatedPage.fill('label:has-text("Title") + input', 'Refresh Test');
+    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
 
-    await page.goto('/queue');
-    await page.click('button:has-text("Add Thread")');
-    await page.fill('label:has-text("Title") + input', 'Refresh Test');
-    await page.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.reload();
 
-    await page.reload();
-
-    const formVisible = await page.locator('input[name="title"]').count() > 0;
+    const formVisible = await authenticatedPage.locator('input[name="title"]').count() > 0;
     if (formVisible) {
-      await expect(page.locator('input[name="title"]')).toHaveValue('');
+      await expect(authenticatedPage.locator('input[name="title"]')).toHaveValue('');
     }
   });
 
@@ -141,7 +121,7 @@ test.describe('Edge Cases & Error Handling', () => {
       issues_remaining: 5,
     });
 
-    await page1.waitForTimeout(1000);
+    await page1.waitForLoadState("networkidle");
     await page2.reload();
 
     const threadOnPage2 = page2.locator('text=Concurrent Tab Test');
@@ -155,13 +135,9 @@ test.describe('Edge Cases & Error Handling', () => {
     await page2.close();
   });
 
-  test('should handle extremely large issues_remaining', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-    const response = await page.request.post('/api/threads/', {
+  test('should handle extremely large issues_remaining', async ({ authenticatedPage }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -176,13 +152,9 @@ test.describe('Edge Cases & Error Handling', () => {
     expect([200, 201, 400, 422]).toContain(response.status());
   });
 
-  test('should handle negative issues_remaining', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-    const response = await page.request.post('/api/threads/', {
+  test('should handle negative issues_remaining', async ({ authenticatedPage }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -197,75 +169,59 @@ test.describe('Edge Cases & Error Handling', () => {
     expect([400, 422]).toContain(response.status());
   });
 
-  test('should handle zero issues_remaining', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    await createThread(page, {
+  test('should handle zero issues_remaining', async ({ authenticatedPage }) => {
+    await createThread(authenticatedPage, {
       title: 'Zero Issues Test',
       format: 'Comic',
       issues_remaining: 0,
     });
 
-    await page.goto('/queue');
+    await authenticatedPage.goto('/queue');
 
-    const thread = page.locator('text=Zero Issues Test');
+    const thread = authenticatedPage.locator('text=Zero Issues Test');
     await expect(thread.first()).toBeVisible();
   });
 
-  test('should handle bookmarking/direct URL access', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should handle bookmarking/direct URL access', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
 
-    await page.goto('/queue');
-    await page.waitForLoadState('networkidle');
+    const url = authenticatedPage.url();
+    await authenticatedPage.goto('/');
 
-    const url = page.url();
-    await page.goto('/');
+    await authenticatedPage.goto(url);
+    await authenticatedPage.waitForLoadState('networkidle');
 
-    await page.goto(url);
-    await page.waitForLoadState('networkidle');
-
-    await expect(page.locator('h1:has-text("Read Queue")')).toBeVisible();
+    await expect(authenticatedPage.locator('h1:has-text("Read Queue")')).toBeVisible();
   });
 
-  test('should handle losing network connection', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should handle losing network connection', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
 
-    await page.goto('/queue');
-    await page.waitForLoadState('networkidle');
+    await authenticatedPage.context().setOffline(true);
 
-    await page.context().setOffline(true);
-
-    const offlineMessage = page.locator('text=offline|no connection|network error');
+    const offlineMessage = authenticatedPage.locator('text=offline|no connection|network error');
     const hasMessage = await offlineMessage.count({ timeout: 5000 }).then(c => c > 0);
 
     if (hasMessage) {
       await expect(offlineMessage.first()).toBeVisible();
     }
 
-    await page.context().setOffline(false);
+    await authenticatedPage.context().setOffline(false);
   });
 
-  test('should handle regaining network connection', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should handle regaining network connection', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
 
-    await page.goto('/queue');
-    await page.waitForLoadState('networkidle');
+    await authenticatedPage.context().setOffline(true);
+    await authenticatedPage.waitForLoadState("networkidle");
 
-    await page.context().setOffline(true);
-    await page.waitForTimeout(1000);
+    await authenticatedPage.context().setOffline(false);
+    await authenticatedPage.reload();
 
-    await page.context().setOffline(false);
-    await page.reload();
-
-    await expect(page.locator('body')).toBeVisible();
+    await expect(authenticatedPage.locator('body')).toBeVisible();
   });
 
   test('should handle browser storage disabled', async ({ context }) => {
@@ -280,7 +236,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await page.fill(SELECTORS.auth.confirmPasswordInput, user.password);
     await page.click(SELECTORS.auth.submitButton);
 
-    await page.waitForTimeout(2000);
+    await page.waitForURL("**/", { timeout: 5000 });
 
     const currentUrl = page.url();
     expect(currentUrl).toMatch(/\/threads\/?$|\/queue\/?$|\/$/);
@@ -314,47 +270,39 @@ test.describe('Edge Cases & Error Handling', () => {
     for (let i = 0; i < 5; i++) {
       for (const route of routes) {
         await authenticatedPage.goto(route);
-        await authenticatedPage.waitForTimeout(100);
+        // Removed small delay for rapid click test
       }
     }
 
     await expect(authenticatedPage.locator('body')).toBeVisible();
   });
 
-  test('should handle very slow network', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    await page.route('**/*', async route => {
+  test('should handle very slow network', async ({ authenticatedPage }) => {
+    await authenticatedPage.route('**/*', async route => {
       await new Promise(resolve => setTimeout(resolve, 5000));
       await route.continue();
     });
 
-    await page.goto('/queue');
+    await authenticatedPage.goto('/queue');
 
-    const loadingIndicator = page.locator('.loading, .spinner');
+    const loadingIndicator = authenticatedPage.locator('.loading, .spinner');
     const hasLoading = await loadingIndicator.count() > 0;
 
     if (hasLoading) {
       await expect(loadingIndicator.first()).toBeVisible();
     }
 
-    await expect(page.locator('body')).toBeVisible({ timeout: 30000 });
+    await expect(authenticatedPage.locator('body')).toBeVisible({ timeout: 30000 });
   });
 
-  test('should handle session timeout', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    await page.evaluate(() => {
+  test('should handle session timeout', async ({ authenticatedPage }) => {
+    await authenticatedPage.evaluate(() => {
       localStorage.removeItem('auth_token');
     });
 
-    await page.reload();
+    await authenticatedPage.reload();
 
-    const loginPrompt = page.locator('text=login|sign in|expired');
+    const loginPrompt = authenticatedPage.locator('text=login|sign in|expired');
     const hasPrompt = await loginPrompt.count() > 0;
 
     if (hasPrompt) {
@@ -362,26 +310,22 @@ test.describe('Edge Cases & Error Handling', () => {
     }
   });
 
-  test('should handle duplicate thread creation', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
+  test('should handle duplicate thread creation', async ({ authenticatedPage }) => {
     const threadData = {
       title: 'Duplicate Test',
       format: 'Comic',
       issues_remaining: 5,
     };
 
-    await createThread(page, threadData);
-    await createThread(page, threadData);
+    await createThread(authenticatedPage, threadData);
+    await createThread(authenticatedPage, threadData);
 
-    await page.goto('/queue');
-    await page.waitForLoadState('networkidle');
-    await page.reload();
-    await page.waitForLoadState('networkidle');
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.reload();
+    await authenticatedPage.waitForLoadState('networkidle');
 
-    const duplicates = await page.locator('text=Duplicate Test').count();
+    const duplicates = await authenticatedPage.locator('text=Duplicate Test').count();
     expect(duplicates).toBeGreaterThanOrEqual(2);
   });
 });

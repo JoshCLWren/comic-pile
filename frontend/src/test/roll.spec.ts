@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS } from './helpers';
+import { SELECTORS } from './helpers';
 
 test.describe('Roll Dice Feature', () => {
   test('should display die selector on home page', async ({ authenticatedPage }) => {
@@ -9,19 +9,9 @@ test.describe('Roll Dice Feature', () => {
     await expect(authenticatedPage.locator(SELECTORS.roll.headerDieLabel)).toBeVisible();
   });
 
-  test('should roll dice and navigate to rate page', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
-
-    await createThread(page, {
-      title: 'Roll Test Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
-
-    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-    const rollResponse = await page.request.post('/api/roll/', {
+  test('should roll dice and navigate to rate page', async ({ authenticatedWithThreadsPage }) => {
+    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
+    const rollResponse = await authenticatedWithThreadsPage.request.post('/api/roll/', {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -29,30 +19,22 @@ test.describe('Roll Dice Feature', () => {
     });
 
     expect(rollResponse.ok()).toBeTruthy();
-    await page.goto('/rate');
-    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+    await authenticatedWithThreadsPage.goto('/rate');
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
   });
 
-  test('regression: roll API response should be handled and navigation should complete', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('regression: roll API response should be handled and navigation should complete', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
-    await createThread(page, { title: 'Thread A', format: 'Comic', issues_remaining: 3 });
-    await createThread(page, { title: 'Thread B', format: 'TPB', issues_remaining: 5 });
-    await createThread(page, { title: 'Thread C', format: 'OGN', issues_remaining: 2 });
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
 
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    await page.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
 
-    await page.click(SELECTORS.roll.mainDie);
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
 
-    await page.waitForURL('**/rate', { timeout: 5000 });
-
-    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
-
-    const currentUrl = page.url();
+    const currentUrl = authenticatedWithThreadsPage.url();
     expect(currentUrl).toMatch(/\/rate\/?$/);
     expect(currentUrl).not.toMatch(/\/$/);
   });
@@ -110,40 +92,23 @@ test.describe('Roll Dice Feature', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
-    await authenticatedPage.click(SELECTORS.roll.mainDie);
-    await authenticatedPage.waitForTimeout(2000);
-
-    const errorMessage = authenticatedPage.locator('text=no threads|queue is empty');
-    const isVisible = await errorMessage.count() > 0;
-
-    if (isVisible) {
-      await expect(errorMessage.first()).toBeVisible();
-    }
+    const emptyQueueMessage = authenticatedPage.locator('text=Queue Empty');
+    await expect(emptyQueueMessage).toBeVisible();
   });
 
-  test('should update session state after roll', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should update session state after roll', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
 
-    await createThread(page, {
-      title: 'Session Test Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
-
-    await page.goto('/');
-
-    const sessionBefore = await page.evaluate(async () => {
+    const sessionBefore = await authenticatedWithThreadsPage.evaluate(async () => {
       const response = await fetch('/api/sessions/current');
       const data = await response.json();
       return data;
     });
 
-    await page.click(SELECTORS.roll.mainDie);
-    await page.waitForTimeout(2000);
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
 
-    const sessionAfter = await page.evaluate(async () => {
+    const sessionAfter = await authenticatedWithThreadsPage.evaluate(async () => {
       const response = await fetch('/api/sessions/current');
       const data = await response.json();
       return data;
@@ -152,70 +117,47 @@ test.describe('Roll Dice Feature', () => {
     expect(sessionAfter).toBeDefined();
   });
 
-  test('should show loading state during roll animation', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should show loading state during roll animation', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
 
-    await createThread(page, {
-      title: 'Animation Test Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
+    const loadingIndicator = authenticatedWithThreadsPage.locator('.loading, .rolling, [aria-busy="true"]');
 
-    await page.click(SELECTORS.roll.mainDie);
-
-    const loadingIndicator = page.locator('.loading, .rolling, [aria-busy="true"]');
-    const hasLoadingState = await loadingIndicator.count() > 0;
-
-    if (hasLoadingState) {
-      await expect(loadingIndicator.first()).toBeVisible();
-    }
+    await expect(async () => {
+      const count = await loadingIndicator.count();
+      if (count > 0) {
+        await expect(loadingIndicator.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should be accessible via keyboard navigation', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should be accessible via keyboard navigation', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await authenticatedWithThreadsPage.waitForSelector('#main-die-3d', { state: 'visible', timeout: 5000 });
 
-    await createThread(page, { title: 'Keyboard Test Comic', format: 'Comic', issues_remaining: 5 });
-
-    await page.goto('/');
-
-    const dieElement = page.locator('#main-die-3d');
+    const dieElement = authenticatedWithThreadsPage.locator('#main-die-3d');
     await dieElement.focus();
-    await page.keyboard.press('Enter');
+    await authenticatedWithThreadsPage.keyboard.press('Enter');
 
-    await page.waitForURL('**/rate', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
 
-    const currentUrl = page.url();
+    const currentUrl = authenticatedWithThreadsPage.url();
     expect(currentUrl).toContain('/rate');
   });
 
-  test('should prevent multiple rapid rolls', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should prevent multiple rapid rolls', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
 
-    await createThread(page, {
-      title: 'Rapid Roll Test',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
+    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
 
-    await page.click(SELECTORS.roll.mainDie);
-    await page.waitForTimeout(100);
-    await page.click(SELECTORS.roll.mainDie);
-
-    await page.waitForTimeout(2000);
-
-    const currentUrl = page.url();
+    const currentUrl = authenticatedWithThreadsPage.url();
     expect(currentUrl).toMatch(/\/rate\/?$/);
   });
 });

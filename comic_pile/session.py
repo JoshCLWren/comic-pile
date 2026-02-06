@@ -107,7 +107,7 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
             user_result = await db.execute(select(User).where(User.id == user_id))
             user = user_result.scalar_one_or_none()
             if not user:
-                user = User(id=user_id, username="default_user")
+                user = User(id=user_id, username=f"user_{user_id}")
                 db.add(user)
                 await db.commit()
                 await db.refresh(user)
@@ -123,7 +123,6 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
             active_session = result.scalars().first()
 
             if active_session:
-                await db.refresh(active_session)
                 return active_session
 
             async with _session_creation_lock:
@@ -146,7 +145,6 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 active_session = result.scalars().first()
 
                 if active_session:
-                    await db.refresh(active_session)
                     return active_session
 
                 new_session = Session(start_die=start_die, user_id=user_id)
@@ -154,7 +152,6 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 await db.flush()
 
                 await create_session_start_snapshot(db, new_session)
-                await db.refresh(new_session)
 
                 return new_session
         except OperationalError as e:

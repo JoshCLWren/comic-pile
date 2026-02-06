@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS } from './helpers';
+import { SELECTORS } from './helpers';
 
 test.describe('Analytics Dashboard', () => {
   test('should display analytics page', async ({ authenticatedPage }) => {
@@ -8,143 +8,80 @@ test.describe('Analytics Dashboard', () => {
     await expect(authenticatedPage.locator('h1:has-text("Analytics")'), 'Analytics page h1 not found').toBeVisible();
   });
 
-  test('should show reading statistics', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should show reading statistics', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/analytics');
 
-    await createThread(page, {
-      title: 'Stats Test Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
-
-    await page.goto('/analytics');
-
-    const glassCards = page.locator('.glass-card');
+    const glassCards = authenticatedWithThreadsPage.locator('.glass-card');
     const count = await glassCards.count();
     await expect(glassCards.first(), `Expected .glass-card elements but found ${count}`).toBeVisible({ timeout: 5000 });
   });
 
-  test('should display charts or graphs', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should display charts or graphs', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/analytics');
 
-    await page.goto('/analytics');
-
-    const chartContainer = page.locator('canvas, .chart, .graph');
-    const hasChart = await chartContainer.count() > 0;
-
-    if (hasChart) {
-      await expect(chartContainer.first()).toBeVisible();
-    }
+    const chartContainer = authenticatedPage.locator('canvas, .chart, .graph');
+    await expect(async () => {
+      const count = await chartContainer.count();
+      if (count > 0) {
+        await expect(chartContainer.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should show total threads count', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should show total threads count', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/analytics');
 
-    const threadCount = 5;
-    for (let i = 0; i < threadCount; i++) {
-      await createThread(page, {
-        title: `Comic ${i + 1}`,
-        format: 'Comic',
-        issues_remaining: 5,
-      });
-    }
-
-    await page.goto('/analytics');
-
-    const countElement = page.locator('text=threads').first();
+    const countElement = authenticatedWithThreadsPage.locator('text=threads').first();
     await expect(countElement).toBeVisible();
   });
 
-  test('should show active vs completed threads', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should show active vs completed threads', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/analytics');
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await authenticatedWithThreadsPage.waitForLoadState("networkidle");
 
-    await createThread(page, {
-      title: 'Active Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
-
-    await page.goto('/analytics');
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000);
-
-    const activeThreadsLabel = page.locator('text=Active Threads');
+    const activeThreadsLabel = authenticatedWithThreadsPage.locator('text=Active Threads');
     await expect(activeThreadsLabel.first()).toBeVisible({ timeout: 5000 });
   });
 
-  test('should display rating distribution', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should display rating distribution', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/analytics');
 
-    await createThread(page, {
-      title: 'Rated Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
-
-    await page.goto('/analytics');
-
-    const completionRate = page.locator('text=Completion Rate');
+    const completionRate = authenticatedWithThreadsPage.locator('text=Completion Rate');
     await expect(completionRate).toBeVisible();
   });
 
-  test('should filter by date range', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should filter by date range', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/analytics');
 
-    await page.goto('/analytics');
-
-    const dateFilter = page.locator('input[type="date"], .date-filter, .time-range');
-    const hasDateFilter = await dateFilter.count() > 0;
-
-    if (hasDateFilter) {
-      await expect(dateFilter.first()).toBeVisible();
-    }
+    const dateFilter = authenticatedPage.locator('input[type="date"], .date-filter, .time-range');
+    await expect(async () => {
+      const count = await dateFilter.count();
+      if (count > 0) {
+        await expect(dateFilter.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should export analytics data', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should export analytics data', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/analytics');
 
-    await page.goto('/analytics');
-
-    const exportButton = page.locator('button:has-text("Export"), button:has-text("Download"), .export-btn');
-    const hasExport = await exportButton.count() > 0;
-
-    if (hasExport) {
-      const downloadPromise = page.waitForEvent('download');
-      await exportButton.first().click();
-      const download = await downloadPromise;
-
-      expect(download.suggestedFilename()).toBeTruthy();
-    }
+    const exportButton = authenticatedPage.locator('button:has-text("Export"), button:has-text("Download"), .export-btn');
+    await expect(async () => {
+      const count = await exportButton.count();
+      if (count > 0) {
+        const downloadPromise = authenticatedPage.waitForEvent('download');
+        await exportButton.first().click();
+        const download = await downloadPromise;
+        expect(download.suggestedFilename()).toBeTruthy();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should show session history summary', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should show session history summary', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/analytics');
 
-    await createThread(page, {
-      title: 'Session Comic',
-      format: 'Comic',
-      issues_remaining: 5,
-    });
-
-    await page.goto('/analytics');
-
-    const recentSessions = page.locator('text=Recent Sessions');
+    const recentSessions = authenticatedWithThreadsPage.locator('h3:has-text("Recent Sessions")');
     await expect(recentSessions).toBeVisible();
   });
 
@@ -152,38 +89,34 @@ test.describe('Analytics Dashboard', () => {
     await authenticatedPage.goto('/');
 
     const analyticsLink = authenticatedPage.locator(SELECTORS.navigation.analyticsLink);
-    const hasLink = await analyticsLink.count() > 0;
+    await expect(analyticsLink.first()).toBeVisible({ timeout: 5000 });
 
-    if (hasLink) {
-      await analyticsLink.first().click();
-      await expect(authenticatedPage).toHaveURL('http://localhost:8000/analytics');
-    }
+    await analyticsLink.first().click();
+    await expect(authenticatedPage).toHaveURL('http://localhost:8000/analytics');
   });
 
   test('should handle empty data gracefully', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/analytics');
 
     const emptyState = authenticatedPage.locator('text=no data|start reading|add threads');
-    const hasEmptyState = await emptyState.count() > 0;
-
-    if (hasEmptyState) {
-      await expect(emptyState.first()).toBeVisible();
-    }
+    await expect(async () => {
+      const count = await emptyState.count();
+      if (count > 0) {
+        await expect(emptyState.first()).toBeVisible();
+      }
+    }).toPass({ timeout: 5000 });
   });
 
-  test('should load data asynchronously', async ({ page }) => {
-    const user = generateTestUser();
-    await registerUser(page, user);
-    await loginUser(page, user);
+  test('should load data asynchronously', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/analytics');
 
-    await page.goto('/analytics');
-
-    const loadingIndicator = page.locator('.loading, .spinner, [aria-busy="true"]');
-    const hasLoading = await loadingIndicator.count() > 0;
-
-    if (hasLoading) {
-      await expect(loadingIndicator.first()).toBeVisible();
-      await expect(loadingIndicator.first()).not.toBeVisible({ timeout: 5000 });
-    }
+    const loadingIndicator = authenticatedPage.locator('.loading, .spinner, [aria-busy="true"]');
+    await expect(async () => {
+      const count = await loadingIndicator.count();
+      if (count > 0) {
+        await expect(loadingIndicator.first()).toBeVisible();
+        await expect(loadingIndicator.first()).not.toBeVisible({ timeout: 5000 });
+      }
+    }).toPass({ timeout: 5000 });
   });
 });
