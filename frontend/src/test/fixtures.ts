@@ -1,6 +1,7 @@
 import { test as base, type Page } from '@playwright/test';
 
 type TestFixtures = {
+  page: Page;
   authenticatedPage: Page;
   testUser: {
     email: string;
@@ -9,6 +10,16 @@ type TestFixtures = {
     accessToken?: string;
   };
 };
+
+async function createAutoWaitingPage(page: Page): Promise<Page> {
+  const originalGoto = page.goto.bind(page);
+  page.goto = async (url: string, options?: any) => {
+    const result = await originalGoto(url, options);
+    await page.waitForLoadState('networkidle');
+    return result;
+  };
+  return page;
+}
 
 async function registerWithRetry(request: any, testUser: any, maxRetries = 3): Promise<{ accessToken: string }> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -53,6 +64,11 @@ async function registerWithRetry(request: any, testUser: any, maxRetries = 3): P
 }
 
 export const test = base.extend<TestFixtures>({
+  page: async ({ page }, use) => {
+    await createAutoWaitingPage(page);
+    await use(page);
+  },
+
   authenticatedPage: async ({ page, request }, use) => {
     const timestamp = Date.now();
     const counter = Math.floor(Math.random() * 10000);
@@ -68,7 +84,15 @@ export const test = base.extend<TestFixtures>({
       localStorage.setItem('auth_token', token);
     }, accessToken);
 
+    const originalGoto = page.goto.bind(page);
+    page.goto = async (url: string, options?: any) => {
+      const result = await originalGoto(url, options);
+      await page.waitForLoadState('networkidle');
+      return result;
+    };
+
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     await use(page);
 
