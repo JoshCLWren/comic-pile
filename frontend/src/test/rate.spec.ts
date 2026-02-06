@@ -14,12 +14,16 @@ test.describe('Rate Thread Feature', () => {
     });
 
     const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-    await page.request.post('/api/roll/', {
+    const rollResponse = await page.request.post('/api/roll/', {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
     });
+
+    expect(rollResponse.ok()).toBeTruthy();
+
+    await page.waitForTimeout(500);
 
     await page.goto('/rate');
     await page.waitForLoadState('networkidle');

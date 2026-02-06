@@ -1,10 +1,19 @@
 """Rate limiting middleware using slowapi."""
 
 import os
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 TEST_MODE = os.getenv("TEST_ENVIRONMENT") == "true"
+
+
+def _should_enable_rate_limiting() -> bool:
+    """Check if rate limiting should be enabled."""
+    if not TEST_MODE:
+        return True
+    return os.getenv("ENABLE_RATE_LIMITING_IN_TESTS") == "true"
+
 
 if TEST_MODE:
     # In test mode, create a limiter but override the limit method to do nothing
@@ -18,9 +27,11 @@ if TEST_MODE:
             return getattr(_real_limiter, name)
 
         def limit(self, limit_value: str):
-            """Return a decorator that does nothing (bypasses rate limiting)."""
+            """Return a decorator that conditionally applies rate limiting."""
 
             def decorator(func):
+                if _should_enable_rate_limiting():
+                    return _real_limiter.limit(limit_value)(func)
                 return func
 
             return decorator

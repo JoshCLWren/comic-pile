@@ -30,6 +30,18 @@ load_dotenv()
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 
+
+@pytest.fixture(scope="session", autouse=True)
+def enable_rate_limiting_for_tests() -> Iterator[None]:
+    """Enable rate limiting for rate limit tests."""
+    original_value = os.environ.get("ENABLE_RATE_LIMITING_IN_TESTS")
+    yield
+    if original_value is None:
+        os.environ.pop("ENABLE_RATE_LIMITING_IN_TESTS", None)
+    else:
+        os.environ["ENABLE_RATE_LIMITING_IN_TESTS"] = original_value
+
+
 _SCHEMA_PREPARED: set[str] = set()
 
 
