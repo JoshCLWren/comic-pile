@@ -5,9 +5,9 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 6 : 4,
-  workers: process.env.CI ? 2 : 4,  // Reduced from 6 to 4 to reduce rate limiting pressure
-  timeout: 60 * 1000, // 60 seconds per test (increased from default 30s for CI)
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : 4,
+  timeout: 30 * 1000,
   reporter: process.env.CI
     ? [
         ['github'],
@@ -25,11 +25,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: 60000,
-    navigationTimeout: 60000,
+    actionTimeout: 30000,
+    navigationTimeout: 30000,
   },
   expect: {
-    timeout: 15000,
+    timeout: 10000,
   },
   projects: [
     {

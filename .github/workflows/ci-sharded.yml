@@ -216,17 +216,25 @@ jobs:
 
   # E2E TypeScript Playwright tests
   test-e2e-playwright:
-    name: E2E Playwright Tests
-    continue-on-error: true
+    name: E2E Playwright Tests (Shard ${{ matrix.shardIndex }}/${{ matrix.totalShards }})
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-tag }}
+      options: >-
+        --shm-size=2gb
+        --memory=8gb
+        --cpus=4
     needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        totalShards: [4]
     env:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test?pool_size=20&max_overflow=10
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test?pool_size=20&max_overflow=10
       PGUSER: postgres
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
@@ -286,8 +294,8 @@ jobs:
           echo "DATABASE_URL: ${DATABASE_URL:0:50}..."
           echo "TEST_DATABASE_URL: ${TEST_DATABASE_URL:0:50}..."
           echo "PGUSER: $PGUSER"
-          # Start backend (single worker for Playwright tests to avoid resource contention)
-          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug > /tmp/backend.log 2>&1 &
+          # Start backend with multiple workers for better concurrency
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --log-level warning > /tmp/backend.log 2>&1 &
           echo $! > /tmp/backend.pid
 
       - name: Wait for backend to be ready
@@ -307,7 +315,7 @@ jobs:
           exit 1
 
       - name: Run Playwright tests
-        run: cd frontend && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium
+        run: cd frontend && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium --shard=${{ matrix.shardIndex }}/${{ matrix.totalShards }}
 
       - name: Upload Playwright test results
         if: always()
