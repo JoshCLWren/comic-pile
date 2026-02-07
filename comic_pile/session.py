@@ -1,19 +1,19 @@
 """Session management functions."""
 
-import threading
-import time
+import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_session_settings
-from app.models import Event, Snapshot, Thread
-from app.models import Session as SessionModel
+from app.models import Event, Session, Snapshot, Thread
 
 
-_session_creation_lock = threading.Lock()
+logger = logging.getLogger(__name__)
+_session_creation_lock = asyncio.Lock()
 
 
 def _session_gap_hours() -> int:
@@ -26,7 +26,7 @@ def _start_die() -> int:
     return get_session_settings().start_die
 
 
-def is_active(started_at: datetime, ended_at: datetime | None, _db: Session) -> bool:
+async def is_active(started_at: datetime, ended_at: datetime | None, _db: AsyncSession) -> bool:
     """Check if session was within configured gap hours."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
     session_time = started_at
@@ -35,26 +35,24 @@ def is_active(started_at: datetime, ended_at: datetime | None, _db: Session) -> 
     return session_time >= cutoff_time and ended_at is None
 
 
-def should_start_new(db: Session, user_id: int) -> bool:
+async def should_start_new(db: AsyncSession, user_id: int) -> bool:
     """Check if no active session in configured gap hours."""
     cutoff_time = datetime.now(UTC) - timedelta(hours=_session_gap_hours())
-    recent_sessions = (
-        db.execute(
-            select(SessionModel)
-            .where(SessionModel.user_id == user_id)
-            .where(SessionModel.started_at >= cutoff_time)
-            .where(SessionModel.ended_at.is_(None))
-        )
-        .scalars()
-        .all()
+    result = await db.execute(
+        select(Session)
+        .where(Session.user_id == user_id)
+        .where(Session.started_at >= cutoff_time)
+        .where(Session.ended_at.is_(None))
     )
+    recent_sessions = result.scalars().all()
 
     return len(recent_sessions) == 0
 
 
-def create_session_start_snapshot(db: Session, session: SessionModel) -> None:
+async def create_session_start_snapshot(db: AsyncSession, session: Session) -> None:
     """Create a snapshot of all states at session start."""
-    threads = db.execute(select(Thread).where(Thread.user_id == session.user_id)).scalars().all()
+    result = await db.execute(select(Thread).where(Thread.user_id == session.user_id))
+    threads = result.scalars().all()
 
     thread_states = {}
     for thread in threads:
@@ -89,10 +87,11 @@ def create_session_start_snapshot(db: Session, session: SessionModel) -> None:
     )
     snapshot.session_state = session_state
     db.add(snapshot)
-    db.commit()
+    await db.commit()
+    await db.refresh(session)
 
 
-def get_or_create(db: Session, user_id: int) -> SessionModel:
+async def get_or_create(db: AsyncSession, user_id: int) -> Session:
     """Get active session or create new one."""
     from app.models import User
 
@@ -105,98 +104,95 @@ def get_or_create(db: Session, user_id: int) -> SessionModel:
             session_gap_hours = _session_gap_hours()
             start_die = _start_die()
 
-            user = db.get(User, user_id)
+            user_result = await db.execute(select(User).where(User.id == user_id))
+            user = user_result.scalar_one_or_none()
             if not user:
-                user = User(id=user_id, username="default_user")
+                user = User(id=user_id, username=f"user_{user_id}")
                 db.add(user)
-                db.commit()
-                db.refresh(user)
+                await db.commit()
+                await db.refresh(user)
 
             cutoff_time = datetime.now(UTC) - timedelta(hours=session_gap_hours)
-            active_session = (
-                db.execute(
-                    select(SessionModel)
-                    .where(SessionModel.user_id == user_id)
-                    .where(SessionModel.ended_at.is_(None))
-                    .where(SessionModel.started_at >= cutoff_time)
-                    .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
-                )
-                .scalars()
-                .first()
+            result = await db.execute(
+                select(Session)
+                .where(Session.user_id == user_id)
+                .where(Session.ended_at.is_(None))
+                .where(Session.started_at >= cutoff_time)
+                .order_by(Session.started_at.desc(), Session.id.desc())
             )
+            active_session = result.scalars().first()
 
             if active_session:
                 return active_session
 
-            with _session_creation_lock:
+            async with _session_creation_lock:
                 try:
-                    db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
-                except Exception:
-                    pass
-
-                active_session = (
-                    db.execute(
-                        select(SessionModel)
-                        .where(SessionModel.user_id == user_id)
-                        .where(SessionModel.ended_at.is_(None))
-                        .where(SessionModel.started_at >= cutoff_time)
-                        .order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+                    await db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
+                except Exception as e:
+                    logger.warning(
+                        f"Advisory lock failed: {e}. "
+                        "Continuing with asyncio.Lock protection only. "
+                        "This may increase risk of race conditions in multi-instance deployments."
                     )
-                    .scalars()
-                    .first()
+
+                result = await db.execute(
+                    select(Session)
+                    .where(Session.user_id == user_id)
+                    .where(Session.ended_at.is_(None))
+                    .where(Session.started_at >= cutoff_time)
+                    .order_by(Session.started_at.desc(), Session.id.desc())
                 )
+                active_session = result.scalars().first()
 
                 if active_session:
                     return active_session
 
-                new_session = SessionModel(start_die=start_die, user_id=user_id)
+                new_session = Session(start_die=start_die, user_id=user_id)
                 db.add(new_session)
-                db.commit()
-                db.refresh(new_session)
+                await db.flush()
 
-                create_session_start_snapshot(db, new_session)
+                await create_session_start_snapshot(db, new_session)
 
                 return new_session
         except OperationalError as e:
             if "deadlock" in str(e).lower():
-                db.rollback()
+                await db.rollback()
                 retries += 1
                 if retries >= max_retries:
                     raise RuntimeError(
                         f"Failed to get_or_create session after {max_retries} retries"
                     ) from e
                 delay = initial_delay * (2 ** (retries - 1))
-                time.sleep(delay)
+                await asyncio.sleep(delay)
             else:
                 raise
 
     raise RuntimeError(f"Failed to get_or_create session after {max_retries} retries")
 
 
-def end_session(session_id: int, db: Session) -> None:
+async def end_session(session_id: int, db: AsyncSession) -> None:
     """Mark session as ended."""
-    session = db.get(SessionModel, session_id)
+    session_result = await db.execute(select(Session).where(Session.id == session_id))
+    session = session_result.scalar_one_or_none()
     if session:
         session.ended_at = datetime.now(UTC)
-        db.commit()
+        await db.commit()
 
 
-def get_current_die(session_id: int, db: Session) -> int:
+async def get_current_die(session_id: int, db: AsyncSession) -> int:
     """Get current die size based on manual selection or last rating event."""
     start_die = _start_die()
-    session = db.get(SessionModel, session_id)
+    session_result = await db.execute(select(Session).where(Session.id == session_id))
+    session = session_result.scalar_one_or_none()
 
-    last_rate_event = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type == "rate")
-            .where(Event.die_after.is_not(None))
-            .order_by(Event.timestamp.desc())
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "rate")
+        .where(Event.die_after.is_not(None))
+        .order_by(Event.timestamp.desc())
     )
+    last_rate_event = result.scalars().first()
 
     if last_rate_event:
         die_after = last_rate_event.die_after

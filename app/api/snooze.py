@@ -6,10 +6,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.api.session as session_module
 
+from app.api.session import build_ladder_path
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
@@ -33,44 +34,8 @@ if os.getenv("TEST") or os.getenv("DISABLE_SESSION_CACHE"):
         session_module.get_current_session_cached = None
 
 
-def build_ladder_path(session_id: int, db: Session) -> str:
-    """Build narrative summary of dice ladder from session events.
-
-    Args:
-        session_id: The session primary key.
-        db: SQLAlchemy session used to load SessionModel and Event.
-
-    Returns:
-        Narrative ladder path or empty string when session not found.
-    """
-    session = db.get(SessionModel, session_id)
-    if not session:
-        return ""
-
-    events = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type == "rate")
-            .order_by(Event.timestamp)
-        )
-        .scalars()
-        .all()
-    )
-
-    if not events:
-        return str(session.start_die)
-
-    path = [session.start_die]
-    for event in events:
-        if event.die_after:
-            path.append(event.die_after)
-
-    return " → ".join(str(d) for d in path)
-
-
-def get_active_thread_info(
-    session_id: int, db: Session
+async def get_active_thread_info(
+    session_id: int, db: AsyncSession
 ) -> tuple[int | None, ActiveThreadInfo | None]:
     """Get the most recently rolled thread info for the session.
 
@@ -81,22 +46,19 @@ def get_active_thread_info(
     Returns:
         Tuple of (thread_id, ActiveThreadInfo or None).
     """
-    event = (
-        db.execute(
-            select(Event)
-            .where(Event.session_id == session_id)
-            .where(Event.type == "roll")
-            .where(Event.selected_thread_id.is_not(None))
-            .order_by(Event.timestamp.desc())
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(Event)
+        .where(Event.session_id == session_id)
+        .where(Event.type == "roll")
+        .where(Event.selected_thread_id.is_not(None))
+        .order_by(Event.timestamp.desc())
     )
+    event = result.scalars().first()
 
     if not event or not event.selected_thread_id:
         return None, None
 
-    thread = db.get(Thread, event.selected_thread_id)
+    thread = await db.get(Thread, event.selected_thread_id)
     if not thread:
         return event.selected_thread_id, None
 
@@ -110,7 +72,7 @@ def get_active_thread_info(
     )
 
 
-def build_session_response(session: SessionModel, db: Session) -> SessionResponse:
+async def build_session_response(session: SessionModel, db: AsyncSession) -> SessionResponse:
     """Build a SessionResponse from a session model.
 
     Args:
@@ -120,19 +82,17 @@ def build_session_response(session: SessionModel, db: Session) -> SessionRespons
     Returns:
         A SessionResponse with all required fields populated.
     """
-    _, active_thread = get_active_thread_info(session.id, db)
+    _, active_thread = await get_active_thread_info(session.id, db)
 
-    snapshot_count = (
-        db.execute(
-            select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
-        ).scalar()
-        or 0
+    result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
     )
+    snapshot_count = result.scalar() or 0
 
     snoozed_ids = session.snoozed_thread_ids or []
     snoozed_threads: list[SnoozedThreadInfo] = []
     for thread_id in snoozed_ids:
-        thread = db.get(Thread, thread_id)
+        thread = await db.get(Thread, thread_id)
         if thread:
             snoozed_threads.append(SnoozedThreadInfo(id=thread.id, title=thread.title))
 
@@ -143,9 +103,9 @@ def build_session_response(session: SessionModel, db: Session) -> SessionRespons
         start_die=session.start_die,
         manual_die=session.manual_die,
         user_id=session.user_id,
-        ladder_path=build_ladder_path(session.id, db),
+        ladder_path=await build_ladder_path(session.id, db),
         active_thread=active_thread,
-        current_die=get_current_die(session.id, db),
+        current_die=await get_current_die(session.id, db),
         last_rolled_result=active_thread.last_rolled_result if active_thread else None,
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
@@ -156,10 +116,10 @@ def build_session_response(session: SessionModel, db: Session) -> SessionRespons
 
 @router.post("/", response_model=SessionResponse)
 @limiter.limit("30/minute")
-def snooze_thread(
+async def snooze_thread(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     """Snooze the pending thread and step the die up.
 
@@ -183,16 +143,13 @@ def snooze_thread(
     Raises:
         HTTPException: If no active session exists or no pending thread to snooze.
     """
-    current_session = (
-        db.execute(
-            select(SessionModel)
-            .where(SessionModel.user_id == current_user.id)
-            .where(SessionModel.ended_at.is_(None))
-            .order_by(SessionModel.started_at.desc())
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(SessionModel)
+        .where(SessionModel.user_id == current_user.id)
+        .where(SessionModel.ended_at.is_(None))
+        .order_by(SessionModel.started_at.desc())
     )
+    current_session = result.scalars().first()
 
     if not current_session:
         raise HTTPException(
@@ -222,7 +179,7 @@ def snooze_thread(
         logger.info(f"Snooze: thread {pending_thread_id} already in snoozed list")
 
     # Step die UP (wider pool)
-    current_die = get_current_die(current_session_id, db)
+    current_die = await get_current_die(current_session_id, db)
     new_die = step_up(current_die)
     current_session.manual_die = new_die
 
@@ -240,26 +197,26 @@ def snooze_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
-    db.commit()
+    await db.commit()
 
     if clear_cache:
         clear_cache()
 
-    db.refresh(current_session)
+    await db.refresh(current_session)
     logger.info(
         f"Snooze: after commit and refresh, snoozed_thread_ids={current_session.snoozed_thread_ids}"
     )
 
-    return build_session_response(current_session, db)
+    return await build_session_response(current_session, db)
 
 
 @router.post("/{thread_id}/unsnooze", response_model=SessionResponse)
 @limiter.limit("30/minute")
-def unsnooze_thread(
+async def unsnooze_thread(
     thread_id: int,
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
     """Remove thread from snoozed list.
 
@@ -276,16 +233,13 @@ def unsnooze_thread(
         HTTPException: If no active session exists.
     """
     _ = request
-    current_session = (
-        db.execute(
-            select(SessionModel)
-            .where(SessionModel.user_id == current_user.id)
-            .where(SessionModel.ended_at.is_(None))
-            .order_by(SessionModel.started_at.desc())
-        )
-        .scalars()
-        .first()
+    result = await db.execute(
+        select(SessionModel)
+        .where(SessionModel.user_id == current_user.id)
+        .where(SessionModel.ended_at.is_(None))
+        .order_by(SessionModel.started_at.desc())
     )
+    current_session = result.scalars().first()
 
     if not current_session:
         raise HTTPException(
@@ -299,10 +253,19 @@ def unsnooze_thread(
     if thread_id in snoozed_ids:
         snoozed_ids.remove(thread_id)
         current_session.snoozed_thread_ids = snoozed_ids
-        db.commit()
+
+        # Record unsnooze event
+        event = Event(
+            type="unsnooze",
+            session_id=current_session.id,
+            thread_id=thread_id,
+        )
+        db.add(event)
+
+        await db.commit()
 
     if clear_cache:
         clear_cache()
 
-    db.refresh(current_session)
-    return build_session_response(current_session, db)
+    await db.refresh(current_session)
+    return await build_session_response(current_session, db)

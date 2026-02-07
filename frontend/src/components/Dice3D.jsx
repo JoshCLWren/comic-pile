@@ -734,7 +734,7 @@ export default function Dice3D({
     <div
       ref={containerRef}
       className="dice-3d"
-      style={{ width: '100%', height: '100%', position: 'relative' }}
+      style={{ width: '100%', height: '100%', position: 'relative', pointerEvents: 'none' }}
     />
   )
 }

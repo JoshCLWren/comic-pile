@@ -1,71 +1,124 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { rollApi } from '../services/api'
 
 export function useRoll() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: () => rollApi.roll(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-    },
-  })
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
+
+  const mutate = async () => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      const response = await rollApi.roll()
+      setIsPending(false)
+      return response
+    } catch (error) {
+      setIsPending(false)
+      setIsError(true)
+      throw error
+    }
+  }
+
+  return { mutate, isPending, isError }
 }
 
 export function useOverrideRoll() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: (data) => rollApi.override(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-    },
-  })
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
+
+  const mutate = async (data) => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      const response = await rollApi.override(data)
+      return response
+    } catch (error) {
+      setIsError(true)
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  return { mutate, isPending, isError }
 }
 
 export function useDismissPending() {
-  const queryClient = useQueryClient()
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
   
-  return useMutation({
-    mutationFn: () => rollApi.dismissPending(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-    },
-  })
+  const mutate = async () => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      await rollApi.dismissPending()
+    } catch (error) {
+      setIsError(true)
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+  
+  return { mutate, isPending, isError }
 }
 
 export function useSetDie() {
-  const queryClient = useQueryClient()
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
   
-  return useMutation({
-    mutationFn: (die) => rollApi.setDie(die),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-    },
-  })
+  const mutate = async (die) => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      await rollApi.setDie(die)
+    } catch (error) {
+      setIsError(true)
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+  
+  return { mutate, isPending, isError }
 }
 
 export function useClearManualDie() {
-  const queryClient = useQueryClient()
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
   
-  return useMutation({
-    mutationFn: () => rollApi.clearManualDie(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-    },
-  })
+  const mutate = async () => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      await rollApi.clearManualDie()
+    } catch (error) {
+      setIsError(true)
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+  
+  return { mutate, isPending, isError }
 }
 
 export function useReroll() {
-  const queryClient = useQueryClient()
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
   
-  return useMutation({
-    mutationFn: () => rollApi.reroll(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-    },
-  })
+  const mutate = async () => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      await rollApi.reroll()
+    } catch (error) {
+      setIsError(true)
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+  
+  return { mutate, isPending, isError }
 }

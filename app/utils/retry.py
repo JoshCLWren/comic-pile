@@ -1,18 +1,18 @@
 """Retry utilities for database operations."""
 
-import time
-from collections.abc import Callable
+import asyncio
+from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import DEADLOCK_INITIAL_DELAY, DEADLOCK_MAX_RETRIES
 
 T = TypeVar("T")
 
 
-def with_deadlock_retry[T](db: Session, operation: Callable[[], T]) -> T:
+async def with_deadlock_retry[T](db: AsyncSession, operation: Callable[[], Awaitable[T]]) -> T:
     """Execute a database operation with retry on deadlock.
 
     Args:
@@ -27,25 +27,25 @@ def with_deadlock_retry[T](db: Session, operation: Callable[[], T]) -> T:
         OperationalError: If error is not a deadlock
 
     Usage:
-        def do_db_work():
+        async def do_db_work():
             # database operations
-            db.commit()
+            await db.commit()
             return some_value
 
-        result = with_deadlock_retry(db, do_db_work)
+        result = await with_deadlock_retry(db, do_db_work)
     """
     retries = 0
     while True:
         try:
-            return operation()
+            return await operation()
         except OperationalError as e:
             if "deadlock" not in str(e).lower():
                 raise
-            db.rollback()
+            await db.rollback()
             retries += 1
             if retries >= DEADLOCK_MAX_RETRIES:
                 raise RuntimeError(
                     f"Failed after {DEADLOCK_MAX_RETRIES} retries due to deadlock"
                 ) from e
             delay = DEADLOCK_INITIAL_DELAY * (2 ** (retries - 1))
-            time.sleep(delay)
+            await asyncio.sleep(delay)

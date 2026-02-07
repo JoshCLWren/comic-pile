@@ -31,7 +31,10 @@ class Event(Base):
         - "rolled_but_skipped": User rolled but skipped reading. Uses `thread_id`
           to record which pending thread was abandoned.
         - "snooze": User snoozed a thread. Uses `thread_id` to record which
-          thread was snoozed.
+          thread was snoozed, `die` for the die before snooze, and `die_after`
+          for the die after stepping up.
+        - "unsnooze": User unsnoozed a thread. Uses `thread_id` to record which
+          thread was removed from the snoozed list.
 
     Thread ID Fields:
         This model has two thread reference fields with different purposes:
@@ -74,8 +77,8 @@ class Event(Base):
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
     )
 
-    session: Mapped["Session"] = relationship("Session", back_populates="events")
-    thread: Mapped["Thread"] = relationship("Thread", back_populates="events")
+    session: Mapped["Session"] = relationship("Session", back_populates="events", lazy="raise")
+    thread: Mapped["Thread"] = relationship("Thread", back_populates="events", lazy="raise")
     snapshots: Mapped[list["Snapshot"]] = relationship(
-        "Snapshot", back_populates="event", cascade="all, delete-orphan"
+        "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
     )

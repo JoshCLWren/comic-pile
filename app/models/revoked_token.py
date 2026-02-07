@@ -34,4 +34,4 @@ class RevokedToken(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    user: Mapped["User"] = relationship("User", back_populates="revoked_tokens")
+    user: Mapped["User"] = relationship("User", back_populates="revoked_tokens", lazy="raise")

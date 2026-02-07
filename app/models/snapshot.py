@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -23,7 +23,9 @@ class Snapshot(Base):
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id"), nullable=True)
     thread_states: Mapped[dict] = mapped_column(JSON, nullable=False)
     session_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
@@ -32,5 +34,5 @@ class Snapshot(Base):
         Index("ix_snapshot_created_at", "created_at"),
     )
 
-    session: Mapped["Session"] = relationship("Session", back_populates="snapshots")
-    event: Mapped["Event"] = relationship("Event", back_populates="snapshots")
+    session: Mapped["Session"] = relationship("Session", back_populates="snapshots", lazy="raise")
+    event: Mapped["Event"] = relationship("Event", back_populates="snapshots", lazy="raise")

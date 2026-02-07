@@ -6,9 +6,10 @@ import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from typing import Annotated
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import build_narrative_summary
 from app.database import get_db
@@ -23,7 +24,7 @@ router = APIRouter(
 
 @router.post("/import/csv/")
 async def import_csv(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
+    file: Annotated[UploadFile, File(...)], db: Annotated[AsyncSession, Depends(get_db)]
 ) -> dict[str, int | list[str]]:
     """Import threads from CSV file.
 
@@ -33,6 +34,16 @@ async def import_csv(
     - issues_remaining: Number of issues remaining (required, integer)
 
     Threads are inserted at position 1 (front of queue).
+
+    Args:
+        file: CSV file to import.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with "imported" count and "errors" list.
+
+    Raises:
+        HTTPException: If file is not a CSV.
     """
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
@@ -86,34 +97,37 @@ async def import_csv(
         except Exception as e:
             errors.append(f"Row {row_num}: {str(e)}")
 
-    db.commit()
+    await db.commit()
 
     for i, thread in enumerate(reversed(imported_threads)):
         thread.queue_position = i + 1
-        db.flush()
+        await db.flush()
 
-    db.commit()
+    await db.commit()
     return {"imported": imported, "errors": errors}
 
 
 @router.get("/export/csv/")
-def export_csv(db: Session = Depends(get_db)) -> StreamingResponse:
+async def export_csv(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export active threads as CSV file.
 
     Format matches Google Sheets: title, format, issues_remaining
+
+    Args:
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        StreamingResponse with CSV file attachment.
     """
-    threads = (
-        db.execute(
-            select(Thread)
-            .where(Thread.status == "active")
-            .where(Thread.queue_position >= 1)
-            .where(Thread.issues_remaining > 0)
-            .where(Thread.is_test.is_(False))
-            .order_by(Thread.queue_position)
-        )
-        .scalars()
-        .all()
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .where(Thread.issues_remaining > 0)
+        .where(Thread.is_test.is_(False))
+        .order_by(Thread.queue_position)
     )
+    threads = result.scalars().all()
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -133,15 +147,25 @@ def export_csv(db: Session = Depends(get_db)) -> StreamingResponse:
 
 
 @router.get("/export/json/")
-def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
+async def export_json(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export full database as JSON for backups.
 
     Includes all data: users, threads, sessions, events (excludes test data)
+
+    Args:
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        StreamingResponse with JSON file attachment.
     """
-    users = db.execute(select(User)).scalars().all()
-    threads = db.execute(select(Thread).where(Thread.is_test.is_(False))).scalars().all()
-    sessions = db.execute(select(SessionModel)).scalars().all()
-    events = db.execute(select(Event)).scalars().all()
+    users_result = await db.execute(select(User))
+    users = users_result.scalars().all()
+    threads_result = await db.execute(select(Thread).where(Thread.is_test.is_(False)))
+    threads = threads_result.scalars().all()
+    sessions_result = await db.execute(select(SessionModel))
+    sessions = sessions_result.scalars().all()
+    events_result = await db.execute(select(Event))
+    events = events_result.scalars().all()
 
     data = {
         "users": [
@@ -212,12 +236,17 @@ def export_json(db: Session = Depends(get_db)) -> StreamingResponse:
 
 
 @router.post("/delete-test-data/")
-async def delete_test_data(db: Session = Depends(get_db)) -> dict[str, int]:
+async def delete_test_data(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, int]:
     """Delete all test data (threads, sessions, events marked as test).
 
-    Returns count of deleted items.
+    Args:
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with counts of deleted threads, sessions, and events.
     """
-    test_threads = db.execute(select(Thread).where(Thread.is_test.is_(True))).scalars().all()
+    test_threads_result = await db.execute(select(Thread).where(Thread.is_test.is_(True)))
+    test_threads = test_threads_result.scalars().all()
     thread_ids = [t.id for t in test_threads]
 
     deleted_events = 0
@@ -225,12 +254,14 @@ async def delete_test_data(db: Session = Depends(get_db)) -> dict[str, int]:
     deleted_threads = len(test_threads)
 
     for thread_id in thread_ids:
-        events_by_thread_id = (
-            db.execute(select(Event).where(Event.thread_id == thread_id)).scalars().all()
+        events_by_thread_id_result = await db.execute(
+            select(Event).where(Event.thread_id == thread_id)
         )
-        events_by_selected_thread_id = (
-            db.execute(select(Event).where(Event.selected_thread_id == thread_id)).scalars().all()
+        events_by_thread_id = events_by_thread_id_result.scalars().all()
+        events_by_selected_thread_id_result = await db.execute(
+            select(Event).where(Event.selected_thread_id == thread_id)
         )
+        events_by_selected_thread_id = events_by_selected_thread_id_result.scalars().all()
         all_events = set()
         for e in events_by_thread_id:
             all_events.add(e)
@@ -238,29 +269,45 @@ async def delete_test_data(db: Session = Depends(get_db)) -> dict[str, int]:
             all_events.add(e)
         deleted_events += len(all_events)
         for event in all_events:
-            db.delete(event)
+            await db.delete(event)
 
-    db.execute(
+    await db.execute(
         update(SessionModel)
         .where(SessionModel.pending_thread_id.in_(thread_ids))
         .values(pending_thread_id=None)
     )
 
-    for _thread_id in thread_ids:
-        sessions = db.execute(select(SessionModel).where(SessionModel.user_id == 1)).scalars().all()
-        for session in sessions:
-            session_id = session.id
-            session_events = (
-                db.execute(select(Event).where(Event.session_id == session_id)).scalars().all()
+    sessions_result = await db.execute(select(SessionModel).where(SessionModel.user_id == 1))
+    sessions = sessions_result.scalars().all()
+    for session in sessions:
+        session_events_result = await db.execute(
+            select(Event).where(Event.session_id == session.id)
+        )
+        session_events = session_events_result.scalars().all()
+
+        def is_test_event(event: Event) -> bool:
+            """Check if an event belongs to a test thread (via either thread_id or selected_thread_id).
+
+            Args:
+                event: Event to check.
+
+            Returns:
+                True if event belongs to a test thread.
+            """
+            thread_is_test = event.thread_id in thread_ids if event.thread_id else False
+            selected_is_test = (
+                event.selected_thread_id in thread_ids if event.selected_thread_id else False
             )
-            if all(e.thread_id in thread_ids for e in session_events if e.thread_id):
-                db.delete(session)
-                deleted_sessions += 1
+            return thread_is_test or selected_is_test
+
+        if all(is_test_event(e) for e in session_events):
+            await db.delete(session)
+            deleted_sessions += 1
 
     for thread in test_threads:
-        db.delete(thread)
+        await db.delete(thread)
 
-    db.commit()
+    await db.commit()
 
     return {
         "deleted_threads": deleted_threads,
@@ -271,7 +318,7 @@ async def delete_test_data(db: Session = Depends(get_db)) -> dict[str, int]:
 
 @router.post("/import/reviews/")
 async def import_reviews(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
+    file: Annotated[UploadFile, File(...)], db: Annotated[AsyncSession, Depends(get_db)]
 ) -> dict[str, int | list[str]]:
     """Import review timestamps from CSV file.
 
@@ -281,6 +328,16 @@ async def import_reviews(
     - review_timestamp: ISO format datetime (required)
 
     Updates thread's last_review_at and review_url fields.
+
+    Args:
+        file: CSV file to import.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with "imported" count and "errors" list.
+
+    Raises:
+        HTTPException: If file is not a CSV.
     """
     if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
@@ -315,7 +372,8 @@ async def import_reviews(
                 errors.append(f"Row {row_num}: thread_id must be an integer")
                 continue
 
-            thread = db.execute(select(Thread).where(Thread.id == thread_id)).scalar_one_or_none()
+            thread_result = await db.execute(select(Thread).where(Thread.id == thread_id))
+            thread = thread_result.scalar_one_or_none()
 
             if not thread:
                 errors.append(f"Row {row_num}: Thread {thread_id} not found")
@@ -329,37 +387,44 @@ async def import_reviews(
 
             thread.review_url = review_url
             thread.last_review_at = review_timestamp
-            db.flush()
+            await db.flush()
             imported += 1
 
         except Exception as e:
             errors.append(f"Row {row_num}: {str(e)}")
 
-    db.commit()
+    await db.commit()
     return {"imported": imported, "errors": errors}
 
 
 @router.get("/export/summary/")
-def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
+async def export_summary(db: Annotated[AsyncSession, Depends(get_db)]) -> StreamingResponse:
     """Export narrative session summaries as markdown file.
 
     Formats all sessions with read, skipped, and completed lists per PRD Section 11.
     Excludes sessions that only involve test threads.
-    """
-    all_sessions = (
-        db.execute(select(SessionModel).order_by(SessionModel.started_at.desc())).scalars().all()
-    )
 
-    test_thread_ids = {
-        t.id for t in db.execute(select(Thread).where(Thread.is_test.is_(True))).scalars().all()
-    }
+    Args:
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        StreamingResponse with markdown file attachment.
+    """
+    all_sessions_result = await db.execute(
+        select(SessionModel).order_by(SessionModel.started_at.desc())
+    )
+    all_sessions = all_sessions_result.scalars().all()
+
+    test_threads_result = await db.execute(select(Thread).where(Thread.is_test.is_(True)))
+    test_thread_ids = {t.id for t in test_threads_result.scalars().all()}
 
     sessions = []
     for session in all_sessions:
         session_id = session.id
-        session_events = (
-            db.execute(select(Event).where(Event.session_id == session_id)).scalars().all()
+        session_events_result = await db.execute(
+            select(Event).where(Event.session_id == session_id)
         )
+        session_events = session_events_result.scalars().all()
         thread_ids_in_session = set()
         for event in session_events:
             if event.thread_id:
@@ -381,7 +446,7 @@ def export_summary(db: Session = Depends(get_db)) -> StreamingResponse:
         output.write("\n")
         output.write(f"Started at d{session.start_die}\n")
 
-        summary = build_narrative_summary(session_id, db)
+        summary = await build_narrative_summary(session_id, db)
 
         if summary["read"]:
             output.write("\nRead:\n\n")

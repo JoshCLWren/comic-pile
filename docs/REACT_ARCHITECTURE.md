@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the React-based frontend architecture for Comic Pile, a dice-driven comic reading tracker. The frontend uses React with Vite for fast development and builds, Tailwind CSS for styling, and React Query (TanStack Query) for server state management.
+This document describes the React-based frontend architecture for Comic Pile, a dice-driven comic reading tracker. The frontend uses React with Vite for fast development and builds, Tailwind CSS for styling, and custom hooks with useState/useEffect for server state management.
 
 ## Technology Stack
 
@@ -11,7 +11,7 @@ This document describes the React-based frontend architecture for Comic Pile, a 
 - **Routing**: React Router DOM 7.x - Client-side routing
 - **HTTP Client**: Axios - Promise-based HTTP client with interceptors
 - **State Management**: 
-  - React Query (@tanstack/react-query 5.x) - Server state, caching, optimistic updates
+  - Custom hooks (useState/useEffect) - Server state with memory leak protection
   - React Context - Client-side global state (dice selection, session state)
 - **Styling**: Tailwind CSS 4.x - Utility-first CSS framework with PostCSS integration
 - **Type Safety**: TypeScript support via Vite's JSDoc mode
@@ -32,10 +32,10 @@ frontend/
 │   │   ├── HistoryPage.jsx    # Event log, undo buttons
 │   │   └── SessionPage.jsx   # Session details, snapshots
 │   ├── hooks/          # Custom React hooks
-│   │   ├── useThreads.js       # React Query hook for threads
-│   │   ├── useSession.js       # React Query hook for session
-│   │   ├── useHistory.js       # React Query hook for history/events
-│   │   ├── useSnapshots.js     # React Query hook for snapshots
+│   │   ├── useThreads.js       # Thread list management
+│   │   ├── useSession.js       # Session state management
+│   │   ├── useHistory.js       # History/events state
+│   │   ├── useSnapshots.js     # Snapshots state
 │   │   ├── useDiceLadder.js    # Dice ladder logic
 │   │   └── useDice3D.js       # Three.js dice lifecycle
 │   ├── services/       # API service layer
@@ -59,7 +59,6 @@ frontend/
 App (BrowserRouter)
 ├── DiceContext.Provider
 ├── SessionContext.Provider
-├── QueryClientProvider
 └── Routes
     ├── / (RollPage)
     │   ├── Header
@@ -99,24 +98,107 @@ const api = axios.create({
 **Request Interceptor**: Adds authentication headers (future feature)
 **Response Interceptor**: Extracts response.data automatically, logs errors
 
-### React Query Integration
+### Custom Hooks Pattern
 
-React Query manages server state with:
+Custom hooks manage server state using useState/useEffect with proper cleanup to prevent memory leaks:
 
-- **Queries** (GET requests):
-  - `useThreads()` - Fetch thread list
-  - `useSession()` - Fetch current session
-  - `useHistory()` - Fetch event history
-  - `useSnapshots()` - Fetch restore points
+```javascript
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { api } from '../services/api'
 
-- **Mutations** (POST/PUT/DELETE requests):
-  - `useCreateThread()` - Add new thread to queue
-  - `useRate()` - Submit rating for current thread
-  - `useRoll()` - Roll dice and get result
-  - `useDeleteThread()` - Remove thread from queue
-  - `useReorderQueue()` - Reorder threads (drag-drop or bulk actions)
+export function useThreads() {
+  const [data, setData] = useState(null)
+  const [isPending, setIsPending] = useState(true)
+  const [isError, setIsError] = useState(false)
+  const [error, setError] = useState(null)
+  const isMounted = useRef(true)
 
-**Optimistic Updates**: Mutations update local cache immediately, rollback on error
+  useEffect(() => {
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
+
+  const fetchData = useCallback(async () => {
+    if (isMounted.current) {
+      setIsPending(true)
+      setIsError(false)
+      setError(null)
+    }
+    try {
+      const result = await api.getThreads()
+      if (isMounted.current) {
+        setData(result)
+      }
+    } catch (err) {
+      if (isMounted.current) {
+        setIsError(true)
+        setError(err)
+      }
+    } finally {
+      if (isMounted.current) {
+        setIsPending(false)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  return { data, isPending, isError, error, refetch: fetchData }
+}
+
+export function useCreateThread() {
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
+  const [error, setError] = useState(null)
+  const isMounted = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
+
+  const createThread = useCallback(async (threadData) => {
+    if (isMounted.current) {
+      setIsPending(true)
+      setIsError(false)
+      setError(null)
+    }
+    try {
+      const result = await api.createThread(threadData)
+      if (isMounted.current) {
+        return result
+      }
+    } catch (err) {
+      if (isMounted.current) {
+        setIsError(true)
+        setError(err)
+      }
+      throw err
+    } finally {
+      if (isMounted.current) {
+        setIsPending(false)
+      }
+    }
+  }, [])
+
+  return { createThread, isPending, isError, error }
+}
+```
+
+**Available Hooks**:
+- `useThreads()` - Fetch and manage thread list
+- `useSession()` - Fetch current session state
+- `useHistory()` - Fetch event history
+- `useSnapshots()` - Fetch restore points
+- `useCreateThread()` - Create new thread mutation
+- `useRate()` - Submit rating mutation
+- `useRoll()` - Roll dice mutation
+- `useDeleteThread()` - Delete thread mutation
+- `useReorderQueue()` - Reorder threads mutation
 
 ### Context Providers
 
@@ -198,15 +280,15 @@ app.mount("/react", StaticFiles(directory="static/react", html=True), name="reac
 - Preserve URL patterns
 
 ### Phase 3: State Management & API Integration (Next)
-- Implement React Query hooks for all endpoints
-- Create mutations with optimistic updates
+- Implement custom hooks for all endpoints
+- Create mutations with proper error handling
 - Set up Context providers for global state
 - Replace mock data with real API calls
 
 ### Phase 4: Migrate 3D Dice & HTMX Interactions (Next)
 - Port dice3d.js to React component (Dice3D.jsx)
 - Replace HTMX attributes with React event handlers
-- Implement real-time updates with React Query refetchInterval
+- Implement real-time updates with custom hooks polling
 
 ### Phase 5: Remove HTMX & Cleanup (Final)
 - Delete Jinja2 templates
@@ -260,23 +342,28 @@ function Dice3D({ dieValue, dieType, isRolling }) {
   const containerRef = useRef(null)
 
   useEffect(() => {
+    let isMounted = true
+    
     // Initialize Three.js scene
     const dice = new Dice3D(containerRef.current, dieType)
     
     // Update die value on prop change
-    if (dieValue) {
+    if (dieValue && isMounted) {
       dice.setValue(dieValue)
     }
 
     // Cleanup on unmount
-    return () => dice.destroy()
+    return () => {
+      isMounted = false
+      dice.destroy()
+    }
   }, [dieValue, dieType])
 
   return <div ref={containerRef} className="dice-container" />
 }
 ```
 
-**Lifecycle**: `useEffect` handles Three.js init and cleanup
+**Lifecycle**: `useEffect` handles Three.js init and cleanup with isMounted guard
 **Reactivity**: Props trigger dice updates
 
 ## Testing Strategy
@@ -285,10 +372,10 @@ function Dice3D({ dieValue, dieType, isRolling }) {
 
 React components can be tested with React Testing Library (future addition):
 ```javascript
-test('roll button calls useRoll mutation', () => {
+test('roll button calls roll mutation', () => {
   const { getByText } = render(<RollPage />)
   fireEvent.click(getByText(/roll d6/i))
-  expect(useRoll).toHaveBeenCalled()
+  expect(mockApi.roll).toHaveBeenCalled()
 })
 ```
 
@@ -321,14 +408,13 @@ const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 
 ### Caching Strategy
 
-- **React Query**: Cache API responses for 30 seconds (default)
-- **Static Assets**: Vite adds hash to filenames (`index-BwiMnkKz.js`)
 - **Browser Cache**: Static files cached via FastAPI StaticFiles
+- **Asset Hashing**: Vite adds hash to filenames (`index-BwiMnkKz.js`) for cache busting
 
 ### Bundle Size
 
-Initial bundle: ~229 KB (73 KB gzipped)
-- Includes React, React Router, Axios, React Query
+Initial bundle: ~180 KB (58 KB gzipped)
+- Includes React, React Router, Axios
 - Additional 3D dice library (Three.js) loaded on demand
 
 ## Development Workflow
@@ -369,11 +455,12 @@ No React-specific env vars needed (uses `/api` for backend).
 - Better HMR (preserves component state)
 - Modern config (no webpack config needed)
 
-### Why React Query over Redux?
-- Server state management built-in
-- Automatic caching and refetching
-- Optimistic updates simpler to implement
-- Less boilerplate code
+### Why Custom Hooks for Server State?
+- Zero dependencies for server state
+- Full control over data fetching logic
+- Simpler mental model for small apps
+- Easier to debug and understand
+- Consistent with AGENTS.md guidelines
 
 ### Why Axios over Fetch?
 - Request/response interceptors
@@ -400,7 +487,6 @@ No React-specific env vars needed (uses `/api` for backend).
 
 - [Vite Documentation](https://vitejs.dev/)
 - [React Documentation](https://react.dev/)
-- [React Query Documentation](https://tanstack.com/query/latest)
 - [Tailwind CSS Documentation](https://tailwindcss.com/)
 - [React Router Documentation](https://reactrouter.com/)
 - [Comic Pile API Documentation](./API.md)

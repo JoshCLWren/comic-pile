@@ -1,27 +1,42 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { snoozeApi } from '../services/api'
 
 export function useSnooze() {
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
 
-  return useMutation({
-    mutationFn: () => snoozeApi.snooze(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-      navigate('/')
-    },
-  })
+  const mutate = async () => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      await snoozeApi.snooze()
+    } catch (error) {
+      setIsError(true)
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  return { mutate, isPending, isError }
 }
 
 export function useUnsnooze() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (threadId) => snoozeApi.unsnooze(threadId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-    },
-  })
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
+
+  const mutate = async (threadId) => {
+    setIsPending(true)
+    setIsError(false)
+    try {
+      await snoozeApi.unsnooze(threadId)
+    } catch (error) {
+      setIsError(true)
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  return { mutate, isPending, isError }
 }

@@ -2,16 +2,16 @@
 
 from datetime import datetime, UTC
 
-from sqlalchemy import delete, or_, update
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, or_, update, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 
 
-def restore_threads_from_snapshot(
-    db: Session,
+async def restore_threads_from_snapshot(
+    db: AsyncSession,
     snapshot: Snapshot,
     user: User,
     session: SessionModel | None = None,
@@ -28,12 +28,14 @@ def restore_threads_from_snapshot(
         snapshot: The snapshot to restore from
         user: The user whose threads to restore
         session: Optional session model (used for pending_thread_id cleanup and user_id fallback)
-    """
-    from sqlalchemy import select
 
+    Returns:
+        None
+    """
     snapshot_thread_ids = {int(tid) for tid in snapshot.thread_states.keys()}
 
-    current_threads = db.execute(select(Thread).where(Thread.user_id == user.id)).scalars().all()
+    result = await db.execute(select(Thread).where(Thread.user_id == user.id))
+    current_threads = result.scalars().all()
     current_thread_ids = {thread.id for thread in current_threads}
 
     # Delete threads that were created after the snapshot
@@ -41,7 +43,7 @@ def restore_threads_from_snapshot(
     if threads_to_delete:
         # Clear pending_thread_id if it references a thread we're deleting
         if session is not None:
-            db.execute(
+            await db.execute(
                 update(SessionModel)
                 .where(SessionModel.id == session.id)
                 .where(SessionModel.pending_thread_id.in_(threads_to_delete))
@@ -49,7 +51,7 @@ def restore_threads_from_snapshot(
             )
 
         # Clear event references to threads we're deleting
-        db.execute(
+        await db.execute(
             update(Event)
             .where(
                 or_(
@@ -61,7 +63,7 @@ def restore_threads_from_snapshot(
         )
 
         # Delete the threads
-        db.execute(
+        await db.execute(
             delete(Thread).where(Thread.id.in_(threads_to_delete)).where(Thread.user_id == user.id)
         )
 
@@ -71,17 +73,17 @@ def restore_threads_from_snapshot(
     fallback_user_id = session.user_id if session else user.id
     for thread_id, state in snapshot.thread_states.items():
         thread_id_int = int(thread_id)
-        thread = db.get(Thread, thread_id_int)
+        thread = await db.get(Thread, thread_id_int)
         if thread:
             # Update existing thread
-            _update_thread_from_state(thread, state)
+            await _update_thread_from_state(thread, state)
         else:
             # Recreate deleted thread
-            new_thread = _create_thread_from_state(thread_id, state, fallback_user_id)
+            new_thread = await _create_thread_from_state(thread_id, state, fallback_user_id)
             db.add(new_thread)
 
 
-def _update_thread_from_state(thread: Thread, state: dict) -> None:
+async def _update_thread_from_state(thread: Thread, state: dict) -> None:
     """Update an existing thread from snapshot state.
 
     Args:
@@ -108,7 +110,7 @@ def _update_thread_from_state(thread: Thread, state: dict) -> None:
         thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
 
 
-def _create_thread_from_state(
+async def _create_thread_from_state(
     thread_id: str | int,
     state: dict,
     fallback_user_id: int,
@@ -146,7 +148,7 @@ def _create_thread_from_state(
     return new_thread
 
 
-def restore_session_state_from_snapshot(
+async def restore_session_state_from_snapshot(
     session: SessionModel,
     snapshot: Snapshot,
 ) -> None:
@@ -155,6 +157,9 @@ def restore_session_state_from_snapshot(
     Args:
         session: The session to update
         snapshot: The snapshot to restore from
+
+    Returns:
+        None
     """
     if snapshot.session_state:
         session.start_die = snapshot.session_state.get("start_die", session.start_die)

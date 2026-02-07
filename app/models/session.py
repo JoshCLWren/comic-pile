@@ -40,13 +40,16 @@ class Session(Base):
     __table_args__ = (
         Index("ix_session_started_at", "started_at"),
         Index("ix_session_ended_at", "ended_at"),
+        Index("ix_session_user_ended_started", "user_id", "ended_at", "started_at"),
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="sessions")
-    pending_thread: Mapped["Thread"] = relationship("Thread", foreign_keys=[pending_thread_id])
+    user: Mapped["User"] = relationship("User", back_populates="sessions", lazy="raise")
+    pending_thread: Mapped["Thread"] = relationship(
+        "Thread", foreign_keys=[pending_thread_id], lazy="raise"
+    )
     events: Mapped[list["Event"]] = relationship(
-        "Event", back_populates="session", cascade="all, delete-orphan"
+        "Event", back_populates="session", cascade="all, delete-orphan", lazy="raise"
     )
     snapshots: Mapped[list["Snapshot"]] = relationship(
-        "Snapshot", back_populates="session", cascade="all, delete-orphan"
+        "Snapshot", back_populates="session", cascade="all, delete-orphan", lazy="raise"
     )

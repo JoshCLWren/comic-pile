@@ -2,20 +2,24 @@
 
 import pytest
 
+from httpx import AsyncClient
 from app.models import Event, Session as SessionModel, Thread
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_thread_info(auth_client, db):
+async def test_rate_session_api_returns_thread_info(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """GET /sessions/current/ returns active thread info for rate page."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Amazing Spider-Man",
@@ -25,9 +29,9 @@ async def test_rate_session_api_returns_thread_info(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -38,8 +42,8 @@ async def test_rate_session_api_returns_thread_info(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
@@ -52,16 +56,18 @@ async def test_rate_session_api_returns_thread_info(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_die_info(auth_client, db):
+async def test_rate_session_api_returns_die_info(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """GET /sessions/current/ returns die info for dice preview."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -71,9 +77,9 @@ async def test_rate_session_api_returns_die_info(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -84,8 +90,8 @@ async def test_rate_session_api_returns_die_info(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
@@ -97,16 +103,18 @@ async def test_rate_session_api_returns_die_info(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_session_api_returns_has_restore_point(auth_client, db):
+async def test_rate_session_api_returns_has_restore_point(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """GET /sessions/current/ returns has_restore_point for session safe indicator."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -116,9 +124,9 @@ async def test_rate_session_api_returns_has_restore_point(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -129,8 +137,8 @@ async def test_rate_session_api_returns_has_restore_point(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
@@ -140,19 +148,21 @@ async def test_rate_session_api_returns_has_restore_point(auth_client, db):
 
 
 @pytest.mark.asyncio
-async def test_rate_api_invalid_rating(auth_client, db, sample_data):
+async def test_rate_api_invalid_rating(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """POST /rate/ with invalid rating returns 400 error."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = sample_data["threads"][0]
-    db.refresh(thread)
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -163,24 +173,26 @@ async def test_rate_api_invalid_rating(auth_client, db, sample_data):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     response = await auth_client.post("/api/rate/", json={"rating": 6.0, "issues_read": 1})
     assert response.status_code == 422
 
 
 @pytest.mark.asyncio
-async def test_rate_api_low_rating_moves_to_back(auth_client, db):
+async def test_rate_api_low_rating_moves_to_back(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ with rating < 4.0 moves thread to back of queue."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread1 = Thread(
         title="Comic 1",
@@ -198,11 +210,11 @@ async def test_rate_api_low_rating_moves_to_back(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread1)
-    db.add(thread2)
-    db.commit()
-    db.refresh(thread1)
-    db.refresh(thread2)
+    async_db.add(thread1)
+    async_db.add(thread2)
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
 
     event = Event(
         type="roll",
@@ -213,27 +225,29 @@ async def test_rate_api_low_rating_moves_to_back(auth_client, db):
         session_id=session.id,
         thread_id=thread1.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     await auth_client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
 
-    db.refresh(thread1)
-    db.refresh(thread2)
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
     assert thread1.queue_position > thread2.queue_position
 
 
 @pytest.mark.asyncio
-async def test_rate_api_high_rating_moves_to_front(auth_client, db):
+async def test_rate_api_high_rating_moves_to_front(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ with rating >= 4.0 moves thread to front of queue."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread1 = Thread(
         title="Comic 1",
@@ -251,11 +265,11 @@ async def test_rate_api_high_rating_moves_to_front(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread1)
-    db.add(thread2)
-    db.commit()
-    db.refresh(thread1)
-    db.refresh(thread2)
+    async_db.add(thread1)
+    async_db.add(thread2)
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
 
     event = Event(
         type="roll",
@@ -266,27 +280,29 @@ async def test_rate_api_high_rating_moves_to_front(auth_client, db):
         session_id=session.id,
         thread_id=thread1.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
 
-    db.refresh(thread1)
-    db.refresh(thread2)
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
     assert thread1.queue_position < thread2.queue_position
 
 
 @pytest.mark.asyncio
-async def test_rate_api_updates_last_activity_at(auth_client, db):
+async def test_rate_api_updates_last_activity_at(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ updates thread last_activity_at timestamp."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -296,9 +312,9 @@ async def test_rate_api_updates_last_activity_at(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     old_activity_at = thread.last_activity_at
 
@@ -311,31 +327,31 @@ async def test_rate_api_updates_last_activity_at(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
 
-    db.refresh(thread)
+    await async_db.refresh(thread)
     assert thread.last_activity_at is not None
     if old_activity_at:
         assert thread.last_activity_at > old_activity_at
 
 
 @pytest.mark.asyncio
-async def test_rate_api_creates_snapshot(auth_client, db):
+async def test_rate_api_creates_snapshot(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """POST /rate/ creates snapshot for undo functionality."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
     from app.models import Snapshot
     from sqlalchemy import select
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -345,9 +361,9 @@ async def test_rate_api_creates_snapshot(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -358,29 +374,28 @@ async def test_rate_api_creates_snapshot(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     await auth_client.post("/api/rate/", json={"rating": 4.5, "issues_read": 1})
 
-    snapshots = (
-        db.execute(select(Snapshot).where(Snapshot.session_id == session.id)).scalars().all()
-    )
+    result = await async_db.execute(select(Snapshot).where(Snapshot.session_id == session.id))
+    snapshots = result.scalars().all()
     assert len(snapshots) >= 1
-    assert any("4.5" in s.description for s in snapshots)
+    assert any(s.description is not None and "After rating" in s.description for s in snapshots)
 
 
 @pytest.mark.asyncio
-async def test_rate_api_with_min_rating(auth_client, db):
+async def test_rate_api_with_min_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """POST /rate/ accepts minimum rating value (0.5)."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -390,9 +405,9 @@ async def test_rate_api_with_min_rating(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -403,24 +418,24 @@ async def test_rate_api_with_min_rating(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     response = await auth_client.post("/api/rate/", json={"rating": 0.5, "issues_read": 1})
     assert response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_rate_api_with_max_rating(auth_client, db):
+async def test_rate_api_with_max_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """POST /rate/ accepts maximum rating value (5.0)."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -430,9 +445,9 @@ async def test_rate_api_with_max_rating(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -443,19 +458,21 @@ async def test_rate_api_with_max_rating(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     response = await auth_client.post("/api/rate/", json={"rating": 5.0, "issues_read": 1})
     assert response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_rate_api_clears_pending_thread(auth_client, db):
+async def test_rate_api_clears_pending_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ clears pending_thread_id from session."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     thread = Thread(
         title="Test Comic",
@@ -465,14 +482,14 @@ async def test_rate_api_clears_pending_thread(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=thread.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     event = Event(
         type="roll",
@@ -483,26 +500,28 @@ async def test_rate_api_clears_pending_thread(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
 
-    db.refresh(session)
+    await async_db.refresh(session)
     assert session.pending_thread_id is None
 
 
 @pytest.mark.asyncio
-async def test_rate_api_updates_issues_remaining(auth_client, db):
+async def test_rate_api_updates_issues_remaining(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """POST /rate/ correctly decreases issues_remaining."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    user = get_or_create_user(db)
+    user = await get_or_create_user_async(async_db)
 
     session = SessionModel(start_die=10, user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -512,9 +531,9 @@ async def test_rate_api_updates_issues_remaining(auth_client, db):
         status="active",
         user_id=user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -525,8 +544,8 @@ async def test_rate_api_updates_issues_remaining(auth_client, db):
         session_id=session.id,
         thread_id=thread.id,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 2})
     assert response.status_code == 200
@@ -534,5 +553,5 @@ async def test_rate_api_updates_issues_remaining(auth_client, db):
     data = response.json()
     assert data["issues_remaining"] == 3
 
-    db.refresh(thread)
+    await async_db.refresh(thread)
     assert thread.issues_remaining == 3

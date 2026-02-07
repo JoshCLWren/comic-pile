@@ -1,12 +1,14 @@
+#!/usr/bin/env python3
 """Seed database with sample data using Faker."""
 
+import asyncio
 import random
 
 from dotenv import load_dotenv
 from faker import Faker
 from sqlalchemy import select
 
-from app.database import SessionLocal
+from app.database import AsyncSessionLocal
 from app.models import Event, Session, Thread, User
 from comic_pile import DICE_LADDER
 
@@ -17,7 +19,7 @@ fake = Faker()
 FORMATS = ["TPB", "Issue", "Graphic Novel", "OGN"]
 
 
-def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
+async def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
     """Seed database with sample threads, sessions, and events.
 
     Args:
@@ -27,159 +29,137 @@ def seed_database(num_threads: int = 25, num_sessions: int = 7) -> None:
     import os
 
     print(f"DATABASE_URL: {os.getenv('DATABASE_URL')}")
-    """Seed database with sample threads, sessions, and events.
+    async with AsyncSessionLocal() as db:
+        try:
+            result = await db.execute(select(User).where(User.id == 1))
+            user = result.scalar_one_or_none()
 
-    Args:
-        num_threads: Number of threads to create (default 25).
-        num_sessions: Number of sessions to create (default 7).
-    """
-    db = SessionLocal()
+            if user is None:
+                user = User(username="demo_user")
+                db.add(user)
+                await db.flush()
+                print(f"Created user: {user.username} (ID: {user.id})")
+                await db.commit()
 
-    try:
-        user = db.execute(select(User).where(User.id == 1)).scalar_one_or_none()
+            result = await db.execute(select(Thread).where(Thread.user_id == user.id))
+            existing_threads = result.scalars().all()
 
-        if user is None:
-            user = User(id=1, username="demo_user")
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            print(f"Created user: {user.username}")
+            for thread in existing_threads:
+                thread.queue_position = len(existing_threads) + thread.id
 
-        existing_threads = (
-            db.execute(select(Thread).where(Thread.user_id == user.id)).scalars().all()
-        )
+            await db.commit()
 
-        for thread in existing_threads:
-            thread.queue_position = len(existing_threads) + thread.id
+            for i in range(num_threads):
+                title = fake.sentence(nb_words=4).rstrip(".")
+                format_val = random.choice(FORMATS)
+                issues_remaining = random.randint(1, 50)
 
-        db.commit()
+                thread = Thread(
+                    title=title,
+                    format=format_val,
+                    issues_remaining=issues_remaining,
+                    queue_position=i + 1,
+                    status="active",
+                    is_test=True,
+                    user_id=user.id,
+                    last_rating=random.uniform(0.5, 5.0) if random.random() > 0.3 else None,
+                )
+                db.add(thread)
 
-        for i in range(num_threads):
-            title = fake.sentence(nb_words=4).rstrip(".")
-            format_val = random.choice(FORMATS)
-            issues_remaining = random.randint(1, 50)
+            await db.commit()
 
-            thread = Thread(
-                title=title,
-                format=format_val,
-                issues_remaining=issues_remaining,
-                queue_position=i + 1,
-                status="active",
-                is_test=True,
-                user_id=user.id,
-                last_rating=random.uniform(0.5, 5.0) if random.random() > 0.3 else None,
-            )
-            db.add(thread)
-
-        db.commit()
-
-        threads = (
-            db.execute(
+            result = await db.execute(
                 select(Thread).where(Thread.user_id == user.id).order_by(Thread.queue_position)
             )
-            .scalars()
-            .all()
-        )
+            threads = result.scalars().all()
 
-        threads_list = list(threads)
-        created_sessions = []
+            threads_list = list(threads)
+            created_sessions = []
 
-        for _i in range(num_sessions):
-            start_time = fake.date_time_between(start_date="-30d", end_date="now")
-            end_time = fake.date_time_between(start_date=start_time, end_date="now")
-            start_die = random.choice(DICE_LADDER)
+            for _i in range(num_sessions):
+                start_time = fake.date_time_between(start_date="-30d", end_date="now")
+                end_time = fake.date_time_between(start_date=start_time, end_date="now")
+                start_die = random.choice(DICE_LADDER)
 
-            session = Session(
-                started_at=start_time,
-                ended_at=end_time,
-                start_die=start_die,
-                user_id=user.id,
-            )
-            db.add(session)
-            db.flush()
-            created_sessions.append(session)
+                session = Session(
+                    started_at=start_time,
+                    ended_at=end_time,
+                    start_die=start_die,
+                    user_id=user.id,
+                )
+                db.add(session)
+                await db.flush()
+                created_sessions.append(session)
 
-            num_events = random.randint(2, 5)
-            current_die = start_die
+                num_events = random.randint(2, 5)
+                current_die = start_die
 
-            for _j in range(num_events):
-                event_type = random.choice(["roll", "rate"])
-                timestamp = fake.date_time_between(start_date=start_time, end_date=end_time)
-            db.add(session)
-            db.flush()
-            created_sessions.append(session)
+                for _j in range(num_events):
+                    event_type = random.choice(["roll", "rate"])
+                    timestamp = fake.date_time_between(start_date=start_time, end_date=end_time)
 
-            num_events = random.randint(2, 5)
-            current_die = start_die
+                    if event_type == "roll":
+                        if threads_list:
+                            selected_thread = random.choice(threads_list)
+                            result = random.randint(1, current_die)
+                            selection_method = random.choice(["dice", "override"])
 
-            for _j in range(num_events):
-                event_type = random.choice(["roll", "rate"])
-                timestamp = fake.date_time_between(start_date=start_time, end_date=end_time)
+                            event = Event(
+                                type="roll",
+                                timestamp=timestamp,
+                                die=current_die,
+                                result=result,
+                                selected_thread_id=selected_thread.id,
+                                selection_method=selection_method,
+                                session_id=session.id,
+                            )
+                            db.add(event)
 
-                if event_type == "roll":
-                    if threads_list:
-                        selected_thread = random.choice(threads_list)
-                        result = random.randint(1, current_die)
-                        selection_method = random.choice(["dice", "override"])
+                            if result > 10:
+                                current_die = min(current_die + 2, DICE_LADDER[-1])
+                            elif result < 5:
+                                current_die = max(current_die - 2, DICE_LADDER[0])
 
-                        event = Event(
-                            type="roll",
-                            timestamp=timestamp,
-                            die=current_die,
-                            result=result,
-                            selected_thread_id=selected_thread.id,
-                            selection_method=selection_method,
-                            session_id=session.id,
-                        )
-                        db.add(event)
+                    else:
+                        if threads_list:
+                            selected_thread = random.choice(threads_list)
+                            rating = round(random.uniform(0.5, 5.0), 1)
+                            issues_read = random.randint(1, 5)
+                            queue_move = random.choice(["back", "front", "middle"])
+                            die_after = random.choice(DICE_LADDER)
 
-                        if result > 10:
-                            current_die = min(current_die + 2, DICE_LADDER[-1])
-                        elif result < 5:
-                            current_die = max(current_die - 2, DICE_LADDER[0])
+                            event = Event(
+                                type="rate",
+                                timestamp=timestamp,
+                                rating=rating,
+                                issues_read=issues_read,
+                                queue_move=queue_move,
+                                die_after=die_after,
+                                thread_id=selected_thread.id,
+                                session_id=session.id,
+                            )
+                            db.add(event)
 
-                else:
-                    if threads_list:
-                        selected_thread = random.choice(threads_list)
-                        rating = round(random.uniform(0.5, 5.0), 1)
-                        issues_read = random.randint(1, 5)
-                        queue_move = random.choice(["back", "front", "middle"])
-                        die_after = random.choice(DICE_LADDER)
+            await db.commit()
 
-                        event = Event(
-                            type="rate",
-                            timestamp=timestamp,
-                            rating=rating,
-                            issues_read=issues_read,
-                            queue_move=queue_move,
-                            die_after=die_after,
-                            thread_id=selected_thread.id,
-                            session_id=session.id,
-                        )
-                        db.add(event)
+            result = await db.execute(select(Thread).where(Thread.user_id == user.id))
+            final_threads = result.scalars().all()
+            result = await db.execute(select(Session).where(Session.user_id == user.id))
+            final_sessions = result.scalars().all()
+            result = await db.execute(select(Event))
+            final_events = result.scalars().all()
 
-        db.commit()
+            print("\n=== Database Seeding Complete ===")
+            print(f"User: {user.username} (ID: {user.id})")
+            print(f"Threads: {len(final_threads)}")
+            print(f"Sessions: {len(final_sessions)}")
+            print(f"Events: {len(final_events)}")
 
-        final_threads = db.execute(select(Thread).where(Thread.user_id == user.id)).scalars().all()
-        final_sessions = (
-            db.execute(select(Session).where(Session.user_id == user.id)).scalars().all()
-        )
-        final_events = db.execute(select(Event)).scalars().all()
-
-        print("\n=== Database Seeding Complete ===")
-        print(f"User: {user.username} (ID: {user.id})")
-        print(f"Threads: {len(final_threads)}")
-        print(f"Sessions: {len(final_sessions)}")
-        print(f"Events: {len(final_events)}")
-
-    except Exception as e:
-        db.rollback()
-        print(f"Error seeding database: {e}")
-        raise
-
-    finally:
-        db.close()
+        except Exception as e:
+            await db.rollback()
+            print(f"Error seeding database: {e}")
+            raise
 
 
 if __name__ == "__main__":
-    seed_database()
+    asyncio.run(seed_database())

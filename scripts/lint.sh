@@ -46,8 +46,24 @@ if [ -z "$VIRTUAL_ENV" ]; then
     if [ -f "$VENV_PATH" ]; then
         source "$VENV_PATH"
     else
-        echo "No virtual environment found. Please run 'uv venv && uv sync --all-extras' first."
-        exit 1
+        # In CI, tools may already be in PATH (e.g., from Docker image)
+        if [ -n "$CI" ]; then
+            # Verify required tools are available
+            if ! command -v ruff >/dev/null 2>&1; then
+                echo "ERROR: ruff not found in PATH (CI environment)"
+                echo "Current PATH: $PATH"
+                exit 1
+            fi
+            if ! command -v python >/dev/null 2>&1; then
+                echo "ERROR: python not found in PATH (CI environment)"
+                echo "Current PATH: $PATH"
+                exit 1
+            fi
+            echo "CI environment: Using tools from PATH"
+        else
+            echo "No virtual environment found. Please run 'uv venv && uv sync --all-extras' first."
+            exit 1
+        fi
     fi
 fi
 
@@ -258,6 +274,15 @@ if should_run_frontend; then
     ANY_CHECKED=1
     echo ""
     echo "Running frontend ESLint..."
+    
+    if [ -n "$CI" ]; then
+        echo "CI environment: Installing frontend dependencies..."
+        (cd frontend && npm ci --legacy-peer-deps) || {
+            echo "${RED}ERROR: Failed to install frontend dependencies.${NC}"
+            exit 1
+        }
+    fi
+    
     if ! (cd frontend && npm run lint); then
         echo ""
         echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"

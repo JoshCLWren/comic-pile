@@ -45,8 +45,10 @@ logs/
 
 # Environment
 .env
+.env.backup
 .env.local
 .env.production
+.envrc
 
 # Docker
 Dockerfile*

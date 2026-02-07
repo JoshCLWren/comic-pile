@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -16,23 +16,32 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/metrics")
-def get_metrics(
+async def get_metrics(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> dict:
+    db: AsyncSession = Depends(get_db),
+) -> dict[
+    str,
+    int | float | dict[str, int] | list[dict[str, int | float | str | None]],
+]:
     """Get reading metrics and analytics for the current user.
 
+    Args:
+        current_user: The authenticated user making the request.
+        db: The database session for querying data.
+
     Returns:
-        Dictionary containing various reading metrics and statistics
+        Dictionary containing various reading metrics and statistics including
+        total_threads, active_threads, completed_threads, completion_rate,
+        average_session_hours, recent_sessions, event_stats, and top_rated_threads.
     """
     # Total threads
     total_threads = (
-        db.scalar(select(func.count(Thread.id)).where(Thread.user_id == current_user.id)) or 0
+        await db.scalar(select(func.count(Thread.id)).where(Thread.user_id == current_user.id)) or 0
     )
 
     # Active threads
     active_threads = (
-        db.scalar(
+        await db.scalar(
             select(func.count(Thread.id)).where(
                 Thread.user_id == current_user.id, Thread.status == "active"
             )
@@ -42,7 +51,7 @@ def get_metrics(
 
     # Completed threads
     completed_threads = (
-        db.scalar(
+        await db.scalar(
             select(func.count(Thread.id)).where(
                 Thread.user_id == current_user.id, Thread.status == "completed"
             )
@@ -56,12 +65,16 @@ def get_metrics(
     )
 
     # Average session duration (in hours)
-    avg_duration_result = db.execute(
-        select(
-            func.avg(func.extract("epoch", SessionModel.ended_at - SessionModel.started_at) / 3600)
-        ).where(
-            SessionModel.user_id == current_user.id,
-            SessionModel.ended_at.isnot(None),
+    avg_duration_result = (
+        await db.execute(
+            select(
+                func.avg(
+                    func.extract("epoch", SessionModel.ended_at - SessionModel.started_at) / 3600
+                )
+            ).where(
+                SessionModel.user_id == current_user.id,
+                SessionModel.ended_at.isnot(None),
+            )
         )
     ).scalar()
 
@@ -69,22 +82,26 @@ def get_metrics(
 
     # Recent reading sessions (last 7 days)
     seven_days_ago = datetime.now(UTC) - timedelta(days=7)
-    recent_sessions = db.scalars(
-        select(SessionModel)
-        .where(
-            SessionModel.user_id == current_user.id,
-            SessionModel.started_at >= seven_days_ago,
+    recent_sessions = (
+        await db.scalars(
+            select(SessionModel)
+            .where(
+                SessionModel.user_id == current_user.id,
+                SessionModel.started_at >= seven_days_ago,
+            )
+            .order_by(SessionModel.started_at.desc())
+            .limit(5)
         )
-        .order_by(SessionModel.started_at.desc())
-        .limit(5)
     ).all()
 
     # Reading events by type
-    event_counts = db.execute(
-        select(Event.type, func.count(Event.id))
-        .join(SessionModel, Event.session_id == SessionModel.id)
-        .where(SessionModel.user_id == current_user.id)
-        .group_by(Event.type)
+    event_counts = (
+        await db.execute(
+            select(Event.type, func.count(Event.id))
+            .join(SessionModel, Event.session_id == SessionModel.id)
+            .where(SessionModel.user_id == current_user.id)
+            .group_by(Event.type)
+        )
     ).all()
 
     event_stats: dict[str, int] = {}
@@ -92,15 +109,17 @@ def get_metrics(
         event_stats[event_type] = count
 
     # Top rated threads (rating >= 4.0)
-    top_threads = db.scalars(
-        select(Thread)
-        .where(
-            Thread.user_id == current_user.id,
-            Thread.last_rating.isnot(None),
-            Thread.last_rating >= 4.0,
+    top_threads = (
+        await db.scalars(
+            select(Thread)
+            .where(
+                Thread.user_id == current_user.id,
+                Thread.last_rating.isnot(None),
+                Thread.last_rating >= 4.0,
+            )
+            .order_by(Thread.last_rating.desc())
+            .limit(5)
         )
-        .order_by(Thread.last_rating.desc())
-        .limit(5)
     ).all()
 
     return {

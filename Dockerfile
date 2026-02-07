@@ -77,4 +77,4 @@ EXPOSE 8000
 # - no `activate`
 # - no PATH reliance
 # - absolute interpreter path
-CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 4"]

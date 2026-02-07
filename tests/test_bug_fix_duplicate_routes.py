@@ -1,7 +1,7 @@
 """Test for bug fix: duplicate route handlers causing DB locks."""
 
 
-def test_no_duplicate_route_handlers():
+def test_no_duplicate_route_handlers() -> None:
     """Verify that no duplicate route handlers exist for the same endpoint.
 
     This test ensures that the bug causing DB locks from history interactions

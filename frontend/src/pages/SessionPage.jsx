@@ -6,14 +6,14 @@ import LoadingSpinner from '../components/LoadingSpinner'
 
 export default function SessionPage() {
   const { id } = useParams()
-  const { data: details, isLoading } = useSessionDetails(id)
+  const { data: details, isPending } = useSessionDetails(id)
   const { data: snapshotsData } = useSessionSnapshots(id)
   const restoreMutation = useRestoreSessionStart()
   const undoMutation = useUndo()
 
   const snapshots = snapshotsData?.snapshots ?? []
 
-  if (isLoading) {
+  if (isPending) {
     return <LoadingSpinner fullScreen />
   }
 
