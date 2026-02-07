@@ -285,6 +285,9 @@ jobs:
       - name: Install Playwright browsers
         run: cd frontend && npx playwright install --with-deps chromium
 
+      - name: Build frontend
+        run: cd frontend && npm run build
+
       - name: Start backend server
         shell: bash
         run: |
