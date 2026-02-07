@@ -125,8 +125,10 @@ export default function RollPage() {
             }
             setIsRolling(false)
             navigate('/rate')
-          } catch {
+          } catch (error) {
+            console.error('Roll failed:', error)
             setIsRolling(false)
+            throw error
           }
         }, 400)
       }
