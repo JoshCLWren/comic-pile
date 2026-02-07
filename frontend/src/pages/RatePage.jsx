@@ -172,6 +172,15 @@ export default function RatePage() {
     setPendingRating(null);
   }
 
+  async function handleSnooze() {
+    try {
+      await snoozeMutation.mutate();
+      navigate('/');
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to snooze thread');
+    }
+  }
+
   if (!session || !session.active_thread) {
     return (
       <div className="text-center py-20">
@@ -309,7 +318,7 @@ export default function RatePage() {
           <div className="flex justify-center pt-2">
             <button
               type="button"
-              onClick={() => snoozeMutation.mutate()}
+              onClick={handleSnooze}
               disabled={snoozeMutation.isPending}
               className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 rounded-lg transition-all disabled:opacity-50"
             >

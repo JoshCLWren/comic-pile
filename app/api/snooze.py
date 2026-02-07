@@ -253,6 +253,15 @@ async def unsnooze_thread(
     if thread_id in snoozed_ids:
         snoozed_ids.remove(thread_id)
         current_session.snoozed_thread_ids = snoozed_ids
+
+        # Record unsnooze event
+        event = Event(
+            type="unsnooze",
+            session_id=current_session.id,
+            thread_id=thread_id,
+        )
+        db.add(event)
+
         await db.commit()
 
     if clear_cache:

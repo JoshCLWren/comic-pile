@@ -1,9 +1,7 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { snoozeApi } from '../services/api'
 
 export function useSnooze() {
-  const navigate = useNavigate()
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
@@ -12,9 +10,9 @@ export function useSnooze() {
     setIsError(false)
     try {
       await snoozeApi.snooze()
-      navigate('/')
-    } catch {
+    } catch (error) {
       setIsError(true)
+      throw error
     } finally {
       setIsPending(false)
     }
@@ -32,8 +30,9 @@ export function useUnsnooze() {
     setIsError(false)
     try {
       await snoozeApi.unsnooze(threadId)
-    } catch {
+    } catch (error) {
       setIsError(true)
+      throw error
     } finally {
       setIsPending(false)
     }

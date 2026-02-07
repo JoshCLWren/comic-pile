@@ -69,6 +69,9 @@ export function useSessionDetails(id) {
 
   const fetchDetails = useCallback(async () => {
     if (!id) {
+      setData(null)
+      setIsError(false)
+      setError(null)
       setIsPending(false)
       return
     }
@@ -101,6 +104,9 @@ export function useSessionSnapshots(id) {
 
   const fetchSnapshots = useCallback(async () => {
     if (!id) {
+      setData(null)
+      setIsError(false)
+      setError(null)
       setIsPending(false)
       return
     }
