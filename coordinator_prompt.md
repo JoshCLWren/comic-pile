@@ -247,6 +247,7 @@ Read AGENTS.md first for project conventions.
   Format: "BLOCKER: {description}" or "FOLLOW-UP: {description}"
 - Do not use --no-verify.
 - Do not add TODOs unless the task spec explicitly calls for one.
+- **CRITICAL: Do not install new libraries or change state management patterns** unless explicitly instructed. Read existing code first to understand what patterns are in use (e.g., useState/useEffect vs React Query, fetch vs axios). If task spec shows a pattern that doesn't match the codebase, report: "BLOCKER: Task spec pattern doesn't match codebase. Found {actual pattern}, spec shows {different pattern}."
 ```
 
 ---

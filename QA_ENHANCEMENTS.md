@@ -74,23 +74,45 @@ rm -f ../comic_pile.db
 **Issue:** API succeeds when unsnoozing, but UI doesn't update to show the thread is no longer snoozed.
 
 **Files:**
-- `frontend/src/hooks/useSnooze.js`
+- `frontend/src/pages/RollPage.jsx` - Add refetch after unsnooze
+- `frontend/src/pages/RatePage.jsx` - Add refetch after snooze
 
-**Root Cause:** Mutation doesn't invalidate queries after successful unsnooze.
+**Root Cause:** Pages don't refetch session data after snooze/unsnooze mutations complete.
 
 **Solution:**
-```javascript
-// Add to useUnsnooze mutation
-const useUnsnooze = (threadId) => {
-  return useMutation({
-    mutationFn: () => snoozeApi.unsnooze(threadId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['session'] })
-      queryClient.invalidateQueries({ queryKey: ['threads'] })
-    }
-  })
-}
+
+The codebase uses custom hooks with useState/useEffect that return a `refetch` function. After mutations, pages must manually call `refetch()` to update data.
+
+**RollPage.jsx (around line 300+):**
+```jsx
+// Find the unsnooze button onClick
+// Before:
+onClick={() => unsnoozeMutation.mutate(thread.id)}
+
+// After:
+onClick={() => unsnoozeMutation.mutate(thread.id).then(() => refetchSession()).catch(() => {
+  // Optional: error handling
+})}
 ```
+
+**RatePage.jsx (around line 160+):**
+```jsx
+// Find the snooze handler
+// Before:
+await snoozeMutation.mutate();
+navigate('/');
+
+// After:
+await snoozeMutation.mutate();
+refetchSession();
+navigate('/');
+```
+
+**Pattern Note:**
+- `useSession()` returns `{ data, isPending, isError, error, refetch }`
+- All data hooks return a `refetch` function for manual updates
+- Call `refetch()` in `.then()` after mutations to refresh stale data
+- See QueuePage.jsx lines 50, 57, 63 for examples of this pattern
 
 **Estimated:** 30 minutes
 
@@ -523,20 +545,31 @@ function handleAction(action) {
   switch (action) {
     case 'read':
       // Set as pending and navigate to rate
-      api.setPendingThread(selectedThread.id)
-      navigate('/rate')
+      api.setPendingThread(selectedThread.id).then(() => {
+        navigate('/rate')
+      })
       break
     case 'move-front':
-      queueApi.moveToFront(selectedThread.id)
+      queueApi.moveToFront(selectedThread.id).then(() => {
+        refetchThreads()  // Refresh queue after move
+      })
       break
     case 'move-back':
-      queueApi.moveToBack(selectedThread.id)
+      queueApi.moveToBack(selectedThread.id).then(() => {
+        refetchThreads()  // Refresh queue after move
+      })
       break
     case 'snooze':
       if (selectedThread.is_snoozed) {
-        snoozeApi.unsnooze(selectedThread.id)
+        snoozeApi.unsnooze(selectedThread.id).then(() => {
+          refetchSession()  // Refresh session to update snoozed list
+          refetchThreads()  // Refresh queue to show updated status
+        })
       } else {
-        snoozeApi.snooze()
+        snoozeApi.snooze().then(() => {
+          refetchSession()  // Refresh session to update snoozed list
+          refetchThreads()  // Refresh queue to show updated status
+        })
       }
       break
     case 'edit':
@@ -605,27 +638,34 @@ function handleAction(action) {
 **Frontend:**
 ```javascript
 // In RatePage.jsx
-const rateMutation = useMutation({
-  mutationFn: rateApi.rate,
-  onSuccess: async (response) => {
-    // Refetch session to check for pending thread
-    const session = await sessionApi.getCurrent()
+// Get refetch function from useSession hook
+const { data: session, refetch: refetchSession } = useSession()
 
-    if (session.pending_thread_id) {
+async function handleRatingSubmit(ratingData) {
+  try {
+    await rateApi.rate(ratingData)
+
+    // Refetch session to check for pending thread
+    const updatedSession = await sessionApi.getCurrent()
+
+    if (updatedSession.pending_thread_id) {
       // Stay on rate page, it will load new pending thread
-      queryClient.invalidateQueries({ queryKey: ['session'] })
+      refetchSession()
     } else {
       // No pending thread, go back to roll
       navigate('/')
     }
-
-    queryClient.invalidateQueries({ queryKey: ['threads'] })
-  },
-  onError: (error) => {
+  } catch (error) {
     setErrorMessage(error.response?.data?.detail || 'Failed to save rating')
-  },
-})
+  }
+}
 ```
+
+**Pattern Note:**
+- Use `sessionApi.getCurrent()` to fetch updated session data
+- Call `refetchSession()` to update the hook's state
+- Don't navigate away if `pending_thread_id` exists
+- The `useSession` hook will auto-load the new pending thread on next render
 
 **Backend Verification:**
 - Ensure rate endpoint clears pending_thread_id after rating
