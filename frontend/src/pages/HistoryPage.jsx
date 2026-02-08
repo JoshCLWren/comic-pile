@@ -53,7 +53,14 @@ export default function HistoryPage() {
     const hours = Math.floor(diffMins / 60)
     const mins = diffMins % 60
     if (hours === 0) return `${mins}m`
+    if (mins === 0) return `${hours}h`
     return `${hours}h ${mins}m`
+  }
+
+  const formatDiceProgression = (ladderPath) => {
+    if (!ladderPath) return ''
+    const dice = ladderPath.split(' → ')
+    return dice.map(d => `d${d}`).join(' → ')
   }
 
   return (
@@ -89,7 +96,7 @@ export default function HistoryPage() {
                   {session.ladder_path && (
                     <div className="space-y-2">
                       <p className="text-sm font-black text-slate-300">
-                        Dice progression: {Array.isArray(session.ladder_path) ? session.ladder_path.join(' → ') : session.ladder_path}
+                        Dice progression: {formatDiceProgression(session.ladder_path)}
                       </p>
                     </div>
                   )}

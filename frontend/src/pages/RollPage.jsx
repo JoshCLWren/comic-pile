@@ -171,15 +171,8 @@ export default function RollPage() {
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Active session</p>
         </div>
         <div className="flex items-center gap-2">
-          {session.has_restore_point && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-teal-500/10 border border-teal-500/20 rounded-lg">
-              <span className="text-xs">🛡️</span>
-              <span className="text-[9px] font-black text-teal-400 uppercase">Session Safe</span>
-            </div>
-          )}
           <div className="relative" id="die-selector">
             {DICE_LADDER.map((die) => (
               <button
