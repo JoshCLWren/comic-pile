@@ -20,7 +20,7 @@ export default function RatePage() {
   const [additionalIssues, setAdditionalIssues] = useState(1)
   const [pendingRating, setPendingRating] = useState(null)
 
-  const { data: session } = useSession()
+  const { data: session, isPending: sessionPending } = useSession()
 
   const rateMutation = useRate()
 
@@ -182,6 +182,15 @@ export default function RatePage() {
   }
 
   if (!session || !session.active_thread) {
+    if (sessionPending) {
+      return (
+        <div className="text-center py-20">
+          <div className="text-6xl mb-4">⏳</div>
+          <h2 className="text-xl font-black text-slate-300 uppercase tracking-wider mb-2">Loading...</h2>
+        </div>
+      );
+    }
+
     return (
       <div className="text-center py-20">
         <div className="text-6xl mb-4">📝</div>

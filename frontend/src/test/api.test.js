@@ -46,4 +46,3 @@ it('calls queue endpoints with expected paths', () => {
   expect(put).toHaveBeenCalledWith('/queue/threads/4/front/')
   expect(put).toHaveBeenCalledWith('/queue/threads/5/back/')
 })
-
