@@ -28,7 +28,7 @@ vi.mock('../hooks/useQueue', () => ({
 beforeEach(() => {
   useThreads.mockReturnValue({
     data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active', position: 1, issues_remaining: 5 },
+      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
       { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
     ],
     isLoading: false,
@@ -48,6 +48,7 @@ it('renders queue items and opens create modal', async () => {
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('Descender')).toBeInTheDocument()
+  expect(screen.getByText('#1')).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: /add thread/i }))
   expect(screen.getByRole('heading', { name: /create thread/i })).toBeInTheDocument()
