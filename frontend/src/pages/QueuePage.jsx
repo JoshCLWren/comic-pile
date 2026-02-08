@@ -42,7 +42,9 @@ export default function QueuePage() {
   const [repositioningThread, setRepositioningThread] = useState(null)
   const [reorderError, setReorderError] = useState(null)
 
-  const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
+  const activeThreads = threads
+    ?.filter((thread) => thread.status === 'active')
+    .sort((a, b) => a.queue_position - b.queue_position) ?? []
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
 
   const handleDelete = (threadId) => {
@@ -244,7 +246,7 @@ export default function QueuePage() {
           aria-label="Thread queue"
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
         >
-          {activeThreads.map((thread) => {
+          {activeThreads.map((thread, index) => {
             const isDragOver = dragOverThreadId === thread.id
             return (
               <div
@@ -256,20 +258,25 @@ export default function QueuePage() {
                 onDrop={handleDrop(thread.id)}
               >
                 <div className="flex justify-between items-start gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Tooltip content="Drag to reorder within the queue.">
-                      <button
-                        type="button"
-                        className="text-slate-500 hover:text-slate-300 transition-colors text-lg"
-                        draggable
-                        onDragStart={handleDragStart(thread.id)}
-                        onDragEnd={handleDragEnd}
-                        aria-label="Drag to reorder"
-                      >
-                        ⠿
-                      </button>
-                    </Tooltip>
-                    <h3 className="text-lg font-bold text-white flex-1 truncate">{thread.title}</h3>
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <span className="text-2xl font-black text-teal-500/30">
+                      #{index + 1}
+                    </span>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Tooltip content="Drag to reorder within the queue.">
+                        <button
+                          type="button"
+                          className="text-slate-500 hover:text-slate-300 transition-colors text-lg"
+                          draggable
+                          onDragStart={handleDragStart(thread.id)}
+                          onDragEnd={handleDragEnd}
+                          aria-label="Drag to reorder"
+                        >
+                          ⠿
+                        </button>
+                      </Tooltip>
+                      <h3 className="text-lg font-bold text-white flex-1 truncate">{thread.title}</h3>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Tooltip content="Edit thread details.">
