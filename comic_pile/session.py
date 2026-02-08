@@ -17,7 +17,9 @@ _session_creation_lock = asyncio.Lock()
 
 
 def _session_gap_hours() -> int:
-    """Get session gap hours from config."""
+    # TODO: Make session_gap_hours configurable in future
+    # Currently hardcoded to 6 hours based on user's reading pattern
+    # (early morning vs late night sessions, rarely < 6 hours apart)
     return get_session_settings().session_gap_hours
 
 

@@ -207,12 +207,6 @@ export default function RatePage() {
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Mark your progress</p>
         </div>
         <div className="flex items-center gap-3">
-          {session.has_restore_point && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-teal-500/10 border border-teal-500/20 rounded-lg">
-              <span className="text-xs">🛡️</span>
-              <span className="text-[9px] font-black text-teal-400 uppercase">Session Safe</span>
-            </div>
-          )}
           <div className="dice-perspective relative" style={{ width: '50px', height: '50px', transform: 'scale(0.4)' }}>
             <LazyDice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
           </div>
@@ -305,15 +299,6 @@ export default function RatePage() {
             ) : (
               'Save & Continue'
             )}
-          </button>
-          <button
-            type="button"
-            id="finish-btn"
-            onClick={() => handleSubmitRating(true)}
-            disabled={rateMutation.isPending}
-            className="w-full py-4 text-lg font-black uppercase tracking-[0.2em] text-slate-400 hover:text-slate-300 transition-colors disabled:opacity-50"
-          >
-            Finish Session
           </button>
           <div className="flex justify-center pt-2">
             <button
