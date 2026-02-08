@@ -24,7 +24,7 @@ export default function HistoryPage() {
               Export Summary
             </a>
           </div>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Chronicle of your journey</p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Your reading session history</p>
         </header>
         <div className="text-center text-slate-500">No sessions yet</div>
       </div>
@@ -43,6 +43,18 @@ export default function HistoryPage() {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
+  const formatDuration = (startedAt, endedAt) => {
+    if (!startedAt || !endedAt) return null
+    const start = new Date(startedAt)
+    const end = new Date(endedAt)
+    const diffMs = end - start
+    const diffMins = Math.floor(diffMs / 60000)
+    const hours = Math.floor(diffMins / 60)
+    const mins = diffMins % 60
+    if (hours === 0) return `${mins}m`
+    return `${hours}h ${mins}m`
+  }
+
   return (
     <div className="space-y-8 pb-20">
       <header className="px-2">
@@ -54,7 +66,7 @@ export default function HistoryPage() {
             Export Summary
           </a>
         </div>
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Chronicle of your journey</p>
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Your reading session history</p>
       </header>
 
       <div id="sessions-list" className="space-y-4" role="list" aria-label="Session history">
@@ -74,7 +86,7 @@ export default function HistoryPage() {
                 {session.ladder_path && (
                   <div className="space-y-2">
                     <p className="text-sm font-black text-slate-300">
-                      Ladder: {Array.isArray(session.ladder_path) ? session.ladder_path.join(', ') : session.ladder_path}
+                      Dice progression: {Array.isArray(session.ladder_path) ? session.ladder_path.join(' → ') : session.ladder_path}
                     </p>
                   </div>
                 )}
@@ -85,8 +97,22 @@ export default function HistoryPage() {
                     <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{session.active_thread.format}</p>
                     {session.last_rolled_result !== null && session.last_rolled_result !== undefined && (
                       <p className="text-[9px] font-black text-teal-300 uppercase tracking-widest">
-                        Roll: {session.last_rolled_result}
+                        Rolled: {session.last_rolled_result} of d{session.active_thread.die_size || 6}
                       </p>
+                    )}
+                  </div>
+                )}
+
+                {session.ended_at && (
+                  <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                    {formatDuration(session.started_at, session.ended_at) && (
+                      <span>Duration: {formatDuration(session.started_at, session.ended_at)}</span>
+                    )}
+                    {formatDuration(session.started_at, session.ended_at) && (session.snapshot_count ?? 0) > 0 && (
+                      <span> · </span>
+                    )}
+                    {(session.snapshot_count ?? 0) > 0 && (
+                      <span>Comics read: {session.snapshot_count ?? 0}</span>
                     )}
                   </div>
                 )}
@@ -97,7 +123,7 @@ export default function HistoryPage() {
                   to={`/sessions/${session.id}`}
                   className="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
                 >
-                  Details
+                  View Full Session
                 </Link>
               </div>
             </div>
