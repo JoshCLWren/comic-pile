@@ -28,6 +28,13 @@ This document captures all QA issues identified during production testing, organ
 ✅ **Ready to implement** - All decisions made
 
 ### Changes
+
+> **⚠️ WARNING:** These commands operate outside the repository and will permanently delete data. 
+> - Verify you're in the correct directory: `pwd` should show `/path/to/comic-pile`
+> - List what will be deleted first: `ls ../comic-pile-*`
+> - Check worktree list: `git worktree list`
+> - Ensure backups exist if needed
+
 **Remove 3 Git Worktrees:**
 ```bash
 git worktree remove ../comic-pile-phase4  # Abandoned auth work (394MB)
@@ -774,7 +781,7 @@ async def audit_sessions():
         # Count by duration buckets
         buckets = await db.execute(
             select(
-                func.case(
+                case(
                     (func.extract("epoch", SessionModel.ended_at - SessionModel.started_at) / 3600 < 1, "< 1 hour"),
                     (func.extract("epoch", SessionModel.ended_at - SessionModel.started_at) / 3600 < 6, "1-6 hours"),
                     (func.extract("epoch", SessionModel.ended_at - SessionModel.started_at) / 3600 < 12, "6-12 hours"),
@@ -830,8 +837,8 @@ avg_duration_result = await db.execute(
 
 **Option C: Add Date Filter**
 ```python
-# Only count sessions from last 90 days
-seven_days_ago = datetime.now(UTC) - timedelta(days=90)
+# Count sessions from last 90 days for more accurate average
+ninety_days_ago = datetime.now(UTC) - timedelta(days=90)
 
 avg_duration_result = await db.execute(
     select(
@@ -839,7 +846,7 @@ avg_duration_result = await db.execute(
     ).where(
         SessionModel.user_id == current_user.id,
         SessionModel.ended_at.isnot(None),
-        SessionModel.started_at >= seven_days_ago
+        SessionModel.started_at >= ninety_days_ago
     )
 ).scalar()
 ```
