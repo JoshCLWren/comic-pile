@@ -48,6 +48,7 @@ export default function HistoryPage() {
     const start = new Date(startedAt)
     const end = new Date(endedAt)
     const diffMs = end - start
+    if (!Number.isFinite(diffMs) || diffMs < 0) return null
     const diffMins = Math.floor(diffMs / 60000)
     const hours = Math.floor(diffMins / 60)
     const mins = diffMins % 60
@@ -70,65 +71,68 @@ export default function HistoryPage() {
       </header>
 
       <div id="sessions-list" className="space-y-4" role="list" aria-label="Session history">
-        {sessions.map((session) => (
-          <div key={session.id} role="listitem" className="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
-            <div className="flex justify-between items-start gap-6 relative z-10">
-              <div className="space-y-4 flex-1 min-w-0">
-                <div className="flex items-center gap-3">
-                  <div className="px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black uppercase tracking-widest text-slate-400">
-                    {formatDate(session.started_at)}
+        {sessions.map((session) => {
+          const duration = formatDuration(session.started_at, session.ended_at)
+          return (
+            <div key={session.id} role="listitem" className="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
+              <div className="flex justify-between items-start gap-6 relative z-10">
+                <div className="space-y-4 flex-1 min-w-0">
+                  <div className="flex items-center gap-3">
+                    <div className="px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      {formatDate(session.started_at)}
+                    </div>
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                      {formatTime(session.started_at)}
+                    </span>
                   </div>
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
-                    {formatTime(session.started_at)}
-                  </span>
+
+                  {session.ladder_path && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-black text-slate-300">
+                        Dice progression: {Array.isArray(session.ladder_path) ? session.ladder_path.join(' → ') : session.ladder_path}
+                      </p>
+                    </div>
+                  )}
+
+                  {session.active_thread && (
+                    <div className="text-sm space-y-1">
+                      <p className="font-black text-slate-300 truncate">{session.active_thread.title}</p>
+                      <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{session.active_thread.format}</p>
+                      {session.last_rolled_result !== null && session.last_rolled_result !== undefined && (
+                        <p className="text-[9px] font-black text-teal-300 uppercase tracking-widest">
+                          Rolled: {session.last_rolled_result} of d{session.current_die}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {session.ended_at && (
+                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                      {duration && (
+                        <span>Duration: {duration}</span>
+                      )}
+                      {duration && (session.snapshot_count ?? 0) > 0 && (
+                        <span> · </span>
+                      )}
+                      {(session.snapshot_count ?? 0) > 0 && (
+                        <span>Comics read: {session.snapshot_count ?? 0}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                {session.ladder_path && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-black text-slate-300">
-                      Dice progression: {Array.isArray(session.ladder_path) ? session.ladder_path.join(' → ') : session.ladder_path}
-                    </p>
-                  </div>
-                )}
-
-                {session.active_thread && (
-                  <div className="text-sm space-y-1">
-                    <p className="font-black text-slate-300 truncate">{session.active_thread.title}</p>
-                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{session.active_thread.format}</p>
-                    {session.last_rolled_result !== null && session.last_rolled_result !== undefined && (
-                      <p className="text-[9px] font-black text-teal-300 uppercase tracking-widest">
-                        Rolled: {session.last_rolled_result} of d{session.active_thread.die_size || 6}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {session.ended_at && (
-                  <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                    {formatDuration(session.started_at, session.ended_at) && (
-                      <span>Duration: {formatDuration(session.started_at, session.ended_at)}</span>
-                    )}
-                    {formatDuration(session.started_at, session.ended_at) && (session.snapshot_count ?? 0) > 0 && (
-                      <span> · </span>
-                    )}
-                    {(session.snapshot_count ?? 0) > 0 && (
-                      <span>Comics read: {session.snapshot_count ?? 0}</span>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <Link
-                  to={`/sessions/${session.id}`}
-                  className="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-                >
-                  View Full Session
-                </Link>
+                <div className="flex gap-2">
+                  <Link
+                    to={`/sessions/${session.id}`}
+                    className="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+                  >
+                    View Full Session
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
