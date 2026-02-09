@@ -1095,6 +1095,8 @@ For each PR, ensure:
 - ✅ PR #5: Mobile Dice Selector Overhaul (merged 2026-02-09)
 - ✅ PR #6: Snoozed Comics with D&D Modifiers (merged 2026-02-09)
 - ✅ PR #7: Make Stale Reminder Tappable (merged 2026-02-09)
+- ✅ PR #8: Quick Actions on Comics (merged 2026-02-09)
+- ✅ PR #9: Fix Session Flow After Rating (merged 2026-02-09)
 - ✅ PR #10: Remove SQLite Backup Code (merged 2026-02-09)
 - ✅ PR #12: Markdown File Cleanup (merged PR #167)
 
@@ -1124,4 +1126,4 @@ For each PR, ensure:
 ---
 
 **Last Updated**: 2026-02-09
-**Next Review**: After completing PR #5 (Mobile Dice Selector)
+**Next Review**: After completing PR #11 (Analytics Audit & Data Fix)
