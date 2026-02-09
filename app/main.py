@@ -3,7 +3,6 @@
 import json
 import logging
 import os
-import subprocess
 import sys
 import time
 import traceback
@@ -541,29 +540,8 @@ def create_app() -> FastAPI:
                     # Catch database errors during table creation (OperationalError, ProgrammingError, etc.)
                     logger.error(f"Failed to create database tables: {e}")
                     sys.exit(1)
-
-            if app_settings.auto_backup_enabled:
-                try:
-                    logger.info("Starting automatic database backup...")
-                    result = subprocess.run(
-                        ["python", "-m", "scripts.backup_database"],
-                        capture_output=True,
-                        text=True,
-                        timeout=60,
-                    )
-                    if result.returncode == 0:
-                        logger.info(f"Database backup completed:\n{result.stdout}")
-                    else:
-                        logger.warning(f"Database backup warning:\n{result.stderr}")
-                except subprocess.TimeoutExpired:
-                    logger.error("Database backup timed out after 60 seconds")
-                except OSError as backup_error:
-                    # Catch process creation and execution errors (FileNotFoundError, PermissionError, etc.)
-                    logger.error(f"Database backup failed: {backup_error}")
-            else:
-                logger.info("Automatic backup disabled (AUTO_BACKUP_ENABLED=false)")
         else:
-            logger.warning("Skipping database initialization and backups due to connection failure")
+            logger.warning("Skipping database initialization due to connection failure")
 
     return app
 

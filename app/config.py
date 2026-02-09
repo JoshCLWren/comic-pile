@@ -93,11 +93,6 @@ class AppSettings(BaseSettings):
         description="Enable internal operations routes",
         json_schema_extra={"env": "ENABLE_INTERNAL_OPS_ROUTES"},
     )
-    auto_backup_enabled: bool = Field(
-        default=True,
-        description="Enable automatic database backup on startup",
-        json_schema_extra={"env": "AUTO_BACKUP_ENABLED"},
-    )
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -194,29 +189,6 @@ class RatingSettings(BaseSettings):
         return v
 
 
-class BackupSettings(BaseSettings):
-    """Database backup configuration settings."""
-
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    backup_dir: str = Field(
-        default="backups",
-        description="Directory for database backups",
-        json_schema_extra={"env": "BACKUP_DIR"},
-    )
-    max_backups: int = Field(
-        default=10,
-        ge=1,
-        description="Maximum number of backup files to retain",
-        json_schema_extra={"env": "MAX_BACKUPS"},
-    )
-    skip_if_unchanged: bool = Field(
-        default=True,
-        description="Skip backup if database hasn't changed",
-        json_schema_extra={"env": "SKIP_IF_UNCHANGED"},
-    )
-
-
 class Settings(BaseSettings):
     """Main settings class that aggregates all configuration groups."""
 
@@ -247,11 +219,6 @@ class Settings(BaseSettings):
     def rating(self) -> RatingSettings:
         """Get rating settings."""
         return get_rating_settings()
-
-    @property
-    def backup(self) -> BackupSettings:
-        """Get backup settings."""
-        return get_backup_settings()
 
 
 # Cached settings instances to avoid re-reading environment on every access
@@ -286,12 +253,6 @@ def get_rating_settings() -> RatingSettings:
 
 
 @lru_cache
-def get_backup_settings() -> BackupSettings:
-    """Get cached backup settings instance."""
-    return BackupSettings()
-
-
-@lru_cache
 def get_settings() -> Settings:
     """Get cached main settings instance."""
     return Settings()
@@ -304,5 +265,4 @@ def clear_settings_cache() -> None:
     get_app_settings.cache_clear()
     get_session_settings.cache_clear()
     get_rating_settings.cache_clear()
-    get_backup_settings.cache_clear()
     get_settings.cache_clear()
