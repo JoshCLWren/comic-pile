@@ -281,6 +281,7 @@ async def get_current_session(
                 snapshot_count=snapshot_count,
                 snoozed_thread_ids=active_session.snoozed_thread_ids or [],
                 snoozed_threads=snoozed_threads,
+                pending_thread_id=active_session.pending_thread_id,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -438,6 +439,7 @@ async def list_sessions(
                 last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
+                pending_thread_id=session.pending_thread_id,
             )
         )
     return responses
@@ -491,6 +493,7 @@ async def get_session(
         last_rolled_result=active_thread.last_rolled_result if active_thread else None,
         has_restore_point=snapshot_count > 0,
         snapshot_count=snapshot_count,
+        pending_thread_id=session.pending_thread_id,
     )
 
 
@@ -792,6 +795,7 @@ async def restore_session_start(
                 last_rolled_result=active_thread.last_rolled_result if active_thread else None,
                 has_restore_point=snapshot_count > 0,
                 snapshot_count=snapshot_count,
+                pending_thread_id=session.pending_thread_id,
             )
         except OperationalError as e:
             if "deadlock" in str(e).lower():
