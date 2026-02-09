@@ -1092,6 +1092,7 @@ For each PR, ensure:
 - ✅ PR #2: Add Queue Position Numbers (merged PR #166)
 - ✅ PR #3: Remove Session UI Indicators (merged 2026-02-08)
 - ✅ PR #4: Improve History View Copy (merged 2026-02-08)
+- ✅ PR #5: Mobile Dice Selector Overhaul (merged 2026-02-09)
 - ✅ PR #10: Remove SQLite Backup Code (merged 2026-02-09)
 - ✅ PR #12: Markdown File Cleanup (merged PR #167)
 
