@@ -1087,9 +1087,12 @@ For each PR, ensure:
 ## Part 8: Progress Tracking
 
 ### Completed PRs
+- ✅ PR #0: Git Worktree Cleanup (completed 2026-02-09)
+- ✅ PR #1: Fix Snooze Re-render Bug (merged PR #172)
 - ✅ PR #2: Add Queue Position Numbers (merged PR #166)
 - ✅ PR #3: Remove Session UI Indicators (merged 2026-02-08)
 - ✅ PR #4: Improve History View Copy (merged 2026-02-08)
+- ✅ PR #10: Remove SQLite Backup Code (merged 2026-02-09)
 - ✅ PR #12: Markdown File Cleanup (merged PR #167)
 
 ### In Progress
@@ -1117,5 +1120,5 @@ For each PR, ensure:
 
 ---
 
-**Last Updated**: 2026-02-08
-**Next Review**: After completing PR #5 (Mobile Dice Selector) or PR #10 (Remove SQLite Backup Code)
+**Last Updated**: 2026-02-09
+**Next Review**: After completing PR #5 (Mobile Dice Selector)
