@@ -6,6 +6,7 @@ const api = axios.create({
 })
 
 let refreshTokenPromise = null
+let isRedirectingToLogin = false
 
 api.interceptors.request.use(
   (config) => {
@@ -20,7 +21,7 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response.data,
-  async   (error) => {
+  async (error) => {
     const originalRequest = error.config
 
     // Log full error details for debugging
@@ -60,14 +61,21 @@ api.interceptors.response.use(
           return api(originalRequest)
         } catch (refreshError) {
           refreshTokenPromise = null
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('refresh_token')
-          window.location.href = '/login'
+          if (!isRedirectingToLogin) {
+            isRedirectingToLogin = true
+            localStorage.removeItem('auth_token')
+            localStorage.removeItem('refresh_token')
+            window.location.href = '/login'
+          }
           return Promise.reject(refreshError)
         }
       } else {
-        localStorage.removeItem('auth_token')
-        window.location.href = '/login'
+        if (!isRedirectingToLogin) {
+          isRedirectingToLogin = true
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('refresh_token')
+          window.location.href = '/login'
+        }
       }
     }
 

@@ -69,8 +69,35 @@ make test                    # With coverage report
 pytest tests/test_roll_api.py -v                   # Single test file
 pytest tests/test_roll_api.py::test_roll_success -v # Single test function
 pytest -k "roll" -v          # Pattern matching
-cd frontend && npm test      # Frontend tests
+cd frontend && npm test      # Frontend unit tests (vitest)
 make test-integration        # E2E tests (Playwright)
+cd frontend && npm run test:e2e  # E2E tests (builds frontend first)
+```
+
+### CRITICAL: Frontend Build for Playwright Tests
+
+**Playwright (E2E) tests MUST have frontend built first:**
+
+```bash
+# ✅ CORRECT - builds frontend automatically
+cd frontend && npm run test:e2e
+
+# ❌ WRONG - will fail with missing static files
+cd frontend && npx playwright test
+
+# If you need to run Playwright directly, always build first:
+cd frontend && npm run build && npx playwright test
+```
+
+**Why?**
+- Playwright tests run against production-like build (not dev server)
+- API serves static files from `frontend/dist/` directory
+- Without `npm run build`, tests fail with 404s for CSS/JS assets
+- CI automatically builds before running Playwright (see `.github/workflows/ci-sharded.yml:289`)
+
+**Quick test for development:**
+```bash
+cd frontend && npm run test:e2e:quick  # Skip build, faster iteration
 ```
 
 ## Python Code Style
@@ -145,19 +172,32 @@ if not thread or thread.user_id != current_user.id:
 
  ### Browser UI Tests
 
- **Use TypeScript Playwright tests** (in `frontend/src/test/`) for browser automation.
+**⚠️ CRITICAL: Frontend must be built before running Playwright tests**
+
+Playwright tests run against the production build, not the dev server. Always build first:
+
+```bash
+# ✅ CORRECT
+cd frontend && npm run test:e2e  # Automatically builds first
+
+# ❌ WRONG - will fail with 404s for CSS/JS assets
+cd frontend && npx playwright test
+```
+
+**Use TypeScript Playwright tests** (in `frontend/src/test/`) for browser automation.
 
  **Python Playwright tests are NOT supported** due to fundamental event loop conflicts:
- - pytest-asyncio requires managing the event loop for async tests
- - Playwright's async fixtures need their own event loop
- - These two systems cannot coexist in the same test suite
- - Multiple attempts to fix this have failed (9+ commits, all reverted)
+  - pytest-asyncio requires managing the event loop for async tests
+  - Playwright's async fixtures need their own event loop
+  - These two systems cannot coexist in the same test suite
+  - Multiple attempts to fix this have failed (9+ commits, all reverted)
 
- **TypeScript Playwright Configuration**:
- - File: `frontend/playwright.config.ts`
- - Automatically starts Uvicorn via `webServer` config
- - Tests run in isolated environment
- - All browser tests work correctly
+  **TypeScript Playwright Configuration**:
+  - File: `frontend/playwright.config.ts`
+  - Automatically starts Uvicorn via `webServer` config
+  - Tests run in isolated environment
+  - All browser tests work correctly
+
 
  **Running E2E Tests Locally**
 

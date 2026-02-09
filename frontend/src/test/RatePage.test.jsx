@@ -59,3 +59,51 @@ it('renders rate page and submits rating', async () => {
   })
   await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith('/'))
 })
+
+it('shows loading state instead of session inactive during initial fetch', async () => {
+  let resolveSession
+  const pendingPromise = new Promise((resolve) => {
+    resolveSession = resolve
+  })
+
+  sessionApi.getCurrent.mockReturnValue(pendingPromise)
+
+  render(<RatePage />)
+
+  await waitFor(() => {
+    expect(screen.getByText('Loading...')).toBeInTheDocument()
+  })
+
+  expect(screen.queryByText('Session Inactive')).not.toBeInTheDocument()
+
+  resolveSession({
+    current_die: 6,
+    last_rolled_result: 4,
+    has_restore_point: true,
+    active_thread: {
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 3,
+    },
+  })
+
+  await waitFor(() => {
+    expect(screen.getByText('Rate Session')).toBeInTheDocument()
+  })
+})
+
+it('shows session inactive when session truly has no active thread', async () => {
+  sessionApi.getCurrent.mockResolvedValue({
+    current_die: 6,
+    last_rolled_result: null,
+    has_restore_point: false,
+    active_thread: null,
+  })
+
+  render(<RatePage />)
+
+  await waitFor(() => {
+    expect(screen.getByText('Session Inactive')).toBeInTheDocument()
+  })
+  expect(screen.getByText('Go to Roll Page')).toBeInTheDocument()
+})

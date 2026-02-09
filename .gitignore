@@ -166,7 +166,7 @@ logs/
 node_modules/
 
 # Frontend build artifacts
-static/react/assets/
+static/react/
 test-results/
 frontend/test-results/
 playwright-report/
