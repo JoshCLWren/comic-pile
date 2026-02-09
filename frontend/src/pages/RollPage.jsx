@@ -12,6 +12,7 @@ import { useUnsnooze } from '../hooks/useSnooze'
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
   const [rolledResult, setRolledResult] = useState(null)
+  const [rolledOffset, setRolledOffset] = useState(null)
   const [selectedThreadId, setSelectedThreadId] = useState(null)
   const [currentDie, setCurrentDie] = useState(6)
   const [diceState, setDiceState] = useState('idle')
@@ -124,23 +125,26 @@ export default function RollPage() {
         rollIntervalRef.current = null
         
         rollTimeoutRef.current = setTimeout(async () => {
-          rollTimeoutRef.current = null
-          try {
-            const response = await rollMutation.mutate()
-            if (response?.result) {
-              setRolledResult(response.result)
-            }
-            if (response?.thread_id) {
-              setSelectedThreadId(response.thread_id)
-            }
-            setIsRolling(false)
-            navigate('/rate')
-          } catch (error) {
-            console.error('Roll failed:', error)
-            setIsRolling(false)
-            throw error
-          }
-        }, 400)
+           rollTimeoutRef.current = null
+           try {
+             const response = await rollMutation.mutate()
+             if (response?.result) {
+               setRolledResult(response.result)
+             }
+             if (response?.offset !== undefined) {
+               setRolledOffset(response.offset)
+             }
+             if (response?.thread_id) {
+               setSelectedThreadId(response.thread_id)
+             }
+             setIsRolling(false)
+             navigate('/rate')
+           } catch (error) {
+             console.error('Roll failed:', error)
+             setIsRolling(false)
+             throw error
+           }
+         }, 400)
       }
     }, 80)
   }
@@ -181,6 +185,12 @@ export default function RollPage() {
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
+          {session.snoozed_threads?.length > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="modifier-badge text-[10px] font-black text-teal-400">+{session.snoozed_threads.length}</span>
+              <span className="text-[9px] text-slate-500 uppercase tracking-wider">snoozed offset active</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div id="die-selector">
@@ -273,7 +283,23 @@ export default function RollPage() {
             </div>
           </div>
 
-          {!isRolling && (
+          {!isRolling && rolledResult && (
+            <div className="text-center shrink-0">
+              <div className="roll-value flex items-center justify-center gap-1">
+                <span className="text-4xl font-black text-teal-400">{rolledResult}</span>
+                {rolledOffset > 0 && (
+                  <span className="modifier text-2xl font-black text-teal-400">+{rolledOffset}</span>
+                )}
+              </div>
+              {rolledOffset > 0 && (
+                <p className="modifier-explanation text-[10px] text-slate-500 mt-1">
+                  {rolledOffset} snoozed comic{rolledOffset > 1 ? 's' : ''} offset
+                </p>
+              )}
+            </div>
+          )}
+
+          {!isRolling && !rolledResult && (
             <p
               id="tap-instruction"
               className="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0 text-center"
