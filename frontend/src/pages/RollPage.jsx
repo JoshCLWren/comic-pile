@@ -23,7 +23,7 @@ export default function RollPage() {
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
 
-  const { data: session } = useSession()
+  const { data: session, refetch: refetchSession } = useSession()
   const { data: threads } = useThreads()
   const { data: staleThreads } = useStaleThreads(7)
 
@@ -33,6 +33,15 @@ export default function RollPage() {
   const rollMutation = useRoll()
   const overrideMutation = useOverrideRoll()
   const unsnoozeMutation = useUnsnooze()
+
+  async function handleUnsnooze(threadId) {
+    try {
+      await unsnoozeMutation.mutate(threadId)
+      await refetchSession()
+    } catch (error) {
+      console.error('Unsnooze failed:', error)
+    }
+  }
 
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
 
@@ -346,7 +355,7 @@ export default function RollPage() {
                       <p className="flex-1 text-sm text-slate-400 truncate">{thread.title}</p>
                       <button
                         type="button"
-                        onClick={() => unsnoozeMutation.mutate(thread.id)}
+                        onClick={() => handleUnsnooze(thread.id)}
                         disabled={unsnoozeMutation.isPending}
                         className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
                         title="Unsnooze this comic"
