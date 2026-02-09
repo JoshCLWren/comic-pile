@@ -8,6 +8,7 @@ import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
 import { useUnsnooze } from '../hooks/useSnooze'
+import { threadsApi } from '../services/api'
 
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
@@ -42,6 +43,15 @@ export default function RollPage() {
       await refetchSession()
     } catch (error) {
       console.error('Unsnooze failed:', error)
+    }
+  }
+
+  async function handleReadStale() {
+    try {
+      await threadsApi.setPending(staleThread.id)
+      navigate('/rate')
+    } catch (error) {
+      console.error('Failed to set pending thread:', error)
     }
   }
 
@@ -352,7 +362,17 @@ export default function RollPage() {
           </div>
 
           {staleThread && (
-            <div className="px-4 pb-4 shrink-0 animate-[fade-in_0.5s_ease-out]">
+            <div
+              onClick={handleReadStale}
+              className="px-4 pb-4 shrink-0 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  handleReadStale()
+                }
+              }}
+            >
               <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
                 <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
                   <span className="text-sm">⏳</span>
@@ -361,6 +381,9 @@ export default function RollPage() {
                   <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
                     You haven't touched <span className="text-amber-400 font-black">{staleThread.title}</span> in{' '}
                     <span className="text-amber-400 font-black">{staleThread.days}</span> days
+                  </p>
+                  <p className="text-[9px] text-amber-300/70 text-center mt-1">
+                    Tap to read now
                   </p>
                 </div>
               </div>
