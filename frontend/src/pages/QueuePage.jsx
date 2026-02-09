@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Modal from '../components/Modal'
 import PositionSlider from '../components/PositionSlider'
 import Tooltip from '../components/Tooltip'
@@ -11,6 +12,9 @@ import {
   useThreads,
   useUpdateThread,
 } from '../hooks/useThread'
+import { useSession } from '../hooks/useSession'
+import { useUnsnooze } from '../hooks/useSnooze'
+import { threadsApi } from '../services/api'
 
 const DEFAULT_CREATE_STATE = {
   title: '',
@@ -20,7 +24,9 @@ const DEFAULT_CREATE_STATE = {
 }
 
 export default function QueuePage() {
+  const navigate = useNavigate()
   const { data: threads, isPending, refetch } = useThreads()
+  const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const deleteMutation = useDeleteThread()
@@ -28,6 +34,7 @@ export default function QueuePage() {
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const moveToPositionMutation = useMoveToPosition()
+  const unsnoozeMutation = useUnsnooze()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -41,6 +48,8 @@ export default function QueuePage() {
   const [dragOverThreadId, setDragOverThreadId] = useState(null)
   const [repositioningThread, setRepositioningThread] = useState(null)
   const [reorderError, setReorderError] = useState(null)
+  const [selectedThread, setSelectedThread] = useState(null)
+  const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
 
   const activeThreads = threads
     ?.filter((thread) => thread.status === 'active')
@@ -192,6 +201,51 @@ export default function QueuePage() {
     setRepositioningThread(thread)
   }
 
+  function handleThreadClick(thread) {
+    setSelectedThread(thread)
+    setIsActionSheetOpen(true)
+  }
+
+  async function handleAction(action) {
+    if (!selectedThread) return
+
+    setIsActionSheetOpen(false)
+
+    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === selectedThread.id) ?? false
+
+    try {
+      switch (action) {
+        case 'read':
+          await threadsApi.setPending(selectedThread.id)
+          navigate('/rate')
+          break
+        case 'move-front':
+          await moveToFrontMutation.mutate(selectedThread.id)
+          await refetch()
+          break
+        case 'move-back':
+          await moveToBackMutation.mutate(selectedThread.id)
+          await refetch()
+          break
+        case 'snooze':
+          if (isSnoozed) {
+            await unsnoozeMutation.mutate(selectedThread.id)
+          } else {
+            await threadsApi.setPending(selectedThread.id)
+            await unsnoozeMutation.mutate(selectedThread.id)
+          }
+          await refetchSession()
+          await refetch()
+          break
+        case 'edit':
+          openEditModal(selectedThread)
+          break
+      }
+    } catch (error) {
+      console.error('Action failed:', error)
+    }
+  }
+
   const handleRepositionConfirm = async (targetPosition) => {
     if (!repositioningThread) return
 
@@ -251,11 +305,12 @@ export default function QueuePage() {
             return (
               <div
                 key={thread.id}
-                className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 ${
+                className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${
                   isDragOver ? 'border-amber-400/60' : ''
                 }`}
                 onDragOver={handleDragOver(thread.id)}
                 onDrop={handleDrop(thread.id)}
+                onClick={() => handleThreadClick(thread)}
               >
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -271,6 +326,7 @@ export default function QueuePage() {
                           onDragStart={handleDragStart(thread.id)}
                           onDragEnd={handleDragEnd}
                           aria-label="Drag to reorder"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           ⠿
                         </button>
@@ -282,7 +338,10 @@ export default function QueuePage() {
                     <Tooltip content="Edit thread details.">
                       <button
                         type="button"
-                        onClick={() => openEditModal(thread)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEditModal(thread)
+                        }}
                         className="text-slate-500 hover:text-white transition-colors text-sm"
                         aria-label="Edit thread"
                       >
@@ -292,7 +351,10 @@ export default function QueuePage() {
                     <Tooltip content="Delete thread from queue.">
                       <button
                         type="button"
-                        onClick={() => handleDelete(thread.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(thread.id)
+                        }}
                         className="text-slate-500 hover:text-red-400 transition-colors text-xl"
                         aria-label="Delete thread"
                       >
@@ -309,7 +371,10 @@ export default function QueuePage() {
                 <div className="flex gap-2 pt-2">
                   <Tooltip content="Move this thread to the front of the queue.">
                     <button
-                      onClick={() => handleMoveToFront(thread.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleMoveToFront(thread.id)
+                      }}
                       className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                     >
                       Front
@@ -317,7 +382,10 @@ export default function QueuePage() {
                   </Tooltip>
                   <Tooltip content="Choose a specific position in the queue.">
                     <button
-                      onClick={() => openRepositionModal(thread)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openRepositionModal(thread)
+                      }}
                       className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                     >
                       Reposition
@@ -325,7 +393,10 @@ export default function QueuePage() {
                   </Tooltip>
                   <Tooltip content="Move this thread to the back of the queue.">
                     <button
-                      onClick={() => handleMoveToBack(thread.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleMoveToBack(thread.id)
+                      }}
                       className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                     >
                       Back
@@ -519,6 +590,46 @@ export default function QueuePage() {
             onCancel={() => setRepositioningThread(null)}
           />
         )}
+      </Modal>
+
+      <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
+        <div className="space-y-2">
+          <button
+            onClick={() => handleAction('read')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">📖</span>
+            <span>Read Now</span>
+          </button>
+          <button
+            onClick={() => handleAction('move-front')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">⬆️</span>
+            <span>Move to Front</span>
+          </button>
+          <button
+            onClick={() => handleAction('move-back')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">⬇️</span>
+            <span>Move to Back</span>
+          </button>
+          <button
+            onClick={() => handleAction('snooze')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
+            <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
+          </button>
+          <button
+            onClick={() => handleAction('edit')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">✏️</span>
+            <span>Edit Thread</span>
+          </button>
+        </div>
       </Modal>
     </div>
   )

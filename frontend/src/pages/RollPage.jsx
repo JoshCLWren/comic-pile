@@ -8,6 +8,7 @@ import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
 import { useUnsnooze } from '../hooks/useSnooze'
+import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { threadsApi } from '../services/api'
 
 export default function RollPage() {
@@ -22,6 +23,8 @@ export default function RollPage() {
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
+  const [selectedThread, setSelectedThread] = useState(null)
+  const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
@@ -36,6 +39,8 @@ export default function RollPage() {
   const rollMutation = useRoll()
   const overrideMutation = useOverrideRoll()
   const unsnoozeMutation = useUnsnooze()
+  const moveToFrontMutation = useMoveToFront()
+  const moveToBackMutation = useMoveToBack()
 
   async function handleUnsnooze(threadId) {
     try {
@@ -52,6 +57,50 @@ export default function RollPage() {
       navigate('/rate')
     } catch (error) {
       console.error('Failed to set pending thread:', error)
+    }
+  }
+
+  function handleThreadClick(thread) {
+    setSelectedThread(thread)
+    setIsActionSheetOpen(true)
+  }
+
+  async function handleAction(action) {
+    if (!selectedThread) return
+
+    setIsActionSheetOpen(false)
+
+    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === selectedThread.id) ?? false
+
+    try {
+      switch (action) {
+        case 'read':
+          await threadsApi.setPending(selectedThread.id)
+          navigate('/rate')
+          break
+        case 'move-front':
+          await moveToFrontMutation.mutate(selectedThread.id)
+          await refetchSession()
+          break
+        case 'move-back':
+          await moveToBackMutation.mutate(selectedThread.id)
+          await refetchSession()
+          break
+        case 'snooze':
+          if (isSnoozed) {
+            await unsnoozeMutation.mutate(selectedThread.id)
+          } else {
+            await threadsApi.setPending(selectedThread.id)
+            await unsnoozeMutation.mutate(selectedThread.id)
+          }
+          await refetchSession()
+          break
+        case 'edit':
+          navigate(`/queue/${selectedThread.id}/edit`)
+          break
+      }
+    } catch (error) {
+      console.error('Action failed:', error)
     }
   }
 
@@ -342,8 +391,8 @@ export default function RollPage() {
                   return (
                     <div
                       key={thread.id}
-                      onClick={() => setSelectedThreadId(thread.id)}
-                      className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all ${
+                      onClick={() => handleThreadClick(thread)}
+                      className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${
                         isSelected ? 'pool-thread-selected' : ''
                       }`}
                     >
@@ -507,6 +556,46 @@ export default function RollPage() {
             }`}
           >
             Auto
+          </button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
+        <div className="space-y-2">
+          <button
+            onClick={() => handleAction('read')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">📖</span>
+            <span>Read Now</span>
+          </button>
+          <button
+            onClick={() => handleAction('move-front')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">⬆️</span>
+            <span>Move to Front</span>
+          </button>
+          <button
+            onClick={() => handleAction('move-back')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">⬇️</span>
+            <span>Move to Back</span>
+          </button>
+          <button
+            onClick={() => handleAction('snooze')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
+            <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
+          </button>
+          <button
+            onClick={() => handleAction('edit')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">✏️</span>
+            <span>Edit Thread</span>
           </button>
         </div>
       </Modal>
