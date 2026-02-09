@@ -19,6 +19,7 @@ export default function RollPage() {
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
+  const [isDieModalOpen, setIsDieModalOpen] = useState(false)
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
@@ -182,33 +183,44 @@ export default function RollPage() {
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative" id="die-selector">
-            {DICE_LADDER.map((die) => (
+          <div id="die-selector">
+            <div className="hidden md:flex gap-2">
+              {DICE_LADDER.map((die) => (
+                <button
+                  key={die}
+                  onClick={() => handleSetDie(die)}
+                  disabled={setDieMutation.isPending}
+                  className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
+                    die === currentDie
+                      ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  d{die}
+                </button>
+              ))}
               <button
-                key={die}
-                onClick={() => handleSetDie(die)}
-                disabled={setDieMutation.isPending}
-                className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
-                  die === currentDie
-                    ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                onClick={handleClearManualDie}
+                disabled={clearManualDieMutation.isPending}
+                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
+                  session.manual_die
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-400'
                     : 'bg-white/5 border-white/10 hover:bg-white/10'
                 }`}
+                title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}
               >
-                d{die}
+                Auto
               </button>
-            ))}
-            <button
-              onClick={handleClearManualDie}
-              disabled={clearManualDieMutation.isPending}
-              className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
-                session.manual_die
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                  : 'bg-white/5 border-white/10 hover:bg-white/10'
-              }`}
-              title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}
-            >
-              Auto
-            </button>
+            </div>
+            <div className="md:hidden">
+              <button
+                onClick={() => setIsDieModalOpen(true)}
+                disabled={setDieMutation.isPending}
+                className="px-3 py-1 text-[10px] font-black rounded-lg border bg-teal-500/20 border-teal-500 text-teal-400 transition-colors"
+              >
+                d{currentDie}
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
             <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
@@ -412,6 +424,42 @@ export default function RollPage() {
             {overrideMutation.isPending ? 'Overriding...' : 'Override Roll'}
           </button>
         </form>
+      </Modal>
+
+      <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
+        <div className="grid grid-cols-3 gap-2">
+          {DICE_LADDER.map((die) => (
+            <button
+              key={die}
+              onClick={() => {
+                handleSetDie(die)
+                setIsDieModalOpen(false)
+              }}
+              disabled={setDieMutation.isPending}
+              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
+                die === currentDie
+                  ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+              }`}
+            >
+              d{die}
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              handleClearManualDie()
+              setIsDieModalOpen(false)
+            }}
+            disabled={clearManualDieMutation.isPending}
+            className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
+              session.manual_die
+                ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                : 'bg-white/5 border-white/10 hover:bg-white/10'
+            }`}
+          >
+            Auto
+          </button>
+        </div>
       </Modal>
     </div>
   )
