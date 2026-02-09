@@ -150,6 +150,12 @@ async def override_roll(
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
+    snoozed_ids = (
+        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    )
+    snoozed_count = len(snoozed_ids)
+    offset = snoozed_count
+
     event = Event(
         type="roll",
         session_id=current_session_id,

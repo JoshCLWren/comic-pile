@@ -188,23 +188,23 @@ export default function RollPage() {
         
         rollTimeoutRef.current = setTimeout(async () => {
            rollTimeoutRef.current = null
-             try {
-              const response = await rollMutation.mutate()
-              if (response?.result) {
-                setRolledResult(response.result)
-              }
-              if (response?.offset !== undefined) {
-                setRolledOffset(response.offset)
-              }
-              if (response?.thread_id) {
-                setSelectedThreadId(response.thread_id)
-              }
-              setIsRolling(false)
-              navigate('/rate', { state: { rollResponse: response } })
-            } catch (error) {
-              console.error('Roll failed:', error)
-              setIsRolling(false)
-            }
+           try {
+             const response = await rollMutation.mutate()
+             if (response?.result) {
+               setRolledResult(response.result)
+             }
+             if (response?.offset !== undefined) {
+               setRolledOffset(response.offset)
+             }
+             if (response?.thread_id) {
+               setSelectedThreadId(response.thread_id)
+             }
+             setIsRolling(false)
+             navigate('/rate', { state: { rollResponse: response } })
+           } catch (error) {
+             console.error('Roll failed:', error)
+             setIsRolling(false)
+           }
          }, 400)
       }
     }, 80)
