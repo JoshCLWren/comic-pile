@@ -78,6 +78,33 @@ test.describe('Rate Thread Feature', () => {
     await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
   });
 
+  test('should remove unsnoozed thread from roll page without refresh', async ({ authenticatedWithThreadsPage }) => {
+    const snoozeButton = authenticatedWithThreadsPage.locator(SELECTORS.rate.snoozeButton);
+    await snoozeButton.click();
+
+    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+    const snoozedToggle = authenticatedWithThreadsPage.locator('button:has-text("Snoozed")');
+    await expect(snoozedToggle).toBeVisible();
+    await snoozedToggle.click();
+
+    const unsnoozeButtons = authenticatedWithThreadsPage.locator('button[aria-label="Unsnooze this comic"]');
+    await expect(unsnoozeButtons.first()).toBeVisible({ timeout: 5000 });
+
+    await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse((response) =>
+        response.url().includes('/api/snooze/') && response.url().includes('/unsnooze')
+      ),
+      unsnoozeButtons.first().click(),
+    ]);
+
+    await expect(async () => {
+      const count = await snoozedToggle.count();
+      expect(count).toBe(0);
+    }).toPass({ timeout: 5000 });
+  });
+
   test('should update thread rating in database', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
