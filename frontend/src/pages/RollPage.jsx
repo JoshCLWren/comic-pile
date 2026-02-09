@@ -108,7 +108,6 @@ export default function RollPage() {
       console.error('Action failed:', error)
     }
   }
-
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
 
   useEffect(() => {
