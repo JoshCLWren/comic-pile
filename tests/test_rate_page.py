@@ -576,6 +576,62 @@ async def test_rate_api_clears_pending_thread_when_no_threads_remain(
 
 
 @pytest.mark.asyncio
+async def test_rate_api_sets_pending_thread_to_next_available(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /rate/ sets pending_thread_id to next available thread when multiple threads exist."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    thread1 = Thread(
+        title="Test Comic 1",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread1)
+
+    thread2 = Thread(
+        title="Test Comic 2",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread2)
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
+
+    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=thread1.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread1.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread1.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+
+    await async_db.refresh(session)
+    assert session.pending_thread_id is not None
+    assert session.pending_thread_id != thread1.id
+
+
+@pytest.mark.asyncio
 async def test_rate_api_updates_issues_remaining(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
