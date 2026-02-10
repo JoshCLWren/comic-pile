@@ -5,6 +5,8 @@ import RollPage from '../pages/RollPage'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
+import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 
 const navigateSpy = vi.fn()
 
@@ -29,11 +31,21 @@ vi.mock('../hooks/useRoll', () => ({
   useOverrideRoll: vi.fn(),
 }))
 
+vi.mock('../hooks/useQueue', () => ({
+  useMoveToFront: vi.fn(),
+  useMoveToBack: vi.fn(),
+}))
+
+vi.mock('../hooks/useSnooze', () => ({
+  useSnooze: vi.fn(),
+  useUnsnooze: vi.fn(),
+}))
+
 beforeEach(() => {
   useSession.mockReturnValue({
     data: {
       current_die: 6,
-      last_rolled_result: 2,
+      last_rolled_result: null,
       manual_die: null,
       has_restore_point: false,
     },
@@ -49,6 +61,10 @@ beforeEach(() => {
   useClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useOverrideRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
 })
 
 it('renders roll page content and opens override modal', async () => {
