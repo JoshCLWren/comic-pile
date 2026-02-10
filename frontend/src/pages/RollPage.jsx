@@ -246,7 +246,7 @@ export default function RollPage() {
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
-          {session.snoozed_threads?.length > 0 && (
+          {session?.snoozed_threads?.length > 0 && (
             <div className="flex items-center gap-2 mt-1">
               <span className="modifier-badge text-[10px] font-black text-teal-400">+{session.snoozed_threads.length}</span>
               <span className="text-[9px] text-slate-500 uppercase tracking-wider">snoozed offset active</span>
@@ -428,6 +428,7 @@ export default function RollPage() {
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
                   handleReadStale()
                 }
               }}
