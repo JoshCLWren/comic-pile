@@ -499,7 +499,7 @@ async def test_get_thread_with_notes(
 
 @pytest.mark.asyncio
 async def test_list_threads_includes_notes(
-    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession, test_username: str
 ) -> None:
     """Test GET /api/threads/ includes notes field in all threads."""
     _ = sample_data
@@ -507,7 +507,7 @@ async def test_list_threads_includes_notes(
 
     from app.models import Thread, User
 
-    result = await async_db.execute(select(User).where(User.username == "test_user"))
+    result = await async_db.execute(select(User).where(User.username == test_username))
     user = result.scalar_one()
     thread_with_notes = Thread(
         title="Flash",
