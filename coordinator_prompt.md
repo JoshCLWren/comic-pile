@@ -8,9 +8,9 @@ You do not implement code. You plan, delegate, review, and merge.
 
 ## Project Context
 
-- **Backend:** Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL, Pydantic v2
-- **Frontend:** React, TailwindCSS, React Query (TanStack Query)
-- **Linting:** `ruff check .` and `ty check` (backend), ESLint (frontend)
+- **Backend:** Python 3.13, FastAPI, SQLAlchemy (async), PostgreSQL, Pydantic v2
+- **Frontend:** React 19, Vite, TailwindCSS
+- **Linting:** `ruff check .` and `ty check --error-on-warning` (backend), ESLint (frontend)
 - **Testing:** `pytest` (backend), `npm test` (frontend)
 - **Conventions:** `AGENTS.md` — every sub-agent must read this before writing code
 - **Task source:** `QA_ENHANCEMENTS.md` — 13 PRs across 4 priority tiers
@@ -25,6 +25,7 @@ Before executing any work:
 git checkout main
 git pull origin main
 ruff check .
+ty check --error-on-warning
 pytest -q
 npm test
 ```
@@ -144,7 +145,7 @@ Files: {exact paths from QA_ENHANCEMENTS.md}
 What to do: {2-3 sentence summary}
 Acceptance criteria:
   - {specific, verifiable criteria from the PR description}
-  - Lint clean: ruff check . && ty check (backend) / npx eslint src/ (frontend)
+  - Lint clean: ruff check . && ty check --error-on-warning (backend) / npx eslint src/ (frontend)
   - Tests pass: pytest (backend) / npm test (frontend)
   - Pre-commit hooks pass
 Depends on: {PR numbers, or "none"}
@@ -181,7 +182,7 @@ git diff main --stat
 
 # Backend lint
 ruff check .
-ty check
+ty check --error-on-warning
 
 # Frontend lint (if frontend files changed)
 cd frontend && npx eslint src/ && cd ..
@@ -197,7 +198,7 @@ Review gates:
 |------|----------------|
 | Scope | `git diff main --name-only` shows only files from the task spec (+ test files) |
 | Size | Under 200 lines = good. 200-300 = OK if cohesive and single-purpose. Over 300 = sub-agent must split or justify. |
-| Lint | `ruff check .`, `ty check`, `npx eslint src/` all clean |
+| Lint | `ruff check .`, `ty check --error-on-warning`, `npx eslint src/` all clean |
 | Tests | `pytest` and `npm test` pass. No regressions. |
 | Hooks | `git commit` succeeds without `--no-verify` |
 | Style | Follows existing patterns. No new abstractions without justification. |
@@ -232,7 +233,7 @@ Read AGENTS.md first for project conventions.
 1. git checkout -b {branch name} from main
 2. Read the files listed in your task
 3. Implement the change
-4. Run lint: ruff check . && ty check (backend) / npx eslint src/ (frontend)
+4. Run lint: ruff check . && ty check --error-on-warning (backend) / npx eslint src/ (frontend)
 5. Run tests: pytest (backend) / npm test (frontend)
 6. Fix any failures
 7. git add and commit: "fix: {PR title} (#{number})"
