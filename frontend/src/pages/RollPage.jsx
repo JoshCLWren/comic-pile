@@ -7,7 +7,7 @@ import { DICE_LADDER } from '../components/diceLadder'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
-import { useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { threadsApi } from '../services/api'
 
@@ -39,6 +39,7 @@ export default function RollPage() {
   const rollMutation = useRoll()
   const overrideMutation = useOverrideRoll()
   const unsnoozeMutation = useUnsnooze()
+  const snoozeMutation = useSnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
 
@@ -91,7 +92,7 @@ export default function RollPage() {
             await unsnoozeMutation.mutate(selectedThread.id)
           } else {
             await threadsApi.setPending(selectedThread.id)
-            await unsnoozeMutation.mutate(selectedThread.id)
+            await snoozeMutation.mutate()
           }
           await refetchSession()
           break

@@ -13,7 +13,7 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import { useSession } from '../hooks/useSession'
-import { useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api'
 
 const DEFAULT_CREATE_STATE = {
@@ -35,6 +35,7 @@ export default function QueuePage() {
   const moveToBackMutation = useMoveToBack()
   const moveToPositionMutation = useMoveToPosition()
   const unsnoozeMutation = useUnsnooze()
+  const snoozeMutation = useSnooze()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -232,7 +233,7 @@ export default function QueuePage() {
             await unsnoozeMutation.mutate(selectedThread.id)
           } else {
             await threadsApi.setPending(selectedThread.id)
-            await unsnoozeMutation.mutate(selectedThread.id)
+            await snoozeMutation.mutate()
           }
           await refetchSession()
           await refetch()

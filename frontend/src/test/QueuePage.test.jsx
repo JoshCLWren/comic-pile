@@ -12,7 +12,7 @@ import {
 } from '../hooks/useThread'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
-import { useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 
 vi.mock('../hooks/useThread', () => ({
   useThreads: vi.fn(),
@@ -33,6 +33,7 @@ vi.mock('../hooks/useSession', () => ({
 }))
 
 vi.mock('../hooks/useSnooze', () => ({
+  useSnooze: vi.fn(),
   useUnsnooze: vi.fn(),
 }))
 
@@ -57,6 +58,7 @@ beforeEach(() => {
     refetch: vi.fn(),
   })
   useUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
 })
 
 it('renders queue items and opens create modal', async () => {
