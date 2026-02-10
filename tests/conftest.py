@@ -170,6 +170,14 @@ async def default_user(async_db: SQLAlchemyAsyncSession) -> User:
     return await _ensure_default_user_async(async_db)
 
 
+@pytest.fixture(scope="function")
+def test_username() -> str:
+    """Get process-specific test username for direct database queries."""
+    import os
+
+    return f"test_user_{os.getpid()}"
+
+
 def get_test_database_url() -> str:
     """Get test database URL from environment (PostgreSQL only)."""
     test_db_url = os.getenv("TEST_DATABASE_URL")
