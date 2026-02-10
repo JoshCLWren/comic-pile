@@ -127,10 +127,9 @@ export const test = base.extend<TestFixtures>({
   freshUserPage: async ({ page, request }, use) => {
     const timestamp = Date.now();
     const counter = Math.floor(Math.random() * 10000);
-    const workerId = process.pid;
     const testUser = {
-      username: `auth_fresh_${timestamp}_${counter}_${workerId}`,
-      email: `auth_fresh_${timestamp}_${counter}_${workerId}@example.com`,
+      username: `auth_fresh_${timestamp}_${counter}`,
+      email: `auth_fresh_${timestamp}_${counter}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -160,10 +159,9 @@ export const test = base.extend<TestFixtures>({
   authenticatedPage: async ({ page, request }, use) => {
     const timestamp = Date.now();
     const counter = Math.floor(Math.random() * 10000);
-    const workerId = process.pid;
     const testUser = {
-      username: `auth_${timestamp}_${counter}_${workerId}`,
-      email: `auth_${timestamp}_${counter}_${workerId}@example.com`,
+      username: `auth_${timestamp}_${counter}`,
+      email: `auth_${timestamp}_${counter}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -183,10 +181,9 @@ export const test = base.extend<TestFixtures>({
   authenticatedWithThreadsPage: async ({ page, request }, use) => {
     const timestamp = Date.now();
     const counter = Math.floor(Math.random() * 10000);
-    const workerId = process.pid;
     const testUser = {
-      username: `auth_threads_${timestamp}_${counter}_${workerId}`,
-      email: `auth_threads_${timestamp}_${counter}_${workerId}@example.com`,
+      username: `auth_threads_${timestamp}_${counter}`,
+      email: `auth_threads_${timestamp}_${counter}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -207,10 +204,9 @@ export const test = base.extend<TestFixtures>({
   testUser: async ({}, use) => {
     const timestamp = Date.now();
     const counter = Math.floor(Math.random() * 10000);
-    const workerId = process.pid;
     const testUser = {
-      username: `test_${timestamp}_${counter}_${workerId}`,
-      email: `test_${timestamp}_${counter}_${workerId}@example.com`,
+      username: `test_${timestamp}_${counter}`,
+      email: `test_${timestamp}_${counter}@example.com`,
       password: 'TestPass123!',
     };
     await use(testUser);
