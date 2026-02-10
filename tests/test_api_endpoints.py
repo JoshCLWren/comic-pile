@@ -295,13 +295,15 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
 
 
 @pytest.mark.asyncio
-async def test_get_session_current(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_get_session_current(
+    auth_client: AsyncClient, async_db: AsyncSession, test_username: str
+) -> None:
     """Test GET /session/current/ returns active session."""
     from datetime import UTC, datetime
 
     from app.models import Session as SessionModel, User
 
-    user_result = await async_db.execute(select(User).where(User.username == "test_user"))
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
     session = SessionModel(start_die=6, user_id=user.id, started_at=datetime.now(UTC))
     async_db.add(session)
@@ -342,7 +344,7 @@ async def test_get_session_current_creates_session(
 
 @pytest.mark.asyncio
 async def test_get_session_current_uses_selected_thread_id(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, test_username: str
 ) -> None:
     """Test GET /sessions/current/ returns active thread from selected_thread_id."""
     from datetime import UTC, datetime
@@ -350,10 +352,10 @@ async def test_get_session_current_uses_selected_thread_id(
     from app.models import Event, Thread, User
     from app.models import Session as SessionModel
 
-    user_result = await async_db.execute(select(User).where(User.username == "test_user"))
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one_or_none()
     if not user:
-        user = User(username="test_user", created_at=datetime.now(UTC))
+        user = User(username=test_username, created_at=datetime.now(UTC))
         async_db.add(user)
         await async_db.commit()
         await async_db.refresh(user)
@@ -456,16 +458,18 @@ async def test_get_session_details(auth_client: AsyncClient, sample_data: dict) 
 
 
 @pytest.mark.asyncio
-async def test_get_thread_with_notes(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_get_thread_with_notes(
+    auth_client: AsyncClient, async_db: AsyncSession, test_username: str
+) -> None:
     """Test GET /api/threads/{id} returns thread with notes field."""
     from datetime import UTC, datetime
 
     from app.models import Thread, User
 
-    result = await async_db.execute(select(User).where(User.username == "test_user"))
+    result = await async_db.execute(select(User).where(User.username == test_username))
     user = result.scalar_one_or_none()
     if not user:
-        user = User(username="test_user", created_at=datetime.now(UTC))
+        user = User(username=test_username, created_at=datetime.now(UTC))
         async_db.add(user)
         await async_db.commit()
         await async_db.refresh(user)
@@ -546,14 +550,14 @@ async def test_list_threads_includes_notes(
 
 @pytest.mark.asyncio
 async def test_delete_thread_clears_pending_thread_id(
-    auth_client: AsyncClient, async_db: AsyncSession
+    auth_client: AsyncClient, async_db: AsyncSession, test_username: str
 ) -> None:
     """Test that deleting a thread clears pending_thread_id from sessions."""
     from datetime import UTC, datetime
 
     from app.models import Session as SessionModel, Thread, User
 
-    result = await async_db.execute(select(User).where(User.username == "test_user"))
+    result = await async_db.execute(select(User).where(User.username == test_username))
     user = result.scalar_one()
     thread = Thread(
         title="Batman",
@@ -589,8 +593,8 @@ async def test_delete_thread_clears_pending_thread_id(
 
 
 @pytest.mark.asyncio
-async def test_delete_thread_integrity_error_pending_thread_id(
-    auth_client: AsyncClient, async_db: AsyncSession
+async def test_delete_thread_with_pending_thread_id_does_not_crash(
+    auth_client: AsyncClient, async_db: AsyncSession, test_username: str
 ) -> None:
     """Regression test for BUG-131: IntegrityError when deleting thread with pending_thread_id.
 
@@ -602,7 +606,7 @@ async def test_delete_thread_integrity_error_pending_thread_id(
 
     from app.models import Session as SessionModel, Thread, User
 
-    result = await async_db.execute(select(User).where(User.username == "test_user"))
+    result = await async_db.execute(select(User).where(User.username == test_username))
     user = result.scalar_one()
     thread = Thread(
         title="Test Thread",
@@ -611,6 +615,16 @@ async def test_delete_thread_integrity_error_pending_thread_id(
         queue_position=1,
         status="active",
         user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    session = SessionModel(
+        start_die=6,
+        user_id=user.id,
+        pending_thread_id=thread.id,
+        started_at=datetime.now(UTC),
     )
     async_db.add(thread)
     await async_db.commit()
