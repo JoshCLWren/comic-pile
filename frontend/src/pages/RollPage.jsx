@@ -40,6 +40,7 @@ export default function RollPage() {
   const overrideMutation = useOverrideRoll()
   const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
+  const snoozeMutation = useSnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
 
