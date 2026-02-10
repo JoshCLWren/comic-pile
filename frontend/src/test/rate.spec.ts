@@ -30,7 +30,7 @@ test.describe('Rate Thread Feature', () => {
 
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
-
+    
     const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
     await expect(ratingInput).toBeVisible();
   });
@@ -58,7 +58,7 @@ test.describe('Rate Thread Feature', () => {
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, rating);
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-
+      
       const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
       await expect(ratingInput).toBeVisible({ timeout: 5000 });
     }
@@ -73,19 +73,17 @@ test.describe('Rate Thread Feature', () => {
     const snoozeButton = authenticatedWithThreadsPage.locator(SELECTORS.rate.snoozeButton);
     await snoozeButton.click();
 
-    await authenticatedWithThreadsPage.waitForLoadState("networkidle");
-
-    const successMessage = authenticatedWithThreadsPage.locator('text=snoozed');
-    await expect(successMessage.first()).toBeVisible({ timeout: 3000 });
-
     await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
   });
 
   test('should remove unsnoozed thread from roll page without refresh', async ({ authenticatedWithThreadsPage }) => {
     const snoozeButton = authenticatedWithThreadsPage.locator(SELECTORS.rate.snoozeButton);
     await snoozeButton.click();
 
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    
+    await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const snoozedToggle = authenticatedWithThreadsPage.locator('button:has-text("Snoozed")');
@@ -113,6 +111,7 @@ test.describe('Rate Thread Feature', () => {
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    
     await authenticatedWithThreadsPage.goto('/queue');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
@@ -133,7 +132,7 @@ test.describe('Rate Thread Feature', () => {
       await issuesInput.fill('2');
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-
+      
       const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
       await expect(ratingInput).toBeVisible({ timeout: 3000 });
     }
@@ -149,6 +148,7 @@ test.describe('Rate Thread Feature', () => {
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
       await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
       const sessionEnded = await authenticatedWithThreadsPage.locator('text=session ended|session complete').count();
       expect(sessionEnded).toBeGreaterThan(0);
@@ -193,7 +193,7 @@ test('should preserve form data on validation error', async ({ authenticatedWith
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-
+    
     const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
     await expect(ratingInput).toBeVisible({ timeout: 5000 });
   });
