@@ -120,27 +120,34 @@ async def ensure_test_schema() -> None:
 
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
+    import os
+
     result = await db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
     if not user:
-        result = await db.execute(select(User).where(User.username == "test_user"))
+        username = f"test_user_{os.getpid()}"
+        result = await db.execute(select(User).where(User.username == username))
         user = result.scalar_one_or_none()
         if not user:
-            user = User(username="test_user", created_at=datetime.now(UTC))
+            user = User(username=username, created_at=datetime.now(UTC))
             db.add(user)
             try:
                 await db.commit()
             except IntegrityError:
                 await db.rollback()
-                result = await db.execute(select(User).where(User.username == "test_user"))
+                result = await db.execute(select(User).where(User.username == username))
                 user = result.scalar_one()
             else:
                 await db.refresh(user)
     return user
 
 
-async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str = "test_user") -> User:
+async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | None = None) -> User:
     """Get or create user with given username (async)."""
+    import os
+
+    if username is None:
+        username = f"test_user_{os.getpid()}"
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
     if not user:
@@ -251,11 +258,14 @@ async def sample_data(
     async_db: SQLAlchemyAsyncSession,
 ) -> dict[str, Thread | SessionModel | Event | User | list]:
     """Create sample threads, sessions for async testing."""
+    import os
+
     now = datetime.now(UTC)
-    user = await async_db.execute(select(User).where(User.username == "test_user"))
+    username = f"test_user_{os.getpid()}"
+    user = await async_db.execute(select(User).where(User.username == username))
     user = user.scalar_one_or_none()
     if not user:
-        user = User(username="test_user", id=1, created_at=now)
+        user = User(username=username, id=1, created_at=now)
         async_db.add(user)
         await async_db.commit()
         await async_db.refresh(user)
@@ -381,15 +391,17 @@ async def client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient
 @pytest_asyncio.fixture(scope="function")
 async def auth_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
     """httpx.AsyncClient with authentication headers for API tests."""
+    import os
     from app.auth import create_access_token
 
+    username = f"test_user_{os.getpid()}"
     app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        result = await async_db.execute(select(User).where(User.username == "test_user"))
+        result = await async_db.execute(select(User).where(User.username == username))
         user = result.scalar_one_or_none()
         if not user:
-            user = User(username="test_user", created_at=datetime.now(UTC))
+            user = User(username=username, created_at=datetime.now(UTC))
             async_db.add(user)
             await async_db.flush()
             await async_db.refresh(user)
