@@ -112,7 +112,6 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 user = User(id=user_id, username=f"user_{user_id}")
                 db.add(user)
                 await db.commit()
-                await db.refresh(user)
 
             cutoff_time = datetime.now(UTC) - timedelta(hours=session_gap_hours)
             result = await db.execute(
