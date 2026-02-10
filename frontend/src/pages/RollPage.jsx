@@ -9,7 +9,7 @@ import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
-import { threadsApi } from '../services/api'
+import { rollApi, threadsApi } from '../services/api'
 
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
@@ -54,7 +54,7 @@ export default function RollPage() {
 
   async function handleReadStale() {
     try {
-      await threadsApi.setPending(staleThread.id)
+      await rollApi.override({ thread_id: staleThread.id })
       navigate('/rate')
     } catch (error) {
       console.error('Failed to set pending thread:', error)
@@ -76,7 +76,7 @@ export default function RollPage() {
     try {
       switch (action) {
         case 'read':
-          await threadsApi.setPending(selectedThread.id)
+          await rollApi.override({ thread_id: selectedThread.id })
           navigate('/rate')
           break
         case 'move-front':

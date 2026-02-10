@@ -438,6 +438,23 @@ async def set_pending_thread(
     current_session = await get_or_create(db, user_id=current_user.id)
     current_session.pending_thread_id = thread_id
     current_session.pending_thread_updated_at = datetime.now(UTC)
+
+    from app.models import Event
+    from comic_pile.session import get_current_die
+
+    current_session_id = current_session.id
+    current_die = await get_current_die(current_session_id, db)
+
+    event = Event(
+        type="roll",
+        session_id=current_session_id,
+        selected_thread_id=thread_id,
+        die=current_die,
+        result=0,
+        selection_method="set-pending",
+    )
+    db.add(event)
+
     await db.commit()
 
     return {"status": "pending_set", "thread_id": thread_id}

@@ -13,8 +13,8 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import { useSession } from '../hooks/useSession'
-import { useUnsnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { rollApi, threadsApi } from '../services/api'
 
 const DEFAULT_CREATE_STATE = {
   title: '',
@@ -34,6 +34,7 @@ export default function QueuePage() {
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const moveToPositionMutation = useMoveToPosition()
+  const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -216,7 +217,7 @@ export default function QueuePage() {
     try {
       switch (action) {
         case 'read':
-          await threadsApi.setPending(selectedThread.id)
+          await rollApi.override({ thread_id: selectedThread.id })
           navigate('/rate')
           break
         case 'move-front':
@@ -232,7 +233,7 @@ export default function QueuePage() {
             await unsnoozeMutation.mutate(selectedThread.id)
           } else {
             await threadsApi.setPending(selectedThread.id)
-            await unsnoozeMutation.mutate(selectedThread.id)
+            await snoozeMutation.mutate()
           }
           await refetchSession()
           await refetch()
