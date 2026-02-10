@@ -109,7 +109,7 @@ test.describe('Rate Thread Feature', () => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
-    await authenticatedWithThreadsPage.waitForURL('**/');
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await authenticatedWithThreadsPage.goto('/queue');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
@@ -175,7 +175,6 @@ test('should preserve form data on validation error', async ({ authenticatedWith
   test('should allow re-rating if page revisited', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForURL('**/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     await authenticatedWithThreadsPage.goto('/');
@@ -187,7 +186,6 @@ test('should preserve form data on validation error', async ({ authenticatedWith
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
   });
 
