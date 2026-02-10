@@ -170,7 +170,7 @@ async def default_user(async_db: SQLAlchemyAsyncSession) -> User:
     return await _ensure_default_user_async(async_db)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def test_username() -> str:
     """Get process-specific test username for direct database queries."""
     import os
@@ -397,19 +397,19 @@ async def client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient
 
 
 @pytest_asyncio.fixture(scope="function")
-async def auth_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient]:
+async def auth_client(
+    async_db: SQLAlchemyAsyncSession, test_username: str
+) -> AsyncGenerator[AsyncClient]:
     """httpx.AsyncClient with authentication headers for API tests."""
-    import os
     from app.auth import create_access_token
 
-    username = f"test_user_{os.getpid()}"
     app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        result = await async_db.execute(select(User).where(User.username == username))
+        result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
-            user = User(username=username, created_at=datetime.now(UTC))
+            user = User(username=test_username, created_at=datetime.now(UTC))
             async_db.add(user)
             await async_db.flush()
             await async_db.refresh(user)
