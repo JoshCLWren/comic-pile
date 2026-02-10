@@ -437,6 +437,14 @@ async def set_pending_thread(
 
     current_session = await get_or_create(db, user_id=current_user.id)
     current_session.pending_thread_id = thread_id
+    current_session.pending_thread_updated_at = datetime.now(UTC)
+
+    event = Event(
+        type="roll",
+        session_id=current_session.id,
+        data={"selection_method": "stale_reminder", "result": 0},
+    )
+    db.add(event)
     await db.commit()
 
     return {"status": "pending_set", "thread_id": thread_id}
