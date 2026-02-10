@@ -54,7 +54,7 @@ export default function RollPage() {
 
   async function handleReadStale() {
     try {
-      await threadsApi.setPending(staleThread.id)
+      await overrideRollMutation.mutate({ thread_id: staleThread.id })
       navigate('/rate')
     } catch (error) {
       console.error('Failed to set pending thread:', error)
@@ -76,7 +76,7 @@ export default function RollPage() {
     try {
       switch (action) {
         case 'read':
-          await threadsApi.setPending(selectedThread.id)
+          await overrideRollMutation.mutate({ thread_id: selectedThread.id })
           navigate('/rate')
           break
         case 'move-front':

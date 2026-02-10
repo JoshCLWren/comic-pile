@@ -208,7 +208,6 @@ async def rate_thread(
     available_threads = [t for t in threads if t.issues_remaining > 0]
 
     if available_threads:
-        new_die = await get_current_die(current_session_id, db)
         pool_size = min(new_die, len(available_threads))
         selected_index = random.randint(0, pool_size - 1)
         next_thread = available_threads[selected_index]

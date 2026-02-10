@@ -439,4 +439,7 @@ async def set_pending_thread(
     current_session.pending_thread_id = thread_id
     await db.commit()
 
+    if clear_cache:
+        clear_cache()
+
     return {"status": "pending_set", "thread_id": thread_id}

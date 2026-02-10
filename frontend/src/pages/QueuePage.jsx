@@ -14,6 +14,7 @@ import {
 } from '../hooks/useThread'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useOverrideRoll } from '../hooks/useRoll'
 import { threadsApi } from '../services/api'
 
 const DEFAULT_CREATE_STATE = {
@@ -36,6 +37,7 @@ export default function QueuePage() {
   const moveToPositionMutation = useMoveToPosition()
   const unsnoozeMutation = useUnsnooze()
   const snoozeMutation = useSnooze()
+  const overrideRollMutation = useOverrideRoll()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -217,7 +219,7 @@ export default function QueuePage() {
     try {
       switch (action) {
         case 'read':
-          await threadsApi.setPending(selectedThread.id)
+          await overrideRollMutation.mutate({ thread_id: selectedThread.id })
           navigate('/rate')
           break
         case 'move-front':
