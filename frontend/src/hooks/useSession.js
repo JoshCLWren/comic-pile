@@ -29,7 +29,7 @@ export function useSession() {
     fetchSession()
   }, [fetchSession])
 
-  return { data, isPending, isError, error, refetch: fetchSession }
+  return { data, setData, isPending, isError, error, refetch: fetchSession }
 }
 
 export function useSessions(params = EMPTY_PARAMS) {
