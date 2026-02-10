@@ -10,6 +10,8 @@ class RollResponse(BaseModel):
     title: str
     die_size: int
     result: int
+    offset: int
+    snoozed_count: int
 
 
 class OverrideRequest(BaseModel):

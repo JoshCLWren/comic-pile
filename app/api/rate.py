@@ -23,6 +23,53 @@ from comic_pile.session import get_current_die
 router = APIRouter()
 
 
+async def select_next_thread(session_id: int, user_id: int, db: AsyncSession) -> Thread | None:
+    """Select the next thread for reading after rating.
+
+    Args:
+        session_id: The current session ID.
+        user_id: The user ID to select threads for.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        The selected thread, or None if no threads available.
+    """
+    from comic_pile.queue import get_roll_pool
+    import random
+
+    snoozed_ids = []
+    result = await db.execute(select(SessionModel).where(SessionModel.id == session_id))
+    session = result.scalar_one_or_none()
+    if session and session.snoozed_thread_ids:
+        snoozed_ids = list(session.snoozed_thread_ids)
+
+    threads = await get_roll_pool(user_id, db, snoozed_ids)
+    available_threads = [t for t in threads if t.issues_remaining > 0]
+
+    if not available_threads:
+        return None
+
+    new_die = await get_current_die(session_id, db)
+    pool_size = min(new_die, len(available_threads))
+    selected_index = random.randint(0, pool_size - 1)
+    next_thread = available_threads[selected_index]
+
+    from app.models import Event
+
+    event = Event(
+        type="roll",
+        session_id=session_id,
+        selected_thread_id=next_thread.id,
+        die=new_die,
+        result=selected_index + 1,
+        selection_method="auto-next",
+    )
+    db.add(event)
+    await db.flush()
+
+    return next_thread
+
+
 async def snapshot_thread_states(
     db: AsyncSession, session_id: int, event_id: int, user_id: int
 ) -> None:
@@ -189,6 +236,8 @@ async def rate_thread(
     else:
         await move_to_back(thread.id, user_id, db)
 
+    finish_session = rate_data.finish_session
+
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
@@ -199,8 +248,18 @@ async def rate_thread(
     if clear_cache:
         clear_cache()
 
-    current_session.pending_thread_id = None
-    current_session.pending_thread_updated_at = None
+    if not finish_session:
+        next_thread = await select_next_thread(current_session_id, user_id, db)
+
+        if next_thread:
+            current_session.pending_thread_id = next_thread.id
+            current_session.pending_thread_updated_at = datetime.now(UTC)
+        else:
+            current_session.pending_thread_id = None
+            current_session.pending_thread_updated_at = None
+    else:
+        current_session.pending_thread_id = None
+        current_session.pending_thread_updated_at = None
 
     await db.flush()
     await db.refresh(event)

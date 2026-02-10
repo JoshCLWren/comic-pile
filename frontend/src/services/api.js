@@ -94,6 +94,7 @@ export const threadsApi = {
   delete: (id) => api.delete(`/threads/${id}`),
   reactivate: (data) => api.post('/threads/reactivate', data),
   listStale: (days = 30) => api.get('/threads/stale', { params: { days } }),
+  setPending: (id) => api.post(`/threads/${id}/set-pending`),
 }
 
 export const rollApi = {

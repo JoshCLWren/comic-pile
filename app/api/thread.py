@@ -404,3 +404,57 @@ async def reactivate_thread(
     if clear_cache:
         clear_cache()
     return thread_to_response(thread)
+
+
+@router.post("/{thread_id}/set-pending")
+async def set_pending_thread(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str | int]:
+    """Set a thread as pending for rating (skip roll).
+
+    Args:
+        thread_id: The thread ID to set as pending.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Status indicating thread was set as pending.
+
+    Raises:
+        HTTPException: If thread not found.
+    """
+    thread = await db.get(Thread, thread_id)
+
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    from comic_pile.session import get_or_create
+
+    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session.pending_thread_id = thread_id
+    current_session.pending_thread_updated_at = datetime.now(UTC)
+
+    from app.models import Event
+    from comic_pile.session import get_current_die
+
+    current_session_id = current_session.id
+    current_die = await get_current_die(current_session_id, db)
+
+    event = Event(
+        type="roll",
+        session_id=current_session_id,
+        selected_thread_id=thread_id,
+        die=current_die,
+        result=0,
+        selection_method="set-pending",
+    )
+    db.add(event)
+
+    await db.commit()
+
+    return {"status": "pending_set", "thread_id": thread_id}
