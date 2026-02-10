@@ -53,7 +53,7 @@ fi
 # Run tests
 echo ""
 echo "🧪 Running tests..."
-if python -m pytest --cov=comic_pile --cov-report=term-missing --cov-fail-under=96 -x; then
+if python -m pytest -p no:xdist --cov=comic_pile --cov-report=term-missing --cov-fail-under=96 -x; then
     echo "✅ Tests passed"
 else
     echo "❌ Tests failed - aborting push"
