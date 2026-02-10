@@ -71,7 +71,9 @@ async def user_b_thread(async_db: AsyncSession, user_b: User) -> Thread:
 
 
 @pytest.mark.asyncio
-async def test_thread_scoped_by_user_on_list(client: AsyncClient, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread) -> None:
+async def test_thread_scoped_by_user_on_list(
+    client: AsyncClient, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
+) -> None:
     """Test list threads only returns threads for authenticated user."""
     _ = user_a
     _ = user_b
@@ -103,7 +105,9 @@ async def test_thread_scoped_by_user_on_list(client: AsyncClient, user_a: User, 
 
 
 @pytest.mark.asyncio
-async def test_thread_get_returns_404_for_other_users_thread(client: AsyncClient, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread) -> None:
+async def test_thread_get_returns_404_for_other_users_thread(
+    client: AsyncClient, user_a: User, user_b: User, user_a_thread: Thread, user_b_thread: Thread
+) -> None:
     """Test GET /api/threads/{id} returns 404 for other users' threads."""
     _ = user_a
     _ = user_b
@@ -131,7 +135,9 @@ async def test_thread_get_returns_404_for_other_users_thread(client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_thread_update_fails_for_other_users_thread(client: AsyncClient, async_db: AsyncSession, user_a: User, user_b: User, user_b_thread: Thread) -> None:
+async def test_thread_update_fails_for_other_users_thread(
+    client: AsyncClient, async_db: AsyncSession, user_a: User, user_b: User, user_b_thread: Thread
+) -> None:
     """Test PUT /api/threads/{id} fails for other users' threads."""
     _ = user_a
     _ = user_b
@@ -166,7 +172,9 @@ async def test_thread_update_fails_for_other_users_thread(client: AsyncClient, a
 
 
 @pytest.mark.asyncio
-async def test_thread_delete_fails_for_other_users_thread(client: AsyncClient, async_db: AsyncSession, user_a: User, user_b: User, user_b_thread: Thread) -> None:
+async def test_thread_delete_fails_for_other_users_thread(
+    client: AsyncClient, async_db: AsyncSession, user_a: User, user_b: User, user_b_thread: Thread
+) -> None:
     """Test DELETE /api/threads/{id} fails for other users' threads."""
     _ = user_a
     _ = user_b
@@ -206,7 +214,9 @@ async def test_thread_delete_fails_for_other_users_thread(client: AsyncClient, a
 
 
 @pytest.mark.asyncio
-async def test_thread_creation_sets_user_id(client: AsyncClient, async_db: AsyncSession, user_a: User, user_b: User) -> None:
+async def test_thread_creation_sets_user_id(
+    client: AsyncClient, async_db: AsyncSession, user_a: User, user_b: User
+) -> None:
     """Test POST /api/threads/ sets user_id from authenticated user."""
     login_a = await client.post(
         "/api/auth/login", json={"username": "test_user_a", "password": "password"}
@@ -243,3 +253,84 @@ async def test_thread_creation_sets_user_id(client: AsyncClient, async_db: Async
     assert len(all_threads) == 2
     for thread in all_threads:
         assert thread.user_id in (user_a.id, user_b.id)
+
+
+@pytest.mark.asyncio
+async def test_set_pending_thread_success(
+    client: AsyncClient, async_db: AsyncSession, user_a: User, user_a_thread: Thread
+) -> None:
+    """Test POST /api/threads/{id}/set-pending sets pending thread in session."""
+    from app.models import Session as SessionModel
+
+    _ = user_a
+    login_a = await client.post(
+        "/api/auth/login", json={"username": "test_user_a", "password": "password"}
+    )
+    assert login_a.status_code == 200
+    token_a = login_a.json()["access_token"]
+
+    response = await client.post(
+        f"/api/threads/{user_a_thread.id}/set-pending",
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "pending_set"
+    assert data["thread_id"] == user_a_thread.id
+
+    result = await async_db.execute(select(SessionModel).where(SessionModel.user_id == user_a.id))
+    session = result.scalar_one_or_none()
+    assert session is not None
+    assert session.pending_thread_id == user_a_thread.id
+    assert session.pending_thread_updated_at is not None
+
+
+@pytest.mark.asyncio
+async def test_set_pending_thread_returns_404_for_other_users_thread(
+    client: AsyncClient, user_a: User, user_b: User, user_b_thread: Thread
+) -> None:
+    """Test POST /api/threads/{id}/set-pending returns 404 for other users' threads."""
+    _ = user_a
+    _ = user_b
+    login_a = await client.post(
+        "/api/auth/login", json={"username": "test_user_a", "password": "password"}
+    )
+    assert login_a.status_code == 200
+    token_a = login_a.json()["access_token"]
+
+    response = await client.post(
+        f"/api/threads/{user_b_thread.id}/set-pending",
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_set_pending_thread_creates_roll_event(
+    client: AsyncClient, async_db: AsyncSession, user_a: User, user_a_thread: Thread
+) -> None:
+    """Test POST /api/threads/{id}/set-pending creates a roll event with selection_method='stale_reminder'."""
+    from app.models import Event
+
+    _ = user_a
+    login_a = await client.post(
+        "/api/auth/login", json={"username": "test_user_a", "password": "password"}
+    )
+    assert login_a.status_code == 200
+    token_a = login_a.json()["access_token"]
+
+    response = await client.post(
+        f"/api/threads/{user_a_thread.id}/set-pending",
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert response.status_code == 200
+
+    result = await async_db.execute(
+        select(Event).where(Event.type == "roll").order_by(Event.timestamp.desc())
+    )
+    event = result.scalar_one_or_none()
+    assert event is not None
+    assert event.selection_method == "stale_reminder"
+    assert event.selected_thread_id == user_a_thread.id
+    assert event.result == 0
+    assert event.die == 0
