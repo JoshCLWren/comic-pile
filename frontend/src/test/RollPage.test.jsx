@@ -33,7 +33,7 @@ beforeEach(() => {
   useSession.mockReturnValue({
     data: {
       current_die: 6,
-      last_rolled_result: 2,
+      last_rolled_result: null,
       manual_die: null,
       has_restore_point: false,
     },

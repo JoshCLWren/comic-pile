@@ -469,7 +469,7 @@ async def test_rate_api_with_max_rating(auth_client: AsyncClient, async_db: Asyn
 async def test_rate_api_clears_pending_thread(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /rate/ clears pending_thread_id from session."""
+    """POST /rate/ sets pending_thread_id to next thread if available, or None if no threads remain."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -477,7 +477,7 @@ async def test_rate_api_clears_pending_thread(
     thread = Thread(
         title="Test Comic",
         format="Comic",
-        issues_remaining=5,
+        issues_remaining=1,
         queue_position=1,
         status="active",
         user_id=user.id,

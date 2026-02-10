@@ -20,7 +20,7 @@ export default function RatePage() {
   const [additionalIssues, setAdditionalIssues] = useState(1)
   const [pendingRating, setPendingRating] = useState(null)
 
-  const { data: session, isPending: sessionPending } = useSession()
+  const { data: session, isPending: sessionPending, refetch: refetchSession } = useSession()
 
   const rateMutation = useRate()
 
@@ -85,9 +85,6 @@ export default function RatePage() {
   }
 
   async function handleSubmitRating(finishSession = false) {
-    // Check if this rating would complete the thread (issues_remaining - 1 <= 0)
-    // Only show modal if not already finishing session
-    // Use session.active_thread since thread variable is defined after the early return
     if (!finishSession && session.active_thread && session.active_thread.issues_remaining - 1 <= 0) {
       setPendingRating(rating);
       setShowCompleteModal(true);
@@ -104,7 +101,12 @@ export default function RatePage() {
         issues_read: 1,
         finish_session: finishSession
       });
-      navigate('/');
+
+      const updatedSession = await refetchSession();
+
+      if (!updatedSession?.pending_thread_id) {
+        navigate('/');
+      }
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
     }
@@ -121,7 +123,12 @@ export default function RatePage() {
         issues_read: 1,
         finish_session: true
       });
-      navigate('/');
+
+      const updatedSession = await refetchSession();
+
+      if (!updatedSession?.pending_thread_id) {
+        navigate('/');
+      }
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
     }
@@ -159,7 +166,12 @@ export default function RatePage() {
         issues_read: 1,
         finish_session: false
       });
-      navigate('/');
+
+      const updatedSession = await refetchSession();
+
+      if (!updatedSession?.pending_thread_id) {
+        navigate('/');
+      }
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
     }

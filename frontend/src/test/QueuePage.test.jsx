@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import {
   useCreateThread,
@@ -10,6 +11,8 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
+import { useSession } from '../hooks/useSession'
+import { useUnsnooze } from '../hooks/useSnooze'
 
 vi.mock('../hooks/useThread', () => ({
   useThreads: vi.fn(),
@@ -25,6 +28,14 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToPosition: vi.fn(),
 }))
 
+vi.mock('../hooks/useSession', () => ({
+  useSession: vi.fn(),
+}))
+
+vi.mock('../hooks/useSnooze', () => ({
+  useUnsnooze: vi.fn(),
+}))
+
 beforeEach(() => {
   useThreads.mockReturnValue({
     data: [
@@ -32,6 +43,7 @@ beforeEach(() => {
       { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
     ],
     isLoading: false,
+    refetch: vi.fn(),
   })
   useCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
@@ -40,11 +52,20 @@ beforeEach(() => {
   useMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useSession.mockReturnValue({
+    data: { snoozed_threads: [] },
+    refetch: vi.fn(),
+  })
+  useUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
 })
 
 it('renders queue items and opens create modal', async () => {
   const user = userEvent.setup()
-  render(<QueuePage />)
+  render(
+    <BrowserRouter>
+      <QueuePage />
+    </BrowserRouter>
+  )
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('Descender')).toBeInTheDocument()

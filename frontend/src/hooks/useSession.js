@@ -16,6 +16,7 @@ export function useSession() {
     try {
       const result = await sessionApi.getCurrent()
       setData(result)
+      return result
     } catch (err) {
       setIsError(true)
       setError(err)
