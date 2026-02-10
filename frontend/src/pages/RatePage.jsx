@@ -5,7 +5,6 @@ import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import { DICE_LADDER } from '../components/diceLadder'
 import { useRate, useSession, useUpdateThread, useSnooze } from '../hooks'
-import { sessionApi } from '../services/api'
 
 export default function RatePage() {
   const navigate = useNavigate()
@@ -103,11 +102,9 @@ export default function RatePage() {
         finish_session: finishSession
       });
 
-      const updatedSession = await sessionApi.getCurrent();
+      const updatedSession = await refetchSession();
 
-      if (updatedSession.pending_thread_id) {
-        refetchSession();
-      } else {
+      if (!updatedSession?.pending_thread_id) {
         navigate('/');
       }
     } catch (error) {
@@ -127,11 +124,9 @@ export default function RatePage() {
         finish_session: true
       });
 
-      const updatedSession = await sessionApi.getCurrent();
+      const updatedSession = await refetchSession();
 
-      if (updatedSession.pending_thread_id) {
-        refetchSession();
-      } else {
+      if (!updatedSession?.pending_thread_id) {
         navigate('/');
       }
     } catch (error) {
@@ -172,11 +167,9 @@ export default function RatePage() {
         finish_session: false
       });
 
-      const updatedSession = await sessionApi.getCurrent();
+      const updatedSession = await refetchSession();
 
-      if (updatedSession.pending_thread_id) {
-        refetchSession();
-      } else {
+      if (!updatedSession?.pending_thread_id) {
         navigate('/');
       }
     } catch (error) {

@@ -1094,7 +1094,7 @@ For each PR, ensure:
 - ✅ PR #4: Improve History View Copy (merged 2026-02-08)
 - ✅ PR #5: Mobile Dice Selector Overhaul (merged 2026-02-09)
 - ✅ PR #6: Snoozed Comics with D&D Modifiers (merged 2026-02-09)
-- ✅ PR #7: Make Stale Reminder Tappable (merged 2026-02-09)
+- 🚧 PR #7: Make Stale Reminder Tappable (in progress - pr/7-stale-reminder-tappable)
 - ✅ PR #8: Quick Actions on Comics (merged 2026-02-09)
 - ✅ PR #9: Fix Session Flow After Rating (merged 2026-02-09)
 - ✅ PR #10: Remove SQLite Backup Code (merged 2026-02-09)

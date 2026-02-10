@@ -442,7 +442,10 @@ async def set_pending_thread(
     event = Event(
         type="roll",
         session_id=current_session.id,
-        data={"selection_method": "stale_reminder", "result": 0},
+        selected_thread_id=thread_id,
+        selection_method="stale_reminder",
+        result=0,
+        die=0,
     )
     db.add(event)
     await db.commit()
