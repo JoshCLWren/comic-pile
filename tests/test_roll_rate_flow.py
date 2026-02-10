@@ -11,7 +11,9 @@ from comic_pile.dice_ladder import step_down
 
 
 @pytest.mark.asyncio
-async def test_roll_rate_history_consistency(auth_client: AsyncClient, async_db: AsyncSession, default_user: User) -> None:
+async def test_roll_rate_history_consistency(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
     """Verify roll and rate operations maintain consistent session state across history."""
     now = datetime.now(UTC)
     threads = [
@@ -83,4 +85,8 @@ async def test_roll_rate_history_consistency(auth_client: AsyncClient, async_db:
     expected_die = step_down(roll_data["die_size"])
     assert rated_data["current_die"] == expected_die
     assert rated_data["last_rolled_result"] == roll_data["result"]
-    assert rated_data["active_thread"]["id"] == roll_data["thread_id"]
+    # After rating, a new roll event is created for the next available thread
+    # so active_thread should be different from the originally rolled thread
+    assert rated_data["active_thread"]["id"] != roll_data["thread_id"]
+    assert rated_data["active_thread"]["id"] in [t.id for t in threads]
+    assert rated_data["active_thread"]["id"] != roll_data["thread_id"]
