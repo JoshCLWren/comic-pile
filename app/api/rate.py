@@ -189,6 +189,8 @@ async def rate_thread(
     else:
         await move_to_back(thread.id, user_id, db)
 
+    finish_session = rate_data.finish_session
+
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
@@ -199,21 +201,25 @@ async def rate_thread(
     if clear_cache:
         clear_cache()
 
-    from comic_pile.queue import get_roll_pool
-    import random
+    if not finish_session:
+        from comic_pile.queue import get_roll_pool
+        import random
 
-    snoozed_ids = current_session.snoozed_thread_ids or []
-    threads = await get_roll_pool(user_id, db, snoozed_ids)
+        snoozed_ids = current_session.snoozed_thread_ids or []
+        threads = await get_roll_pool(user_id, db, snoozed_ids)
 
-    available_threads = [t for t in threads if t.issues_remaining > 0]
+        available_threads = [t for t in threads if t.issues_remaining > 0]
 
-    if available_threads:
-        new_die = await get_current_die(current_session_id, db)
-        pool_size = min(new_die, len(available_threads))
-        selected_index = random.randint(0, pool_size - 1)
-        next_thread = available_threads[selected_index]
-        current_session.pending_thread_id = next_thread.id
-        current_session.pending_thread_updated_at = datetime.now(UTC)
+        if available_threads:
+            new_die = await get_current_die(current_session_id, db)
+            pool_size = min(new_die, len(available_threads))
+            selected_index = random.randint(0, pool_size - 1)
+            next_thread = available_threads[selected_index]
+            current_session.pending_thread_id = next_thread.id
+            current_session.pending_thread_updated_at = datetime.now(UTC)
+        else:
+            current_session.pending_thread_id = None
+            current_session.pending_thread_updated_at = None
     else:
         current_session.pending_thread_id = None
         current_session.pending_thread_updated_at = None

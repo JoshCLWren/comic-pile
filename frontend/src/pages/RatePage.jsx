@@ -21,7 +21,7 @@ export default function RatePage() {
   const [additionalIssues, setAdditionalIssues] = useState(1)
   const [pendingRating, setPendingRating] = useState(null)
 
-  const { data: session, isPending: sessionPending, refetch: refetchSession } = useSession()
+  const { data: session, setData: setSession, isPending: sessionPending } = useSession()
 
   const rateMutation = useRate()
 
@@ -106,7 +106,7 @@ export default function RatePage() {
       const updatedSession = await sessionApi.getCurrent();
 
       if (updatedSession.pending_thread_id) {
-        refetchSession();
+        setSession(updatedSession);
       } else {
         navigate('/');
       }
@@ -130,7 +130,7 @@ export default function RatePage() {
       const updatedSession = await sessionApi.getCurrent();
 
       if (updatedSession.pending_thread_id) {
-        refetchSession();
+        setSession(updatedSession);
       } else {
         navigate('/');
       }
@@ -175,7 +175,7 @@ export default function RatePage() {
       const updatedSession = await sessionApi.getCurrent();
 
       if (updatedSession.pending_thread_id) {
-        refetchSession();
+        setSession(updatedSession);
       } else {
         navigate('/');
       }
