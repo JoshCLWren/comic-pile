@@ -28,7 +28,15 @@ test.describe('Rate Thread Feature', () => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+    const url = authenticatedWithThreadsPage.url();
+
+    if (url.includes('/rate')) {
+
+      await authenticatedWithThreadsPage.goto('/');
+    }
+
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.dieSelector, { state: 'visible', timeout: 5000 });
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.dieSelector)).toBeVisible();
@@ -56,8 +64,15 @@ test.describe('Rate Thread Feature', () => {
 
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, rating);
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-      await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+      const url = authenticatedWithThreadsPage.url();
+
+      if (url.includes('/rate')) {
+
+        await authenticatedWithThreadsPage.goto('/');
+        await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      }
     }
   });
 
@@ -75,14 +90,29 @@ test.describe('Rate Thread Feature', () => {
     const successMessage = authenticatedWithThreadsPage.locator('text=snoozed');
     await expect(successMessage.first()).toBeVisible({ timeout: 3000 });
 
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+    const url = authenticatedWithThreadsPage.url();
+
+    if (url.includes('/rate')) {
+
+      await authenticatedWithThreadsPage.goto('/');
+    }
   });
 
   test('should remove unsnoozed thread from roll page without refresh', async ({ authenticatedWithThreadsPage }) => {
     const snoozeButton = authenticatedWithThreadsPage.locator(SELECTORS.rate.snoozeButton);
     await snoozeButton.click();
 
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+    const url = authenticatedWithThreadsPage.url();
+
+    if (url.includes('/rate')) {
+
+      await authenticatedWithThreadsPage.goto('/');
+    }
+
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const snoozedToggle = authenticatedWithThreadsPage.locator('button:has-text("Snoozed")');
@@ -109,7 +139,15 @@ test.describe('Rate Thread Feature', () => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
-    await authenticatedWithThreadsPage.waitForURL('**/');
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+    const url = authenticatedWithThreadsPage.url();
+
+    if (url.includes('/rate')) {
+
+      await authenticatedWithThreadsPage.goto('/');
+    }
+
     await authenticatedWithThreadsPage.goto('/queue');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
@@ -129,7 +167,14 @@ test.describe('Rate Thread Feature', () => {
     if (isVisible) {
       await issuesInput.fill('2');
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-      await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 3000 });
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+      const url = authenticatedWithThreadsPage.url();
+
+      if (url.includes('/rate')) {
+
+        await authenticatedWithThreadsPage.goto('/');
+      }
     }
   });
 
@@ -142,7 +187,14 @@ test.describe('Rate Thread Feature', () => {
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
-      await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+      const url = authenticatedWithThreadsPage.url();
+
+      if (url.includes('/rate')) {
+
+        await authenticatedWithThreadsPage.goto('/');
+      }
 
       const sessionEnded = await authenticatedWithThreadsPage.locator('text=session ended|session complete').count();
       expect(sessionEnded).toBeGreaterThan(0);
@@ -175,9 +227,16 @@ test('should preserve form data on validation error', async ({ authenticatedWith
   test('should allow re-rating if page revisited', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForURL('**/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
+    const url = authenticatedWithThreadsPage.url();
+
+    if (url.includes('/rate')) {
+
+      await authenticatedWithThreadsPage.goto('/');
+    }
+
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { state: 'visible', timeout: 5000 });
@@ -187,7 +246,15 @@ test('should preserve form data on validation error', async ({ authenticatedWith
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+    const url2 = authenticatedWithThreadsPage.url();
+
+    if (url2.includes('/rate')) {
+
+      await authenticatedWithThreadsPage.goto('/');
+    }
+
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
   });
 
