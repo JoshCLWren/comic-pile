@@ -151,13 +151,13 @@ export default function RollPage() {
     setDiceState(state)
   }
 
-  function handleSetDie(die) {
+  async function handleSetDie(die) {
     setCurrentDie(die)
-    setDieMutation.mutate(die)
+    await setDieMutation.mutate(die)
   }
 
-  function handleClearManualDie() {
-    clearManualDieMutation.mutate()
+  async function handleClearManualDie() {
+    await clearManualDieMutation.mutate()
   }
 
   function handleRoll() {
@@ -418,6 +418,7 @@ export default function RollPage() {
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
                   handleReadStale()
                 }
               }}
@@ -529,9 +530,13 @@ export default function RollPage() {
           {DICE_LADDER.map((die) => (
             <button
               key={die}
-              onClick={() => {
-                handleSetDie(die)
-                setIsDieModalOpen(false)
+              onClick={async () => {
+                try {
+                  await handleSetDie(die)
+                  setIsDieModalOpen(false)
+                } catch (error) {
+                  console.error('Failed to set die:', error)
+                }
               }}
               disabled={setDieMutation.isPending}
               className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
@@ -544,9 +549,13 @@ export default function RollPage() {
             </button>
           ))}
           <button
-            onClick={() => {
-              handleClearManualDie()
-              setIsDieModalOpen(false)
+            onClick={async () => {
+              try {
+                await handleClearManualDie()
+                setIsDieModalOpen(false)
+              } catch (error) {
+                console.error('Failed to clear manual die:', error)
+              }
             }}
             disabled={clearManualDieMutation.isPending}
             className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
