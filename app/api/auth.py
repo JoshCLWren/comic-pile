@@ -78,7 +78,6 @@ async def register_user(
     db.add(user)
     try:
         await db.commit()
-        await db.refresh(user)
     except sqlalchemy_exc.IntegrityError:
         await db.rollback()
         raise HTTPException(

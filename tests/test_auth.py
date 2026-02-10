@@ -29,15 +29,27 @@ class TestAuth:
         assert data["token_type"] == "bearer"
 
         # Verify user was created in database
+        print(f"\nDEBUG: async_db session: {async_db}")
+        print(f"DEBUG: async_db in transaction: {async_db.in_transaction()}")
+        print(f"DEBUG: async_db dirty: {async_db.dirty}")
+        print(f"DEBUG: async_db new: {async_db.new}")
+        print(
+            f"DEBUG: async_db committed: {not async_db.dirty and not async_db.new and not async_db.deleted}"
+        )
+
+        await async_db.rollback()
         result = await async_db.execute(select(User).where(User.username == "newuser"))
         user = result.scalar_one_or_none()
+        print(f"DEBUG: user after query: {user}")
         assert user is not None
         assert user.email == "newuser@example.com"
         assert user.password_hash is not None
         assert user.password_hash != "securepassword123"  # Should be hashed
 
     @pytest.mark.asyncio
-    async def test_register_user_duplicate_username(self, client: AsyncClient, async_db: AsyncSession) -> None:
+    async def test_register_user_duplicate_username(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
         """Test registration with duplicate username fails."""
         # Create first user
         user_data = {
@@ -59,7 +71,9 @@ class TestAuth:
         assert "Username already registered" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_register_user_duplicate_email(self, client: AsyncClient, async_db: AsyncSession) -> None:
+    async def test_register_user_duplicate_email(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
         """Test registration with duplicate email fails."""
         # Create first user
         user_data = {
@@ -166,7 +180,9 @@ class TestAuth:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_get_current_user_authenticated(self, client: AsyncClient, async_db: AsyncSession) -> None:
+    async def test_get_current_user_authenticated(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
         """Test getting current user info when authenticated."""
         # Register and login user
         user_data = {
