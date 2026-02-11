@@ -160,4 +160,22 @@ test.describe('Roll Dice Feature', () => {
     const currentUrl = authenticatedWithThreadsPage.url();
     expect(currentUrl).toMatch(/\/rate\/?$/);
   });
+
+  test('should navigate to rate page without loading state after roll', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
+
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+
+    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
+
+    const loadingText = authenticatedWithThreadsPage.getByText('Loading...');
+    
+    await expect(async () => {
+      const isVisible = await loadingText.isVisible().catch(() => false);
+      expect(isVisible).toBe(false);
+    }).toPass({ timeout: 3000, intervals: 100 });
+
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
+  });
 });

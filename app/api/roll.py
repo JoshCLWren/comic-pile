@@ -67,7 +67,6 @@ async def roll_dice(
     selected_thread = threads[selected_index]
 
     selected_thread_id = selected_thread.id
-    selected_thread_title = selected_thread.title
 
     event = Event(
         type="roll",
@@ -89,7 +88,10 @@ async def roll_dice(
 
     return RollResponse(
         thread_id=selected_thread_id,
-        title=selected_thread_title,
+        title=selected_thread.title,
+        format=selected_thread.format,
+        issues_remaining=selected_thread.issues_remaining,
+        queue_position=selected_index + 1,
         die_size=current_die,
         result=selected_index + 1,
         offset=offset,
@@ -133,7 +135,6 @@ async def override_roll(
     current_die = await get_current_die(current_session_id, db)
 
     override_thread_id = override_thread.id
-    override_thread_title = override_thread.title
 
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
@@ -167,7 +168,10 @@ async def override_roll(
 
     return RollResponse(
         thread_id=override_thread_id,
-        title=override_thread_title,
+        title=override_thread.title,
+        format=override_thread.format,
+        issues_remaining=override_thread.issues_remaining,
+        queue_position=0,
         die_size=current_die,
         result=0,
         offset=offset,
