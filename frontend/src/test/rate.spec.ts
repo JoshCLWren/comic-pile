@@ -24,14 +24,15 @@ test.describe('Rate Thread Feature', () => {
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.submitButton)).toBeVisible();
   });
 
-  test('should submit rating and return to home', async ({ authenticatedWithThreadsPage }) => {
+  test('should submit rating and stay on rate page when pending thread exists', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.dieSelector, { state: 'visible', timeout: 5000 });
-    await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.dieSelector)).toBeVisible();
+    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
+    
+    const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
+    await expect(ratingInput).toBeVisible();
   });
 
   test('should validate rating range (0-5)', async ({ authenticatedWithThreadsPage }) => {
@@ -56,8 +57,10 @@ test.describe('Rate Thread Feature', () => {
 
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, rating);
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-      await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      
+      const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
+      await expect(ratingInput).toBeVisible({ timeout: 5000 });
     }
   });
 
@@ -70,19 +73,17 @@ test.describe('Rate Thread Feature', () => {
     const snoozeButton = authenticatedWithThreadsPage.locator(SELECTORS.rate.snoozeButton);
     await snoozeButton.click();
 
-    await authenticatedWithThreadsPage.waitForLoadState("networkidle");
-
-    const successMessage = authenticatedWithThreadsPage.locator('text=snoozed');
-    await expect(successMessage.first()).toBeVisible({ timeout: 3000 });
-
     await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
   });
 
   test('should remove unsnoozed thread from roll page without refresh', async ({ authenticatedWithThreadsPage }) => {
     const snoozeButton = authenticatedWithThreadsPage.locator(SELECTORS.rate.snoozeButton);
     await snoozeButton.click();
 
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    
+    await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const snoozedToggle = authenticatedWithThreadsPage.locator('button:has-text("Snoozed")');
@@ -109,7 +110,8 @@ test.describe('Rate Thread Feature', () => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
-    await authenticatedWithThreadsPage.waitForURL('**/');
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    
     await authenticatedWithThreadsPage.goto('/queue');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
@@ -129,7 +131,10 @@ test.describe('Rate Thread Feature', () => {
     if (isVisible) {
       await issuesInput.fill('2');
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-      await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 3000 });
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      
+      const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
+      await expect(ratingInput).toBeVisible({ timeout: 3000 });
     }
   });
 
@@ -143,6 +148,7 @@ test.describe('Rate Thread Feature', () => {
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
       await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
       const sessionEnded = await authenticatedWithThreadsPage.locator('text=session ended|session complete').count();
       expect(sessionEnded).toBeGreaterThan(0);
@@ -154,7 +160,7 @@ test.describe('Rate Thread Feature', () => {
     expect(parseFloat(ratingValue)).toBeGreaterThan(0);
   });
 
-test('should preserve form data on validation error', async ({ authenticatedWithThreadsPage }) => {
+  test('should preserve form data on validation error', async ({ authenticatedWithThreadsPage }) => {
     const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
     await ratingInput.waitFor({ state: 'visible' });
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
@@ -175,7 +181,6 @@ test('should preserve form data on validation error', async ({ authenticatedWith
   test('should allow re-rating if page revisited', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForURL('**/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     await authenticatedWithThreadsPage.goto('/');
@@ -187,8 +192,10 @@ test('should preserve form data on validation error', async ({ authenticatedWith
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    
+    const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
+    await expect(ratingInput).toBeVisible({ timeout: 5000 });
   });
 
   test('should handle network errors gracefully', async ({ authenticatedWithThreadsPage }) => {

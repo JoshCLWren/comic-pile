@@ -1,5 +1,7 @@
 """Rate API endpoint."""
 
+import random
+
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -17,7 +19,7 @@ from app.models.user import User
 from app.schemas import RateRequest, ThreadResponse
 from app.api.thread import thread_to_response
 from comic_pile.dice_ladder import step_down, step_up
-from comic_pile.queue import move_to_back, move_to_front
+from comic_pile.queue import get_roll_pool, move_to_back, move_to_front
 from comic_pile.session import get_current_die
 
 router = APIRouter()
@@ -199,8 +201,24 @@ async def rate_thread(
     if clear_cache:
         clear_cache()
 
-    current_session.pending_thread_id = None
-    current_session.pending_thread_updated_at = None
+    if not rate_data.finish_session:
+        snoozed_ids = current_session.snoozed_thread_ids or []
+        threads = await get_roll_pool(user_id, db, snoozed_ids)
+
+        available_threads = [t for t in threads if t.issues_remaining > 0]
+
+        if available_threads:
+            pool_size = min(new_die, len(available_threads))
+            selected_index = random.randint(0, pool_size - 1)
+            next_thread = available_threads[selected_index]
+            current_session.pending_thread_id = next_thread.id
+            current_session.pending_thread_updated_at = datetime.now(UTC)
+        else:
+            current_session.pending_thread_id = None
+            current_session.pending_thread_updated_at = None
+    else:
+        current_session.pending_thread_id = None
+        current_session.pending_thread_updated_at = None
 
     await db.flush()
     await db.refresh(event)

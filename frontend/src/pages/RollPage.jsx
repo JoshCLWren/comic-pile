@@ -7,11 +7,14 @@ import { DICE_LADDER } from '../components/diceLadder'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
-import { useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
+import { threadsApi } from '../services/api'
 
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
   const [rolledResult, setRolledResult] = useState(null)
+  const [rolledOffset, setRolledOffset] = useState(null)
   const [selectedThreadId, setSelectedThreadId] = useState(null)
   const [currentDie, setCurrentDie] = useState(6)
   const [diceState, setDiceState] = useState('idle')
@@ -19,12 +22,15 @@ export default function RollPage() {
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
+  const [isDieModalOpen, setIsDieModalOpen] = useState(false)
+  const [selectedThread, setSelectedThread] = useState(null)
+  const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
 
   const { data: session, refetch: refetchSession } = useSession()
-  const { data: threads } = useThreads()
+  const { data: threads, refetch: refetchThreads } = useThreads()
   const { data: staleThreads } = useStaleThreads(7)
 
   const navigate = useNavigate()
@@ -32,7 +38,10 @@ export default function RollPage() {
   const clearManualDieMutation = useClearManualDie()
   const rollMutation = useRoll()
   const overrideMutation = useOverrideRoll()
+  const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
+  const moveToFrontMutation = useMoveToFront()
+  const moveToBackMutation = useMoveToBack()
 
   async function handleUnsnooze(threadId) {
     try {
@@ -40,6 +49,61 @@ export default function RollPage() {
       await refetchSession()
     } catch (error) {
       console.error('Unsnooze failed:', error)
+    }
+  }
+
+  async function handleReadStale() {
+    try {
+      await threadsApi.setPending(staleThread.id)
+      navigate('/rate')
+    } catch (error) {
+      console.error('Failed to set pending thread:', error)
+    }
+  }
+
+  function handleThreadClick(thread) {
+    setSelectedThread(thread)
+    setIsActionSheetOpen(true)
+  }
+
+  async function handleAction(action) {
+    if (!selectedThread) return
+
+    setIsActionSheetOpen(false)
+
+    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === selectedThread.id) ?? false
+
+    try {
+      switch (action) {
+        case 'read':
+          await threadsApi.setPending(selectedThread.id)
+          navigate('/rate')
+          break
+        case 'move-front':
+          await moveToFrontMutation.mutate(selectedThread.id)
+          await refetchSession()
+          await refetchThreads()
+          break
+        case 'move-back':
+          await moveToBackMutation.mutate(selectedThread.id)
+          await refetchSession()
+          await refetchThreads()
+          break
+        case 'snooze':
+          if (isSnoozed) {
+            await unsnoozeMutation.mutate(selectedThread.id)
+          } else {
+            await threadsApi.setPending(selectedThread.id)
+            await snoozeMutation.mutate()
+          }
+          await refetchSession()
+          break
+        case 'edit':
+          navigate('/queue', { state: { editThreadId: selectedThread.id } })
+          break
+      }
+    } catch (error) {
+      console.error('Action failed:', error)
     }
   }
 
@@ -90,13 +154,13 @@ export default function RollPage() {
     setDiceState(state)
   }
 
-  function handleSetDie(die) {
+  async function handleSetDie(die) {
     setCurrentDie(die)
-    setDieMutation.mutate(die)
+    await setDieMutation.mutate(die)
   }
 
-  function handleClearManualDie() {
-    clearManualDieMutation.mutate()
+  async function handleClearManualDie() {
+    await clearManualDieMutation.mutate()
   }
 
   function handleRoll() {
@@ -123,23 +187,25 @@ export default function RollPage() {
         rollIntervalRef.current = null
         
         rollTimeoutRef.current = setTimeout(async () => {
-          rollTimeoutRef.current = null
-          try {
-            const response = await rollMutation.mutate()
-            if (response?.result) {
-              setRolledResult(response.result)
+           rollTimeoutRef.current = null
+           try {
+             const response = await rollMutation.mutate()
+             if (response?.result) {
+               setRolledResult(response.result)
+             }
+             if (response?.offset !== undefined) {
+               setRolledOffset(response.offset)
+             }
+             if (response?.thread_id) {
+               setSelectedThreadId(response.thread_id)
+             }
+             setIsRolling(false)
+             navigate('/rate')
+            } catch (error) {
+              console.error('Roll failed:', error)
+              setIsRolling(false)
             }
-            if (response?.thread_id) {
-              setSelectedThreadId(response.thread_id)
-            }
-            setIsRolling(false)
-            navigate('/rate')
-          } catch (error) {
-            console.error('Roll failed:', error)
-            setIsRolling(false)
-            throw error
-          }
-        }, 400)
+         }, 400)
       }
     }, 80)
   }
@@ -180,35 +246,52 @@ export default function RollPage() {
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
+          {session.snoozed_threads?.length > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="modifier-badge text-[10px] font-black text-teal-400">+{session.snoozed_threads.length}</span>
+              <span className="text-[9px] text-slate-500 uppercase tracking-wider">snoozed offset active</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative" id="die-selector">
-            {DICE_LADDER.map((die) => (
+          <div id="die-selector">
+            <div className="hidden md:flex gap-2">
+              {DICE_LADDER.map((die) => (
+                <button
+                  key={die}
+                  onClick={() => handleSetDie(die)}
+                  disabled={setDieMutation.isPending}
+                  className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
+                    die === currentDie
+                      ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  d{die}
+                </button>
+              ))}
               <button
-                key={die}
-                onClick={() => handleSetDie(die)}
-                disabled={setDieMutation.isPending}
-                className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
-                  die === currentDie
-                    ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                onClick={handleClearManualDie}
+                disabled={clearManualDieMutation.isPending}
+                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
+                  session.manual_die
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-400'
                     : 'bg-white/5 border-white/10 hover:bg-white/10'
                 }`}
+                title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}
               >
-                d{die}
+                Auto
               </button>
-            ))}
-            <button
-              onClick={handleClearManualDie}
-              disabled={clearManualDieMutation.isPending}
-              className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
-                session.manual_die
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                  : 'bg-white/5 border-white/10 hover:bg-white/10'
-              }`}
-              title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}
-            >
-              Auto
-            </button>
+            </div>
+            <div className="md:hidden">
+              <button
+                onClick={() => setIsDieModalOpen(true)}
+                disabled={setDieMutation.isPending}
+                className="px-3 py-1 text-[10px] font-black rounded-lg border bg-teal-500/20 border-teal-500 text-teal-400 transition-colors"
+              >
+                d{currentDie}
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
             <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
@@ -261,7 +344,23 @@ export default function RollPage() {
             </div>
           </div>
 
-          {!isRolling && (
+          {!isRolling && rolledResult && (
+            <div className="text-center shrink-0">
+              <div className="roll-value flex items-center justify-center gap-1">
+                <span className="text-4xl font-black text-teal-400">{rolledResult}</span>
+                {rolledOffset > 0 && (
+                  <span className="modifier text-2xl font-black text-teal-400">+{rolledOffset}</span>
+                )}
+              </div>
+              {rolledOffset > 0 && (
+                <p className="modifier-explanation text-[10px] text-slate-500 mt-1">
+                  {rolledOffset} snoozed comic{rolledOffset > 1 ? 's' : ''} offset
+                </p>
+              )}
+            </div>
+          )}
+
+          {!isRolling && !rolledResult && (
             <p
               id="tap-instruction"
               className="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0 text-center"
@@ -294,8 +393,16 @@ export default function RollPage() {
                   return (
                     <div
                       key={thread.id}
-                      onClick={() => setSelectedThreadId(thread.id)}
-                      className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all ${
+                      onClick={() => handleThreadClick(thread)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleThreadClick(thread)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${
                         isSelected ? 'pool-thread-selected' : ''
                       }`}
                     >
@@ -314,7 +421,17 @@ export default function RollPage() {
           </div>
 
           {staleThread && (
-            <div className="px-4 pb-4 shrink-0 animate-[fade-in_0.5s_ease-out]">
+            <div
+              onClick={handleReadStale}
+              className="px-4 pb-4 shrink-0 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  handleReadStale()
+                }
+              }}
+            >
               <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
                 <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
                   <span className="text-sm">⏳</span>
@@ -323,6 +440,9 @@ export default function RollPage() {
                   <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
                     You haven't touched <span className="text-amber-400 font-black">{staleThread.title}</span> in{' '}
                     <span className="text-amber-400 font-black">{staleThread.days}</span> days
+                  </p>
+                  <p className="text-[9px] text-amber-300/70 text-center mt-1">
+                    Tap to read now
                   </p>
                 </div>
               </div>
@@ -412,6 +532,95 @@ export default function RollPage() {
             {overrideMutation.isPending ? 'Overriding...' : 'Override Roll'}
           </button>
         </form>
+      </Modal>
+
+      <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
+        <div className="grid grid-cols-3 gap-2">
+          {DICE_LADDER.map((die) => (
+            <button
+              key={die}
+              onClick={async () => {
+                try {
+                  await handleSetDie(die)
+                  setIsDieModalOpen(false)
+                } catch (error) {
+                  console.error('Failed to set die:', error)
+                }
+              }}
+              disabled={setDieMutation.isPending}
+              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
+                die === currentDie
+                  ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+              }`}
+            >
+              d{die}
+            </button>
+          ))}
+          <button
+            onClick={async () => {
+              try {
+                await handleClearManualDie()
+                setIsDieModalOpen(false)
+              } catch (error) {
+                console.error('Failed to clear manual die:', error)
+              }
+            }}
+            disabled={clearManualDieMutation.isPending}
+            className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
+              session.manual_die
+                ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                : 'bg-white/5 border-white/10 hover:bg-white/10'
+            }`}
+          >
+            Auto
+          </button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => handleAction('read')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">📖</span>
+            <span>Read Now</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAction('move-front')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">⬆️</span>
+            <span>Move to Front</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAction('move-back')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">⬇️</span>
+            <span>Move to Back</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAction('snooze')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
+            <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAction('edit')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">✏️</span>
+            <span>Edit Thread</span>
+          </button>
+        </div>
       </Modal>
     </div>
   )

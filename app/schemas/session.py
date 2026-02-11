@@ -40,6 +40,7 @@ class SessionResponse(BaseModel):
     snapshot_count: int
     snoozed_thread_ids: list[int] = []
     snoozed_threads: list[SnoozedThreadInfo] = []
+    pending_thread_id: int | None = None
 
 
 class EventDetail(BaseModel):
