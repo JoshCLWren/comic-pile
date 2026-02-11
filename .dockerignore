@@ -35,6 +35,9 @@ docs/
 
 # Tests
 tests/
+tests_e2e/
+frontend/src/test/
+static/react/test/
 .pytest_cache/
 .coverage
 htmlcov/
