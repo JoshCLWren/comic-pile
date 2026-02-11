@@ -38,8 +38,8 @@ export default function RatePage() {
       setPreviewSides(rollResponse.die_size)
       setRolledValue(rollResponse.result)
     } else if (session) {
-      const die = session.current_die || 6
-      const result = session.last_rolled_result || 1
+      const die = session.current_die ?? 6
+      const result = session.last_rolled_result ?? 1
       setCurrentDie(die)
       setPredictedDie(die)
       setPreviewSides(die)
@@ -105,7 +105,7 @@ export default function RatePage() {
   }
 
   async function handleSubmitRating(finishSession = false) {
-    if (!finishSession && session.active_thread && session.active_thread.issues_remaining - 1 <= 0) {
+    if (!finishSession && activeThread && activeThread.issues_remaining - 1 <= 0) {
       setPendingRating(rating);
       setShowCompleteModal(true);
       return;
@@ -148,9 +148,6 @@ export default function RatePage() {
 
   async function handleAddMoreIssues() {
     if (additionalIssues < 1) return;
-
-    // Use session.active_thread since thread is defined after the early return guard
-    const activeThread = session.active_thread;
     if (!activeThread) return;
 
     const newIssuesRemaining = activeThread.issues_remaining + additionalIssues;
