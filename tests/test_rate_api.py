@@ -496,3 +496,50 @@ def test_rating_settings_validates_range(monkeypatch: pytest.MonkeyPatch) -> Non
     assert settings.rating_min == 0.5
     assert settings.rating_max == 5.0
     assert settings.rating_threshold == 4.0
+
+
+@pytest.mark.asyncio
+async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Regression test for MissingGreenlet error when accessing snoozed_thread_ids after commit.
+
+    This test ensures that accessing session.snoozed_thread_ids doesn't trigger
+    a lazy load after commit, which causes MissingGreenlet in SQLAlchemy async.
+    """
+    threads = sample_data["threads"]
+
+    # Create a session
+    session = SessionModel(
+        user_id=1,
+        start_die=20,
+        manual_die=None,
+        snoozed_thread_ids=[threads[0].id],
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    # Create a roll event
+    event = Event(
+        type="roll",
+        session_id=session.id,
+        thread_id=threads[1].id,
+        selected_thread_id=threads[1].id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    # Rate the thread - this should not raise MissingGreenlet
+    response = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 4.0, "issues_read": 1, "finish_session": False},
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["id"] == threads[1].id
+
+    # Verify session still has snoozed_thread_ids accessible
+    await async_db.refresh(session)
+    assert session.snoozed_thread_ids == [threads[0].id]

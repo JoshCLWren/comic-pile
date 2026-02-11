@@ -129,6 +129,7 @@ async def rate_thread(
         )
 
     current_session_id = current_session.id
+    snoozed_ids = current_session.snoozed_thread_ids or []
     result = await db.execute(
         select(Event)
         .where(Event.session_id == current_session_id)
@@ -202,7 +203,6 @@ async def rate_thread(
         clear_cache()
 
     if not rate_data.finish_session:
-        snoozed_ids = current_session.snoozed_thread_ids or []
         threads = await get_roll_pool(user_id, db, snoozed_ids)
 
         available_threads = [t for t in threads if t.issues_remaining > 0]
