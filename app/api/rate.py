@@ -201,18 +201,21 @@ async def rate_thread(
     if clear_cache:
         clear_cache()
 
-    snoozed_ids = current_session.snoozed_thread_ids or []
-    threads = await get_roll_pool(user_id, db, snoozed_ids)
+    if not rate_data.finish_session:
+        snoozed_ids = current_session.snoozed_thread_ids or []
+        threads = await get_roll_pool(user_id, db, snoozed_ids)
 
-    available_threads = [t for t in threads if t.issues_remaining > 0]
+        available_threads = [t for t in threads if t.issues_remaining > 0]
 
-    if available_threads:
-        new_die = await get_current_die(current_session_id, db)
-        pool_size = min(new_die, len(available_threads))
-        selected_index = random.randint(0, pool_size - 1)
-        next_thread = available_threads[selected_index]
-        current_session.pending_thread_id = next_thread.id
-        current_session.pending_thread_updated_at = datetime.now(UTC)
+        if available_threads:
+            pool_size = min(new_die, len(available_threads))
+            selected_index = random.randint(0, pool_size - 1)
+            next_thread = available_threads[selected_index]
+            current_session.pending_thread_id = next_thread.id
+            current_session.pending_thread_updated_at = datetime.now(UTC)
+        else:
+            current_session.pending_thread_id = None
+            current_session.pending_thread_updated_at = None
     else:
         current_session.pending_thread_id = None
         current_session.pending_thread_updated_at = None

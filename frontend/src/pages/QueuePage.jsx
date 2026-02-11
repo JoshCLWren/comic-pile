@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../components/Modal'
 import PositionSlider from '../components/PositionSlider'
 import Tooltip from '../components/Tooltip'
@@ -13,7 +13,7 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import { useSession } from '../hooks/useSession'
-import { useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api'
 
 const DEFAULT_CREATE_STATE = {
@@ -25,6 +25,7 @@ const DEFAULT_CREATE_STATE = {
 
 export default function QueuePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { data: threads, isPending, refetch } = useThreads()
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
@@ -34,6 +35,7 @@ export default function QueuePage() {
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const moveToPositionMutation = useMoveToPosition()
+  const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -50,6 +52,16 @@ export default function QueuePage() {
   const [reorderError, setReorderError] = useState(null)
   const [selectedThread, setSelectedThread] = useState(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+
+  useEffect(() => {
+    if (location.state?.editThreadId && threads) {
+      const thread = threads.find((t) => t.id === location.state.editThreadId)
+      if (thread) {
+        openEditModal(thread)
+        navigate(location.pathname, { replace: true, state: {} })
+      }
+    }
+  }, [location.state, threads, navigate])
 
   const activeThreads = threads
     ?.filter((thread) => thread.status === 'active')
@@ -231,8 +243,7 @@ export default function QueuePage() {
           if (isSnoozed) {
             await unsnoozeMutation.mutate(selectedThread.id)
           } else {
-            await threadsApi.setPending(selectedThread.id)
-            await unsnoozeMutation.mutate(selectedThread.id)
+            await snoozeMutation.mutate()
           }
           await refetchSession()
           await refetch()
@@ -311,6 +322,14 @@ export default function QueuePage() {
                 onDragOver={handleDragOver(thread.id)}
                 onDrop={handleDrop(thread.id)}
                 onClick={() => handleThreadClick(thread)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleThreadClick(thread)
+                  }
+                }}
               >
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -595,6 +614,7 @@ export default function QueuePage() {
       <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
         <div className="space-y-2">
           <button
+            type="button"
             onClick={() => handleAction('read')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -602,6 +622,7 @@ export default function QueuePage() {
             <span>Read Now</span>
           </button>
           <button
+            type="button"
             onClick={() => handleAction('move-front')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -609,6 +630,7 @@ export default function QueuePage() {
             <span>Move to Front</span>
           </button>
           <button
+            type="button"
             onClick={() => handleAction('move-back')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -616,6 +638,7 @@ export default function QueuePage() {
             <span>Move to Back</span>
           </button>
           <button
+            type="button"
             onClick={() => handleAction('snooze')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -623,6 +646,7 @@ export default function QueuePage() {
             <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
           </button>
           <button
+            type="button"
             onClick={() => handleAction('edit')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >

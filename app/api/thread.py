@@ -433,10 +433,26 @@ async def set_pending_thread(
             detail=f"Thread {thread_id} not found",
         )
 
+    if thread.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} is not active",
+        )
+
+    if thread.issues_remaining <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} has no issues remaining",
+        )
+
     from comic_pile.session import get_or_create
 
     current_session = await get_or_create(db, user_id=current_user.id)
     current_session.pending_thread_id = thread_id
+    current_session.pending_thread_updated_at = datetime.now(UTC)
     await db.commit()
+
+    if clear_cache:
+        clear_cache()
 
     return {"status": "pending_set", "thread_id": thread_id}

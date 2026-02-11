@@ -160,7 +160,7 @@ test.describe('Rate Thread Feature', () => {
     expect(parseFloat(ratingValue)).toBeGreaterThan(0);
   });
 
-test('should preserve form data on validation error', async ({ authenticatedWithThreadsPage }) => {
+  test('should preserve form data on validation error', async ({ authenticatedWithThreadsPage }) => {
     const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
     await ratingInput.waitFor({ state: 'visible' });
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');

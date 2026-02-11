@@ -5,7 +5,6 @@ import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import { DICE_LADDER } from '../components/diceLadder'
 import { useRate, useSession, useUpdateThread, useSnooze } from '../hooks'
-import { sessionApi } from '../services/api'
 
 export default function RatePage() {
   const navigate = useNavigate()
@@ -103,13 +102,7 @@ export default function RatePage() {
         finish_session: finishSession
       });
 
-      const updatedSession = await sessionApi.getCurrent();
-
-      if (updatedSession.pending_thread_id) {
-        refetchSession();
-      } else {
-        navigate('/');
-      }
+      await navigateAfterRating();
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
     }
@@ -127,13 +120,7 @@ export default function RatePage() {
         finish_session: true
       });
 
-      const updatedSession = await sessionApi.getCurrent();
-
-      if (updatedSession.pending_thread_id) {
-        refetchSession();
-      } else {
-        navigate('/');
-      }
+      await navigateAfterRating();
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
     }
@@ -172,13 +159,7 @@ export default function RatePage() {
         finish_session: false
       });
 
-      const updatedSession = await sessionApi.getCurrent();
-
-      if (updatedSession.pending_thread_id) {
-        refetchSession();
-      } else {
-        navigate('/');
-      }
+      await navigateAfterRating();
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
     }
@@ -198,6 +179,19 @@ export default function RatePage() {
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to snooze thread');
     }
+  }
+
+  async function navigateAfterRating() {
+    try {
+      const updatedSession = await refetchSession();
+
+      if (updatedSession?.pending_thread_id) {
+        return;
+      }
+    } catch {
+      // Session fetch failed, fall through to navigate
+    }
+    navigate('/');
   }
 
   if (!session || !session.active_thread) {

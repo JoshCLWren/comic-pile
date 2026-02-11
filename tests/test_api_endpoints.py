@@ -5,6 +5,8 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models import Session as SessionModel, Thread
+
 
 @pytest.mark.asyncio
 async def test_create_thread(auth_client: AsyncClient, async_db: AsyncSession) -> None:
@@ -632,3 +634,104 @@ async def test_delete_thread_integrity_error_pending_thread_id(
 
     await async_db.refresh(session)
     assert session.pending_thread_id is None
+
+
+@pytest.mark.asyncio
+async def test_set_pending_thread_updates_timestamp_and_clears_cache(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{id}/set-pending updates pending_thread_updated_at and clears caches."""
+    from datetime import datetime, UTC
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Test Comic",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    session = SessionModel(
+        start_die=6,
+        user_id=user.id,
+        started_at=datetime.now(UTC),
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    old_pending_updated_at = session.pending_thread_updated_at
+
+    response = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "pending_set"
+    assert data["thread_id"] == thread.id
+
+    await async_db.refresh(session)
+    assert session.pending_thread_id == thread.id
+    assert session.pending_thread_updated_at is not None
+    if old_pending_updated_at:
+        assert session.pending_thread_updated_at > old_pending_updated_at
+
+
+@pytest.mark.asyncio
+async def test_set_pending_thread_rejects_completed_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{id}/set-pending returns 400 for completed threads."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Test Comic",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="completed",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    response = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
+
+    assert response.status_code == 400
+    assert "not active" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_set_pending_thread_rejects_thread_with_no_issues(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{id}/set-pending returns 400 for threads with no issues remaining."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Test Comic",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    response = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
+
+    assert response.status_code == 400
+    assert "no issues" in response.json()["detail"].lower()

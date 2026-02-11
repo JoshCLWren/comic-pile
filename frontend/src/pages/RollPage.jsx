@@ -7,7 +7,7 @@ import { DICE_LADDER } from '../components/diceLadder'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
-import { useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { threadsApi } from '../services/api'
 
@@ -30,7 +30,7 @@ export default function RollPage() {
   const rollTimeoutRef = useRef(null)
 
   const { data: session, refetch: refetchSession } = useSession()
-  const { data: threads } = useThreads()
+  const { data: threads, refetch: refetchThreads } = useThreads()
   const { data: staleThreads } = useStaleThreads(7)
 
   const navigate = useNavigate()
@@ -38,6 +38,7 @@ export default function RollPage() {
   const clearManualDieMutation = useClearManualDie()
   const rollMutation = useRoll()
   const overrideMutation = useOverrideRoll()
+  const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
@@ -81,22 +82,24 @@ export default function RollPage() {
         case 'move-front':
           await moveToFrontMutation.mutate(selectedThread.id)
           await refetchSession()
+          await refetchThreads()
           break
         case 'move-back':
           await moveToBackMutation.mutate(selectedThread.id)
           await refetchSession()
+          await refetchThreads()
           break
         case 'snooze':
           if (isSnoozed) {
             await unsnoozeMutation.mutate(selectedThread.id)
           } else {
             await threadsApi.setPending(selectedThread.id)
-            await unsnoozeMutation.mutate(selectedThread.id)
+            await snoozeMutation.mutate()
           }
           await refetchSession()
           break
         case 'edit':
-          navigate(`/queue/${selectedThread.id}/edit`)
+          navigate('/queue', { state: { editThreadId: selectedThread.id } })
           break
       }
     } catch (error) {
@@ -198,11 +201,10 @@ export default function RollPage() {
              }
              setIsRolling(false)
              navigate('/rate')
-           } catch (error) {
-             console.error('Roll failed:', error)
-             setIsRolling(false)
-             throw error
-           }
+            } catch (error) {
+              console.error('Roll failed:', error)
+              setIsRolling(false)
+            }
          }, 400)
       }
     }, 80)
@@ -392,6 +394,14 @@ export default function RollPage() {
                     <div
                       key={thread.id}
                       onClick={() => handleThreadClick(thread)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleThreadClick(thread)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${
                         isSelected ? 'pool-thread-selected' : ''
                       }`}
@@ -571,6 +581,7 @@ export default function RollPage() {
       <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
         <div className="space-y-2">
           <button
+            type="button"
             onClick={() => handleAction('read')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -578,6 +589,7 @@ export default function RollPage() {
             <span>Read Now</span>
           </button>
           <button
+            type="button"
             onClick={() => handleAction('move-front')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -585,6 +597,7 @@ export default function RollPage() {
             <span>Move to Front</span>
           </button>
           <button
+            type="button"
             onClick={() => handleAction('move-back')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -592,6 +605,7 @@ export default function RollPage() {
             <span>Move to Back</span>
           </button>
           <button
+            type="button"
             onClick={() => handleAction('snooze')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -599,6 +613,7 @@ export default function RollPage() {
             <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
           </button>
           <button
+            type="button"
             onClick={() => handleAction('edit')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
