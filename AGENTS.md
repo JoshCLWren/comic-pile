@@ -134,6 +134,44 @@ The pre-commit hook blocks these comments:
 
 Fix the underlying issue instead of suppressing warnings.
 
+### CRITICAL: MissingGreenlet Errors After Database Commits
+
+**Symptom**: `sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called`
+
+**Root Cause**: Accessing SQLAlchemy model attributes after `await db.commit()` causes session expiration. SQLAlchemy lazy-loads attributes on access, but after commit the session is closed/expired.
+
+**Example of buggy code**:
+```python
+await db.commit()
+
+# This will FAIL - accessing thread.title after commit triggers lazy load
+return RollResponse(
+    title=thread.title,  # ❌ MissingGreenlet error
+    format=thread.format,
+)
+```
+
+**Required Fix Pattern**:
+```python
+# Extract all needed attributes BEFORE commit
+thread_title = thread.title
+thread_format = thread.format
+thread_issues = thread.issues_remaining
+thread_position = thread.queue_position
+
+await db.commit()
+
+# Use extracted values after commit - safe!
+return RollResponse(
+    title=thread_title,  # ✅ Works
+    format=thread_format,
+    issues_remaining=thread_issues,
+    queue_position=thread_position,
+)
+```
+
+**Rule**: If you need data from a SQLAlchemy model after `db.commit()`, extract it into variables BEFORE the commit.
+
 ## API Patterns
 
 ### Pydantic Schemas

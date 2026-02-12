@@ -188,19 +188,19 @@ export default function RollPage() {
         
         rollTimeoutRef.current = setTimeout(async () => {
            rollTimeoutRef.current = null
-           try {
-             const response = await rollMutation.mutate()
-             if (response?.result) {
-               setRolledResult(response.result)
-             }
-             if (response?.offset !== undefined) {
-               setRolledOffset(response.offset)
-             }
-             if (response?.thread_id) {
-               setSelectedThreadId(response.thread_id)
-             }
-             setIsRolling(false)
-             navigate('/rate')
+             try {
+              const response = await rollMutation.mutate()
+              if (response?.result) {
+                setRolledResult(response.result)
+              }
+              if (response?.offset !== undefined) {
+                setRolledOffset(response.offset)
+              }
+              if (response?.thread_id) {
+                setSelectedThreadId(response.thread_id)
+              }
+              setIsRolling(false)
+              navigate('/rate', { state: { rollResponse: response } })
             } catch (error) {
               console.error('Roll failed:', error)
               setIsRolling(false)
@@ -227,10 +227,10 @@ export default function RollPage() {
 
     overrideMutation
       .mutate({ thread_id: Number(overrideThreadId) })
-      .then(() => {
+      .then((response) => {
         setIsOverrideOpen(false)
         setOverrideThreadId('')
-        navigate('/rate')
+        navigate('/rate', { state: { rollResponse: response } })
       })
       .catch(() => {
         // Handle error if needed

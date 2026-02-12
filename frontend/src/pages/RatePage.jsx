@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
@@ -8,6 +8,8 @@ import { useRate, useSession, useUpdateThread, useSnooze } from '../hooks'
 
 export default function RatePage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const rollResponse = location.state?.rollResponse
 
   const [rating, setRating] = useState(4.0)
   const [predictedDie, setPredictedDie] = useState(6)
@@ -29,15 +31,33 @@ export default function RatePage() {
   const snoozeMutation = useSnooze()
 
   useEffect(() => {
-    if (session) {
-      const die = session.current_die || 6
-      const result = session.last_rolled_result || 1
+    // Use roll response data first, then fall back to session
+    if (rollResponse) {
+      setCurrentDie(rollResponse.die_size)
+      setPredictedDie(rollResponse.die_size)
+      setPreviewSides(rollResponse.die_size)
+      setRolledValue(rollResponse.result)
+    } else if (session) {
+      const die = session.current_die ?? 6
+      const result = session.last_rolled_result ?? 1
       setCurrentDie(die)
       setPredictedDie(die)
       setPreviewSides(die)
       setRolledValue(result)
     }
-  }, [session])
+  }, [rollResponse, session])
+
+  // Get active thread data from roll response or session
+  const activeThread = rollResponse
+    ? {
+        id: rollResponse.thread_id,
+        title: rollResponse.title,
+        format: rollResponse.format,
+        issues_remaining: rollResponse.issues_remaining,
+        queue_position: rollResponse.queue_position,
+        last_rolled_result: rollResponse.result,
+      }
+    : session?.active_thread
 
   function updateUI(val) {
     const num = parseFloat(val);
@@ -85,7 +105,7 @@ export default function RatePage() {
   }
 
   async function handleSubmitRating(finishSession = false) {
-    if (!finishSession && session.active_thread && session.active_thread.issues_remaining - 1 <= 0) {
+    if (!finishSession && activeThread && activeThread.issues_remaining - 1 <= 0) {
       setPendingRating(rating);
       setShowCompleteModal(true);
       return;
@@ -128,9 +148,6 @@ export default function RatePage() {
 
   async function handleAddMoreIssues() {
     if (additionalIssues < 1) return;
-
-    // Use session.active_thread since thread is defined after the early return guard
-    const activeThread = session.active_thread;
     if (!activeThread) return;
 
     const newIssuesRemaining = activeThread.issues_remaining + additionalIssues;
@@ -194,8 +211,8 @@ export default function RatePage() {
     navigate('/');
   }
 
-  if (!session || !session.active_thread) {
-    if (sessionPending) {
+  if (!activeThread) {
+    if (sessionPending && !rollResponse) {
       return (
         <div className="text-center py-20">
           <div className="text-6xl mb-4">⏳</div>
@@ -219,7 +236,7 @@ export default function RatePage() {
     );
   }
 
-  const thread = session.active_thread;
+  const thread = activeThread;
 
   return (
     <div className="space-y-8 pb-10">

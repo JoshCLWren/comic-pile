@@ -160,4 +160,37 @@ test.describe('Roll Dice Feature', () => {
     const currentUrl = authenticatedWithThreadsPage.url();
     expect(currentUrl).toMatch(/\/rate\/?$/);
   });
+
+  test('should navigate to rate page without loading state after roll', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
+
+    // Simulate roll by posting to API directly
+    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
+    const rollResponse = await authenticatedWithThreadsPage.request.post('/api/roll/', {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    data: {},
+    });
+
+    expect(rollResponse.ok()).toBeTruthy();
+    const rollData = await rollResponse.json();
+
+    // Navigate with state data like RollPage does
+    await authenticatedWithThreadsPage.goto('/rate', { waitUntil: 'load' });
+    await authenticatedWithThreadsPage.evaluate((data) => {
+      window.history.pushState({ rollResponse: data }, '', '/rate');
+    });
+
+    // Verify no loading state appears
+    const loadingText = authenticatedWithThreadsPage.getByText('Loading...');
+    await expect(async () => {
+      const isVisible = await loadingText.isVisible().catch(() => false);
+      expect(isVisible).toBe(false);
+    }).toPass({ timeout: 3000 });
+
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
+  });
 });
