@@ -83,6 +83,10 @@ async def roll_dice(
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
+
+    # Refresh thread to ensure all attributes are loaded after commit
+    await db.refresh(selected_thread)
+
     if clear_cache:
         clear_cache()
 
@@ -163,6 +167,10 @@ async def override_roll(
             snoozed_count = len(snoozed_ids)
 
         await db.commit()
+
+        # Refresh thread to ensure all attributes are loaded after commit
+        await db.refresh(override_thread)
+
         if clear_cache:
             clear_cache()
 

@@ -169,12 +169,12 @@ test.describe('Roll Dice Feature', () => {
 
     await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
 
+    // Check that "Loading..." text does not appear
     const loadingText = authenticatedWithThreadsPage.getByText('Loading...');
-    
     await expect(async () => {
       const isVisible = await loadingText.isVisible().catch(() => false);
       expect(isVisible).toBe(false);
-    }).toPass({ timeout: 3000, intervals: 100 });
+    }).toPass({ timeout: 3000 });
 
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
   });
