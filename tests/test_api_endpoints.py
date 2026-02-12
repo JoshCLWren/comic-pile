@@ -235,55 +235,60 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
     now = datetime.now(UTC)
     result = await async_db.execute(select(User).where(User.id == 1))
     user = result.scalar_one()
+    user_id = user.id  # Extract before commit
+
     thread = Thread(
         title="Test Thread",
         format="Comic",
         issues_remaining=10,
         queue_position=100,
         status="active",
-        user_id=user.id,
+        user_id=user_id,
     )
     async_db.add(thread)
     await async_db.commit()
     await async_db.refresh(thread)
+    thread_id = thread.id  # Extract before next commit
 
-    session = SessionModel(start_die=6, user_id=user.id, started_at=now)
+    session = SessionModel(start_die=6, user_id=user_id, started_at=now)
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
+    session_id = session.id  # Extract before next commit
 
     event = Event(
         type="roll",
         die=6,
         result=4,
-        session_id=session.id,
-        thread_id=thread.id,
+        session_id=session_id,
+        thread_id=thread_id,
         timestamp=now,
     )
     async_db.add(event)
     await async_db.commit()
     await async_db.refresh(event)
+    event_id = event.id  # Extract before next commit
 
     snapshot = Snapshot(
-        session_id=session.id,
-        event_id=event.id,
+        session_id=session_id,
+        event_id=event_id,
         thread_states={"1": {"title": "Test Thread"}},
         description="Test snapshot",
     )
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await auth_client.delete(f"/api/threads/{thread.id}")
+    response = await auth_client.delete(f"/api/threads/{thread_id}")
     assert response.status_code == 204
 
-    db_thread = await async_db.get(Thread, thread.id)
+    db_thread = await async_db.get(Thread, thread_id)
     assert db_thread is None
 
-    db_event = await async_db.get(Event, event.id)
+    db_event = await async_db.get(Event, event_id)
     assert db_event is None
 
     result = await async_db.execute(
-        select(func.count(Snapshot.id)).where(Snapshot.event_id == event.id)
+        select(func.count(Snapshot.id)).where(Snapshot.event_id == event_id)
     )
     snapshot_count_after = result.scalar()
     assert snapshot_count_after == 0
