@@ -33,136 +33,68 @@ async def test_rate_success(auth_client: AsyncClient, async_db: AsyncSession) ->
     assert thread.last_rating == 4.0
 
 
+
 @pytest.mark.asyncio
 async def test_rate_low_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Rating=3.0, die_size steps up."""
-    from tests.conftest import get_or_create_user_async
+    """Rating=3.0, die_size steps up - using API-first pattern."""
+    # Create thread and start session via API
+    await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
+    await start_session_via_api(auth_client, start_die=10)
 
-    user = await get_or_create_user_async(async_db)
-
-    session = SessionModel(start_die=10, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Test Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    event = Event(
-        type="roll",
-        die=10,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-        thread_id=thread.id,
-    )
-    async_db.add(event)
-    await async_db.commit()
-
+    # Test rating with low score
     response = await auth_client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
     assert response.status_code == 200
+
+    # Verify die stepped up (10 -> 12) due to low rating
+    # Get the session to verify events
+    from app.models import Session as SessionModel
+
+    result = await async_db.execute(select(SessionModel))
+    session = result.scalar_one_or_none()
+    assert session is not None
 
     result = await async_db.execute(
         select(Event).where(Event.session_id == session.id).where(Event.type == "rate")
     )
     events = result.scalars().all()
     assert len(events) == 1
-    assert events[0].die_after == 12
+    assert events[0].die_after == 12  # Stepped up from d10
 
 
 @pytest.mark.asyncio
 async def test_rate_high_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Rating=4.0, die_size steps down."""
-    from tests.conftest import get_or_create_user_async
+    """Rating=4.0, die_size steps down - using API-first pattern."""
+    # Create thread and start session via API
+    await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
+    await start_session_via_api(auth_client, start_die=10)
 
-    user = await get_or_create_user_async(async_db)
-
-    session = SessionModel(start_die=10, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Test Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    event = Event(
-        type="roll",
-        die=10,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-        thread_id=thread.id,
-    )
-    async_db.add(event)
-    await async_db.commit()
-
+    # Test rating with high score
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 200
+
+    # Verify die stepped down (10 -> 8) due to high rating
+    from app.models import Session as SessionModel
+
+    result = await async_db.execute(select(SessionModel))
+    session = result.scalar_one_or_none()
+    assert session is not None
 
     result = await async_db.execute(
         select(Event).where(Event.session_id == session.id).where(Event.type == "rate")
     )
     events = result.scalars().all()
     assert len(events) == 1
-    assert events[0].die_after == 8
+    assert events[0].die_after == 8  # Stepped down from d10
 
 
 @pytest.mark.asyncio
 async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Issues <= 0, moves to back of queue, session ends only with finish_session=True."""
-    from tests.conftest import get_or_create_user_async
+    """Issues <= 0, marks thread completed - using API-first pattern."""
+    # Create thread with only 1 issue remaining and start session
+    await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=1)
+    await start_session_via_api(auth_client, start_die=10)
 
-    user = await get_or_create_user_async(async_db)
-
-    session = SessionModel(start_die=10, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Test Thread",
-        format="Comic",
-        issues_remaining=1,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    event = Event(
-        type="roll",
-        die=10,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-        thread_id=thread.id,
-    )
-    async_db.add(event)
-    await async_db.commit()
-
+    # Rate and finish the session
     response = await auth_client.post(
         "/api/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
     )
@@ -172,52 +104,40 @@ async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSe
     assert data["status"] == "completed"
     assert data["issues_remaining"] == 0
 
-    await async_db.refresh(thread)
+    # Verify thread is completed
+    result = await async_db.execute(select(Thread).where(Thread.title == "Test Thread"))
+    thread = result.scalar_one_or_none()
+    assert thread is not None
     assert thread.status == "completed"
     assert thread.queue_position == 1
 
-    await async_db.refresh(session)
+    # Verify session ended
+    from app.models import Session as SessionModel
+
+    result = await async_db.execute(select(SessionModel))
+    session = result.scalar_one_or_none()
+    assert session is not None
     assert session.ended_at is not None
+
 
 
 @pytest.mark.asyncio
 async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Event saved with rating and issues_read."""
-    from tests.conftest import get_or_create_user_async
+    """Event saved with rating and issues_read - using API-first pattern."""
+    # Create thread and start session via API
+    await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
+    await start_session_via_api(auth_client, start_die=10)
 
-    user = await get_or_create_user_async(async_db)
-
-    session = SessionModel(start_die=10, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Test Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    event = Event(
-        type="roll",
-        die=10,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-        thread_id=thread.id,
-    )
-    async_db.add(event)
-    await async_db.commit()
-
+    # Rate the thread
     response = await auth_client.post("/api/rate/", json={"rating": 4.5, "issues_read": 2})
     assert response.status_code == 200
+
+    # Verify event was recorded with correct values
+    from app.models import Session as SessionModel
+
+    result = await async_db.execute(select(SessionModel))
+    session = result.scalar_one_or_none()
+    assert session is not None
 
     result = await async_db.execute(
         select(Event).where(Event.session_id == session.id).where(Event.type == "rate")
@@ -230,7 +150,7 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
 
 @pytest.mark.asyncio
 async def test_rate_no_active_session(auth_client: AsyncClient) -> None:
-    """Returns error if no active session."""
+    """Returns error if no active session - no setup needed."""
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
     assert "No active session" in response.json()["detail"]
@@ -238,7 +158,11 @@ async def test_rate_no_active_session(auth_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_rate_no_active_thread(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Returns error if no active thread in session."""
+    """Returns error if no active thread in session.
+
+    This test still uses direct DB access because there's no API endpoint
+    to create a session without threads. This is an edge case test.
+    """
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
