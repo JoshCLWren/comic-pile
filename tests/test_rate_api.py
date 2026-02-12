@@ -7,44 +7,17 @@ from app.models import Event, Thread
 from httpx import AsyncClient
 from app.models import Session as SessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.conftest import create_thread_via_api, start_session_via_api
 
 
 @pytest.mark.asyncio
 async def test_rate_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """POST /rate/ updates thread correctly."""
-    from tests.conftest import get_or_create_user_async
+    """POST /rate/ updates thread correctly using API-first pattern."""
+    # Create thread and start session via API (decoupled from SQLAlchemy)
+    await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
+    await start_session_via_api(auth_client, start_die=10)
 
-    user = await get_or_create_user_async(async_db)
-
-    session = SessionModel(start_die=10, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Test Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    event = Event(
-        type="roll",
-        die=10,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-        thread_id=thread.id,
-    )
-    async_db.add(event)
-    await async_db.commit()
-
+    # Test the rate endpoint
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 200
 
@@ -52,7 +25,10 @@ async def test_rate_success(auth_client: AsyncClient, async_db: AsyncSession) ->
     assert data["issues_remaining"] == 4
     assert data["last_rating"] == 4.0
 
-    await async_db.refresh(thread)
+    # Verify final state with simple SELECT query
+    result = await async_db.execute(select(Thread).where(Thread.title == "Test Thread"))
+    thread = result.scalar_one_or_none()
+    assert thread is not None
     assert thread.issues_remaining == 4
     assert thread.last_rating == 4.0
 

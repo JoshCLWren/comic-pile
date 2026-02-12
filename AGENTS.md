@@ -326,7 +326,7 @@ cd frontend && npx playwright test
 
  ### API Tests
 
-API tests use in-memory SQLite for fast unit testing:
+API tests use PostgreSQL for testing (configured in `.env.test`):
 
 - Tests in `tests/` directory, test files: `test_*.py`, functions: `test_*`
 - Use `@pytest.mark.asyncio` for async tests
@@ -341,10 +341,109 @@ async def test_example(auth_client, sample_data):
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
 
-# Database session
-def test_db_example(db):
-    thread = db.get(Thread, 1)
+# Database session (use sparingly - prefer API-based helpers)
+async def test_db_example(async_db):
+    result = await async_db.execute(select(Thread).where(Thread.id == 1))
+    thread = result.scalar_one_or_none()
 ```
+
+### API-First Testing Pattern (RECOMMENDED)
+
+**Goal**: Decouple tests from SQLAlchemy implementation details by using API endpoints for test setup.
+
+**Why?**
+- Avoids MissingGreenlet errors from accessing models after commits
+- Tests reflect real application usage patterns
+- Reduces coupling to ORM internals
+- Simpler test code that's easier to maintain
+
+**Helper Functions** (available in `tests/conftest.py`):
+
+```python
+# ✅ RECOMMENDED: Create threads via API
+thread = await create_thread_via_api(
+    auth_client,
+    title="Superman",
+    format="Comic",
+    issues_remaining=10,
+)
+
+# ✅ RECOMMENDED: Start session via roll endpoint
+roll_data = await start_session_via_api(auth_client, start_die=10)
+
+# ✅ RECOMMENDED: Rate thread via API
+rate_data = await rate_thread_via_api(
+    auth_client,
+    rating=4.0,
+    issues_read=1,
+)
+```
+
+**When to Use API vs Direct DB Access**:
+
+| Scenario | Use API Helpers | Use Direct DB |
+|----------|----------------|---------------|
+| Creating test data | ✅ Preferred | Only if API unavailable |
+| Testing API endpoints | ✅ Always | For verification queries |
+| Testing business logic | ✅ Via API | For unit tests of pure functions |
+| Complex test setup | ✅ Multiple API calls | Only if no API exists |
+| Verifying state | Via API queries | ✅ Simple SELECT queries OK |
+
+**Example: Old Pattern vs New Pattern**
+
+```python
+# ❌ OLD PATTERN: Tightly coupled to SQLAlchemy
+@pytest.mark.asyncio
+async def test_rate_old(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    from tests.conftest import get_or_create_user_async
+    
+    user = await get_or_create_user_async(async_db)
+    
+    # Multiple commit/refresh cycles required
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)  # Need ID, prone to MissingGreenlet
+    
+    thread = Thread(title="Test", format="Comic", issues_remaining=5, 
+                   queue_position=1, status="active", user_id=user.id)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)  # Need ID, prone to MissingGreenlet
+    
+    event = Event(type="roll", die=10, result=1, 
+                 selected_thread_id=thread.id, selection_method="random",
+                 session_id=session.id, thread_id=thread.id)
+    async_db.add(event)
+    await async_db.commit()
+    
+    # Finally test the endpoint
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    assert response.status_code == 200
+
+# ✅ NEW PATTERN: API-first, decoupled from SQLAlchemy
+@pytest.mark.asyncio
+async def test_rate_new(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    # Use API helpers for setup - no SQLAlchemy details needed!
+    await create_thread_via_api(auth_client, title="Test", issues_remaining=5)
+    await start_session_via_api(auth_client, start_die=10)
+    
+    # Test the endpoint
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    assert response.status_code == 200
+    
+    # Verify with simple SELECT query if needed
+    result = await async_db.execute(select(Thread).where(Thread.title == "Test"))
+    thread = result.scalar_one_or_none()
+    assert thread.last_rating == 4.0
+```
+
+**Benefits of New Pattern**:
+- 15 lines reduced to 8 lines
+- No `commit()`/`refresh()` cycles to manage
+- No risk of MissingGreenlet errors
+- Reflects actual user workflow
+- Easier to understand and maintain
 
  ## Docker Test Environment
 
