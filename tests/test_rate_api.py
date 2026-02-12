@@ -47,8 +47,6 @@ async def test_rate_low_rating(auth_client: AsyncClient, async_db: AsyncSession)
 
     # Verify die stepped up (10 -> 12) due to low rating
     # Get the session to verify events
-    from app.models import Session as SessionModel
-
     result = await async_db.execute(select(SessionModel))
     session = result.scalar_one_or_none()
     assert session is not None
@@ -73,8 +71,6 @@ async def test_rate_high_rating(auth_client: AsyncClient, async_db: AsyncSession
     assert response.status_code == 200
 
     # Verify die stepped down (10 -> 8) due to high rating
-    from app.models import Session as SessionModel
-
     result = await async_db.execute(select(SessionModel))
     session = result.scalar_one_or_none()
     assert session is not None
@@ -112,8 +108,6 @@ async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSe
     assert thread.queue_position == 1
 
     # Verify session ended
-    from app.models import Session as SessionModel
-
     result = await async_db.execute(select(SessionModel))
     session = result.scalar_one_or_none()
     assert session is not None
@@ -133,8 +127,6 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
     assert response.status_code == 200
 
     # Verify event was recorded with correct values
-    from app.models import Session as SessionModel
-
     result = await async_db.execute(select(SessionModel))
     session = result.scalar_one_or_none()
     assert session is not None

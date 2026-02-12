@@ -102,6 +102,8 @@ async def test_old_pattern_for_comparison(
     - Doesn't reflect real application usage
     - More code, harder to maintain
     """
+    # NOTE: These imports are for demonstration only - showing the old pattern
+    # In new tests, avoid these imports and use API helpers instead
     from datetime import UTC, datetime
 
     from tests.conftest import get_or_create_user_async
