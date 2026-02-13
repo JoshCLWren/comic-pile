@@ -78,14 +78,14 @@ def create_error_response(
     Args:
         status_code: HTTP status code
         message: Human-readable error message
-        details: Optional list of error details
+        details: Optional list of ErrorDetail objects
 
     Returns:
         Dictionary with error response structure
     """
     # Convert ErrorDetail objects to dicts for JSON serialization
-    details_list = [d.model_dump(exclude_none=True) if isinstance(d, ErrorDetail) else d for d in (details or [])]
-    
+    details_list = [d.model_dump(exclude_none=True) for d in (details or [])]
+
     return {
         "error": {
             "code": status_code,
