@@ -54,8 +54,8 @@ export default function RollPage() {
 
   async function handleReadStale() {
     try {
-      await threadsApi.setPending(staleThread.id)
-      navigate('/rate')
+      const response = await threadsApi.setPending(staleThread.id)
+      navigate('/rate', { state: { rollResponse: response } })
     } catch (error) {
       console.error('Failed to set pending thread:', error)
     }
@@ -76,8 +76,10 @@ export default function RollPage() {
     try {
       switch (action) {
         case 'read':
-          await threadsApi.setPending(selectedThread.id)
-          navigate('/rate')
+          {
+            const response = await threadsApi.setPending(selectedThread.id)
+            navigate('/rate', { state: { rollResponse: response } })
+          }
           break
         case 'move-front':
           await moveToFrontMutation.mutate(selectedThread.id)

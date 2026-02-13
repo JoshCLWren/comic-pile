@@ -678,8 +678,12 @@ async def test_set_pending_thread_updates_timestamp_and_clears_cache(
 
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "pending_set"
     assert data["thread_id"] == thread.id
+    assert data["title"] == thread.title
+    assert data["format"] == thread.format
+    assert data["issues_remaining"] == thread.issues_remaining
+    assert data["queue_position"] == thread.queue_position
+    assert data["result"]
 
     await async_db.refresh(session)
     assert session.pending_thread_id == thread.id

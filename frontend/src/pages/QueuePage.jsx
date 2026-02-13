@@ -228,8 +228,10 @@ export default function QueuePage() {
     try {
       switch (action) {
         case 'read':
-          await threadsApi.setPending(selectedThread.id)
-          navigate('/rate')
+          {
+            const response = await threadsApi.setPending(selectedThread.id)
+            navigate('/rate', { state: { rollResponse: response } })
+          }
           break
         case 'move-front':
           await moveToFrontMutation.mutate(selectedThread.id)
