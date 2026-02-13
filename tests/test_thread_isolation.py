@@ -78,24 +78,24 @@ async def test_thread_scoped_by_user_on_list(client: AsyncClient, user_a: User, 
     _ = user_a_thread
     _ = user_b_thread
     login_a = await client.post(
-        "/api/auth/login", json={"username": "test_user_a", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_a", "password": "password"}
     )
     assert login_a.status_code == 200
     token_a = login_a.json()["access_token"]
 
-    response = await client.get("/api/threads/", headers={"Authorization": f"Bearer {token_a}"})
+    response = await client.get("/api/v1/threads/", headers={"Authorization": f"Bearer {token_a}"})
     assert response.status_code == 200
     threads = response.json()
     assert len(threads) == 1
     assert threads[0]["title"] == "User A Thread"
 
     login_b = await client.post(
-        "/api/auth/login", json={"username": "test_user_b", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_b", "password": "password"}
     )
     assert login_b.status_code == 200
     token_b = login_b.json()["access_token"]
 
-    response = await client.get("/api/threads/", headers={"Authorization": f"Bearer {token_b}"})
+    response = await client.get("/api/v1/threads/", headers={"Authorization": f"Bearer {token_b}"})
     assert response.status_code == 200
     threads = response.json()
     assert len(threads) == 1
@@ -108,24 +108,24 @@ async def test_thread_get_returns_404_for_other_users_thread(client: AsyncClient
     _ = user_a
     _ = user_b
     login_a = await client.post(
-        "/api/auth/login", json={"username": "test_user_a", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_a", "password": "password"}
     )
     assert login_a.status_code == 200
     token_a = login_a.json()["access_token"]
 
     response = await client.get(
-        f"/api/threads/{user_b_thread.id}", headers={"Authorization": f"Bearer {token_a}"}
+        f"/api/v1/threads/{user_b_thread.id}", headers={"Authorization": f"Bearer {token_a}"}
     )
     assert response.status_code == 404
 
     login_b = await client.post(
-        "/api/auth/login", json={"username": "test_user_b", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_b", "password": "password"}
     )
     assert login_b.status_code == 200
     token_b = login_b.json()["access_token"]
 
     response = await client.get(
-        f"/api/threads/{user_a_thread.id}", headers={"Authorization": f"Bearer {token_b}"}
+        f"/api/v1/threads/{user_a_thread.id}", headers={"Authorization": f"Bearer {token_b}"}
     )
     assert response.status_code == 404
 
@@ -136,26 +136,26 @@ async def test_thread_update_fails_for_other_users_thread(client: AsyncClient, a
     _ = user_a
     _ = user_b
     login_a = await client.post(
-        "/api/auth/login", json={"username": "test_user_a", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_a", "password": "password"}
     )
     assert login_a.status_code == 200
     token_a = login_a.json()["access_token"]
 
     response = await client.put(
-        f"/api/threads/{user_b_thread.id}",
+        f"/api/v1/threads/{user_b_thread.id}",
         headers={"Authorization": f"Bearer {token_a}"},
         json={"title": "Hacked Title"},
     )
     assert response.status_code == 404
 
     login_b = await client.post(
-        "/api/auth/login", json={"username": "test_user_b", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_b", "password": "password"}
     )
     assert login_b.status_code == 200
     token_b = login_b.json()["access_token"]
 
     response = await client.put(
-        f"/api/threads/{user_b_thread.id}",
+        f"/api/v1/threads/{user_b_thread.id}",
         headers={"Authorization": f"Bearer {token_b}"},
         json={"title": "Valid Update"},
     )
@@ -171,13 +171,13 @@ async def test_thread_delete_fails_for_other_users_thread(client: AsyncClient, a
     _ = user_a
     _ = user_b
     login_a = await client.post(
-        "/api/auth/login", json={"username": "test_user_a", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_a", "password": "password"}
     )
     assert login_a.status_code == 200
     token_a = login_a.json()["access_token"]
 
     response = await client.delete(
-        f"/api/threads/{user_b_thread.id}", headers={"Authorization": f"Bearer {token_a}"}
+        f"/api/v1/threads/{user_b_thread.id}", headers={"Authorization": f"Bearer {token_a}"}
     )
     assert response.status_code == 404
 
@@ -188,13 +188,13 @@ async def test_thread_delete_fails_for_other_users_thread(client: AsyncClient, a
     assert thread_exists is not None
 
     login_b = await client.post(
-        "/api/auth/login", json={"username": "test_user_b", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_b", "password": "password"}
     )
     assert login_b.status_code == 200
     token_b = login_b.json()["access_token"]
 
     response = await client.delete(
-        f"/api/threads/{user_b_thread.id}", headers={"Authorization": f"Bearer {token_b}"}
+        f"/api/v1/threads/{user_b_thread.id}", headers={"Authorization": f"Bearer {token_b}"}
     )
     assert response.status_code == 204
 
@@ -209,13 +209,13 @@ async def test_thread_delete_fails_for_other_users_thread(client: AsyncClient, a
 async def test_thread_creation_sets_user_id(client: AsyncClient, async_db: AsyncSession, user_a: User, user_b: User) -> None:
     """Test POST /api/threads/ sets user_id from authenticated user."""
     login_a = await client.post(
-        "/api/auth/login", json={"username": "test_user_a", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_a", "password": "password"}
     )
     assert login_a.status_code == 200
     token_a = login_a.json()["access_token"]
 
     response = await client.post(
-        "/api/threads/",
+        "/api/v1/threads/",
         headers={"Authorization": f"Bearer {token_a}"},
         json={"title": "User A Thread", "format": "Comic", "issues_remaining": 10},
     )
@@ -224,13 +224,13 @@ async def test_thread_creation_sets_user_id(client: AsyncClient, async_db: Async
     assert thread_data["title"] == "User A Thread"
 
     login_b = await client.post(
-        "/api/auth/login", json={"username": "test_user_b", "password": "password"}
+        "/api/v1/auth/login", json={"username": "test_user_b", "password": "password"}
     )
     assert login_b.status_code == 200
     token_b = login_b.json()["access_token"]
 
     response = await client.post(
-        "/api/threads/",
+        "/api/v1/threads/",
         headers={"Authorization": f"Bearer {token_b}"},
         json={"title": "User B Thread", "format": "Comic", "issues_remaining": 5},
     )

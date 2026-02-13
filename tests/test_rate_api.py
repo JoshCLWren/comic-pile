@@ -45,7 +45,7 @@ async def test_rate_success(auth_client: AsyncClient, async_db: AsyncSession) ->
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 200
 
     data = response.json()
@@ -93,7 +93,7 @@ async def test_rate_low_rating(auth_client: AsyncClient, async_db: AsyncSession)
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 3.0, "issues_read": 1})
     assert response.status_code == 200
 
     result = await async_db.execute(
@@ -140,7 +140,7 @@ async def test_rate_high_rating(auth_client: AsyncClient, async_db: AsyncSession
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 200
 
     result = await async_db.execute(
@@ -188,7 +188,7 @@ async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSe
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
+        "/api/v1/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
     )
     assert response.status_code == 200
 
@@ -240,7 +240,7 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.5, "issues_read": 2})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.5, "issues_read": 2})
     assert response.status_code == 200
 
     result = await async_db.execute(
@@ -255,7 +255,7 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
 @pytest.mark.asyncio
 async def test_rate_no_active_session(auth_client: AsyncClient) -> None:
     """Returns error if no active session."""
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
     assert "No active session" in response.json()["detail"]
 
@@ -272,7 +272,7 @@ async def test_rate_no_active_thread(auth_client: AsyncClient, async_db: AsyncSe
     await async_db.commit()
     await async_db.refresh(session)
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
     assert "No active thread" in response.json()["detail"]
 
@@ -314,7 +314,7 @@ async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: Async
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 200
 
     await async_db.refresh(session)
@@ -375,7 +375,7 @@ async def test_rate_low_rating_updates_manual_die(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 3.0, "issues_read": 1})
     assert response.status_code == 200
 
     await async_db.refresh(session)
@@ -436,7 +436,7 @@ async def test_rate_finish_session_flag_controls_session_end(
     await async_db.commit()
 
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": False}
+        "/api/v1/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 
@@ -532,7 +532,7 @@ async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
 
     # Rate the thread - this should not raise MissingGreenlet
     response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 4.0, "issues_read": 1, "finish_session": False},
     )
     assert response.status_code == 200

@@ -15,13 +15,13 @@ async def test_move_to_position_clamps_to_max(
     """Moving to position > max_position clamps to max."""
     thread_id = sample_data["threads"][0].id
 
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     threads = response.json()
     active_threads = [t for t in threads if t["status"] == "active"]
     max_position = len(active_threads)
 
     response = await auth_client.put(
-        f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
+        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
     )
     assert response.status_code == 200
 
@@ -49,7 +49,7 @@ async def test_move_to_position_when_no_threads(
     await async_db.refresh(thread)
 
     response = await auth_client.put(
-        f"/api/queue/threads/{thread.id}/position/", json={"new_position": 1}
+        f"/api/v1/queue/threads/{thread.id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200
 

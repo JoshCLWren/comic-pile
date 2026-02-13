@@ -123,7 +123,7 @@ async def test_serve_react_spa_serves_index(auth_client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_serve_react_spa_returns_404_for_api_paths(auth_client: AsyncClient) -> None:
     """Test serve_react_spa returns 404 for blocked API prefixes."""
-    response = await auth_client.get("/api/nonexistent")
+    response = await auth_client.get("/api/v1/nonexistent")
     assert response.status_code == 404
     data = response.json()
     # New Google-style error format

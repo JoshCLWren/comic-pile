@@ -46,7 +46,7 @@ async def test_create_threads_to_meet_20(
     ]
 
     for thread in threads_data:
-        resp = await auth_client.post("/api/threads/", json=thread)
+        resp = await auth_client.post("/api/v1/threads/", json=thread)
         assert resp.status_code == 201
         data = resp.json()
         assert "id" in data
@@ -72,7 +72,7 @@ async def test_reposition_thread_with_sequential_positions(
 
     # Test the reposition API call - move Superman from position 1 to position 3
     response = await auth_client.put(
-        f"/api/queue/threads/{superman_thread.id}/position/", json={"new_position": 3}
+        f"/api/v1/queue/threads/{superman_thread.id}/position/", json={"new_position": 3}
     )
 
     assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"

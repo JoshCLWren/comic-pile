@@ -20,7 +20,7 @@ class TestAuth:
             "password": "securepassword123",
         }
 
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -57,7 +57,7 @@ class TestAuth:
             "email": "test@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         # Try to create user with same username
@@ -66,7 +66,7 @@ class TestAuth:
             "email": "different@example.com",
             "password": "password456",
         }
-        response = await client.post("/api/auth/register", json=duplicate_data)
+        response = await client.post("/api/v1/auth/register", json=duplicate_data)
         assert response.status_code == 400
         assert "Username already registered" in response.json()["detail"]
 
@@ -81,7 +81,7 @@ class TestAuth:
             "email": "same@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         # Try to create user with same email
@@ -90,7 +90,7 @@ class TestAuth:
             "email": "same@example.com",
             "password": "password456",
         }
-        response = await client.post("/api/auth/register", json=duplicate_data)
+        response = await client.post("/api/v1/auth/register", json=duplicate_data)
         assert response.status_code == 400
         assert "Email already registered" in response.json()["detail"]
 
@@ -103,7 +103,7 @@ class TestAuth:
             "email": "login@example.com",
             "password": "mypassword123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         # Login
@@ -111,7 +111,7 @@ class TestAuth:
             "username": "loginuser",
             "password": "mypassword123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -126,7 +126,7 @@ class TestAuth:
             "username": "nonexistent",
             "password": "wrongpassword",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 401
         assert "Incorrect username or password" in response.json()["detail"]
 
@@ -139,20 +139,20 @@ class TestAuth:
             "email": "refresh@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "refreshuser",
             "password": "password123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         tokens = response.json()
 
         # Refresh token
         refresh_data = {"refresh_token": tokens["refresh_token"]}
-        response = await client.post("/api/auth/refresh", json=refresh_data)
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 200
 
         new_tokens = response.json()
@@ -168,7 +168,7 @@ class TestAuth:
     async def test_refresh_token_invalid(self, client: AsyncClient) -> None:
         """Test refresh with invalid token fails."""
         refresh_data = {"refresh_token": "invalid.jwt.token"}
-        response = await client.post("/api/auth/refresh", json=refresh_data)
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 401
         assert "Invalid refresh token" in response.json()["detail"]
 
@@ -176,7 +176,7 @@ class TestAuth:
     async def test_refresh_token_none(self, client: AsyncClient) -> None:
         """Test refresh with None token fails with 401 not 500."""
         refresh_data = {"refresh_token": None}
-        response = await client.post("/api/auth/refresh", json=refresh_data)
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -190,20 +190,20 @@ class TestAuth:
             "email": "me@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "meuser",
             "password": "password123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         tokens = response.json()
 
         # Get current user info
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
-        response = await client.get("/api/auth/me", headers=headers)
+        response = await client.get("/api/v1/auth/me", headers=headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -214,7 +214,7 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_get_current_user_unauthenticated(self, client: AsyncClient) -> None:
         """Test getting current user info without authentication fails."""
-        response = await client.get("/api/auth/me")
+        response = await client.get("/api/v1/auth/me")
         assert response.status_code == 401
         assert "Not authenticated" in response.json()["detail"]
 
@@ -227,20 +227,20 @@ class TestAuth:
             "email": "logout@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "logoutuser",
             "password": "password123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         tokens = response.json()
 
         # Logout
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
-        response = await client.post("/api/auth/logout", headers=headers)
+        response = await client.post("/api/v1/auth/logout", headers=headers)
         assert response.status_code == 200
         assert response.json() == {"message": "Successfully logged out"}
 
@@ -252,14 +252,14 @@ class TestAuth:
             "email": "logoutidempotent@example.com",
             "password": "password123",
         }
-        response = await client.post("/api/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 200
 
         login_data = {
             "username": "logoutidempotentuser",
             "password": "password123",
         }
-        response = await client.post("/api/auth/login", json=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         tokens = response.json()
 

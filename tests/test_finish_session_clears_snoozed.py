@@ -57,7 +57,7 @@ async def test_finish_session_clears_snoozed_threads(auth_client: AsyncClient, a
     await async_db.commit()
 
     # Snooze thread1 (die steps up to d8, thread1 added to snoozed list)
-    snooze_response = await auth_client.post("/api/snooze/")
+    snooze_response = await auth_client.post("/api/v1/snooze/")
     assert snooze_response.status_code == 200
     snooze_data = snooze_response.json()
     assert thread1.id in snooze_data["snoozed_thread_ids"]
@@ -79,7 +79,7 @@ async def test_finish_session_clears_snoozed_threads(auth_client: AsyncClient, a
 
     # Rate thread2 with finish_session=True to finish the session
     rate_response = await auth_client.post(
-        "/api/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
+        "/api/v1/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
     )
     assert rate_response.status_code == 200
 

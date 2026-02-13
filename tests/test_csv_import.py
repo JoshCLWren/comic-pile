@@ -22,7 +22,7 @@ Wonder Woman,Trade Paperback,3"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -56,7 +56,7 @@ Batman,Trade"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -76,7 +76,7 @@ Batman,Comic,5"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -96,7 +96,7 @@ Batman,Comic,5"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -116,7 +116,7 @@ Batman,Comic,5"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -136,7 +136,7 @@ Batman,Comic,5"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -155,7 +155,7 @@ Superman,Comic,0"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -177,7 +177,7 @@ async def test_import_empty_file(client: AsyncClient, default_user: User, enable
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -194,7 +194,7 @@ async def test_import_non_csv_file(client: AsyncClient, default_user: User, enab
     txt_file = io.BytesIO(txt_content.encode())
     files = {"file": ("test.txt", txt_file, "text/plain")}
 
-    response = await client.post("/api/admin/import/csv/", files=files)
+    response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert response.status_code == 400
 
 
@@ -203,7 +203,7 @@ async def test_export_csv(client: AsyncClient, sample_data: dict, enable_interna
     """Test GET /admin/export/csv/ returns valid CSV."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/csv/")
+    response = await client.get("/api/v1/admin/export/csv/")
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
 
@@ -221,7 +221,7 @@ async def test_export_csv_only_active(client: AsyncClient, sample_data: dict, en
     """Test GET /admin/export/csv/ only exports active threads."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/csv/")
+    response = await client.get("/api/v1/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.text
@@ -236,7 +236,7 @@ async def test_export_csv_only_active(client: AsyncClient, sample_data: dict, en
 async def test_export_csv_empty(client: AsyncClient, enable_internal_ops: None) -> None:
     """Test GET /admin/export/csv/ returns empty CSV when no threads."""
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/csv/")
+    response = await client.get("/api/v1/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.text
@@ -250,7 +250,7 @@ async def test_export_json(client: AsyncClient, sample_data: dict, enable_intern
     """Test GET /admin/export/json/ returns all data."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/json/")
+    response = await client.get("/api/v1/admin/export/json/")
     assert response.status_code == 200
 
     data = response.json()
@@ -275,7 +275,7 @@ async def test_export_json_includes_completed(client: AsyncClient, sample_data: 
     """Test GET /admin/export/json/ includes completed threads."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/json/")
+    response = await client.get("/api/v1/admin/export/json/")
     assert response.status_code == 200
 
     data = response.json()
@@ -295,10 +295,10 @@ Wonder Woman,Trade Paperback,3"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
-    import_response = await client.post("/api/admin/import/csv/", files=files)
+    import_response = await client.post("/api/v1/admin/import/csv/", files=files)
     assert import_response.status_code == 200
 
-    export_response = await client.get("/api/admin/export/csv/")
+    export_response = await client.get("/api/v1/admin/export/csv/")
     assert export_response.status_code == 200
 
     exported_content = export_response.text
@@ -325,7 +325,7 @@ async def test_export_summary(client: AsyncClient, sample_data: dict, enable_int
     """Test GET /admin/export/summary/ returns markdown with narrative summaries."""
     _ = sample_data
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/summary/")
+    response = await client.get("/api/v1/admin/export/summary/")
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/markdown; charset=utf-8"
     assert "attachment; filename=session_summaries_" in response.headers["content-disposition"]
@@ -341,7 +341,7 @@ async def test_export_summary(client: AsyncClient, sample_data: dict, enable_int
 async def test_export_summary_empty(client: AsyncClient, enable_internal_ops: None) -> None:
     """Test GET /admin/export/summary/ works with no sessions."""
     _ = enable_internal_ops
-    response = await client.get("/api/admin/export/summary/")
+    response = await client.get("/api/v1/admin/export/summary/")
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/markdown; charset=utf-8"
 
@@ -361,7 +361,7 @@ async def test_import_reviews_valid_csv(client: AsyncClient, sample_data: dict, 
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("reviews.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -388,7 +388,7 @@ async def test_import_reviews_missing_thread_id(client: AsyncClient, enable_inte
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("reviews.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -406,7 +406,7 @@ async def test_import_reviews_missing_review_url(client: AsyncClient, enable_int
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("reviews.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -424,7 +424,7 @@ async def test_import_reviews_missing_timestamp(client: AsyncClient, enable_inte
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("reviews.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -442,7 +442,7 @@ abc,https://example.com/review,2024-01-15T10:30:00"""
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("reviews.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -460,7 +460,7 @@ async def test_import_reviews_thread_not_found(client: AsyncClient, enable_inter
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("reviews.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -483,7 +483,7 @@ async def test_import_reviews_invalid_timestamp(client: AsyncClient, sample_data
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("reviews.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 200
 
     data = response.json()
@@ -500,7 +500,7 @@ async def test_import_reviews_non_csv_file(client: AsyncClient, enable_internal_
     txt_file = io.BytesIO(txt_content.encode())
     files = {"file": ("test.txt", txt_file, "text/plain")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 400
 
 
@@ -512,7 +512,7 @@ async def test_import_reviews_empty_file(client: AsyncClient, enable_internal_op
     csv_file = io.BytesIO(csv_content.encode())
     files = {"file": ("reviews.csv", csv_file, "text/csv")}
 
-    response = await client.post("/api/admin/import/reviews/", files=files)
+    response = await client.post("/api/v1/admin/import/reviews/", files=files)
     assert response.status_code == 200
 
     data = response.json()

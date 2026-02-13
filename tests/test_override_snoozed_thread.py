@@ -42,23 +42,23 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
     await async_db.refresh(session)
 
     # Roll using API to set pending thread
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
     roll_data = roll_response.json()
     rolled_thread_id = roll_data["thread_id"]
 
     # Snooze the rolled thread (thread1)
-    snooze_response = await auth_client.post("/api/snooze/")
+    snooze_response = await auth_client.post("/api/v1/snooze/")
     assert snooze_response.status_code == 200
     snooze_data = snooze_response.json()
     assert rolled_thread_id in snooze_data["snoozed_thread_ids"]
 
     # Now override to snoozed thread1
-    override_response = await auth_client.post("/api/roll/override", json={"thread_id": thread1.id})
+    override_response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread1.id})
     assert override_response.status_code == 200
 
     # Get current session from API to verify snoozed list was updated
-    session_response = await auth_client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/v1/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
 
