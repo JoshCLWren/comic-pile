@@ -19,6 +19,8 @@ type TestUser = {
   password: string;
 };
 
+let fixtureUserCounter = 0;
+
 async function registerWithRetry(request: Request, testUser: TestUser, maxRetries = 3): Promise<{ accessToken: string }> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -29,6 +31,22 @@ async function registerWithRetry(request: Request, testUser: TestUser, maxRetrie
 
       if (!registerResponse.ok()) {
         const bodyText = await registerResponse.text();
+
+        if (registerResponse.status() === 400 && bodyText.includes('Username already registered')) {
+          const loginResponse = await request.post('/api/auth/login', {
+            data: {
+              username: testUser.username,
+              password: testUser.password,
+            },
+            timeout: 10000,
+          });
+
+          if (loginResponse.ok()) {
+            const loginData = await loginResponse.json();
+            return { accessToken: loginData.access_token };
+          }
+        }
+
         const error = new Error(
           `Fixture registration failed for ${testUser.username}: ${registerResponse.status()} ${registerResponse.statusText()}. Response: ${bodyText}`
         );
@@ -125,12 +143,11 @@ export const test = base.extend<TestFixtures>({
   },
 
   freshUserPage: async ({ page, request }, use) => {
-    const timestamp = Date.now();
-    const counter = Math.floor(Math.random() * 10000);
-    const workerId = process.pid;
+    const counter = ++fixtureUserCounter;
+    const workerId = process.pid || 0;
     const testUser = {
-      username: `auth_fresh_${timestamp}_${counter}_${workerId}`,
-      email: `auth_fresh_${timestamp}_${counter}_${workerId}@example.com`,
+      username: `auth_fresh_${counter}_${workerId}`,
+      email: `auth_fresh_${counter}_${workerId}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -158,12 +175,11 @@ export const test = base.extend<TestFixtures>({
   },
 
   authenticatedPage: async ({ page, request }, use) => {
-    const timestamp = Date.now();
-    const counter = Math.floor(Math.random() * 10000);
-    const workerId = process.pid;
+    const counter = ++fixtureUserCounter;
+    const workerId = process.pid || 0;
     const testUser = {
-      username: `auth_${timestamp}_${counter}_${workerId}`,
-      email: `auth_${timestamp}_${counter}_${workerId}@example.com`,
+      username: `auth_${counter}_${workerId}`,
+      email: `auth_${counter}_${workerId}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -181,12 +197,11 @@ export const test = base.extend<TestFixtures>({
   },
 
   authenticatedWithThreadsPage: async ({ page, request }, use) => {
-    const timestamp = Date.now();
-    const counter = Math.floor(Math.random() * 10000);
-    const workerId = process.pid;
+    const counter = ++fixtureUserCounter;
+    const workerId = process.pid || 0;
     const testUser = {
-      username: `auth_threads_${timestamp}_${counter}_${workerId}`,
-      email: `auth_threads_${timestamp}_${counter}_${workerId}@example.com`,
+      username: `auth_threads_${counter}_${workerId}`,
+      email: `auth_threads_${counter}_${workerId}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -205,11 +220,11 @@ export const test = base.extend<TestFixtures>({
   },
 
   testUser: async ({}, use) => {
-    const timestamp = Date.now();
-    const counter = Math.floor(Math.random() * 10000);
+    const counter = ++fixtureUserCounter;
+    const workerId = process.pid || 0;
     const testUser = {
-      username: `test_${timestamp}_${counter}`,
-      email: `test_${timestamp}_${counter}@example.com`,
+      username: `test_${counter}_${workerId}`,
+      email: `test_${counter}_${workerId}@example.com`,
       password: 'TestPass123!',
     };
     await use(testUser);
