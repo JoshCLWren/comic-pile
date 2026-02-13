@@ -15,7 +15,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
+from app.schemas import RateRequest, ReactivateRequest, SessionResponse, ThreadCreate, ThreadResponse, ThreadUpdate
 
 router = APIRouter(tags=["threads"])
 
@@ -354,13 +354,15 @@ async def delete_thread(
         clear_cache()
 
 
-@router.post("/reactivate", response_model=ThreadResponse)
-async def reactivate_thread(
+@router.post(":reactivate", response_model=ThreadResponse)
+async def reactivate_thread_custom_method(
     request: ReactivateRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> ThreadResponse:
-    """Reactivate a completed thread by adding more issues.
+    """Reactivate a completed thread by adding more issues (custom method).
+
+    This is a Google API Design Guide compliant custom method.
 
     Args:
         request: Reactivation request with thread_id and issues_to_add.
@@ -406,13 +408,40 @@ async def reactivate_thread(
     return thread_to_response(thread)
 
 
-@router.post("/{thread_id}/set-pending")
-async def set_pending_thread(
+# Keep old endpoint for backward compatibility during migration
+@router.post("/reactivate", response_model=ThreadResponse)
+async def reactivate_thread(
+    request: ReactivateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Reactivate a completed thread by adding more issues.
+
+    DEPRECATED: Use POST /threads:reactivate instead.
+
+    Args:
+        request: Reactivation request with thread_id and issues_to_add.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with reactivated thread details.
+
+    Raises:
+        HTTPException: If thread not found, not completed, or issues_to_add invalid.
+    """
+    return await reactivate_thread_custom_method(request, current_user, db)
+
+
+@router.post("/{thread_id}:setPending")
+async def set_pending_thread_custom_method(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str | int]:
-    """Set a thread as pending for rating (skip roll).
+    """Set a thread as pending for rating (skip roll) - custom method.
+
+    This is a Google API Design Guide compliant custom method.
 
     Args:
         thread_id: The thread ID to set as pending.
@@ -456,3 +485,88 @@ async def set_pending_thread(
         clear_cache()
 
     return {"status": "pending_set", "thread_id": thread_id}
+
+
+# Keep old endpoint for backward compatibility during migration
+@router.post("/{thread_id}/set-pending")
+async def set_pending_thread(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str | int]:
+    """Set a thread as pending for rating (skip roll).
+
+    DEPRECATED: Use POST /threads/{id}:setPending instead.
+
+    Args:
+        thread_id: The thread ID to set as pending.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Status indicating thread was set as pending.
+
+    Raises:
+        HTTPException: If thread not found.
+    """
+    return await set_pending_thread_custom_method(thread_id, current_user, db)
+
+
+@router.post(":rate", response_model=ThreadResponse)
+@limiter.limit("60/minute")
+async def rate_current_thread(
+    request: Request,
+    rate_data: RateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Rate the currently active thread (custom method).
+
+    This is a Google API Design Guide compliant custom method.
+    Delegates to the rate API implementation.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        rate_data: Rating request data.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with updated thread details.
+
+    Raises:
+        HTTPException: If no active session, invalid rating, or thread not found.
+    """
+    from app.api.rate import rate_thread as rate_thread_impl
+
+    return await rate_thread_impl(request, rate_data, current_user, db)
+
+
+@router.post("/{thread_id}:unsnooze", response_model=SessionResponse)
+@limiter.limit("30/minute")
+async def unsnooze_thread_custom_method(
+    thread_id: int,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    """Remove thread from snoozed list (custom method).
+
+    This is a Google API Design Guide compliant custom method.
+    Delegates to the snooze unsnooze implementation.
+
+    Args:
+        thread_id: The thread ID to remove from snoozed list.
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse containing the updated session.
+
+    Raises:
+        HTTPException: If no active session exists.
+    """
+    from app.api.snooze import unsnooze_thread as unsnooze_thread_impl
+
+    return await unsnooze_thread_impl(thread_id, request, current_user, db)
