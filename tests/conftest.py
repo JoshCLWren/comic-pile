@@ -400,6 +400,77 @@ async def auth_client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncC
     app.dependency_overrides.clear()
 
 
+async def create_thread_via_api(
+    auth_client: AsyncClient,
+    title: str = "Test Thread",
+    format: str = "Comic",
+    issues_remaining: int = 10,
+    notes: str | None = None,
+) -> dict:
+    """Create a thread via API endpoint (decoupled from SQLAlchemy).
+
+    This helper uses the API endpoint instead of direct database access,
+    making tests independent of SQLAlchemy session management and
+    avoiding MissingGreenlet errors.
+
+    Returns the created thread as dict from API response.
+    """
+    thread_data = {
+        "title": title,
+        "format": format,
+        "issues_remaining": issues_remaining,
+    }
+    if notes is not None:
+        thread_data["notes"] = notes
+
+    response = await auth_client.post("/api/threads/", json=thread_data)
+    if response.status_code != 201:
+        raise RuntimeError(
+            f"Failed to create thread via API: {response.status_code} - {response.text}"
+        )
+    return response.json()
+
+
+async def start_session_via_api(
+    auth_client: AsyncClient,
+    start_die: int = 10,
+) -> dict:
+    """Start a new session via roll endpoint (decoupled from SQLAlchemy).
+
+    Performs a roll which starts a session and selects an active thread.
+    This is the natural way users start sessions in the application.
+
+    Note: At least one active thread must exist before calling this function.
+    Use create_thread_via_api() first if needed.
+
+    Returns the roll response data including session and thread info.
+    """
+    response = await auth_client.post("/api/roll/")
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to start session via roll: {response.status_code}")
+
+    return response.json()
+
+
+async def rate_thread_via_api(
+    auth_client: AsyncClient,
+    rating: float = 4.0,
+    issues_read: int = 1,
+) -> dict:
+    """Rate the current thread via API endpoint (decoupled from SQLAlchemy).
+
+    Returns the rate response data.
+    """
+    response = await auth_client.post(
+        "/api/rate/",
+        json={"rating": rating, "issues_read": issues_read},
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to rate via API: {response.status_code}")
+
+    return response.json()
+
+
 @pytest.fixture(scope="function")
 def enable_internal_ops() -> Iterator[None]:
     """Enable internal ops routes for tests that access admin endpoints."""
