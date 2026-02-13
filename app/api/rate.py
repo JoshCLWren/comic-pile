@@ -205,7 +205,7 @@ async def rate_thread(
     if not rate_data.finish_session:
         threads = await get_roll_pool(user_id, db, snoozed_ids)
 
-        available_threads = [t for t in threads if t.issues_remaining > 0]
+        available_threads = [t for t in threads if t.issues_remaining > 0 and t.id != thread.id]
 
         if available_threads:
             pool_size = min(new_die, len(available_threads))

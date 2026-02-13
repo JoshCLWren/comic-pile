@@ -13,9 +13,10 @@ let userIdCounter = 0;
 export function generateTestUser(): TestUser {
   const timestamp = Date.now();
   const counter = ++userIdCounter;
+  const workerId = process.pid || 0;
   return {
-    username: `testuser_${timestamp}_${counter}`,
-    email: `testuser_${timestamp}_${counter}@example.com`,
+    username: `testuser_${timestamp}_${counter}_${workerId}`,
+    email: `testuser_${timestamp}_${counter}_${workerId}@example.com`,
     password: 'TestPass123!',
   };
 }

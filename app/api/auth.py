@@ -70,15 +70,15 @@ async def register_user(
 
     # Create new user
     hashed_password = hash_password(user_data.password)
+    username = user_data.username
     user = User(
-        username=user_data.username,
+        username=username,
         email=user_data.email,
         password_hash=hashed_password,
     )
     db.add(user)
     try:
         await db.commit()
-        await db.refresh(user)
     except sqlalchemy_exc.IntegrityError:
         await db.rollback()
         raise HTTPException(
@@ -88,8 +88,8 @@ async def register_user(
 
     # Create tokens
     jti = secrets.token_urlsafe(32)
-    access_token = create_access_token(data={"sub": user.username, "jti": jti})
-    refresh_token = create_refresh_token(data={"sub": user.username, "jti": jti})
+    access_token = create_access_token(data={"sub": username, "jti": jti})
+    refresh_token = create_refresh_token(data={"sub": username, "jti": jti})
 
     return TokenResponse(
         access_token=access_token,

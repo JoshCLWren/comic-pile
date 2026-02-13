@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class ThreadCreate(BaseModel):
     """Schema for creating a new thread."""
 
-    title: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1, max_length=200)
     format: str = Field(..., min_length=1)
     issues_remaining: int = Field(..., ge=0)
     notes: str | None = None
@@ -18,7 +18,7 @@ class ThreadCreate(BaseModel):
 class ThreadUpdate(BaseModel):
     """Schema for updating a thread."""
 
-    title: str | None = Field(None, min_length=1)
+    title: str | None = Field(None, min_length=1, max_length=200)
     format: str | None = Field(None, min_length=1)
     issues_remaining: int | None = Field(None, ge=0)
     notes: str | None = None
