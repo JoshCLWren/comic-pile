@@ -48,7 +48,7 @@ async def test_roll_no_pool(auth_client: AsyncClient, async_db: AsyncSession) ->
 
     response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 400
-    assert "No active threads" in response.json()["detail"]
+    assert "No active threads" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -85,7 +85,7 @@ async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: 
     _ = sample_data
     response = await auth_client.post("/api/v1/roll/override", json={"thread_id": 999})
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]
+    assert "not found" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio

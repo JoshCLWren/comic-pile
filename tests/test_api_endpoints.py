@@ -93,7 +93,7 @@ async def test_get_thread_not_found(auth_client: AsyncClient) -> None:
     """Test GET /api/threads/{id} returns 404 for non-existent thread."""
     response = await auth_client.get("/api/v1/threads/999")
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    assert "not found" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -439,7 +439,7 @@ async def test_get_session_not_found(auth_client: AsyncClient) -> None:
     """Test GET /sessions/{id} returns 404 for non-existent session."""
     response = await auth_client.get("/api/v1/sessions/999")
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    assert "not found" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -712,7 +712,7 @@ async def test_set_pending_thread_rejects_completed_thread(
     response = await auth_client.post(f"/api/v1/threads/{thread.id}/set-pending")
 
     assert response.status_code == 400
-    assert "not active" in response.json()["detail"].lower()
+    assert "not active" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -739,4 +739,4 @@ async def test_set_pending_thread_rejects_thread_with_no_issues(
     response = await auth_client.post(f"/api/v1/threads/{thread.id}/set-pending")
 
     assert response.status_code == 400
-    assert "no issues" in response.json()["detail"].lower()
+    assert "no issues" in response.json()["error"]["message"].lower()

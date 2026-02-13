@@ -68,7 +68,7 @@ class TestAuth:
         }
         response = await client.post("/api/v1/auth/register", json=duplicate_data)
         assert response.status_code == 400
-        assert "Username already registered" in response.json()["detail"]
+        assert "Username already registered" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_register_user_duplicate_email(
@@ -92,7 +92,7 @@ class TestAuth:
         }
         response = await client.post("/api/v1/auth/register", json=duplicate_data)
         assert response.status_code == 400
-        assert "Email already registered" in response.json()["detail"]
+        assert "Email already registered" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_login_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
@@ -128,7 +128,7 @@ class TestAuth:
         }
         response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 401
-        assert "Incorrect username or password" in response.json()["detail"]
+        assert "Incorrect username or password" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_refresh_token_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
@@ -170,7 +170,7 @@ class TestAuth:
         refresh_data = {"refresh_token": "invalid.jwt.token"}
         response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 401
-        assert "Invalid refresh token" in response.json()["detail"]
+        assert "Invalid refresh token" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_refresh_token_none(self, client: AsyncClient) -> None:
@@ -216,7 +216,7 @@ class TestAuth:
         """Test getting current user info without authentication fails."""
         response = await client.get("/api/v1/auth/me")
         assert response.status_code == 401
-        assert "Not authenticated" in response.json()["detail"]
+        assert "Not authenticated" in response.json()["error"]["message"]
 
     @pytest.mark.asyncio
     async def test_logout(self, client: AsyncClient, async_db: AsyncSession) -> None:

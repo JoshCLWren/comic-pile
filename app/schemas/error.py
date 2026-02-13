@@ -58,6 +58,7 @@ def http_status_to_name(status_code: int) -> str:
         403: "PERMISSION_DENIED",
         404: "NOT_FOUND",
         409: "ALREADY_EXISTS",
+        422: "INVALID_ARGUMENT",
         429: "RESOURCE_EXHAUSTED",
         500: "INTERNAL",
         501: "NOT_IMPLEMENTED",
@@ -82,11 +83,14 @@ def create_error_response(
     Returns:
         Dictionary with error response structure
     """
+    # Convert ErrorDetail objects to dicts for JSON serialization
+    details_list = [d.model_dump(exclude_none=True) if isinstance(d, ErrorDetail) else d for d in (details or [])]
+    
     return {
         "error": {
             "code": status_code,
             "message": message,
             "status": http_status_to_name(status_code),
-            "details": details or [],
+            "details": details_list,
         }
     }

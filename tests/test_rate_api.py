@@ -257,7 +257,7 @@ async def test_rate_no_active_session(auth_client: AsyncClient) -> None:
     """Returns error if no active session."""
     response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
-    assert "No active session" in response.json()["detail"]
+    assert "No active session" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -274,7 +274,7 @@ async def test_rate_no_active_thread(auth_client: AsyncClient, async_db: AsyncSe
 
     response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
-    assert "No active thread" in response.json()["detail"]
+    assert "No active thread" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
