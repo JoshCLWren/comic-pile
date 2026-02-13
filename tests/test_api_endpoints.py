@@ -683,7 +683,8 @@ async def test_set_pending_thread_updates_timestamp_and_clears_cache(
     assert data["format"] == thread.format
     assert data["issues_remaining"] == thread.issues_remaining
     assert data["queue_position"] == thread.queue_position
-    assert data["result"]
+    assert data["result"] == 0
+    assert data["die_size"] == 6
 
     await async_db.refresh(session)
     assert session.pending_thread_id == thread.id
