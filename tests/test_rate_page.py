@@ -45,7 +45,7 @@ async def test_rate_session_api_returns_thread_info(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "active_thread" in data
@@ -93,7 +93,7 @@ async def test_rate_session_api_returns_die_info(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "current_die" in data
@@ -140,7 +140,7 @@ async def test_rate_session_api_returns_has_restore_point(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "has_restore_point" in data
@@ -176,7 +176,7 @@ async def test_rate_api_invalid_rating(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 6.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 6.0, "issues_read": 1})
     assert response.status_code == 422
 
 
@@ -228,7 +228,7 @@ async def test_rate_api_low_rating_moves_to_back(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
+    await auth_client.post("/api/v1/rate/", json={"rating": 3.0, "issues_read": 1})
 
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
@@ -283,7 +283,7 @@ async def test_rate_api_high_rating_moves_to_front(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
 
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
@@ -330,7 +330,7 @@ async def test_rate_api_updates_last_activity_at(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
 
     await async_db.refresh(thread)
     assert thread.last_activity_at is not None
@@ -377,7 +377,7 @@ async def test_rate_api_creates_snapshot(auth_client: AsyncClient, async_db: Asy
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.5, "issues_read": 1})
+    await auth_client.post("/api/v1/rate/", json={"rating": 4.5, "issues_read": 1})
 
     result = await async_db.execute(select(Snapshot).where(Snapshot.session_id == session.id))
     snapshots = result.scalars().all()
@@ -421,7 +421,7 @@ async def test_rate_api_with_min_rating(auth_client: AsyncClient, async_db: Asyn
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 0.5, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 0.5, "issues_read": 1})
     assert response.status_code == 200
 
 
@@ -461,7 +461,7 @@ async def test_rate_api_with_max_rating(auth_client: AsyncClient, async_db: Asyn
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 5.0, "issues_read": 1})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 5.0, "issues_read": 1})
     assert response.status_code == 200
 
 
@@ -513,7 +513,7 @@ async def test_rate_api_sets_pending_thread_to_next(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
 
     await async_db.refresh(session)
     assert session.pending_thread_id is not None
@@ -558,7 +558,7 @@ async def test_rate_api_clears_pending_thread_when_no_threads_remain(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 1})
 
     await async_db.refresh(session)
     assert session.pending_thread_id is None
@@ -602,7 +602,7 @@ async def test_rate_api_updates_issues_remaining(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 2})
+    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issues_read": 2})
     assert response.status_code == 200
 
     data = response.json()
@@ -661,7 +661,7 @@ async def test_rate_api_no_pending_thread_when_finish_session(
     await async_db.commit()
 
     await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 4.0, "issues_read": 1, "finish_session": True},
     )
 
@@ -720,7 +720,7 @@ async def test_rate_api_sets_pending_thread_when_not_finish_session(
     await async_db.commit()
 
     await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 4.0, "issues_read": 1, "finish_session": False},
     )
 

@@ -49,7 +49,7 @@ async def test_both_buttons_available_when_thread_complete(auth_client: AsyncCli
 
     # Rate the last issue (issues_remaining becomes 0)
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
+        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 
@@ -61,7 +61,7 @@ async def test_both_buttons_available_when_thread_complete(auth_client: AsyncCli
     assert session.ended_at is None  # Session should still be active
 
     # Get current session to verify active_thread is still available
-    response = await auth_client.get("/api/sessions/current/")
+    response = await auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert data["active_thread"]["id"] == thread.id
@@ -111,7 +111,7 @@ async def test_can_still_rate_after_thread_complete(auth_client: AsyncClient, as
 
     # Rate the last issue (issues_remaining becomes 0)
     response = await auth_client.post(
-        "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
+        "/api/v1/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 
@@ -119,5 +119,5 @@ async def test_can_still_rate_after_thread_complete(auth_client: AsyncClient, as
     assert thread.issues_remaining == 0
 
     # Roll again (should be able to roll thread with 0 issues)
-    response = await auth_client.post("/api/roll/")
+    response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 200

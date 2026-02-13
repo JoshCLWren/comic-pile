@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 @pytest.mark.asyncio
 async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None:
     """POST /roll/ returns valid thread."""
-    response = await auth_client.post("/api/roll/")
+    response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 200
 
     data = response.json()
@@ -29,7 +29,7 @@ async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> Non
     """POST /roll/override/ sets specific thread."""
     _ = sample_data
     thread_id = 1
-    response = await auth_client.post("/api/roll/override", json={"thread_id": thread_id})
+    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
     assert response.status_code == 200
 
     data = response.json()
@@ -46,9 +46,9 @@ async def test_roll_no_pool(auth_client: AsyncClient, async_db: AsyncSession) ->
 
     await get_or_create_user_async(async_db)
 
-    response = await auth_client.post("/api/roll/")
+    response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 400
-    assert "No active threads" in response.json()["detail"]
+    assert "No active threads" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -71,7 +71,7 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
     await async_db.commit()
     await async_db.refresh(thread)
 
-    response = await auth_client.post("/api/roll/")
+    response = await auth_client.post("/api/v1/roll/")
     assert response.status_code == 200
 
     data = response.json()
@@ -83,9 +83,9 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
 async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: dict) -> None:
     """Override returns 404 for non-existent thread."""
     _ = sample_data
-    response = await auth_client.post("/api/roll/override", json={"thread_id": 999})
+    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": 999})
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]
+    assert "not found" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -93,11 +93,11 @@ async def test_set_manual_die(auth_client: AsyncClient, sample_data: dict, async
     """POST /roll/set-die sets manual_die on session."""
     _ = sample_data
     _ = async_db
-    response = await auth_client.post("/api/roll/set-die?die=20")
+    response = await auth_client.post("/api/v1/roll/set-die?die=20")
     assert response.status_code == 200
     assert response.text == "d20"
 
-    session_response = await auth_client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/v1/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
     assert session_data["manual_die"] == 20
@@ -116,11 +116,11 @@ async def test_clear_manual_die(auth_client: AsyncClient, sample_data: dict, asy
     session.manual_die = 12
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/clear-manual-die")
+    response = await auth_client.post("/api/v1/roll/clear-manual-die")
     assert response.status_code == 200
     assert response.text == "d8"
 
-    session_response = await auth_client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/v1/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
     assert session_data["manual_die"] is None
@@ -130,7 +130,7 @@ async def test_clear_manual_die(auth_client: AsyncClient, sample_data: dict, asy
 async def test_clear_manual_die_with_no_manual_set(auth_client: AsyncClient, sample_data: dict) -> None:
     """POST /roll/clear-manual-die works even when manual_die is not set."""
     _ = sample_data
-    response = await auth_client.post("/api/roll/clear-manual-die")
+    response = await auth_client.post("/api/v1/roll/clear-manual-die")
     assert response.status_code == 200
     assert response.text == "d8"
 
@@ -152,10 +152,10 @@ async def test_clear_manual_die_returns_correct_current_die_regression(auth_clie
     session.manual_die = 20
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/clear-manual-die")
+    response = await auth_client.post("/api/v1/roll/clear-manual-die")
     assert response.status_code == 200
 
-    session_response = await auth_client.get("/api/sessions/current/")
+    session_response = await auth_client.get("/api/v1/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
 

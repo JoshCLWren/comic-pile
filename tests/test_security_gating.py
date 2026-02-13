@@ -14,12 +14,12 @@ from tests.conftest import _create_async_db_override
 @pytest.mark.parametrize(
     "endpoint",
     [
-        "/api/tasks/",
-        "/api/tasks/ready",
-        "/api/tasks/metrics",
-        "/api/admin/export/csv/",
-        "/api/admin/export/json/",
-        "/api/admin/export/summary/",
+        "/api/v1/tasks/",
+        "/api/v1/tasks/ready",
+        "/api/v1/tasks/metrics",
+        "/api/v1/admin/export/csv/",
+        "/api/v1/admin/export/json/",
+        "/api/v1/admin/export/summary/",
     ],
 )
 async def test_internal_routes_return_404_when_disabled(client: AsyncClient, endpoint: str) -> None:
@@ -54,13 +54,13 @@ async def test_admin_routes_accessible_when_enabled(
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/admin/export/csv/")
+            response = await ac.get("/api/v1/admin/export/csv/")
             assert response.status_code == 200
 
-            response = await ac.get("/api/admin/export/json/")
+            response = await ac.get("/api/v1/admin/export/json/")
             assert response.status_code == 200
 
-            response = await ac.get("/api/admin/export/summary/")
+            response = await ac.get("/api/v1/admin/export/summary/")
             assert response.status_code == 200
     finally:
         if original_value is None:
@@ -76,10 +76,10 @@ async def test_production_mode_blocks_internal_routes(client: AsyncClient) -> No
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "false"
 
     try:
-        response = await client.get("/api/tasks/")
+        response = await client.get("/api/v1/tasks/")
         assert response.status_code == 404
 
-        response = await client.get("/api/admin/export/csv/")
+        response = await client.get("/api/v1/admin/export/csv/")
         assert response.status_code == 404
     finally:
         os.environ.pop("ENABLE_DEBUG_ROUTES", None)
@@ -101,7 +101,7 @@ async def test_sensitive_headers_redacted_in_error_logs(
     """Authorization, Cookie, and Set-Cookie headers are redacted in error logs."""
     with caplog.at_level(logging.WARNING):
         _ = await client.post(
-            "/api/roll",
+            "/api/v1/roll",
             json={"faces": 6, "count": 1},
             headers={
                 "Authorization": "Bearer secret-token-123",
@@ -149,7 +149,7 @@ async def test_sensitive_json_keys_redacted_in_error_logs(
     }
 
     with caplog.at_level(logging.WARNING):
-        _ = await client.post("/api/roll", json=sensitive_data)
+        _ = await client.post("/api/v1/roll", json=sensitive_data)
 
     log_entries = [record for record in caplog.records if "Client Error" in record.message]
     assert len(log_entries) > 0
@@ -182,7 +182,7 @@ async def test_all_sensitive_json_keys_redacted(
     for sensitive_data in test_cases:
         caplog.clear()
         with caplog.at_level(logging.WARNING):
-            _ = await client.post("/api/roll", json=sensitive_data)
+            _ = await client.post("/api/v1/roll", json=sensitive_data)
 
         log_entries = [record for record in caplog.records if "Client Error" in record.message]
         if log_entries:
@@ -200,7 +200,7 @@ async def test_auth_routes_log_only_size_and_type(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Auth routes (/api/auth/, /api/login, /api/register, /api/logout) log only size/type, not content."""
-    auth_endpoints = ["/api/login", "/api/register", "/api/logout", "/api/auth/refresh"]
+    auth_endpoints = ["/api/login", "/api/register", "/api/logout", "/api/v1/auth/refresh"]
     sensitive_data = {"username": "test", "password": "secret123", "token": "abc"}
 
     for endpoint in auth_endpoints:
@@ -231,7 +231,7 @@ async def test_non_sensitive_body_not_redacted(
     safe_data = {"username": "testuser", "email": "test@example.com", "count": 5}
 
     with caplog.at_level(logging.WARNING):
-        _ = await client.post("/api/roll", json=safe_data)
+        _ = await client.post("/api/v1/roll", json=safe_data)
 
     log_entries = [record for record in caplog.records if "Client Error" in record.message]
     assert len(log_entries) > 0

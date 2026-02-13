@@ -48,11 +48,11 @@ async def test_roll_rate_history_consistency(auth_client: AsyncClient, async_db:
         async_db.add(thread)
     await async_db.commit()
 
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
     roll_data = roll_response.json()
 
-    session_after_roll = await auth_client.get("/api/sessions/current/")
+    session_after_roll = await auth_client.get("/api/v1/sessions/current/")
     assert session_after_roll.status_code == 200
     session_data = session_after_roll.json()
 
@@ -61,7 +61,7 @@ async def test_roll_rate_history_consistency(auth_client: AsyncClient, async_db:
     assert active_thread["id"] == roll_data["thread_id"]
     assert session_data["last_rolled_result"] == roll_data["result"]
 
-    history_response = await auth_client.get("/api/sessions/")
+    history_response = await auth_client.get("/api/v1/sessions/")
     assert history_response.status_code == 200
     history_sessions = history_response.json()
     assert history_sessions
@@ -71,12 +71,12 @@ async def test_roll_rate_history_consistency(auth_client: AsyncClient, async_db:
     assert latest["active_thread"]["id"] == roll_data["thread_id"]
 
     rate_response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 5.0, "issues_read": 1, "finish_session": False},
     )
     assert rate_response.status_code == 200
 
-    session_after_rate = await auth_client.get("/api/sessions/current/")
+    session_after_rate = await auth_client.get("/api/v1/sessions/current/")
     assert session_after_rate.status_code == 200
     rated_data = session_after_rate.json()
 

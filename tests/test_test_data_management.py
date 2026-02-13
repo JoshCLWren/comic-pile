@@ -114,7 +114,7 @@ async def test_bulk_delete_test_data(client: AsyncClient, async_db: AsyncSession
     async_db.add_all([event1, event2])
     await async_db.commit()
 
-    response = await client.post("/api/admin/delete-test-data/")
+    response = await client.post("/api/v1/admin/delete-test-data/")
     assert response.status_code == 200
     data = response.json()
     assert data["deleted_threads"] == 2
@@ -159,7 +159,7 @@ async def test_export_csv_excludes_test_data(client: AsyncClient, async_db: Asyn
     async_db.add_all([test_thread, real_thread])
     await async_db.commit()
 
-    response = await client.get("/api/admin/export/csv/")
+    response = await client.get("/api/v1/admin/export/csv/")
     assert response.status_code == 200
 
     content = response.content.decode("utf-8")
@@ -204,7 +204,7 @@ async def test_export_json_excludes_test_data(client: AsyncClient, async_db: Asy
     async_db.add_all([test_thread, real_thread])
     await async_db.commit()
 
-    response = await client.get("/api/admin/export/json/")
+    response = await client.get("/api/v1/admin/export/json/")
     assert response.status_code == 200
 
     data = json.loads(response.content.decode("utf-8"))
@@ -287,7 +287,7 @@ async def test_export_summary_excludes_test_only_sessions(client: AsyncClient, a
     async_db.add_all([test_event, real_event])
     await async_db.commit()
 
-    response = await client.get("/api/admin/export/summary/")
+    response = await client.get("/api/v1/admin/export/summary/")
     assert response.status_code == 200
 
     content = response.content.decode("utf-8")
@@ -338,7 +338,7 @@ async def test_delete_test_data_clears_pending_thread_id(client: AsyncClient, as
 
     assert session.pending_thread_id == test_thread.id
 
-    response = await client.post("/api/admin/delete-test-data/")
+    response = await client.post("/api/v1/admin/delete-test-data/")
 
     assert response.status_code == 200, (
         f"Expected 200, got {response.status_code}: {response.text if hasattr(response, 'text') else ''}"
@@ -464,7 +464,7 @@ async def test_delete_test_data_with_selected_thread_id(client: AsyncClient, asy
     )
     await async_db.commit()
 
-    response = await client.post("/api/admin/delete-test-data/")
+    response = await client.post("/api/v1/admin/delete-test-data/")
     assert response.status_code == 200
     data = response.json()
     assert data["deleted_threads"] == 1

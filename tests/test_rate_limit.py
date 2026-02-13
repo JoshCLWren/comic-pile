@@ -14,10 +14,10 @@ async def test_rate_limit_on_threads_list(auth_client: AsyncClient) -> None:
     limiter.reset()
 
     for _ in range(100):
-        response = await auth_client.get("/api/threads/")
+        response = await auth_client.get("/api/v1/threads/")
         assert response.status_code == 200
 
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 429
 
 
@@ -28,7 +28,7 @@ async def test_rate_limit_on_thread_create(auth_client: AsyncClient) -> None:
 
     for _ in range(30):
         response = await auth_client.post(
-            "/api/threads/",
+            "/api/v1/threads/",
             json={
                 "title": f"Test Thread {random.randint(10000, 99999)}",
                 "format": "Comic",
@@ -38,7 +38,7 @@ async def test_rate_limit_on_thread_create(auth_client: AsyncClient) -> None:
         assert response.status_code == 201
 
     response = await auth_client.post(
-        "/api/threads/",
+        "/api/v1/threads/",
         json={
             "title": f"Test Thread {random.randint(10000, 99999)}",
             "format": "Comic",
@@ -55,13 +55,13 @@ async def test_rate_limit_on_rate(auth_client: AsyncClient) -> None:
 
     for _ in range(60):
         response = await auth_client.post(
-            "/api/rate/",
+            "/api/v1/rate/",
             json={"rating": 3, "issues_read": 1},
         )
         assert response.status_code in (200, 400)
 
     response = await auth_client.post(
-        "/api/rate/",
+        "/api/v1/rate/",
         json={"rating": 3, "issues_read": 1},
     )
     assert response.status_code == 429
@@ -72,5 +72,5 @@ async def test_rate_limit_headers(auth_client: AsyncClient) -> None:
     """Test that rate limiting response headers are present."""
     limiter.reset()
 
-    response = await auth_client.get("/api/threads/")
+    response = await auth_client.get("/api/v1/threads/")
     assert response.status_code == 200

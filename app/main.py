@@ -27,6 +27,7 @@ from app.api import admin, analytics, auth, queue, rate, roll, session, snooze, 
 from app.config import get_app_settings, get_database_settings
 from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
+from app.schemas.error import ErrorDetail, create_error_response
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +266,10 @@ def create_app() -> FastAPI:
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error"},
+            content=create_error_response(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="Internal server error",
+            ),
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -314,7 +318,10 @@ def create_app() -> FastAPI:
 
         return JSONResponse(
             status_code=exc.status_code,
-            content={"detail": exc.detail},
+            content=create_error_response(
+                status_code=exc.status_code,
+                message=str(exc.detail),
+            ),
         )
 
     @app.exception_handler(RequestValidationError)
@@ -329,6 +336,7 @@ def create_app() -> FastAPI:
             JSON response with 422 status code and validation errors.
         """
         errors = []
+        error_details = []
         for error in exc.errors():
             field_path = ".".join(str(loc) for loc in error["loc"])
             errors.append(
@@ -337,6 +345,14 @@ def create_app() -> FastAPI:
                     "message": error["msg"],
                     "type": error["type"],
                 }
+            )
+            error_details.append(
+                ErrorDetail(
+                    field=field_path,
+                    reason=error["type"],
+                    message=error["msg"],
+                    location="body" if "body" in error["loc"] else "query",
+                )
             )
 
         error_data = {
@@ -364,23 +380,26 @@ def create_app() -> FastAPI:
         )
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "detail": "Validation failed",
-                "errors": errors,
-                "body": exc.body,
-            },
+            content=create_error_response(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Validation failed",
+                details=error_details,
+            ),
         )
 
-    app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    app.include_router(admin.router, prefix="/api", tags=["admin"])
-    app.include_router(analytics.router, prefix="/api", tags=["analytics"])
-    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-    app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
-    app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(session.router, prefix="/api", tags=["session"])
-    app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
-    app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
+    # API v1 routes
+    app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+    app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
+    app.include_router(session.router, prefix="/api/v1", tags=["session"])
+    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
+    app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
+    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
+    
+    # Action routers - will be migrated to custom methods
+    app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
+    app.include_router(rate.router, prefix="/api/v1/rate", tags=["rate"])
+    app.include_router(snooze.router, prefix="/api/v1/snooze", tags=["snooze"])
+    app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
 
     @app.api_route(
         "/api/{path:path}",
@@ -395,7 +414,13 @@ def create_app() -> FastAPI:
         Returns:
             JSON response with 404 status code.
         """
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content=create_error_response(
+                status_code=status.HTTP_404_NOT_FOUND,
+                message="Not Found",
+            ),
+        )
 
     # Mount static files only if directories exist (for CI/testing environments)
     if Path("static").exists():

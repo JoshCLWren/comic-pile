@@ -13,9 +13,11 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Snapshot, Thread, User
 from app.models import Session as SessionModel
+from app import schemas as app_schemas
 from app.schemas import (
     ActiveThreadInfo,
     EventDetail,
+    RollResponse,
     SessionDetailsResponse,
     SessionResponse,
     SnapshotResponse,
@@ -809,3 +811,182 @@ async def restore_session_start(
                 raise
 
     raise RuntimeError(f"Failed to restore session after {max_retries} retries")
+
+
+@router.post("/sessions:roll", response_model=RollResponse)
+@limiter.limit("30/minute")
+async def roll_dice_custom_method(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> RollResponse:
+    """Roll dice to select a thread (custom method).
+
+    This is a Google API Design Guide compliant custom method.
+    Delegates to the roll API implementation.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        RollResponse with selected thread and die result.
+
+    Raises:
+        HTTPException: If no active threads available.
+    """
+    from app.api.roll import roll_dice as roll_dice_impl
+
+    return await roll_dice_impl(request, current_user, db)
+
+
+@router.post("/sessions:snooze", response_model=SessionResponse)
+@limiter.limit("60/minute")
+async def snooze_thread_custom_method(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    """Snooze the currently active thread (custom method).
+
+    This is a Google API Design Guide compliant custom method.
+    Delegates to the snooze API implementation.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse with updated session details.
+
+    Raises:
+        HTTPException: If no active thread to snooze.
+    """
+    from app.api.snooze import snooze_thread as snooze_thread_impl
+
+    return await snooze_thread_impl(request, current_user, db)
+
+
+@router.post("/{session_id}:restore", response_model=SessionResponse)
+async def restore_session_custom_method(
+    session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    """Restore session to its initial state (custom method).
+
+    This is a Google API Design Guide compliant custom method.
+    Delegates to the existing restore implementation.
+
+    Args:
+        session_id: ID of session to restore.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse with restored session details.
+
+    Raises:
+        HTTPException: If session not found or user doesn't own it.
+    """
+    return await restore_session_start(session_id, current_user, db)
+
+
+@router.post("/sessions:rollOverride", response_model=RollResponse)
+async def roll_override_custom_method(
+    request: app_schemas.OverrideRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> RollResponse:
+    """Override roll to select a specific thread (custom method).
+
+    This is a Google API Design Guide compliant custom method.
+    Delegates to the roll override implementation.
+
+    Args:
+        request: Override request with thread_id.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        RollResponse with the overridden thread selection.
+
+    Raises:
+        HTTPException: If thread not found.
+    """
+    from app.api.roll import override_roll as override_roll_impl
+
+    return await override_roll_impl(request, current_user, db)
+
+
+@router.post("/sessions:setDie")
+async def set_manual_die_custom_method(
+    die: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, int]:
+    """Set manual die size for current session (custom method).
+
+    This is a Google API Design Guide compliant custom method.
+
+    Args:
+        die: The die size to set (must be 4, 6, 8, 10, 12, or 20).
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with the set die size.
+
+    Raises:
+        HTTPException: If die size is invalid.
+    """
+    from comic_pile.session import get_or_create
+
+    current_session = await get_or_create(db, user_id=current_user.id)
+
+    if die not in [4, 6, 8, 10, 12, 20]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid die size. Must be one of: 4, 6, 8, 10, 12, 20",
+        )
+
+    current_session.manual_die = die
+    await db.commit()
+
+    if clear_cache:
+        clear_cache()
+
+    return {"die": die}
+
+
+@router.post("/sessions:clearManualDie")
+async def clear_manual_die_custom_method(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, int]:
+    """Clear manual die size and return to automatic dice ladder mode (custom method).
+
+    This is a Google API Design Guide compliant custom method.
+
+    Args:
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Dictionary with the current die size after clearing manual override.
+    """
+    from comic_pile.session import get_or_create
+
+    current_session = await get_or_create(db, user_id=current_user.id)
+
+    current_session.manual_die = None
+    await db.commit()
+
+    if clear_cache:
+        clear_cache()
+
+    await db.refresh(current_session)
+    current_die = await get_current_die(current_session.id, db)
+    return {"die": current_die}

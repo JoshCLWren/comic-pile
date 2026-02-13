@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: '/api/v1',
   timeout: 10000,
 })
 
@@ -87,25 +87,27 @@ api.interceptors.response.use(
 export default api
 
 export const threadsApi = {
-  list: () => api.get('/threads/'),
+  list: (params) => api.get('/threads/', { params }),
   get: (id) => api.get(`/threads/${id}`),
   create: (data) => api.post('/threads/', data),
   update: (id, data) => api.put(`/threads/${id}`, data),
   delete: (id) => api.delete(`/threads/${id}`),
-  reactivate: (data) => api.post('/threads/reactivate', data),
-  listStale: (days = 30) => api.get('/threads/stale', { params: { days } }),
-  setPending: (id) => api.post(`/threads/${id}/set-pending`),
+  reactivate: (data) => api.post('/threads:reactivate', data),
+  listStale: (days = 30) => api.get('/threads/', { params: { status: 'stale', days } }),
+  setPending: (id) => api.post(`/threads/${id}:setPending`),
+  unsnooze: (id) => api.post(`/threads/${id}:unsnooze`),
+  rate: (data) => api.post('/threads:rate', data),
 }
 
 export const rollApi = {
-  roll: () => api.post('/roll/'),
-  override: (data) => api.post('/roll/override', data),
-  setDie: (die) => api.post('/roll/set-die', null, { params: { die } }),
-  clearManualDie: () => api.post('/roll/clear-manual-die'),
+  roll: () => api.post('/sessions:roll'),
+  override: (data) => api.post('/sessions:rollOverride', data),
+  setDie: (die) => api.post('/sessions:setDie', null, { params: { die } }),
+  clearManualDie: () => api.post('/sessions:clearManualDie'),
 }
 
 export const rateApi = {
-  rate: (data) => api.post('/rate/', data),
+  rate: (data) => api.post('/threads:rate', data),
 }
 
 export const sessionApi = {
@@ -114,7 +116,9 @@ export const sessionApi = {
   getCurrent: () => api.get('/sessions/current/'),
   getDetails: (id) => api.get(`/sessions/${id}/details`),
   getSnapshots: (id) => api.get(`/sessions/${id}/snapshots`),
-  restoreSessionStart: (id) => api.post(`/sessions/${id}/restore-session-start`),
+  restoreSessionStart: (id) => api.post(`/sessions/${id}:restore`),
+  roll: () => api.post('/sessions:roll'),
+  snooze: () => api.post('/sessions:snooze'),
 }
 
 export const queueApi = {
@@ -133,6 +137,6 @@ export const tasksApi = {
 }
 
 export const snoozeApi = {
-  snooze: () => api.post('/snooze/'),
-  unsnooze: (threadId) => api.post(`/snooze/${threadId}/unsnooze`),
+  snooze: () => api.post('/sessions:snooze'),
+  unsnooze: (threadId) => api.post(`/threads/${threadId}:unsnooze`),
 }

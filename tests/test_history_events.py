@@ -24,7 +24,7 @@ async def test_queue_move_creates_event(
     thread_id = sample_data["threads"][0].id
 
     response = await auth_client.put(
-        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 3}
+        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": 3}
     )
     assert response.status_code == 200
 
@@ -56,7 +56,7 @@ async def test_move_to_front_creates_event(
 
     thread_id = sample_data["threads"][1].id
 
-    response = await auth_client.put(f"/api/queue/threads/{thread_id}/front/")
+    response = await auth_client.put(f"/api/v1/queue/threads/{thread_id}/front/")
     assert response.status_code == 200
 
     result = await async_db.execute(
@@ -87,7 +87,7 @@ async def test_move_to_back_creates_event(
 
     thread_id = sample_data["threads"][2].id
 
-    response = await auth_client.put(f"/api/queue/threads/{thread_id}/back/")
+    response = await auth_client.put(f"/api/v1/queue/threads/{thread_id}/back/")
     assert response.status_code == 200
 
     result = await async_db.execute(
@@ -118,13 +118,13 @@ async def test_delete_thread_creates_event(
     initial_delete_count = len(result.scalars().all())
 
     create_response = await auth_client.post(
-        "/api/threads/",
+        "/api/v1/threads/",
         json={"title": "Test Thread", "format": "Comic", "issues_remaining": 5},
     )
     assert create_response.status_code == 201
     thread_id = create_response.json()["id"]
 
-    delete_response = await auth_client.delete(f"/api/threads/{thread_id}")
+    delete_response = await auth_client.delete(f"/api/v1/threads/{thread_id}")
     assert delete_response.status_code == 204
 
     result = await async_db.execute(select(Event).where(Event.type == "delete"))
@@ -156,7 +156,7 @@ async def test_no_duplicate_event_on_no_movement(
     initial_event_count = len(result.scalars().all())
 
     response = await auth_client.put(
-        f"/api/queue/threads/{thread_id}/position/", json={"new_position": 1}
+        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": 1}
     )
     assert response.status_code == 200
 

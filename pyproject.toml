@@ -136,6 +136,3 @@ SECRET_KEY = "dev-secret-key-change-in-production"
 AUTO_BACKUP_ENABLED = "false"
 PORT = "8000"
 typeStubPaths = []
-
-[tool.pytest.markers]
-integration = "marks tests as integration tests using Playwright"

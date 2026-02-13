@@ -7,6 +7,13 @@ from app.schemas.auth import (
     UserRegisterRequest,
     UserResponse,
 )
+from app.schemas.error import (
+    ErrorDetail,
+    ErrorResponse,
+    ErrorResponseWrapper,
+    create_error_response,
+    http_status_to_name,
+)
 from app.schemas.rate import RateRequest
 from app.schemas.roll import OverrideRequest, RollResponse
 from app.schemas.session import (
@@ -19,6 +26,7 @@ from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
 from app.schemas.thread import (
     ReactivateRequest,
     ThreadCreate,
+    ThreadListResponse,
     ThreadResponse,
     ThreadUpdate,
 )
@@ -30,10 +38,17 @@ __all__ = [
     "TokenResponse",
     "UserResponse",
     "RefreshTokenRequest",
+    # Error
+    "ErrorDetail",
+    "ErrorResponse",
+    "ErrorResponseWrapper",
+    "create_error_response",
+    "http_status_to_name",
     # Thread
     "ThreadCreate",
     "ThreadUpdate",
     "ThreadResponse",
+    "ThreadListResponse",
     "ReactivateRequest",
     # Roll
     "RollResponse",

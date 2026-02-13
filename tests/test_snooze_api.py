@@ -55,7 +55,7 @@ async def test_snooze_success(
     session.pending_thread_id = thread.id
     await async_db.commit()
 
-    response = await auth_client.post("/api/snooze/")
+    response = await auth_client.post("/api/v1/snooze/")
     assert response.status_code == 200
 
     data = response.json()
@@ -102,9 +102,9 @@ async def test_snooze_no_pending_thread(
     async_db.add(session)
     await async_db.commit()
 
-    response = await auth_client.post("/api/snooze/")
+    response = await auth_client.post("/api/v1/snooze/")
     assert response.status_code == 400
-    assert "No pending thread to snooze" in response.json()["detail"]
+    assert "No pending thread to snooze" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -114,9 +114,9 @@ async def test_snooze_no_session(auth_client: AsyncClient) -> None:
     Args:
         auth_client: Authenticated HTTP client for API requests.
     """
-    response = await auth_client.post("/api/snooze/")
+    response = await auth_client.post("/api/v1/snooze/")
     assert response.status_code == 400
-    assert "No active session" in response.json()["detail"]
+    assert "No active session" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -177,11 +177,11 @@ async def test_snooze_excludes_from_roll(
     await async_db.commit()
 
     # Snooze thread1
-    snooze_response = await auth_client.post("/api/snooze/")
+    snooze_response = await auth_client.post("/api/v1/snooze/")
     assert snooze_response.status_code == 200
 
     # Roll again - should only get thread2
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
 
     roll_data = roll_response.json()
@@ -246,11 +246,11 @@ async def test_snooze_duplicate_thread(
     session.pending_thread_id = thread.id
     await async_db.commit()
 
-    response1 = await auth_client.post("/api/snooze/")
+    response1 = await auth_client.post("/api/v1/snooze/")
     assert response1.status_code == 200
 
     # Roll again (will get thread2)
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
 
     # Manually set pending_thread_id back to the already-snoozed thread
@@ -270,7 +270,7 @@ async def test_snooze_duplicate_thread(
     await async_db.commit()
 
     # Second snooze of the same thread
-    response2 = await auth_client.post("/api/snooze/")
+    response2 = await auth_client.post("/api/v1/snooze/")
     assert response2.status_code == 200
 
     data = response2.json()
@@ -326,7 +326,7 @@ async def test_snooze_all_threads(
     session.pending_thread_id = thread.id
     await async_db.commit()
 
-    snooze_response = await auth_client.post("/api/snooze/")
+    snooze_response = await auth_client.post("/api/v1/snooze/")
     assert snooze_response.status_code == 200
 
     # Verify the thread is snoozed
@@ -334,9 +334,9 @@ async def test_snooze_all_threads(
     assert thread.id in snooze_data["snoozed_thread_ids"]
 
     # Now try to roll - should fail with no threads available
-    roll_response = await auth_client.post("/api/roll/")
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 400
-    assert "No active threads" in roll_response.json()["detail"]
+    assert "No active threads" in roll_response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -384,7 +384,7 @@ async def test_snooze_steps_die_up_from_max(
     session.pending_thread_id = thread.id
     await async_db.commit()
 
-    response = await auth_client.post("/api/snooze/")
+    response = await auth_client.post("/api/v1/snooze/")
     assert response.status_code == 200
 
     data = response.json()
@@ -458,7 +458,7 @@ async def test_snooze_multiple_different_threads(
     session.pending_thread_id = thread1.id
     await async_db.commit()
 
-    response1 = await auth_client.post("/api/snooze/")
+    response1 = await auth_client.post("/api/v1/snooze/")
     assert response1.status_code == 200
     data1 = response1.json()
     assert thread1.id in data1["snoozed_thread_ids"]
@@ -478,7 +478,7 @@ async def test_snooze_multiple_different_threads(
     session.pending_thread_id = thread2.id
     await async_db.commit()
 
-    response2 = await auth_client.post("/api/snooze/")
+    response2 = await auth_client.post("/api/v1/snooze/")
     assert response2.status_code == 200
     data2 = response2.json()
     assert thread1.id in data2["snoozed_thread_ids"]
@@ -499,7 +499,7 @@ async def test_snooze_multiple_different_threads(
     session.pending_thread_id = thread3.id
     await async_db.commit()
 
-    response3 = await auth_client.post("/api/snooze/")
+    response3 = await auth_client.post("/api/v1/snooze/")
     assert response3.status_code == 200
     data3 = response3.json()
     assert thread1.id in data3["snoozed_thread_ids"]

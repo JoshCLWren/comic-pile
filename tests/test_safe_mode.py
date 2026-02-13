@@ -76,7 +76,7 @@ async def test_session_response_has_restore_point_true(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
+    response = await safe_mode_auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is True
@@ -93,7 +93,7 @@ async def test_session_response_has_restore_point_false(
     await async_db.commit()
     await async_db.refresh(session)
 
-    response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
+    response = await safe_mode_auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is False
@@ -129,7 +129,7 @@ async def test_current_session_response_includes_restore_point(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await safe_mode_auth_client.get("/api/sessions/current/")
+    response = await safe_mode_auth_client.get("/api/v1/sessions/current/")
     assert response.status_code == 200
     data = response.json()
     assert "has_restore_point" in data
@@ -168,7 +168,7 @@ async def test_list_sessions_includes_restore_point_for_each(
     async_db.add(snapshot)
     await async_db.commit()
 
-    response = await safe_mode_auth_client.get("/api/sessions/")
+    response = await safe_mode_auth_client.get("/api/v1/sessions/")
     assert response.status_code == 200
     sessions = response.json()
     assert len(sessions) == 2
@@ -234,7 +234,7 @@ async def test_snapshot_count_increases_with_multiple_snapshots(
     async_db.add_all([snapshot1, snapshot2])
     await async_db.commit()
 
-    response = await safe_mode_auth_client.get(f"/api/sessions/{session.id}")
+    response = await safe_mode_auth_client.get(f"/api/v1/sessions/{session.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["has_restore_point"] is True
