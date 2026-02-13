@@ -368,8 +368,8 @@ thread = await create_thread_via_api(
     issues_remaining=10,
 )
 
-# ✅ RECOMMENDED: Start session via roll endpoint
-roll_data = await start_session_via_api(auth_client, start_die=10)
+# ✅ RECOMMENDED: Start session via roll endpoint (after creating thread)
+roll_data = await start_session_via_api(auth_client)
 
 # ✅ RECOMMENDED: Rate thread via API
 rate_data = await rate_thread_via_api(
@@ -426,7 +426,7 @@ async def test_rate_old(auth_client: AsyncClient, async_db: AsyncSession) -> Non
 async def test_rate_new(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     # Use API helpers for setup - no SQLAlchemy details needed!
     await create_thread_via_api(auth_client, title="Test", issues_remaining=5)
-    await start_session_via_api(auth_client, start_die=10)
+    await start_session_via_api(auth_client)
     
     # Test the endpoint
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})

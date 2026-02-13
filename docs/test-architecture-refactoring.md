@@ -107,7 +107,7 @@ async def test_rate_success(auth_client: AsyncClient, async_db: AsyncSession) ->
     """POST /rate/ updates thread correctly using API-first pattern."""
     # Create thread and start session via API (decoupled from SQLAlchemy)
     await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
-    await start_session_via_api(auth_client, start_die=10)
+    await start_session_via_api(auth_client)
 
     # Test the rate endpoint
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})

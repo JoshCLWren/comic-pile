@@ -15,7 +15,7 @@ Three new helper functions that decouple tests from SQLAlchemy:
 await create_thread_via_api(auth_client, title="Superman", issues_remaining=10)
 
 # Start session via API (creates session + rolls)
-await start_session_via_api(auth_client, start_die=10)
+await start_session_via_api(auth_client)
 
 # Rate thread via API
 await rate_thread_via_api(auth_client, rating=4.5, issues_read=2)
@@ -100,7 +100,7 @@ async def test_rate_success(auth_client, async_db):
     """POST /rate/ updates thread correctly using API-first pattern."""
     # Create thread and start session via API
     await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
-    await start_session_via_api(auth_client, start_die=10)
+    await start_session_via_api(auth_client)
     
     # Test the rate endpoint
     response = await auth_client.post("/api/rate/", 

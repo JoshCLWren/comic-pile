@@ -437,17 +437,14 @@ async def start_session_via_api(
 ) -> dict:
     """Start a new session via roll endpoint (decoupled from SQLAlchemy).
 
-    Creates a session and thread, then performs a roll. This is the
-    natural way users start sessions in the application.
+    Performs a roll which starts a session and selects an active thread.
+    This is the natural way users start sessions in the application.
+
+    Note: At least one active thread must exist before calling this function.
+    Use create_thread_via_api() first if needed.
 
     Returns the roll response data including session and thread info.
     """
-    thread = await create_thread_via_api(
-        auth_client,
-        title=f"Session Thread (d{start_die})",
-        issues_remaining=10,
-    )
-
     response = await auth_client.post("/api/roll/")
     if response.status_code != 200:
         raise RuntimeError(f"Failed to start session via roll: {response.status_code}")

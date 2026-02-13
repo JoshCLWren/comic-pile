@@ -42,7 +42,7 @@ async def test_create_and_rate_thread_api_first(
     assert thread["issues_remaining"] == 10
 
     # Start session via roll (creates session and rolls)
-    roll_data = await start_session_via_api(auth_client, start_die=10)
+    roll_data = await start_session_via_api(auth_client)
     assert "title" in roll_data
 
     # Rate the thread via API

@@ -15,7 +15,7 @@ async def test_rate_success(auth_client: AsyncClient, async_db: AsyncSession) ->
     """POST /rate/ updates thread correctly using API-first pattern."""
     # Create thread and start session via API (decoupled from SQLAlchemy)
     await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
-    await start_session_via_api(auth_client, start_die=10)
+    await start_session_via_api(auth_client)
 
     # Test the rate endpoint
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
@@ -39,7 +39,7 @@ async def test_rate_low_rating(auth_client: AsyncClient, async_db: AsyncSession)
     """Rating=3.0, die_size steps up - using API-first pattern."""
     # Create thread and start session via API
     await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
-    await start_session_via_api(auth_client, start_die=10)
+    await start_session_via_api(auth_client)
 
     # Test rating with low score
     response = await auth_client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
@@ -64,7 +64,7 @@ async def test_rate_high_rating(auth_client: AsyncClient, async_db: AsyncSession
     """Rating=4.0, die_size steps down - using API-first pattern."""
     # Create thread and start session via API
     await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
-    await start_session_via_api(auth_client, start_die=10)
+    await start_session_via_api(auth_client)
 
     # Test rating with high score
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
@@ -88,7 +88,7 @@ async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSe
     """Issues <= 0, marks thread completed - using API-first pattern."""
     # Create thread with only 1 issue remaining and start session
     await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=1)
-    await start_session_via_api(auth_client, start_die=10)
+    await start_session_via_api(auth_client)
 
     # Rate and finish the session
     response = await auth_client.post(
@@ -120,7 +120,7 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
     """Event saved with rating and issues_read - using API-first pattern."""
     # Create thread and start session via API
     await create_thread_via_api(auth_client, title="Test Thread", issues_remaining=5)
-    await start_session_via_api(auth_client, start_die=10)
+    await start_session_via_api(auth_client)
 
     # Rate the thread
     response = await auth_client.post("/api/rate/", json={"rating": 4.5, "issues_read": 2})
