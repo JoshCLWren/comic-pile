@@ -26,6 +26,7 @@ from app.schemas.snapshot import SnapshotResponse, SnapshotsListResponse
 from app.schemas.thread import (
     ReactivateRequest,
     ThreadCreate,
+    ThreadListResponse,
     ThreadResponse,
     ThreadUpdate,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "ThreadCreate",
     "ThreadUpdate",
     "ThreadResponse",
+    "ThreadListResponse",
     "ReactivateRequest",
     # Roll
     "RollResponse",

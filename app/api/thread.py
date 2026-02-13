@@ -4,9 +4,9 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,15 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas import RateRequest, ReactivateRequest, SessionResponse, ThreadCreate, ThreadResponse, ThreadUpdate
+from app.schemas import (
+    RateRequest,
+    ReactivateRequest,
+    SessionResponse,
+    ThreadCreate,
+    ThreadListResponse,
+    ThreadResponse,
+    ThreadUpdate,
+)
 
 router = APIRouter(tags=["threads"])
 
@@ -46,13 +54,15 @@ def thread_to_response(thread: Thread) -> ThreadResponse:
     )
 
 
-@router.get("/stale", response_model=list[ThreadResponse])
+@router.get("/stale", response_model=list[ThreadResponse], deprecated=True)
 async def list_stale_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     days: int = 30,
 ) -> list[ThreadResponse]:
     """List threads not read in specified days (default 30).
+
+    DEPRECATED: Use GET /threads?status=stale&days={days} instead.
 
     Args:
         current_user: The authenticated user making the request.
@@ -80,31 +90,68 @@ clear_cache = None
 get_threads_cached = None
 
 
-@router.get("/", response_model=list[ThreadResponse])
+@router.get("/", response_model=ThreadListResponse)
 @limiter.limit("100/minute")
 async def list_threads(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> list[ThreadResponse]:
-    """List all threads ordered by position.
+    status_filter: str | None = Query(None, pattern="^(active|completed|stale)$", alias="status"),
+    days: int | None = Query(None, ge=1, description="Days for stale filter"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page"),
+) -> ThreadListResponse:
+    """List threads with optional filtering and pagination.
+
+    Supports filtering by status and pagination.
+    Use status=stale with days parameter to list stale threads.
 
     Args:
         request: FastAPI request object for rate limiting.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
+        status_filter: Optional status filter (active, completed, stale).
+        days: Days threshold for stale filter (only used with status=stale).
+        page: Page number for pagination (default 1).
+        page_size: Number of items per page (default 50, max 100).
 
     Returns:
-        List of ThreadResponse objects ordered by queue_position.
+        ThreadListResponse with paginated threads and metadata.
     """
-    if get_threads_cached:
-        threads = await get_threads_cached(db, current_user.id)
-    else:
-        result = await db.execute(
-            select(Thread).where(Thread.user_id == current_user.id).order_by(Thread.queue_position)
+    from datetime import timedelta
+
+    query = select(Thread).where(Thread.user_id == current_user.id)
+
+    # Apply status filter
+    if status_filter == "active":
+        query = query.where(Thread.status == "active")
+    elif status_filter == "completed":
+        query = query.where(Thread.status == "completed")
+    elif status_filter == "stale":
+        days_value = days or 30
+        cutoff_date = datetime.now(UTC) - timedelta(days=days_value)
+        query = query.where(Thread.status == "active").where(
+            (Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None))
         )
-        threads = result.scalars().all()
-    return [thread_to_response(thread) for thread in threads]
+
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total_count_result = await db.execute(count_query)
+    total_count = total_count_result.scalar() or 0
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    query = query.order_by(Thread.queue_position).limit(page_size).offset(offset)
+
+    result = await db.execute(query)
+    threads = result.scalars().all()
+
+    return ThreadListResponse(
+        threads=[thread_to_response(thread) for thread in threads],
+        total_count=total_count,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/completed", response_class=HTMLResponse)

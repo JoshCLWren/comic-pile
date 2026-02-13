@@ -11,7 +11,8 @@ export function useThreads() {
     setIsError(false)
     try {
       const result = await threadsApi.list()
-      setData(result)
+      // Extract threads from paginated response
+      setData(result.threads || result)
     } catch {
       setIsError(true)
     } finally {
@@ -84,7 +85,8 @@ export function useStaleThreads(days = 30) {
       try {
         const result = await threadsApi.listStale(days)
         if (isMounted) {
-          setData(result)
+          // Extract threads from paginated response
+          setData(result.threads || result)
         }
       } catch {
         if (isMounted) {

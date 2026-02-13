@@ -87,13 +87,13 @@ api.interceptors.response.use(
 export default api
 
 export const threadsApi = {
-  list: () => api.get('/threads/'),
+  list: (params) => api.get('/threads/', { params }),
   get: (id) => api.get(`/threads/${id}`),
   create: (data) => api.post('/threads/', data),
   update: (id, data) => api.put(`/threads/${id}`, data),
   delete: (id) => api.delete(`/threads/${id}`),
   reactivate: (data) => api.post('/threads:reactivate', data),
-  listStale: (days = 30) => api.get('/threads/stale', { params: { days } }),
+  listStale: (days = 30) => api.get('/threads/', { params: { status: 'stale', days } }),
   setPending: (id) => api.post(`/threads/${id}:setPending`),
   unsnooze: (id) => api.post(`/threads/${id}:unsnooze`),
   rate: (data) => api.post('/threads:rate', data),
