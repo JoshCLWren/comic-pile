@@ -662,6 +662,10 @@ async def test_set_pending_thread_updates_timestamp_and_clears_cache(
     async_db.add(thread)
     await async_db.commit()
     await async_db.refresh(thread)
+    thread_title = thread.title
+    thread_format = thread.format
+    thread_issues_remaining = thread.issues_remaining
+    thread_queue_position = thread.queue_position
 
     session = SessionModel(
         start_die=6,
@@ -678,8 +682,13 @@ async def test_set_pending_thread_updates_timestamp_and_clears_cache(
 
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "pending_set"
     assert data["thread_id"] == thread.id
+    assert data["title"] == thread_title
+    assert data["format"] == thread_format
+    assert data["issues_remaining"] == thread_issues_remaining
+    assert data["queue_position"] == thread_queue_position
+    assert data["result"] == 0
+    assert data["die_size"] == 6
 
     await async_db.refresh(session)
     assert session.pending_thread_id == thread.id

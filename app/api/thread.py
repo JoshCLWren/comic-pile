@@ -15,7 +15,8 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas import ReactivateRequest, ThreadCreate, ThreadResponse, ThreadUpdate
+from app.schemas import ReactivateRequest, RollResponse, ThreadCreate, ThreadResponse, ThreadUpdate
+from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
 
@@ -406,13 +407,13 @@ async def reactivate_thread(
     return thread_to_response(thread)
 
 
-@router.post("/{thread_id}/set-pending")
+@router.post("/{thread_id}/set-pending", response_model=RollResponse)
 async def set_pending_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> dict[str, str | int]:
-    """Set a thread as pending for rating (skip roll).
+) -> RollResponse:
+    """Set a thread as pending for rating (manual selection).
 
     Args:
         thread_id: The thread ID to set as pending.
@@ -420,7 +421,7 @@ async def set_pending_thread(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        Status indicating thread was set as pending.
+        RollResponse with the selected thread details.
 
     Raises:
         HTTPException: If thread not found.
@@ -439,20 +440,61 @@ async def set_pending_thread(
             detail=f"Thread {thread_id} is not active",
         )
 
-    if thread.issues_remaining <= 0:
+    thread_id_int = thread.id
+    thread_title = thread.title
+    thread_format = thread.format
+    thread_issues = thread.issues_remaining
+    thread_position = thread.queue_position
+
+    if thread_issues <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Thread {thread_id} has no issues remaining",
         )
 
-    from comic_pile.session import get_or_create
-
     current_session = await get_or_create(db, user_id=current_user.id)
-    current_session.pending_thread_id = thread_id
-    current_session.pending_thread_updated_at = datetime.now(UTC)
-    await db.commit()
+    current_session_id = current_session.id
+    current_die = await get_current_die(current_session_id, db)
 
+    snoozed_ids = (
+        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
+    )
+    snoozed_count = len(snoozed_ids)
+    offset = snoozed_count
+
+    # Manual selection sets pending directly; no random roll is performed.
+    result = 0
+    event = Event(
+        type="roll",
+        session_id=current_session_id,
+        selected_thread_id=thread_id_int,
+        die=current_die,
+        result=result,
+        selection_method="manual",
+    )
+    db.add(event)
+
+    current_session.pending_thread_id = thread_id_int
+    current_session.pending_thread_updated_at = datetime.now(UTC)
+
+    if thread_id_int in snoozed_ids:
+        snoozed_ids.remove(thread_id_int)
+        current_session.snoozed_thread_ids = snoozed_ids
+        offset = len(snoozed_ids)
+        snoozed_count = len(snoozed_ids)
+
+    await db.commit()
     if clear_cache:
         clear_cache()
 
-    return {"status": "pending_set", "thread_id": thread_id}
+    return RollResponse(
+        thread_id=thread_id_int,
+        title=thread_title,
+        format=thread_format,
+        issues_remaining=thread_issues,
+        queue_position=thread_position,
+        die_size=current_die,
+        result=result,
+        offset=offset,
+        snoozed_count=snoozed_count,
+    )
