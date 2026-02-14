@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { buildD10Faces } from './d10Geometry';
+import { getDiceRenderConfigForSides } from './diceRenderConfig';
 
 function normalize(v) {
   const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -18,9 +19,30 @@ function addTriangle(verts, uvs, inds, v0, v1, v2, uv0, uv1, uv2) {
   inds.push(idx, idx + 1, idx + 2);
 }
 
-function createTextureAtlas(maxNumber) {
+function createTextureAtlas(maxNumber, renderConfig) {
+  const {
+    tileSize,
+    uvInset,
+    fontScale,
+    textOffsetX,
+    textOffsetY,
+    borderWidth,
+    textColor,
+    borderColor,
+    backgroundColor,
+    fontFamily,
+    fontWeight,
+    triangleUvRadius,
+    d12UvRadius,
+    d10UvPadding,
+    d10AutoCenter,
+    d10TopOffsetX,
+    d10TopOffsetY,
+    d10BottomOffsetX,
+    d10BottomOffsetY,
+  } = renderConfig;
+
   const canvas = document.createElement('canvas');
-  const tileSize = 256;
   const cols = Math.ceil(Math.sqrt(maxNumber));
   const rows = Math.ceil(maxNumber / cols);
 
@@ -28,7 +50,7 @@ function createTextureAtlas(maxNumber) {
   canvas.height = tileSize * rows;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   for (let i = 1; i <= maxNumber; i++) {
@@ -37,40 +59,72 @@ function createTextureAtlas(maxNumber) {
     const x = col * tileSize;
     const y = row * tileSize;
 
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = backgroundColor;
     ctx.fillRect(x, y, tileSize, tileSize);
 
-    ctx.strokeStyle = '#cccccc';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(x + 2, y + 2, tileSize - 4, tileSize - 4);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = borderWidth;
+    ctx.strokeRect(
+      x + borderWidth / 2,
+      y + borderWidth / 2,
+      tileSize - borderWidth,
+      tileSize - borderWidth,
+    );
 
-    ctx.fillStyle = '#1a1a2e';
-    ctx.font = `bold ${tileSize * 0.4}px Arial`;
+    ctx.fillStyle = textColor;
+    ctx.font = `${fontWeight} ${tileSize * fontScale}px ${fontFamily}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
     const text = i.toString();
-    ctx.fillText(text, x + tileSize / 2, y + tileSize / 2);
+    ctx.fillText(
+      text,
+      x + tileSize * (0.5 + textOffsetX),
+      y + tileSize * (0.5 + textOffsetY),
+    );
   }
 
   const texture = new THREE.CanvasTexture(canvas);
+  // Avoid mipmap/tile bleeding artifacts on tiny dice faces (mobile rating view).
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.needsUpdate = true;
-  return { texture, cols, rows };
+  return {
+    texture,
+    cols,
+    rows,
+    uvInset,
+    triangleUvRadius,
+    d12UvRadius,
+    d10UvPadding,
+    d10AutoCenter,
+    d10TopOffsetX,
+    d10TopOffsetY,
+    d10BottomOffsetX,
+    d10BottomOffsetY,
+  };
 }
 
-function getUVForNumber(number, cols, rows) {
+function getUVForNumber(number, cols, rows, uvInset = 0) {
   const col = (number - 1) % cols;
   const row = Math.floor((number - 1) / cols);
+  const tileU = 1 / cols;
+  const tileV = 1 / rows;
+  const insetU = tileU * uvInset;
+  const insetV = tileV * uvInset;
   return {
-    u0: col / cols,
-    v0: 1 - (row + 1) / rows,
-    u1: (col + 1) / cols,
-    v1: 1 - row / rows
+    u0: col / cols + insetU,
+    v0: 1 - (row + 1) / rows + insetV,
+    u1: (col + 1) / cols - insetU,
+    v1: 1 - row / rows - insetV
   };
 }
 
 function createD4Geometry(atlasInfo) {
-  const { cols, rows } = atlasInfo;
+  const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
   const verts = [];
   const uvs = [];
   const inds = [];
@@ -92,11 +146,11 @@ function createD4Geometry(atlasInfo) {
 
   for (let i = 0; i < faces.length; i++) {
     const f = faces[i];
-    const uv = getUVForNumber(f[3], cols, rows);
+    const uv = getUVForNumber(f[3], cols, rows, uvInset);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.4;
-    const ry = (uv.v1 - uv.v0) * 0.4;
+    const rx = (uv.u1 - uv.u0) * triangleUvRadius;
+    const ry = (uv.v1 - uv.v0) * triangleUvRadius;
 
     addTriangle(
       verts,
@@ -120,7 +174,7 @@ function createD4Geometry(atlasInfo) {
 }
 
 function createD6Geometry(atlasInfo) {
-  const { cols, rows } = atlasInfo;
+  const { cols, rows, uvInset } = atlasInfo;
   const verts = [];
   const uvs = [];
   const inds = [];
@@ -148,7 +202,7 @@ function createD6Geometry(atlasInfo) {
 
   for (let i = 0; i < faces.length; i++) {
     const f = faces[i];
-    const uv = getUVForNumber(f[4], cols, rows);
+    const uv = getUVForNumber(f[4], cols, rows, uvInset);
     const idx = verts.length / 3;
 
     verts.push(corners[f[0]][0], corners[f[0]][1], corners[f[0]][2]);
@@ -173,7 +227,7 @@ function createD6Geometry(atlasInfo) {
 }
 
 function createD8Geometry(atlasInfo) {
-  const { cols, rows } = atlasInfo;
+  const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
   const verts = [];
   const uvs = [];
   const inds = [];
@@ -201,11 +255,11 @@ function createD8Geometry(atlasInfo) {
 
   for (let i = 0; i < faces.length; i++) {
     const f = faces[i];
-    const uv = getUVForNumber(f[3], cols, rows);
+    const uv = getUVForNumber(f[3], cols, rows, uvInset);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.4;
-    const ry = (uv.v1 - uv.v0) * 0.4;
+    const rx = (uv.u1 - uv.u0) * triangleUvRadius;
+    const ry = (uv.v1 - uv.v0) * triangleUvRadius;
 
     addTriangle(verts, uvs, inds, v[f[0]], v[f[1]], v[f[2]], [cx, cy + ry], [cx - rx, cy - ry], [cx + rx, cy - ry]);
   }
@@ -219,7 +273,17 @@ function createD8Geometry(atlasInfo) {
 }
 
 function createD10Geometry(atlasInfo) {
-  const { cols, rows } = atlasInfo;
+  const {
+    cols,
+    rows,
+    uvInset,
+    d10UvPadding,
+    d10AutoCenter,
+    d10TopOffsetX,
+    d10TopOffsetY,
+    d10BottomOffsetX,
+    d10BottomOffsetY,
+  } = atlasInfo;
   const verts = [];
   const uvs = [];
   const inds = [];
@@ -297,13 +361,22 @@ function createD10Geometry(atlasInfo) {
     return { uMin, uMax, vMin, vMax };
   }
 
-  function mapToTextureTile(u, v, bounds, tileUv) {
+  function normalizeToBounds(u, v, bounds) {
     const { uMin, uMax, vMin, vMax } = bounds;
-    const uNorm = uMax > uMin ? (u - uMin) / (uMax - uMin) : 0.5;
-    const vNorm = vMax > vMin ? (v - vMin) / (vMax - vMin) : 0.5;
     return {
-      u: tileUv.u0 + uNorm * (tileUv.u1 - tileUv.u0),
-      v: tileUv.v0 + vNorm * (tileUv.v1 - tileUv.v0)
+      uNorm: uMax > uMin ? (u - uMin) / (uMax - uMin) : 0.5,
+      vNorm: vMax > vMin ? (v - vMin) / (vMax - vMin) : 0.5,
+    };
+  }
+
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, value));
+  }
+
+  function mapToTextureTile(uNorm, vNorm, tileUv, tilePadding) {
+    return {
+      u: tileUv.u0 + (tilePadding + uNorm * (1 - tilePadding * 2)) * (tileUv.u1 - tileUv.u0),
+      v: tileUv.v0 + (tilePadding + vNorm * (1 - tilePadding * 2)) * (tileUv.v1 - tileUv.v0)
     };
   }
 
@@ -323,12 +396,37 @@ function createD10Geometry(atlasInfo) {
     const projD = projectVertexToPlane(d, center, uAxis, vAxis);
 
     const bounds = calculateUVBounds(projA, projB, projC, projD);
-    const tileUv = getUVForNumber(number, cols, rows);
+    const tileUv = getUVForNumber(number, cols, rows, uvInset);
 
-    const uvA = mapToTextureTile(projA.u, projA.v, bounds, tileUv);
-    const uvB = mapToTextureTile(projB.u, projB.v, bounds, tileUv);
-    const uvC = mapToTextureTile(projC.u, projC.v, bounds, tileUv);
-    const uvD = mapToTextureTile(projD.u, projD.v, bounds, tileUv);
+    const nA = normalizeToBounds(projA.u, projA.v, bounds);
+    const nB = normalizeToBounds(projB.u, projB.v, bounds);
+    const nC = normalizeToBounds(projC.u, projC.v, bounds);
+    const nD = normalizeToBounds(projD.u, projD.v, bounds);
+
+    const points = [nA, nB, nC, nD];
+    let centerShiftX = 0;
+    let centerShiftY = 0;
+
+    if (d10AutoCenter) {
+      const centerU = points.reduce((sum, p) => sum + p.uNorm, 0) / points.length;
+      const centerV = points.reduce((sum, p) => sum + p.vNorm, 0) / points.length;
+      centerShiftX = 0.5 - centerU;
+      centerShiftY = 0.5 - centerV;
+    }
+
+    const groupOffsetX = number <= 5 ? d10TopOffsetX : d10BottomOffsetX;
+    const groupOffsetY = number <= 5 ? d10TopOffsetY : d10BottomOffsetY;
+
+    const adjusted = points.map((point) => ({
+      uNorm: clamp01(point.uNorm + centerShiftX + groupOffsetX),
+      vNorm: clamp01(point.vNorm + centerShiftY + groupOffsetY),
+    }));
+
+    const [aNorm, bNorm, cNorm, dNorm] = adjusted;
+    const uvA = mapToTextureTile(aNorm.uNorm, aNorm.vNorm, tileUv, d10UvPadding);
+    const uvB = mapToTextureTile(bNorm.uNorm, bNorm.vNorm, tileUv, d10UvPadding);
+    const uvC = mapToTextureTile(cNorm.uNorm, cNorm.vNorm, tileUv, d10UvPadding);
+    const uvD = mapToTextureTile(dNorm.uNorm, dNorm.vNorm, tileUv, d10UvPadding);
 
     addTriangle(verts, uvs, inds, a, b, c, [uvA.u, uvA.v], [uvB.u, uvB.v], [uvC.u, uvC.v]);
     addTriangle(verts, uvs, inds, a, c, d, [uvA.u, uvA.v], [uvC.u, uvC.v], [uvD.u, uvD.v]);
@@ -343,7 +441,7 @@ function createD10Geometry(atlasInfo) {
 }
 
 function createD12Geometry(atlasInfo) {
-  const { cols, rows } = atlasInfo;
+  const { cols, rows, uvInset, d12UvRadius } = atlasInfo;
   const verts = [];
   const uvs = [];
   const inds = [];
@@ -393,11 +491,11 @@ function createD12Geometry(atlasInfo) {
 
   for (let fi = 0; fi < faces.length; fi++) {
     const f = faces[fi];
-    const uv = getUVForNumber(f[5], cols, rows);
+    const uv = getUVForNumber(f[5], cols, rows, uvInset);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.42;
-    const ry = (uv.v1 - uv.v0) * 0.42;
+    const rx = (uv.u1 - uv.u0) * d12UvRadius;
+    const ry = (uv.v1 - uv.v0) * d12UvRadius;
 
     const center = [0, 0, 0];
     for (let j = 0; j < 5; j++) {
@@ -436,7 +534,7 @@ function createD12Geometry(atlasInfo) {
 }
 
 function createD20Geometry(atlasInfo) {
-  const { cols, rows } = atlasInfo;
+  const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
   const verts = [];
   const uvs = [];
   const inds = [];
@@ -484,11 +582,11 @@ function createD20Geometry(atlasInfo) {
 
   for (let i = 0; i < faces.length; i++) {
     const f = faces[i];
-    const uv = getUVForNumber(f[3], cols, rows);
+    const uv = getUVForNumber(f[3], cols, rows, uvInset);
     const cx = (uv.u0 + uv.u1) / 2;
     const cy = (uv.v0 + uv.v1) / 2;
-    const rx = (uv.u1 - uv.u0) * 0.4;
-    const ry = (uv.v1 - uv.v0) * 0.4;
+    const rx = (uv.u1 - uv.u0) * triangleUvRadius;
+    const ry = (uv.v1 - uv.v0) * triangleUvRadius;
 
     addTriangle(verts, uvs, inds, v[f[0]], v[f[1]], v[f[2]], [cx, cy + ry], [cx - rx, cy - ry], [cx + rx, cy - ry]);
   }
@@ -588,8 +686,10 @@ export default function Dice3D({
   value = 1,
   isRolling = false,
   freeze = false,
+  lockMotion = false,
   color = 0xffffff,
   onRollComplete = null,
+  renderConfig = null,
 }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -661,7 +761,8 @@ export default function Dice3D({
       }
     }
 
-    const atlasInfo = createTextureAtlas(sides);
+    const resolvedConfig = getDiceRenderConfigForSides(sides, renderConfig);
+    const atlasInfo = createTextureAtlas(sides, resolvedConfig);
     const geometry = buildGeometry(sides, atlasInfo);
     numberNormalsRef.current = buildNumberNormals(geometry, atlasInfo.cols, atlasInfo.rows)
     const material = new THREE.MeshStandardMaterial({
@@ -677,7 +778,7 @@ export default function Dice3D({
     meshRef.current = mesh;
 
     previousSidesRef.current = sides;
-  }, [sides, color]);
+  }, [sides, color, renderConfig]);
 
   useEffect(() => {
     let animationFrameId;
@@ -685,7 +786,13 @@ export default function Dice3D({
     const animate = () => {
       if (!meshRef.current) return;
 
-      if (isRolling) {
+      if (lockMotion) {
+        if (targetRotationRef.current) {
+          const { x, y, z } = targetRotationRef.current;
+          meshRef.current.rotation.set(x, y, z);
+          targetRotationRef.current = null;
+        }
+      } else if (isRolling) {
         meshRef.current.rotation.x += 0.2;
         meshRef.current.rotation.y += 0.25;
         meshRef.current.rotation.z += 0.15;
@@ -722,13 +829,19 @@ export default function Dice3D({
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [isRolling, onRollComplete, freeze]);
+  }, [isRolling, onRollComplete, freeze, lockMotion]);
 
   useEffect(() => {
     if (!isRolling && meshRef.current) {
-      targetRotationRef.current = getFaceRotation(value, numberNormalsRef.current)
+      const nextRotation = getFaceRotation(value, numberNormalsRef.current)
+      if (lockMotion) {
+        meshRef.current.rotation.set(nextRotation.x, nextRotation.y, nextRotation.z)
+        targetRotationRef.current = null
+      } else {
+        targetRotationRef.current = nextRotation
+      }
     }
-  }, [value, isRolling, sides])
+  }, [value, isRolling, sides, renderConfig, lockMotion])
 
   return (
     <div

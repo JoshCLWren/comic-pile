@@ -14,3 +14,20 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Dice Playground (Standalone Dev Harness)
+
+This repo includes a standalone dice inspection harness at `dice-playground.html`.
+It is intentionally **not** wired into app routes/navigation.
+
+- Start harness: `npm run dice:playground`
+- Open: `http://127.0.0.1:4174/dice-playground.html`
+- Run visual regression checks: `npm run test:dice-playground`
+- Update visual baselines: `npm run test:dice-playground:update`
+
+Playground features:
+- Live sliders for UV inset, font scale, text offsets, border width, and UV radius/padding
+- Color/font controls (text, border, background, family, weight)
+- D10-specific controls: auto-center plus separate top(1-5)/bottom(6-10) offsets
+- Per-die overrides (d4/d6/d8/d10/d12/d20) on top of global defaults
+- Preset JSON editor with Apply, Copy, Download, Local Save/Load, and Reset controls

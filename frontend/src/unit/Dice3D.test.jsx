@@ -125,6 +125,8 @@ vi.mock('three', () => {
     BufferGeometry,
     BufferAttribute,
     CanvasTexture,
+    LinearFilter: 'LinearFilter',
+    ClampToEdgeWrapping: 'ClampToEdgeWrapping',
     Scene,
     PerspectiveCamera,
     WebGLRenderer,

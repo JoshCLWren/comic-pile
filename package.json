@@ -13,6 +13,9 @@
     "lint:js": "sh -c 'if ls static/js/*.js >/dev/null 2>&1; then npx eslint static/js/*.js; else echo \"No JavaScript files to lint\"; fi'",
     "lint:html": "npx htmlhint app/templates/*.html",
     "lint": "npm run lint:js && npm run lint:html",
-    "lint:fix": "sh -c 'if ls static/js/*.js >/dev/null 2>&1; then npx eslint static/js/*.js --fix; else echo \"No JavaScript files to fix\"; fi'"
+    "lint:fix": "sh -c 'if ls static/js/*.js >/dev/null 2>&1; then npx eslint static/js/*.js --fix; else echo \"No JavaScript files to fix\"; fi'",
+    "dice:playground": "npm --prefix frontend run dice:playground",
+    "test:dice-playground": "npm --prefix frontend run test:dice-playground",
+    "test:dice-playground:update": "npm --prefix frontend run test:dice-playground:update"
   }
 }
