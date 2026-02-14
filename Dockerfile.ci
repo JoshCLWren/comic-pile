@@ -81,7 +81,7 @@ RUN cd frontend && npm run build
 
 # Stage 7: Final image with everything
 FROM frontend-build AS final
-COPY . .
 COPY --from=frontend-build /workspace/static/react /workspace/static/react
+COPY . .
 ENV PATH="/workspace/.venv/bin:$PATH"
 CMD ["/bin/bash"]
