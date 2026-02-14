@@ -49,6 +49,10 @@ function clampNumber(value, fallback, min, max) {
   return Math.max(min, Math.min(max, numeric))
 }
 
+function clampInteger(value, fallback, min, max) {
+  return Math.round(clampNumber(value, fallback, min, max))
+}
+
 function pickString(value, fallback) {
   return typeof value === 'string' && value.length > 0 ? value : fallback
 }
@@ -75,12 +79,12 @@ export function getDiceRenderConfigForSides(sides, overrides = null) {
   }
 
   return {
-    tileSize: clampNumber(raw.tileSize, DEFAULT_GLOBAL_CONFIG.tileSize, 64, 1024),
+    tileSize: clampInteger(raw.tileSize, DEFAULT_GLOBAL_CONFIG.tileSize, 64, 1024),
     uvInset: clampNumber(raw.uvInset, DEFAULT_GLOBAL_CONFIG.uvInset, 0, 0.25),
     fontScale: clampNumber(raw.fontScale, DEFAULT_GLOBAL_CONFIG.fontScale, 0.1, 0.8),
     textOffsetX: clampNumber(raw.textOffsetX, DEFAULT_GLOBAL_CONFIG.textOffsetX, -0.4, 0.4),
     textOffsetY: clampNumber(raw.textOffsetY, DEFAULT_GLOBAL_CONFIG.textOffsetY, -0.4, 0.4),
-    borderWidth: clampNumber(raw.borderWidth, DEFAULT_GLOBAL_CONFIG.borderWidth, 0, 20),
+    borderWidth: clampInteger(raw.borderWidth, DEFAULT_GLOBAL_CONFIG.borderWidth, 0, 20),
     triangleUvRadius: clampNumber(
       raw.triangleUvRadius,
       DEFAULT_GLOBAL_CONFIG.triangleUvRadius,

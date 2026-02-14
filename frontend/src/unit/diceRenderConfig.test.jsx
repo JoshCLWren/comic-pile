@@ -55,18 +55,20 @@ it('uses committed per-side defaults', () => {
 it('clamps invalid values to safe ranges', () => {
   const config = getDiceRenderConfigForSides(10, {
     global: {
+      tileSize: 255.7,
       uvInset: 9,
       fontScale: -3,
-      borderWidth: 99,
+      borderWidth: 7.6,
       d10UvPadding: -5,
       d10TopOffsetX: 8,
       d10BottomOffsetY: -9,
     },
   })
 
+  expect(config.tileSize).toBe(256)
   expect(config.uvInset).toBe(0.25)
   expect(config.fontScale).toBe(0.1)
-  expect(config.borderWidth).toBe(20)
+  expect(config.borderWidth).toBe(8)
   expect(config.d10UvPadding).toBe(0)
   expect(config.d10TopOffsetX).toBe(0.5)
   expect(config.d10BottomOffsetY).toBe(-0.5)
