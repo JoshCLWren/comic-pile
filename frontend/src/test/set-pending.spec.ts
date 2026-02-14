@@ -93,7 +93,9 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
       },
     });
 
+    expect(threadsResponse.ok()).toBeTruthy();
     const threads = await threadsResponse.json();
+    expect(threads.length).toBeGreaterThan(0);
     const threadId = threads[0].id;
 
     const setPendingResponse = await authenticatedWithThreadsPage.request.post(`/api/threads/${threadId}/set-pending`, {

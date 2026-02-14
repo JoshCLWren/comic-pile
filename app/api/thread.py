@@ -462,6 +462,7 @@ async def set_pending_thread(
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
+    # Manual selection sets pending directly; no random roll is performed.
     result = 0
     event = Event(
         type="roll",
