@@ -16,7 +16,7 @@ test.describe('History Page', () => {
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState("networkidle");
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     await authenticatedWithThreadsPage.goto('/history');
 
@@ -94,7 +94,7 @@ test.describe('History Page', () => {
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState("networkidle");
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     await authenticatedWithThreadsPage.goto('/history');
 
