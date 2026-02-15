@@ -1,4 +1,4 @@
-interface GlobalConfig {
+export interface GlobalConfig {
   tileSize: number
   uvInset: number
   fontScale: number
@@ -20,11 +20,11 @@ interface GlobalConfig {
   fontWeight: string
 }
 
-interface SideConfig extends Partial<GlobalConfig> {}
+export type SideConfig = Partial<GlobalConfig>
 
-interface DiceRenderConfig {
+export interface DiceRenderConfig {
   global: GlobalConfig
-  perSides: Record<number, SideConfig>
+  perSides: Record<string | number, SideConfig>
 }
 
 const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {

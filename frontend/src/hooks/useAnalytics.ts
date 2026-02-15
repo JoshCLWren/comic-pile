@@ -1,10 +1,33 @@
 import { useState, useEffect } from 'react'
 import { tasksApi } from '../services/api'
 
+export interface RecentSession {
+  id: number
+  start_die: number
+  started_at: string
+  ended_at: string | null
+}
+
+export interface TopRatedThread {
+  id: number
+  title: string
+  rating: number
+  format: string | null
+}
+
+interface EventStats {
+  [eventType: string]: number
+}
+
 interface MetricsData {
   total_threads: number
+  active_threads: number
   completed_threads: number
-  average_rating: number
+  completion_rate: number
+  average_session_hours: number
+  recent_sessions: RecentSession[]
+  event_stats: EventStats
+  top_rated_threads: TopRatedThread[]
 }
 
 export function useAnalytics() {
