@@ -1,10 +1,5 @@
 import { useState } from 'react'
-import { rateApi } from '../services/api'
-
-interface RateData {
-  thread_id: number
-  rating: number
-}
+import { rateApi, type RateData } from '../services/api'
 
 export function useRate() {
   const [isPending, setIsPending] = useState(false)

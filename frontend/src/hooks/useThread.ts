@@ -1,33 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { threadsApi } from '../services/api'
-
-interface Thread {
-  id: number
-  title: string
-  format: string
-  issues_remaining: number
-  notes?: string
-  queue_position?: number
-  last_rating?: number
-  is_pending?: boolean
-}
-
-interface CreateThreadData {
-  title: string
-  format: string
-  issues_remaining: number
-  notes?: string
-}
-
-interface UpdateThreadData extends Partial<CreateThreadData> {}
+import { threadsApi, type Thread, type CreateThreadData, type UpdateThreadData, type ReactivateThreadData } from '../services/api'
 
 interface UpdateThreadParams {
   id: number
   data: UpdateThreadData
-}
-
-interface ReactivateThreadData {
-  thread_id: number
 }
 
 export function useThreads() {

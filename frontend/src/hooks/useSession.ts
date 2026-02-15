@@ -1,23 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { sessionApi } from '../services/api'
-
-interface Session {
-  id: number
-  created_at: string
-  updated_at: string
-  roll_result?: string
-  rating?: number
-}
+import { sessionApi, type Session, type SnapshotData } from '../services/api'
 
 interface SessionListParams {
   page?: number
   per_page?: number
-}
-
-interface SnapshotData {
-  id: number
-  timestamp: string
-  action: string
 }
 
 const EMPTY_PARAMS = Object.freeze({})
@@ -28,16 +14,18 @@ export function useSession() {
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
-  const fetchSession = useCallback(async () => {
+  const fetchSession = useCallback(async (): Promise<Session | null> => {
     setIsPending(true)
     setIsError(false)
     setError(null)
     try {
       const result = await sessionApi.getCurrent()
       setData(result)
+      return result
     } catch (err) {
       setIsError(true)
       setError(err as Error)
+      return null
     } finally {
       setIsPending(false)
     }

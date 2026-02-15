@@ -6,6 +6,7 @@ import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import { DICE_LADDER } from '../components/diceLadder'
 import { useRate, useSession, useUpdateThread, useSnooze } from '../hooks'
+import type { RollResponse } from '../services/api'
 
 interface ActiveThread {
   id: number
@@ -14,29 +15,6 @@ interface ActiveThread {
   issues_remaining: number
   queue_position: number
   last_rolled_result?: number
-}
-
-interface RollResponse {
-  thread_id: number
-  title: string
-  format: string
-  issues_remaining: number
-  queue_position: number
-  result: number
-  die_size: number
-}
-
-interface Session {
-  current_die: number
-  last_rolled_result: number | null
-  active_thread?: ActiveThread
-  pending_thread_id?: number | null
-}
-
-interface RateData {
-  rating: number
-  issues_read: number
-  finish_session: boolean
 }
 
 interface ApiErrorResponse {
@@ -87,7 +65,7 @@ export default function RatePage(): React.JSX.Element {
     }
   }, [rollResponse, session])
 
-  const activeThread: ActiveThread | undefined = rollResponse
+  const activeThread: ActiveThread | null | undefined = rollResponse
     ? {
         id: rollResponse.thread_id,
         title: rollResponse.title,
@@ -96,7 +74,13 @@ export default function RatePage(): React.JSX.Element {
         queue_position: rollResponse.queue_position,
         last_rolled_result: rollResponse.result,
       }
-    : session?.active_thread
+    : (session?.active_thread?.id ? {
+        id: session.active_thread.id,
+        title: session.active_thread.title,
+        format: session.active_thread.format,
+        issues_remaining: 0,  // Default when coming from session
+        queue_position: 0,   // Default when coming from session
+      } : null)
 
   function updateUI(val: string): void {
     const num = parseFloat(val);
@@ -104,14 +88,14 @@ export default function RatePage(): React.JSX.Element {
     let newPredictedDie = currentDie;
 
     if (num >= 4.0) {
-      const idx = DICE_LADDER.indexOf(currentDie);
+      const idx = DICE_LADDER.indexOf(currentDie as typeof DICE_LADDER[number]);
       if (idx > 0) {
         newPredictedDie = DICE_LADDER[idx - 1];
       } else {
         newPredictedDie = DICE_LADDER[0];
       }
     } else {
-      const idx = DICE_LADDER.indexOf(currentDie);
+      const idx = DICE_LADDER.indexOf(currentDie as typeof DICE_LADDER[number]);
       if (idx < DICE_LADDER.length - 1) {
         newPredictedDie = DICE_LADDER[idx + 1];
       } else {

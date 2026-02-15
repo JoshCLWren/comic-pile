@@ -1,34 +1,10 @@
 import { useState, useEffect } from 'react'
-import { tasksApi } from '../services/api'
+import { tasksApi, type MetricsData } from '../services/api'
 
-export interface RecentSession {
-  id: number
-  start_die: number
-  started_at: string
-  ended_at: string | null
-}
-
-export interface TopRatedThread {
-  id: number
-  title: string
-  rating: number
-  format: string | null
-}
-
-interface EventStats {
-  [eventType: string]: number
-}
-
-interface MetricsData {
-  total_threads: number
-  active_threads: number
-  completed_threads: number
-  completion_rate: number
-  average_session_hours: number
-  recent_sessions: RecentSession[]
-  event_stats: EventStats
-  top_rated_threads: TopRatedThread[]
-}
+// Re-export types from MetricsData
+export type RecentSession = MetricsData['recent_sessions'][number]
+export type TopRatedThread = MetricsData['top_rated_threads'][number]
+export type { MetricsData }
 
 export function useAnalytics() {
   const [data, setData] = useState<MetricsData | null>(null)

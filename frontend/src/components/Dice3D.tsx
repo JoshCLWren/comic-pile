@@ -812,8 +812,20 @@ export default function Dice3D({
         scene.remove(meshRef.current);
         if (meshRef.current.geometry) meshRef.current.geometry.dispose();
         if (meshRef.current.material) {
-          if (meshRef.current.material.map) meshRef.current.material.map.dispose();
-          meshRef.current.material.dispose();
+          const material = meshRef.current.material;
+          if (Array.isArray(material)) {
+            material.forEach(m => {
+              if ('map' in m && (m as { map?: { dispose(): void } }).map) {
+                (m as { map: { dispose(): void } }).map.dispose();
+              }
+              m.dispose();
+            });
+          } else {
+            if ('map' in material && (material as { map?: { dispose(): void } }).map) {
+              (material as { map: { dispose(): void } }).map.dispose();
+            }
+            material.dispose();
+          }
         }
       }
       renderer.dispose();
@@ -827,8 +839,20 @@ export default function Dice3D({
       sceneRef.current.remove(meshRef.current);
       if (meshRef.current.geometry) meshRef.current.geometry.dispose();
       if (meshRef.current.material) {
-        if (meshRef.current.material.map) meshRef.current.material.map.dispose();
-        meshRef.current.material.dispose();
+        const material = meshRef.current.material;
+        if (Array.isArray(material)) {
+          material.forEach(m => {
+            if ('map' in m && (m as { map?: { dispose(): void } }).map) {
+              (m as { map: { dispose(): void } }).map.dispose();
+            }
+            m.dispose();
+          });
+        } else {
+          if ('map' in material && (material as { map?: { dispose(): void } }).map) {
+            (material as { map: { dispose(): void } }).map.dispose();
+          }
+          material.dispose();
+        }
       }
     }
 

@@ -2,7 +2,7 @@ import { useEffect, ReactNode } from 'react'
 
 interface ModalProps {
   isOpen: boolean
-  title: string
+  title: string | undefined
   onClose: () => void
   children: ReactNode
   'data-testid'?: string

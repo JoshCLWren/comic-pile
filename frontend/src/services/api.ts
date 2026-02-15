@@ -1,6 +1,7 @@
-import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
+import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 
-const api = axios.create({
+// Create base axios instance
+const axiosInstance = axios.create({
   baseURL: '/api',
   timeout: 10000,
 })
@@ -8,7 +9,7 @@ const api = axios.create({
 let refreshTokenPromise: Promise<{ access_token: string; refresh_token: string }> | null = null
 let isRedirectingToLogin = false
 
-api.interceptors.request.use(
+axiosInstance.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('auth_token')
     if (token) {
@@ -19,8 +20,8 @@ api.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error)
 )
 
-api.interceptors.response.use(
-  (response) => response.data,
+axiosInstance.interceptors.response.use(
+  <T>(response: AxiosResponse<T>): T => response.data,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
@@ -45,20 +46,19 @@ api.interceptors.response.use(
       if (refreshToken) {
         try {
           if (!refreshTokenPromise) {
-            refreshTokenPromise = api.post<{ access_token: string; refresh_token: string }>('/auth/refresh', {
+            refreshTokenPromise = axiosInstance.post<{ access_token: string; refresh_token: string }>('/auth/refresh', {
               refresh_token: refreshToken,
-            })
+            }).then(response => response.data) as Promise<{ access_token: string; refresh_token: string }>
           }
 
-          const response = await refreshTokenPromise
+          const tokens = await refreshTokenPromise
           refreshTokenPromise = null
 
-          const { access_token, refresh_token: newRefreshToken } = response
-          localStorage.setItem('auth_token', access_token)
-          localStorage.setItem('refresh_token', newRefreshToken)
+          localStorage.setItem('auth_token', tokens.access_token)
+          localStorage.setItem('refresh_token', tokens.refresh_token)
 
-          originalRequest.headers.Authorization = `Bearer ${access_token}`
-          return api(originalRequest)
+          originalRequest.headers.Authorization = `Bearer ${tokens.access_token}`
+          return axiosInstance(originalRequest)
         } catch (refreshError) {
           refreshTokenPromise = null
           if (!isRedirectingToLogin) {
@@ -84,6 +84,18 @@ api.interceptors.response.use(
   }
 )
 
+// Type-safe API wrapper that ensures interceptor types are correctly applied
+const api = {
+  get: <T = unknown>(url: string, config?: object): Promise<T> => 
+    axiosInstance.get<T>(url, config) as unknown as Promise<T>,
+  post: <T = unknown>(url: string, data?: unknown, config?: object): Promise<T> =>
+    axiosInstance.post<T>(url, data, config) as unknown as Promise<T>,
+  put: <T = unknown>(url: string, data?: unknown, config?: object): Promise<T> =>
+    axiosInstance.put<T>(url, data, config) as unknown as Promise<T>,
+  delete: <T = unknown>(url: string, config?: object): Promise<T> =>
+    axiosInstance.delete<T>(url, config) as unknown as Promise<T>,
+}
+
 export default api
 
 interface Thread {
@@ -91,37 +103,47 @@ interface Thread {
   title: string
   format: string
   issues_remaining: number
-  notes?: string
-  queue_position?: number
-  last_rating?: number
-  is_pending?: boolean
+  notes: string | null
+  queue_position: number
+  last_rating: number | null
+  status: string
+  last_activity_at: string | null
+  review_url: string | null
+  last_review_at: string | null
+  is_test: boolean
+  created_at: string
 }
 
 interface CreateThreadData {
   title: string
   format: string
   issues_remaining: number
-  notes?: string
+  notes?: string | null
 }
 
 interface UpdateThreadData extends Partial<CreateThreadData> {}
 
 interface ReactivateThreadData {
   thread_id: number
+  issues_to_add: number
 }
 
 interface RollResponse {
+  thread_id: number
   title: string
   format: string
   issues_remaining: number
-  thread_id: number
   queue_position: number
-  is_pending: boolean
+  die_size: number
+  result: number
+  offset: number
+  snoozed_count: number
 }
 
 interface RateData {
-  thread_id: number
   rating: number
+  issues_read: number
+  finish_session: boolean
 }
 
 interface SessionListParams {
@@ -129,12 +151,34 @@ interface SessionListParams {
   per_page?: number
 }
 
+interface ActiveThreadInfo {
+  id: number | null
+  title: string
+  format: string
+}
+
+interface SnoozedThreadInfo {
+  id: number
+  title: string
+  format: string
+}
+
 interface Session {
   id: number
-  created_at: string
-  updated_at: string
-  roll_result?: string
-  rating?: number
+  started_at: string
+  ended_at: string | null
+  start_die: number
+  manual_die: number | null
+  user_id: number
+  ladder_path: string
+  active_thread: ActiveThreadInfo | null
+  current_die: number
+  last_rolled_result: number | null
+  has_restore_point: boolean
+  snapshot_count: number
+  snoozed_thread_ids: number[]
+  snoozed_threads: SnoozedThreadInfo[]
+  pending_thread_id: number | null
 }
 
 interface SnapshotData {
@@ -145,8 +189,24 @@ interface SnapshotData {
 
 interface MetricsData {
   total_threads: number
+  active_threads: number
   completed_threads: number
+  completion_rate: number
   average_rating: number
+  average_session_hours: number
+  recent_sessions: {
+    id: number
+    start_die: number
+    started_at: string
+    ended_at: string | null
+  }[]
+  event_stats: { [eventType: string]: number }
+  top_rated_threads: {
+    id: number
+    title: string
+    rating: number
+    format: string | null
+  }[]
 }
 
 export const threadsApi = {
@@ -165,11 +225,15 @@ export const rollApi = {
   override: (data: { thread_id: number }) => api.post<RollResponse>('/roll/override', data),
   setDie: (die: number) => api.post('/roll/set-die', null, { params: { die } }),
   clearManualDie: () => api.post('/roll/clear-manual-die'),
+  dismissPending: () => api.post('/roll/dismiss-pending'),
+  reroll: () => api.post('/roll/reroll'),
 }
 
 export const rateApi = {
   rate: (data: RateData) => api.post('/rate/', data),
 }
+
+export type { Thread, CreateThreadData, UpdateThreadData, ReactivateThreadData, RollResponse, RateData, Session, ActiveThreadInfo, SnoozedThreadInfo, SnapshotData, MetricsData }
 
 export const sessionApi = {
   list: (params?: SessionListParams) => api.get<Session[]>('/sessions/', { params }),

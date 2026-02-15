@@ -1,11 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { undoApi } from '../services/api'
-
-interface SnapshotData {
-  id: number
-  timestamp: string
-  action: string
-}
+import { undoApi, type SnapshotData } from '../services/api'
 
 interface UndoParams {
   sessionId: number

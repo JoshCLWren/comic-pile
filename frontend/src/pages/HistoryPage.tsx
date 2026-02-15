@@ -1,22 +1,7 @@
 import React from 'react'
 import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
-
-interface ActiveThread {
-  title: string
-  format: string
-}
-
-interface Session {
-  id: number
-  started_at: string
-  ended_at: string | null
-  ladder_path: string | null
-  active_thread: ActiveThread | null
-  last_rolled_result: number | null
-  current_die: number | null
-  snapshot_count: number | null
-}
+import type { Session } from '../services/api'
 
 export default function HistoryPage(): React.JSX.Element {
   const { data: sessions, isPending, error } = useSessions()

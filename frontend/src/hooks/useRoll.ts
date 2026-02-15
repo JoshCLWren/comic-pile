@@ -1,14 +1,5 @@
 import { useState } from 'react'
-import { rollApi } from '../services/api'
-
-interface RollResponse {
-  title: string
-  format: string
-  issues_remaining: number
-  thread_id: number
-  queue_position: number
-  is_pending: boolean
-}
+import { rollApi, type RollResponse } from '../services/api'
 
 export function useRoll() {
   const [isPending, setIsPending] = useState(false)
@@ -60,7 +51,7 @@ export function useDismissPending() {
     setIsPending(true)
     setIsError(false)
     try {
-      await rollApi.dismissPending?.()
+      await rollApi.dismissPending()
     } catch (error) {
       setIsError(true)
       throw error
@@ -120,7 +111,7 @@ export function useReroll() {
     setIsPending(true)
     setIsError(false)
     try {
-      await rollApi.reroll?.()
+      await rollApi.reroll()
     } catch (error) {
       setIsError(true)
       throw error

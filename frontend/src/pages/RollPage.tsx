@@ -10,44 +10,10 @@ import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
-import { threadsApi } from '../services/api'
-
-interface Thread {
-  id: number
-  title: string
-  format: string
-  issues_remaining: number
-  queue_position: number
-  status: string
-  notes?: string
-}
+import { threadsApi, type Thread, type RollResponse } from '../services/api'
 
 interface StaleThread extends Thread {
   days: number
-  last_activity_at?: string
-  created_at: string
-}
-
-interface SnoozedThread {
-  id: number
-  title: string
-}
-
-interface Session {
-  current_die: number
-  last_rolled_result: number | null
-  manual_die: number | null
-  snoozed_threads: SnoozedThread[]
-}
-
-interface RollResponse {
-  result: number
-  offset?: number
-  thread_id: number
-  title: string
-  format: string
-  issues_remaining: number
-  queue_position: number
 }
 
 type DiceState = 'idle' | 'rolled'

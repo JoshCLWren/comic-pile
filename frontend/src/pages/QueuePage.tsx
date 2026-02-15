@@ -14,30 +14,7 @@ import {
 } from '../hooks/useThread'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api'
-
-interface Thread {
-  id: number
-  title: string
-  format: string
-  issues_remaining: number | null
-  notes: string | null
-  status: 'active' | 'completed'
-  queue_position: number
-}
-
-interface CreateThreadData {
-  title: string
-  format: string
-  issues_remaining: number
-  notes: string | null
-}
-
-interface UpdateThreadData {
-  title: string
-  format: string
-  notes: string | null
-}
+import { threadsApi, type Thread } from '../services/api'
 
 interface FormState {
   title: string
@@ -49,10 +26,6 @@ interface FormState {
 interface LocationState {
   editThreadId?: number
   rollResponse?: unknown
-}
-
-interface SessionData {
-  snoozed_threads?: Thread[]
 }
 
 const DEFAULT_CREATE_STATE: FormState = {
@@ -177,7 +150,7 @@ export default function QueuePage() {
         title: createForm.title,
         format: createForm.format,
         issues_remaining: Number(createForm.issuesRemaining),
-        notes: createForm.notes || null,
+        notes: createForm.notes || undefined,
       })
       setCreateForm(DEFAULT_CREATE_STATE)
       setIsCreateOpen(false)
@@ -197,7 +170,7 @@ export default function QueuePage() {
         data: {
           title: editForm.title,
           format: editForm.format,
-          notes: editForm.notes || null,
+          notes: editForm.notes || undefined,
         },
       })
       setEditingThread(null)
