@@ -4,10 +4,10 @@
 
 /**
  * Formats a date string or Date object to a short date format.
- * @param {string|Date|null|undefined} value - The date value to format
- * @returns {string} Formatted date string (e.g., "Jan 15") or empty string if invalid
+ * @param value - The date value to format
+ * @returns Formatted date string (e.g., "Jan 15") or empty string if invalid
  */
-export function formatDate(value) {
+export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return ''
   const date = new Date(value)
   if (isNaN(date.getTime())) return ''
@@ -16,10 +16,10 @@ export function formatDate(value) {
 
 /**
  * Formats a date string or Date object to a time format.
- * @param {string|Date|null|undefined} value - The date value to format
- * @returns {string} Formatted time string (e.g., "2:30 PM") or empty string if invalid
+ * @param value - The date value to format
+ * @returns Formatted time string (e.g., "2:30 PM") or empty string if invalid
  */
-export function formatTime(value) {
+export function formatTime(value: string | Date | null | undefined): string {
   if (!value) return ''
   const date = new Date(value)
   if (isNaN(date.getTime())) return ''
@@ -28,10 +28,10 @@ export function formatTime(value) {
 
 /**
  * Formats a date string or Date object to include both date and time.
- * @param {string|Date|null|undefined} value - The date value to format
- * @returns {string} Formatted datetime string (e.g., "Jan 15 2:30 PM") or "—" if invalid
+ * @param value - The date value to format
+ * @returns Formatted datetime string (e.g., "Jan 15 2:30 PM") or "—" if invalid
  */
-export function formatDateTime(value) {
+export function formatDateTime(value: string | Date | null | undefined): string {
   if (!value) return '—'
   const date = new Date(value)
   if (isNaN(date.getTime())) return '—'
@@ -43,10 +43,10 @@ export function formatDateTime(value) {
 
 /**
  * Formats a date for 24-hour time display.
- * @param {string|Date|null|undefined} value - The date value to format
- * @returns {string} Formatted time string (e.g., "14:30") or "N/A" if invalid
+ * @param value - The date value to format
+ * @returns Formatted time string (e.g., "14:30") or "N/A" if invalid
  */
-export function formatTime24(value) {
+export function formatTime24(value: string | Date | null | undefined): string {
   if (!value) return 'N/A'
   const date = new Date(value)
   if (isNaN(date.getTime())) return 'N/A'

@@ -1,4 +1,33 @@
-const DEFAULT_GLOBAL_CONFIG = {
+interface GlobalConfig {
+  tileSize: number
+  uvInset: number
+  fontScale: number
+  textOffsetX: number
+  textOffsetY: number
+  borderWidth: number
+  triangleUvRadius: number
+  d12UvRadius: number
+  d10UvPadding: number
+  d10AutoCenter: boolean
+  d10TopOffsetX: number
+  d10TopOffsetY: number
+  d10BottomOffsetX: number
+  d10BottomOffsetY: number
+  textColor: string
+  borderColor: string
+  backgroundColor: string
+  fontFamily: string
+  fontWeight: string
+}
+
+interface SideConfig extends Partial<GlobalConfig> {}
+
+interface DiceRenderConfig {
+  global: GlobalConfig
+  perSides: Record<number, SideConfig>
+}
+
+const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
   tileSize: 256,
   uvInset: 0.045,
   fontScale: 0.36,
@@ -20,7 +49,7 @@ const DEFAULT_GLOBAL_CONFIG = {
   fontWeight: 'bold',
 }
 
-export const DEFAULT_DICE_RENDER_CONFIG = {
+export const DEFAULT_DICE_RENDER_CONFIG: DiceRenderConfig = {
   global: DEFAULT_GLOBAL_CONFIG,
   perSides: {
     6: {
@@ -41,7 +70,7 @@ export const DEFAULT_DICE_RENDER_CONFIG = {
   },
 }
 
-function clampNumber(value, fallback, min, max) {
+function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) {
     return fallback
@@ -49,19 +78,22 @@ function clampNumber(value, fallback, min, max) {
   return Math.max(min, Math.min(max, numeric))
 }
 
-function clampInteger(value, fallback, min, max) {
+function clampInteger(value: unknown, fallback: number, min: number, max: number): number {
   return Math.round(clampNumber(value, fallback, min, max))
 }
 
-function pickString(value, fallback) {
+function pickString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.length > 0 ? value : fallback
 }
 
-function pickBoolean(value, fallback) {
+function pickBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
-export function getDiceRenderConfigForSides(sides, overrides = null) {
+export function getDiceRenderConfigForSides(
+  sides: number,
+  overrides: Partial<DiceRenderConfig> | null = null
+): GlobalConfig {
   const defaultGlobal = DEFAULT_DICE_RENDER_CONFIG.global ?? {}
   const defaultSide =
     DEFAULT_DICE_RENDER_CONFIG.perSides?.[String(sides)] ??
@@ -70,7 +102,7 @@ export function getDiceRenderConfigForSides(sides, overrides = null) {
   const globalOverrides = overrides?.global ?? {}
   const sideOverrides = overrides?.perSides?.[String(sides)] ?? overrides?.perSides?.[sides] ?? {}
 
-  const raw = {
+  const raw: Record<string, unknown> = {
     ...DEFAULT_GLOBAL_CONFIG,
     ...defaultGlobal,
     ...defaultSide,
