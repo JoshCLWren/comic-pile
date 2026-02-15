@@ -33,12 +33,11 @@
   - Header shows "+X snoozed offset active"
   - Files: app/api/roll.py, app/schemas/roll.py, RollPage.jsx
 
- - 🚧 **PR #7:** Make Stale Reminder Tappable (in progress - fixes being applied)
-   - Created POST /api/threads/{thread_id}/set-pending endpoint
-   - Made stale reminder banner clickable with keyboard support
-   - Added "Tap to read now" hint text
-   - Files: app/api/thread.py, RollPage.jsx, api.js
-   - Status: PR #186 open in worktree /mnt/extra/josh/code/comic-pile-pr186
+- ✅ **PR #7:** Make Stale Reminder Tappable (1-2 hours)
+  - Created POST /api/threads/{thread_id}/set-pending endpoint
+  - Made stale reminder banner clickable with keyboard support
+  - Added "Tap to read now" hint text
+  - Files: app/api/thread.py, RollPage.jsx, api.js
 
 - ✅ **PR #8:** Quick Actions on Comics (2-3 hours)
   - Action sheet with 5 options: Read Now, Move to Front/Back, Snooze/Unsnooze, Edit

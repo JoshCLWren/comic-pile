@@ -108,16 +108,19 @@ export default function RollPage() {
       console.error('Action failed:', error)
     }
   }
-
   const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
 
   useEffect(() => {
     if (session?.current_die) {
       setCurrentDie(session.current_die)
     }
-    if (session?.last_rolled_result) {
+    if (session?.last_rolled_result !== undefined && session?.last_rolled_result !== null) {
       setRolledResult(session.last_rolled_result)
     }
+    // TODO: Backend needs to add last_rolled_offset to session response
+    // if (session?.last_rolled_offset !== undefined) {
+    //   setRolledOffset(session.last_rolled_offset)
+    // }
   }, [session])
 
   useEffect(() => {
@@ -190,20 +193,20 @@ export default function RollPage() {
         
         rollTimeoutRef.current = setTimeout(async () => {
            rollTimeoutRef.current = null
-           try {
-             const response = await rollMutation.mutate()
-             if (response?.result) {
-               setRolledResult(response.result)
-             }
-             if (response?.offset !== undefined) {
-               setRolledOffset(response.offset)
-             }
-             if (response?.thread_id) {
-               setSelectedThreadId(response.thread_id)
-             }
-             setIsRolling(false)
-             navigate('/rate', { state: { rollResponse: response } })
-           } catch (error) {
+            try {
+              const response = await rollMutation.mutate()
+              if (response?.result !== undefined && response?.result !== null) {
+                setRolledResult(response.result)
+              }
+              if (response?.offset !== undefined) {
+                setRolledOffset(response.offset)
+              }
+              if (response?.thread_id) {
+                setSelectedThreadId(response.thread_id)
+              }
+              setIsRolling(false)
+              navigate('/rate', { state: { rollResponse: response } })
+            } catch (error) {
              console.error('Roll failed:', error)
              setIsRolling(false)
            }
@@ -346,7 +349,7 @@ export default function RollPage() {
             </div>
           </div>
 
-          {!isRolling && rolledResult && (
+          {!isRolling && rolledResult !== null && (
             <div className="text-center shrink-0">
               <div className="roll-value flex items-center justify-center gap-1">
                 <span className="text-4xl font-black text-teal-400">{rolledResult}</span>
@@ -362,7 +365,7 @@ export default function RollPage() {
             </div>
           )}
 
-          {!isRolling && !rolledResult && (
+          {!isRolling && rolledResult === null && (
             <p
               id="tap-instruction"
               className="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0 text-center"

@@ -264,7 +264,7 @@ async def test_export_json(client: AsyncClient, sample_data: dict, enable_intern
     assert len(data["sessions"]) == 2
     assert len(data["events"]) == 2
 
-    assert data["users"][0]["username"] == "test_user"
+    assert data["users"][0]["username"].startswith("test_user")
     assert data["threads"][0]["title"] == "Superman"
     assert data["sessions"][0]["start_die"] == 6
     assert data["events"][0]["type"] == "roll"

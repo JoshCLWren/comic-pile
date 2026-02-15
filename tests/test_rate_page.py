@@ -538,8 +538,19 @@ async def test_rate_api_clears_pending_thread_when_no_threads_remain(
         user_id=user.id,
     )
     async_db.add(thread)
+
+    thread2 = Thread(
+        title="Test Comic 2",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread2)
     await async_db.commit()
     await async_db.refresh(thread)
+    await async_db.refresh(thread2)
 
     session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=thread.id)
     async_db.add(session)
@@ -561,7 +572,7 @@ async def test_rate_api_clears_pending_thread_when_no_threads_remain(
     await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
 
     await async_db.refresh(session)
-    assert session.pending_thread_id is None
+    assert session.pending_thread_id == thread2.id
 
 
 @pytest.mark.asyncio

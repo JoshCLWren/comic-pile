@@ -144,10 +144,11 @@ export const test = base.extend<TestFixtures>({
 
   freshUserPage: async ({ page, request }, use) => {
     const counter = ++fixtureUserCounter;
-    const workerId = process.pid || 0;
+    const timestamp = Date.now();
+    const workerId = process.pid ?? 0;
     const testUser = {
-      username: `auth_fresh_${counter}_${workerId}`,
-      email: `auth_fresh_${counter}_${workerId}@example.com`,
+      username: `auth_fresh_${timestamp}_${counter}_${workerId}`,
+      email: `auth_fresh_${timestamp}_${counter}_${workerId}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -176,10 +177,11 @@ export const test = base.extend<TestFixtures>({
 
   authenticatedPage: async ({ page, request }, use) => {
     const counter = ++fixtureUserCounter;
-    const workerId = process.pid || 0;
+    const timestamp = Date.now();
+    const workerId = process.pid ?? 0;
     const testUser = {
-      username: `auth_${counter}_${workerId}`,
-      email: `auth_${counter}_${workerId}@example.com`,
+      username: `auth_${timestamp}_${counter}_${workerId}`,
+      email: `auth_${timestamp}_${counter}_${workerId}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -198,10 +200,11 @@ export const test = base.extend<TestFixtures>({
 
   authenticatedWithThreadsPage: async ({ page, request }, use) => {
     const counter = ++fixtureUserCounter;
-    const workerId = process.pid || 0;
+    const timestamp = Date.now();
+    const workerId = process.pid ?? 0;
     const testUser = {
-      username: `auth_threads_${counter}_${workerId}`,
-      email: `auth_threads_${counter}_${workerId}@example.com`,
+      username: `auth_threads_${timestamp}_${counter}_${workerId}`,
+      email: `auth_threads_${timestamp}_${counter}_${workerId}@example.com`,
       password: 'TestPass123!',
     };
 
@@ -221,10 +224,11 @@ export const test = base.extend<TestFixtures>({
 
   testUser: async ({}, use) => {
     const counter = ++fixtureUserCounter;
-    const workerId = process.pid || 0;
+    const timestamp = Date.now();
+    const workerId = process.pid ?? 0;
     const testUser = {
-      username: `test_${counter}_${workerId}`,
-      email: `test_${counter}_${workerId}@example.com`,
+      username: `test_${timestamp}_${counter}_${workerId}`,
+      email: `test_${timestamp}_${counter}_${workerId}@example.com`,
       password: 'TestPass123!',
     };
     await use(testUser);
