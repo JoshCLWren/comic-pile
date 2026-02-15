@@ -37,7 +37,6 @@ export default function QueuePage() {
   const moveToPositionMutation = useMoveToPosition()
   const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
-  const snoozeMutation = useSnooze()
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
