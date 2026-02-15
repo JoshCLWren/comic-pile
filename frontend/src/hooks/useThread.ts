@@ -1,8 +1,37 @@
 import { useState, useEffect, useCallback } from 'react'
 import { threadsApi } from '../services/api'
 
+interface Thread {
+  id: number
+  title: string
+  format: string
+  issues_remaining: number
+  notes?: string
+  queue_position?: number
+  last_rating?: number
+  is_pending?: boolean
+}
+
+interface CreateThreadData {
+  title: string
+  format: string
+  issues_remaining: number
+  notes?: string
+}
+
+interface UpdateThreadData extends Partial<CreateThreadData> {}
+
+interface UpdateThreadParams {
+  id: number
+  data: UpdateThreadData
+}
+
+interface ReactivateThreadData {
+  thread_id: number
+}
+
 export function useThreads() {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<Thread[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
@@ -26,8 +55,8 @@ export function useThreads() {
   return { data, isPending, isError, refetch: fetchData }
 }
 
-export function useThread(id) {
-  const [data, setData] = useState(null)
+export function useThread(id: number | null | undefined) {
+  const [data, setData] = useState<Thread | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
@@ -71,7 +100,7 @@ export function useThread(id) {
 }
 
 export function useStaleThreads(days = 30) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<Thread[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
@@ -111,13 +140,14 @@ export function useCreateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async (data) => {
+  const mutate = useCallback(async (data: CreateThreadData) => {
     setIsPending(true)
     setIsError(false)
     try {
       return await threadsApi.create(data)
-    } catch (error) {
-      console.error('Failed to create thread:', error.response?.data?.detail || error.message)
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      console.error('Failed to create thread:', err.response?.data?.detail || err.message)
       setIsError(true)
       throw error
     } finally {
@@ -132,13 +162,14 @@ export function useUpdateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async ({ id, data }) => {
+  const mutate = useCallback(async ({ id, data }: UpdateThreadParams) => {
     setIsPending(true)
     setIsError(false)
     try {
       return await threadsApi.update(id, data)
-    } catch (error) {
-      console.error('Failed to update thread:', error.response?.data?.detail || error.message)
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      console.error('Failed to update thread:', err.response?.data?.detail || err.message)
       setIsError(true)
       throw error
     } finally {
@@ -153,13 +184,14 @@ export function useDeleteThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async (id) => {
+  const mutate = useCallback(async (id: number) => {
     setIsPending(true)
     setIsError(false)
     try {
       return await threadsApi.delete(id)
-    } catch (error) {
-      console.error('Failed to delete thread:', error.response?.data?.detail || error.message)
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      console.error('Failed to delete thread:', err.response?.data?.detail || err.message)
       setIsError(true)
       throw error
     } finally {
@@ -174,13 +206,14 @@ export function useReactivateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async (data) => {
+  const mutate = useCallback(async (data: ReactivateThreadData) => {
     setIsPending(true)
     setIsError(false)
     try {
       return await threadsApi.reactivate(data)
-    } catch (error) {
-      console.error('Failed to reactivate thread:', error.response?.data?.detail || error.message)
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      console.error('Failed to reactivate thread:', err.response?.data?.detail || err.message)
       setIsError(true)
       throw error
     } finally {

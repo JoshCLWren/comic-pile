@@ -1,8 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { undoApi } from '../services/api'
 
-export function useSnapshots(sessionId) {
-  const [data, setData] = useState(null)
+interface SnapshotData {
+  id: number
+  timestamp: string
+  action: string
+}
+
+interface UndoParams {
+  sessionId: number
+  snapshotId: number
+}
+
+export function useSnapshots(sessionId: number | null | undefined) {
+  const [data, setData] = useState<SnapshotData[] | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
@@ -42,15 +53,16 @@ export function useUndo() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async ({ sessionId, snapshotId }) => {
+  const mutate = useCallback(async ({ sessionId, snapshotId }: UndoParams) => {
     setIsPending(true)
     setIsError(false)
 
     try {
       await undoApi.undo(sessionId, snapshotId)
-    } catch (error) {
+    } catch (error: unknown) {
       setIsError(true)
-      console.error('Failed to undo action:', error.response?.data?.detail || error.message)
+      const err = error as { response?: { data?: { detail?: string } }; message?: string }
+      console.error('Failed to undo action:', err.response?.data?.detail || err.message)
       throw error
     } finally {
       setIsPending(false)

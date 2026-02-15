@@ -25,7 +25,7 @@ export function useUnsnooze() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async (threadId) => {
+  const mutate = async (threadId: number) => {
     setIsPending(true)
     setIsError(false)
     try {

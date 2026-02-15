@@ -1,13 +1,32 @@
 import { useCallback, useEffect, useState } from 'react'
 import { sessionApi } from '../services/api'
 
+interface Session {
+  id: number
+  created_at: string
+  updated_at: string
+  roll_result?: string
+  rating?: number
+}
+
+interface SessionListParams {
+  page?: number
+  per_page?: number
+}
+
+interface SnapshotData {
+  id: number
+  timestamp: string
+  action: string
+}
+
 const EMPTY_PARAMS = Object.freeze({})
 
 export function useSession() {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<Session | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const fetchSession = useCallback(async () => {
     setIsPending(true)
@@ -18,7 +37,7 @@ export function useSession() {
       setData(result)
     } catch (err) {
       setIsError(true)
-      setError(err)
+      setError(err as Error)
     } finally {
       setIsPending(false)
     }
@@ -31,11 +50,11 @@ export function useSession() {
   return { data, isPending, isError, error, refetch: fetchSession }
 }
 
-export function useSessions(params = EMPTY_PARAMS) {
-  const [data, setData] = useState(null)
+export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
+  const [data, setData] = useState<Session[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const effectiveParams = params ?? EMPTY_PARAMS
 
@@ -48,7 +67,7 @@ export function useSessions(params = EMPTY_PARAMS) {
       setData(result)
     } catch (err) {
       setIsError(true)
-      setError(err)
+      setError(err as Error)
     } finally {
       setIsPending(false)
     }
@@ -61,11 +80,11 @@ export function useSessions(params = EMPTY_PARAMS) {
   return { data, isPending, isError, error, refetch: fetchSessions }
 }
 
-export function useSessionDetails(id) {
-  const [data, setData] = useState(null)
+export function useSessionDetails(id: number | null | undefined) {
+  const [data, setData] = useState<unknown>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const fetchDetails = useCallback(async () => {
     if (!id) {
@@ -83,7 +102,7 @@ export function useSessionDetails(id) {
       setData(result)
     } catch (err) {
       setIsError(true)
-      setError(err)
+      setError(err as Error)
     } finally {
       setIsPending(false)
     }
@@ -96,11 +115,11 @@ export function useSessionDetails(id) {
   return { data, isPending, isError, error, refetch: fetchDetails }
 }
 
-export function useSessionSnapshots(id) {
-  const [data, setData] = useState(null)
+export function useSessionSnapshots(id: number | null | undefined) {
+  const [data, setData] = useState<SnapshotData[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const fetchSnapshots = useCallback(async () => {
     if (!id) {
@@ -118,7 +137,7 @@ export function useSessionSnapshots(id) {
       setData(result)
     } catch (err) {
       setIsError(true)
-      setError(err)
+      setError(err as Error)
     } finally {
       setIsPending(false)
     }
@@ -134,9 +153,9 @@ export function useSessionSnapshots(id) {
 export function useRestoreSessionStart() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
-  const mutate = useCallback(async (sessionId) => {
+  const mutate = useCallback(async (sessionId: number) => {
     setIsPending(true)
     setIsError(false)
     setError(null)
@@ -145,8 +164,9 @@ export function useRestoreSessionStart() {
       return result
     } catch (err) {
       setIsError(true)
-      setError(err)
-      console.error('Failed to restore session:', err.response?.data?.detail || err.message)
+      setError(err as Error)
+      const error = err as { response?: { data?: { detail?: string } }; message?: string }
+      console.error('Failed to restore session:', error.response?.data?.detail || error.message)
       throw err
     } finally {
       setIsPending(false)

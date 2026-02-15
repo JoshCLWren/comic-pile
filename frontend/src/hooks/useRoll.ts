@@ -1,11 +1,20 @@
 import { useState } from 'react'
 import { rollApi } from '../services/api'
 
+interface RollResponse {
+  title: string
+  format: string
+  issues_remaining: number
+  thread_id: number
+  queue_position: number
+  is_pending: boolean
+}
+
 export function useRoll() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async () => {
+  const mutate = async (): Promise<RollResponse> => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -26,7 +35,7 @@ export function useOverrideRoll() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async (data) => {
+  const mutate = async (data: { thread_id: number }): Promise<RollResponse> => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -51,7 +60,7 @@ export function useDismissPending() {
     setIsPending(true)
     setIsError(false)
     try {
-      await rollApi.dismissPending()
+      await rollApi.dismissPending?.()
     } catch (error) {
       setIsError(true)
       throw error
@@ -67,7 +76,7 @@ export function useSetDie() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
   
-  const mutate = async (die) => {
+  const mutate = async (die: number) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -111,7 +120,7 @@ export function useReroll() {
     setIsPending(true)
     setIsError(false)
     try {
-      await rollApi.reroll()
+      await rollApi.reroll?.()
     } catch (error) {
       setIsError(true)
       throw error
