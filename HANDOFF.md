@@ -78,7 +78,7 @@ From QA_ENHANCEMENTS.md progress tracking:
 
 ## Session Stats
 
-**Total PRs merged:** 10
+**Total PRs merged:** 12
 **Total lines changed:** ~1000+ lines across backend and frontend
 **Test coverage:** Maintained at 96%
 **Lint status:** All clean (ruff, ty, eslint)
