@@ -100,28 +100,4 @@ async def test_validation_exception_handler_for_thread_create_missing_fields(
     assert len(data["errors"]) > 0
 
 
-@pytest.mark.asyncio
-@pytest.mark.skip(reason="Requires frontend build - run in E2E tests instead")
-async def test_serve_react_spa_serves_index(auth_client: AsyncClient) -> None:
-    """Test serve_react_spa returns React index.html for valid paths."""
-    response = await auth_client.get("/rate")
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/html")
 
-
-@pytest.mark.asyncio
-@pytest.mark.skip(reason="Requires frontend build - run in E2E tests instead")
-async def test_serve_react_spa_serves_queue_page(auth_client: AsyncClient) -> None:
-    """Test serve_react_spa serves React app for /queue."""
-    response = await auth_client.get("/queue")
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/html")
-
-
-@pytest.mark.asyncio
-@pytest.mark.skip(reason="Requires frontend build - run in E2E tests instead")
-async def test_serve_react_spa_serves_history_page(auth_client: AsyncClient) -> None:
-    """Test serve_react_spa serves React app for /history."""
-    response = await auth_client.get("/history")
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/html")
