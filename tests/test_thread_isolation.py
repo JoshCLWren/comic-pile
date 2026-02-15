@@ -275,8 +275,10 @@ async def test_set_pending_thread_success(
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "pending_set"
     assert data["thread_id"] == user_a_thread.id
+    assert data["title"] == user_a_thread.title
+    assert data["format"] == user_a_thread.format
+    assert data["die_size"] >= 4
 
     result = await async_db.execute(select(SessionModel).where(SessionModel.user_id == user_a.id))
     session = result.scalar_one_or_none()
@@ -309,7 +311,7 @@ async def test_set_pending_thread_returns_404_for_other_users_thread(
 async def test_set_pending_thread_creates_roll_event(
     client: AsyncClient, async_db: AsyncSession, user_a: User, user_a_thread: Thread
 ) -> None:
-    """Test POST /api/threads/{id}/set-pending creates a roll event with selection_method='stale_reminder'."""
+    """Test POST /api/threads/{id}/set-pending creates a roll event with selection_method='manual'."""
     from app.models import Event
 
     _ = user_a
@@ -330,7 +332,7 @@ async def test_set_pending_thread_creates_roll_event(
     )
     event = result.scalar_one_or_none()
     assert event is not None
-    assert event.selection_method == "stale_reminder"
+    assert event.selection_method == "manual"
     assert event.selected_thread_id == user_a_thread.id
     assert event.result == 0
-    assert event.die == 0
+    assert event.die is not None
