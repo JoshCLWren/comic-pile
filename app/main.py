@@ -424,7 +424,10 @@ def create_app() -> FastAPI:
         """
         from fastapi.responses import FileResponse
 
-        return FileResponse("static/react/index.html")
+        return FileResponse(
+            "static/react/index.html",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+        )
 
     @app.get("/react")
     async def serve_react_redirect():
@@ -494,7 +497,10 @@ def create_app() -> FastAPI:
         ):
             raise StarletteHTTPException(status_code=404, detail="Not Found")
 
-        return FileResponse("static/react/index.html")
+        return FileResponse(
+            "static/react/index.html",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+        )
 
     @app.on_event("startup")
     async def startup_event():

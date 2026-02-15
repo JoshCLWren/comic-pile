@@ -101,6 +101,18 @@ async def test_validation_exception_handler_for_thread_create_missing_fields(
 
 
 @pytest.mark.asyncio
+async def test_spa_routes_disable_html_caching(auth_client: AsyncClient) -> None:
+    """SPA HTML routes should disable caching to avoid stale chunk references after deploy."""
+    root_response = await auth_client.get("/")
+    rate_response = await auth_client.get("/rate")
+
+    assert root_response.status_code == 200
+    assert rate_response.status_code == 200
+    assert root_response.headers.get("cache-control") == "no-store, no-cache, must-revalidate"
+    assert rate_response.headers.get("cache-control") == "no-store, no-cache, must-revalidate"
+
+
+@pytest.mark.asyncio
 @pytest.mark.skip(reason="Requires frontend build - run in E2E tests instead")
 async def test_serve_react_spa_serves_index(auth_client: AsyncClient) -> None:
     """Test serve_react_spa returns React index.html for valid paths."""
