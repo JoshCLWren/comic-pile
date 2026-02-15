@@ -120,8 +120,6 @@ async def ensure_test_schema() -> None:
 
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
-    import os
-
     result = await db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
     if not user:
@@ -144,8 +142,6 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
 
 async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | None = None) -> User:
     """Get or create user with given username (async)."""
-    import os
-
     if username is None:
         username = f"test_user_{os.getpid()}"
     result = await db.execute(select(User).where(User.username == username))
@@ -173,8 +169,6 @@ async def default_user(async_db: SQLAlchemyAsyncSession) -> User:
 @pytest.fixture(scope="session")
 def test_username() -> str:
     """Get process-specific test username for direct database queries."""
-    import os
-
     return f"test_user_{os.getpid()}"
 
 

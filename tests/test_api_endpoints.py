@@ -626,16 +626,6 @@ async def test_delete_thread_with_pending_thread_id_does_not_crash(
         pending_thread_id=thread.id,
         started_at=datetime.now(UTC),
     )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    session = SessionModel(
-        start_die=6,
-        user_id=user.id,
-        pending_thread_id=thread.id,
-        started_at=datetime.now(UTC),
-    )
     async_db.add(session)
     await async_db.commit()
     await async_db.refresh(session)
