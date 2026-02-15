@@ -249,10 +249,9 @@ export default function RollPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
           {session?.snoozed_threads?.length > 0 && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="modifier-badge text-[10px] font-black text-teal-400">+{session.snoozed_threads.length}</span>
-              <span className="text-[9px] text-slate-500 uppercase tracking-wider">snoozed offset active</span>
-            </div>
+            <p className="mt-1 text-[9px] text-slate-500 uppercase tracking-wider">
+              {session.snoozed_threads.length} snoozed excluded from rolls
+            </p>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -350,13 +349,11 @@ export default function RollPage() {
             <div className="text-center shrink-0">
               <div className="roll-value flex items-center justify-center gap-1">
                 <span className="text-4xl font-black text-teal-400">{rolledResult}</span>
-                {rolledOffset > 0 && (
-                  <span className="modifier text-2xl font-black text-teal-400">+{rolledOffset}</span>
-                )}
               </div>
               {rolledOffset > 0 && (
                 <p className="modifier-explanation text-[10px] text-slate-500 mt-1">
-                  {rolledOffset} snoozed comic{rolledOffset > 1 ? 's' : ''} offset
+                  {rolledOffset} snoozed comic{rolledOffset > 1 ? 's are' : ' is'} excluded
+                  from this roll
                 </p>
               )}
             </div>
