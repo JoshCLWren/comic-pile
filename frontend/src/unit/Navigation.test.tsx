@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { expect, test, afterEach } from 'vitest'
-import App, { AuthProvider } from '../App'
+import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 
 afterEach(() => {

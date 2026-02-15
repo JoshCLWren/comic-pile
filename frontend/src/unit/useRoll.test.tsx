@@ -21,7 +21,7 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-const setupMutation = async (hook, args) => {
+const setupMutation = async <T,>(hook: () => { mutate: (args: T) => Promise<unknown> }, args: T): Promise<void> => {
   const { result } = renderHook(() => hook())
 
   await act(async () => {

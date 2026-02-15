@@ -111,7 +111,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(sagaPoolItem)
 
     expect(screen.getByText('Read Now')).toBeInTheDocument()
@@ -128,7 +128,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(sagaPoolItem)
 
     const snoozeButton = screen.getByText('Snooze')
@@ -157,7 +157,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(sagaPoolItem)
 
     const unsnoozeButton = screen.getByText('Unsnooze')
@@ -171,7 +171,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(sagaPoolItem)
 
     const editButton = screen.getByText('Edit Thread')
@@ -187,7 +187,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(sagaPoolItem)
 
     const moveFrontButton = screen.getByText('Move to Front')
@@ -206,7 +206,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(sagaPoolItem)
 
     const moveBackButton = screen.getByText('Move to Back')
@@ -224,7 +224,7 @@ describe('Keyboard Accessibility', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     sagaPoolItem.focus()
     await user.keyboard('{Enter}')
 
@@ -235,7 +235,7 @@ describe('Keyboard Accessibility', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     sagaPoolItem.focus()
     await user.keyboard(' ')
 

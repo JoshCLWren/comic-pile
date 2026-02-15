@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { buildD10Faces, D10_FACE_NUMBERS } from '../components/d10Geometry'
 
-function sub(a, b) {
+type Vector3 = [number, number, number]
+
+function sub(a: Vector3, b: Vector3): Vector3 {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
-function cross(a, b) {
+function cross(a: Vector3, b: Vector3): Vector3 {
   return [
     a[1] * b[2] - a[2] * b[1],
     a[2] * b[0] - a[0] * b[2],
@@ -13,7 +15,7 @@ function cross(a, b) {
   ]
 }
 
-function dot(a, b) {
+function dot(a: Vector3, b: Vector3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
@@ -24,7 +26,7 @@ describe('d10Geometry', () => {
 
     faces.forEach((face) => {
       expect(face).toHaveLength(4)
-      const [a, b, c, d] = face
+      const [a, b, c, d] = face as [Vector3, Vector3, Vector3, Vector3]
       const normal = cross(sub(b, a), sub(c, a))
       const deviation = dot(normal, sub(d, a))
       expect(Math.abs(deviation)).toBeLessThan(1e-6)

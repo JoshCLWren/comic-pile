@@ -18,9 +18,15 @@ vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="anal
 
 import App, { AuthProvider, AppRoutes, useAuth } from '../App'
 
-let authContextValue = null
+interface AuthContextValue {
+  token: string | null
+  login: (token: string) => void
+  logout: () => void
+}
 
-const TestAuthConsumer = ({ onAuth }) => {
+let authContextValue: AuthContextValue | null = null
+
+const TestAuthConsumer = ({ onAuth }: { onAuth?: (auth: AuthContextValue) => void }) => {
   const auth = useAuth()
   useEffect(() => {
     authContextValue = auth
@@ -126,7 +132,7 @@ describe('auth state race condition regression', () => {
     })
 
     act(() => {
-      authContextValue.login('test-token')
+      authContextValue!.login('test-token')
     })
 
     await waitFor(() => {
@@ -146,7 +152,7 @@ describe('auth state race condition regression', () => {
     })
 
     act(() => {
-      authContextValue.login('test-token')
+      authContextValue!.login('test-token')
     })
 
     await waitFor(() => {

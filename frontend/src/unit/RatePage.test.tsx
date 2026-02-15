@@ -52,7 +52,7 @@ it('renders rate page and submits rating', async () => {
   await user.click(await screen.findByRole('button', { name: /save & continue/i }))
 
   await waitFor(() => expect(rateApi.rate).toHaveBeenCalled())
-  const [payload] = rateApi.rate.mock.calls[0]
+  const [payload] = rateApi.rate.mock.calls[0] as [{ rating: number; issues_read: number; finish_session: boolean }]
   expect(payload).toEqual({
     rating: 4,
     issues_read: 1,
@@ -62,7 +62,7 @@ it('renders rate page and submits rating', async () => {
 })
 
 it('shows loading state instead of session inactive during initial fetch', async () => {
-  let resolveSession
+  let resolveSession: ((value: unknown) => void) | undefined
   const pendingPromise = new Promise((resolve) => {
     resolveSession = resolve
   })
@@ -77,7 +77,7 @@ it('shows loading state instead of session inactive during initial fetch', async
 
   expect(screen.queryByText('Session Inactive')).not.toBeInTheDocument()
 
-  resolveSession({
+  resolveSession!({
     current_die: 6,
     last_rolled_result: 4,
     has_restore_point: true,
@@ -93,26 +93,54 @@ it('shows loading state instead of session inactive during initial fetch', async
   })
 })
 
-  it('shows session inactive when session truly has no active thread', async () => {
-    sessionApi.getCurrent.mockResolvedValue({
-      current_die: 6,
-      last_rolled_result: null,
-      has_restore_point: false,
-      active_thread: null,
-    })
-
-    render(<RatePage />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Session Inactive')).toBeInTheDocument()
-    })
-    expect(screen.getByText('Go to Roll Page')).toBeInTheDocument()
+it('shows session inactive when session truly has no active thread', async () => {
+  sessionApi.getCurrent.mockResolvedValue({
+    current_die: 6,
+    last_rolled_result: null,
+    has_restore_point: false,
+    active_thread: null,
   })
 
-  it('navigates to home after rating when no pending thread exists', async () => {
-    const user = userEvent.setup()
+  render(<RatePage />)
 
-    sessionApi.getCurrent.mockResolvedValue({
+  await waitFor(() => {
+    expect(screen.getByText('Session Inactive')).toBeInTheDocument()
+  })
+  expect(screen.getByText('Go to Roll Page')).toBeInTheDocument()
+})
+
+it('navigates to home after rating when no pending thread exists', async () => {
+  const user = userEvent.setup()
+
+  sessionApi.getCurrent.mockResolvedValue({
+    current_die: 6,
+    last_rolled_result: 4,
+    has_restore_point: true,
+    active_thread: {
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 3,
+    },
+    pending_thread_id: null,
+  })
+  rateApi.rate.mockResolvedValue({})
+
+  render(<RatePage />)
+
+  await waitFor(() => expect(screen.getByText('Rate Session')).toBeInTheDocument())
+  await user.click(await screen.findByRole('button', { name: /save & continue/i }))
+
+  await waitFor(() => expect(rateApi.rate).toHaveBeenCalled())
+  await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith('/'))
+})
+
+it.skip('stays on rate page after rating when pending thread exists', async () => {
+  // This test has timing issues with mockImplementation
+  // The functionality is tested in the E2E tests instead
+  const user = userEvent.setup()
+
+  sessionApi.getCurrent.mockImplementation(async () => {
+    return {
       current_die: 6,
       last_rolled_result: 4,
       has_restore_point: true,
@@ -121,52 +149,24 @@ it('shows loading state instead of session inactive during initial fetch', async
         format: 'Comic',
         issues_remaining: 3,
       },
-      pending_thread_id: null,
-    })
-    rateApi.rate.mockResolvedValue({})
-
-    render(<RatePage />)
-
-    await waitFor(() => expect(screen.getByText('Rate Session')).toBeInTheDocument())
-    await user.click(await screen.findByRole('button', { name: /save & continue/i }))
-
-    await waitFor(() => expect(rateApi.rate).toHaveBeenCalled())
-    await waitFor(() => expect(navigateSpy).toHaveBeenCalledWith('/'))
+      pending_thread_id: 2,
+    }
   })
+  rateApi.rate.mockResolvedValue({})
 
-  it.skip('stays on rate page after rating when pending thread exists', async () => {
-    // This test has timing issues with mockImplementation
-    // The functionality is tested in the E2E tests instead
-    const user = userEvent.setup()
+  render(<RatePage />)
 
-    sessionApi.getCurrent.mockImplementation(async () => {
-      return {
-        current_die: 6,
-        last_rolled_result: 4,
-        has_restore_point: true,
-        active_thread: {
-          title: 'Saga',
-          format: 'Comic',
-          issues_remaining: 3,
-        },
-        pending_thread_id: 2,
-      }
-    })
-    rateApi.rate.mockResolvedValue({})
+  await waitFor(() => expect(screen.getByText('Rate Session')).toBeInTheDocument())
+  await user.click(await screen.findByRole('button', { name: /save & continue/i }))
 
-    render(<RatePage />)
+  await waitFor(() => expect(rateApi.rate).toHaveBeenCalled(), { timeout: 1000 })
 
-    await waitFor(() => expect(screen.getByText('Rate Session')).toBeInTheDocument())
-    await user.click(await screen.findByRole('button', { name: /save & continue/i }))
+  await waitFor(() => {
+    expect(navigateSpy).not.toHaveBeenCalled()
+  }, { timeout: 300 })
+})
 
-    await waitFor(() => expect(rateApi.rate).toHaveBeenCalled(), { timeout: 1000 })
-
-    await waitFor(() => {
-      expect(navigateSpy).not.toHaveBeenCalled()
-    }, { timeout: 300 })
-  })
-
-  it.skip('handles session refresh failure gracefully by navigating home', async () => {
-    // This test is skipped due to vitest socket issues with mockImplementation
-    // The functionality is tested in the E2E tests instead
-  })
+it.skip('handles session refresh failure gracefully by navigating home', async () => {
+  // This test is skipped due to vitest socket issues with mockImplementation
+  // The functionality is tested in the E2E tests instead
+})

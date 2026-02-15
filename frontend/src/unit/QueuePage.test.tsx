@@ -96,7 +96,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     expect(threadCard).toBeInTheDocument()
 
     await user.click(threadCard)
@@ -115,7 +115,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(threadCard)
 
     const snoozeButton = screen.getByText('Snooze')
@@ -140,7 +140,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(threadCard)
 
     const unsnoozeButton = screen.getByText('Unsnooze')
@@ -172,7 +172,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     await user.click(threadCard)
 
     const snoozeButton = screen.getByText('Snooze')
@@ -194,7 +194,7 @@ describe('Keyboard Accessibility', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     threadCard.focus()
     await user.keyboard('{Enter}')
 
@@ -209,7 +209,7 @@ describe('Keyboard Accessibility', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement
     threadCard.focus()
     await user.keyboard(' ')
 
