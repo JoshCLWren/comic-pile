@@ -150,24 +150,6 @@ async def override_roll(
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
-    snoozed_ids = (
-        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
-    )
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
-    snoozed_ids = (
-        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
-    )
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
-    snoozed_ids = (
-        list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
-    )
-    snoozed_count = len(snoozed_ids)
-    offset = snoozed_count
-
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -178,19 +160,18 @@ async def override_roll(
     )
     db.add(event)
 
-    if current_session:
-        current_session.pending_thread_id = override_thread_id
-        current_session.pending_thread_updated_at = datetime.now(UTC)
+    current_session.pending_thread_id = override_thread_id
+    current_session.pending_thread_updated_at = datetime.now(UTC)
 
-        if override_thread_id in snoozed_ids:
-            snoozed_ids.remove(override_thread_id)
-            current_session.snoozed_thread_ids = snoozed_ids
-            offset = len(snoozed_ids)
-            snoozed_count = len(snoozed_ids)
+    if override_thread_id in snoozed_ids:
+        snoozed_ids.remove(override_thread_id)
+        current_session.snoozed_thread_ids = snoozed_ids
+        offset = len(snoozed_ids)
+        snoozed_count = len(snoozed_ids)
 
-        await db.commit()
-        if clear_cache:
-            clear_cache()
+    await db.commit()
+    if clear_cache:
+        clear_cache()
 
     return RollResponse(
         thread_id=override_thread_id,

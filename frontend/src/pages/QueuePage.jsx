@@ -257,6 +257,7 @@ export default function QueuePage() {
       }
     } catch (error) {
       console.error('Action failed:', error)
+      alert(`Action failed: ${error.response?.data?.detail || error.message || 'Unknown error'}`)
     }
   }
 

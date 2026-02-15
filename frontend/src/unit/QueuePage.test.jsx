@@ -13,6 +13,7 @@ import {
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { threadsApi } from '../services/api'
 
 vi.mock('../hooks/useThread', () => ({
   useThreads: vi.fn(),
@@ -37,7 +38,14 @@ vi.mock('../hooks/useSnooze', () => ({
   useUnsnooze: vi.fn(),
 }))
 
+vi.mock('../services/api', () => ({
+  threadsApi: {
+    setPending: vi.fn(),
+  },
+}))
+
 beforeEach(() => {
+  vi.stubGlobal('alert', vi.fn())
   useThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
@@ -59,6 +67,17 @@ beforeEach(() => {
   })
   useUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  threadsApi.setPending.mockResolvedValue({
+    thread_id: 1,
+    title: 'Saga',
+    format: 'Comic',
+    issues_remaining: 5,
+    queue_position: 1,
+    die_size: 6,
+    result: 1,
+    offset: 0,
+    snoozed_count: 0,
+  })
 })
 
 it('renders queue items and opens create modal', async () => {
