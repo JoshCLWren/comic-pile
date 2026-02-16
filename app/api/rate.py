@@ -5,7 +5,7 @@ import random
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -156,6 +156,7 @@ async def rate_thread(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {last_roll_event.selected_thread_id} not found",
         )
+    thread_id = thread.id
 
     current_die = await get_current_die(current_session_id, db)
 
@@ -180,7 +181,7 @@ async def rate_thread(
     event = Event(
         type="rate",
         session_id=current_session_id,
-        thread_id=thread.id,
+        thread_id=thread_id,
         rating=rate_data.rating,
         issues_read=rate_data.issues_read,
         die=current_die,
@@ -189,16 +190,21 @@ async def rate_thread(
     db.add(event)
 
     if rate_data.rating >= rating_threshold:
-        await move_to_front(thread.id, user_id, db)
+        await move_to_front(thread_id, user_id, db)
     else:
-        await move_to_back(thread.id, user_id, db)
+        await move_to_back(thread_id, user_id, db)
 
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
         if thread_issues_remaining <= 0:
-            thread.status = "completed"
-            await move_to_back(thread.id, user_id, db)
+            await db.execute(
+                update(Thread)
+                .where(Thread.id == thread_id)
+                .where(Thread.user_id == user_id)
+                .values(status="completed")
+            )
+            await move_to_back(thread_id, user_id, db)
 
     if clear_cache:
         clear_cache()
@@ -206,7 +212,7 @@ async def rate_thread(
     if not rate_data.finish_session:
         threads = await get_roll_pool(user_id, db, snoozed_ids)
 
-        available_threads = [t for t in threads if t.issues_remaining > 0 and t.id != thread.id]
+        available_threads = [t for t in threads if t.issues_remaining > 0 and t.id != thread_id]
 
         if available_threads:
             pool_size = min(new_die, len(available_threads))
