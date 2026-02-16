@@ -170,6 +170,7 @@ async def rate_thread(
     thread.issues_remaining -= rate_data.issues_read
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
+    thread_issues_remaining = thread.issues_remaining
 
     if rate_data.rating >= rating_threshold:
         new_die = step_down(current_die)
@@ -195,7 +196,7 @@ async def rate_thread(
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
-        if thread.issues_remaining <= 0:
+        if thread_issues_remaining <= 0:
             thread.status = "completed"
             await move_to_back(thread.id, user_id, db)
 

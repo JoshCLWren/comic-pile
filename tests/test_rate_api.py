@@ -205,6 +205,63 @@ async def test_rate_completes_thread(auth_client: AsyncClient, async_db: AsyncSe
 
 
 @pytest.mark.asyncio
+async def test_rate_finish_session_no_missing_greenlet_after_queue_commit(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """finish_session path should not access expired thread attrs after queue move commit."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    target_thread = Thread(
+        title="Target Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    other_thread = Thread(
+        title="Other Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add_all([target_thread, other_thread])
+    await async_db.commit()
+    await async_db.refresh(target_thread)
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=target_thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=target_thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 4.0, "issues_read": 1, "finish_session": True},
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "completed"
+    assert data["issues_remaining"] == 0
+
+
+@pytest.mark.asyncio
 async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Event saved with rating and issues_read."""
     from tests.conftest import get_or_create_user_async
