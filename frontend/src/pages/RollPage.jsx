@@ -14,7 +14,6 @@ import { threadsApi } from '../services/api'
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
   const [rolledResult, setRolledResult] = useState(null)
-  const [rolledOffset, setRolledOffset] = useState(null)
   const [selectedThreadId, setSelectedThreadId] = useState(null)
   const [currentDie, setCurrentDie] = useState(6)
   const [diceState, setDiceState] = useState('idle')
@@ -117,10 +116,6 @@ export default function RollPage() {
     if (session?.last_rolled_result !== undefined && session?.last_rolled_result !== null) {
       setRolledResult(session.last_rolled_result)
     }
-    // TODO: Backend needs to add last_rolled_offset to session response
-    // if (session?.last_rolled_offset !== undefined) {
-    //   setRolledOffset(session.last_rolled_offset)
-    // }
   }, [session])
 
   useEffect(() => {
@@ -197,9 +192,6 @@ export default function RollPage() {
               const response = await rollMutation.mutate()
               if (response?.result !== undefined && response?.result !== null) {
                 setRolledResult(response.result)
-              }
-              if (response?.offset !== undefined) {
-                setRolledOffset(response.offset)
               }
               if (response?.thread_id) {
                 setSelectedThreadId(response.thread_id)
@@ -348,22 +340,6 @@ export default function RollPage() {
               />
             </div>
           </div>
-
-          {!isRolling && rolledResult !== null && (
-            <div className="text-center shrink-0">
-              <div className="roll-value flex items-center justify-center gap-1">
-                <span className="text-4xl font-black text-teal-400">{rolledResult}</span>
-                {rolledOffset > 0 && (
-                  <span className="modifier text-2xl font-black text-teal-400">+{rolledOffset}</span>
-                )}
-              </div>
-              {rolledOffset > 0 && (
-                <p className="modifier-explanation text-[10px] text-slate-500 mt-1">
-                  {rolledOffset} snoozed comic{rolledOffset > 1 ? 's' : ''} offset
-                </p>
-              )}
-            </div>
-          )}
 
           {!isRolling && rolledResult === null && (
             <p
