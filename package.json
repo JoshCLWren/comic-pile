@@ -16,6 +16,7 @@
     "lint:fix": "sh -c 'if ls static/js/*.js >/dev/null 2>&1; then npx eslint static/js/*.js --fix; else echo \"No JavaScript files to fix\"; fi'",
     "dice:playground": "npm --prefix frontend run dice:playground",
     "test:dice-playground": "npm --prefix frontend run test:dice-playground",
-    "test:dice-playground:update": "npm --prefix frontend run test:dice-playground:update"
+    "test:dice-playground:update": "npm --prefix frontend run test:dice-playground:update",
+    "test:e2e:prod-smoke": "npm --prefix frontend run test:e2e:prod-smoke"
   }
 }

@@ -623,7 +623,7 @@ function handleAction(action) {
 
 ### PR 9: Fix Session Flow After Rating
 
-**Issue:** After rating, if session has pending thread, should stay on rate page. Currently always goes to roll page.
+**Issue:** After rating, users should return to the roll view to avoid confusion and accidental repeated ratings.
 
 **Files:**
 - `frontend/src/pages/RatePage.jsx:102-110`
@@ -631,14 +631,12 @@ function handleAction(action) {
 
 **Current Behavior:**
 1. Roll → navigate to rate
-2. Rate comic → navigate to roll (always)
-3. User has to roll again even if pending thread exists
+2. Rate comic → behavior varied by implementation and could stay on rate when pending exists
 
 **Desired Behavior:**
 1. Roll → navigate to rate
-2. Rate comic → check session state
-3. If pending_thread_id exists → stay on rate with next thread
-4. If no pending_thread_id → go to roll page
+2. Rate comic and click Save & Continue
+3. Always route to roll page (`/`) for the next deliberate roll decision
 
 **Implementation:**
 
@@ -652,16 +650,9 @@ async function handleRatingSubmit(ratingData) {
   try {
     await rateApi.rate(ratingData)
 
-    // Refetch session to check for pending thread
-    const updatedSession = await sessionApi.getCurrent()
-
-    if (updatedSession.pending_thread_id) {
-      // Stay on rate page, it will load new pending thread
-      refetchSession()
-    } else {
-      // No pending thread, go back to roll
-      navigate('/')
-    }
+    // Optionally refresh session for consistency, then route to roll.
+    await sessionApi.getCurrent()
+    navigate('/')
   } catch (error) {
     setErrorMessage(error.response?.data?.detail || 'Failed to save rating')
   }
@@ -669,14 +660,12 @@ async function handleRatingSubmit(ratingData) {
 ```
 
 **Pattern Note:**
-- Use `sessionApi.getCurrent()` to fetch updated session data
-- Call `refetchSession()` to update the hook's state
-- Don't navigate away if `pending_thread_id` exists
-- The `useSession` hook will auto-load the new pending thread on next render
+- Save & Continue has deterministic navigation to `/`
+- Avoid conditional route logic based on `pending_thread_id` for this action
 
 **Backend Verification:**
-- Ensure rate endpoint clears pending_thread_id after rating
-- Ensure session returns updated pending_thread_id if set
+- Ensure rate endpoint keeps session state consistent
+- Navigation decision is frontend-controlled and always returns to roll
 
 **Estimated:** 2 hours
 

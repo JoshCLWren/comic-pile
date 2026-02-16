@@ -3,6 +3,7 @@
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev test seed migrate worktrees status test-integration deploy-prod dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
+.PHONY: test-e2e-prod-smoke
 
 # Configuration
 PREFIX ?= /usr/local
@@ -187,6 +188,13 @@ test-e2e-browser:  ## Run Playwright browser tests (requires test database and w
 test-e2e-api:  ## Run e2e API tests (no browser/server needed)
 	@echo "Running e2e API tests..."
 	@pytest tests_e2e/test_api_workflows.py --no-cov -v
+
+test-e2e-prod-smoke:  ## Run Playwright prod smoke test (set PROD_BASE_URL=https://...)
+	@if [ -z "$(PROD_BASE_URL)" ]; then \
+		echo "Usage: make test-e2e-prod-smoke PROD_BASE_URL=https://app-production-72b9.up.railway.app"; \
+		exit 1; \
+	fi
+	@PROD_BASE_URL="$(PROD_BASE_URL)" npm --prefix frontend run test:e2e:prod-smoke
  
 save-db:  ## Save database to JSON (python -m scripts.export_db)
 	@echo "Exporting database to db_export.json..."

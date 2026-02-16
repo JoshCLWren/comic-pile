@@ -24,15 +24,45 @@ test.describe('Rate Thread Feature', () => {
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.submitButton)).toBeVisible();
   });
 
-  test('should submit rating and stay on rate page when pending thread exists', async ({ authenticatedWithThreadsPage }) => {
+  test('should submit rating and route to roll page after save and continue', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
+  });
+
+  test('should keep the same active thread when leaving and returning to /rate before submit', async ({ authenticatedWithThreadsPage }) => {
+    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
+    expect(token).toBeTruthy();
+
+    const beforeResponse = await authenticatedWithThreadsPage.request.get('/api/sessions/current/', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(beforeResponse.ok()).toBeTruthy();
+    const beforeSession = await beforeResponse.json();
+    const beforeThreadId = beforeSession.active_thread?.id;
+    const beforeTitle = beforeSession.active_thread?.title;
+
+    expect(beforeThreadId).toBeDefined();
+    expect(beforeTitle).toBeTruthy();
+
+    await authenticatedWithThreadsPage.goto('/history');
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+    await authenticatedWithThreadsPage.goto('/rate');
     await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
-    
-    const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
-    await expect(ratingInput).toBeVisible();
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+    await expect(authenticatedWithThreadsPage.locator('#thread-info h2')).toContainText(beforeTitle);
+
+    const afterResponse = await authenticatedWithThreadsPage.request.get('/api/sessions/current/', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(afterResponse.ok()).toBeTruthy();
+    const afterSession = await afterResponse.json();
+    expect(afterSession.active_thread?.id).toBe(beforeThreadId);
   });
 
   test('should validate rating range (0-5)', async ({ authenticatedWithThreadsPage }) => {
@@ -58,9 +88,8 @@ test.describe('Rate Thread Feature', () => {
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, rating);
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-      
-      const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
-      await expect(ratingInput).toBeVisible({ timeout: 5000 });
+      await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+      await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 5000 });
     }
   });
 

@@ -200,13 +200,9 @@ export default function RatePage() {
 
   async function navigateAfterRating() {
     try {
-      const updatedSession = await refetchSession();
-
-      if (updatedSession?.pending_thread_id) {
-        return;
-      }
+      await refetchSession();
     } catch {
-      // Session fetch failed, fall through to navigate
+      // Best-effort refresh only; route behavior is deterministic.
     }
     navigate('/');
   }
