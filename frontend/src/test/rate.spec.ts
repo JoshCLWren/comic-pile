@@ -221,15 +221,12 @@ test.describe('Rate Thread Feature', () => {
     );
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
-    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await expect(authenticatedWithThreadsPage.getByText('Thread Finished!')).toBeVisible();
-
     const rateResponsePromise = authenticatedWithThreadsPage.waitForResponse(
       (response) =>
         response.url().includes('/api/rate/') &&
         response.request().method() === 'POST'
     );
-    await authenticatedWithThreadsPage.getByRole('button', { name: 'Complete Thread' }).click();
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
     const rateResponse = await rateResponsePromise;
     expect(rateResponse.status()).toBe(200);

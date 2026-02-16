@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import LazyDice3D from '../components/LazyDice3D'
-import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import { DICE_LADDER } from '../components/diceLadder'
-import { useRate, useSession, useUpdateThread, useSnooze } from '../hooks'
+import { useRate, useSession, useSnooze } from '../hooks'
 
 export default function RatePage() {
   const navigate = useNavigate()
@@ -17,16 +16,10 @@ export default function RatePage() {
   const [previewSides, setPreviewSides] = useState(6)
   const [rolledValue, setRolledValue] = useState(1)
   const [errorMessage, setErrorMessage] = useState('')
-  const [showCompleteModal, setShowCompleteModal] = useState(false)
-  const [showAddIssuesInput, setShowAddIssuesInput] = useState(false)
-  const [additionalIssues, setAdditionalIssues] = useState(1)
-  const [pendingRating, setPendingRating] = useState(null)
 
   const { data: session, isPending: sessionPending, refetch: refetchSession } = useSession()
 
   const rateMutation = useRate()
-
-  const updateThreadMutation = useUpdateThread()
 
   const snoozeMutation = useSnooze()
 
@@ -105,11 +98,9 @@ export default function RatePage() {
   }
 
   async function handleSubmitRating(finishSession = false) {
-    if (!finishSession && activeThread && activeThread.issues_remaining - 1 <= 0) {
-      setPendingRating(rating);
-      setShowCompleteModal(true);
-      return;
-    }
+    const shouldAutoCompleteThread =
+      !finishSession && activeThread && activeThread.issues_remaining - 1 <= 0;
+    const shouldFinishSession = finishSession || shouldAutoCompleteThread;
 
     if (rating >= 4.0) {
       createExplosion();
@@ -119,74 +110,13 @@ export default function RatePage() {
       await rateMutation.mutate({
         rating,
         issues_read: 1,
-        finish_session: finishSession
+        finish_session: shouldFinishSession
       });
 
       await navigateAfterRating();
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
     }
-  }
-
-  async function handleCompleteThread() {
-    setShowCompleteModal(false);
-    if (pendingRating >= 4.0) {
-      createExplosion();
-    }
-    try {
-      await rateMutation.mutate({
-        rating: pendingRating,
-        issues_read: 1,
-        finish_session: true
-      });
-
-      await navigateAfterRating();
-    } catch (error) {
-      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
-    }
-  }
-
-  async function handleAddMoreIssues() {
-    if (additionalIssues < 1) return;
-    if (!activeThread) return;
-
-    const newIssuesRemaining = activeThread.issues_remaining + additionalIssues;
-    try {
-      await updateThreadMutation.mutate({
-        id: activeThread.id,
-        data: { issues_remaining: newIssuesRemaining }
-      });
-    } catch (error) {
-      // Surface error to user and keep modal open for retry
-      setErrorMessage(error.response?.data?.detail || 'Failed to add issues. Please try again.');
-      return;
-    }
-
-    // Only close modal and submit rating on successful update
-    setShowCompleteModal(false);
-
-    // Then submit the rating normally (not finishing session)
-    if (pendingRating >= 4.0) {
-      createExplosion();
-    }
-    try {
-      await rateMutation.mutate({
-        rating: pendingRating,
-        issues_read: 1,
-        finish_session: false
-      });
-
-      await navigateAfterRating();
-    } catch (error) {
-      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
-    }
-  }
-
-  function handleCloseModal() {
-    setShowCompleteModal(false);
-    setShowAddIssuesInput(false);
-    setAdditionalIssues(1);
-    setPendingRating(null);
   }
 
   async function handleSnooze() {
@@ -351,74 +281,6 @@ export default function RatePage() {
         </div>
       </div>
 
-      <Modal isOpen={showCompleteModal} title="Thread Finished!" onClose={handleCloseModal}>
-        <div className="space-y-6">
-          <p className="text-slate-300 text-sm">
-            This thread is finished! What would you like to do?
-          </p>
-
-          {!showAddIssuesInput ? (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={handleCompleteThread}
-                disabled={rateMutation.isPending}
-                className="w-full py-4 glass-button text-sm font-black uppercase tracking-widest disabled:opacity-50"
-              >
-                {rateMutation.isPending ? (
-                  <span className="spinner mx-auto"></span>
-                ) : (
-                  'Complete Thread'
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddIssuesInput(true)}
-                className="w-full py-3 text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-teal-400 hover:bg-teal-500/10 border border-slate-700 hover:border-teal-500/30 rounded-xl transition-all"
-              >
-                Add More Issues
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="additional-issues" className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
-                  How many issues to add?
-                </label>
-                <input
-                  type="number"
-                  id="additional-issues"
-                  min="1"
-                  value={additionalIssues}
-                  onChange={(e) => setAdditionalIssues(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-slate-100 text-lg font-bold focus:outline-none focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/50"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAddIssuesInput(false)}
-                  className="flex-1 py-3 text-sm font-bold uppercase tracking-widest text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl transition-colors"
-                >
-                  Back
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAddMoreIssues}
-                  disabled={rateMutation.isPending || updateThreadMutation.isPending}
-                  className="flex-1 py-3 glass-button text-sm font-black uppercase tracking-widest disabled:opacity-50"
-                >
-                  {(rateMutation.isPending || updateThreadMutation.isPending) ? (
-                    <span className="spinner mx-auto"></span>
-                  ) : (
-                    'Confirm'
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 }
