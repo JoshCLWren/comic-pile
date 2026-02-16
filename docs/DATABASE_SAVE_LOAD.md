@@ -476,7 +476,7 @@ data["threads"] = [...]
 
 ```bash
 # Set different DATABASE_URL
-export DATABASE_URL="sqlite:///./comic_pile_test.db"
+export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5437/comic_pile_test"
 python -m scripts.import_db
 ```
 

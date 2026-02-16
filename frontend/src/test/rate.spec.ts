@@ -184,6 +184,58 @@ test.describe('Rate Thread Feature', () => {
     }
   });
 
+  test('should not return 500 when finishing a session on a completed thread', async ({
+    authenticatedWithThreadsPage,
+  }) => {
+    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
+    expect(token).toBeTruthy();
+
+    const createResponse = await authenticatedWithThreadsPage.request.post('/api/threads/', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      data: {
+        title: 'Greenlet Regression Thread',
+        format: 'issue',
+        issues_remaining: 1,
+      },
+    });
+    expect(createResponse.ok()).toBeTruthy();
+    const createdThread = await createResponse.json();
+
+    const setPendingResponse = await authenticatedWithThreadsPage.request.post(
+      `/api/threads/${createdThread.id}/set-pending`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    expect(setPendingResponse.ok()).toBeTruthy();
+
+    await authenticatedWithThreadsPage.goto('/rate');
+    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
+    await expect(authenticatedWithThreadsPage.locator('#thread-info h2')).toContainText(
+      'Greenlet Regression Thread'
+    );
+
+    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+    await expect(authenticatedWithThreadsPage.getByText('Thread Finished!')).toBeVisible();
+
+    const rateResponsePromise = authenticatedWithThreadsPage.waitForResponse(
+      (response) =>
+        response.url().includes('/api/rate/') &&
+        response.request().method() === 'POST'
+    );
+    await authenticatedWithThreadsPage.getByRole('button', { name: 'Complete Thread' }).click();
+
+    const rateResponse = await rateResponsePromise;
+    expect(rateResponse.status()).toBe(200);
+    await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
+  });
+
   test('should show validation for missing rating', async ({ authenticatedWithThreadsPage }) => {
     const ratingValue = await authenticatedWithThreadsPage.inputValue(SELECTORS.rate.ratingInput);
     expect(parseFloat(ratingValue)).toBeGreaterThan(0);

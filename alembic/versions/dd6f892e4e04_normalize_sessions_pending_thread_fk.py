@@ -37,7 +37,7 @@ class _BatchOp(Protocol):
     def drop_constraint(self, constraint_name: str, type_: str | None = None) -> None: ...
 
 
-def _sqlite_safe_drop_fk(
+def _legacy_safe_drop_fk(
     batch_op: _BatchOp,
     conn: Connection,
     table_name: str,
@@ -60,20 +60,6 @@ def upgrade() -> None:
             "ALTER TABLE sessions ADD CONSTRAINT sessions_pending_thread_id_fkey "
             "FOREIGN KEY (pending_thread_id) REFERENCES threads(id) ON DELETE SET NULL"
         )
-        return
-
-    if dialect == "sqlite":
-        with op.batch_alter_table("sessions", schema=None) as batch_op:
-            for name in _SESSIONS_PENDING_THREAD_FK_NAMES:
-                _sqlite_safe_drop_fk(batch_op, conn, "sessions", name)
-
-            batch_op.create_foreign_key(
-                "sessions_pending_thread_id_fkey",
-                "threads",
-                ["pending_thread_id"],
-                ["id"],
-                ondelete="SET NULL",
-            )
         return
 
     for name in _SESSIONS_PENDING_THREAD_FK_NAMES:
@@ -109,20 +95,6 @@ def downgrade() -> None:
             "ALTER TABLE sessions ADD CONSTRAINT sessions_pending_thread_id_fkey "
             "FOREIGN KEY (pending_thread_id) REFERENCES threads(id)"
         )
-        return
-
-    if dialect == "sqlite":
-        with op.batch_alter_table("sessions", schema=None) as batch_op:
-            for name in _SESSIONS_PENDING_THREAD_FK_NAMES:
-                _sqlite_safe_drop_fk(batch_op, conn, "sessions", name)
-
-            batch_op.create_foreign_key(
-                "sessions_pending_thread_id_fkey",
-                "threads",
-                ["pending_thread_id"],
-                ["id"],
-                ondelete="NO ACTION",
-            )
         return
 
     for name in _SESSIONS_PENDING_THREAD_FK_NAMES:

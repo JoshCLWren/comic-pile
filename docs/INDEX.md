@@ -18,7 +18,6 @@ This index provides a comprehensive map of all documentation in the comic-pile p
 
 - [DATABASE_SAVE_LOAD.md](DATABASE_SAVE_LOAD.md) - Database save/load functionality, export formats, and backup procedures.
 - [rate_limiting.md](rate_limiting.md) - Rate limiting documentation - slowapi configuration and endpoint protection.
-- [SQLITE_CLEANUP.md](SQLITE_CLEANUP.md) - SQLite cleanup notes and migration considerations.
 
 ## Current Stack
 

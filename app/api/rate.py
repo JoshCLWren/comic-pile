@@ -189,7 +189,19 @@ async def rate_thread(
     )
     db.add(event)
 
-    if rate_data.rating >= rating_threshold:
+    should_complete_thread = rate_data.finish_session and thread_issues_remaining <= 0
+
+    if should_complete_thread:
+        await db.execute(
+            update(Thread)
+            .where(Thread.id == thread_id)
+            .where(Thread.user_id == user_id)
+            .values(status="completed")
+        )
+
+    if should_complete_thread:
+        await move_to_back(thread_id, user_id, db)
+    elif rate_data.rating >= rating_threshold:
         await move_to_front(thread_id, user_id, db)
     else:
         await move_to_back(thread_id, user_id, db)
@@ -197,14 +209,6 @@ async def rate_thread(
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
         current_session.snoozed_thread_ids = None
-        if thread_issues_remaining <= 0:
-            await db.execute(
-                update(Thread)
-                .where(Thread.id == thread_id)
-                .where(Thread.user_id == user_id)
-                .values(status="completed")
-            )
-            await move_to_back(thread_id, user_id, db)
 
     if clear_cache:
         clear_cache()
@@ -233,6 +237,17 @@ async def rate_thread(
     await db.commit()
 
     await snapshot_thread_states(db, current_session_id, event_id, user_id)
-    await db.refresh(thread)
 
-    return thread_to_response(thread)
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.id == thread_id)
+        .where(Thread.user_id == user_id)
+    )
+    updated_thread = result.scalar_one_or_none()
+    if not updated_thread:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    return thread_to_response(updated_thread)

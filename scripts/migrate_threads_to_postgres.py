@@ -91,16 +91,16 @@ def migrate_threads_to_postgres():
         cursor.execute("SELECT id FROM threads WHERE user_id = 1 ORDER BY queue_position")
         pg_thread_ids = [row[0] for row in cursor.fetchall()]
 
-        sqlite_to_pg_thread_ids = {}
-        for sqlite_thread, pg_id in zip(sorted_threads, pg_thread_ids, strict=True):
-            sqlite_to_pg_thread_ids[sqlite_thread["id"]] = pg_id
+        source_to_pg_thread_ids = {}
+        for source_thread, pg_id in zip(sorted_threads, pg_thread_ids, strict=True):
+            source_to_pg_thread_ids[source_thread["id"]] = pg_id
 
         print(f"  ✓ Inserted {len(thread_values)} threads")
 
         print("\nImporting sessions...")
         session_values = []
         for session in sessions:
-            pg_pending_thread_id = sqlite_to_pg_thread_ids.get(session.get("pending_thread_id"))
+            pg_pending_thread_id = source_to_pg_thread_ids.get(session.get("pending_thread_id"))
             session_values.append(
                 (
                     session.get("started_at"),
@@ -129,20 +129,20 @@ def migrate_threads_to_postgres():
 
         sorted_sessions = sorted(sessions, key=lambda s: s["id"])
         session_id_map = {}
-        for sqlite_session, pg_id in zip(sorted_sessions, pg_session_ids, strict=True):
-            session_id_map[sqlite_session["id"]] = pg_id
+        for source_session, pg_id in zip(sorted_sessions, pg_session_ids, strict=True):
+            session_id_map[source_session["id"]] = pg_id
 
         print("\nImporting events...")
         event_values = []
         for event in events:
             pg_session_id = session_id_map.get(event["session_id"])
             pg_thread_id = (
-                sqlite_to_pg_thread_ids.get(event.get("thread_id"))
+                source_to_pg_thread_ids.get(event.get("thread_id"))
                 if event.get("thread_id")
                 else None
             )
             pg_selected_thread_id = (
-                sqlite_to_pg_thread_ids.get(event.get("selected_thread_id"))
+                source_to_pg_thread_ids.get(event.get("selected_thread_id"))
                 if event.get("selected_thread_id")
                 else None
             )

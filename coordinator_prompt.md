@@ -46,7 +46,7 @@ Then read `QA_ENHANCEMENTS.md` Progress Tracking section to determine which batc
 | 2 | PR 1 | Fix snooze re-render bug | Parallel Group A | 30 min |
 | 2 | PR 2 | Add queue position numbers | Parallel Group A | 30 min |
 | 2 | PR 12 | Markdown file cleanup | Parallel Group A | 30 min |
-| 3 | PR 10 | Remove SQLite backup code | After Group A merges | 1 hr |
+| 3 | PR 10 | Remove legacy backup code | After Group A merges | 1 hr |
 
 > **Group A note:** If PR 12 deletes files that PRs 1 or 2 reference, run PR 12 last in the group. Otherwise all three can run in true parallel.
 

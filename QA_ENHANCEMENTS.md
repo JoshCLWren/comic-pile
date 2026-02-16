@@ -673,11 +673,11 @@ async function handleRatingSubmit(ratingData) {
 
 ## Part 3: Backend Fixes (PRs 10-11)
 
-### PR 10: Remove SQLite Backup Code
+### PR 10: Remove Legacy Backup Code
 
-**Issue:** Backup code errors in production. It's for SQLite, but app now uses PostgreSQL. Dead code that needs removal.
+**Issue:** Backup code errors in production. It targets legacy local DB assumptions, but app now uses PostgreSQL. Dead code that needs removal.
 
-**User Feedback:** "I need to get rid of the database backup code that errors out in prod because it's for sqlite or something. It's dead code and needs to go away."
+**User Feedback:** "I need to get rid of the database backup code that errors out in prod. It's dead code and needs to go away."
 
 **Files:**
 - `app/main.py:500-566` - Startup backup trigger
@@ -701,7 +701,7 @@ async def startup_event():
 ```
 
 **scripts/backup_database.py:**
-- Delete entire file (unused, designed for SQLite)
+- Delete entire file (unused, legacy backup path)
 
 **app/config.py:**
 ```python
@@ -797,7 +797,7 @@ python scripts/audit_session_durations.py
 ### Phase 2: Fix Based on Audit Results
 
 **Likely Issues:**
-1. Sessions from SQLite → PostgreSQL migration with bad timestamps
+1. Sessions from legacy migration with bad timestamps
 2. Sessions never properly closed (left open for days)
 3. Test data from development
 
@@ -1086,7 +1086,7 @@ For each PR, ensure:
 - ✅ PR #7: Make Stale Reminder Tappable (merged 2026-02-09)
 - ✅ PR #8: Quick Actions on Comics (merged 2026-02-09)
 - ✅ PR #9: Fix Session Flow After Rating (merged 2026-02-09)
-- ✅ PR #10: Remove SQLite Backup Code (merged 2026-02-09)
+- ✅ PR #10: Remove Legacy Backup Code (merged 2026-02-09)
 - ✅ PR #12: Markdown File Cleanup (merged PR #167)
 
 ### In Progress

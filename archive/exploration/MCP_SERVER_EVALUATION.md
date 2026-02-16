@@ -803,7 +803,7 @@ async def claim_task(task_id: str, agent_name: str, worktree: str) -> dict:
 └─────────────────┬───────────────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────────┐
-│              Database (SQLite/Postgres)         │
+│              Database (PostgreSQL)         │
 └─────────────────────────────────────────────────┘
 ```
 

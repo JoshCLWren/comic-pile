@@ -326,7 +326,7 @@ cd frontend && npx playwright test
 
  ### API Tests
 
-API tests use in-memory SQLite for fast unit testing:
+API tests use async PostgreSQL test databases:
 
 - Tests in `tests/` directory, test files: `test_*.py`, functions: `test_*`
 - Use `@pytest.mark.asyncio` for async tests

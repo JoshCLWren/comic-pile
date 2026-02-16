@@ -13,7 +13,7 @@
   - Removed orphaned pr/ branches (pr/4 was force deleted)
   - Direct on main, no sub-agent
 
-- ✅ **PR #10:** Remove SQLite Backup Code (1 hour)
+- ✅ **PR #10:** Remove Legacy Backup Code (1 hour)
   - Removed app/main.py startup backup trigger
   - Deleted scripts/backup_database.py
   - Removed BackupSettings from app/config.py
