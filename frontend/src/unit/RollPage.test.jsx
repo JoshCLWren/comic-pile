@@ -64,6 +64,7 @@ beforeEach(() => {
       { id: 1, title: 'Saga', format: 'Comic', status: 'active' },
       { id: 2, title: 'X-Men', format: 'Comic', status: 'active' },
     ],
+    refetch: vi.fn()
   })
   useStaleThreads.mockReturnValue({ data: [] })
   useSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
@@ -436,5 +437,41 @@ describe('Rating View', () => {
     expect(within(poolContainer).queryByText('Saga')).not.toBeInTheDocument()
     // Other threads (X-Men) should still be there
     expect(within(poolContainer).getByText('X-Men')).toBeInTheDocument()
+  })
+
+  it('[P4] refetches threads after successful rating', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
+      thread_id: 1,
+      result: 3,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 5
+    })
+
+    const mockRefetchThreads = vi.fn()
+    useThreads.mockReturnValue({
+      data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }],
+      refetch: mockRefetchThreads
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // 1. Enter rating view
+    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+
+    // 2. Submit rating
+    const mockRate = vi.fn().mockResolvedValue({})
+    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    await user.click(screen.getByText('Save & Continue'))
+
+    // 3. Verify refetchThreads was called
+    await waitFor(() => {
+      expect(mockRefetchThreads).toHaveBeenCalled()
+    })
   })
 })

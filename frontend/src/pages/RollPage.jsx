@@ -133,6 +133,7 @@ export default function RollPage() {
             await snoozeMutation.mutate()
           }
           await refetchSession()
+          await refetchThreads()
           break
         case 'edit':
           navigate('/queue', { state: { editThreadId: selectedThread.id } })
@@ -249,6 +250,7 @@ export default function RollPage() {
       });
 
       await refetchSession();
+      await refetchThreads();
       setIsRatingView(false);
       setRolledResult(null);
     } catch (error) {
@@ -260,6 +262,7 @@ export default function RollPage() {
     try {
       await snoozeMutation.mutate();
       await refetchSession();
+      await refetchThreads();
       setIsRatingView(false);
       setRolledResult(null);
     } catch (error) {
