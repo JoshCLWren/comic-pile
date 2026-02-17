@@ -152,12 +152,7 @@ export default function RollPage() {
     if (session?.last_rolled_result !== undefined && session?.last_rolled_result !== null) {
       setRolledResult(session.last_rolled_result)
     }
-
-    if (session?.pending_thread_id) {
-      enterRatingView(session.pending_thread_id, session.last_rolled_result, session.active_thread)
-    }
-  }, [session?.pending_thread_id, session?.current_die, session?.last_rolled_result])
-
+  }, [session?.current_die, session?.last_rolled_result])
   useEffect(() => {
     if (staleThreads && staleThreads.length > 0) {
       const thread = staleThreads[0]
