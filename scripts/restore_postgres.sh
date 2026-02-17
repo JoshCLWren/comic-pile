@@ -25,7 +25,7 @@ fi
 BACKUP_FILE="${1:-}"
 
 # Parse DATABASE_URL
-# Expected format: postgresql+psycopg://user:password@host:port/database
+# Supported formats: postgresql+asyncpg://..., postgresql+psycopg://..., postgresql://..., postgres://...
 parse_database_url() {
     local url="$DATABASE_URL"
 
@@ -34,8 +34,12 @@ parse_database_url() {
         exit 1
     fi
 
-    # Remove the postgresql+psycopg:// prefix
-    local clean_url="${url#postgresql+psycopg://}"
+    # Remove URL scheme prefix
+    local clean_url="$url"
+    clean_url="${clean_url#postgresql+asyncpg://}"
+    clean_url="${clean_url#postgresql+psycopg://}"
+    clean_url="${clean_url#postgresql://}"
+    clean_url="${clean_url#postgres://}"
 
     # Extract user:password
     local credentials="${clean_url%%@*}"

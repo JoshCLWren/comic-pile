@@ -3,7 +3,7 @@
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev test seed migrate worktrees status test-integration deploy-prod dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
-.PHONY: test-e2e-prod-smoke
+.PHONY: test-e2e-prod-smoke check-prod-assets
 
 # Configuration
 PREFIX ?= /usr/local
@@ -275,19 +275,34 @@ list-postgres-backups:  ## List all PostgreSQL backups
 	@ls -lh backups/postgres/postgres_backup_*.sql.gz 2>/dev/null || echo "No PostgreSQL backups found"
 
 deploy-prod:  ## Deploy to Railway production
-	@echo "Building React frontend..."
-	@cd frontend && npm run build && cd ..
-	@echo "Committing and pushing to GitHub..."
-	@git add -A
-	@git commit -m "$$(date -u +'%Y-%m-%d %H:%M:%S') production deploy" || echo "No changes to commit"
-	@git push origin main
+	@echo "Verifying clean git worktree..."
+	@if ! git diff --quiet || ! git diff --cached --quiet; then \
+		echo "ERROR: Working tree is not clean. Commit or stash changes before deploy."; \
+		exit 1; \
+	fi
+	@echo "Verifying current branch is up to date with origin/main..."
+	@git fetch origin main
+	@if [ "$$(git rev-parse HEAD)" != "$$(git rev-parse origin/main)" ]; then \
+		echo "ERROR: Current HEAD does not match origin/main."; \
+		echo "Rebase/merge and push before deploy to ensure deterministic release."; \
+		exit 1; \
+	fi
 	@echo "Deploying to Railway..."
 	@railway up --detach
 	@sleep 60
 	@echo "Checking deployment status..."
 	@railway status
 	@echo "Testing health endpoint..."
-	@curl -s https://app-production-72b9.up.railway.app/health || echo "Health check failed"
+	@curl -fsS https://app-production-72b9.up.railway.app/health >/dev/null
+	@echo "Validating deployed frontend asset references..."
+	@bash scripts/check_frontend_assets.sh https://app-production-72b9.up.railway.app
+
+check-prod-assets:  ## Validate deployed frontend assets (make check-prod-assets PROD_BASE_URL=https://...)
+	@if [ -z "$(PROD_BASE_URL)" ]; then \
+		echo "Usage: make check-prod-assets PROD_BASE_URL=https://app-production-72b9.up.railway.app"; \
+		exit 1; \
+	fi
+	@bash scripts/check_frontend_assets.sh "$(PROD_BASE_URL)"
 
 dev-all:  ## Run both frontend and backend dev servers (Vite proxies /api to backend)
 	@bash scripts/dev-all.sh

@@ -320,6 +320,7 @@ export default function QueuePage() {
               return (
                 <div
                   key={thread.id}
+                  data-testid="queue-thread-item"
                   className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${isDragOver ? 'border-amber-400/60' : ''
                     }`}
                   onDragOver={handleDragOver(thread.id)}

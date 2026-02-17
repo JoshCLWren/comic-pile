@@ -28,7 +28,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://comicpile:comicpile_password@db:5432/comicpile
+      DATABASE_URL: postgresql+asyncpg://comicpile:comicpile_password@db:5432/comicpile
       ENVIRONMENT: development
     ports:
       - "8003:8000"

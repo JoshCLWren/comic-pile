@@ -382,6 +382,26 @@ def create_app() -> FastAPI:
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
 
+    def _assert_production_frontend_assets() -> None:
+        """Ensure required frontend artifacts exist in production.
+
+        Raises:
+            RuntimeError: If required built frontend artifacts are missing.
+        """
+        if app_settings.environment != "production":
+            return
+
+        spa_index = Path("static/react/index.html")
+        assets_dir = Path("static/react/assets")
+        has_js = any(assets_dir.glob("*.js")) if assets_dir.exists() else False
+        has_css = any(assets_dir.glob("*.css")) if assets_dir.exists() else False
+
+        if not spa_index.exists() or not assets_dir.exists() or not has_js or not has_css:
+            raise RuntimeError(
+                "Missing built frontend artifacts in production. "
+                "Expected static/react/index.html and static/react/assets with JS/CSS files."
+            )
+
     @app.api_route(
         "/api/{path:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
@@ -397,12 +417,15 @@ def create_app() -> FastAPI:
         """
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
-    # Mount static files only if directories exist (for CI/testing environments)
-    if Path("static").exists():
+    # Mount static files. In production, artifact presence is enforced at startup.
+    if app_settings.environment == "production":
         app.mount("/static", StaticFiles(directory="static"), name="static")
-
-    if Path("static/react/assets").exists():
         app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+    else:
+        if Path("static").exists():
+            app.mount("/static", StaticFiles(directory="static"), name="static")
+        if Path("static/react/assets").exists():
+            app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
 
     @app.get("/vite.svg")
     async def serve_vite_svg():
@@ -427,6 +450,8 @@ def create_app() -> FastAPI:
         cache_headers = {"Cache-Control": "no-store, no-cache, must-revalidate"}
         if spa_index.exists():
             return FileResponse(str(spa_index), headers=cache_headers)
+        if app_settings.environment == "production":
+            raise StarletteHTTPException(status_code=503, detail="Frontend assets unavailable")
         fallback_html = (
             "<!doctype html><html><body>"
             "<div id='root'></div>"
@@ -520,6 +545,8 @@ def create_app() -> FastAPI:
         """
         import asyncio
         from sqlalchemy import text
+
+        _assert_production_frontend_assets()
 
         max_retries = 3
         retry_delay = 1

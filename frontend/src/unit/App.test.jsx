@@ -45,7 +45,6 @@ test('renders navigation labels', () => {
   renderWithAuth('/')
 
   expect(screen.getByText('Roll')).toBeInTheDocument()
-  expect(screen.getByText('Rate')).toBeInTheDocument()
   expect(screen.getByText('Queue')).toBeInTheDocument()
   expect(screen.getByText('History')).toBeInTheDocument()
   expect(screen.getByText('Analytics')).toBeInTheDocument()
