@@ -3,23 +3,18 @@ import { SELECTORS, setRangeInput } from './helpers';
 
 test.describe('Rate Thread Feature', () => {
   test.beforeEach(async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
-    const rollResponse = await authenticatedWithThreadsPage.request.post('/api/roll/', {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    expect(rollResponse.ok()).toBeTruthy();
-
-    await authenticatedWithThreadsPage.waitForLoadState("networkidle");
-
-    await authenticatedWithThreadsPage.goto('/rate');
+    await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({
+      has: authenticatedWithThreadsPage.locator('p.font-black'),
+    }).first();
+    await expect(firstThreadCard).toBeVisible({ timeout: 10000 });
+    await firstThreadCard.click();
+    await authenticatedWithThreadsPage.getByText('Read Now', { exact: true }).click();
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 10000 });
   });
 
-  test('should display rating input on rate page', async ({ authenticatedWithThreadsPage }) => {
+  test('should display rating input on inline rating view', async ({ authenticatedWithThreadsPage }) => {
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.submitButton)).toBeVisible();
   });
@@ -33,7 +28,7 @@ test.describe('Rate Thread Feature', () => {
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
   });
 
-  test('should keep the same active thread when leaving and returning to /rate before submit', async ({ authenticatedWithThreadsPage }) => {
+  test('should keep the same active thread when leaving and returning home before submit', async ({ authenticatedWithThreadsPage }) => {
     const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
     expect(token).toBeTruthy();
 
@@ -51,8 +46,8 @@ test.describe('Rate Thread Feature', () => {
     await authenticatedWithThreadsPage.goto('/history');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
-    await authenticatedWithThreadsPage.goto('/rate');
-    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     await expect(authenticatedWithThreadsPage.locator('#thread-info h2')).toContainText(beforeTitle);
@@ -82,7 +77,7 @@ test.describe('Rate Thread Feature', () => {
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
       await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { state: 'visible', timeout: 5000 });
       await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-      await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
+      await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, rating);
@@ -214,8 +209,8 @@ test.describe('Rate Thread Feature', () => {
     );
     expect(setPendingResponse.ok()).toBeTruthy();
 
-    await authenticatedWithThreadsPage.goto('/rate');
-    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
     await expect(authenticatedWithThreadsPage.locator('#thread-info h2')).toContainText(
       'Greenlet Regression Thread'
     );
@@ -265,7 +260,7 @@ test('should preserve form data on validation error', async ({ authenticatedWith
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { state: 'visible', timeout: 5000 });
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');

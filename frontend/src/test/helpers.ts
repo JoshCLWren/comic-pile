@@ -163,8 +163,8 @@ export const SELECTORS = {
   },
   rate: {
     ratingInput: '#rating-input',
-    submitButton: '#submit-btn',
-    snoozeButton: 'button:has-text("Snooze Thread")',
+    submitButton: 'button:has-text("Save & Continue")',
+    snoozeButton: 'button:has-text("Snooze")',
   },
   navigation: {
     homeLink: 'a[href="/"]',

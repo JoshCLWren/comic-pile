@@ -101,7 +101,7 @@ test.describe('Production Smoke', () => {
     await expect(page.locator('#main-die-3d')).toBeVisible();
 
     await page.click('#main-die-3d');
-    await page.waitForURL('**/rate', { timeout: 10000 });
+    await page.waitForSelector('#rating-input', { timeout: 10000 });
     await expect(page.locator('#rating-input')).toBeVisible();
 
     await page.goto('/queue');
@@ -133,15 +133,15 @@ test.describe('Production Smoke', () => {
     await expect(page.locator('#main-die-3d')).toBeVisible();
 
     await page.click('#main-die-3d');
-    await page.waitForURL('**/rate', { timeout: 10000 });
+    await page.waitForSelector('#rating-input', { timeout: 10000 });
     await expect(page.locator('#rating-input')).toBeVisible();
 
-    await page.click('#submit-btn');
+    await page.click('button:has-text("Save & Continue")');
     await page.waitForURL('**/', { timeout: 10000 });
     await expect(page.locator('#main-die-3d')).toBeVisible();
   });
 
-  test('leave and return to /rate before submit keeps same active thread (existing prod user)', async ({
+  test('leave and return to / before submit keeps same active thread (existing prod user)', async ({
     page,
   }) => {
     const health = await page.request.get('/health');
@@ -163,7 +163,7 @@ test.describe('Production Smoke', () => {
     await expect(page.locator('#main-die-3d')).toBeVisible();
 
     await page.click('#main-die-3d');
-    await page.waitForURL('**/rate', { timeout: 10000 });
+    await page.waitForSelector('#rating-input', { timeout: 10000 });
     await expect(page.locator('#thread-info h2')).toBeVisible();
     const titleBefore = (await page.locator('#thread-info h2').innerText()).trim();
 
@@ -178,8 +178,8 @@ test.describe('Production Smoke', () => {
     await page.goto('/history');
     await page.waitForLoadState('networkidle');
 
-    await page.goto('/rate');
-    await page.waitForURL('**/rate', { timeout: 10000 });
+    await page.goto('/');
+    await page.waitForSelector('#rating-input', { timeout: 10000 });
     await expect(page.locator('#thread-info h2')).toContainText(titleBefore);
 
     const afterSession = await page.request.get('/api/sessions/current/', {
