@@ -223,6 +223,7 @@ async def rate_thread(
             select(Thread)
             .where(Thread.user_id == user_id)
             .where(Thread.status == "active")
+            .where(Thread.queue_position >= 1)
             .where(Thread.id != thread_id)
             .order_by(Thread.queue_position)
             .limit(1)

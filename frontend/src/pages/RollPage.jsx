@@ -12,6 +12,8 @@ import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { threadsApi } from '../services/api'
 
+const RATING_THRESHOLD = 4.0
+
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
   const [rolledResult, setRolledResult] = useState(null)
@@ -33,6 +35,7 @@ export default function RollPage() {
   const [predictedDie, setPredictedDie] = useState(6)
   const [previewSides, setPreviewSides] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
+  const [issuesRead, setIssuesRead] = useState(1)
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
@@ -82,12 +85,15 @@ export default function RollPage() {
     // P1: Store specific thread metadata for rating view
     if (threadMetadata && threadMetadata.title) {
       setActiveRatingThread(threadMetadata)
-    } else if (session?.active_thread && session.active_thread.id === (threadId ? parseInt(threadId, 10) : null)) {
+    } else if (!threadId && session?.active_thread) {
+      setActiveRatingThread(session.active_thread)
+    } else if (session?.active_thread && session.active_thread.id === Number(threadId)) {
       setActiveRatingThread(session.active_thread)
     }
 
     // P2: Reset rating state on entry
     setRating(4.0)
+    setIssuesRead(1)
     setErrorMessage('')
 
     // Reset predictions based on current die
@@ -187,7 +193,7 @@ export default function RollPage() {
     setRating(num);
     let newPredictedDie = currentDie;
 
-    if (num >= 4.0) {
+    if (num >= RATING_THRESHOLD) {
       const idx = DICE_LADDER.indexOf(currentDie);
       if (idx > 0) {
         newPredictedDie = DICE_LADDER[idx - 1];
@@ -228,14 +234,14 @@ export default function RollPage() {
   }
 
   async function handleSubmitRating(finishSession = false) {
-    if (rating >= 4.0) {
+    if (rating >= RATING_THRESHOLD) {
       createExplosion();
     }
 
     try {
       await rateMutation.mutate({
         rating,
-        issues_read: 1,
+        issues_read: Math.max(1, Number(issuesRead) || 1),
         finish_session: finishSession
       });
 
@@ -263,7 +269,7 @@ export default function RollPage() {
   const dieSize = currentDie || 6;
   // P3: Filter pool using local selectedThreadId state for immediate consistency
   const filteredThreads = activeThreads.filter(t =>
-    !isRatingView || t.id !== (selectedThreadId ? parseInt(selectedThreadId, 10) : null)
+    !isRatingView || t.id !== (selectedThreadId ? Number(selectedThreadId) : null)
   );
   const pool = filteredThreads.slice(0, dieSize) || [];
 
@@ -487,10 +493,10 @@ export default function RollPage() {
                   </div>
 
                   <div className="text-center space-y-4">
-                    <Tooltip content="Ratings of 4.0+ move the thread to the front and step the die down. Lower ratings move it back and step the die up.">
+                    <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the thread to the front and step the die down. Lower ratings move it back and step the die up.`}>
                       <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 cursor-help">How was it?</p>
                     </Tooltip>
-                    <div id="rating-value" className={`text-4xl font-black ${rating >= 4.0 ? 'text-teal-400' : 'text-indigo-400'}`}>
+                    <div id="rating-value" className={`text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-teal-400' : 'text-indigo-400'}`}>
                       {rating.toFixed(1)}
                     </div>
                     <input
@@ -507,14 +513,34 @@ export default function RollPage() {
                     />
                   </div>
 
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="issues-read-input"
+                        className="block text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 text-center"
+                      >
+                        Issues Read
+                      </label>
+                      <input
+                        id="issues-read-input"
+                        type="number"
+                        name="issues_read"
+                        min="1"
+                        step="1"
+                        value={issuesRead}
+                        onChange={(e) => setIssuesRead(Math.max(1, Number(e.target.value) || 1))}
+                        className="w-24 mx-auto block rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-center text-sm font-black text-slate-100"
+                        aria-label="Issues read"
+                      />
+                    </div>
+
                   <div
-                    className={`p-4 rounded-3xl border shadow-xl ${rating >= 4.0
+                    className={`p-4 rounded-3xl border shadow-xl ${rating >= RATING_THRESHOLD
                       ? 'bg-teal-500/5 border-teal-500/20'
                       : 'bg-indigo-500/5 border-indigo-500/20'
                       }`}
                   >
                     <p id="queue-effect" className="text-[10px] font-black text-slate-200 text-center uppercase tracking-[0.15em] leading-relaxed">
-                      {rating >= 4.0
+                      {rating >= RATING_THRESHOLD
                         ? `Excellent! Die steps down 🎲 Move to front${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`
                         : `Okay. Die steps up 🎲 Move to back${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`}
                     </p>
@@ -562,7 +588,7 @@ export default function RollPage() {
                   </div>
 
                   {errorMessage && (
-                    <div className="text-[10px] text-rose-500 text-center font-bold">
+                    <div id="error-message" className="text-[10px] text-rose-500 text-center font-bold">
                       {errorMessage}
                     </div>
                   )}
@@ -601,7 +627,7 @@ export default function RollPage() {
                   </div>
                 ) : (
                   pool.map((thread, index) => {
-                    const isSelected = selectedThreadId && parseInt(selectedThreadId, 10) === thread.id
+                    const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
                     return (
                       <div
                         key={thread.id}

@@ -68,7 +68,7 @@ test.describe('Accessibility Tests', () => {
     await page.waitForSelector(SELECTORS.roll.mainDie);
     await page.click(SELECTORS.roll.mainDie);
 
-    await page.waitForSelector('#rating-input', { state: 'visible' });
+    await page.waitForSelector(SELECTORS.rate.ratingInput, { state: 'visible' });
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])

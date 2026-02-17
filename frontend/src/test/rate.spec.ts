@@ -147,16 +147,21 @@ test.describe('Rate Thread Feature', () => {
 
   test('should allow adjusting issues read', async ({ authenticatedWithThreadsPage }) => {
     const issuesInput = authenticatedWithThreadsPage.locator('input[name="issues_read"]');
-    const isVisible = await issuesInput.count() > 0;
+    await expect(issuesInput).toBeVisible();
 
-    if (isVisible) {
-      await issuesInput.fill('2');
-      await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-      
-      const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
-      await expect(ratingInput).toBeVisible({ timeout: 3000 });
-    }
+    let submittedIssuesRead: number | null = null;
+    await authenticatedWithThreadsPage.route('**/api/rate/**', async (route) => {
+      const body = route.request().postDataJSON() as { issues_read?: number };
+      if (typeof body.issues_read === 'number') {
+        submittedIssuesRead = body.issues_read;
+      }
+      await route.continue();
+    });
+
+    await issuesInput.fill('2');
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    expect(submittedIssuesRead).toBe(2);
   });
 
   test('should handle finish session option', async ({ authenticatedWithThreadsPage }) => {
@@ -225,7 +230,7 @@ test.describe('Rate Thread Feature', () => {
     expect(parseFloat(ratingValue)).toBeGreaterThan(0);
   });
 
-test('should preserve form data on validation error', async ({ authenticatedWithThreadsPage }) => {
+  test('should preserve form data on validation error', async ({ authenticatedWithThreadsPage }) => {
     const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
     await ratingInput.waitFor({ state: 'visible' });
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');

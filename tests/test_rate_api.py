@@ -716,6 +716,70 @@ async def test_rate_final_issue_completes_thread_but_keeps_session_active(
 
 
 @pytest.mark.asyncio
+async def test_rate_auto_advance_skips_nonpositive_queue_positions(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Auto-advance should only select active threads with queue_position >= 1."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    rated_thread = Thread(
+        title="Rated Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    skipped_thread = Thread(
+        title="Skipped Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=0,
+        status="active",
+        user_id=user.id,
+    )
+    next_thread = Thread(
+        title="Next Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add_all([rated_thread, skipped_thread, next_thread])
+    await async_db.commit()
+    await async_db.refresh(rated_thread)
+    await async_db.refresh(next_thread)
+
+    roll_event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=rated_thread.id,
+        session_id=session.id,
+        thread_id=rated_thread.id,
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 4.0, "issues_read": 1, "finish_session": False},
+    )
+    assert response.status_code == 200
+
+    await async_db.refresh(session)
+    assert session.pending_thread_id == next_thread.id
+
+
+@pytest.mark.asyncio
 async def test_finish_session_ends_session_regardless_of_thread_completion(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

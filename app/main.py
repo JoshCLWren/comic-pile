@@ -415,15 +415,24 @@ def create_app() -> FastAPI:
 
         return FileResponse("static/vite.svg", media_type="image/svg+xml")
 
-    def _serve_spa_index_response():
-        """Serve SPA index file when available, else return fallback HTML for test environments."""
+    def _serve_spa_index_response() -> Response:
+        """Serve SPA index file when available, else return fallback HTML.
+
+        Returns:
+            FileResponse for the built SPA index, or fallback HTMLResponse in test environments.
+        """
         from fastapi.responses import FileResponse, HTMLResponse
 
         spa_index = Path("static/react/index.html")
         cache_headers = {"Cache-Control": "no-store, no-cache, must-revalidate"}
         if spa_index.exists():
             return FileResponse(str(spa_index), headers=cache_headers)
-        return HTMLResponse("<!doctype html><html><body><div id='root'></div></body></html>", headers=cache_headers)
+        fallback_html = (
+            "<!doctype html><html><body>"
+            "<div id='root'></div>"
+            "</body></html>"
+        )
+        return HTMLResponse(fallback_html, headers=cache_headers)
 
     @app.get("/")
     async def serve_root():
