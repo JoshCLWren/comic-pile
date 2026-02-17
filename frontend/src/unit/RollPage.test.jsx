@@ -474,4 +474,36 @@ describe('Rating View', () => {
       expect(mockRefetchThreads).toHaveBeenCalled()
     })
   })
+
+  it('[P6] does not auto-finish session when rating the last issue', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
+      thread_id: 1,
+      result: 3,
+      title: 'Final Issue Thread',
+      format: 'Comic',
+      issues_remaining: 1 // Only 1 issue left
+    })
+
+    const mockRate = vi.fn().mockResolvedValue({})
+    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // 1. Enter rating view
+    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+
+    // 2. Submit rating (Save & Continue)
+    await user.click(screen.getByText('Save & Continue'))
+
+    // 3. Verify mutate was called with finish_session: false
+    await waitFor(() => {
+      expect(mockRate).toHaveBeenCalledWith(expect.objectContaining({
+        finish_session: false
+      }))
+    })
+  })
 })

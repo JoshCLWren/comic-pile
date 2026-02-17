@@ -233,11 +233,6 @@ export default function RollPage() {
   }
 
   async function handleSubmitRating(finishSession = false) {
-    const thread = activeRatingThread
-    const shouldAutoCompleteThread =
-      !finishSession && thread && thread.issues_remaining - 1 <= 0;
-    const shouldFinishSession = finishSession || shouldAutoCompleteThread;
-
     if (rating >= 4.0) {
       createExplosion();
     }
@@ -246,7 +241,7 @@ export default function RollPage() {
       await rateMutation.mutate({
         rating,
         issues_read: 1,
-        finish_session: shouldFinishSession
+        finish_session: finishSession
       });
 
       await refetchSession();
