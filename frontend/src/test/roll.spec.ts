@@ -10,16 +10,9 @@ test.describe('Roll Dice Feature', () => {
   });
 
   test('should roll dice and show inline rating on home page', async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
-    const rollResponse = await authenticatedWithThreadsPage.request.post('/api/roll/', {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    expect(rollResponse.ok()).toBeTruthy();
     await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
     expect(new URL(authenticatedWithThreadsPage.url()).pathname).toBe('/');
   });
@@ -164,20 +157,7 @@ test.describe('Roll Dice Feature', () => {
   test('should show inline rating without loading state after roll', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
-
-    // Simulate roll by posting to API directly
-    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
-    const rollResponse = await authenticatedWithThreadsPage.request.post('/api/roll/', {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    data: {},
-    });
-
-    expect(rollResponse.ok()).toBeTruthy();
-    await rollResponse.json();
-    await authenticatedWithThreadsPage.goto('/', { waitUntil: 'load' });
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
 
     // Verify no loading state appears
     const loadingText = authenticatedWithThreadsPage.getByText('Loading...');
