@@ -7,6 +7,7 @@ import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
+import { useRate } from '../hooks'
 
 const navigateSpy = vi.fn()
 
@@ -38,15 +39,25 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
 }))
+vi.mock('../hooks', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useRate: vi.fn(),
+  }
+})
 
 beforeEach(() => {
+  const mockSessionData = {
+    current_die: 6,
+    last_rolled_result: null,
+    manual_die: null,
+    has_restore_point: false,
+    snoozed_threads: [],
+  }
   useSession.mockReturnValue({
-    data: {
-      current_die: 6,
-      last_rolled_result: null,
-      manual_die: null,
-      has_restore_point: false,
-    },
+    data: mockSessionData,
+    refetch: vi.fn(),
   })
   useThreads.mockReturnValue({
     data: [
@@ -63,6 +74,7 @@ beforeEach(() => {
   useUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
 })
 
 it('renders roll page content and opens override modal', async () => {
@@ -240,5 +252,67 @@ describe('Keyboard Accessibility', () => {
     await user.keyboard(' ')
 
     expect(screen.getByText('Read Now')).toBeInTheDocument()
+  })
+})
+
+describe('Rating View', () => {
+  it('shows rating view after a successful roll', async () => {
+    const mockRoll = vi.fn().mockResolvedValue({ result: 4, thread_id: 1 })
+    useRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
+
+    // Simulate initial state
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: 4,
+        manual_die: null,
+        active_thread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5 }
+      },
+      refetch: vi.fn()
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    const diceElement = screen.getByLabelText('Roll the dice')
+    await user.click(diceElement)
+
+    // Wait for the roll timeout (400ms in code + 80ms interval)
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+      expect(screen.getByText('Excellent! Die steps down 🎲 Move to front (d4)')).toBeInTheDocument()
+      expect(screen.getByText('Saga')).toBeInTheDocument()
+    }, { timeout: 2000 })
+  })
+
+  it('shows rating view after clicking Read Now', async () => {
+    const { threadsApi } = await import('../services/api')
+    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue({ result: 3, thread_id: 1 })
+
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: 3,
+        manual_die: null,
+        active_thread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5 }
+      },
+      refetch: vi.fn()
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaPoolItem)
+
+    const readNowButton = screen.getByText('Read Now')
+    await user.click(readNowButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+      expect(screen.getByText('Saga')).toBeInTheDocument()
+    })
+
+    setPendingSpy.mockRestore()
   })
 })

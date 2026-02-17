@@ -9,6 +9,7 @@ import { useStaleThreads, useThreads } from '../hooks/useThread'
 import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
+import { useRate } from '../hooks'
 import { threadsApi } from '../services/api'
 
 export default function RollPage() {
@@ -24,6 +25,13 @@ export default function RollPage() {
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
   const [selectedThread, setSelectedThread] = useState(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+
+  // Rating state
+  const [isRatingView, setIsRatingView] = useState(false)
+  const [rating, setRating] = useState(4.0)
+  const [predictedDie, setPredictedDie] = useState(6)
+  const [previewSides, setPreviewSides] = useState(6)
+  const [errorMessage, setErrorMessage] = useState('')
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
@@ -41,6 +49,7 @@ export default function RollPage() {
   const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
+  const rateMutation = useRate()
 
   async function handleUnsnooze(threadId) {
     try {
@@ -54,7 +63,7 @@ export default function RollPage() {
   async function handleReadStale() {
     try {
       const response = await threadsApi.setPending(staleThread.id)
-      navigate('/rate', { state: { rollResponse: response } })
+      enterRatingView(response.thread_id, response.result)
     } catch (error) {
       console.error('Failed to set pending thread:', error)
     }
@@ -63,6 +72,20 @@ export default function RollPage() {
   function handleThreadClick(thread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
+  }
+
+  function enterRatingView(threadId, result = null) {
+    if (threadId) setSelectedThreadId(threadId)
+    if (result !== null) setRolledResult(result)
+
+    // Calculate initial prediction based on current rating (4.0)
+    const die = currentDie || 6
+    const idx = DICE_LADDER.indexOf(die)
+    const initialPredicted = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0]
+
+    setPredictedDie(initialPredicted)
+    setPreviewSides(initialPredicted)
+    setIsRatingView(true)
   }
 
   async function handleAction(action) {
@@ -77,7 +100,7 @@ export default function RollPage() {
         case 'read':
           {
             const response = await threadsApi.setPending(selectedThread.id)
-            navigate('/rate', { state: { rollResponse: response } })
+            enterRatingView(response.thread_id, response.result)
           }
           break
         case 'move-front':
@@ -116,7 +139,11 @@ export default function RollPage() {
     if (session?.last_rolled_result !== undefined && session?.last_rolled_result !== null) {
       setRolledResult(session.last_rolled_result)
     }
-  }, [session])
+
+    if (session?.pending_thread_id) {
+      enterRatingView(session.pending_thread_id, session.last_rolled_result)
+    }
+  }, [session?.pending_thread_id, session?.current_die, session?.last_rolled_result])
 
   useEffect(() => {
     if (staleThreads && staleThreads.length > 0) {
@@ -147,8 +174,93 @@ export default function RollPage() {
     }
   }, [])
 
-  const dieSize = session?.current_die || 6
-  const pool = activeThreads.slice(0, dieSize) || []
+  function updateRatingUI(val) {
+    const num = parseFloat(val);
+    setRating(num);
+    let newPredictedDie = currentDie;
+
+    if (num >= 4.0) {
+      const idx = DICE_LADDER.indexOf(currentDie);
+      if (idx > 0) {
+        newPredictedDie = DICE_LADDER[idx - 1];
+      } else {
+        newPredictedDie = DICE_LADDER[0];
+      }
+    } else {
+      const idx = DICE_LADDER.indexOf(currentDie);
+      if (idx < DICE_LADDER.length - 1) {
+        newPredictedDie = DICE_LADDER[idx + 1];
+      } else {
+        newPredictedDie = DICE_LADDER[DICE_LADDER.length - 1];
+      }
+    }
+
+    setPredictedDie(newPredictedDie);
+    setPreviewSides(newPredictedDie);
+  }
+
+  function createExplosion() {
+    const layer = document.getElementById('explosion-layer');
+    if (!layer) return;
+    const count = 50;
+
+    for (let i = 0; i < count; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 150 + Math.random() * 250;
+      p.style.left = '50%';
+      p.style.top = '50%';
+      p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+      p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+      p.style.background = i % 2 ? 'var(--accent-teal)' : 'var(--accent-violet)';
+      layer.appendChild(p);
+      setTimeout(() => p.remove(), 1000);
+    }
+  }
+
+  async function handleSubmitRating(finishSession = false) {
+    const thread = session?.active_thread
+    const shouldAutoCompleteThread =
+      !finishSession && thread && thread.issues_remaining - 1 <= 0;
+    const shouldFinishSession = finishSession || shouldAutoCompleteThread;
+
+    if (rating >= 4.0) {
+      createExplosion();
+    }
+
+    try {
+      await rateMutation.mutate({
+        rating,
+        issues_read: 1,
+        finish_session: shouldFinishSession
+      });
+
+      await refetchSession();
+      setIsRatingView(false);
+      setRolledResult(null);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    }
+  }
+
+  async function handleSnooze() {
+    try {
+      await snoozeMutation.mutate();
+      await refetchSession();
+      setIsRatingView(false);
+      setRolledResult(null);
+    } catch (error) {
+      setErrorMessage(error.response?.data?.detail || 'Failed to snooze thread');
+    }
+  }
+
+  const dieSize = currentDie || 6;
+  // Filter out the pending thread from the pool if we are in rating view
+  const filteredThreads = activeThreads.filter(t =>
+    !isRatingView || t.id !== session?.pending_thread_id
+  );
+  const pool = filteredThreads.slice(0, dieSize) || [];
 
   function setDiceStateValue(state) {
     setDiceState(state)
@@ -185,24 +297,18 @@ export default function RollPage() {
       if (currentRollCount >= maxRolls) {
         clearInterval(rollIntervalRef.current)
         rollIntervalRef.current = null
-        
+
         rollTimeoutRef.current = setTimeout(async () => {
-           rollTimeoutRef.current = null
-            try {
-              const response = await rollMutation.mutate()
-              if (response?.result !== undefined && response?.result !== null) {
-                setRolledResult(response.result)
-              }
-              if (response?.thread_id) {
-                setSelectedThreadId(response.thread_id)
-              }
-              setIsRolling(false)
-              navigate('/rate', { state: { rollResponse: response } })
-            } catch (error) {
-             console.error('Roll failed:', error)
-             setIsRolling(false)
-           }
-         }, 400)
+          rollTimeoutRef.current = null
+          try {
+            const response = await rollMutation.mutate()
+            enterRatingView(response.thread_id, response.result)
+            setIsRolling(false)
+          } catch (error) {
+            console.error('Roll failed:', error)
+            setIsRolling(false)
+          }
+        }, 400)
       }
     }, 80)
   }
@@ -227,7 +333,7 @@ export default function RollPage() {
       .then((response) => {
         setIsOverrideOpen(false)
         setOverrideThreadId('')
-        navigate('/rate', { state: { rollResponse: response } })
+        enterRatingView(response.thread_id, response.result)
       })
       .catch(() => {
         // Handle error if needed
@@ -258,11 +364,10 @@ export default function RollPage() {
                   key={die}
                   onClick={() => handleSetDie(die)}
                   disabled={setDieMutation.isPending}
-                  className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
-                    die === currentDie
-                      ? 'bg-teal-500/20 border-teal-500 text-teal-400'
-                      : 'bg-white/5 border-white/10 hover:bg-white/10'
-                  }`}
+                  className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie
+                    ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                    : 'bg-white/5 border-white/10 hover:bg-white/10'
+                    }`}
                 >
                   d{die}
                 </button>
@@ -270,11 +375,10 @@ export default function RollPage() {
               <button
                 onClick={handleClearManualDie}
                 disabled={clearManualDieMutation.isPending}
-                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${
-                  session.manual_die
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                    : 'bg-white/5 border-white/10 hover:bg-white/10'
-                }`}
+                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  }`}
                 title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}
               >
                 Auto
@@ -319,291 +423,398 @@ export default function RollPage() {
         <div className="glass-card flex-1 flex flex-col relative overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-          <div
-            id="main-die-3d"
-            onClick={handleRoll}
-            onKeyDown={handleKeyDown}
-            role="button"
-            tabIndex={0}
-            aria-label="Roll the dice"
-            className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all`}
-            style={{ width: '200px', height: '200px', margin: '0 auto' }}
-          >
-            <div className="w-full h-full">
-              <LazyDice3D
-                sides={currentDie}
-                value={rolledResult || 1}
-                isRolling={isRolling}
-                showValue={false}
-                color={0xffffff}
-                onRollComplete={handleRollComplete}
-              />
-            </div>
-          </div>
-
-          {!isRolling && rolledResult === null && (
-            <p
-              id="tap-instruction"
-              className="text-slate-500 font-black uppercase tracking-[0.5em] text-[9px] animate-pulse shrink-0 text-center"
-            >
-              Tap Die to Roll
-            </p>
-          )}
-
-          <div className="flex-1 min-h-0 mt-4 px-4 pb-4 overflow-hidden flex flex-col">
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_15px_var(--accent-teal)]"></div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Roll Pool</span>
-            </div>
-            <div className="flex-1 overflow-y-auto mt-2 space-y-2 scrollbar-thin">
-              {pool.length === 0 ? (
-                <div className="text-center py-10 space-y-3">
-                  <div className="text-3xl">📚</div>
-                  <p className="text-xs text-slate-500 font-black uppercase tracking-widest">Queue Empty</p>
-                  <p className="text-[10px] text-slate-600">Add comics to your queue to start rolling</p>
-                  <button
-                    onClick={() => navigate('/queue')}
-                    className="mt-2 px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-teal-400 transition-colors"
-                  >
-                    Add Thread
-                  </button>
-                </div>
-              ) : (
-                pool.map((thread, index) => {
-                  const isSelected = selectedThreadId && parseInt(selectedThreadId, 10) === thread.id
-                  return (
-                    <div
-                      key={thread.id}
-                      onClick={() => handleThreadClick(thread)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          handleThreadClick(thread)
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${
-                        isSelected ? 'pool-thread-selected' : ''
-                      }`}
-                    >
-                      <span className="text-lg font-black text-slate-500/50 group-hover:text-slate-400/50 transition-colors">
-                        {index + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black text-slate-300 truncate text-sm">{thread.title}</p>
-                        <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </div>
-
-          {staleThread && (
-            <div
-              onClick={handleReadStale}
-              className="px-4 pb-4 shrink-0 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  handleReadStale()
-                }
-              }}
-            >
-              <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
-                <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
-                  <span className="text-sm">⏳</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
-                    You haven't touched <span className="text-amber-400 font-black">{staleThread.title}</span> in{' '}
-                    <span className="text-amber-400 font-black">{staleThread.days}</span> days
-                  </p>
-                  <p className="text-[9px] text-amber-300/70 text-center mt-1">
-                    Tap to read now
-                  </p>
+          <div className="flex-1 overflow-y-auto scrollbar-thin flex flex-col">
+            {!isRatingView ? (
+              <div
+                id="main-die-3d"
+                onClick={handleRoll}
+                onKeyDown={handleKeyDown}
+                role="button"
+                tabIndex={0}
+                aria-label="Roll the dice"
+                className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4`}
+                style={{ width: '200px', height: '200px', margin: '0 auto' }}
+              >
+                <div className="w-full h-full">
+                  <LazyDice3D
+                    sides={currentDie}
+                    value={rolledResult || 1}
+                    isRolling={isRolling}
+                    showValue={false}
+                    color={0xffffff}
+                    onRollComplete={handleRollComplete}
+                  />
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="p-4 space-y-8 relative z-10">
+                <div id="thread-info" role="status" aria-live="polite">
+                  <div className="space-y-2 text-center">
+                    <h2 className="text-2xl font-black text-slate-100">{session?.active_thread?.title || 'Loading...'}</h2>
+                    <div className="flex items-center justify-center gap-3">
+                      <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/20">
+                        {session?.active_thread?.format || '...'}
+                      </span>
+                      <span className="text-slate-500 text-xs font-bold">{session?.active_thread?.issues_remaining || 0} Issues left</span>
+                    </div>
+                  </div>
+                </div>
 
-          {session.snoozed_threads?.length > 0 && (
-            <div className="px-4 pb-4 shrink-0">
-              <button
-                type="button"
-                onClick={() => setSnoozedExpanded(!snoozedExpanded)}
-                className="w-full px-4 py-2 bg-slate-500/5 border border-slate-500/10 rounded-xl flex items-center gap-2 hover:bg-slate-500/10 transition-colors"
-              >
-                <span
-                  className={`text-slate-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
-                >
-                  ▶
-                </span>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Snoozed ({session.snoozed_threads.length})
-                </span>
-              </button>
-              {snoozedExpanded && (
-                <div className="mt-2 space-y-1">
-                  {session.snoozed_threads.map((thread) => (
+                <div className="space-y-8">
+                  <div id="rating-preview-dice" className="dice-perspective">
                     <div
-                      key={thread.id}
-                      className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                      id="die-preview-wrapper"
+                      className="dice-state-rate-flow relative flex items-center justify-center"
+                      style={{ width: '120px', height: '120px', margin: '0 auto' }}
                     >
-                      <p className="flex-1 text-sm text-slate-400 truncate">{thread.title}</p>
+                      <LazyDice3D
+                        sides={previewSides}
+                        value={rolledResult || 1}
+                        isRolling={false}
+                        showValue={false}
+                        freeze
+                        color={0xffffff}
+                      />
+                      <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wider text-indigo-400">
+                        Rating
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-center space-y-4">
+                    <Tooltip content="Ratings of 4.0+ move the thread to the front and step the die down. Lower ratings move it back and step the die up.">
+                      <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 cursor-help">How was it?</p>
+                    </Tooltip>
+                    <div id="rating-value" className={`text-4xl font-black ${rating >= 4.0 ? 'text-teal-400' : 'text-indigo-400'}`}>
+                      {rating.toFixed(1)}
+                    </div>
+                    <input
+                      type="range"
+                      id="rating-input"
+                      name="rating"
+                      min="0.5"
+                      max="5.0"
+                      step="0.5"
+                      value={rating}
+                      className="w-full h-4"
+                      aria-label="Rating from 0.5 to 5.0 in steps of 0.5"
+                      onChange={(e) => updateRatingUI(e.target.value)}
+                    />
+                  </div>
+
+                  <div
+                    className={`p-4 rounded-3xl border shadow-xl ${rating >= 4.0
+                      ? 'bg-teal-500/5 border-teal-500/20'
+                      : 'bg-indigo-500/5 border-indigo-500/20'
+                      }`}
+                  >
+                    <p id="queue-effect" className="text-[10px] font-black text-slate-200 text-center uppercase tracking-[0.15em] leading-relaxed">
+                      {rating >= 4.0
+                        ? `Excellent! Die steps down 🎲 Move to front${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`
+                        : `Okay. Die steps up 🎲 Move to back${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`}
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSubmitRating(false)}
+                      disabled={rateMutation.isPending}
+                      className="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.2em] relative shadow-[0_15px_40px_rgba(20,184,166,0.3)] disabled:opacity-50"
+                    >
+                      {rateMutation.isPending ? 'Saving...' : 'Save & Continue'}
+                    </button>
+                    <div className="flex justify-center gap-4">
                       <button
                         type="button"
-                        onClick={() => handleUnsnooze(thread.id)}
-                        disabled={unsnoozeMutation.isPending}
-                        className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
-                        title="Unsnooze this comic"
-                        aria-label="Unsnooze this comic"
+                        onClick={handleSnooze}
+                        disabled={snoozeMutation.isPending}
+                        className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 rounded-lg transition-all disabled:opacity-50"
                       >
-                        ✕
+                        {snoozeMutation.isPending ? 'Snoozing...' : 'Snooze'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsRatingView(false)}
+                        className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent hover:border-white/10 rounded-lg transition-all"
+                      >
+                        Cancel
                       </button>
                     </div>
-                  ))}
+                  </div>
+
+                  {errorMessage && (
+                    <div className="text-[10px] text-rose-500 text-center font-bold">
+                      {errorMessage}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Shared Pool Display */}
+            <div className={`px-4 pb-4 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-8'}`}>
+              {!isRolling && rolledResult === null && !isRatingView && (
+                <p
+                  id="tap-instruction"
+                  className="text-slate-500 font-black uppercase tracking-[0.5em] text-[10px] animate-pulse shrink-0 text-center mb-8"
+                >
+                  Tap Die to Roll
+                </p>
+              )}
+
+              <div className="flex items-center gap-2 shrink-0 mb-4">
+                <div className="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_15px_var(--accent-teal)]"></div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Roll Pool</span>
+              </div>
+
+              <div className="space-y-2">
+                {pool.length === 0 ? (
+                  <div className="text-center py-10 space-y-3">
+                    <div className="text-3xl">📚</div>
+                    <p className="text-xs text-slate-500 font-black uppercase tracking-widest">Queue Empty</p>
+                    <p className="text-[10px] text-slate-600">Add comics to your queue to start rolling</p>
+                    <button
+                      onClick={() => navigate('/queue')}
+                      className="mt-2 px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-teal-400 transition-colors"
+                    >
+                      Add Thread
+                    </button>
+                  </div>
+                ) : (
+                  pool.map((thread, index) => {
+                    const isSelected = selectedThreadId && parseInt(selectedThreadId, 10) === thread.id
+                    return (
+                      <div
+                        key={thread.id}
+                        onClick={() => handleThreadClick(thread)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleThreadClick(thread)
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected' : ''
+                          }`}
+                      >
+                        <span className="text-lg font-black text-slate-500/50 group-hover:text-slate-400/50 transition-colors">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-slate-300 truncate text-sm">{thread.title}</p>
+                          <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              {staleThread && !isRatingView && (
+                <div
+                  onClick={handleReadStale}
+                  className="mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleReadStale()
+                    }
+                  }}
+                >
+                  <div className="px-4 py-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-3">
+                    <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center shrink-0">
+                      <span className="text-sm">⏳</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
+                        You haven't touched <span className="text-amber-400 font-black">{staleThread.title}</span> in{' '}
+                        <span className="text-amber-400 font-black">{staleThread.days}</span> days
+                      </p>
+                      <p className="text-[9px] text-amber-300/70 text-center mt-1">
+                        Tap to read now
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {session.snoozed_threads?.length > 0 && !isRatingView && (
+                <div className="mt-8">
+                  <button
+                    type="button"
+                    onClick={() => setSnoozedExpanded(!snoozedExpanded)}
+                    className="w-full px-4 py-2 bg-slate-500/5 border border-slate-500/10 rounded-xl flex items-center gap-2 hover:bg-slate-500/10 transition-colors"
+                  >
+                    <span
+                      className={`text-slate-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
+                    >
+                      ▶
+                    </span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Snoozed ({session.snoozed_threads.length})
+                    </span>
+                  </button>
+                  {snoozedExpanded && (
+                    <div className="mt-2 space-y-1">
+                      {session.snoozed_threads.map((thread) => (
+                        <div
+                          key={thread.id}
+                          className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                        >
+                          <p className="flex-1 text-sm text-slate-400 truncate">{thread.title}</p>
+                          <button
+                            type="button"
+                            onClick={() => handleUnsnooze(thread.id)}
+                            disabled={unsnoozeMutation.isPending}
+                            className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                            title="Unsnooze this comic"
+                            aria-label="Unsnooze this comic"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
-      </div>
 
-      <div id="explosion-layer" className="explosion-wrap"></div>
+        <div id="explosion-layer" className="explosion-wrap"></div>
 
-      <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>
-        <form className="space-y-4" onSubmit={handleOverrideSubmit}>
-          <p className="text-xs text-slate-400">Pick a thread to force next roll result.</p>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Thread</label>
-            <select
-              value={overrideThreadId}
-              onChange={(event) => setOverrideThreadId(event.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
-              required
-            >
-              <option value="">Select a thread...</option>
-              <optgroup label="Active Threads">
-                {activeThreads.map((thread) => (
-                  <option key={thread.id} value={thread.id}>
-                    {thread.title} ({thread.format})
-                  </option>
-                ))}
-              </optgroup>
-              {session.snoozed_threads?.length > 0 && (
-                <optgroup label="Snoozed Threads">
-                  {session.snoozed_threads.map((thread) => (
+        <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>
+          <form className="space-y-4" onSubmit={handleOverrideSubmit}>
+            <p className="text-xs text-slate-400">Pick a thread to force next roll result.</p>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Thread</label>
+              <select
+                value={overrideThreadId}
+                onChange={(event) => setOverrideThreadId(event.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                required
+              >
+                <option value="">Select a thread...</option>
+                <optgroup label="Active Threads">
+                  {activeThreads.map((thread) => (
                     <option key={thread.id} value={thread.id}>
                       {thread.title} ({thread.format})
                     </option>
                   ))}
                 </optgroup>
-              )}
-            </select>
-          </div>
-          <button
-            type="submit"
-            disabled={overrideMutation.isPending || !overrideThreadId}
-            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
-          >
-            {overrideMutation.isPending ? 'Overriding...' : 'Override Roll'}
-          </button>
-        </form>
-      </Modal>
-
-      <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
-        <div className="grid grid-cols-3 gap-2">
-          {DICE_LADDER.map((die) => (
+                {session.snoozed_threads?.length > 0 && (
+                  <optgroup label="Snoozed Threads">
+                    {session.snoozed_threads.map((thread) => (
+                      <option key={thread.id} value={thread.id}>
+                        {thread.title} ({thread.format})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
             <button
-              key={die}
-              onClick={async () => {
-                try {
-                  await handleSetDie(die)
-                  setIsDieModalOpen(false)
-                } catch (error) {
-                  console.error('Failed to set die:', error)
-                }
-              }}
-              disabled={setDieMutation.isPending}
-              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
-                die === currentDie
+              type="submit"
+              disabled={overrideMutation.isPending || !overrideThreadId}
+              className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
+            >
+              {overrideMutation.isPending ? 'Overriding...' : 'Override Roll'}
+            </button>
+          </form>
+        </Modal>
+
+        <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
+          <div className="grid grid-cols-3 gap-2">
+            {DICE_LADDER.map((die) => (
+              <button
+                key={die}
+                onClick={async () => {
+                  try {
+                    await handleSetDie(die)
+                    setIsDieModalOpen(false)
+                  } catch (error) {
+                    console.error('Failed to set die:', error)
+                  }
+                }}
+                disabled={setDieMutation.isPending}
+                className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${die === currentDie
                   ? 'bg-teal-500/20 border-teal-500 text-teal-400'
                   : 'bg-white/5 border-white/10 hover:bg-white/10'
-              }`}
-            >
-              d{die}
-            </button>
-          ))}
-          <button
-            onClick={async () => {
-              try {
-                await handleClearManualDie()
-                setIsDieModalOpen(false)
-              } catch (error) {
-                console.error('Failed to clear manual die:', error)
-              }
-            }}
-            disabled={clearManualDieMutation.isPending}
-            className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
-              session.manual_die
+                  }`}
+              >
+                d{die}
+              </button>
+            ))}
+            <button
+              onClick={async () => {
+                try {
+                  await handleClearManualDie()
+                  setIsDieModalOpen(false)
+                } catch (error) {
+                  console.error('Failed to clear manual die:', error)
+                }
+              }}
+              disabled={clearManualDieMutation.isPending}
+              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${session.manual_die
                 ? 'bg-amber-500/20 border-amber-500 text-amber-400'
                 : 'bg-white/5 border-white/10 hover:bg-white/10'
-            }`}
-          >
-            Auto
-          </button>
-        </div>
-      </Modal>
+                }`}
+            >
+              Auto
+            </button>
+          </div>
+        </Modal>
 
-      <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => handleAction('read')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">📖</span>
-            <span>Read Now</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('move-front')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">⬆️</span>
-            <span>Move to Front</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('move-back')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">⬇️</span>
-            <span>Move to Back</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('snooze')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
-            <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('edit')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">✏️</span>
-            <span>Edit Thread</span>
-          </button>
-        </div>
-      </Modal>
+        <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => handleAction('read')}
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">📖</span>
+              <span>Read Now</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAction('move-front')}
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">⬆️</span>
+              <span>Move to Front</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAction('move-back')}
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">⬇️</span>
+              <span>Move to Back</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAction('snooze')}
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
+              <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAction('edit')}
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            >
+              <span className="text-lg">✏️</span>
+              <span>Edit Thread</span>
+            </button>
+          </div>
+        </Modal>
+      </div>
     </div>
   )
 }
