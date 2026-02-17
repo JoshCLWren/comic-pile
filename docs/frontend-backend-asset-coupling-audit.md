@@ -13,10 +13,9 @@ The app currently works in production for core flows, but the deploy architectur
 Severity: High
 
 Evidence:
-- `app/main.py:418`
-- `app/main.py:426`
-- `app/main.py:430`
-- `app/main.py:435`
+- `app/main.py` - `_serve_spa_index_response()`
+- `app/main.py` - `serve_root()`
+- `app/main.py` - `serve_react_spa()`
 
 Details:
 - `_serve_spa_index_response()` serves fallback inline HTML when `static/react/index.html` is missing.
@@ -37,8 +36,7 @@ Recommendation:
 Severity: High
 
 Evidence:
-- `app/main.py:400`
-- `app/main.py:404`
+- `app/main.py` - static mount block in `create_app()`
 
 Details:
 - Static mounts for `/static` and `/assets` are only mounted if directories exist.
@@ -57,10 +55,7 @@ Recommendation:
 Severity: High
 
 Evidence:
-- `Makefile:277`
-- `Makefile:281`
-- `Makefile:282`
-- `Makefile:285`
+- `Makefile` - `deploy-prod` target
 
 Details:
 - Deploy target builds frontend locally, stages all changes (`git add -A`), auto-commits with timestamp, pushes main, then deploys.
@@ -80,10 +75,9 @@ Recommendation:
 Severity: Medium
 
 Evidence:
-- `docker-compose.prod.yml:29`
-- `docker-compose.yml:31`
-- `pyproject.toml:132`
-- `pyproject.toml:133`
+- `docker-compose.prod.yml` - app service `DATABASE_URL`
+- `docker-compose.yml` - app service `DATABASE_URL`
+- `pyproject.toml` - dependency declarations
 
 Details:
 - Multiple runtime/default configs still use `postgresql+psycopg://` despite project policy requiring asyncpg-only for application runtime.
@@ -103,7 +97,7 @@ Recommendation:
 Severity: Medium
 
 Evidence:
-- `frontend/src/test/helpers.ts:151`
+- `frontend/src/test/helpers.ts` - `SELECTORS.threadList.threadItem`
 
 Details:
 - `threadItem: '.thread-item'` no longer matches current queue markup.
@@ -122,8 +116,8 @@ Recommendation:
 Severity: Low
 
 Evidence:
-- `frontend/vite.config.js:17`
-- `AGENTS.md:94`
+- `frontend/vite.config.js` - build `outDir`
+- `AGENTS.md` - Playwright build guidance
 
 Details:
 - Build output is `static/react`, but some docs/instructions still mention `frontend/dist`.
@@ -138,15 +132,15 @@ Recommendation:
 
 ### 7. Production Docker image includes excessive context and runtime files
 Severity: High
+Status: Remediated in this PR
 
 Evidence:
-- `Dockerfile:65`
-- `.dockerignore:1`
-- `.dockerignore:58`
+- `Dockerfile` - runtime stage targeted `COPY` statements
+- `.dockerignore` - node/test artifact ignore entries
 
 Details:
-- Runtime stage uses `COPY . .`, which brings broad repository contents into the production image.
-- `.dockerignore` currently does not exclude `node_modules` / `frontend/node_modules`, allowing large local dependency trees into build context.
+- Remediated in this PR by replacing broad runtime copy behavior with targeted runtime `COPY` statements.
+- Remediated in this PR by excluding dependency/test artifact noise from Docker context.
 
 Risk:
 - Larger image and slower builds/deploys.
@@ -160,14 +154,15 @@ Recommendation:
 
 ### 8. Docker build reproducibility and supply-chain hardening gaps
 Severity: Medium
+Status: Remediated in this PR
 
 Evidence:
-- `Dockerfile:28`
-- `Dockerfile:37`
+- `Dockerfile` - pinned Node frontend builder stage
+- `Dockerfile` - frontend dependency install/build steps
 
 Details:
-- Node is installed via `curl ... | bash` setup script in builder stage.
-- Frontend install uses `npm ci --legacy-peer-deps`, indicating unresolved dependency constraints.
+- Remediated in this PR by using a pinned Node image in a dedicated frontend build stage instead of curl-based setup.
+- Frontend build now runs via deterministic lockfile-based install in the dedicated builder stage.
 
 Risk:
 - Lower reproducibility and harder dependency provenance guarantees.
@@ -181,12 +176,13 @@ Recommendation:
 
 ### 9. Runtime command defaults are brittle in Docker
 Severity: Medium
+Status: Remediated in this PR
 
 Evidence:
-- `Dockerfile:80`
+- `Dockerfile` - runtime `CMD`
 
 Details:
-- Runtime command depends on `$PORT` being set and hardcodes `--workers 4`.
+- Remediated in this PR with default-safe runtime command values using `${PORT:-8000}` and `${WEB_CONCURRENCY:-2}`.
 
 Risk:
 - Startup failure when `PORT` is absent in non-platform environments.
@@ -198,17 +194,15 @@ Recommendation:
 ## Current Strengths
 
 - Dockerfile build flow already produces frontend assets during image build:
-  - `Dockerfile:38`
+  - `Dockerfile` - `frontend-builder` stage `npm run build`
 - CI Playwright job explicitly builds frontend before browser tests:
-  - `.github/workflows/ci-sharded.yml:289`
+  - `.github/workflows/ci-sharded.yml` - Playwright job build step
 - Production smoke coverage catches chunk load failures in key routes:
-  - `frontend/src/test/prod-smoke.spec.ts:101`
+  - `frontend/src/test/prod-smoke.spec.ts` - chunk failure response listener
 - Dockerfile already separates build and runtime stages:
-  - `Dockerfile:4`
-  - `Dockerfile:45`
+  - `Dockerfile` - `python-builder` and runtime stages
 - Runtime container already runs as non-root user:
-  - `Dockerfile:57`
-  - `Dockerfile:71`
+  - `Dockerfile` - `useradd` and `USER appuser`
 
 These are good foundations; the remaining issues are mostly fail-fast and process hardening.
 

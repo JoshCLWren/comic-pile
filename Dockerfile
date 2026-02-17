@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy uv binary
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Copy uv binary from a pinned tag for reproducible builds.
+COPY --from=ghcr.io/astral-sh/uv:0.6.3 /uv /usr/local/bin/uv
 
 WORKDIR /app
 

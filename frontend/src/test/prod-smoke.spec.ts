@@ -167,8 +167,8 @@ test.describe('Production Smoke', () => {
 
     await page.click(SELECTORS.roll.mainDie);
     await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 10000 });
-    await expect(page.locator('#thread-info h2')).toBeVisible();
-    const titleBefore = (await page.locator('#thread-info h2').innerText()).trim();
+    await expect(page.locator(SELECTORS.thread.title)).toBeVisible();
+    const titleBefore = (await page.locator(SELECTORS.thread.title).innerText()).trim();
 
     const beforeSession = await page.request.get('/api/sessions/current/', {
       headers: { Authorization: `Bearer ${token}` },

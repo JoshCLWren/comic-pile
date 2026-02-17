@@ -31,7 +31,10 @@ echo "Found ${#assets[@]} frontend assets in HTML"
 for asset in "${assets[@]}"; do
   url="$BASE_URL$asset"
   echo "Checking asset: $url"
-  curl -fsSI "$url" >/dev/null
+  if ! curl -fsSI --max-time 10 "$url" >/dev/null; then
+    echo "ERROR: Failed to fetch asset: $url"
+    exit 1
+  fi
   echo "OK: $asset"
 done
 

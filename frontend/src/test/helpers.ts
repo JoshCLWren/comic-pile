@@ -166,6 +166,9 @@ export const SELECTORS = {
     submitButton: 'button:has-text("Save & Continue")',
     snoozeButton: 'button:has-text("Snooze")',
   },
+  thread: {
+    title: '#thread-info h2',
+  },
   navigation: {
     homeLink: 'a[href="/"]',
     queueLink: 'a[href="/queue"]',

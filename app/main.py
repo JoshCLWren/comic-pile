@@ -417,8 +417,9 @@ def create_app() -> FastAPI:
         """
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
-    # Mount static files. In production, artifact presence is enforced at startup.
+    # Mount static files. In production, enforce artifact presence before mounting.
     if app_settings.environment == "production":
+        _assert_production_frontend_assets()
         app.mount("/static", StaticFiles(directory="static"), name="static")
         app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
     else:
@@ -545,8 +546,6 @@ def create_app() -> FastAPI:
         """
         import asyncio
         from sqlalchemy import text
-
-        _assert_production_frontend_assets()
 
         max_retries = 3
         retry_delay = 1

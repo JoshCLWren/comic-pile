@@ -15,7 +15,6 @@ env/
 
 # Node dependencies and frontend build noise
 node_modules/
-frontend/node_modules/
 frontend/test-results/
 playwright-report/
 playwright-report-prod/
@@ -67,7 +66,5 @@ docker-compose*.yml
 .dockerignore
 
 # Misc local artifacts
-.coverage*
 .ruff_cache/
 .mypy_cache/
-.pytest_cache/
