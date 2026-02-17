@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
@@ -257,7 +257,13 @@ describe('Keyboard Accessibility', () => {
 
 describe('Rating View', () => {
   it('shows rating view after a successful roll', async () => {
-    const mockRoll = vi.fn().mockResolvedValue({ result: 4, thread_id: 1 })
+    const mockRoll = vi.fn().mockResolvedValue({
+      result: 4,
+      thread_id: 1,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 5
+    })
     useRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
 
     // Simulate initial state
@@ -287,7 +293,13 @@ describe('Rating View', () => {
 
   it('shows rating view after clicking Read Now', async () => {
     const { threadsApi } = await import('../services/api')
-    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue({ result: 3, thread_id: 1 })
+    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
+      result: 3,
+      thread_id: 1,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 5
+    })
 
     useSession.mockReturnValue({
       data: {
@@ -314,5 +326,115 @@ describe('Rating View', () => {
     })
 
     setPendingSpy.mockRestore()
+  })
+
+  it('[P1] uses immediate metadata from API instead of stale session data', async () => {
+    const { threadsApi } = await import('../services/api')
+    const freshMetadata = {
+      thread_id: 2,
+      title: 'Fresh X-Men',
+      format: 'HC',
+      issues_remaining: 10,
+      result: 5
+    }
+    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue(freshMetadata)
+
+    // Session still shows Saga (ID 1) as active_thread
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: 1,
+        active_thread: { id: 1, title: 'Old Saga', format: 'Comic', issues_remaining: 5 }
+      },
+      refetch: vi.fn()
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // Click X-Men in pool
+    const xmenPoolItem = screen.getByText('X-Men').closest('[role="button"]')
+    await user.click(xmenPoolItem)
+
+    const readNowButton = screen.getByText('Read Now')
+    await user.click(readNowButton)
+
+    await waitFor(() => {
+      // Should show "Fresh X-Men" even though session says "Old Saga"
+      expect(screen.getByText('Fresh X-Men')).toBeInTheDocument()
+      expect(screen.getByText('HC')).toBeInTheDocument()
+      expect(screen.getByText('10 Issues left')).toBeInTheDocument()
+    })
+
+    setPendingSpy.mockRestore()
+  })
+
+  it('[P2] resets rating to 4.0 when starting a new flow', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
+      thread_id: 1,
+      result: 3,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 5
+    })
+
+    const mockRate = vi.fn().mockResolvedValue({})
+    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // 1. Enter rating view for first thread
+    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+
+    // 2. Change rating to 1.0 and save
+    const input = screen.getByLabelText(/rating/i)
+    fireEvent.change(input, { target: { value: '1.0' } })
+    expect(screen.getByText('1.0')).toBeInTheDocument()
+
+    await user.click(screen.getByText('Save & Continue'))
+
+    // 3. Wait for rating view to close and roll view to return
+    await waitFor(() => {
+      expect(screen.queryByText('How was it?')).not.toBeInTheDocument()
+    })
+
+    // 4. Enter rating view again for same or another thread
+    const sagaItem2 = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaItem2)
+    const readNowButton = await screen.findByText('Read Now')
+    await user.click(readNowButton)
+
+    // 5. Verify it's back to 4.0, not stuck at 1.0
+    expect(await screen.findByText('4.0')).toBeInTheDocument()
+  })
+
+  it('[P3] filters the rated thread from the pool display', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
+      thread_id: 1,
+      title: 'Saga',
+      result: 3
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // Initially Saga is in pool
+    expect(screen.getByText('Saga')).toBeInTheDocument()
+
+    // Enter rating view for Saga
+    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+
+    // In rating view, Saga should be HIDDEN from the pool at the bottom
+    const poolContainer = screen.getByText('Roll Pool').parentElement.parentElement
+    expect(within(poolContainer).queryByText('Saga')).not.toBeInTheDocument()
+    // Other threads (X-Men) should still be there
+    expect(within(poolContainer).getByText('X-Men')).toBeInTheDocument()
   })
 })

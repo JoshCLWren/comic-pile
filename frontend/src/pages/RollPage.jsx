@@ -25,6 +25,7 @@ export default function RollPage() {
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
   const [selectedThread, setSelectedThread] = useState(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+  const [activeRatingThread, setActiveRatingThread] = useState(null)
 
   // Rating state
   const [isRatingView, setIsRatingView] = useState(false)
@@ -63,7 +64,7 @@ export default function RollPage() {
   async function handleReadStale() {
     try {
       const response = await threadsApi.setPending(staleThread.id)
-      enterRatingView(response.thread_id, response.result)
+      enterRatingView(response.thread_id, response.result, response)
     } catch (error) {
       console.error('Failed to set pending thread:', error)
     }
@@ -74,11 +75,22 @@ export default function RollPage() {
     setIsActionSheetOpen(true)
   }
 
-  function enterRatingView(threadId, result = null) {
+  function enterRatingView(threadId, result = null, threadMetadata = null) {
     if (threadId) setSelectedThreadId(threadId)
     if (result !== null) setRolledResult(result)
 
-    // Calculate initial prediction based on current rating (4.0)
+    // P1: Store specific thread metadata for rating view
+    if (threadMetadata && threadMetadata.title) {
+      setActiveRatingThread(threadMetadata)
+    } else if (session?.active_thread && session.active_thread.id === (threadId ? parseInt(threadId, 10) : null)) {
+      setActiveRatingThread(session.active_thread)
+    }
+
+    // P2: Reset rating state on entry
+    setRating(4.0)
+    setErrorMessage('')
+
+    // Reset predictions based on current die
     const die = currentDie || 6
     const idx = DICE_LADDER.indexOf(die)
     const initialPredicted = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0]
@@ -100,7 +112,7 @@ export default function RollPage() {
         case 'read':
           {
             const response = await threadsApi.setPending(selectedThread.id)
-            enterRatingView(response.thread_id, response.result)
+            enterRatingView(response.thread_id, response.result, response)
           }
           break
         case 'move-front':
@@ -141,7 +153,7 @@ export default function RollPage() {
     }
 
     if (session?.pending_thread_id) {
-      enterRatingView(session.pending_thread_id, session.last_rolled_result)
+      enterRatingView(session.pending_thread_id, session.last_rolled_result, session.active_thread)
     }
   }, [session?.pending_thread_id, session?.current_die, session?.last_rolled_result])
 
@@ -220,7 +232,7 @@ export default function RollPage() {
   }
 
   async function handleSubmitRating(finishSession = false) {
-    const thread = session?.active_thread
+    const thread = activeRatingThread
     const shouldAutoCompleteThread =
       !finishSession && thread && thread.issues_remaining - 1 <= 0;
     const shouldFinishSession = finishSession || shouldAutoCompleteThread;
@@ -256,9 +268,9 @@ export default function RollPage() {
   }
 
   const dieSize = currentDie || 6;
-  // Filter out the pending thread from the pool if we are in rating view
+  // P3: Filter pool using local selectedThreadId state for immediate consistency
   const filteredThreads = activeThreads.filter(t =>
-    !isRatingView || t.id !== session?.pending_thread_id
+    !isRatingView || t.id !== (selectedThreadId ? parseInt(selectedThreadId, 10) : null)
   );
   const pool = filteredThreads.slice(0, dieSize) || [];
 
@@ -302,7 +314,7 @@ export default function RollPage() {
           rollTimeoutRef.current = null
           try {
             const response = await rollMutation.mutate()
-            enterRatingView(response.thread_id, response.result)
+            enterRatingView(response.thread_id, response.result, response)
             setIsRolling(false)
           } catch (error) {
             console.error('Roll failed:', error)
@@ -333,7 +345,7 @@ export default function RollPage() {
       .then((response) => {
         setIsOverrideOpen(false)
         setOverrideThreadId('')
-        enterRatingView(response.thread_id, response.result)
+        enterRatingView(response.thread_id, response.result, response)
       })
       .catch(() => {
         // Handle error if needed
@@ -450,12 +462,12 @@ export default function RollPage() {
               <div className="p-4 space-y-8 relative z-10">
                 <div id="thread-info" role="status" aria-live="polite">
                   <div className="space-y-2 text-center">
-                    <h2 className="text-2xl font-black text-slate-100">{session?.active_thread?.title || 'Loading...'}</h2>
+                    <h2 className="text-2xl font-black text-slate-100">{activeRatingThread?.title || 'Loading...'}</h2>
                     <div className="flex items-center justify-center gap-3">
                       <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/20">
-                        {session?.active_thread?.format || '...'}
+                        {activeRatingThread?.format || '...'}
                       </span>
-                      <span className="text-slate-500 text-xs font-bold">{session?.active_thread?.issues_remaining || 0} Issues left</span>
+                      <span className="text-slate-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} Issues left</span>
                     </div>
                   </div>
                 </div>
