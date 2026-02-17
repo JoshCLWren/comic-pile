@@ -110,6 +110,10 @@ function AppRoutes() {
               }
             />
             <Route
+              path="/rate"
+              element={<Navigate to="/" replace />}
+            />
+            <Route
               path="/"
               element={
                 <ProtectedRoute>
