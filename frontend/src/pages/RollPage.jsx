@@ -534,6 +534,14 @@ export default function RollPage() {
                     >
                       {rateMutation.isPending ? 'Saving...' : 'Save & Continue'}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSubmitRating(true)}
+                      disabled={rateMutation.isPending}
+                      className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
+                    >
+                      {rateMutation.isPending ? 'Saving...' : 'Save & Finish Session'}
+                    </button>
                     <div className="flex justify-center gap-4">
                       <button
                         type="button"

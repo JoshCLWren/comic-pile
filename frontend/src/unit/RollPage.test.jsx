@@ -506,4 +506,36 @@ describe('Rating View', () => {
       }))
     })
   })
+
+  it('[P7] can finish session explicitly via Save & Finish Session', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
+      thread_id: 1,
+      result: 3,
+      title: 'Ongoing Thread',
+      format: 'Comic',
+      issues_remaining: 5
+    })
+
+    const mockRate = vi.fn().mockResolvedValue({})
+    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    // 1. Enter rating view
+    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+
+    // 2. Click Save & Finish Session
+    await user.click(screen.getByText('Save & Finish Session'))
+
+    // 3. Verify mutate was called with finish_session: true
+    await waitFor(() => {
+      expect(mockRate).toHaveBeenCalledWith(expect.objectContaining({
+        finish_session: true
+      }))
+    })
+  })
 })

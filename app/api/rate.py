@@ -187,7 +187,7 @@ async def rate_thread(
     )
     db.add(event)
 
-    should_complete_thread = rate_data.finish_session and thread_issues_remaining <= 0
+    should_complete_thread = thread_issues_remaining <= 0
 
     if should_complete_thread:
         await db.execute(

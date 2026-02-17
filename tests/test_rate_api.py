@@ -498,11 +498,11 @@ async def test_rate_finish_session_flag_controls_session_end(
     assert response.status_code == 200
 
     data = response.json()
-    assert data["status"] != "completed"
+    assert data["status"] == "completed"
     assert data["issues_remaining"] == 0
 
     await async_db.refresh(thread)
-    assert thread.status != "completed"
+    assert thread.status == "completed"
 
     await async_db.refresh(session)
     assert session.ended_at is None
@@ -600,3 +600,111 @@ async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
     # Verify session still has snoozed_thread_ids accessible
     await async_db.refresh(session)
     assert session.snoozed_thread_ids == [threads[0].id]
+
+
+@pytest.mark.asyncio
+async def test_rate_final_issue_completes_thread_but_keeps_session_active(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Rating the final issue should complete the thread even if finish_session=False."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Final Issue Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    # Simulate a roll event
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    # Rate with finish_session=False
+    response = await auth_client.post(
+        "/api/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": False}
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "completed"
+    assert data["issues_remaining"] == 0
+
+    await async_db.refresh(thread)
+    assert thread.status == "completed"
+
+    await async_db.refresh(session)
+    assert session.ended_at is None
+    assert session.pending_thread_id is None
+
+
+@pytest.mark.asyncio
+async def test_finish_session_ends_session_regardless_of_thread_completion(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Explicit finish_session=True should end the session even if thread is not completed."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Ongoing Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    # Simulate a roll event
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    # Rate with finish_session=True
+    response = await auth_client.post(
+        "/api/rate/", json={"rating": 4.0, "issues_read": 1, "finish_session": True}
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "active"  # Still active because issues_remaining > 0
+    assert data["issues_remaining"] == 4
+
+    await async_db.refresh(session)
+    assert session.ended_at is not None
