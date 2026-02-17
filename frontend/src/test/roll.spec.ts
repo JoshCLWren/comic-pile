@@ -9,7 +9,7 @@ test.describe('Roll Dice Feature', () => {
     await expect(authenticatedPage.locator(SELECTORS.roll.headerDieLabel)).toBeVisible();
   });
 
-  test('should roll dice and navigate to rate page', async ({ authenticatedWithThreadsPage }) => {
+  test('should roll dice and show inline rating on home page', async ({ authenticatedWithThreadsPage }) => {
     const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
     const rollResponse = await authenticatedWithThreadsPage.request.post('/api/roll/', {
       headers: {
@@ -19,8 +19,9 @@ test.describe('Roll Dice Feature', () => {
     });
 
     expect(rollResponse.ok()).toBeTruthy();
-    await authenticatedWithThreadsPage.goto('/rate');
+    await authenticatedWithThreadsPage.goto('/');
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+    expect(new URL(authenticatedWithThreadsPage.url()).pathname).toBe('/');
   });
 
   test('regression: roll API response should be handled and inline rating should appear', async ({ authenticatedWithThreadsPage }) => {
@@ -143,7 +144,7 @@ test.describe('Roll Dice Feature', () => {
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
 
     const currentUrl = authenticatedWithThreadsPage.url();
-    expect(currentUrl).toContain('/');
+    expect(new URL(currentUrl).pathname).toBe('/');
     expect(currentUrl).not.toContain('/rate');
   });
 
@@ -160,7 +161,7 @@ test.describe('Roll Dice Feature', () => {
     expect(currentUrl).toMatch(/\/$/);
   });
 
-  test('should navigate to rate page without loading state after roll', async ({ authenticatedWithThreadsPage }) => {
+  test('should show inline rating without loading state after roll', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
 
@@ -175,13 +176,8 @@ test.describe('Roll Dice Feature', () => {
     });
 
     expect(rollResponse.ok()).toBeTruthy();
-    const rollData = await rollResponse.json();
-
-    // Navigate with state data like RollPage does
-    await authenticatedWithThreadsPage.goto('/rate', { waitUntil: 'load' });
-    await authenticatedWithThreadsPage.evaluate((data) => {
-      window.history.pushState({ rollResponse: data }, '', '/rate');
-    });
+    await rollResponse.json();
+    await authenticatedWithThreadsPage.goto('/', { waitUntil: 'load' });
 
     // Verify no loading state appears
     const loadingText = authenticatedWithThreadsPage.getByText('Loading...');
@@ -191,5 +187,6 @@ test.describe('Roll Dice Feature', () => {
     }).toPass({ timeout: 3000 });
 
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
+    expect(new URL(authenticatedWithThreadsPage.url()).pathname).toBe('/');
   });
 });

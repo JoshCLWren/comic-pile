@@ -310,6 +310,63 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
 
 
 @pytest.mark.asyncio
+async def test_rate_clamps_issues_read_to_remaining(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Clamps issues_read so issues_remaining never goes negative."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Clamp Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 5})
+    assert response.status_code == 200
+    assert response.json()["issues_remaining"] == 0
+
+    await async_db.refresh(thread)
+    assert thread.issues_remaining == 0
+    assert thread.status == "completed"
+
+    result = await async_db.execute(
+        select(Event)
+        .where(Event.session_id == session.id)
+        .where(Event.type == "rate")
+        .order_by(Event.timestamp.desc())
+    )
+    rate_event = result.scalars().first()
+    assert rate_event is not None
+    assert rate_event.issues_read == 1
+
+
+@pytest.mark.asyncio
 async def test_rate_no_active_session(auth_client: AsyncClient) -> None:
     """Returns error if no active session."""
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})

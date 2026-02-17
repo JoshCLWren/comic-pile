@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 async def snapshot_thread_states(
-    db: AsyncSession, session_id: int, event_id: int, user_id: int
+    db: AsyncSession, session_id: int, event_id: int, user_id: int, commit: bool = True
 ) -> None:
     """Create a snapshot of all thread states for undo functionality.
 
@@ -34,6 +34,7 @@ async def snapshot_thread_states(
         session_id: The session ID to create snapshot for.
         event_id: The event ID that triggered the snapshot.
         user_id: The user ID to snapshot threads for.
+        commit: Whether to commit inside this helper.
     """
     result = await db.execute(select(Thread).where(Thread.user_id == user_id))
     threads = result.scalars().all()
@@ -74,7 +75,8 @@ async def snapshot_thread_states(
         description="After rating",
     )
     db.add(snapshot)
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
 clear_cache = None
@@ -166,7 +168,8 @@ async def rate_thread(
             detail=f"Rating must be between {rating_min} and {rating_max}",
         )
 
-    thread.issues_remaining -= rate_data.issues_read
+    issues_read = min(rate_data.issues_read, thread.issues_remaining)
+    thread.issues_remaining -= issues_read
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
     thread_issues_remaining = thread.issues_remaining
@@ -181,7 +184,7 @@ async def rate_thread(
         session_id=current_session_id,
         thread_id=thread_id,
         rating=rate_data.rating,
-        issues_read=rate_data.issues_read,
+        issues_read=issues_read,
         die=current_die,
         die_after=new_die,
     )
@@ -198,11 +201,11 @@ async def rate_thread(
         )
 
     if should_complete_thread:
-        await move_to_back(thread_id, user_id, db)
+        await move_to_back(thread_id, user_id, db, commit=False)
     elif rate_data.rating >= rating_threshold:
-        await move_to_front(thread_id, user_id, db)
+        await move_to_front(thread_id, user_id, db, commit=False)
     else:
-        await move_to_back(thread_id, user_id, db)
+        await move_to_back(thread_id, user_id, db, commit=False)
 
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
@@ -235,9 +238,8 @@ async def rate_thread(
     await db.flush()
     await db.refresh(event)
     event_id = event.id
+    await snapshot_thread_states(db, current_session_id, event_id, user_id, commit=False)
     await db.commit()
-
-    await snapshot_thread_states(db, current_session_id, event_id, user_id)
 
     result = await db.execute(
         select(Thread)

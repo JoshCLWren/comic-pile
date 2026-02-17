@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
@@ -76,6 +76,10 @@ beforeEach(() => {
   useMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 it('renders roll page content and opens override modal', async () => {
@@ -449,6 +453,9 @@ describe('Rating View', () => {
       issues_remaining: 5
     })
 
+    const mockRate = vi.fn().mockResolvedValue({})
+    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
     const mockRefetchThreads = vi.fn()
     useThreads.mockReturnValue({
       data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }],
@@ -464,9 +471,6 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Read Now'))
 
     // 2. Submit rating
-    const mockRate = vi.fn().mockResolvedValue({})
-    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
-
     await user.click(screen.getByText('Save & Continue'))
 
     // 3. Verify refetchThreads was called
@@ -537,5 +541,30 @@ describe('Rating View', () => {
         finish_session: true
       }))
     })
+  })
+
+  it('[P8] cancel clears rating view and roll-selection state', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
+      thread_id: 1,
+      result: 3,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 5
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+
+    await user.click(screen.getByText('Cancel'))
+
+    expect(screen.getByText('Tap Die to Roll')).toBeInTheDocument()
+
+    const selectedPoolItem = document.querySelector('.pool-thread-selected')
+    expect(selectedPoolItem).toBeNull()
   })
 })

@@ -548,7 +548,12 @@ export default function RollPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setIsRatingView(false)}
+                        onClick={() => {
+                          setIsRatingView(false)
+                          setRolledResult(null)
+                          setSelectedThreadId(null)
+                          setActiveRatingThread(null)
+                        }}
                         className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent hover:border-white/10 rounded-lg transition-all"
                       >
                         Cancel
