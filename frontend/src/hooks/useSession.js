@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
 import { sessionApi } from '../services/api'
 
 const EMPTY_PARAMS = Object.freeze({})
@@ -29,7 +29,16 @@ export function useSession() {
     fetchSession()
   }, [fetchSession])
 
-  return { data, setData, isPending, isError, error, refetch: fetchSession }
+  const value = useMemo(() => ({
+    data,
+    setData,
+    isPending,
+    isError,
+    error,
+    refetch: fetchSession
+  }), [data, isPending, isError, error, fetchSession])
+
+  return value
 }
 
 export function useSessions(params = EMPTY_PARAMS) {

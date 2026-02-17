@@ -230,7 +230,7 @@ export default function QueuePage() {
         case 'read':
           {
             const response = await threadsApi.setPending(selectedThread.id)
-            navigate('/rate', { state: { rollResponse: response } })
+            navigate('/', { state: { rollResponse: response } })
           }
           break
         case 'move-front':
@@ -309,127 +309,126 @@ export default function QueuePage() {
             </div>
           )}
           <div
-          data-testid="queue-thread-list"
-          id="queue-container"
-          role="list"
-          aria-label="Thread queue"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
-        >
-          {activeThreads.map((thread, index) => {
-            const isDragOver = dragOverThreadId === thread.id
-            return (
-              <div
-                key={thread.id}
-                className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${
-                  isDragOver ? 'border-amber-400/60' : ''
-                }`}
-                onDragOver={handleDragOver(thread.id)}
-                onDrop={handleDrop(thread.id)}
-                onClick={() => handleThreadClick(thread)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    handleThreadClick(thread)
-                  }
-                }}
-              >
-                <div className="flex justify-between items-start gap-3">
-                  <div className="flex items-start gap-3 min-w-0 flex-1">
-                    <span className="text-2xl font-black text-teal-500/30">
-                      #{index + 1}
-                    </span>
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <Tooltip content="Drag to reorder within the queue.">
+            data-testid="queue-thread-list"
+            id="queue-container"
+            role="list"
+            aria-label="Thread queue"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
+          >
+            {activeThreads.map((thread, index) => {
+              const isDragOver = dragOverThreadId === thread.id
+              return (
+                <div
+                  key={thread.id}
+                  className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${isDragOver ? 'border-amber-400/60' : ''
+                    }`}
+                  onDragOver={handleDragOver(thread.id)}
+                  onDrop={handleDrop(thread.id)}
+                  onClick={() => handleThreadClick(thread)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleThreadClick(thread)
+                    }
+                  }}
+                >
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <span className="text-2xl font-black text-teal-500/30">
+                        #{index + 1}
+                      </span>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Tooltip content="Drag to reorder within the queue.">
+                          <button
+                            type="button"
+                            className="text-slate-500 hover:text-slate-300 transition-colors text-lg"
+                            draggable
+                            onDragStart={handleDragStart(thread.id)}
+                            onDragEnd={handleDragEnd}
+                            aria-label="Drag to reorder"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            ⠿
+                          </button>
+                        </Tooltip>
+                        <h3 className="text-lg font-bold text-white flex-1 truncate">{thread.title}</h3>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Tooltip content="Edit thread details.">
                         <button
                           type="button"
-                          className="text-slate-500 hover:text-slate-300 transition-colors text-lg"
-                          draggable
-                          onDragStart={handleDragStart(thread.id)}
-                          onDragEnd={handleDragEnd}
-                          aria-label="Drag to reorder"
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEditModal(thread)
+                          }}
+                          className="text-slate-500 hover:text-white transition-colors text-sm"
+                          aria-label="Edit thread"
                         >
-                          ⠿
+                          ✎
                         </button>
                       </Tooltip>
-                      <h3 className="text-lg font-bold text-white flex-1 truncate">{thread.title}</h3>
+                      <Tooltip content="Delete thread from queue.">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(thread.id)
+                          }}
+                          className="text-slate-500 hover:text-red-400 transition-colors text-xl"
+                          aria-label="Delete thread"
+                        >
+                          &times;
+                        </button>
+                      </Tooltip>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Tooltip content="Edit thread details.">
+                  <p className="text-sm text-slate-400">{thread.format}</p>
+                  {thread.notes && <p className="text-xs text-slate-500">{thread.notes}</p>}
+                  {thread.issues_remaining !== null && (
+                    <p className="text-xs text-slate-500">{thread.issues_remaining} issues remaining</p>
+                  )}
+                  <div className="flex gap-2 pt-2">
+                    <Tooltip content="Move this thread to the front of the queue.">
                       <button
-                        type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          openEditModal(thread)
+                          handleMoveToFront(thread.id)
                         }}
-                        className="text-slate-500 hover:text-white transition-colors text-sm"
-                        aria-label="Edit thread"
+                        className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                       >
-                        ✎
+                        Front
                       </button>
                     </Tooltip>
-                    <Tooltip content="Delete thread from queue.">
+                    <Tooltip content="Choose a specific position in the queue.">
                       <button
-                        type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleDelete(thread.id)
+                          openRepositionModal(thread)
                         }}
-                        className="text-slate-500 hover:text-red-400 transition-colors text-xl"
-                        aria-label="Delete thread"
+                        className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                       >
-                        &times;
+                        Reposition
+                      </button>
+                    </Tooltip>
+                    <Tooltip content="Move this thread to the back of the queue.">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleMoveToBack(thread.id)
+                        }}
+                        className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                      >
+                        Back
                       </button>
                     </Tooltip>
                   </div>
                 </div>
-                <p className="text-sm text-slate-400">{thread.format}</p>
-                {thread.notes && <p className="text-xs text-slate-500">{thread.notes}</p>}
-                {thread.issues_remaining !== null && (
-                  <p className="text-xs text-slate-500">{thread.issues_remaining} issues remaining</p>
-                )}
-                <div className="flex gap-2 pt-2">
-                  <Tooltip content="Move this thread to the front of the queue.">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleMoveToFront(thread.id)
-                      }}
-                      className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                    >
-                      Front
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="Choose a specific position in the queue.">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openRepositionModal(thread)
-                      }}
-                      className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                    >
-                      Reposition
-                    </button>
-                  </Tooltip>
-                  <Tooltip content="Move this thread to the back of the queue.">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleMoveToBack(thread.id)
-                      }}
-                      className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                    >
-                      Back
-                    </button>
-                  </Tooltip>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
         </>
       )}
 

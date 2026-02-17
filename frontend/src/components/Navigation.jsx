@@ -50,10 +50,6 @@ export default function Navigation() {
             <span className="text-2xl mb-1" aria-hidden="true">🎲</span>
             <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Roll</span>
           </Link>
-          <Link to="/rate" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/rate') ? 'active' : 'hover:bg-white/5'}`} aria-label="Rate page">
-            <span className="text-2xl mb-1" aria-hidden="true">📝</span>
-            <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Rate</span>
-          </Link>
           <Link to="/queue" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/queue') ? 'active' : 'hover:bg-white/5'}`} aria-label="Queue page">
             <span className="text-2xl mb-1" aria-hidden="true">📚</span>
             <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Queue</span>

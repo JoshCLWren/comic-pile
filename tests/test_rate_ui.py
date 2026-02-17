@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_both_buttons_available_when_thread_complete(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_both_buttons_available_when_thread_complete(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """Both Save & Continue and Finish Session should be available even when issues_remaining is 0."""
     # Create user
     from tests.conftest import get_or_create_user_async
@@ -55,12 +57,15 @@ async def test_both_buttons_available_when_thread_complete(auth_client: AsyncCli
 
     await async_db.refresh(thread)
     assert thread.issues_remaining == 0
-    assert thread.status == "active"  # Should not be completed unless finish_session=True
+    assert thread.status == "completed"  # Thread completes when issues_remaining reaches 0
 
     await async_db.refresh(session)
-    assert session.ended_at is None  # Session should still be active
+    assert (
+        session.ended_at is None
+    )  # Session should still be active (decoupled from thread completion)
 
     # Get current session to verify active_thread is still available
+    # even though the thread is completed, the session is still active
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
@@ -70,8 +75,10 @@ async def test_both_buttons_available_when_thread_complete(auth_client: AsyncCli
 
 
 @pytest.mark.asyncio
-async def test_can_still_rate_after_thread_complete(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """After rating last issue, should still be able to rate again if rolled."""
+async def test_can_still_rate_after_thread_complete(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """After one thread completes, session continues and other threads can be rolled."""
     # Create user
     from tests.conftest import get_or_create_user_async
 
@@ -83,41 +90,60 @@ async def test_can_still_rate_after_thread_complete(auth_client: AsyncClient, as
     await async_db.commit()
     await async_db.refresh(session)
 
-    # Create thread with 1 issue remaining
-    thread = Thread(
-        title="Test Thread",
+    # Create thread with 1 issue remaining (will complete)
+    thread1 = Thread(
+        title="Thread 1",
         format="Comic",
         issues_remaining=1,
         queue_position=1,
         status="active",
         user_id=user.id,
     )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
+    async_db.add(thread1)
 
-    # Create roll event to select the thread
+    # Create another thread with issues remaining (stays active)
+    thread2 = Thread(
+        title="Thread 2",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread2)
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
+
+    # Create roll event to select thread1
     roll_event = Event(
         type="roll",
         die=10,
         result=1,
-        selected_thread_id=thread.id,
+        selected_thread_id=thread1.id,
         selection_method="random",
         session_id=session.id,
-        thread_id=thread.id,
+        thread_id=thread1.id,
     )
     async_db.add(roll_event)
     await async_db.commit()
 
-    # Rate the last issue (issues_remaining becomes 0)
+    # Rate the last issue of thread1 (issues_remaining becomes 0, thread completes)
     response = await auth_client.post(
         "/api/rate/", json={"rating": 5.0, "issues_read": 1, "finish_session": False}
     )
     assert response.status_code == 200
 
-    await async_db.refresh(thread)
-    assert thread.issues_remaining == 0
+    await async_db.refresh(thread1)
+    assert thread1.issues_remaining == 0
+    assert thread1.status == "completed"  # Thread completes when issues_remaining reaches 0
 
-    # Roll again (should be able to roll thread with 0 issues)
+    # Session should still be active
+    await async_db.refresh(session)
+    assert session.ended_at is None
+
+    # Roll again - should get thread2 (the only active thread remaining)
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 200
+    data = response.json()
+    assert data["thread_id"] == thread2.id

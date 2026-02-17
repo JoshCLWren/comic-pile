@@ -12,7 +12,7 @@ test.describe('History Page', () => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
@@ -33,7 +33,7 @@ test.describe('History Page', () => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
 
     await authenticatedWithThreadsPage.goto('/history');
 
@@ -90,7 +90,7 @@ test.describe('History Page', () => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);

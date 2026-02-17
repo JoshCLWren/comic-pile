@@ -12,13 +12,20 @@ test.describe('Thread Management', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Saga');
     await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
-    await authenticatedPage.click('button[type="submit"]');
+    await Promise.all([
+      authenticatedPage.waitForResponse((response) =>
+        response.url().includes('/api/threads/') &&
+        response.request().method() === 'POST' &&
+        response.status() < 300
+      ),
+      authenticatedPage.click('button[type="submit"]'),
+    ]);
     
     await authenticatedPage.waitForLoadState('networkidle');
     await authenticatedPage.waitForTimeout(1000);
 
-    await authenticatedPage.waitForSelector('text=Saga', { state: 'visible', timeout: 15000 });
-    await expect(authenticatedPage.locator('text=Saga')).toBeVisible();
+    await authenticatedPage.waitForSelector('#queue-container h3', { state: 'visible', timeout: 15000 });
+    await expect(authenticatedPage.locator('#queue-container h3').filter({ hasText: 'Saga' })).toBeVisible();
   });
 
   test('should create multiple threads', async ({ authenticatedPage }) => {

@@ -9,34 +9,26 @@ test.describe('Roll Dice Feature', () => {
     await expect(authenticatedPage.locator(SELECTORS.roll.headerDieLabel)).toBeVisible();
   });
 
-  test('should roll dice and navigate to rate page', async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
-    const rollResponse = await authenticatedWithThreadsPage.request.post('/api/roll/', {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    expect(rollResponse.ok()).toBeTruthy();
-    await authenticatedWithThreadsPage.goto('/rate');
+  test('should roll dice and show inline rating on home page', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+    expect(new URL(authenticatedWithThreadsPage.url()).pathname).toBe('/');
   });
 
-  test('regression: roll API response should be handled and navigation should complete', async ({ authenticatedWithThreadsPage }) => {
+  test('regression: roll API response should be handled and inline rating should appear', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
 
-    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
-
-    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
 
     const currentUrl = authenticatedWithThreadsPage.url();
-    expect(currentUrl).toMatch(/\/rate\/?$/);
-    expect(currentUrl).not.toMatch(/\/$/);
+    expect(currentUrl).toMatch(/\/$/);
+    expect(currentUrl).not.toMatch(/\/rate/);
   });
 
   test('should show tap instruction on first visit', async ({ authenticatedPage }) => {
@@ -106,7 +98,7 @@ test.describe('Roll Dice Feature', () => {
     });
 
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
 
     const sessionAfter = await authenticatedWithThreadsPage.evaluate(async () => {
       const response = await fetch('/api/sessions/current');
@@ -142,10 +134,11 @@ test.describe('Roll Dice Feature', () => {
     await dieElement.focus();
     await authenticatedWithThreadsPage.keyboard.press('Enter');
 
-    await authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 });
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
 
     const currentUrl = authenticatedWithThreadsPage.url();
-    expect(currentUrl).toContain('/rate');
+    expect(new URL(currentUrl).pathname).toBe('/');
+    expect(currentUrl).not.toContain('/rate');
   });
 
   test('should prevent multiple rapid rolls', async ({ authenticatedWithThreadsPage }) => {
@@ -155,34 +148,16 @@ test.describe('Roll Dice Feature', () => {
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
 
-    await authenticatedWithThreadsPage.waitForURL("**/rate", { timeout: 5000 });
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
 
     const currentUrl = authenticatedWithThreadsPage.url();
-    expect(currentUrl).toMatch(/\/rate\/?$/);
+    expect(currentUrl).toMatch(/\/$/);
   });
 
-  test('should navigate to rate page without loading state after roll', async ({ authenticatedWithThreadsPage }) => {
+  test('should show inline rating without loading state after roll', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
-
-    // Simulate roll by posting to API directly
-    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
-    const rollResponse = await authenticatedWithThreadsPage.request.post('/api/roll/', {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    data: {},
-    });
-
-    expect(rollResponse.ok()).toBeTruthy();
-    const rollData = await rollResponse.json();
-
-    // Navigate with state data like RollPage does
-    await authenticatedWithThreadsPage.goto('/rate', { waitUntil: 'load' });
-    await authenticatedWithThreadsPage.evaluate((data) => {
-      window.history.pushState({ rollResponse: data }, '', '/rate');
-    });
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
 
     // Verify no loading state appears
     const loadingText = authenticatedWithThreadsPage.getByText('Loading...');
@@ -192,5 +167,6 @@ test.describe('Roll Dice Feature', () => {
     }).toPass({ timeout: 3000 });
 
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
+    expect(new URL(authenticatedWithThreadsPage.url()).pathname).toBe('/');
   });
 });

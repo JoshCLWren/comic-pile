@@ -11,8 +11,15 @@ from app.models import Thread
 logger = logging.getLogger(__name__)
 
 
-async def move_to_front(thread_id: int, user_id: int, db: AsyncSession) -> None:
-    """Move thread to front of queue."""
+async def move_to_front(thread_id: int, user_id: int, db: AsyncSession, commit: bool = True) -> None:
+    """Move thread to front of queue.
+
+    Args:
+        thread_id: Thread to move.
+        user_id: Thread owner.
+        db: Async database session.
+        commit: Whether to commit inside this helper.
+    """
     result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
     )
@@ -33,11 +40,19 @@ async def move_to_front(thread_id: int, user_id: int, db: AsyncSession) -> None:
         .values(queue_position=Thread.queue_position + 1)
     )
     target_thread.queue_position = 1
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
-async def move_to_back(thread_id: int, user_id: int, db: AsyncSession) -> None:
-    """Move thread to back of queue."""
+async def move_to_back(thread_id: int, user_id: int, db: AsyncSession, commit: bool = True) -> None:
+    """Move thread to back of queue.
+
+    Args:
+        thread_id: Thread to move.
+        user_id: Thread owner.
+        db: Async database session.
+        commit: Whether to commit inside this helper.
+    """
     result = await db.execute(
         select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
     )
@@ -71,7 +86,8 @@ async def move_to_back(thread_id: int, user_id: int, db: AsyncSession) -> None:
         .values(queue_position=Thread.queue_position - 1)
     )
     target_thread.queue_position = max_position
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
 async def move_to_position(

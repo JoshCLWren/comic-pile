@@ -68,7 +68,7 @@ test.describe('Accessibility Tests', () => {
     await page.waitForSelector(SELECTORS.roll.mainDie);
     await page.click(SELECTORS.roll.mainDie);
 
-    await page.waitForSelector('#rating-input', { state: 'visible' });
+    await page.waitForSelector(SELECTORS.rate.ratingInput, { state: 'visible' });
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -290,7 +290,7 @@ test.describe('Accessibility Tests', () => {
 
     if (hasLiveRegions) {
       await page.click(SELECTORS.roll.mainDie);
-      await page.waitForURL("**/rate", { timeout: 5000 });
+      await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
 
       for (const region of liveRegions) {
         const isVisible = await region.isVisible();

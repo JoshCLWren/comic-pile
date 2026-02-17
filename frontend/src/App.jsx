@@ -4,7 +4,6 @@ import Navigation from './components/Navigation'
 import './index.css'
 
 const RollPage = lazy(() => import('./pages/RollPage'))
-const RatePage = lazy(() => import('./pages/RatePage'))
 const QueuePage = lazy(() => import('./pages/QueuePage'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const SessionPage = lazy(() => import('./pages/SessionPage'))
@@ -111,18 +110,14 @@ function AppRoutes() {
               }
             />
             <Route
+              path="/rate"
+              element={<Navigate to="/" replace />}
+            />
+            <Route
               path="/"
               element={
                 <ProtectedRoute>
                   <RollPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/rate"
-              element={
-                <ProtectedRoute>
-                  <RatePage />
                 </ProtectedRoute>
               }
             />

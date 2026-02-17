@@ -1,15 +1,13 @@
 import { test, expect } from './fixtures';
 
 test.describe('Set Pending Thread (Manual Selection)', () => {
-  test('should click thread in queue and navigate to rate page', async ({ authenticatedWithThreadsPage }) => {
+  test('should click thread in queue and navigate to home page', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/queue');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await authenticatedWithThreadsPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
 
     const firstThreadCard = authenticatedWithThreadsPage.locator('#queue-container .glass-card').first();
     await expect(firstThreadCard).toBeVisible({ timeout: 5000 });
-
-    const threadTitle = await firstThreadCard.locator('h3').textContent();
 
     await firstThreadCard.click();
 
@@ -21,23 +19,14 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
     const readButton = authenticatedWithThreadsPage.getByText('Read Now', { exact: true }).first();
     await expect(readButton).toBeVisible({ timeout: 3000 });
 
-    await Promise.all([
-      authenticatedWithThreadsPage.waitForURL('**/rate', { timeout: 5000 }),
-      readButton.click(),
-    ]);
+    await readButton.click();
+    await authenticatedWithThreadsPage.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
 
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const currentUrl = authenticatedWithThreadsPage.url();
-    expect(currentUrl).toContain('/rate');
-
-    await expect(authenticatedWithThreadsPage.locator('#rating-input')).toBeVisible({ timeout: 3000 });
-
-    const ratePageTitle = authenticatedWithThreadsPage.locator('#thread-info h2');
-    await expect(ratePageTitle).toBeVisible({ timeout: 3000 });
-
-    const ratePageTitleText = await ratePageTitle.textContent();
-    expect(ratePageTitleText).toBe(threadTitle);
+    expect(new URL(currentUrl).pathname).toBe('/');
+    await expect(authenticatedWithThreadsPage.locator('#main-die-3d')).toBeVisible({ timeout: 3000 });
   });
 
   test('should return correct RollResponse structure when setting thread as pending', async ({ authenticatedWithThreadsPage }) => {

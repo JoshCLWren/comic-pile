@@ -1,6 +1,5 @@
 """Rate API endpoint."""
 
-import random
 
 from datetime import UTC, datetime
 
@@ -19,14 +18,14 @@ from app.models.user import User
 from app.schemas import RateRequest, ThreadResponse
 from app.api.thread import thread_to_response
 from comic_pile.dice_ladder import step_down, step_up
-from comic_pile.queue import get_roll_pool, move_to_back, move_to_front
+from comic_pile.queue import move_to_back, move_to_front
 from comic_pile.session import get_current_die
 
 router = APIRouter()
 
 
 async def snapshot_thread_states(
-    db: AsyncSession, session_id: int, event_id: int, user_id: int
+    db: AsyncSession, session_id: int, event_id: int, user_id: int, commit: bool = True
 ) -> None:
     """Create a snapshot of all thread states for undo functionality.
 
@@ -35,6 +34,7 @@ async def snapshot_thread_states(
         session_id: The session ID to create snapshot for.
         event_id: The event ID that triggered the snapshot.
         user_id: The user ID to snapshot threads for.
+        commit: Whether to commit inside this helper.
     """
     result = await db.execute(select(Thread).where(Thread.user_id == user_id))
     threads = result.scalars().all()
@@ -75,7 +75,8 @@ async def snapshot_thread_states(
         description="After rating",
     )
     db.add(snapshot)
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
 clear_cache = None
@@ -129,7 +130,6 @@ async def rate_thread(
         )
 
     current_session_id = current_session.id
-    snoozed_ids = current_session.snoozed_thread_ids or []
     result = await db.execute(
         select(Event)
         .where(Event.session_id == current_session_id)
@@ -168,7 +168,8 @@ async def rate_thread(
             detail=f"Rating must be between {rating_min} and {rating_max}",
         )
 
-    thread.issues_remaining -= rate_data.issues_read
+    issues_read = min(rate_data.issues_read, thread.issues_remaining)
+    thread.issues_remaining -= issues_read
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
     thread_issues_remaining = thread.issues_remaining
@@ -183,13 +184,13 @@ async def rate_thread(
         session_id=current_session_id,
         thread_id=thread_id,
         rating=rate_data.rating,
-        issues_read=rate_data.issues_read,
+        issues_read=issues_read,
         die=current_die,
         die_after=new_die,
     )
     db.add(event)
 
-    should_complete_thread = rate_data.finish_session and thread_issues_remaining <= 0
+    should_complete_thread = thread_issues_remaining <= 0
 
     if should_complete_thread:
         await db.execute(
@@ -200,11 +201,11 @@ async def rate_thread(
         )
 
     if should_complete_thread:
-        await move_to_back(thread_id, user_id, db)
+        await move_to_back(thread_id, user_id, db, commit=False)
     elif rate_data.rating >= rating_threshold:
-        await move_to_front(thread_id, user_id, db)
+        await move_to_front(thread_id, user_id, db, commit=False)
     else:
-        await move_to_back(thread_id, user_id, db)
+        await move_to_back(thread_id, user_id, db, commit=False)
 
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
@@ -213,30 +214,33 @@ async def rate_thread(
     if clear_cache:
         clear_cache()
 
-    if not rate_data.finish_session:
-        threads = await get_roll_pool(user_id, db, snoozed_ids)
-
-        available_threads = [t for t in threads if t.issues_remaining > 0 and t.id != thread_id]
-
-        if available_threads:
-            pool_size = min(new_die, len(available_threads))
-            selected_index = random.randint(0, pool_size - 1)
-            next_thread = available_threads[selected_index]
+    if rate_data.finish_session:
+        current_session.pending_thread_id = None
+        current_session.pending_thread_updated_at = None
+    else:
+        # Auto-advance to next thread in queue for legacy flow and API consistency
+        next_thread_result = await db.execute(
+            select(Thread)
+            .where(Thread.user_id == user_id)
+            .where(Thread.status == "active")
+            .where(Thread.queue_position >= 1)
+            .where(Thread.id != thread_id)
+            .order_by(Thread.queue_position)
+            .limit(1)
+        )
+        next_thread = next_thread_result.scalar_one_or_none()
+        if next_thread:
             current_session.pending_thread_id = next_thread.id
             current_session.pending_thread_updated_at = datetime.now(UTC)
         else:
             current_session.pending_thread_id = None
             current_session.pending_thread_updated_at = None
-    else:
-        current_session.pending_thread_id = None
-        current_session.pending_thread_updated_at = None
 
     await db.flush()
     await db.refresh(event)
     event_id = event.id
+    await snapshot_thread_states(db, current_session_id, event_id, user_id, commit=False)
     await db.commit()
-
-    await snapshot_thread_states(db, current_session_id, event_id, user_id)
 
     result = await db.execute(
         select(Thread)
