@@ -115,8 +115,11 @@ async def _safe_get_request_body(request: Request) -> str | dict | None:
         return None
 
 
-def create_app() -> FastAPI:
+def create_app(*, serve_frontend: bool = True) -> FastAPI:
     """Create and configure the FastAPI application.
+
+    Args:
+        serve_frontend: Whether to mount frontend static assets and SPA routes.
 
     Returns:
         Configured FastAPI application instance.
@@ -382,6 +385,26 @@ def create_app() -> FastAPI:
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
 
+    def _assert_production_frontend_assets() -> None:
+        """Ensure required frontend artifacts exist in production.
+
+        Raises:
+            RuntimeError: If required built frontend artifacts are missing.
+        """
+        if app_settings.environment != "production":
+            return
+
+        spa_index = Path("static/react/index.html")
+        assets_dir = Path("static/react/assets")
+        has_js = any(assets_dir.glob("*.js")) if assets_dir.exists() else False
+        has_css = any(assets_dir.glob("*.css")) if assets_dir.exists() else False
+
+        if not spa_index.exists() or not assets_dir.exists() or not has_js or not has_css:
+            raise RuntimeError(
+                "Missing built frontend artifacts in production. "
+                "Expected static/react/index.html and static/react/assets with JS/CSS files."
+            )
+
     @app.api_route(
         "/api/{path:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
@@ -397,73 +420,80 @@ def create_app() -> FastAPI:
         """
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
-    # Mount static files only if directories exist (for CI/testing environments)
-    if Path("static").exists():
-        app.mount("/static", StaticFiles(directory="static"), name="static")
+    if serve_frontend:
+        # Mount static files. In production, enforce artifact presence before mounting.
+        if app_settings.environment == "production":
+            _assert_production_frontend_assets()
+            app.mount("/static", StaticFiles(directory="static"), name="static")
+            app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+        else:
+            if Path("static").exists():
+                app.mount("/static", StaticFiles(directory="static"), name="static")
+            if Path("static/react/assets").exists():
+                app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
 
-    if Path("static/react/assets").exists():
-        app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+        @app.get("/vite.svg")
+        async def serve_vite_svg():
+            """Serve vite favicon.
 
-    @app.get("/vite.svg")
-    async def serve_vite_svg():
-        """Serve vite favicon.
+            Returns:
+                FileResponse with vite.svg file.
+            """
+            from fastapi.responses import FileResponse
 
-        Returns:
-            FileResponse with vite.svg file.
-        """
-        from fastapi.responses import FileResponse
+            return FileResponse("static/vite.svg", media_type="image/svg+xml")
 
-        return FileResponse("static/vite.svg", media_type="image/svg+xml")
+        def _serve_spa_index_response() -> Response:
+            """Serve SPA index file when available, else return fallback HTML.
 
-    def _serve_spa_index_response() -> Response:
-        """Serve SPA index file when available, else return fallback HTML.
+            Returns:
+                FileResponse for the built SPA index, or fallback HTMLResponse in test environments.
+            """
+            from fastapi.responses import FileResponse, HTMLResponse
 
-        Returns:
-            FileResponse for the built SPA index, or fallback HTMLResponse in test environments.
-        """
-        from fastapi.responses import FileResponse, HTMLResponse
+            spa_index = Path("static/react/index.html")
+            cache_headers = {"Cache-Control": "no-store, no-cache, must-revalidate"}
+            if spa_index.exists():
+                return FileResponse(str(spa_index), headers=cache_headers)
+            if app_settings.environment == "production":
+                raise StarletteHTTPException(status_code=503, detail="Frontend assets unavailable")
+            fallback_html = (
+                "<!doctype html><html><body>"
+                "<div id='root'></div>"
+                "</body></html>"
+            )
+            return HTMLResponse(fallback_html, headers=cache_headers)
 
-        spa_index = Path("static/react/index.html")
-        cache_headers = {"Cache-Control": "no-store, no-cache, must-revalidate"}
-        if spa_index.exists():
-            return FileResponse(str(spa_index), headers=cache_headers)
-        fallback_html = (
-            "<!doctype html><html><body>"
-            "<div id='root'></div>"
-            "</body></html>"
-        )
-        return HTMLResponse(fallback_html, headers=cache_headers)
+        @app.get("/")
+        async def serve_root():
+            """Serve React app at root URL.
 
-    @app.get("/")
-    async def serve_root():
-        """Serve React app at root URL.
+            Returns:
+                FileResponse with React index.html.
+            """
+            return _serve_spa_index_response()
 
-        Returns:
-            FileResponse with React index.html.
-        """
-        return _serve_spa_index_response()
+        @app.get("/react")
+        async def serve_react_redirect():
+            """Redirect /react to / for consistent routing.
 
-    @app.get("/react")
-    async def serve_react_redirect():
-        """Redirect /react to / for consistent routing.
+            Returns:
+                RedirectResponse to root URL.
+            """
+            from fastapi.responses import RedirectResponse
 
-        Returns:
-            RedirectResponse to root URL.
-        """
-        from fastapi.responses import RedirectResponse
+            return RedirectResponse("/", status_code=301)
 
-        return RedirectResponse("/", status_code=301)
+        @app.get("/react/")
+        async def serve_react_redirect_slash():
+            """Redirect /react/ to / for consistent routing.
 
-    @app.get("/react/")
-    async def serve_react_redirect_slash():
-        """Redirect /react/ to / for consistent routing.
+            Returns:
+                RedirectResponse to root URL.
+            """
+            from fastapi.responses import RedirectResponse
 
-        Returns:
-            RedirectResponse to root URL.
-        """
-        from fastapi.responses import RedirectResponse
-
-        return RedirectResponse("/", status_code=301)
+            return RedirectResponse("/", status_code=301)
 
     @app.get("/health", response_model=None)
     async def health_check(db: AsyncSession = Depends(get_db)) -> dict | JSONResponse:
@@ -484,32 +514,33 @@ def create_app() -> FastAPI:
                 content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
             )
 
-    @app.get("/{full_path:path}")
-    async def serve_react_spa(full_path: str):
-        """Serve the React SPA for non-API routes.
+    if serve_frontend:
+        @app.get("/{full_path:path}")
+        async def serve_react_spa(full_path: str):
+            """Serve the React SPA for non-API routes.
 
-        The React app owns routing for paths like /rate, /queue, /history, etc.
+            The React app owns routing for paths like /rate, /queue, /history, etc.
 
-        Args:
-            full_path: The path to serve.
+            Args:
+                full_path: The path to serve.
 
-        Returns:
-            FileResponse with React index.html.
+            Returns:
+                FileResponse with React index.html.
 
-        Raises:
-            StarletteHTTPException: If path is blocked.
-        """
-        blocked_prefixes = ("api", "static", "assets", "debug")
-        blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg"}
+            Raises:
+                StarletteHTTPException: If path is blocked.
+            """
+            blocked_prefixes = ("api", "static", "assets", "debug")
+            blocked_exact = {"health", "openapi.json", "docs", "redoc", "vite.svg"}
 
-        if (
-            full_path in blocked_exact
-            or full_path in blocked_prefixes
-            or any(full_path.startswith(prefix + "/") for prefix in blocked_prefixes)
-        ):
-            raise StarletteHTTPException(status_code=404, detail="Not Found")
+            if (
+                full_path in blocked_exact
+                or full_path in blocked_prefixes
+                or any(full_path.startswith(prefix + "/") for prefix in blocked_prefixes)
+            ):
+                raise StarletteHTTPException(status_code=404, detail="Not Found")
 
-        return _serve_spa_index_response()
+            return _serve_spa_index_response()
 
     @app.on_event("startup")
     async def startup_event():

@@ -13,6 +13,12 @@ build/
 venv/
 env/
 
+# Node dependencies and frontend build noise
+node_modules/
+frontend/test-results/
+playwright-report/
+playwright-report-prod/
+
 # Database
 *.db
 
@@ -43,6 +49,8 @@ htmlcov/
 # Logs
 *.log
 logs/
+backend.log
+frontend.log
 
 # Environment
 .env
@@ -56,3 +64,7 @@ Dockerfile*
 !Dockerfile
 docker-compose*.yml
 .dockerignore
+
+# Misc local artifacts
+.ruff_cache/
+.mypy_cache/

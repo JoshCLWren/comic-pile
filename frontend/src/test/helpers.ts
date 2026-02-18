@@ -148,7 +148,7 @@ export const SELECTORS = {
   },
   threadList: {
     container: '#queue-container',
-    threadItem: '.thread-item',
+    threadItem: '[data-testid=\"queue-thread-item\"]',
     newThreadButton: 'button:has-text("Add Thread")',
     titleInput: 'label:has-text("Title") + input',
     formatInput: 'label:has-text("Format") + input',
@@ -165,6 +165,9 @@ export const SELECTORS = {
     ratingInput: '#rating-input',
     submitButton: 'button:has-text("Save & Continue")',
     snoozeButton: 'button:has-text("Snooze")',
+  },
+  thread: {
+    title: '#thread-info h2',
   },
   navigation: {
     homeLink: 'a[href="/"]',

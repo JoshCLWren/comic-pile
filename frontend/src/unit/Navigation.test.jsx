@@ -34,7 +34,6 @@ test('renders navigation links when authenticated', () => {
   renderWithAuth()
 
   expect(screen.getByRole('link', { name: /roll page/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /rate page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()

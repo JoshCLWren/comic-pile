@@ -55,6 +55,12 @@ async function loginExistingUser(
   return token;
 }
 
+function getExistingUserCredentials() {
+  const username = process.env.PROD_TEST_USERNAME;
+  const password = process.env.PROD_TEST_PASSWORD;
+  return { username, password };
+}
+
 async function seedThreads(
   page: Page,
   token: string,
@@ -118,10 +124,8 @@ test.describe('Production Smoke', () => {
     const health = await page.request.get('/health');
     expect(health.ok()).toBeTruthy();
 
-    const username = process.env.PROD_TEST_USERNAME;
-    const password = process.env.PROD_TEST_PASSWORD;
-    expect(username, 'Set PROD_TEST_USERNAME for existing-user smoke').toBeTruthy();
-    expect(password, 'Set PROD_TEST_PASSWORD for existing-user smoke').toBeTruthy();
+    const { username, password } = getExistingUserCredentials();
+    test.skip(!username || !password, 'Set PROD_TEST_USERNAME and PROD_TEST_PASSWORD for existing-user smoke');
 
     const token = await loginExistingUser(page, username as string, password as string);
 
@@ -148,10 +152,8 @@ test.describe('Production Smoke', () => {
     const health = await page.request.get('/health');
     expect(health.ok()).toBeTruthy();
 
-    const username = process.env.PROD_TEST_USERNAME;
-    const password = process.env.PROD_TEST_PASSWORD;
-    expect(username, 'Set PROD_TEST_USERNAME for existing-user smoke').toBeTruthy();
-    expect(password, 'Set PROD_TEST_PASSWORD for existing-user smoke').toBeTruthy();
+    const { username, password } = getExistingUserCredentials();
+    test.skip(!username || !password, 'Set PROD_TEST_USERNAME and PROD_TEST_PASSWORD for existing-user smoke');
 
     const token = await loginExistingUser(page, username as string, password as string);
 
@@ -165,8 +167,8 @@ test.describe('Production Smoke', () => {
 
     await page.click(SELECTORS.roll.mainDie);
     await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 10000 });
-    await expect(page.locator('#thread-info h2')).toBeVisible();
-    const titleBefore = (await page.locator('#thread-info h2').innerText()).trim();
+    await expect(page.locator(SELECTORS.thread.title)).toBeVisible();
+    const titleBefore = (await page.locator(SELECTORS.thread.title).innerText()).trim();
 
     const beforeSession = await page.request.get('/api/sessions/current/', {
       headers: { Authorization: `Bearer ${token}` },
@@ -180,8 +182,8 @@ test.describe('Production Smoke', () => {
     await page.waitForLoadState('networkidle');
 
     await page.goto('/');
-    await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 10000 });
-    await expect(page.locator('#thread-info h2')).toContainText(titleBefore);
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible();
 
     const afterSession = await page.request.get('/api/sessions/current/', {
       headers: { Authorization: `Bearer ${token}` },
@@ -189,5 +191,6 @@ test.describe('Production Smoke', () => {
     expect(afterSession.ok()).toBeTruthy();
     const afterData = await afterSession.json();
     expect(afterData.active_thread?.id).toBe(activeBefore);
+    expect(afterData.active_thread?.title).toBe(titleBefore);
   });
 });

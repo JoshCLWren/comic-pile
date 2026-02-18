@@ -1,20 +1,19 @@
 # ============================
-# Builder stage
+# Python dependency stage
 # ============================
-FROM python:3.13-slim AS builder
+FROM python:3.13-slim AS python-builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# System deps needed to build wheels and frontend
+# System deps needed to build Python wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy uv binary
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Copy uv binary from a pinned tag for reproducible builds.
+COPY --from=ghcr.io/astral-sh/uv:0.6.3 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
@@ -24,20 +23,20 @@ COPY pyproject.toml uv.lock ./
 # Install Python deps into a local venv
 RUN uv sync --frozen --no-dev
 
-# Install Node.js for frontend build
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+# ============================
+# Frontend build stage
+# ============================
+FROM node:22.11.0-bookworm-slim AS frontend-builder
 
-# Copy frontend files
-COPY frontend/ ./frontend/
-
-# Install frontend dependencies and build
 WORKDIR /app/frontend
-RUN npm ci --legacy-peer-deps && \
-    npm run build
 
-WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+# Vite writes to /app/static/react based on outDir in vite config
 
 # ============================
 # Runtime stage
@@ -58,12 +57,18 @@ RUN useradd --create-home --shell /bin/bash appuser
 
 WORKDIR /app
 
-# Copy venv from builder
-COPY --from=builder /app/.venv /app/.venv
+# Copy Python runtime environment
+COPY --from=python-builder /app/.venv /app/.venv
 
-# Copy application code (excluding frontend source since it's already built)
-COPY . .
-COPY --from=builder /app/static ./static
+# Copy only runtime application files
+COPY app/ ./app/
+COPY comic_pile/ ./comic_pile/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./alembic.ini
+COPY static/ ./static/
+
+# Copy compiled frontend assets produced by Vite
+COPY --from=frontend-builder /app/static/react ./static/react
 
 # Fix ownership
 RUN chown -R appuser:appuser /app
@@ -77,4 +82,4 @@ EXPOSE 8000
 # - no `activate`
 # - no PATH reliance
 # - absolute interpreter path
-CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 4"]
+CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-2}"]

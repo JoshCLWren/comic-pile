@@ -94,24 +94,10 @@ If the make target or script doesn't work, restore manually:
 
 ```bash
 # Extract DATABASE_URL components
-# From .env: DATABASE_URL=postgresql+psycopg://comicpile:comicpile_password@localhost:5435/comicpile
+# From .env: DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/comicpile
 
 # Decompress and restore
 gunzip -c backups/postgres/postgres_backup_comicpile_20240104_103354.sql.gz | \
-    PGPASSWORD=comicpile_password \
-    psql -h localhost -p 5435 -U comicpile -d comicpile
-```
-
-**Step 4: Manual restore (alternative method)**
-
-If the make target doesn't work, restore manually:
-
-```bash
-# Extract DATABASE_URL components
-# From .env: DATABASE_URL=postgresql+psycopg://comicpile:comicpile_password@localhost:5435/comicpile
-
-# Decompress and restore
-gunzip -c backups/postgres/postgres_backup_comicpile_20260104_103354.sql.gz | \
     PGPASSWORD=comicpile_password \
     psql -h localhost -p 5435 -U comicpile -d comicpile
 ```

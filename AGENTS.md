@@ -91,7 +91,7 @@ cd frontend && npm run build && npx playwright test
 
 **Why?**
 - Playwright tests run against production-like build (not dev server)
-- API serves static files from `frontend/dist/` directory
+- API serves static files from `static/react/` directory
 - Without `npm run build`, tests fail with 404s for CSS/JS assets
 - CI automatically builds before running Playwright (see `.github/workflows/ci-sharded.yml:289`)
 
