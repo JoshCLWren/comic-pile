@@ -261,6 +261,8 @@ export default function RollPage() {
       await refetchThreads();
       setIsRatingView(false);
       setRolledResult(null);
+      setSelectedThreadId(null);
+      setActiveRatingThread(null);
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to snooze thread');
     }
@@ -551,27 +553,19 @@ export default function RollPage() {
                       type="button"
                       onClick={() => handleSubmitRating(false)}
                       disabled={rateMutation.isPending}
-                      className="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.2em] relative shadow-[0_15px_40px_rgba(20,184,166,0.3)] disabled:opacity-50"
+                      className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
                     >
                       {rateMutation.isPending ? 'Saving...' : 'Save & Continue'}
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleSubmitRating(true)}
-                      disabled={rateMutation.isPending}
-                      className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
+                      onClick={handleSnooze}
+                      disabled={snoozeMutation.isPending}
+                      className="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.2em] relative shadow-[0_15px_40px_rgba(20,184,166,0.3)] disabled:opacity-50"
                     >
-                      {rateMutation.isPending ? 'Saving...' : 'Save & Finish Session'}
+                      {snoozeMutation.isPending ? 'Snoozing...' : 'Snooze'}
                     </button>
-                    <div className="flex justify-center gap-4">
-                      <button
-                        type="button"
-                        onClick={handleSnooze}
-                        disabled={snoozeMutation.isPending}
-                        className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 rounded-lg transition-all disabled:opacity-50"
-                      >
-                        {snoozeMutation.isPending ? 'Snoozing...' : 'Snooze'}
-                      </button>
+                    <div className="flex justify-center">
                       <button
                         type="button"
                         onClick={() => {
