@@ -290,7 +290,7 @@ async def test_cors_origins_allowed_in_production_when_set(async_db: AsyncSessio
     from app.database import get_db
     from app.main import create_app
 
-    test_app = create_app()
+    test_app = create_app(serve_frontend=False)
     test_app.dependency_overrides[get_db] = await _create_async_db_override(None)
 
     try:
@@ -326,7 +326,7 @@ async def test_cors_defaults_to_wildcard_in_development(async_db: AsyncSession) 
     from app.database import get_db
     from app.main import create_app
 
-    test_app = create_app()
+    test_app = create_app(serve_frontend=False)
     test_app.dependency_overrides[get_db] = await _create_async_db_override(None)
 
     try:
@@ -360,7 +360,7 @@ async def test_cors_allow_credentials_is_false(async_db: AsyncSession) -> None:
     from app.database import get_db
     from app.main import create_app
 
-    test_app = create_app()
+    test_app = create_app(serve_frontend=False)
     test_app.dependency_overrides[get_db] = await _create_async_db_override(None)
 
     try:
@@ -410,7 +410,7 @@ async def test_app_starts_successfully(
 
     test_app = None
     try:
-        test_app = create_app()
+        test_app = create_app(serve_frontend=False)
         test_app.dependency_overrides[get_db] = await _create_async_db_override(None)
 
         transport = ASGITransport(app=test_app)
