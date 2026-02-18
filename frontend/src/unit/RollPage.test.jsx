@@ -511,7 +511,7 @@ describe('Rating View', () => {
     })
   })
 
-  it('[P7] can finish session explicitly via Save & Finish Session', async () => {
+  it('[P7] does not show Save & Finish Session action', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
       thread_id: 1,
@@ -532,15 +532,8 @@ describe('Rating View', () => {
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
-    // 2. Click Save & Finish Session
-    await user.click(screen.getByText('Save & Finish Session'))
-
-    // 3. Verify mutate was called with finish_session: true
-    await waitFor(() => {
-      expect(mockRate).toHaveBeenCalledWith(expect.objectContaining({
-        finish_session: true
-      }))
-    })
+    expect(screen.queryByText('Save & Finish Session')).not.toBeInTheDocument()
+    expect(mockRate).not.toHaveBeenCalled()
   })
 
   it('[P8] cancel clears rating view and roll-selection state', async () => {
