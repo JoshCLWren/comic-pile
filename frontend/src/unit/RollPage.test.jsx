@@ -533,6 +533,7 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Read Now'))
 
     expect(screen.queryByText('Save & Finish Session')).not.toBeInTheDocument()
+    expect(screen.getByText('Snooze')).toBeInTheDocument()
     expect(mockRate).not.toHaveBeenCalled()
   })
 

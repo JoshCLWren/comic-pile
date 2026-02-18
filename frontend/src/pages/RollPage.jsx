@@ -261,6 +261,8 @@ export default function RollPage() {
       await refetchThreads();
       setIsRatingView(false);
       setRolledResult(null);
+      setSelectedThreadId(null);
+      setActiveRatingThread(null);
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to snooze thread');
     }
