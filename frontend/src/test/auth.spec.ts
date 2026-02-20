@@ -57,7 +57,7 @@ test.describe('Authentication Flow', () => {
     await page.waitForURL('/', { timeout: 5000 });
 
     await page.evaluate(() => localStorage.clear());
-    await page.goto('/login');
+    await page.waitForURL('**/login', { timeout: 5000 });
     await page.fill(SELECTORS.auth.usernameInput, user.username);
     await page.fill(SELECTORS.auth.passwordInput, user.password);
     await page.click(SELECTORS.auth.submitButton);
