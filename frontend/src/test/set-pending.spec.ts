@@ -20,13 +20,13 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
     await expect(readButton).toBeVisible({ timeout: 3000 });
 
     await readButton.click();
-    await authenticatedWithThreadsPage.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
+    await authenticatedWithThreadsPage.waitForSelector('#rating-input', { state: 'visible', timeout: 10000 });
 
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const currentUrl = authenticatedWithThreadsPage.url();
     expect(new URL(currentUrl).pathname).toBe('/');
-    await expect(authenticatedWithThreadsPage.locator('#main-die-3d')).toBeVisible({ timeout: 3000 });
+    await expect(authenticatedWithThreadsPage.locator('#rating-input')).toBeVisible({ timeout: 3000 });
   });
 
   test('should return correct RollResponse structure when setting thread as pending', async ({ authenticatedWithThreadsPage }) => {
