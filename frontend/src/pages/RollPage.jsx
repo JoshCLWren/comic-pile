@@ -355,6 +355,27 @@ export default function RollPage() {
     await clearManualDieMutation.mutate()
   }
 
+  async function recoverPendingRollConflict() {
+    const latestSession = await refetchSession()
+    const pendingId = Number(latestSession?.pending_thread_id ?? session?.pending_thread_id ?? 0)
+
+    if (!pendingId) {
+      return false
+    }
+
+    const pendingMetadata =
+      latestSession?.active_thread && latestSession.active_thread.id === pendingId
+        ? latestSession.active_thread
+        : activeThreads.find((thread) => thread.id === pendingId)
+
+    enterRatingView(
+      pendingId,
+      latestSession?.last_rolled_result ?? session?.last_rolled_result ?? 0,
+      pendingMetadata,
+    )
+    return true
+  }
+
   function handleRoll() {
     if (isRolling) return
     if (session?.pending_thread_id) {
@@ -395,7 +416,19 @@ export default function RollPage() {
             enterRatingView(response.thread_id, response.result, response)
             setIsRolling(false)
           } catch (error) {
+            if (error?.response?.status === 409) {
+              const recovered = await recoverPendingRollConflict()
+              if (!recovered) {
+                setErrorMessage(
+                  error.response?.data?.detail ||
+                    'A roll is already pending. Rate, snooze, or cancel it before rolling again.',
+                )
+              }
+              setIsRolling(false)
+              return
+            }
             console.error('Roll failed:', error)
+            setErrorMessage(error.response?.data?.detail || 'Failed to roll')
             setIsRolling(false)
           }
         }, 400)
@@ -561,7 +594,7 @@ export default function RollPage() {
                       style={{ width: '120px', height: '120px', margin: '0 auto' }}
                     >
                       <LazyDice3D
-                        sides={currentDie}
+                        sides={predictedDie}
                         value={rolledResult || 1}
                         isRolling={false}
                         showValue={false}

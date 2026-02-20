@@ -26,7 +26,9 @@ vi.mock('react-router-dom', async () => {
 })
 
 vi.mock('../components/LazyDice3D', () => ({
-  default: () => <div data-testid="lazy-dice" />,
+  default: ({ sides, value }) => (
+    <div data-testid="lazy-dice" data-sides={String(sides)} data-value={String(value)} />
+  ),
 }))
 
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
@@ -596,6 +598,97 @@ describe('Rating View', () => {
       expect(screen.getByText('Queue #2')).toBeInTheDocument()
       expect(screen.getByText('Rolled 6 on d6')).toBeInTheDocument()
     })
+  })
+
+  it('recovers from roll conflicts by refetching session and reopening rating view', async () => {
+    const conflictError = {
+      response: {
+        status: 409,
+        data: { detail: 'Pending roll already exists' },
+      },
+    }
+    const mockRoll = vi.fn().mockRejectedValue(conflictError)
+    const refetchSessionSpy = vi.fn().mockResolvedValue({
+      current_die: 6,
+      last_rolled_result: 5,
+      pending_thread_id: 2,
+      active_thread: {
+        id: 2,
+        title: 'X-Men',
+        format: 'Comic',
+        issues_remaining: 7,
+        queue_position: 1,
+      },
+      snoozed_threads: [],
+    })
+
+    useRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: null,
+        pending_thread_id: null,
+        snoozed_threads: [],
+      },
+      refetch: refetchSessionSpy,
+    })
+    useThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 2 },
+        { id: 2, title: 'X-Men', format: 'Comic', status: 'active', queue_position: 1 },
+      ],
+      refetch: vi.fn(),
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    await user.click(screen.getByLabelText('Roll the dice'))
+
+    await waitFor(() => {
+      expect(mockRoll).toHaveBeenCalled()
+    }, { timeout: 2500 })
+    await waitFor(() => {
+      expect(refetchSessionSpy).toHaveBeenCalled()
+    }, { timeout: 2500 })
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+      expect(screen.getByText('X-Men')).toBeInTheDocument()
+      expect(screen.getByText('Queue #1')).toBeInTheDocument()
+    })
+  })
+
+  it('renders predicted die in rating preview', async () => {
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: 6,
+        pending_thread_id: 1,
+        manual_die: null,
+        active_thread: {
+          id: 1,
+          title: 'Saga',
+          format: 'Comic',
+          issues_remaining: 5,
+          queue_position: 2,
+        },
+      },
+      refetch: vi.fn(),
+    })
+
+    render(<RollPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+    })
+
+    const previewContainer = document.getElementById('rating-preview-dice')
+    const previewDie = within(previewContainer).getByTestId('lazy-dice')
+    expect(previewDie).toHaveAttribute('data-sides', '4')
+
+    fireEvent.change(screen.getByLabelText(/rating/i), { target: { value: '1.0' } })
+
+    expect(within(previewContainer).getByTestId('lazy-dice')).toHaveAttribute('data-sides', '8')
   })
 
   it('cancels pending roll through dismiss mutation', async () => {
