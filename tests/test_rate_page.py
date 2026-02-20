@@ -669,14 +669,14 @@ async def test_rate_api_updates_issues_remaining(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 2})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0})
     assert response.status_code == 200
 
     data = response.json()
-    assert data["issues_remaining"] == 3
+    assert data["issues_remaining"] == 4
 
     await async_db.refresh(thread)
-    assert thread.issues_remaining == 3
+    assert thread.issues_remaining == 4
 
 
 @pytest.mark.asyncio

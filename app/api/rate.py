@@ -167,10 +167,9 @@ async def rate_thread(
             detail=f"Rating must be between {rating_min} and {rating_max}",
         )
 
-    issues_read = rate_data.issues_read
-    if issues_read is not None:
-        issues_read = min(issues_read, thread.issues_remaining)
-        thread.issues_remaining -= issues_read
+    # Comic Pile reads one issue per rating action by design.
+    issues_read = 1 if thread.issues_remaining > 0 else 0
+    thread.issues_remaining -= issues_read
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
     thread_issues_remaining = thread.issues_remaining

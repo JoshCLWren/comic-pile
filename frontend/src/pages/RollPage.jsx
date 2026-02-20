@@ -239,6 +239,7 @@ export default function RollPage() {
     try {
       await rateMutation.mutate({
         rating,
+        issues_read: 1,
         finish_session: finishSession
       });
 
