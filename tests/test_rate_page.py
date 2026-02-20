@@ -151,7 +151,7 @@ async def test_rate_session_api_returns_has_restore_point(
 async def test_rate_api_invalid_rating(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
-    """POST /rate/ with invalid rating returns 400 error."""
+    """POST /rate/ with invalid rating returns 422 error."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -228,7 +228,8 @@ async def test_rate_api_low_rating_moves_to_back(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 3.0})
+    response = await auth_client.post("/api/rate/", json={"rating": 3.0})
+    assert response.status_code == 200
 
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
@@ -283,7 +284,8 @@ async def test_rate_api_high_rating_moves_to_front(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0})
+    assert response.status_code == 200
 
     await async_db.refresh(thread1)
     await async_db.refresh(thread2)
@@ -330,7 +332,8 @@ async def test_rate_api_updates_last_activity_at(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0})
+    assert response.status_code == 200
 
     await async_db.refresh(thread)
     assert thread.last_activity_at is not None
@@ -377,7 +380,8 @@ async def test_rate_api_creates_snapshot(auth_client: AsyncClient, async_db: Asy
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.5})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.5})
+    assert response.status_code == 200
 
     result = await async_db.execute(select(Snapshot).where(Snapshot.session_id == session.id))
     snapshots = result.scalars().all()
@@ -513,7 +517,8 @@ async def test_rate_api_sets_pending_thread_to_next(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0})
+    assert response.status_code == 200
 
     await async_db.refresh(session)
     assert session.pending_thread_id is not None
@@ -521,10 +526,10 @@ async def test_rate_api_sets_pending_thread_to_next(
 
 
 @pytest.mark.asyncio
-async def test_rate_api_clears_pending_thread_when_no_threads_remain(
+async def test_rate_api_redirects_pending_thread_to_next_available(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /rate/ clears pending_thread_id to None when no threads remain."""
+    """POST /rate/ redirects pending_thread_id to next thread when one remains."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -569,7 +574,8 @@ async def test_rate_api_clears_pending_thread_when_no_threads_remain(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0})
+    assert response.status_code == 200
 
     await async_db.refresh(session)
     assert session.pending_thread_id == thread2.id
@@ -624,7 +630,8 @@ async def test_rate_api_sets_pending_thread_to_next_available(
     async_db.add(event)
     await async_db.commit()
 
-    await auth_client.post("/api/rate/", json={"rating": 4.0})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0})
+    assert response.status_code == 200
 
     await async_db.refresh(session)
     assert session.pending_thread_id is not None
