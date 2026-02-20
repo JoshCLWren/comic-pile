@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 # Pre-push hook - runs before push to remote
 
-set -e
+set -euo pipefail
 
-# Intentionally do not parse .env here.
-# Environment should be provided by your shell, and Python will load `.env`
-# where appropriate via python-dotenv.
-
-echo "🚀 Running pre-push checks..."
+echo "Running pre-push CI parity checks..."
 
 # Ensure we're running at repo root
 if [ ! -f "pyproject.toml" ]; then
@@ -16,10 +12,10 @@ if [ ! -f "pyproject.toml" ]; then
 fi
 
 # Activate venv if not already active (worktree-aware)
-if [ -z "$VIRTUAL_ENV" ]; then
+if [ -z "${VIRTUAL_ENV:-}" ]; then
     VENV_PATH=".venv/bin/activate"
     if [ ! -f "$VENV_PATH" ] && [ -f .git ]; then
-        GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+        GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null || true)
         if [ -n "$GIT_COMMON_DIR" ]; then
             MAIN_REPO_DIR=$(dirname "$GIT_COMMON_DIR")
             if [ -f "$MAIN_REPO_DIR/.venv/bin/activate" ]; then
@@ -30,38 +26,46 @@ if [ -z "$VIRTUAL_ENV" ]; then
     fi
 
     if [ -f "$VENV_PATH" ]; then
+        # shellcheck disable=SC1090
         source "$VENV_PATH"
     else
-        echo "No virtual environment found. Please run 'uv venv && uv sync --all-extras' first."
+        echo "ERROR: No virtual environment found. Run 'uv venv && uv sync --all-extras' first."
         exit 1
     fi
 fi
 
-# Run lint (match CI as closely as possible)
-echo ""
-echo "🧹 Running lint..."
-if bash scripts/lint.sh; then
-    echo "✅ Lint passed"
-else
-    echo "❌ Lint failed - aborting push"
-    echo ""
-    echo "To bypass this hook (not recommended), use:"
-    echo "  git push --no-verify"
+if ! command -v npm >/dev/null 2>&1; then
+    echo "ERROR: npm is required for frontend lint/tests."
     exit 1
 fi
 
-# Run tests
-echo ""
-echo "🧪 Running tests..."
-if python -m pytest -p no:xdist --cov=comic_pile --cov-report=term-missing --cov-fail-under=96 -x; then
-    echo "✅ Tests passed"
-else
-    echo "❌ Tests failed - aborting push"
-    echo ""
-    echo "To bypass this hook (not recommended), use:"
-    echo "  git push --no-verify"
-    exit 1
+if [ ! -d "frontend/node_modules" ]; then
+    echo "Installing frontend dependencies (frontend/node_modules missing)..."
+    (cd frontend && npm ci)
 fi
 
 echo ""
-echo "✅ All pre-push checks passed"
+echo "1/5 Running lint (scripts/lint.sh)..."
+bash scripts/lint.sh
+
+echo ""
+echo "2/5 Running backend tests with coverage..."
+python -m pytest tests/ --cov=comic_pile --cov-report=xml
+
+echo ""
+echo "3/5 Running E2E API workflow tests..."
+python -m pytest tests_e2e/test_api_workflows.py -v --no-cov
+
+echo ""
+echo "4/5 Running E2E dice ladder tests..."
+python -m pytest tests_e2e/test_dice_ladder_e2e.py --no-cov -v
+
+echo ""
+echo "5/5 Running frontend Playwright E2E (build + test)..."
+(
+    cd frontend
+    REUSE_EXISTING_SERVER="${REUSE_EXISTING_SERVER:-true}" npm run test:e2e
+)
+
+echo ""
+echo "All pre-push checks passed."
