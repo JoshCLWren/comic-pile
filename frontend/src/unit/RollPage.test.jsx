@@ -600,11 +600,91 @@ describe('Rating View', () => {
     })
   })
 
+  it('hydrates pending thread metadata when active threads arrive after initial render', async () => {
+    const sessionData = {
+      current_die: 6,
+      last_rolled_result: 5,
+      pending_thread_id: 2,
+      manual_die: null,
+      active_thread: {
+        id: 1,
+        title: 'Saga',
+        format: 'Comic',
+        issues_remaining: 5,
+        queue_position: 1,
+      },
+    }
+
+    const refetchSessionSpy = vi.fn()
+    const refetchThreadsSpy = vi.fn()
+    let threadsData = []
+
+    useSession.mockImplementation(() => ({
+      data: sessionData,
+      refetch: refetchSessionSpy,
+    }))
+    useThreads.mockImplementation(() => ({
+      data: threadsData,
+      refetch: refetchThreadsSpy,
+    }))
+
+    const { rerender } = render(<RollPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+      expect(screen.getByText('Loading...')).toBeInTheDocument()
+    })
+
+    threadsData = [
+      {
+        id: 2,
+        title: 'X-Men',
+        format: 'Comic',
+        issues_remaining: 7,
+        queue_position: 3,
+        status: 'active',
+      },
+    ]
+
+    rerender(<RollPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Queue #3')).toBeInTheDocument()
+      expect(screen.getByText('X-Men')).toBeInTheDocument()
+    })
+  })
+
   it('does not render invalid rolled zero text when pending roll result is missing', async () => {
     useSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: null,
+        pending_thread_id: 1,
+        manual_die: null,
+        active_thread: {
+          id: 1,
+          title: 'Saga',
+          format: 'Comic',
+          issues_remaining: 5,
+          queue_position: 2,
+        },
+      },
+      refetch: vi.fn(),
+    })
+
+    render(<RollPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+      expect(screen.queryByText('Rolled 0 on d6')).not.toBeInTheDocument()
+    })
+  })
+
+  it('does not render invalid rolled zero text when pending roll result is zero', async () => {
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: 0,
         pending_thread_id: 1,
         manual_die: null,
         active_thread: {

@@ -176,7 +176,10 @@ export default function RollPage() {
     if (!pendingThreadId) return
 
     const pendingId = Number(pendingThreadId)
-    if (isRatingView && Number(selectedThreadId) === pendingId) return
+    const isCurrentPendingSelection = Number(selectedThreadId) === pendingId
+    const hasHydratedPendingMetadata = Boolean(activeRatingThread?.title)
+
+    if (isRatingView && isCurrentPendingSelection && hasHydratedPendingMetadata) return
 
     const pendingFromSession =
       session?.active_thread && session.active_thread.id === pendingId
@@ -198,9 +201,12 @@ export default function RollPage() {
 
     const pendingResult = pendingFromSession?.last_rolled_result ?? session?.last_rolled_result ?? null
     const pendingMetadata = pendingFromSession ?? pendingFromThreads
+    const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection
 
     setSelectedThreadId(pendingId)
-    setRolledResult(pendingResult)
+    if (pendingResult !== null && pendingResult !== undefined) {
+      setRolledResult(pendingResult)
+    }
     if (pendingMetadata && pendingMetadata.title) {
       setActiveRatingThread({
         id: pendingMetadata.id ?? pendingMetadata.thread_id ?? pendingId,
@@ -212,17 +218,20 @@ export default function RollPage() {
           pendingMetadata.result ?? pendingMetadata.last_rolled_result ?? pendingResult,
       })
     }
-    setRating(4.0)
-    setErrorMessage('')
-    const die = currentDie || 6
-    const idx = DICE_LADDER.indexOf(die)
-    setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
-    setIsRatingView(true)
+    if (shouldInitializeRatingView) {
+      setRating(4.0)
+      setErrorMessage('')
+      const die = currentDie || 6
+      const idx = DICE_LADDER.indexOf(die)
+      setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
+      setIsRatingView(true)
+    }
   }, [
     session?.pending_thread_id,
     session?.active_thread,
     session?.last_rolled_result,
     activeThreads,
+    activeRatingThread,
     currentDie,
     isRatingView,
     selectedThreadId,
@@ -341,6 +350,8 @@ export default function RollPage() {
     !isRatingView || t.id !== (selectedThreadId ? Number(selectedThreadId) : null)
   );
   const pool = filteredThreads.slice(0, dieSize) || [];
+  const hasValidRolledResult =
+    Number.isInteger(rolledResult) && rolledResult >= 1 && rolledResult <= currentDie
 
   function setDiceStateValue(state) {
     setDiceState(state)
@@ -604,7 +615,7 @@ export default function RollPage() {
                         Rating
                       </span>
                     </div>
-                    {rolledResult !== null && rolledResult !== undefined && (
+                    {hasValidRolledResult && (
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
                         Rolled {rolledResult} on d{currentDie}
                       </p>
