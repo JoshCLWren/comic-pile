@@ -75,6 +75,7 @@ async def get_session_with_thread_safe(
                 queue_position=pending_thread.queue_position,
                 last_rolled_result=last_rolled_result,
             )
+        return session, None
 
     if not event or not event.selected_thread_id:
         return session, None
