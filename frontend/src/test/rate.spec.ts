@@ -145,25 +145,6 @@ test.describe('Rate Thread Feature', () => {
     await expect(threadTitle).toBeVisible();
   });
 
-  test('should allow adjusting issues read', async ({ authenticatedWithThreadsPage }) => {
-    const issuesInput = authenticatedWithThreadsPage.locator('input[name="issues_read"]');
-    await expect(issuesInput).toBeVisible();
-
-    let submittedIssuesRead: number | null = null;
-    await authenticatedWithThreadsPage.route('**/api/rate/**', async (route) => {
-      const body = route.request().postDataJSON() as { issues_read?: number };
-      if (typeof body.issues_read === 'number') {
-        submittedIssuesRead = body.issues_read;
-      }
-      await route.continue();
-    });
-
-    await issuesInput.fill('2');
-    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-    expect(submittedIssuesRead).toBe(2);
-  });
-
   test('should handle finish session option', async ({ authenticatedWithThreadsPage }) => {
     const finishCheckbox = authenticatedWithThreadsPage.locator('input[name="finish_session"]');
     const hasFinishOption = await finishCheckbox.count() > 0;

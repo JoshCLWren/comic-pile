@@ -1,6 +1,5 @@
 """Rate API endpoint."""
 
-
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -168,8 +167,10 @@ async def rate_thread(
             detail=f"Rating must be between {rating_min} and {rating_max}",
         )
 
-    issues_read = min(rate_data.issues_read, thread.issues_remaining)
-    thread.issues_remaining -= issues_read
+    issues_read = rate_data.issues_read
+    if issues_read is not None:
+        issues_read = min(issues_read, thread.issues_remaining)
+        thread.issues_remaining -= issues_read
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
     thread_issues_remaining = thread.issues_remaining
@@ -243,9 +244,7 @@ async def rate_thread(
     await db.commit()
 
     result = await db.execute(
-        select(Thread)
-        .where(Thread.id == thread_id)
-        .where(Thread.user_id == user_id)
+        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
     )
     updated_thread = result.scalar_one_or_none()
     if not updated_thread:
