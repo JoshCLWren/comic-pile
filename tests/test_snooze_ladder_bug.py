@@ -95,21 +95,19 @@ async def test_multiple_snooze_then_rate(auth_client: AsyncClient, async_db: Asy
         async_db.add(thread)
     await async_db.commit()
 
-    first_roll = await auth_client.post("/api/roll/")
-    assert first_roll.status_code == 200
-
-    result = await async_db.execute(
-        select(SessionModel).where(SessionModel.user_id == default_user.id)
-    )
-    session = result.scalars().first()
-    assert session is not None
-    assert session.start_die == 6
-
     expected_dies = [6]
 
     for i, _thread in enumerate(threads[:6]):
         roll_response = await auth_client.post("/api/roll/")
         assert roll_response.status_code == 200
+
+        if i == 0:
+            result = await async_db.execute(
+                select(SessionModel).where(SessionModel.user_id == default_user.id)
+            )
+            session = result.scalars().first()
+            assert session is not None
+            assert session.start_die == 6
 
         if i < 5:
             snooze_response = await auth_client.post("/api/snooze/")
@@ -123,9 +121,6 @@ async def test_multiple_snooze_then_rate(auth_client: AsyncClient, async_db: Asy
             assert current_die == expected_die, (
                 f"After snooze #{i + 1}, expected die d{expected_die}, got d{current_die}"
             )
-
-    final_roll_response = await auth_client.post("/api/roll/")
-    assert final_roll_response.status_code == 200
 
     rate_response = await auth_client.post(
         "/api/rate/",

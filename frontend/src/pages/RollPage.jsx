@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
@@ -6,7 +6,13 @@ import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../components/diceLadder'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
-import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
+import {
+  useClearManualDie,
+  useDismissPending,
+  useOverrideRoll,
+  useRoll,
+  useSetDie,
+} from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
@@ -33,7 +39,6 @@ export default function RollPage() {
   const [isRatingView, setIsRatingView] = useState(false)
   const [rating, setRating] = useState(4.0)
   const [predictedDie, setPredictedDie] = useState(6)
-  const [previewSides, setPreviewSides] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
 
   const rollIntervalRef = useRef(null)
@@ -47,6 +52,7 @@ export default function RollPage() {
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
   const rollMutation = useRoll()
+  const dismissPendingMutation = useDismissPending()
   const overrideMutation = useOverrideRoll()
   const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
@@ -81,26 +87,30 @@ export default function RollPage() {
     if (threadId) setSelectedThreadId(threadId)
     if (result !== null) setRolledResult(result)
 
-    // P1: Store specific thread metadata for rating view
     if (threadMetadata && threadMetadata.title) {
-      setActiveRatingThread(threadMetadata)
+      setActiveRatingThread({
+        id: threadMetadata.id ?? threadMetadata.thread_id ?? Number(threadId),
+        title: threadMetadata.title,
+        format: threadMetadata.format,
+        issues_remaining: threadMetadata.issues_remaining,
+        queue_position: threadMetadata.queue_position,
+        last_rolled_result:
+          threadMetadata.result ?? threadMetadata.last_rolled_result ?? result ?? null,
+      })
     } else if (!threadId && session?.active_thread) {
       setActiveRatingThread(session.active_thread)
     } else if (session?.active_thread && session.active_thread.id === Number(threadId)) {
       setActiveRatingThread(session.active_thread)
     }
 
-    // P2: Reset rating state on entry
     setRating(4.0)
     setErrorMessage('')
 
-    // Reset predictions based on current die
     const die = currentDie || 6
     const idx = DICE_LADDER.indexOf(die)
     const initialPredicted = idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0]
 
     setPredictedDie(initialPredicted)
-    setPreviewSides(initialPredicted)
     setIsRatingView(true)
   }
 
@@ -147,7 +157,10 @@ export default function RollPage() {
       console.error('Action failed:', error)
     }
   }
-  const activeThreads = threads?.filter((thread) => thread.status === 'active') ?? []
+  const activeThreads = useMemo(
+    () => threads?.filter((thread) => thread.status === 'active') ?? [],
+    [threads],
+  )
 
   useEffect(() => {
     if (session?.current_die) {
@@ -157,6 +170,72 @@ export default function RollPage() {
       setRolledResult(session.last_rolled_result)
     }
   }, [session?.current_die, session?.last_rolled_result])
+
+  useEffect(() => {
+    const pendingThreadId = session?.pending_thread_id
+    if (!pendingThreadId) return
+
+    const pendingId = Number(pendingThreadId)
+    const isCurrentPendingSelection = Number(selectedThreadId) === pendingId
+    const hasHydratedPendingMetadata = Boolean(activeRatingThread?.title)
+
+    if (isRatingView && isCurrentPendingSelection && hasHydratedPendingMetadata) return
+
+    const pendingFromSession =
+      session?.active_thread && session.active_thread.id === pendingId
+        ? {
+          id: session.active_thread.id,
+          title: session.active_thread.title,
+          format: session.active_thread.format,
+          issues_remaining: session.active_thread.issues_remaining,
+          queue_position: session.active_thread.queue_position,
+          last_rolled_result:
+            session.last_rolled_result ?? session.active_thread.last_rolled_result ?? null,
+        }
+        : null
+
+    const pendingFromThreads =
+      !pendingFromSession && activeThreads.length > 0
+        ? activeThreads.find((thread) => thread.id === pendingId)
+        : null
+
+    const pendingResult = pendingFromSession?.last_rolled_result ?? session?.last_rolled_result ?? null
+    const pendingMetadata = pendingFromSession ?? pendingFromThreads
+    const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection
+
+    setSelectedThreadId(pendingId)
+    if (pendingResult !== null && pendingResult !== undefined) {
+      setRolledResult(pendingResult)
+    }
+    if (pendingMetadata && pendingMetadata.title) {
+      setActiveRatingThread({
+        id: pendingMetadata.id ?? pendingMetadata.thread_id ?? pendingId,
+        title: pendingMetadata.title,
+        format: pendingMetadata.format,
+        issues_remaining: pendingMetadata.issues_remaining,
+        queue_position: pendingMetadata.queue_position,
+        last_rolled_result:
+          pendingMetadata.result ?? pendingMetadata.last_rolled_result ?? pendingResult,
+      })
+    }
+    if (shouldInitializeRatingView) {
+      setRating(4.0)
+      setErrorMessage('')
+      const die = currentDie || 6
+      const idx = DICE_LADDER.indexOf(die)
+      setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
+      setIsRatingView(true)
+    }
+  }, [
+    session?.pending_thread_id,
+    session?.active_thread,
+    session?.last_rolled_result,
+    activeThreads,
+    activeRatingThread,
+    currentDie,
+    isRatingView,
+    selectedThreadId,
+  ])
   useEffect(() => {
     if (staleThreads && staleThreads.length > 0) {
       const thread = staleThreads[0]
@@ -187,28 +266,27 @@ export default function RollPage() {
   }, [])
 
   function updateRatingUI(val) {
-    const num = parseFloat(val);
-    setRating(num);
-    let newPredictedDie = currentDie;
+    const num = parseFloat(val)
+    setRating(num)
+    let newPredictedDie = currentDie
 
     if (num >= RATING_THRESHOLD) {
-      const idx = DICE_LADDER.indexOf(currentDie);
+      const idx = DICE_LADDER.indexOf(currentDie)
       if (idx > 0) {
-        newPredictedDie = DICE_LADDER[idx - 1];
+        newPredictedDie = DICE_LADDER[idx - 1]
       } else {
-        newPredictedDie = DICE_LADDER[0];
+        newPredictedDie = DICE_LADDER[0]
       }
     } else {
-      const idx = DICE_LADDER.indexOf(currentDie);
+      const idx = DICE_LADDER.indexOf(currentDie)
       if (idx < DICE_LADDER.length - 1) {
-        newPredictedDie = DICE_LADDER[idx + 1];
+        newPredictedDie = DICE_LADDER[idx + 1]
       } else {
-        newPredictedDie = DICE_LADDER[DICE_LADDER.length - 1];
+        newPredictedDie = DICE_LADDER[DICE_LADDER.length - 1]
       }
     }
 
-    setPredictedDie(newPredictedDie);
-    setPreviewSides(newPredictedDie);
+    setPredictedDie(newPredictedDie)
   }
 
   function createExplosion() {
@@ -272,6 +350,8 @@ export default function RollPage() {
     !isRatingView || t.id !== (selectedThreadId ? Number(selectedThreadId) : null)
   );
   const pool = filteredThreads.slice(0, dieSize) || [];
+  const hasValidRolledResult =
+    Number.isInteger(rolledResult) && rolledResult >= 1 && rolledResult <= currentDie
 
   function setDiceStateValue(state) {
     setDiceState(state)
@@ -286,8 +366,38 @@ export default function RollPage() {
     await clearManualDieMutation.mutate()
   }
 
+  async function recoverPendingRollConflict() {
+    const latestSession = await refetchSession()
+    const pendingId = Number(latestSession?.pending_thread_id ?? session?.pending_thread_id ?? 0)
+
+    if (!pendingId) {
+      return false
+    }
+
+    const pendingMetadata =
+      latestSession?.active_thread && latestSession.active_thread.id === pendingId
+        ? latestSession.active_thread
+        : activeThreads.find((thread) => thread.id === pendingId)
+
+    enterRatingView(
+      pendingId,
+      latestSession?.last_rolled_result ?? session?.last_rolled_result ?? null,
+      pendingMetadata,
+    )
+    return true
+  }
+
   function handleRoll() {
     if (isRolling) return
+    if (session?.pending_thread_id) {
+      const pendingId = Number(session.pending_thread_id)
+      const pendingMetadata =
+        session?.active_thread && session.active_thread.id === pendingId
+          ? session.active_thread
+          : activeThreads.find((thread) => thread.id === pendingId)
+      enterRatingView(pendingId, session?.last_rolled_result ?? null, pendingMetadata)
+      return
+    }
 
     if (rollIntervalRef.current) {
       clearInterval(rollIntervalRef.current)
@@ -316,7 +426,19 @@ export default function RollPage() {
             enterRatingView(response.thread_id, response.result, response)
             setIsRolling(false)
           } catch (error) {
+            if (error?.response?.status === 409) {
+              const recovered = await recoverPendingRollConflict()
+              if (!recovered) {
+                setErrorMessage(
+                  error.response?.data?.detail ||
+                    'A roll is already pending. Rate, snooze, or cancel it before rolling again.',
+                )
+              }
+              setIsRolling(false)
+              return
+            }
             console.error('Roll failed:', error)
+            setErrorMessage(error.response?.data?.detail || 'Failed to roll')
             setIsRolling(false)
           }
         }, 400)
@@ -356,7 +478,7 @@ export default function RollPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="min-h-screen flex flex-col">
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
@@ -430,11 +552,11 @@ export default function RollPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="glass-card flex-1 flex flex-col relative overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="glass-card flex-1 flex flex-col relative">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-thin flex flex-col">
+          <div className="flex-1 flex flex-col">
             {!isRatingView ? (
               <div
                 id="main-die-3d"
@@ -443,10 +565,10 @@ export default function RollPage() {
                 role="button"
                 tabIndex={0}
                 aria-label="Roll the dice"
-                className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4`}
-                style={{ width: '200px', height: '200px', margin: '0 auto' }}
+                className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 mx-auto`}
+                style={{ width: '200px', height: '200px' }}
               >
-                <div className="w-full h-full">
+                <div className="w-full h-full main-die-optical-center">
                   <LazyDice3D
                     sides={currentDie}
                     value={rolledResult || 1}
@@ -463,6 +585,9 @@ export default function RollPage() {
                   <div className="space-y-2 text-center">
                     <h2 className="text-2xl font-black text-slate-100">{activeRatingThread?.title || 'Loading...'}</h2>
                     <div className="flex items-center justify-center gap-3">
+                      <span className="bg-teal-500/20 text-teal-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-teal-500/20">
+                        Queue #{activeRatingThread?.queue_position ?? '-'}
+                      </span>
                       <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/20">
                         {activeRatingThread?.format || '...'}
                       </span>
@@ -479,7 +604,7 @@ export default function RollPage() {
                       style={{ width: '120px', height: '120px', margin: '0 auto' }}
                     >
                       <LazyDice3D
-                        sides={previewSides}
+                        sides={predictedDie}
                         value={rolledResult || 1}
                         isRolling={false}
                         showValue={false}
@@ -490,6 +615,11 @@ export default function RollPage() {
                         Rating
                       </span>
                     </div>
+                    {hasValidRolledResult && (
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
+                        Rolled {rolledResult} on d{currentDie}
+                      </p>
+                    )}
                   </div>
 
                   <div className="text-center space-y-4">
@@ -546,15 +676,26 @@ export default function RollPage() {
                     <div className="flex justify-center">
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
+                          try {
+                            await dismissPendingMutation.mutate()
+                            await refetchSession()
+                            await refetchThreads()
+                          } catch (error) {
+                            setErrorMessage(
+                              error.response?.data?.detail || 'Failed to cancel pending roll',
+                            )
+                            return
+                          }
                           setIsRatingView(false)
                           setRolledResult(null)
                           setSelectedThreadId(null)
                           setActiveRatingThread(null)
+                          setErrorMessage('')
                         }}
                         className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent hover:border-white/10 rounded-lg transition-all"
                       >
-                        Cancel
+                        Cancel Pending Roll
                       </button>
                     </div>
                   </div>
@@ -616,7 +757,7 @@ export default function RollPage() {
                           }`}
                       >
                         <span className="text-lg font-black text-slate-500/50 group-hover:text-slate-400/50 transition-colors">
-                          {index + 1}
+                          #{thread.queue_position ?? index + 1}
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="font-black text-slate-300 truncate text-sm">{thread.title}</p>

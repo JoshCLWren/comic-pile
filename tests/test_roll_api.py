@@ -80,6 +80,103 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
 
 
 @pytest.mark.asyncio
+async def test_roll_blocked_when_pending_exists(auth_client: AsyncClient, sample_data: dict) -> None:
+    """POST /roll/ returns 409 when a pending thread exists."""
+    _ = sample_data
+
+    first_response = await auth_client.post("/api/roll/")
+    assert first_response.status_code == 200
+
+    second_response = await auth_client.post("/api/roll/")
+    assert second_response.status_code == 409
+    assert "already pending" in second_response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_dismiss_pending_clears_pending_thread(
+    auth_client: AsyncClient, sample_data: dict
+) -> None:
+    """POST /roll/dismiss-pending clears pending thread in current session."""
+    _ = sample_data
+
+    roll_response = await auth_client.post("/api/roll/")
+    assert roll_response.status_code == 200
+
+    before_session = await auth_client.get("/api/sessions/current/")
+    assert before_session.status_code == 200
+    assert before_session.json()["pending_thread_id"] is not None
+
+    dismiss_response = await auth_client.post("/api/roll/dismiss-pending")
+    assert dismiss_response.status_code == 204
+
+    after_session = await auth_client.get("/api/sessions/current/")
+    assert after_session.status_code == 200
+    assert after_session.json()["pending_thread_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_dismiss_pending_when_no_pending_exists(
+    auth_client: AsyncClient, sample_data: dict
+) -> None:
+    """POST /roll/dismiss-pending is idempotent when no pending thread exists."""
+    _ = sample_data
+
+    before_session = await auth_client.get("/api/sessions/current/")
+    assert before_session.status_code == 200
+    assert before_session.json()["pending_thread_id"] is None
+
+    dismiss_response = await auth_client.post("/api/roll/dismiss-pending")
+    assert dismiss_response.status_code == 204
+
+    after_session = await auth_client.get("/api/sessions/current/")
+    assert after_session.status_code == 200
+    assert after_session.json()["pending_thread_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_roll_pending_message_does_not_leak_other_user_thread_title(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
+    """POST /roll/ does not leak another user's thread title in pending-roll detail."""
+    import os
+    from datetime import UTC, datetime
+
+    from app.models import Session as SessionModel, Thread
+    from tests.conftest import get_or_create_user_async
+
+    session_response = await auth_client.get("/api/sessions/current/")
+    assert session_response.status_code == 200
+    current_session_id = session_response.json()["id"]
+
+    other_user = await get_or_create_user_async(async_db, username=f"other_user_{os.getpid()}")
+    private_title = "Private Other User Thread"
+    private_thread = Thread(
+        title=private_title,
+        format="Comic",
+        issues_remaining=3,
+        queue_position=99,
+        status="active",
+        user_id=other_user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(private_thread)
+    await async_db.commit()
+    await async_db.refresh(private_thread)
+
+    current_session = await async_db.get(SessionModel, current_session_id)
+    assert current_session is not None
+    current_session.pending_thread_id = private_thread.id
+    current_session.pending_thread_updated_at = datetime.now(UTC)
+    await async_db.commit()
+
+    roll_response = await auth_client.post("/api/roll/")
+    assert roll_response.status_code == 409
+    detail = roll_response.json()["detail"]
+    assert "already pending" in detail
+    assert private_title not in detail
+
+
+@pytest.mark.asyncio
 async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: dict) -> None:
     """Override returns 404 for non-existent thread."""
     _ = sample_data

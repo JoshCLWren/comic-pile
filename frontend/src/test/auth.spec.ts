@@ -56,9 +56,11 @@ test.describe('Authentication Flow', () => {
     await page.click(SELECTORS.auth.submitButton);
     await page.waitForURL('/', { timeout: 5000 });
 
-    await page.evaluate(() => localStorage.clear());
-    // api.js redirects on 401 API responses; localStorage mutation alone does not trigger that flow.
-    await page.goto('/login');
+    await page.evaluate(() => {
+      localStorage.clear();
+      window.location.assign('/login');
+    });
+    await page.waitForURL('**/login', { timeout: 10000 });
     await page.fill(SELECTORS.auth.usernameInput, user.username);
     await page.fill(SELECTORS.auth.passwordInput, user.password);
     await page.click(SELECTORS.auth.submitButton);

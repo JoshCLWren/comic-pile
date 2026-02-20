@@ -81,6 +81,13 @@ body {
   display: block;
 }
 
+/* Optical centering for the main mobile die render. */
+@media (max-width: 640px) {
+  #main-die-3d .main-die-optical-center {
+    transform: translateX(8px);
+  }
+}
+
 .dice3d-label {
   position: absolute;
   inset: 0;
