@@ -681,6 +681,59 @@ function getFaceRotation(value, normalMap) {
   return { x: euler.x, y: euler.y, z: euler.z }
 }
 
+function getProjectedCenterOffsetPx(mesh, camera, width, height) {
+  try {
+    const worldBox = new THREE.Box3().setFromObject(mesh);
+    if (worldBox.isEmpty()) {
+      return { x: 0, y: 0 };
+    }
+
+    const { min, max } = worldBox;
+    const corners = [
+      new THREE.Vector3(min.x, min.y, min.z),
+      new THREE.Vector3(min.x, min.y, max.z),
+      new THREE.Vector3(min.x, max.y, min.z),
+      new THREE.Vector3(min.x, max.y, max.z),
+      new THREE.Vector3(max.x, min.y, min.z),
+      new THREE.Vector3(max.x, min.y, max.z),
+      new THREE.Vector3(max.x, max.y, min.z),
+      new THREE.Vector3(max.x, max.y, max.z),
+    ];
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const corner of corners) {
+      const projected = corner.project(camera);
+      minX = Math.min(minX, projected.x);
+      maxX = Math.max(maxX, projected.x);
+      minY = Math.min(minY, projected.y);
+      maxY = Math.max(maxY, projected.y);
+    }
+
+    const centerNdcX = (minX + maxX) * 0.5;
+    const centerNdcY = (minY + maxY) * 0.5;
+
+    const offsetX = -centerNdcX * (width * 0.5);
+    const offsetY = centerNdcY * (height * 0.5);
+
+    // Guard against occasional projection spikes during init/resizing.
+    const maxOffset = Math.min(width, height) * 0.18;
+    return {
+      x: THREE.MathUtils.clamp(offsetX, -maxOffset, maxOffset),
+      y: THREE.MathUtils.clamp(offsetY, -maxOffset, maxOffset),
+    };
+  } catch {
+    return { x: 0, y: 0 };
+  }
+}
+
+function lerp(start, end, alpha) {
+  return start + (end - start) * alpha;
+}
+
 export default function Dice3D({
   sides = 6,
   value = 1,
@@ -699,6 +752,8 @@ export default function Dice3D({
   const targetRotationRef = useRef(null);
   const numberNormalsRef = useRef(null);
   const previousSidesRef = useRef(sides);
+  const opticalOffsetRef = useRef({ x: 0, y: 0 });
+  const viewportSizeRef = useRef({ w: 200, h: 200 });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -706,6 +761,7 @@ export default function Dice3D({
     const container = containerRef.current;
     const w = container.clientWidth || 200;
     const h = container.clientHeight || 200;
+    viewportSizeRef.current = { w, h };
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
@@ -817,6 +873,15 @@ export default function Dice3D({
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
+        if (rendererRef.current.domElement && meshRef.current) {
+          const { w, h } = viewportSizeRef.current;
+          const { x, y } = getProjectedCenterOffsetPx(meshRef.current, cameraRef.current, w, h);
+          const easedX = lerp(opticalOffsetRef.current.x, x, 0.12);
+          const easedY = lerp(opticalOffsetRef.current.y, y, 0.12);
+          opticalOffsetRef.current = { x: easedX, y: easedY };
+          rendererRef.current.domElement.style.transform =
+            `translate(${easedX.toFixed(2)}px, ${easedY.toFixed(2)}px)`;
+        }
       }
 
       animationFrameId = requestAnimationFrame(animate);
@@ -827,6 +892,9 @@ export default function Dice3D({
     return () => {
       if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
+      }
+      if (rendererRef.current?.domElement) {
+        rendererRef.current.domElement.style.transform = 'translate(0px, 0px)';
       }
     };
   }, [isRolling, onRollComplete, freeze, lockMotion]);
