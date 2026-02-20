@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
@@ -469,9 +469,9 @@ export default function RollPage() {
     }
   }
 
-  function handleRollComplete() {
+  const handleRollComplete = useCallback(() => {
     setDiceStateValue('rolled')
-  }
+  }, [])
 
   function handleOverrideSubmit(event) {
     event.preventDefault()
