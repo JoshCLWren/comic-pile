@@ -620,19 +620,16 @@ export default function RollPage() {
                       style={{ width: '120px', height: '120px', margin: '0 auto' }}
                     >
                       <LazyDice3D
-                        sides={predictedDie}
+                        sides={currentDie}
                         value={rolledResult || 1}
                         isRolling={false}
                         showValue={false}
                         freeze
                         color={0xffffff}
                       />
-                      <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wider text-indigo-400">
-                        Rating
-                      </span>
                     </div>
                     {hasValidRolledResult && (
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
+                      <p className="mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
                         Rolled {rolledResult} on d{currentDie}
                       </p>
                     )}

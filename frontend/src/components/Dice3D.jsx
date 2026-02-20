@@ -842,12 +842,15 @@ export default function Dice3D({
     const animate = () => {
       if (!meshRef.current) return;
 
+      let isStable = false;
+
       if (lockMotion) {
         if (targetRotationRef.current) {
           const { x, y, z } = targetRotationRef.current;
           meshRef.current.rotation.set(x, y, z);
           targetRotationRef.current = null;
         }
+        isStable = true;
       } else if (isRolling) {
         meshRef.current.rotation.x += 0.2;
         meshRef.current.rotation.y += 0.25;
@@ -866,14 +869,18 @@ export default function Dice3D({
           meshRef.current.rotation.set(x, y, z);
           targetRotationRef.current = null;
           if (onRollComplete) onRollComplete();
+          isStable = true;
         }
       } else if (!freeze) {
         meshRef.current.rotation.y += 0.008;
+      } else {
+        isStable = true;
       }
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
-        if (rendererRef.current.domElement && meshRef.current) {
+        const isIdleRotating = !freeze && !lockMotion && !isRolling && !targetRotationRef.current;
+        if (rendererRef.current.domElement && meshRef.current && isStable && !isIdleRotating) {
           const { w, h } = viewportSizeRef.current;
           const { x, y } = getProjectedCenterOffsetPx(meshRef.current, cameraRef.current, w, h);
           const easedX = lerp(opticalOffsetRef.current.x, x, 0.12);
