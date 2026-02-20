@@ -369,10 +369,6 @@ export default function RollPage() {
   const hasValidRolledResult =
     Number.isInteger(rolledResult) && rolledResult >= 1 && rolledResult <= currentDie
 
-  function setDiceStateValue(state) {
-    setDiceState(state)
-  }
-
   async function handleSetDie(die) {
     setCurrentDie(die)
     await setDieMutation.mutate(die)
@@ -423,7 +419,7 @@ export default function RollPage() {
     }
 
     setIsRolling(true)
-    setDiceStateValue('idle')
+    setDiceState('idle')
 
     let currentRollCount = 0
     const maxRolls = 10
@@ -470,7 +466,7 @@ export default function RollPage() {
   }
 
   const handleRollComplete = useCallback(() => {
-    setDiceStateValue('rolled')
+    setDiceState('rolled')
   }, [])
 
   function handleOverrideSubmit(event) {
