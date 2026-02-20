@@ -400,6 +400,161 @@ async def test_get_session_current_uses_selected_thread_id(
 
 
 @pytest.mark.asyncio
+async def test_get_session_current_prefers_pending_thread_over_last_roll(
+    auth_client: AsyncClient, async_db: AsyncSession, test_username: str
+) -> None:
+    """GET /sessions/current should surface pending_thread_id as active_thread."""
+    from datetime import UTC, datetime
+
+    from app.models import Event, Thread, User
+    from app.models import Session as SessionModel
+
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        user = User(username=test_username, created_at=datetime.now(UTC))
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
+
+    first_thread = Thread(
+        title="First",
+        format="TPB",
+        issues_remaining=4,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(UTC),
+    )
+    pending_thread = Thread(
+        title="Pending",
+        format="TPB",
+        issues_remaining=8,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add_all([first_thread, pending_thread])
+    await async_db.commit()
+    await async_db.refresh(first_thread)
+    await async_db.refresh(pending_thread)
+
+    session = SessionModel(
+        start_die=6,
+        user_id=user.id,
+        pending_thread_id=pending_thread.id,
+        started_at=datetime.now(UTC),
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    roll_event = Event(
+        type="roll",
+        die=6,
+        result=3,
+        selected_thread_id=first_thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=None,
+        timestamp=datetime.now(UTC),
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/sessions/current/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["pending_thread_id"] == pending_thread.id
+    assert data["active_thread"]["id"] == pending_thread.id
+    assert data["active_thread"]["title"] == "Pending"
+    assert data["last_rolled_result"] == 3
+
+
+@pytest.mark.asyncio
+async def test_get_session_current_returns_no_active_thread_when_pending_is_stale(
+    auth_client: AsyncClient, async_db: AsyncSession, test_username: str
+) -> None:
+    """GET /sessions/current should not fall back to roll event when pending thread is stale."""
+    from datetime import UTC, datetime
+
+    from app.models import Event, Thread, User
+    from app.models import Session as SessionModel
+
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        user = User(username=test_username, created_at=datetime.now(UTC))
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
+
+    rolled_thread = Thread(
+        title="Rolled",
+        format="TPB",
+        issues_remaining=4,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(rolled_thread)
+    await async_db.commit()
+    await async_db.refresh(rolled_thread)
+
+    other_user = User(username=f"{test_username}_other", created_at=datetime.now(UTC))
+    async_db.add(other_user)
+    await async_db.commit()
+    await async_db.refresh(other_user)
+
+    other_user_thread = Thread(
+        title="Other User Pending",
+        format="TPB",
+        issues_remaining=6,
+        queue_position=1,
+        status="active",
+        user_id=other_user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(other_user_thread)
+    await async_db.commit()
+    await async_db.refresh(other_user_thread)
+
+    session = SessionModel(
+        start_die=6,
+        user_id=user.id,
+        pending_thread_id=other_user_thread.id,
+        started_at=datetime.now(UTC),
+    )
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    roll_event = Event(
+        type="roll",
+        die=6,
+        result=2,
+        selected_thread_id=rolled_thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=None,
+        timestamp=datetime.now(UTC),
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/sessions/current/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["pending_thread_id"] == other_user_thread.id
+    assert data["active_thread"] is None
+    assert data["last_rolled_result"] is None
+
+
+@pytest.mark.asyncio
 async def test_get_sessions(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/ lists all sessions."""
     _ = sample_data

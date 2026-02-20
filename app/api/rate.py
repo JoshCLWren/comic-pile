@@ -129,32 +129,46 @@ async def rate_thread(
         )
 
     current_session_id = current_session.id
-    result = await db.execute(
-        select(Event)
-        .where(Event.session_id == current_session_id)
-        .where(Event.type == "roll")
-        .where(Event.selected_thread_id.is_not(None))
-        .order_by(Event.timestamp.desc())
-    )
-    last_roll_event = result.scalars().first()
+    thread = None
+    target_thread_id = current_session.pending_thread_id
 
-    if not last_roll_event:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active thread. Please roll the dice first.",
+    if target_thread_id is not None:
+        result = await db.execute(
+            select(Thread).where(Thread.id == target_thread_id).where(Thread.user_id == user_id)
         )
+        thread = result.scalar_one_or_none()
+        if not thread:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Thread {target_thread_id} not found",
+            )
+    else:
+        result = await db.execute(
+            select(Event)
+            .where(Event.session_id == current_session_id)
+            .where(Event.type == "roll")
+            .where(Event.selected_thread_id.is_not(None))
+            .order_by(Event.timestamp.desc())
+        )
+        last_roll_event = result.scalars().first()
 
-    result = await db.execute(
-        select(Thread)
-        .where(Thread.id == last_roll_event.selected_thread_id)
-        .where(Thread.user_id == user_id)
-    )
-    thread = result.scalar_one_or_none()
-    if not thread:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {last_roll_event.selected_thread_id} not found",
+        if not last_roll_event:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No active thread. Please roll the dice first.",
+            )
+
+        result = await db.execute(
+            select(Thread)
+            .where(Thread.id == last_roll_event.selected_thread_id)
+            .where(Thread.user_id == user_id)
         )
+        thread = result.scalar_one_or_none()
+        if not thread:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Thread {last_roll_event.selected_thread_id} not found",
+            )
     thread_id = thread.id
 
     current_die = await get_current_die(current_session_id, db)

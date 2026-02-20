@@ -56,6 +56,27 @@ async def get_session_with_thread_safe(
     )
     event = event_result.scalars().first()
 
+    last_rolled_result = event.result if event else None
+
+    # Prefer pending thread when present so UI and rate target stay consistent.
+    if session.pending_thread_id is not None:
+        pending_result = await db.execute(
+            select(Thread)
+            .where(Thread.id == session.pending_thread_id)
+            .where(Thread.user_id == session.user_id)
+        )
+        pending_thread = pending_result.scalar_one_or_none()
+        if pending_thread:
+            return session, ActiveThreadInfo(
+                id=pending_thread.id,
+                title=pending_thread.title,
+                format=pending_thread.format,
+                issues_remaining=pending_thread.issues_remaining,
+                queue_position=pending_thread.queue_position,
+                last_rolled_result=last_rolled_result,
+            )
+        return session, None
+
     if not event or not event.selected_thread_id:
         return session, None
 
@@ -69,7 +90,7 @@ async def get_session_with_thread_safe(
         format=thread.format,
         issues_remaining=thread.issues_remaining,
         queue_position=thread.queue_position,
-        last_rolled_result=event.result,
+        last_rolled_result=last_rolled_result,
     )
 
 
