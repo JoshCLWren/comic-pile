@@ -4,7 +4,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
-import { useClearManualDie, useOverrideRoll, useRoll, useSetDie } from '../hooks/useRoll'
+import {
+  useClearManualDie,
+  useDismissPending,
+  useOverrideRoll,
+  useRoll,
+  useSetDie,
+} from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
@@ -30,6 +36,7 @@ vi.mock('../hooks/useRoll', () => ({
   useClearManualDie: vi.fn(),
   useRoll: vi.fn(),
   useOverrideRoll: vi.fn(),
+  useDismissPending: vi.fn(),
 }))
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: vi.fn(),
@@ -71,6 +78,7 @@ beforeEach(() => {
   useClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useOverrideRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useDismissPending.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
@@ -555,11 +563,84 @@ describe('Rating View', () => {
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
-    await user.click(screen.getByText('Cancel'))
+    await user.click(screen.getByText('Cancel Pending Roll'))
 
     expect(screen.getByText('Tap Die to Roll')).toBeInTheDocument()
 
     const selectedPoolItem = document.querySelector('.pool-thread-selected')
     expect(selectedPoolItem).toBeNull()
+  })
+
+  it('restores pending rating view from session state on load', async () => {
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: 6,
+        pending_thread_id: 1,
+        manual_die: null,
+        active_thread: {
+          id: 1,
+          title: 'Saga',
+          format: 'Comic',
+          issues_remaining: 5,
+          queue_position: 2,
+        },
+      },
+      refetch: vi.fn(),
+    })
+
+    render(<RollPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+      expect(screen.getByText('Queue #2')).toBeInTheDocument()
+      expect(screen.getByText('Rolled 6 on d6')).toBeInTheDocument()
+    })
+  })
+
+  it('cancels pending roll through dismiss mutation', async () => {
+    const dismissSpy = vi.fn().mockResolvedValue({})
+    const refetchSessionSpy = vi.fn().mockResolvedValue({})
+    const refetchThreadsSpy = vi.fn().mockResolvedValue({})
+
+    useDismissPending.mockReturnValue({ mutate: dismissSpy, isPending: false })
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: 2,
+        pending_thread_id: 1,
+        manual_die: null,
+        active_thread: {
+          id: 1,
+          title: 'Saga',
+          format: 'Comic',
+          issues_remaining: 5,
+          queue_position: 1,
+        },
+      },
+      refetch: refetchSessionSpy,
+    })
+    useThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1 },
+        { id: 2, title: 'X-Men', format: 'Comic', status: 'active', queue_position: 2 },
+      ],
+      refetch: refetchThreadsSpy,
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('Cancel Pending Roll'))
+
+    await waitFor(() => {
+      expect(dismissSpy).toHaveBeenCalled()
+      expect(refetchSessionSpy).toHaveBeenCalled()
+      expect(refetchThreadsSpy).toHaveBeenCalled()
+    })
   })
 })

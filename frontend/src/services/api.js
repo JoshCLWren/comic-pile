@@ -100,6 +100,8 @@ export const threadsApi = {
 export const rollApi = {
   roll: () => api.post('/roll/'),
   override: (data) => api.post('/roll/override', data),
+  dismissPending: () => api.post('/roll/dismiss-pending'),
+  reroll: () => api.post('/roll/'),
   setDie: (die) => api.post('/roll/set-die', null, { params: { die } }),
   clearManualDie: () => api.post('/roll/clear-manual-die'),
 }

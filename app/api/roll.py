@@ -48,6 +48,18 @@ async def roll_dice(
     user_id = current_user.id
     current_session = await get_or_create(db, user_id=user_id)
     current_session_id = current_session.id
+
+    if current_session.pending_thread_id is not None:
+        pending_thread = await db.get(Thread, current_session.pending_thread_id)
+        pending_title = pending_thread.title if pending_thread else f"Thread {current_session.pending_thread_id}"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"A roll is already pending for '{pending_title}'. "
+                "Rate, snooze, or cancel the pending roll before rolling again."
+            ),
+        )
+
     current_die = await get_current_die(current_session_id, db)
 
     # Exclude snoozed threads from the pool
@@ -101,6 +113,26 @@ async def roll_dice(
         offset=offset,
         snoozed_count=snoozed_count,
     )
+
+
+@router.post("/dismiss-pending", status_code=status.HTTP_204_NO_CONTENT)
+async def dismiss_pending_roll(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Clear any pending thread for the current session.
+
+    Args:
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+    """
+    current_session = await get_or_create(db, user_id=current_user.id)
+    current_session.pending_thread_id = None
+    current_session.pending_thread_updated_at = None
+    await db.commit()
+
+    if clear_cache:
+        clear_cache()
 
 
 @router.post("/override", response_model=RollResponse)
