@@ -196,7 +196,7 @@ export default function RollPage() {
         ? activeThreads.find((thread) => thread.id === pendingId)
         : null
 
-    const pendingResult = pendingFromSession?.last_rolled_result ?? session?.last_rolled_result ?? 0
+    const pendingResult = pendingFromSession?.last_rolled_result ?? session?.last_rolled_result ?? null
     const pendingMetadata = pendingFromSession ?? pendingFromThreads
 
     setSelectedThreadId(pendingId)
@@ -370,7 +370,7 @@ export default function RollPage() {
 
     enterRatingView(
       pendingId,
-      latestSession?.last_rolled_result ?? session?.last_rolled_result ?? 0,
+      latestSession?.last_rolled_result ?? session?.last_rolled_result ?? null,
       pendingMetadata,
     )
     return true
@@ -379,13 +379,12 @@ export default function RollPage() {
   function handleRoll() {
     if (isRolling) return
     if (session?.pending_thread_id) {
-      setErrorMessage('A roll is already pending. Rate, snooze, or cancel it before rolling again.')
       const pendingId = Number(session.pending_thread_id)
       const pendingMetadata =
         session?.active_thread && session.active_thread.id === pendingId
           ? session.active_thread
           : activeThreads.find((thread) => thread.id === pendingId)
-      enterRatingView(pendingId, session?.last_rolled_result ?? 0, pendingMetadata)
+      enterRatingView(pendingId, session?.last_rolled_result ?? null, pendingMetadata)
       return
     }
 
@@ -605,9 +604,11 @@ export default function RollPage() {
                         Rating
                       </span>
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
-                      Rolled {rolledResult ?? 0} on d{currentDie}
-                    </p>
+                    {rolledResult !== null && rolledResult !== undefined && (
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
+                        Rolled {rolledResult} on d{currentDie}
+                      </p>
+                    )}
                   </div>
 
                   <div className="text-center space-y-4">

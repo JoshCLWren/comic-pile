@@ -50,12 +50,17 @@ async def roll_dice(
     current_session_id = current_session.id
 
     if current_session.pending_thread_id is not None:
-        pending_thread = await db.get(Thread, current_session.pending_thread_id)
-        pending_title = pending_thread.title if pending_thread else f"Thread {current_session.pending_thread_id}"
+        pending_thread_result = await db.execute(
+            select(Thread.title)
+            .where(Thread.id == current_session.pending_thread_id)
+            .where(Thread.user_id == user_id)
+        )
+        pending_title = pending_thread_result.scalar_one_or_none()
+        pending_reference = f"'{pending_title}'" if pending_title else "another thread"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"A roll is already pending for '{pending_title}'. "
+                f"A roll is already pending for {pending_reference}. "
                 "Rate, snooze, or cancel the pending roll before rolling again."
             ),
         )

@@ -600,6 +600,32 @@ describe('Rating View', () => {
     })
   })
 
+  it('does not render invalid rolled zero text when pending roll result is missing', async () => {
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: null,
+        pending_thread_id: 1,
+        manual_die: null,
+        active_thread: {
+          id: 1,
+          title: 'Saga',
+          format: 'Comic',
+          issues_remaining: 5,
+          queue_position: 2,
+        },
+      },
+      refetch: vi.fn(),
+    })
+
+    render(<RollPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('How was it?')).toBeInTheDocument()
+      expect(screen.queryByText('Rolled 0 on d6')).not.toBeInTheDocument()
+    })
+  })
+
   it('recovers from roll conflicts by refetching session and reopening rating view', async () => {
     const conflictError = {
       response: {
