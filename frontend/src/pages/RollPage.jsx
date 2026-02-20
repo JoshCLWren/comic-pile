@@ -35,7 +35,6 @@ export default function RollPage() {
   const [predictedDie, setPredictedDie] = useState(6)
   const [previewSides, setPreviewSides] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
-  const [issuesRead, setIssuesRead] = useState(1)
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
@@ -93,7 +92,6 @@ export default function RollPage() {
 
     // P2: Reset rating state on entry
     setRating(4.0)
-    setIssuesRead(1)
     setErrorMessage('')
 
     // Reset predictions based on current die
@@ -241,7 +239,7 @@ export default function RollPage() {
     try {
       await rateMutation.mutate({
         rating,
-        issues_read: Math.max(1, Number(issuesRead) || 1),
+        issues_read: 1,
         finish_session: finishSession
       });
 
@@ -514,26 +512,6 @@ export default function RollPage() {
                       onChange={(e) => updateRatingUI(e.target.value)}
                     />
                   </div>
-
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="issues-read-input"
-                        className="block text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 text-center"
-                      >
-                        Issues Read
-                      </label>
-                      <input
-                        id="issues-read-input"
-                        type="number"
-                        name="issues_read"
-                        min="1"
-                        step="1"
-                        value={issuesRead}
-                        onChange={(e) => setIssuesRead(Math.max(1, Number(e.target.value) || 1))}
-                        className="w-24 mx-auto block rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-center text-sm font-black text-slate-100"
-                        aria-label="Issues read"
-                      />
-                    </div>
 
                   <div
                     className={`p-4 rounded-3xl border shadow-xl ${rating >= RATING_THRESHOLD

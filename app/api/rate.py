@@ -1,6 +1,5 @@
 """Rate API endpoint."""
 
-
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -168,7 +167,8 @@ async def rate_thread(
             detail=f"Rating must be between {rating_min} and {rating_max}",
         )
 
-    issues_read = min(rate_data.issues_read, thread.issues_remaining)
+    # Comic Pile reads one issue per rating action by design.
+    issues_read = 1 if thread.issues_remaining > 0 else 0
     thread.issues_remaining -= issues_read
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
@@ -243,9 +243,7 @@ async def rate_thread(
     await db.commit()
 
     result = await db.execute(
-        select(Thread)
-        .where(Thread.id == thread_id)
-        .where(Thread.user_id == user_id)
+        select(Thread).where(Thread.id == thread_id).where(Thread.user_id == user_id)
     )
     updated_thread = result.scalar_one_or_none()
     if not updated_thread:

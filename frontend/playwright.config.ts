@@ -43,7 +43,7 @@ export default defineConfig({
       ? 'echo "CI mode - reusing existing server"'
       : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"',
     port: parseInt(process.env.API_PORT || '8000'),
-    reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
+    reuseExistingServer: true,
     timeout: 120000,
   },
 });

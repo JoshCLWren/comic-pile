@@ -263,7 +263,7 @@ async def test_rate_finish_session_no_missing_greenlet_after_queue_commit(
 
 @pytest.mark.asyncio
 async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """Event saved with rating and issues_read."""
+    """Event saved with rating and fixed issues_read of 1."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -297,7 +297,7 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.5, "issues_read": 2})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.5})
     assert response.status_code == 200
 
     result = await async_db.execute(
@@ -306,14 +306,14 @@ async def test_rate_records_event(auth_client: AsyncClient, async_db: AsyncSessi
     events = result.scalars().all()
     assert len(events) == 1
     assert events[0].rating == 4.5
-    assert events[0].issues_read == 2
+    assert events[0].issues_read == 1
 
 
 @pytest.mark.asyncio
-async def test_rate_clamps_issues_read_to_remaining(
+async def test_rate_ignores_client_issues_read_and_reads_one(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Clamps issues_read so issues_remaining never goes negative."""
+    """Always decrements by one issue, ignoring client-provided issues_read."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)

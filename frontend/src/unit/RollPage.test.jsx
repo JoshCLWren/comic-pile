@@ -506,6 +506,7 @@ describe('Rating View', () => {
     // 3. Verify mutate was called with finish_session: false
     await waitFor(() => {
       expect(mockRate).toHaveBeenCalledWith(expect.objectContaining({
+        issues_read: 1,
         finish_session: false
       }))
     })
