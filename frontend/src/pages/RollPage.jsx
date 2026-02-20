@@ -43,6 +43,7 @@ export default function RollPage() {
 
   const rollIntervalRef = useRef(null)
   const rollTimeoutRef = useRef(null)
+  const suppressPendingAutoOpenRef = useRef(false)
 
   const { data: session, refetch: refetchSession } = useSession()
   const { data: threads, refetch: refetchThreads } = useThreads()
@@ -84,6 +85,8 @@ export default function RollPage() {
   }
 
   function enterRatingView(threadId, result = null, threadMetadata = null) {
+    suppressPendingAutoOpenRef.current = false
+
     if (threadId) setSelectedThreadId(threadId)
     if (result !== null) setRolledResult(result)
 
@@ -172,6 +175,8 @@ export default function RollPage() {
   }, [session?.current_die, session?.last_rolled_result])
 
   useEffect(() => {
+    if (suppressPendingAutoOpenRef.current) return
+
     const pendingThreadId = session?.pending_thread_id
     if (!pendingThreadId) return
 
@@ -321,10 +326,19 @@ export default function RollPage() {
         finish_session: finishSession
       });
 
-      await refetchSession();
-      await refetchThreads();
+      suppressPendingAutoOpenRef.current = true
       setIsRatingView(false);
       setRolledResult(null);
+      setSelectedThreadId(null);
+      setActiveRatingThread(null);
+      setErrorMessage('');
+
+      try {
+        await refetchSession();
+        await refetchThreads();
+      } catch (refetchError) {
+        console.error('Failed to refresh after rating:', refetchError)
+      }
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
     }

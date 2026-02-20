@@ -392,6 +392,63 @@ async def test_rate_no_active_thread(auth_client: AsyncClient, async_db: AsyncSe
 
 
 @pytest.mark.asyncio
+async def test_rate_targets_pending_thread_not_last_roll(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /rate/ should rate session.pending_thread_id when it differs from last roll event."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    first_thread = Thread(
+        title="First Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    pending_thread = Thread(
+        title="Pending Thread",
+        format="Comic",
+        issues_remaining=7,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add_all([first_thread, pending_thread])
+    await async_db.commit()
+    await async_db.refresh(first_thread)
+    await async_db.refresh(pending_thread)
+
+    session = SessionModel(start_die=10, user_id=user.id, pending_thread_id=pending_thread.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    # Latest roll event still points to first_thread (stale roll metadata).
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=first_thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=first_thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
+    assert response.status_code == 200
+
+    await async_db.refresh(first_thread)
+    await async_db.refresh(pending_thread)
+
+    assert first_thread.issues_remaining == 5
+    assert pending_thread.issues_remaining == 6
+
+@pytest.mark.asyncio
 async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Rating creates rate event with die_after value."""
     from tests.conftest import get_or_create_user_async
