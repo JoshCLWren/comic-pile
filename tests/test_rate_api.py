@@ -448,6 +448,7 @@ async def test_rate_targets_pending_thread_not_last_roll(
     assert first_thread.issues_remaining == 5
     assert pending_thread.issues_remaining == 6
 
+
 @pytest.mark.asyncio
 async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Rating creates rate event with die_after value."""

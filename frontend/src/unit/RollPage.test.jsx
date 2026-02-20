@@ -538,6 +538,56 @@ describe('Rating View', () => {
     expect(screen.queryByText('Failed to save rating')).not.toBeInTheDocument()
   })
 
+  it('[P5b] closes rating view when threads refresh fails after session refresh succeeds', async () => {
+    const { threadsApi } = await import('../services/api')
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
+      thread_id: 1,
+      result: 3,
+      title: 'Saga',
+      format: 'Comic',
+      issues_remaining: 5
+    })
+
+    const mockRate = vi.fn().mockResolvedValue({})
+    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+
+    const mockRefetchSession = vi.fn().mockResolvedValue({})
+    useSession.mockReturnValue({
+      data: {
+        current_die: 6,
+        last_rolled_result: null,
+        manual_die: null,
+        has_restore_point: false,
+        snoozed_threads: [],
+      },
+      refetch: mockRefetchSession,
+    })
+
+    const mockRefetchThreads = vi.fn().mockRejectedValue(new Error('threads refresh failed'))
+    useThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active' },
+        { id: 2, title: 'X-Men', format: 'Comic', status: 'active' },
+      ],
+      refetch: mockRefetchThreads,
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    await user.click(sagaItem)
+    await user.click(screen.getByText('Read Now'))
+    await user.click(screen.getByText('Save & Continue'))
+
+    await waitFor(() => {
+      expect(screen.queryByText('How was it?')).not.toBeInTheDocument()
+    })
+    expect(screen.queryByText('Failed to save rating')).not.toBeInTheDocument()
+    expect(mockRefetchSession).toHaveBeenCalled()
+    expect(mockRefetchThreads).toHaveBeenCalled()
+  })
+
   it('[P6] does not auto-finish session when rating the last issue', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue({

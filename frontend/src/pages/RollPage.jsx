@@ -333,11 +333,13 @@ export default function RollPage() {
       setActiveRatingThread(null);
       setErrorMessage('');
 
-      try {
-        await refetchSession();
-        await refetchThreads();
-      } catch (refetchError) {
-        console.error('Failed to refresh after rating:', refetchError)
+      const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
+      const [sessionRefreshResult, threadsRefreshResult] = refreshResults
+      if (sessionRefreshResult.status === 'rejected') {
+        console.error('Failed to refresh session after rating:', sessionRefreshResult.reason)
+      }
+      if (threadsRefreshResult.status === 'rejected') {
+        console.error('Failed to refresh threads after rating:', threadsRefreshResult.reason)
       }
     } catch (error) {
       setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
