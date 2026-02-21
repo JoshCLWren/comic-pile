@@ -4,7 +4,7 @@ import { useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '
 import { useUndo } from '../hooks/useUndo'
 import { formatDateTime } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
-import type { SessionDetails, SessionEvent } from '../services/api'
+import type { SessionEvent } from '../services/api'
 
 interface Snapshot {
   id: number
