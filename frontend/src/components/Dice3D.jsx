@@ -764,7 +764,7 @@ export default function Dice3D({
   const debugPrevIsRollingRef = useRef(false);
   if (isRolling && !debugPrevIsRollingRef.current) {
     const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:render', message: 'isRolling prop became true', data: { debugLabel }, hypothesisId: 'A', timestamp: Date.now() };
-    fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+    fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => { });
     (debugLabel === 'main' ? console.warn : console.debug)('[roll-debug]', payload);
     debugPrevIsRollingRef.current = true;
   }
@@ -801,6 +801,13 @@ export default function Dice3D({
     rendererRef.current = renderer;
 
     container.appendChild(renderer.domElement);
+
+    // Center the canvas inside its position:relative container.
+    const canvas = renderer.domElement;
+    canvas.style.position = 'absolute';
+    canvas.style.top = '50%';
+    canvas.style.left = '50%';
+    canvas.style.transform = 'translate(-50%, -50%)';
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
@@ -871,7 +878,7 @@ export default function Dice3D({
         debugMeshNullCountRef.current += 1;
         if (debugMeshNullCountRef.current <= 3 || debugMeshNullCountRef.current % 60 === 0) {
           const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:animate', message: 'mesh null', data: { count: debugMeshNullCountRef.current }, hypothesisId: 'C', timestamp: Date.now() };
-          fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+          fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => { });
           console.debug('[roll-debug]', payload);
         }
         animationFrameId = requestAnimationFrame(animate);
@@ -881,14 +888,14 @@ export default function Dice3D({
       if (rolling && !debugLastRollingRef.current) {
         const el = rendererRef.current?.domElement;
         const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:animate', message: 'entered rolling branch', data: { debugLabel, lockMotion, freeze, hasTarget: !!targetRotationRef.current, canvasW: el?.clientWidth, canvasH: el?.clientHeight }, hypothesisId: 'A', timestamp: Date.now() };
-        fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+        fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => { });
         (debugLabel === 'main' ? console.warn : console.debug)('[roll-debug]', payload);
         debugLastRollingRef.current = true;
       }
       if (!rolling) debugLastRollingRef.current = false;
       if (fc % 60 === 0) {
         const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:animate', message: 'frame sample', data: { rolling, lockMotion, freeze, hasMesh: true, hasTarget: !!targetRotationRef.current, frame: fc }, hypothesisId: 'B,D,E', timestamp: Date.now() };
-        fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+        fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => { });
         console.debug('[roll-debug]', payload);
       }
       // #endregion
@@ -906,7 +913,7 @@ export default function Dice3D({
         // #region agent log
         if (fc % 30 === 0) {
           const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:rolling-branch', message: 'applying roll rotation', data: { frame: fc }, hypothesisId: 'A', timestamp: Date.now() };
-          fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+          fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => { });
           console.debug('[roll-debug]', payload);
         }
         // #endregion
@@ -946,7 +953,7 @@ export default function Dice3D({
           const easedY = lerp(opticalOffsetRef.current.y, y, 0.12);
           opticalOffsetRef.current = { x: easedX, y: easedY };
           rendererRef.current.domElement.style.transform =
-            `translate(${easedX.toFixed(2)}px, ${easedY.toFixed(2)}px)`;
+            `translate(calc(-50% + ${easedX.toFixed(2)}px), calc(-50% + ${easedY.toFixed(2)}px))`;
         }
       }
 
@@ -960,7 +967,7 @@ export default function Dice3D({
         cancelAnimationFrame(animationFrameId);
       }
       if (rendererRef.current?.domElement) {
-        rendererRef.current.domElement.style.transform = 'translate(0px, 0px)';
+        rendererRef.current.domElement.style.transform = 'translate(-50%, -50%)';
       }
     };
     // Restart loop when isRolling changes so the new loop definitely sees current ref.
