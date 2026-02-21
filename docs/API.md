@@ -6,7 +6,7 @@ The Comic Pile API is a RESTful API for tracking comic reading using a dice-driv
 
 - **Base URL**: `http://localhost:8000`
 - **Content Type**: `application/json`
-- **Authentication**: Not required (single-user application)
+- **Authentication**: JWT Bearer token required (see `/api/auth/login`)
 
 ### Interactive Documentation
 

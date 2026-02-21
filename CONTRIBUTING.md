@@ -12,7 +12,7 @@ The lint script runs:
 - Python compilation check
 - Ruff linting
 - Any type usage check (ruff ANN401 rule)
-- Pyright type checking
+- ty type checking (ty check --error-on-warning)
 
 The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: ignore`, or `# pylint: ignore`.
 
@@ -57,7 +57,7 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 
 ### Frontend Development
 
-- React components live in `app/templates/` with JSX syntax
+- React components live in `frontend/src/` with JSX syntax
 - Style with Tailwind CSS (mobile-first, touch targets ≥44px)
 - Keep custom JavaScript to a minimum (React handles most interactivity)
 

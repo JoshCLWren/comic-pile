@@ -26,11 +26,9 @@ pytest tests_e2e/ -m integration --video=retain-on-failure
 - `test_dice_ladder_e2e.py` - Dice ladder behavior tests
 
 ### 2. TypeScript Playwright Tests (frontend/src/test/)
-**Status**: ⚠️ Requires backend async fix
+**Status**: ✅ Working
 
 These are Node.js-based Playwright tests with comprehensive coverage including accessibility and visual regression.
-
-**Note**: These tests are currently failing due to a backend async context issue (sqlalchemy.exc.MissingGreenlet). The tests are correctly written and will pass once the backend issue is resolved.
 
 ```bash
 # Run all TypeScript E2E tests
@@ -58,16 +56,9 @@ npm run test:e2e:headed
 - `network.spec.ts` - API/network tests (15 tests)
 - `edge-cases.spec.ts` - Edge case tests (20 tests)
 
-## Backend Issue
+## Known Issues
 
-The TypeScript Playwright tests are failing with:
-```
-sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called
-```
-
-This occurs in `app/api/session.py` when accessing database values outside an async context. The Python E2E tests work around this by using a different test server setup, but the TypeScript tests hit this bug.
-
-**Fix Required**: Ensure all database access in `app/api/session.py` and related files uses proper async/await patterns.
+MissingGreenlet errors in `app/api/session.py` and `app/api/rate.py` have been fixed. If you encounter similar issues, ensure all SQLAlchemy model attributes are extracted into variables **before** `await db.commit()` (see `AGENTS.md` for the required pattern).
 
 ## CI Configuration
 
@@ -78,8 +69,8 @@ The CI pipeline (`.github/workflows/ci-sharded.yml`) runs:
    - `test-e2e-dice-ladder` - Dice ladder behavior tests
    - `test-e2e-browser-*` - Individual browser UI tests (sharded for parallel execution)
 
-2. **TypeScript E2E Tests** ⚠️
-   - `test-e2e-playwright` - New Playwright tests (added but failing due to backend issue)
+2. **TypeScript E2E Tests** ✅
+   - `test-e2e-playwright` - Playwright tests
 
 ## Local Development
 
@@ -192,8 +183,6 @@ pytest tests_e2e/test_browser_ui.py --debug
 
 ## Next Steps
 
-1. **Fix backend async issue** in `app/api/session.py` to unblock TypeScript tests
-2. **Add more Python E2E tests** for coverage gaps
-3. **Enable TypeScript tests in CI** once backend is fixed
-4. **Add visual regression baseline images** for screenshot tests
-5. **Set up accessibility dashboard** for tracking a11y violations
+1. **Add more Python E2E tests** for coverage gaps
+2. **Add visual regression baseline images** for screenshot tests
+3. **Set up accessibility dashboard** for tracking a11y violations

@@ -18,7 +18,8 @@ A dice-driven comic reading tracker built with FastAPI, React, and Tailwind CSS.
 - **Frontend**: React + Vite + Tailwind CSS
 - **Styling**: Tailwind CSS
 - **Testing**: pytest with httpx.AsyncClient for API tests
-- **Code Quality**: ruff linting, pyright type checking, 96% coverage requirement
+- **Auth**: JWT authentication with refresh token rotation
+- **Code Quality**: ruff linting, ty type checking, 96% coverage requirement
 
 ## Quick Start
 
@@ -76,9 +77,7 @@ make migrate
 - `make seed` - Populate database with Faker sample data
 - `make migrate` - Run Alembic migrations
 - `make pytest` - Run test suite with coverage
-- `make lint` - Run ruff and pyright
-- `make worktrees` - List git worktrees
-- `make status` - Show current task status
+- `make lint` - Run ruff and ty type checking
 
 ## Project Structure
 
@@ -90,12 +89,15 @@ make migrate
 │   ├── api/               # API route handlers
 │   ├── models/            # SQLAlchemy database models
 │   ├── schemas/           # Pydantic request/response schemas
-│   └── templates/         # React components
+│   └── auth.py            # JWT authentication
 ├── comic_pile/            # Core package (dice ladder, queue, session logic)
-├── migrations/            # Alembic migration files
-├── scripts/               # Utility scripts (seed data, etc.)
-├── static/                # Static assets (CSS, JS)
+├── frontend/              # React frontend (Vite + Tailwind CSS)
+├── alembic/               # Database migration files
+├── scripts/               # Utility scripts (seed data, backups)
+├── static/                # Built frontend assets
 ├── tests/                 # pytest test suite
+├── tests_e2e/             # Playwright E2E tests
+├── docs/                  # Technical documentation
 ├── pyproject.toml         # Project configuration
 └── uv.lock                # Dependency lockfile
 ```
@@ -136,7 +138,7 @@ ruff format .
 
 ```bash
 # Run type checker
-pyright .
+ty check --error-on-warning
 ```
 
 ### Pre-commit Hook
@@ -145,7 +147,7 @@ A pre-commit hook is installed automatically that runs:
 - Python compilation check
 - Ruff linting
 - Any type usage check (disallows `Any` type)
-- Pyright type checking
+- ty type checking
 
 The hook will block commits with issues. To test manually:
 
@@ -171,13 +173,25 @@ The app is configured with CORS enabled for local network access. To use the app
    sudo ufw allow 8000
    ```
 
-## API Documentation
+## Documentation
 
-FastAPI automatically generates interactive API documentation:
+| Document | Description |
+|----------|-------------|
+| [docs/API.md](docs/API.md) | REST API reference — endpoints, schemas, and examples |
+| [docs/REACT_ARCHITECTURE.md](docs/REACT_ARCHITECTURE.md) | Frontend architecture — components, hooks, contexts, build pipeline |
+| [docs/AUTH_USERS_MULTITENANT_PLAN.md](docs/AUTH_USERS_MULTITENANT_PLAN.md) | JWT auth design and multi-tenant isolation plan |
+| [docs/DATABASE_SAVE_LOAD.md](docs/DATABASE_SAVE_LOAD.md) | PostgreSQL backups, JSON export/import, disaster recovery |
+| [docs/rate_limiting.md](docs/rate_limiting.md) | Per-endpoint rate limits via slowapi |
+| [docs/GIT_HOOKS.md](docs/GIT_HOOKS.md) | Pre-commit and pre-push hook setup |
+| [docs/frontend-backend-asset-coupling-audit.md](docs/frontend-backend-asset-coupling-audit.md) | Asset pipeline audit and remediation plan |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and code quality standards |
+| [LOCAL_TESTING.md](LOCAL_TESTING.md) | Local test environment setup with fixtures and sample data |
+| [TECH_DEBT.md](TECH_DEBT.md) | Technical debt tracker — active items and resolution history |
+| [SECURITY.md](SECURITY.md) | Docker security, SSL/TLS, secrets, container hardening |
+| [ROLLBACK.md](ROLLBACK.md) | Database, Docker, and git rollback procedures |
+| [prd.md](prd.md) | Product Requirements Document (design source of truth) |
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- Full API Documentation: [docs/API.md](docs/API.md)
+Interactive API docs are also available at `/docs` (Swagger UI) and `/redoc` when the server is running.
 
 ## Contributing
 

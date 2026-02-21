@@ -19,16 +19,6 @@ limiter = Limiter(key_func=get_remote_address)
 
 ## Rate Limits by Endpoint
 
-### Task API
-
-| Endpoint | Limit | Description |
-|----------|-------|-------------|
-| `GET /api/tasks/` | 200/minute | List all tasks |
-| `POST /api/tasks/` | 60/minute | Create new task |
-| `GET /api/tasks/ready` | 200/minute | Get ready tasks (high frequency for workers) |
-| `GET /api/tasks/{task_id}` | 200/minute | Get task details |
-| `PATCH /api/tasks/{task_id}` | 60/minute | Update task |
-
 ### Thread API
 
 | Endpoint | Limit | Description |

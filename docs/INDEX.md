@@ -4,71 +4,39 @@ This index provides a comprehensive map of all documentation in the comic-pile p
 
 ## Getting Started
 
-- [README.md](../README.md) - Main project entry point, tech stack overview, quick start guide, and API documentation links.
-- [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines, development workflow, code quality standards, and testing guidelines.
+- [README.md](../README.md) — Project overview, quick start, and development workflow.
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — Development workflow, code quality standards, and testing guidelines.
+- [LOCAL_TESTING.md](../LOCAL_TESTING.md) — Local test environment setup with sample data and fixtures.
 
-## Core Architecture
+## Architecture & Design
 
-- [../prd.md](../prd.md) - Product Requirements Document (source of truth for project requirements).
-- [API.md](API.md) - Complete API documentation with endpoints, request/response schemas, and examples.
-- [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md) - React stack details, component organization, state management, and migration notes.
-- [AUTH_USERS_MULTITENANT_PLAN.md](AUTH_USERS_MULTITENANT_PLAN.md) - Step-by-step plan for JWT auth, multi-user isolation, and React-only modernization.
+- [prd.md](../prd.md) — Product Requirements Document (source of truth for product rules and design).
+- [REACT_ARCHITECTURE.md](REACT_ARCHITECTURE.md) — React frontend architecture, component hierarchy, hooks, and build pipeline.
+- [API.md](API.md) — Complete REST API documentation with endpoints, schemas, and examples.
+- [AUTH_USERS_MULTITENANT_PLAN.md](AUTH_USERS_MULTITENANT_PLAN.md) — JWT auth implementation plan and multi-tenant isolation (Phases 1-7 complete).
 
-## Technical Documentation
+## Operations & Infrastructure
 
-- [DATABASE_SAVE_LOAD.md](DATABASE_SAVE_LOAD.md) - Database save/load functionality, export formats, and backup procedures.
-- [rate_limiting.md](rate_limiting.md) - Rate limiting documentation - slowapi configuration and endpoint protection.
+- [DATABASE_SAVE_LOAD.md](DATABASE_SAVE_LOAD.md) — PostgreSQL backups, JSON export/import, and disaster recovery.
+- [rate_limiting.md](rate_limiting.md) — slowapi rate limiting configuration and per-endpoint limits.
+- [GIT_HOOKS.md](GIT_HOOKS.md) — Pre-commit and pre-push hook setup for code quality enforcement.
+- [frontend-backend-asset-coupling-audit.md](frontend-backend-asset-coupling-audit.md) — Asset pipeline audit findings and remediation plan.
+- [../ROLLBACK.md](../ROLLBACK.md) — Database, Docker, and git rollback procedures.
+- [../SECURITY.md](../SECURITY.md) — Docker security, SSL/TLS, secrets management, and container hardening.
 
-## Current Stack
+## Project Health
 
-**Backend:**
-- FastAPI (Python 3.13)
-- PostgreSQL with SQLAlchemy ORM
-- Alembic for migrations
+- [../TECH_DEBT.md](../TECH_DEBT.md) — Technical debt tracker with prioritized items and resolution history.
+- [../AGENTS.md](../AGENTS.md) — AI agent guidelines and project conventions.
 
-**Frontend:**
-- React + Vite
-- Tailwind CSS for styling
+## Testing
 
-**Testing:**
-- pytest for backend API tests
-- Playwright for E2E tests
-- Coverage target: 96%
+- [../tests_e2e/README.md](../tests_e2e/README.md) — E2E test suites (Python Playwright and TypeScript Playwright).
+- [../frontend/src/test/README.md](../frontend/src/test/README.md) — TypeScript Playwright test structure and usage.
+- [../scripts/README_thread_management.md](../scripts/README_thread_management.md) — Thread queue audit and fix scripts.
 
-**Code Quality:**
-- ruff for linting
-- pyright for type checking
-- ESLint for JavaScript
-- htmlhint for HTML
+## Archived
 
-## Quick Reference
-
-**Development:**
-```bash
-make dev          # Start FastAPI dev server
-pytest            # Run tests
-make lint         # Run linters (ruff, pyright)
-make pytest       # Run tests with coverage
-make seed         # Populate sample data
-make migrate      # Run database migrations
-```
-
-**API Documentation:**
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
-**Key Directories:**
-- `app/` - FastAPI application (api/, models/, schemas/, templates/)
-- `comic_pile/` - Core package (dice ladder, queue, session logic)
-- `tests/` - pytest test suite
-- `frontend/` - React frontend application
-- `docs/` - Technical documentation
-- `migrations/` - Alembic migration files
-
-## Archived Documentation
-
-Historical documentation is organized in [../archive/](../archive/) for reference:
-
-- **archive/htmx-backup/** - Legacy frontend documentation (stack migrated to React)
-- **archive/exploration/** - Exploratory research documents (MCP, Docker, etc.)
-- **archive/historical/** - Historical summaries and audit reports
+Historical documentation is in [../archive/](../archive/) for reference:
+- **archive/historical/** — Audit reports, implementation summaries, and PRD compliance reviews.
+- **archive/exploration/** — Exploratory research (MCP, sharing, anti-binge features).
