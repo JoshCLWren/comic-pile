@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
@@ -369,10 +369,6 @@ export default function RollPage() {
   const hasValidRolledResult =
     Number.isInteger(rolledResult) && rolledResult >= 1 && rolledResult <= currentDie
 
-  function setDiceStateValue(state) {
-    setDiceState(state)
-  }
-
   async function handleSetDie(die) {
     setCurrentDie(die)
     await setDieMutation.mutate(die)
@@ -423,7 +419,7 @@ export default function RollPage() {
     }
 
     setIsRolling(true)
-    setDiceStateValue('idle')
+    setDiceState('idle')
 
     let currentRollCount = 0
     const maxRolls = 10
@@ -469,9 +465,9 @@ export default function RollPage() {
     }
   }
 
-  function handleRollComplete() {
-    setDiceStateValue('rolled')
-  }
+  const handleRollComplete = useCallback(() => {
+    setDiceState('rolled')
+  }, [])
 
   function handleOverrideSubmit(event) {
     event.preventDefault()
@@ -620,19 +616,16 @@ export default function RollPage() {
                       style={{ width: '120px', height: '120px', margin: '0 auto' }}
                     >
                       <LazyDice3D
-                        sides={predictedDie}
+                        sides={currentDie}
                         value={rolledResult || 1}
                         isRolling={false}
                         showValue={false}
                         freeze
                         color={0xffffff}
                       />
-                      <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wider text-indigo-400">
-                        Rating
-                      </span>
                     </div>
                     {hasValidRolledResult && (
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
+                      <p className="mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
                         Rolled {rolledResult} on d{currentDie}
                       </p>
                     )}

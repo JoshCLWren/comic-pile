@@ -863,7 +863,7 @@ describe('Rating View', () => {
     })
   })
 
-  it('renders predicted die in rating preview', async () => {
+  it('renders current die in rating preview (not predicted)', async () => {
     useSession.mockReturnValue({
       data: {
         current_die: 6,
@@ -889,11 +889,11 @@ describe('Rating View', () => {
 
     const previewContainer = document.getElementById('rating-preview-dice')
     const previewDie = within(previewContainer).getByTestId('lazy-dice')
-    expect(previewDie).toHaveAttribute('data-sides', '4')
+    expect(previewDie).toHaveAttribute('data-sides', '6')
 
     fireEvent.change(screen.getByLabelText(/rating/i), { target: { value: '1.0' } })
 
-    expect(within(previewContainer).getByTestId('lazy-dice')).toHaveAttribute('data-sides', '8')
+    expect(within(previewContainer).getByTestId('lazy-dice')).toHaveAttribute('data-sides', '6')
   })
 
   it('cancels pending roll through dismiss mutation', async () => {
