@@ -209,6 +209,28 @@ interface MetricsData {
   }[]
 }
 
+interface SessionEvent {
+  id: number
+  timestamp: string
+  type: string
+  thread_title: string | null
+  rating: number | null
+  result: number | null
+  die: number | null
+  queue_move: string | null
+}
+
+interface SessionDetails {
+  session_id: number
+  started_at: string
+  ended_at: string | null
+  start_die: number
+  current_die: number
+  ladder_path: string
+  narrative_summary: { [key: string]: string[] } | null
+  events: SessionEvent[]
+}
+
 export const threadsApi = {
   list: () => api.get<Thread[]>('/threads/'),
   get: (id: number) => api.get<Thread>(`/threads/${id}`),
@@ -233,13 +255,13 @@ export const rateApi = {
   rate: (data: RateData) => api.post('/rate/', data),
 }
 
-export type { Thread, CreateThreadData, UpdateThreadData, ReactivateThreadData, RollResponse, RateData, Session, ActiveThreadInfo, SnoozedThreadInfo, SnapshotData, MetricsData }
+export type { Thread, CreateThreadData, UpdateThreadData, ReactivateThreadData, RollResponse, RateData, Session, ActiveThreadInfo, SnoozedThreadInfo, SnapshotData, MetricsData, SessionDetails, SessionEvent }
 
 export const sessionApi = {
   list: (params?: SessionListParams) => api.get<Session[]>('/sessions/', { params }),
   get: (id: number) => api.get<Session>(`/sessions/${id}`),
   getCurrent: () => api.get<Session>('/sessions/current/'),
-  getDetails: (id: number) => api.get(`/sessions/${id}/details`),
+  getDetails: (id: number) => api.get<SessionDetails>(`/sessions/${id}/details`),
   getSnapshots: (id: number) => api.get<SnapshotData[]>(`/sessions/${id}/snapshots`),
   restoreSessionStart: (id: number) => api.post(`/sessions/${id}/restore-session-start`),
 }

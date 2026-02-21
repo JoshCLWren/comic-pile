@@ -69,7 +69,7 @@ export function useSessions(params: SessionListParams = EMPTY_PARAMS) {
 }
 
 export function useSessionDetails(id: number | null | undefined) {
-  const [data, setData] = useState<unknown>(null)
+  const [data, setData] = useState<import('../services/api').SessionDetails | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState<Error | null>(null)

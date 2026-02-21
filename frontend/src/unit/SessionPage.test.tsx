@@ -40,7 +40,7 @@ beforeEach(() => {
     isLoading: false,
   })
   useSessionSnapshots.mockReturnValue({
-    data: { snapshots: [{ id: 4, description: 'Before twist', created_at: '2024-05-01T10:20:00Z' }] },
+    data: [{ id: 4, action: 'Before twist', timestamp: '2024-05-01T10:20:00Z' }],
   })
   useRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: false })
   useUndo.mockReturnValue({ mutate: undoSpy, isPending: false })

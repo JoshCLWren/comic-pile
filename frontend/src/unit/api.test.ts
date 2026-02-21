@@ -45,8 +45,8 @@ it('calls thread endpoints with expected paths', () => {
   threadsApi.list()
   threadsApi.get(9)
 
-  expect(get).toHaveBeenCalledWith('/threads/')
-  expect(get).toHaveBeenCalledWith('/threads/9')
+  expect(get).toHaveBeenCalledWith('/threads/', undefined)
+  expect(get).toHaveBeenCalledWith('/threads/9', undefined)
 })
 
 it('calls queue endpoints with expected paths', () => {
@@ -54,7 +54,7 @@ it('calls queue endpoints with expected paths', () => {
   queueApi.moveToFront(4)
   queueApi.moveToBack(5)
 
-  expect(put).toHaveBeenCalledWith('/queue/threads/3/position/', { new_position: 2 })
-  expect(put).toHaveBeenCalledWith('/queue/threads/4/front/')
-  expect(put).toHaveBeenCalledWith('/queue/threads/5/back/')
+  expect(put).toHaveBeenCalledWith('/queue/threads/3/position/', { new_position: 2 }, undefined)
+  expect(put).toHaveBeenCalledWith('/queue/threads/4/front/', undefined, undefined)
+  expect(put).toHaveBeenCalledWith('/queue/threads/5/back/', undefined, undefined)
 })

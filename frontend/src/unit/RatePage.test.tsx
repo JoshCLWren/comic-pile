@@ -34,6 +34,7 @@ beforeEach(() => {
     last_rolled_result: 4,
     has_restore_point: true,
     active_thread: {
+      id: 1,
       title: 'Saga',
       format: 'Comic',
       issues_remaining: 3,
@@ -82,6 +83,7 @@ it('shows loading state instead of session inactive during initial fetch', async
     last_rolled_result: 4,
     has_restore_point: true,
     active_thread: {
+      id: 1,
       title: 'Saga',
       format: 'Comic',
       issues_remaining: 3,
@@ -117,6 +119,7 @@ it('navigates to home after rating when no pending thread exists', async () => {
     last_rolled_result: 4,
     has_restore_point: true,
     active_thread: {
+      id: 1,
       title: 'Saga',
       format: 'Comic',
       issues_remaining: 3,

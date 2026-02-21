@@ -4,32 +4,7 @@ import { useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '
 import { useUndo } from '../hooks/useUndo'
 import { formatDateTime } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
-
-interface NarrativeSummary {
-  [key: string]: string[]
-}
-
-interface SessionEvent {
-  id: number
-  timestamp: string
-  type: string
-  thread_title: string | null
-  rating: number | null
-  result: number | null
-  die: number | null
-  queue_move: string | null
-}
-
-interface SessionDetails {
-  session_id: number
-  started_at: string
-  ended_at: string | null
-  start_die: number
-  current_die: number
-  ladder_path: string
-  narrative_summary: NarrativeSummary | null
-  events: SessionEvent[]
-}
+import type { SessionDetails, SessionEvent } from '../services/api'
 
 interface Snapshot {
   id: number
@@ -37,18 +12,19 @@ interface Snapshot {
   created_at: string
 }
 
-interface SnapshotsData {
-  snapshots: Snapshot[]
-}
-
 export default function SessionPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
-  const { data: details, isPending } = useSessionDetails(id)
-  const { data: snapshotsData } = useSessionSnapshots(id)
+  const sessionId = id ? parseInt(id, 10) : undefined
+  const { data: details, isPending } = useSessionDetails(sessionId)
+  const { data: snapshotsData } = useSessionSnapshots(sessionId)
   const restoreMutation = useRestoreSessionStart()
   const undoMutation = useUndo()
 
-  const snapshots: Snapshot[] = snapshotsData?.snapshots ?? []
+  const snapshots: Snapshot[] = Array.isArray(snapshotsData) ? snapshotsData.map(s => ({
+    id: s.id,
+    description: s.action,
+    created_at: s.timestamp
+  })) : []
 
   if (isPending) {
     return <LoadingSpinner fullScreen />
