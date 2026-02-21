@@ -754,6 +754,11 @@ export default function Dice3D({
   const previousSidesRef = useRef(sides);
   const opticalOffsetRef = useRef({ x: 0, y: 0 });
   const viewportSizeRef = useRef({ w: 200, h: 200 });
+  const isRollingRef = useRef(isRolling);
+  const onRollCompleteRef = useRef(onRollComplete);
+
+  isRollingRef.current = isRolling;
+  onRollCompleteRef.current = onRollComplete;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -842,6 +847,7 @@ export default function Dice3D({
     const animate = () => {
       if (!meshRef.current) return;
 
+      const rolling = isRollingRef.current;
       let isStable = false;
 
       if (lockMotion) {
@@ -851,7 +857,7 @@ export default function Dice3D({
           targetRotationRef.current = null;
         }
         isStable = true;
-      } else if (isRolling) {
+      } else if (rolling) {
         meshRef.current.rotation.x += 0.2;
         meshRef.current.rotation.y += 0.25;
         meshRef.current.rotation.z += 0.15;
@@ -868,7 +874,8 @@ export default function Dice3D({
         if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01 && Math.abs(dz) < 0.01) {
           meshRef.current.rotation.set(x, y, z);
           targetRotationRef.current = null;
-          if (onRollComplete) onRollComplete();
+          const onComplete = onRollCompleteRef.current;
+          if (onComplete) onComplete();
           isStable = true;
         }
       } else if (!freeze) {
@@ -879,7 +886,7 @@ export default function Dice3D({
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
-        const isIdleRotating = !freeze && !lockMotion && !isRolling && !targetRotationRef.current;
+        const isIdleRotating = !freeze && !lockMotion && !rolling && !targetRotationRef.current;
         if (rendererRef.current.domElement && meshRef.current && isStable && !isIdleRotating) {
           const { w, h } = viewportSizeRef.current;
           const { x, y } = getProjectedCenterOffsetPx(meshRef.current, cameraRef.current, w, h);
@@ -904,7 +911,7 @@ export default function Dice3D({
         rendererRef.current.domElement.style.transform = 'translate(0px, 0px)';
       }
     };
-  }, [isRolling, onRollComplete, freeze, lockMotion]);
+  }, [freeze, lockMotion]);
 
   useEffect(() => {
     if (!isRolling && meshRef.current) {
