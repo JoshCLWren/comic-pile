@@ -833,8 +833,9 @@ async def test_rate_auto_advance_skips_nonpositive_queue_positions(
     )
     assert response.status_code == 200
 
+    # After rating, auto-advance is disabled, so pending_thread_id should be None.
     await async_db.refresh(session)
-    assert session.pending_thread_id == next_thread.id
+    assert session.pending_thread_id is None
 
 
 @pytest.mark.asyncio

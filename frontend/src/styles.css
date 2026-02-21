@@ -75,6 +75,11 @@ body {
   height: 100%;
 }
 
+/* Force compositing layer during roll so canvas repaints are visible */
+.dice-3d-rolling {
+  will-change: transform;
+}
+
 .dice3d-canvas {
   width: 100%;
   height: 100%;

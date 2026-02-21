@@ -46,15 +46,17 @@ async def get_session_with_thread_safe(
     if not session:
         return None, None
 
-    # Query Event table after Session to ensure consistent lock ordering
+    # Query the latest action event to determine if there's an active roll.
+    # An active roll exists only if the most recent action was a "roll".
     event_result = await db.execute(
         select(Event)
         .where(Event.session_id == session_id)
-        .where(Event.type == "roll")
-        .where(Event.selected_thread_id.is_not(None))
-        .order_by(Event.timestamp.desc())
+        .where(Event.type.in_(["roll", "rate", "snooze", "rolled_but_skipped"]))
+        .order_by(Event.timestamp.desc(), Event.id.desc())
     )
-    event = event_result.scalars().first()
+    latest_event = event_result.scalars().first()
+    
+    event = latest_event if latest_event and latest_event.type == "roll" else None
 
     last_rolled_result = event.result if event else None
 

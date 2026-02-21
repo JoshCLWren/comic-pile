@@ -232,23 +232,8 @@ async def rate_thread(
         current_session.pending_thread_id = None
         current_session.pending_thread_updated_at = None
     else:
-        # Auto-advance to next thread in queue for legacy flow and API consistency
-        next_thread_result = await db.execute(
-            select(Thread)
-            .where(Thread.user_id == user_id)
-            .where(Thread.status == "active")
-            .where(Thread.queue_position >= 1)
-            .where(Thread.id != thread_id)
-            .order_by(Thread.queue_position)
-            .limit(1)
-        )
-        next_thread = next_thread_result.scalar_one_or_none()
-        if next_thread:
-            current_session.pending_thread_id = next_thread.id
-            current_session.pending_thread_updated_at = datetime.now(UTC)
-        else:
-            current_session.pending_thread_id = None
-            current_session.pending_thread_updated_at = None
+        current_session.pending_thread_id = None
+        current_session.pending_thread_updated_at = None
 
     await db.flush()
     await db.refresh(event)

@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useLayoutEffect } from 'react';
 import * as THREE from 'three';
 import { buildD10Faces } from './d10Geometry';
 import { getDiceRenderConfigForSides } from './diceRenderConfig';
@@ -743,6 +743,7 @@ export default function Dice3D({
   color = 0xffffff,
   onRollComplete = null,
   renderConfig = null,
+  debugLabel = null,
 }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
@@ -756,9 +757,27 @@ export default function Dice3D({
   const viewportSizeRef = useRef({ w: 200, h: 200 });
   const isRollingRef = useRef(isRolling);
   const onRollCompleteRef = useRef(onRollComplete);
+  // #region agent log
+  const debugFrameCountRef = useRef(0);
+  const debugLastRollingRef = useRef(false);
+  const debugMeshNullCountRef = useRef(0);
+  const debugPrevIsRollingRef = useRef(false);
+  if (isRolling && !debugPrevIsRollingRef.current) {
+    const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:render', message: 'isRolling prop became true', data: { debugLabel }, hypothesisId: 'A', timestamp: Date.now() };
+    fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+    (debugLabel === 'main' ? console.warn : console.debug)('[roll-debug]', payload);
+    debugPrevIsRollingRef.current = true;
+  }
+  if (!isRolling) debugPrevIsRollingRef.current = false;
+  // #endregion
 
   isRollingRef.current = isRolling;
   onRollCompleteRef.current = onRollComplete;
+
+  // Sync ref in layout so the animation loop sees it before the next frame.
+  useLayoutEffect(() => {
+    isRollingRef.current = isRolling;
+  }, [isRolling]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -845,9 +864,35 @@ export default function Dice3D({
     let animationFrameId;
 
     const animate = () => {
-      if (!meshRef.current) return;
-
+      // #region agent log
+      debugFrameCountRef.current += 1;
+      const fc = debugFrameCountRef.current;
+      if (!meshRef.current) {
+        debugMeshNullCountRef.current += 1;
+        if (debugMeshNullCountRef.current <= 3 || debugMeshNullCountRef.current % 60 === 0) {
+          const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:animate', message: 'mesh null', data: { count: debugMeshNullCountRef.current }, hypothesisId: 'C', timestamp: Date.now() };
+          fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+          console.debug('[roll-debug]', payload);
+        }
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
       const rolling = isRollingRef.current;
+      if (rolling && !debugLastRollingRef.current) {
+        const el = rendererRef.current?.domElement;
+        const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:animate', message: 'entered rolling branch', data: { debugLabel, lockMotion, freeze, hasTarget: !!targetRotationRef.current, canvasW: el?.clientWidth, canvasH: el?.clientHeight }, hypothesisId: 'A', timestamp: Date.now() };
+        fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+        (debugLabel === 'main' ? console.warn : console.debug)('[roll-debug]', payload);
+        debugLastRollingRef.current = true;
+      }
+      if (!rolling) debugLastRollingRef.current = false;
+      if (fc % 60 === 0) {
+        const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:animate', message: 'frame sample', data: { rolling, lockMotion, freeze, hasMesh: true, hasTarget: !!targetRotationRef.current, frame: fc }, hypothesisId: 'B,D,E', timestamp: Date.now() };
+        fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+        console.debug('[roll-debug]', payload);
+      }
+      // #endregion
+
       let isStable = false;
 
       if (lockMotion) {
@@ -858,6 +903,13 @@ export default function Dice3D({
         }
         isStable = true;
       } else if (rolling) {
+        // #region agent log
+        if (fc % 30 === 0) {
+          const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:rolling-branch', message: 'applying roll rotation', data: { frame: fc }, hypothesisId: 'A', timestamp: Date.now() };
+          fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => {});
+          console.debug('[roll-debug]', payload);
+        }
+        // #endregion
         meshRef.current.rotation.x += 0.2;
         meshRef.current.rotation.y += 0.25;
         meshRef.current.rotation.z += 0.15;
@@ -911,7 +963,8 @@ export default function Dice3D({
         rendererRef.current.domElement.style.transform = 'translate(0px, 0px)';
       }
     };
-  }, [freeze, lockMotion]);
+    // Restart loop when isRolling changes so the new loop definitely sees current ref.
+  }, [freeze, lockMotion, isRolling]);
 
   useEffect(() => {
     if (!isRolling && meshRef.current) {
@@ -928,7 +981,7 @@ export default function Dice3D({
   return (
     <div
       ref={containerRef}
-      className="dice-3d"
+      className={`dice-3d${isRolling ? ' dice-3d-rolling' : ''}`}
       style={{ width: '100%', height: '100%', position: 'relative', pointerEvents: 'none' }}
     />
   )

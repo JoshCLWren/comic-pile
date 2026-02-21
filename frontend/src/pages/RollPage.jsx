@@ -542,7 +542,7 @@ export default function RollPage() {
           <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
             <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
               <div className="w-full h-full">
-                <LazyDice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
+                <LazyDice3D debugLabel="header" sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
               </div>
             </div>
             <div className="text-right">
@@ -582,6 +582,7 @@ export default function RollPage() {
               >
                 <div className="w-full h-full main-die-optical-center">
                   <LazyDice3D
+                    debugLabel="main"
                     sides={currentDie}
                     value={rolledResult || 1}
                     isRolling={isRolling}

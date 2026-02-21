@@ -84,8 +84,8 @@ async def test_roll_rate_history_consistency(
 
     expected_die = step_down(roll_data["die_size"])
     assert rated_data["current_die"] == expected_die
-    # After rating, a new roll event is created for the next available thread
-    # The active_thread and last_rolled_result are from the most recent roll event
-    assert rated_data["active_thread"] is not None
-    assert rated_data["active_thread"]["id"] in [t.id for t in threads]
-    assert rated_data["last_rolled_result"] is not None
+    
+    # After rating, auto-advance is disabled.
+    # The active_thread should be None until a new roll is performed.
+    assert rated_data["active_thread"] is None
+    assert rated_data["last_rolled_result"] is None
