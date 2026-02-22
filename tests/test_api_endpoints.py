@@ -65,6 +65,19 @@ async def test_list_threads(auth_client: AsyncClient, sample_data: dict) -> None
 
 
 @pytest.mark.asyncio
+async def test_list_threads_search(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Test GET /api/threads/?search= filters threads by title."""
+    _ = sample_data
+
+    response = await auth_client.get("/api/threads/", params={"search": "man"})
+    assert response.status_code == 200
+
+    threads = response.json()
+    titles = {thread["title"] for thread in threads}
+    assert titles == {"Superman", "Batman", "Aquaman", "Wonder Woman"}
+
+
+@pytest.mark.asyncio
 async def test_list_threads_empty(auth_client: AsyncClient) -> None:
     """Test GET /api/threads/ with no threads returns empty list."""
     response = await auth_client.get("/api/threads/")

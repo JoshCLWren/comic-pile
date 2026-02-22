@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
@@ -89,18 +89,28 @@ async def list_threads(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    search: str | None = Query(default=None, min_length=1),
 ) -> list[ThreadResponse]:
     """List all threads ordered by position.
 
     Args:
         request: FastAPI request object for rate limiting.
+        search: Optional case-insensitive title search filter.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
     Returns:
         List of ThreadResponse objects ordered by queue_position.
     """
-    if get_threads_cached:
+    if search:
+        result = await db.execute(
+            select(Thread)
+            .where(Thread.user_id == current_user.id)
+            .where(Thread.title.ilike(f"%{search}%"))
+            .order_by(Thread.queue_position)
+        )
+        threads = result.scalars().all()
+    elif get_threads_cached:
         threads = await get_threads_cached(db, current_user.id)
     else:
         result = await db.execute(
