@@ -40,8 +40,6 @@ class ThreadResponse(BaseModel):
     last_review_at: datetime | None
     notes: str | None
     is_test: bool
-    is_blocked: bool = False
-    blocking_reasons: list[str] = []
     created_at: datetime
 
 

@@ -7,12 +7,6 @@ from app.schemas.auth import (
     UserRegisterRequest,
     UserResponse,
 )
-from app.schemas.dependency import (
-    BlockingExplanation,
-    DependencyCreate,
-    DependencyResponse,
-    ThreadDependenciesResponse,
-)
 from app.schemas.rate import RateRequest
 from app.schemas.roll import OverrideRequest, RollResponse
 from app.schemas.session import (
@@ -41,11 +35,6 @@ __all__ = [
     "ThreadUpdate",
     "ThreadResponse",
     "ReactivateRequest",
-    # Dependency
-    "DependencyCreate",
-    "DependencyResponse",
-    "BlockingExplanation",
-    "ThreadDependenciesResponse",
     # Roll
     "RollResponse",
     "OverrideRequest",

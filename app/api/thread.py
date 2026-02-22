@@ -43,8 +43,6 @@ def thread_to_response(thread: Thread) -> ThreadResponse:
         last_review_at=thread.last_review_at,
         notes=thread.notes,
         is_test=thread.is_test,
-        is_blocked=thread.is_blocked,
-        blocking_reasons=[],
         created_at=thread.created_at,
     )
 
