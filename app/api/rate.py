@@ -16,8 +16,9 @@ from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import RateRequest, ThreadResponse
 from app.api.thread import thread_to_response
+from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
-from comic_pile.queue import move_to_back, move_to_front
+from comic_pile.queue import get_roll_pool, move_to_back, move_to_front
 from comic_pile.session import get_current_die
 
 router = APIRouter()
@@ -216,6 +217,7 @@ async def rate_thread(
 
     if should_complete_thread:
         await move_to_back(thread_id, user_id, db, commit=False)
+        await refresh_user_blocked_status(user_id, db)
     elif rate_data.rating >= rating_threshold:
         await move_to_front(thread_id, user_id, db, commit=False)
     else:
@@ -232,8 +234,18 @@ async def rate_thread(
         current_session.pending_thread_id = None
         current_session.pending_thread_updated_at = None
     else:
-        current_session.pending_thread_id = None
-        current_session.pending_thread_updated_at = None
+        snoozed_ids = current_session.snoozed_thread_ids or []
+        roll_pool = await get_roll_pool(user_id, db, snoozed_ids)
+
+        next_pending_thread_id = next(
+            (candidate.id for candidate in roll_pool if candidate.id != thread_id),
+            roll_pool[0].id if roll_pool else None,
+        )
+
+        current_session.pending_thread_id = next_pending_thread_id
+        current_session.pending_thread_updated_at = (
+            datetime.now(UTC) if next_pending_thread_id is not None else None
+        )
 
     await db.flush()
     await db.refresh(event)

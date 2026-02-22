@@ -22,6 +22,7 @@ from app.schemas import (
     SnapshotsListResponse,
 )
 from app.schemas.session import SnoozedThreadInfo
+from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -79,21 +80,37 @@ async def get_session_with_thread_safe(
             )
         return session, None
 
-    if not event or not event.selected_thread_id:
-        return session, None
+    if event and event.selected_thread_id:
+        thread = await db.get(Thread, event.selected_thread_id)
+        if thread and thread.user_id == session.user_id:
+            return session, ActiveThreadInfo(
+                id=thread.id,
+                title=thread.title,
+                format=thread.format,
+                issues_remaining=thread.issues_remaining,
+                queue_position=thread.queue_position,
+                last_rolled_result=last_rolled_result,
+            )
 
-    thread = await db.get(Thread, event.selected_thread_id)
-    if not thread:
-        return session, None
+    # When a thread is just completed by rating and no pending thread is set,
+    # keep that completed thread visible to the UI for follow-up actions.
+    if latest_event and latest_event.type == "rate" and latest_event.thread_id:
+        rated_thread = await db.get(Thread, latest_event.thread_id)
+        if (
+            rated_thread
+            and rated_thread.user_id == session.user_id
+            and rated_thread.status == "completed"
+        ):
+            return session, ActiveThreadInfo(
+                id=rated_thread.id,
+                title=rated_thread.title,
+                format=rated_thread.format,
+                issues_remaining=rated_thread.issues_remaining,
+                queue_position=rated_thread.queue_position,
+                last_rolled_result=last_rolled_result,
+            )
 
-    return session, ActiveThreadInfo(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        queue_position=thread.queue_position,
-        last_rolled_result=last_rolled_result,
-    )
+    return session, None
 
 
 async def build_narrative_summary(session_id: int, db: AsyncSession) -> dict[str, list[str]]:
@@ -790,6 +807,9 @@ async def restore_session_start(
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)
                 session.manual_die = snapshot.session_state.get("manual_die", session.manual_die)
 
+            await db.commit()
+            await db.refresh(session)
+            await refresh_user_blocked_status(current_user.id, db)
             await db.commit()
             await db.refresh(session)
 

@@ -23,7 +23,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import admin, analytics, auth, queue, rate, roll, session, snooze, thread, undo
+from app.api import admin, analytics, auth, dependency, queue, rate, roll, session, snooze, thread, undo
 from app.config import get_app_settings, get_database_settings
 from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
@@ -384,6 +384,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(session.router, prefix="/api", tags=["session"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
+    app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
 
     def _assert_production_frontend_assets() -> None:
         """Ensure required frontend artifacts exist in production.
