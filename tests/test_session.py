@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import get_active_thread
 from app.config import clear_settings_cache
-from app.models import Event, Session, Snapshot, Thread, User
+from app.models import Dependency, Event, Session, Snapshot, Thread, User
 from app.models import Session as SessionModel
 from comic_pile.session import (
     create_session_start_snapshot,
@@ -909,6 +909,54 @@ async def test_restore_session_start_clears_pending_thread_id(
 
     restored_thread2 = await async_db.get(Thread, thread2.id)
     assert restored_thread2 is not None
+
+
+@pytest.mark.asyncio
+async def test_restore_session_start_recomputes_blocked_status(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """Restore should recompute denormalized blocked flags from dependencies."""
+    thread1 = Thread(
+        title="Prereq",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    thread2 = Thread(
+        title="Blocked",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=default_user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add_all([thread1, thread2])
+    await async_db.flush()
+
+    async_db.add(Dependency(source_thread_id=thread1.id, target_thread_id=thread2.id))
+    await async_db.commit()
+    await async_db.refresh(thread2)
+
+    session = SessionModel(start_die=6, user_id=default_user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    await create_session_start_snapshot(async_db, session)
+
+    # Simulate stale denormalized flag before restore.
+    thread2.is_blocked = False
+    await async_db.commit()
+
+    response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
+    assert response.status_code == 200
+
+    await async_db.refresh(thread2)
+    assert thread2.is_blocked is True
 
 
 @pytest.mark.asyncio

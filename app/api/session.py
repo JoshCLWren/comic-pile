@@ -22,6 +22,7 @@ from app.schemas import (
     SnapshotsListResponse,
 )
 from app.schemas.session import SnoozedThreadInfo
+from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -804,6 +805,8 @@ async def restore_session_start(
 
             await db.commit()
             await db.refresh(session)
+            await refresh_user_blocked_status(current_user.id, db)
+            await db.commit()
 
             if clear_cache:
                 clear_cache()
