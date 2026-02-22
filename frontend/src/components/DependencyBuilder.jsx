@@ -48,22 +48,30 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       return
     }
 
+    let isCurrent = true
     const timeout = setTimeout(async () => {
+      if (!isCurrent) return
       setIsSearching(true)
       setError('')
       try {
         const candidates = await threadsApi.list({ search: query })
+        if (!isCurrent) return
         const filtered = candidates.filter((candidate) => candidate.id !== thread.id)
         setSearchResults(filtered)
       } catch (searchError) {
+        if (!isCurrent) return
         setError(searchError?.response?.data?.detail || 'Thread search failed.')
         setSearchResults([])
       } finally {
+        if (!isCurrent) return
         setIsSearching(false)
       }
     }, 300)
 
-    return () => clearTimeout(timeout)
+    return () => {
+      isCurrent = false
+      clearTimeout(timeout)
+    }
   }, [searchQuery, isOpen, thread?.id])
 
   async function handleCreateDependency() {
@@ -100,10 +108,11 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
       <div className="space-y-4">
         <div className="space-y-2">
-          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          <label htmlFor="search-prereq-thread" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
             Search prerequisite thread
           </label>
           <input
+            id="search-prereq-thread"
             type="text"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}

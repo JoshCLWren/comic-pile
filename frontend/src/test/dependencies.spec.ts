@@ -21,10 +21,14 @@ test.describe('Dependencies', () => {
     const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Thread' }).first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
-    await authenticatedPage.fill('input[placeholder="Type at least 2 characters"]', 'Source')
-    await authenticatedPage.waitForTimeout(500)
+    await authenticatedPage.fill('input#search-prereq-thread', 'Source')
+    await authenticatedPage.waitForSelector('button:has-text("Source Thread")', { state: 'visible' })
     await authenticatedPage.click('button:has-text("Source Thread")')
     await authenticatedPage.click('button:has-text("Block with:")')
+
+    await authenticatedPage.waitForResponse(
+      (response) => response.url().includes('/api/v1/dependencies/') && response.request().method() === 'POST' && response.status() < 300
+    )
 
     await authenticatedPage.click('button[aria-label="Close modal"]')
     await authenticatedPage.waitForLoadState('networkidle')
@@ -59,6 +63,10 @@ test.describe('Dependencies', () => {
     const source = threads.find((thread: { title: string; id: number }) => thread.title === 'A Prequel')
     const target = threads.find((thread: { title: string; id: number }) => thread.title === 'B Main Story')
 
+    if (!source || !target) {
+      throw new Error(`Failed to find expected threads: source=${source?.id}, target=${target?.id}`)
+    }
+
     await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
@@ -85,7 +93,7 @@ test.describe('Dependencies', () => {
     })
 
     await authenticatedPage.click('button:has-text("Read Now")')
-    await authenticatedPage.waitForTimeout(300)
+    await authenticatedPage.waitForFunction(() => sawAlert === true, { timeout: 2000 })
 
     expect(sawAlert).toBeTruthy()
   })

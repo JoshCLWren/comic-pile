@@ -102,11 +102,12 @@ async def list_threads(
     Returns:
         List of ThreadResponse objects ordered by queue_position.
     """
-    if search:
+    normalized_search = search.strip() if search is not None else None
+    if normalized_search:
         result = await db.execute(
             select(Thread)
             .where(Thread.user_id == current_user.id)
-            .where(Thread.title.ilike(f"%{search}%"))
+            .where(Thread.title.ilike(f"%{normalized_search}%"))
             .order_by(Thread.queue_position)
         )
         threads = result.scalars().all()
