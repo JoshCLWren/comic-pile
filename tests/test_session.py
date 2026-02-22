@@ -948,7 +948,9 @@ async def test_restore_session_start_recomputes_blocked_status(
 
     await create_session_start_snapshot(async_db, session)
 
-    # Simulate stale denormalized flag before restore.
+    # Set a correct value, then corrupt it to stale denormalized state.
+    thread2.is_blocked = True
+    await async_db.commit()
     thread2.is_blocked = False
     await async_db.commit()
 

@@ -82,7 +82,7 @@ async def get_session_with_thread_safe(
 
     if event and event.selected_thread_id:
         thread = await db.get(Thread, event.selected_thread_id)
-        if thread:
+        if thread and thread.user_id == session.user_id:
             return session, ActiveThreadInfo(
                 id=thread.id,
                 title=thread.title,
@@ -96,7 +96,11 @@ async def get_session_with_thread_safe(
     # keep that completed thread visible to the UI for follow-up actions.
     if latest_event and latest_event.type == "rate" and latest_event.thread_id:
         rated_thread = await db.get(Thread, latest_event.thread_id)
-        if rated_thread and rated_thread.user_id == session.user_id and rated_thread.status == "completed":
+        if (
+            rated_thread
+            and rated_thread.user_id == session.user_id
+            and rated_thread.status == "completed"
+        ):
             return session, ActiveThreadInfo(
                 id=rated_thread.id,
                 title=rated_thread.title,
@@ -807,6 +811,7 @@ async def restore_session_start(
             await db.refresh(session)
             await refresh_user_blocked_status(current_user.id, db)
             await db.commit()
+            await db.refresh(session)
 
             if clear_cache:
                 clear_cache()
