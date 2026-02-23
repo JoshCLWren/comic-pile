@@ -86,15 +86,12 @@ test.describe('Dependencies', () => {
       .first()
       .click()
 
-    let sawAlert = false
-    authenticatedPage.on('dialog', async (dialog) => {
-      sawAlert = true
-      await dialog.accept()
-    })
+    const dialogPromise = authenticatedPage.waitForEvent('dialog', { timeout: 2000 })
 
     await authenticatedPage.click('button:has-text("Read Now")')
-    await authenticatedPage.waitForFunction(() => sawAlert === true, { timeout: 2000 })
 
-    expect(sawAlert).toBeTruthy()
+    const dialog = await dialogPromise
+    expect(dialog.message()).toContain('blocked')
+    await dialog.accept()
   })
 })
