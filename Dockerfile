@@ -1,10 +1,11 @@
+# Global ARGs (available to all stages when redeclared)
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
 # ============================
 # Python dependency stage
 # ============================
 FROM python:3.13-slim AS python-builder
-
-ARG USER_ID=1000
-ARG GROUP_ID=1000
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -45,6 +46,9 @@ RUN npm run build
 # Runtime stage
 # ============================
 FROM python:3.13-slim
+
+ARG USER_ID=1000
+ARG GROUP_ID=1000
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
