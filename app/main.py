@@ -23,7 +23,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import admin, analytics, auth, dependency, queue, rate, roll, session, snooze, thread, undo
+from app.api import admin, analytics, auth, collection, dependency, queue, rate, roll, session, snooze, thread, undo
 from app.config import get_app_settings, get_database_settings
 from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
@@ -379,6 +379,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
+    app.include_router(collection.router, prefix="/api/v1/collections", tags=["collections"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
     app.include_router(session.router, prefix="/api", tags=["session"])

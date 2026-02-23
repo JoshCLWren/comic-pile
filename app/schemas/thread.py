@@ -13,6 +13,7 @@ class ThreadCreate(BaseModel):
     issues_remaining: int = Field(..., ge=0)
     notes: str | None = None
     is_test: bool = False
+    collection_id: int | None = None
 
 
 class ThreadUpdate(BaseModel):
@@ -23,6 +24,7 @@ class ThreadUpdate(BaseModel):
     issues_remaining: int | None = Field(None, ge=0)
     notes: str | None = None
     is_test: bool | None = None
+    collection_id: int | None = None
 
 
 class ThreadResponse(BaseModel):
@@ -42,6 +44,7 @@ class ThreadResponse(BaseModel):
     is_test: bool
     is_blocked: bool = False
     blocking_reasons: list[str] = []
+    collection_id: int | None = None
     created_at: datetime
 
 

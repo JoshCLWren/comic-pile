@@ -45,6 +45,7 @@ def thread_to_response(thread: Thread) -> ThreadResponse:
         is_test=thread.is_test,
         is_blocked=thread.is_blocked,
         blocking_reasons=[],
+        collection_id=thread.collection_id,
         created_at=thread.created_at,
     )
 
@@ -90,12 +91,14 @@ async def list_threads(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
     search: str | None = Query(default=None, min_length=1),
+    collection_id: int | None = Query(default=None),
 ) -> list[ThreadResponse]:
     """List all threads ordered by position.
 
     Args:
         request: FastAPI request object for rate limiting.
         search: Optional case-insensitive title search filter.
+        collection_id: Optional collection ID to filter threads.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
@@ -103,20 +106,21 @@ async def list_threads(
         List of ThreadResponse objects ordered by queue_position.
     """
     normalized_search = search.strip() if search is not None else None
+    query = select(Thread).where(Thread.user_id == current_user.id)
+
+    if collection_id is not None:
+        query = query.where(Thread.collection_id == collection_id)
+
     if normalized_search:
-        result = await db.execute(
-            select(Thread)
-            .where(Thread.user_id == current_user.id)
-            .where(Thread.title.ilike(f"%{normalized_search}%"))
-            .order_by(Thread.queue_position)
-        )
+        query = query.where(Thread.title.ilike(f"%{normalized_search}%"))
+        query = query.order_by(Thread.queue_position)
+        result = await db.execute(query)
         threads = result.scalars().all()
-    elif get_threads_cached:
+    elif get_threads_cached and collection_id is None:
         threads = await get_threads_cached(db, current_user.id)
     else:
-        result = await db.execute(
-            select(Thread).where(Thread.user_id == current_user.id).order_by(Thread.queue_position)
-        )
+        query = query.order_by(Thread.queue_position)
+        result = await db.execute(query)
         threads = result.scalars().all()
     return [thread_to_response(thread) for thread in threads]
 
@@ -228,6 +232,7 @@ async def create_thread(
                 user_id=current_user.id,
                 notes=thread_data.notes,
                 is_test=thread_data.is_test,
+                collection_id=thread_data.collection_id,
             )
             db.add(new_thread)
             await db.commit()
@@ -318,6 +323,8 @@ async def update_thread(
         thread.notes = thread_data.notes
     if thread_data.is_test is not None:
         thread.is_test = thread_data.is_test
+    if thread_data.collection_id is not None:
+        thread.collection_id = thread_data.collection_id
     await db.commit()
     await db.refresh(thread)
     if clear_cache:
@@ -511,3 +518,50 @@ async def set_pending_thread(
         offset=offset,
         snoozed_count=snoozed_count,
     )
+
+
+@router.post("/{thread_id}:moveToCollection", response_model=ThreadResponse)
+async def move_thread_to_collection(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    collection_id: int | None = Query(None),
+) -> ThreadResponse:
+    """Move a thread to a collection (or remove from collection if collection_id is None).
+
+    Args:
+        thread_id: The thread ID to move.
+        collection_id: The collection ID to move the thread to (None to remove from collection).
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with updated thread details.
+
+    Raises:
+        HTTPException: If thread not found or collection doesn't belong to user.
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    # If collection_id is provided, verify it belongs to the user
+    if collection_id is not None:
+        from app.models import Collection
+
+        collection = await db.get(Collection, collection_id)
+        if not collection or collection.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Collection {collection_id} not found",
+            )
+
+    thread.collection_id = collection_id
+    await db.commit()
+    await db.refresh(thread)
+    if clear_cache:
+        clear_cache()
+    return thread_to_response(thread)
