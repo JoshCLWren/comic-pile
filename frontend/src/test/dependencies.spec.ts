@@ -80,13 +80,25 @@ test.describe('Dependencies', () => {
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
 
+    // Wait for the blocked indicator to appear (means blocked state was loaded)
+    await expect(
+      authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'B Main Story' })
+        .locator('[aria-label="Blocked thread"]')
+    ).toBeVisible()
+
     await authenticatedPage
       .locator('#queue-container .glass-card')
       .filter({ hasText: 'B Main Story' })
       .first()
       .click()
 
-    const dialogPromise = authenticatedPage.waitForEvent('dialog', { timeout: 2000 })
+    // Wait for action sheet modal to open
+    await authenticatedPage.waitForSelector('button:has-text("Read Now")', { state: 'visible' })
+
+    // Set up dialog listener before clicking
+    const dialogPromise = authenticatedPage.waitForEvent('dialog')
 
     await authenticatedPage.click('button:has-text("Read Now")')
 
