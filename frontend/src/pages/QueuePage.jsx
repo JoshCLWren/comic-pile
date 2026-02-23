@@ -4,6 +4,7 @@ import Modal from '../components/Modal'
 import PositionSlider from '../components/PositionSlider'
 import Tooltip from '../components/Tooltip'
 import LoadingSpinner from '../components/LoadingSpinner'
+import DependencyBuilder from '../components/DependencyBuilder'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
 import {
   useCreateThread,
@@ -14,7 +15,7 @@ import {
 } from '../hooks/useThread'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api'
+import { dependenciesApi, threadsApi } from '../services/api'
 
 const DEFAULT_CREATE_STATE = {
   title: '',
@@ -52,6 +53,10 @@ export default function QueuePage() {
   const [reorderError, setReorderError] = useState(null)
   const [selectedThread, setSelectedThread] = useState(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+  const [blockedThreadIds, setBlockedThreadIds] = useState([])
+  const [blockingReasonMap, setBlockingReasonMap] = useState({})
+  const [dependencyThread, setDependencyThread] = useState(null)
+  const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
 
   useEffect(() => {
     if (location.state?.editThreadId && threads) {
@@ -62,6 +67,40 @@ export default function QueuePage() {
       }
     }
   }, [location.state, threads, navigate])
+
+  async function refreshBlockedState() {
+    try {
+      const blockedIds = await dependenciesApi.listBlockedThreadIds()
+      setBlockedThreadIds(blockedIds)
+
+      if (blockedIds.length === 0) {
+        setBlockingReasonMap({})
+        return
+      }
+
+      const details = await Promise.all(
+        blockedIds.map(async (threadId) => {
+          try {
+            const info = await dependenciesApi.getBlockingInfo(threadId)
+            return [threadId, info.blocking_reasons || []]
+          } catch {
+            return [threadId, []]
+          }
+        })
+      )
+
+      setBlockingReasonMap(Object.fromEntries(details))
+    } catch {
+      // Non-blocking UI enhancement; keep queue usable even if dependency API fails.
+      setBlockedThreadIds([])
+      setBlockingReasonMap({})
+    }
+  }
+
+  useEffect(() => {
+    if (!threads) return
+    refreshBlockedState()
+  }, [threads])
 
   const activeThreads = threads
     ?.filter((thread) => thread.status === 'active')
@@ -229,6 +268,13 @@ export default function QueuePage() {
       switch (action) {
         case 'read':
           {
+            const isBlocked = blockedThreadIds.includes(selectedThread.id) || selectedThread.is_blocked
+            if (isBlocked) {
+              const reasons = blockingReasonMap[selectedThread.id] || ['This thread is blocked by a dependency.']
+              alert(`Cannot read yet:\n\n${reasons.join('\n')}`)
+              break
+            }
+
             const response = await threadsApi.setPending(selectedThread.id)
             navigate('/', { state: { rollResponse: response } })
           }
@@ -250,6 +296,10 @@ export default function QueuePage() {
           }
           await refetchSession()
           await refetch()
+          break
+        case 'dependencies':
+          setDependencyThread(selectedThread)
+          setIsDependencyBuilderOpen(true)
           break
         case 'edit':
           openEditModal(selectedThread)
@@ -317,11 +367,14 @@ export default function QueuePage() {
           >
             {activeThreads.map((thread, index) => {
               const isDragOver = dragOverThreadId === thread.id
+              const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
+              const blockingReasons = blockingReasonMap[thread.id] || []
+
               return (
                 <div
                   key={thread.id}
                   data-testid="queue-thread-item"
-                  className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${isDragOver ? 'border-amber-400/60' : ''
+                  className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''
                     }`}
                   onDragOver={handleDragOver(thread.id)}
                   onDrop={handleDrop(thread.id)}
@@ -355,6 +408,11 @@ export default function QueuePage() {
                           </button>
                         </Tooltip>
                         <h3 className="text-lg font-bold text-white flex-1 truncate">{thread.title}</h3>
+                        {isBlocked && (
+                          <Tooltip content={blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'}>
+                            <span className="text-red-300 text-lg" aria-label="Blocked thread">🔒</span>
+                          </Tooltip>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -369,6 +427,20 @@ export default function QueuePage() {
                           aria-label="Edit thread"
                         >
                           ✎
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Manage dependencies for this thread.">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDependencyThread(thread)
+                            setIsDependencyBuilderOpen(true)
+                          }}
+                          className="text-slate-500 hover:text-white transition-colors text-sm"
+                          aria-label="Manage dependencies"
+                        >
+                          🔗
                         </button>
                       </Tooltip>
                       <Tooltip content="Delete thread from queue.">
@@ -651,6 +723,14 @@ export default function QueuePage() {
           </button>
           <button
             type="button"
+            onClick={() => handleAction('dependencies')}
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+          >
+            <span className="text-lg">🔗</span>
+            <span>Dependencies</span>
+          </button>
+          <button
+            type="button"
             onClick={() => handleAction('edit')}
             className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -659,6 +739,19 @@ export default function QueuePage() {
           </button>
         </div>
       </Modal>
+
+      <DependencyBuilder
+        thread={dependencyThread}
+        isOpen={isDependencyBuilderOpen}
+        onClose={() => {
+          setIsDependencyBuilderOpen(false)
+          setDependencyThread(null)
+        }}
+        onChanged={async () => {
+          await refetch()
+          await refreshBlockedState()
+        }}
+      />
     </div>
   )
 }

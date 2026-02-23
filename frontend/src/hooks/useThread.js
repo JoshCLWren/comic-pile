@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { threadsApi } from '../services/api'
 
-export function useThreads() {
+export function useThreads(searchTerm = '') {
   const [data, setData] = useState(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
@@ -10,14 +10,15 @@ export function useThreads() {
     setIsPending(true)
     setIsError(false)
     try {
-      const result = await threadsApi.list()
+      const params = searchTerm?.trim() ? { search: searchTerm.trim() } : undefined
+      const result = await threadsApi.list(params)
       setData(result)
     } catch {
       setIsError(true)
     } finally {
       setIsPending(false)
     }
-  }, [])
+  }, [searchTerm])
 
   useEffect(() => {
     fetchData()

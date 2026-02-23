@@ -21,7 +21,11 @@ services:
       retries: 5
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        USER_ID: ${UID:-1000}
+        GROUP_ID: ${GID:-1000}
     container_name: comic-pile-test-001-app
     restart: unless-stopped
     depends_on:

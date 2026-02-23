@@ -87,7 +87,7 @@ api.interceptors.response.use(
 export default api
 
 export const threadsApi = {
-  list: () => api.get('/threads/'),
+  list: (params) => api.get('/threads/', { params }),
   get: (id) => api.get(`/threads/${id}`),
   create: (data) => api.post('/threads/', data),
   update: (id, data) => api.put(`/threads/${id}`, data),
@@ -128,6 +128,20 @@ export const queueApi = {
 export const undoApi = {
   undo: (sessionId, snapshotId) => api.post(`/undo/${sessionId}/undo/${snapshotId}`),
   listSnapshots: (sessionId) => api.get(`/undo/${sessionId}/snapshots`),
+}
+
+export const dependenciesApi = {
+  listBlockedThreadIds: () => api.get('/v1/dependencies/blocked'),
+  listThreadDependencies: (threadId) => api.get(`/v1/threads/${threadId}/dependencies`),
+  getBlockingInfo: (threadId) => api.post(`/v1/threads/${threadId}:getBlockingInfo`),
+  createDependency: ({ sourceId, targetId }) =>
+    api.post('/v1/dependencies/', {
+      source_type: 'thread',
+      source_id: sourceId,
+      target_type: 'thread',
+      target_id: targetId,
+    }),
+  deleteDependency: (dependencyId) => api.delete(`/v1/dependencies/${dependencyId}`),
 }
 
 export const tasksApi = {

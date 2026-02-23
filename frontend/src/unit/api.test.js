@@ -20,7 +20,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { queueApi, threadsApi } from '../services/api'
+import { dependenciesApi, queueApi, threadsApi } from '../services/api'
 
 beforeEach(() => {
   get.mockResolvedValue({})
@@ -31,9 +31,11 @@ beforeEach(() => {
 
 it('calls thread endpoints with expected paths', () => {
   threadsApi.list()
+  threadsApi.list({ search: 'bat' })
   threadsApi.get(9)
 
-  expect(get).toHaveBeenCalledWith('/threads/')
+  expect(get).toHaveBeenCalledWith('/threads/', { params: undefined })
+  expect(get).toHaveBeenCalledWith('/threads/', { params: { search: 'bat' } })
   expect(get).toHaveBeenCalledWith('/threads/9')
 })
 
@@ -45,4 +47,23 @@ it('calls queue endpoints with expected paths', () => {
   expect(put).toHaveBeenCalledWith('/queue/threads/3/position/', { new_position: 2 })
   expect(put).toHaveBeenCalledWith('/queue/threads/4/front/')
   expect(put).toHaveBeenCalledWith('/queue/threads/5/back/')
+})
+
+it('calls dependency endpoints with expected paths', () => {
+  dependenciesApi.listBlockedThreadIds()
+  dependenciesApi.listThreadDependencies(11)
+  dependenciesApi.getBlockingInfo(12)
+  dependenciesApi.createDependency({ sourceId: 1, targetId: 2 })
+  dependenciesApi.deleteDependency(7)
+
+  expect(get).toHaveBeenCalledWith('/v1/dependencies/blocked')
+  expect(get).toHaveBeenCalledWith('/v1/threads/11/dependencies')
+  expect(post).toHaveBeenCalledWith('/v1/threads/12:getBlockingInfo')
+  expect(post).toHaveBeenCalledWith('/v1/dependencies/', {
+    source_type: 'thread',
+    source_id: 1,
+    target_type: 'thread',
+    target_id: 2,
+  })
+  expect(del).toHaveBeenCalledWith('/v1/dependencies/7')
 })

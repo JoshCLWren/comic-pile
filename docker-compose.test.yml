@@ -21,6 +21,9 @@ services:
       context: .
       dockerfile: Dockerfile.ci
       target: final
+      args:
+        USER_ID: ${UID:-1000}
+        GROUP_ID: ${GID:-1000}
     container_name: comic-pile-e2e-api
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres-test:5432/comic_pile_test

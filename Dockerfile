@@ -1,3 +1,7 @@
+# Global ARGs (available to all stages when redeclared)
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
 # ============================
 # Python dependency stage
 # ============================
@@ -43,6 +47,9 @@ RUN npm run build
 # ============================
 FROM python:3.13-slim
 
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
@@ -52,8 +59,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash appuser
+# Create non-root user with host UID/GID to avoid permission issues
+RUN groupadd -g ${GROUP_ID} appuser && \
+    useradd -u ${USER_ID} -g ${GROUP_ID} --create-home --shell /bin/bash appuser
 
 WORKDIR /app
 
@@ -71,9 +79,9 @@ COPY static/ ./static/
 COPY --from=frontend-builder /app/static/react ./static/react
 
 # Fix ownership
-RUN chown -R appuser:appuser /app
+RUN chown -R ${USER_ID}:${GROUP_ID} /app
 
-USER appuser
+USER ${USER_ID}
 
 # Railway injects PORT
 EXPOSE 8000
