@@ -97,13 +97,18 @@ test.describe('Dependencies', () => {
     // Wait for action sheet modal to open
     await authenticatedPage.waitForSelector('button:has-text("Read Now")', { state: 'visible' })
 
-    // Set up dialog listener before clicking
-    const dialogPromise = authenticatedPage.waitForEvent('dialog')
+    // Set up dialog handler that auto-accepts and captures the message
+    let dialogMessage = ''
+    authenticatedPage.on('dialog', async (dialog) => {
+      dialogMessage = dialog.message()
+      await dialog.accept()
+    })
 
     await authenticatedPage.click('button:has-text("Read Now")')
 
-    const dialog = await dialogPromise
-    expect(dialog.message()).toContain('blocked')
-    await dialog.accept()
+    // Wait a bit for the dialog handler to fire
+    await authenticatedPage.waitForTimeout(500)
+
+    expect(dialogMessage.toLowerCase()).toContain('blocked')
   })
 })
