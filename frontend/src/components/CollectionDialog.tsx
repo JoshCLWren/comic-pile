@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useCollections, type Collection, type CollectionCreate, type CollectionUpdate } from '../contexts/CollectionContext'
+import { useCollections } from '../contexts/CollectionContext'
+import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 import './CollectionDialog.css'
 
 interface CollectionDialogProps {
@@ -90,10 +91,16 @@ export default function CollectionDialog({ collection, onClose }: CollectionDial
   }
 
   return (
-    <div className="collection-dialog__overlay" onClick={handleBackdropClick}>
+    <div
+      className="collection-dialog__overlay"
+      onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="collection-dialog-title"
+    >
       <div className="collection-dialog">
         <div className="collection-dialog__header">
-          <h2 className="collection-dialog__title">
+          <h2 id="collection-dialog-title" className="collection-dialog__title">
             {isEditMode ? 'Edit Collection' : 'Create Collection'}
           </h2>
           <button

@@ -1,26 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import { collectionsApi } from '../services/api'
-
-export interface Collection {
-  id: number
-  name: string
-  user_id: number
-  is_default: boolean
-  position: number
-  created_at: string
-}
-
-export interface CollectionCreate {
-  name: string
-  is_default?: boolean
-  position?: number
-}
-
-export interface CollectionUpdate {
-  name?: string
-  is_default?: boolean
-  position?: number
-}
+import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 
 interface CollectionContextType {
   collections: Collection[]

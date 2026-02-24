@@ -42,7 +42,7 @@ export default function CollectionSwitcher() {
         {collections.map((collection) => (
           <option key={collection.id} value={collection.id}>
             {collection.name}
-            {collection.isDefault ? ' ★' : ''}
+            {collection.is_default ? ' ★' : ''}
           </option>
         ))}
       </select>

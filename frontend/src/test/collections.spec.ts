@@ -68,7 +68,7 @@ test.describe('Collections', () => {
 
     await expect(authenticatedPage.locator('text=' + collectionName)).toBeVisible();
 
-    await authenticatedPage.click('text=' + collectionName);
+    await authenticatedPage.locator('.sidebar').getByText(collectionName).click();
     await authenticatedPage.waitForLoadState('networkidle');
 
     await expect(
@@ -126,16 +126,13 @@ test.describe('Collections', () => {
 
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await expect(async () => {
-      const isVisible = await authenticatedPage.locator('text=' + collectionName).count() > 0;
-      expect(isVisible).toBe(false);
-    }).toPass({ timeout: 5000 });
+    await expect(authenticatedPage.locator('text=' + collectionName)).toHaveCount(0, { timeout: 5000 });
 
     const threadCard = authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: threadTitle });
     await expect(threadCard).toBeVisible();
 
-    const badgeCount = await threadCard.locator('.inline-flex').count();
-    expect(badgeCount).toBe(0);
+    const badge = threadCard.locator('[data-testid="collection-badge"]');
+    await expect(badge).toHaveCount(0);
   });
 
   test('filters threads by collection', async ({ authenticatedPage, request }) => {
@@ -161,19 +158,19 @@ test.describe('Collections', () => {
     await expect(authenticatedPage.locator('text=' + threadAName)).toBeVisible();
     await expect(authenticatedPage.locator('text=' + threadBName)).toBeVisible();
 
-    await authenticatedPage.click('text=' + collectionAName);
+    await authenticatedPage.locator('.sidebar').getByText(collectionAName).click();
     await authenticatedPage.waitForLoadState('networkidle');
 
     await expect(authenticatedPage.locator('text=' + threadAName)).toBeVisible();
     await expect(authenticatedPage.locator('text=' + threadBName)).toHaveCount(0);
 
-    await authenticatedPage.click('text=' + collectionBName);
+    await authenticatedPage.locator('.sidebar').getByText(collectionBName).click();
     await authenticatedPage.waitForLoadState('networkidle');
 
     await expect(authenticatedPage.locator('text=' + threadBName)).toBeVisible();
     await expect(authenticatedPage.locator('text=' + threadAName)).toHaveCount(0);
 
-    await authenticatedPage.click('text=All Collections');
+    await authenticatedPage.locator('.sidebar').getByText('All Collections').click();
     await authenticatedPage.waitForLoadState('networkidle');
 
     await expect(authenticatedPage.locator('text=' + threadAName)).toBeVisible();

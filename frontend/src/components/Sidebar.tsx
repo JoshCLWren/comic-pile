@@ -28,14 +28,14 @@ export default function Sidebar() {
     setIsDialogOpen(false)
   }
 
-  const handleSelectCollection = (id: number | null) => {
-    setActiveCollectionId(id)
-  }
-
   const handleDeleteCollection = async (id: number, event: React.MouseEvent) => {
     event.stopPropagation()
     if (window.confirm('Are you sure you want to delete this collection?')) {
-      await deleteCollection(id)
+      try {
+        await deleteCollection(id)
+      } catch {
+        alert('Failed to delete collection. Please try again.')
+      }
     }
   }
 
@@ -59,41 +59,35 @@ export default function Sidebar() {
           <div className="sidebar__loading">Loading...</div>
         ) : (
           <ul className="sidebar__list">
-            <li
-              className={`sidebar__item ${activeCollectionId === null ? 'sidebar__item--active' : ''}`}
-              onClick={() => handleSelectCollection(null)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleSelectCollection(null)
-                }
-              }}
-            >
-              <span className="sidebar__item-name">All Collections</span>
+            <li className={`sidebar__item ${activeCollectionId === null ? 'sidebar__item--active' : ''}`}>
+              <button
+                className="sidebar__item-btn"
+                onClick={() => setActiveCollectionId(null)}
+                type="button"
+              >
+                <span className="sidebar__item-name">All Collections</span>
+              </button>
             </li>
             {collections.map((collection) => (
               <li
                 key={collection.id}
                 className={`sidebar__item ${activeCollectionId === collection.id ? 'sidebar__item--active' : ''}`}
-                onClick={() => handleSelectCollection(collection.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    handleSelectCollection(collection.id)
-                  }
-                }}
               >
-                <span className="sidebar__item-name">
-                  {collection.name}
-                  {collection.is_default && (
-                    <span className="sidebar__default-marker" aria-label="Default collection">
-                      {' '}
-                      ★
-                    </span>
-                  )}
-                </span>
+                <button
+                  className="sidebar__item-btn"
+                  onClick={() => setActiveCollectionId(collection.id)}
+                  type="button"
+                >
+                  <span className="sidebar__item-name">
+                    {collection.name}
+                    {collection.is_default && (
+                      <span className="sidebar__default-marker" aria-label="Default collection">
+                        {' '}
+                        ★
+                      </span>
+                    )}
+                  </span>
+                </button>
                 {!collection.is_default && (
                   <button
                     type="button"

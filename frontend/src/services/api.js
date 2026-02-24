@@ -154,11 +154,11 @@ export const snoozeApi = {
 }
 
 export const collectionsApi = {
-  list: () => api.get('/collections/'),
-  get: (id) => api.get(`/collections/${id}`),
-  create: (data) => api.post('/collections/', data),
-  update: (id, data) => api.put(`/collections/${id}`, data),
-  delete: (id) => api.delete(`/collections/${id}`),
+  list: () => api.get('/v1/collections/'),
+  get: (id) => api.get(`/v1/collections/${id}`),
+  create: (data) => api.post('/v1/collections/', data),
+  update: (id, data) => api.put(`/v1/collections/${id}`, data),
+  delete: (id) => api.delete(`/v1/collections/${id}`),
   moveThreadToCollection: (threadId, collectionId) =>
     api.post(`/threads/${threadId}:moveToCollection`, null, { params: { collection_id: collectionId } }),
 }

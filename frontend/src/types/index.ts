@@ -51,3 +51,27 @@ export interface Thread {
   /** ISO 8601 timestamp when the thread was created */
   created_at: string;
 }
+
+/**
+ * Data required to create a new collection
+ */
+export interface CollectionCreate {
+  /** Display name of the collection */
+  name: string;
+  /** Whether this should be the default collection */
+  is_default?: boolean;
+  /** Position for ordering (optional, defaults to end) */
+  position?: number;
+}
+
+/**
+ * Data for updating an existing collection
+ */
+export interface CollectionUpdate {
+  /** New display name */
+  name?: string;
+  /** Whether this should be the default collection */
+  is_default?: boolean;
+  /** New position for ordering */
+  position?: number;
+}
