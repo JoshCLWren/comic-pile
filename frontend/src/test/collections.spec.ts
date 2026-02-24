@@ -61,12 +61,12 @@ test.describe('Collections', () => {
     }
 
     const collectionName = `Test Collection ${Date.now()}`;
-    const collectionId = await createCollection(request, token, collectionName);
+    await createCollection(request, token, collectionName);
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await expect(authenticatedPage.locator('text=' + collectionName)).toBeVisible();
+    await expect(authenticatedPage.locator('.sidebar').getByText(collectionName)).toBeVisible();
 
     await authenticatedPage.locator('.sidebar').getByText(collectionName).click();
     await authenticatedPage.waitForLoadState('networkidle');
@@ -95,8 +95,8 @@ test.describe('Collections', () => {
     await expect(threadCard).toBeVisible();
 
     await expect(
-      threadCard.locator(`text=${collectionName}`)
-    ).toBeVisible();
+      threadCard.locator('[data-testid="collection-badge"]')
+    ).toHaveText(collectionName);
   });
 
   test('deletes collection and moves threads', async ({ authenticatedPage, request }) => {
@@ -114,7 +114,7 @@ test.describe('Collections', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await expect(authenticatedPage.locator('text=' + collectionName)).toBeVisible();
+    await expect(authenticatedPage.locator('.sidebar').getByText(collectionName)).toBeVisible();
 
     authenticatedPage.on('dialog', dialog => dialog.accept());
 
@@ -126,7 +126,7 @@ test.describe('Collections', () => {
 
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await expect(authenticatedPage.locator('text=' + collectionName)).toHaveCount(0, { timeout: 5000 });
+    await expect(authenticatedPage.locator('.sidebar').getByText(collectionName)).toHaveCount(0, { timeout: 5000 });
 
     const threadCard = authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: threadTitle });
     await expect(threadCard).toBeVisible();
