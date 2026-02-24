@@ -212,6 +212,17 @@ async def create_thread(
     Raises:
         RuntimeError: If failed after max retries.
     """
+    # If collection_id is provided, verify it belongs to the user
+    if thread_data.collection_id is not None:
+        from app.models import Collection
+
+        collection = await db.get(Collection, thread_data.collection_id)
+        if not collection or collection.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Collection {thread_data.collection_id} not found",
+            )
+
     max_retries = 3
     initial_delay = 0.1
     retries = 0
@@ -323,7 +334,18 @@ async def update_thread(
         thread.notes = thread_data.notes
     if thread_data.is_test is not None:
         thread.is_test = thread_data.is_test
-    if thread_data.collection_id is not None:
+    # Check if collection_id was explicitly provided in the request using model_fields_set
+    if "collection_id" in thread_data.model_fields_set:
+        # If collection_id is provided (can be None to clear), verify ownership
+        if thread_data.collection_id is not None:
+            from app.models import Collection
+
+            collection = await db.get(Collection, thread_data.collection_id)
+            if not collection or collection.user_id != current_user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Collection {thread_data.collection_id} not found",
+                )
         thread.collection_id = thread_data.collection_id
     await db.commit()
     await db.refresh(thread)

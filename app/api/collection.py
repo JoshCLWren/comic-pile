@@ -71,17 +71,36 @@ async def list_collections(
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
         page_size: Number of collections to return per page.
-        page_token: Token for pagination continuation.
+        page_token: Token for pagination continuation (position value).
 
     Returns:
         CollectionListResponse with paginated collections.
     """
     query = select(Collection).where(Collection.user_id == current_user.id)
     query = query.order_by(Collection.position)
-    query = query.limit(page_size)
+
+    # Apply cursor-based pagination if page_token provided
+    if page_token:
+        try:
+            cursor_position = int(page_token)
+            query = query.where(Collection.position > cursor_position)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid page_token format",
+            ) from None
+
+    # Query for page_size + 1 to detect if there's a next page
+    query = query.limit(page_size + 1)
 
     result = await db.execute(query)
     collections = result.scalars().all()
+
+    # Check if there are more pages
+    has_more = len(collections) > page_size
+
+    # Only return the first page_size items
+    collections_to_return = collections[:page_size]
 
     collection_responses = [
         CollectionResponse(
@@ -92,14 +111,13 @@ async def list_collections(
             position=c.position,
             created_at=c.created_at,
         )
-        for c in collections
+        for c in collections_to_return
     ]
 
-    # Simple pagination - return empty next_page_token for now
+    # Set next_page_token to position of last item if there are more pages
     next_token = None
-    if len(collections) == page_size:
-        # In a real implementation, this would be an encoded cursor
-        next_token = ""
+    if has_more and collections_to_return:
+        next_token = str(collections_to_return[-1].position)
 
     return CollectionListResponse(
         collections=collection_responses,
@@ -268,7 +286,10 @@ async def delete_collection(
     from app.models import Thread
 
     await db.execute(
-        sa_update(Thread).where(Thread.collection_id == collection_id).values(collection_id=None)
+        sa_update(Thread)
+        .where(Thread.collection_id == collection_id)
+        .where(Thread.user_id == current_user.id)
+        .values(collection_id=None)
     )
 
     await db.delete(collection)
