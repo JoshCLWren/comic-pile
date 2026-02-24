@@ -5,7 +5,7 @@ import type { APIRequestContext } from '@playwright/test';
  * Helper to create a collection via API
  */
 async function createCollection(request: APIRequestContext, token: string, name: string, isDefault = false) {
-  const response = await request.post('/api/collections/', {
+  const response = await request.post('/api/v1/collections/', {
     data: { name, is_default: isDefault },
     headers: {
       'Authorization': `Bearer ${token}`,
