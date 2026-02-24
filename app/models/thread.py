@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.collection import Collection
     from app.models.dependency import Dependency
     from app.models.event import Event
     from app.models.user import User
@@ -38,16 +39,29 @@ class Thread(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    collection_id: Mapped[int | None] = mapped_column(
+        ForeignKey("collections.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("ix_thread_position", "queue_position"),
         Index("ix_thread_status", "status"),
         Index("ix_thread_last_activity", "last_activity_at"),
         Index("ix_thread_user_status_position", "user_id", "status", "queue_position"),
-        Index("ix_thread_user_status_blocked_position", "user_id", "status", "is_blocked", "queue_position"),
+        Index(
+            "ix_thread_user_status_blocked_position",
+            "user_id",
+            "status",
+            "is_blocked",
+            "queue_position",
+        ),
+        Index("ix_thread_collection_id", "collection_id"),
     )
 
     user: Mapped["User"] = relationship("User", back_populates="threads", lazy="raise")
+    collection: Mapped["Collection | None"] = relationship(
+        "Collection", back_populates="threads", lazy="raise", passive_deletes=True
+    )
     events: Mapped[list["Event"]] = relationship(
         "Event", back_populates="thread", cascade="all, delete-orphan", lazy="raise"
     )
