@@ -63,6 +63,7 @@ test.describe('Collections', () => {
     const collectionName = `Test Collection ${Date.now()}`;
     await createCollection(request, token, collectionName);
 
+    // Reload page to refresh collections from API
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
@@ -111,6 +112,7 @@ test.describe('Collections', () => {
 
     await createThreadInCollection(request, token, collectionId, threadTitle);
 
+    // Reload page to refresh collections from API
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
@@ -152,6 +154,7 @@ test.describe('Collections', () => {
     await createThreadInCollection(request, token, collectionAId, threadAName);
     await createThreadInCollection(request, token, collectionBId, threadBName);
 
+    // Reload page to refresh collections from API
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
