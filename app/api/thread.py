@@ -582,8 +582,11 @@ async def move_thread_to_collection(
             )
 
     thread.collection_id = collection_id
+
+    # Extract thread attributes before commit to avoid MissingGreenlet error
+    thread_response = thread_to_response(thread)
+
     await db.commit()
-    await db.refresh(thread)
     if clear_cache:
         clear_cache()
-    return thread_to_response(thread)
+    return thread_response

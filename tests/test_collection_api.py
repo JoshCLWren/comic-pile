@@ -1,13 +1,14 @@
 """Tests for Collection API endpoints."""
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Collection, Thread
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_collection(auth_client: AsyncClient, async_db: AsyncSession) -> Collection:
     """Create a sample collection for testing."""
     from tests.conftest import get_or_create_user_async
@@ -27,7 +28,7 @@ async def sample_collection(auth_client: AsyncClient, async_db: AsyncSession) ->
     return collection
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_thread(auth_client: AsyncClient, async_db: AsyncSession) -> Thread:
     """Create a sample thread for testing."""
     from datetime import UTC, datetime
@@ -54,13 +55,17 @@ async def sample_thread(auth_client: AsyncClient, async_db: AsyncSession) -> Thr
 @pytest.mark.asyncio
 async def test_create_collection(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Test creating a collection."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
     response = await auth_client.post(
         "/api/v1/collections/", json={"name": "DC Comics", "is_default": False, "position": 0}
     )
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "DC Comics"
-    assert data["user_id"] == 1
+    assert data["user_id"] == user.id
 
 
 @pytest.mark.asyncio

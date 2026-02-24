@@ -10,7 +10,7 @@ class CollectionCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=100)
     is_default: bool = False
-    position: int = 0
+    position: int = Field(default=0, ge=0)
 
 
 class CollectionUpdate(BaseModel):
@@ -18,7 +18,7 @@ class CollectionUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=100)
     is_default: bool | None = None
-    position: int | None = None
+    position: int | None = Field(None, ge=0)
 
 
 class CollectionResponse(BaseModel):

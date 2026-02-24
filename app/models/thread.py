@@ -55,6 +55,7 @@ class Thread(Base):
             "is_blocked",
             "queue_position",
         ),
+        Index("ix_thread_collection_id", "collection_id"),
     )
 
     user: Mapped["User"] = relationship("User", back_populates="threads", lazy="raise")

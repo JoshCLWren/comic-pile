@@ -48,13 +48,21 @@ async def create_collection(
     await db.commit()
     await db.refresh(new_collection)
 
+    # Extract attributes immediately after refresh to avoid MissingGreenlet error
+    new_collection_id = new_collection.id
+    new_collection_name = new_collection.name
+    new_collection_user_id = new_collection.user_id
+    new_collection_is_default = new_collection.is_default
+    new_collection_position = new_collection.position
+    new_collection_created_at = new_collection.created_at
+
     return CollectionResponse(
-        id=new_collection.id,
-        name=new_collection.name,
-        user_id=new_collection.user_id,
-        is_default=new_collection.is_default,
-        position=new_collection.position,
-        created_at=new_collection.created_at,
+        id=new_collection_id,
+        name=new_collection_name,
+        user_id=new_collection_user_id,
+        is_default=new_collection_is_default,
+        position=new_collection_position,
+        created_at=new_collection_created_at,
     )
 
 
@@ -80,10 +88,23 @@ async def list_collections(
     query = query.order_by(Collection.position)
 
     # Apply cursor-based pagination if page_token provided
+    # Uses composite cursor of (position, id) to handle non-unique positions
     if page_token:
         try:
-            cursor_position = int(page_token)
-            query = query.where(Collection.position > cursor_position)
+            parts = page_token.split(",")
+            if len(parts) != 2:
+                raise ValueError("Invalid format")
+            cursor_position = int(parts[0])
+            cursor_id = int(parts[1])
+            # Filter: (position > cursor_position) OR (position == cursor_position AND id > cursor_id)
+            from sqlalchemy import or_
+
+            query = query.where(
+                or_(
+                    Collection.position > cursor_position,
+                    (Collection.position == cursor_position) & (Collection.id > cursor_id),
+                )
+            )
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -114,10 +135,11 @@ async def list_collections(
         for c in collections_to_return
     ]
 
-    # Set next_page_token to position of last item if there are more pages
+    # Set next_page_token to composite cursor of last item if there are more pages
     next_token = None
     if has_more and collections_to_return:
-        next_token = str(collections_to_return[-1].position)
+        last = collections_to_return[-1]
+        next_token = f"{last.position},{last.id}"
 
     return CollectionListResponse(
         collections=collection_responses,
@@ -196,16 +218,23 @@ async def update_collection(
     if collection_data.position is not None:
         collection.position = collection_data.position
 
+    # Extract attributes before commit to avoid MissingGreenlet error
+    collection_id_val = collection.id
+    collection_name = collection.name
+    collection_user_id = collection.user_id
+    collection_is_default = collection.is_default
+    collection_position = collection.position
+    collection_created_at = collection.created_at
+
     await db.commit()
-    await db.refresh(collection)
 
     return CollectionResponse(
-        id=collection.id,
-        name=collection.name,
-        user_id=collection.user_id,
-        is_default=collection.is_default,
-        position=collection.position,
-        created_at=collection.created_at,
+        id=collection_id_val,
+        name=collection_name,
+        user_id=collection_user_id,
+        is_default=collection_is_default,
+        position=collection_position,
+        created_at=collection_created_at,
     )
 
 
@@ -244,16 +273,23 @@ async def patch_collection(
     if collection_data.position is not None:
         collection.position = collection_data.position
 
+    # Extract attributes before commit to avoid MissingGreenlet error
+    collection_id_val = collection.id
+    collection_name = collection.name
+    collection_user_id = collection.user_id
+    collection_is_default = collection.is_default
+    collection_position = collection.position
+    collection_created_at = collection.created_at
+
     await db.commit()
-    await db.refresh(collection)
 
     return CollectionResponse(
-        id=collection.id,
-        name=collection.name,
-        user_id=collection.user_id,
-        is_default=collection.is_default,
-        position=collection.position,
-        created_at=collection.created_at,
+        id=collection_id_val,
+        name=collection_name,
+        user_id=collection_user_id,
+        is_default=collection_is_default,
+        position=collection_position,
+        created_at=collection_created_at,
     )
 
 
@@ -280,6 +316,12 @@ async def delete_collection(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Collection {collection_id} not found",
+        )
+
+    if collection.is_default:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete default collection",
         )
 
     # Update threads to remove collection reference
