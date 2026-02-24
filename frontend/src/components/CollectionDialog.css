@@ -1,0 +1,202 @@
+/* Collection Dialog Overlay */
+.collection-dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+/* Collection Dialog Container */
+.collection-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 32rem;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* Dialog Header */
+.collection-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.collection-dialog__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  color: #f8fafc;
+}
+
+.collection-dialog__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: 1.5rem;
+  font-weight: 300;
+  line-height: 1;
+  color: rgba(148, 163, 184, 0.9);
+  background: transparent;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.collection-dialog__close-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Dialog Form */
+.collection-dialog__form {
+  padding: 1.5rem;
+}
+
+/* Form Field */
+.collection-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.collection-dialog__checkbox-field {
+  flex-direction: row;
+  align-items: center;
+}
+
+.collection-dialog__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.collection-dialog__required {
+  color: #ef4444;
+}
+
+/* Text Input */
+.collection-dialog__input {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.collection-dialog__input::placeholder {
+  color: rgba(148, 163, 184, 0.7);
+}
+
+.collection-dialog__input:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.collection-dialog__input:focus {
+  border-color: var(--accent-indigo);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.3);
+}
+
+/* Character Count */
+.collection-dialog__char-count {
+  align-self: flex-end;
+  font-size: 0.75rem;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+/* Checkbox Field */
+.collection-dialog__checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.collection-dialog__checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent-indigo);
+  border-radius: 0.25rem;
+}
+
+.collection-dialog__checkbox-text {
+  font-size: 0.875rem;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+/* Error Message */
+.collection-dialog__error {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.875rem;
+  color: #fecaca;
+  background: rgba(220, 38, 38, 0.2);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  border-radius: 0.5rem;
+}
+
+/* Dialog Actions */
+.collection-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+/* Buttons */
+.collection-dialog__btn {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.collection-dialog__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.collection-dialog__btn--secondary {
+  color: rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.collection-dialog__btn--secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.collection-dialog__btn--primary {
+  color: white;
+  background: var(--accent-indigo);
+}
+
+.collection-dialog__btn--primary:hover:not(:disabled) {
+  background: #4338ca;
+}

@@ -16,6 +16,24 @@ import {
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../services/api'
+import { useCollections } from '../contexts/CollectionContext'
+
+/**
+ * Badge component displaying collection name for a thread.
+ * @param {{ collectionId: number }} props
+ */
+function CollectionBadge({ collectionId }) {
+  const { collections } = useCollections()
+  const collection = collections.find(c => c.id === collectionId)
+
+  if (!collection) return null
+
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+      {collection.name}
+    </span>
+  )
+}
 
 const DEFAULT_CREATE_STATE = {
   title: '',
@@ -27,7 +45,8 @@ const DEFAULT_CREATE_STATE = {
 export default function QueuePage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: threads, isPending, refetch } = useThreads()
+  const { activeCollectionId } = useCollections()
+  const { data: threads, isPending, refetch } = useThreads('', activeCollectionId)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -459,6 +478,11 @@ export default function QueuePage() {
                     </div>
                   </div>
                   <p className="text-sm text-slate-400">{thread.format}</p>
+                  {thread.collection_id && (
+                    <div className="mt-1">
+                      <CollectionBadge collectionId={thread.collection_id} />
+                    </div>
+                  )}
                   {thread.notes && <p className="text-xs text-slate-500">{thread.notes}</p>}
                   {thread.issues_remaining !== null && (
                     <p className="text-xs text-slate-500">{thread.issues_remaining} issues remaining</p>

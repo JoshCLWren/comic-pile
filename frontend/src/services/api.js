@@ -152,3 +152,13 @@ export const snoozeApi = {
   snooze: () => api.post('/snooze/'),
   unsnooze: (threadId) => api.post(`/snooze/${threadId}/unsnooze`),
 }
+
+export const collectionsApi = {
+  list: () => api.get('/collections/'),
+  get: (id) => api.get(`/collections/${id}`),
+  create: (data) => api.post('/collections/', data),
+  update: (id, data) => api.put(`/collections/${id}`, data),
+  delete: (id) => api.delete(`/collections/${id}`),
+  moveThreadToCollection: (threadId, collectionId) =>
+    api.post(`/threads/${threadId}:moveToCollection`, null, { params: { collection_id: collectionId } }),
+}
