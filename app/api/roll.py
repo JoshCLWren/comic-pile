@@ -86,8 +86,26 @@ async def roll_dice(
     selected_thread_id = selected_thread.id
     selected_thread_title = selected_thread.title
     selected_thread_format = selected_thread.format
-    selected_thread_issues_remaining = selected_thread.issues_remaining
     selected_thread_queue_position = selected_thread.queue_position
+
+    selected_thread_issues_remaining = await selected_thread.get_issues_remaining(db)
+
+    selected_thread_total_issues = selected_thread.total_issues
+    selected_thread_reading_progress = selected_thread.reading_progress
+    selected_thread_next_unread_issue_id = selected_thread.next_unread_issue_id
+
+    selected_thread_issue_id = None
+    selected_thread_issue_number = None
+    if selected_thread.uses_issue_tracking() and selected_thread_next_unread_issue_id:
+        from app.models import Issue
+
+        issue_result = await db.execute(
+            select(Issue).where(Issue.id == selected_thread_next_unread_issue_id)
+        )
+        next_issue = issue_result.scalar_one_or_none()
+        if next_issue:
+            selected_thread_issue_id = next_issue.id
+            selected_thread_issue_number = next_issue.issue_number
 
     event = Event(
         type="roll",
@@ -117,6 +135,12 @@ async def roll_dice(
         result=selected_index + 1,
         offset=offset,
         snoozed_count=snoozed_count,
+        issue_id=selected_thread_issue_id,
+        issue_number=selected_thread_issue_number,
+        next_issue_id=selected_thread_issue_id,
+        next_issue_number=selected_thread_issue_number,
+        total_issues=selected_thread_total_issues,
+        reading_progress=selected_thread_reading_progress,
     )
 
 
@@ -178,8 +202,26 @@ async def override_roll(
     override_thread_id = override_thread.id
     override_thread_title = override_thread.title
     override_thread_format = override_thread.format
-    override_thread_issues_remaining = override_thread.issues_remaining
     override_thread_queue_position = override_thread.queue_position
+
+    override_thread_issues_remaining = await override_thread.get_issues_remaining(db)
+
+    override_thread_total_issues = override_thread.total_issues
+    override_thread_reading_progress = override_thread.reading_progress
+    override_thread_next_unread_issue_id = override_thread.next_unread_issue_id
+
+    override_thread_issue_id = None
+    override_thread_issue_number = None
+    if override_thread.uses_issue_tracking() and override_thread_next_unread_issue_id:
+        from app.models import Issue
+
+        issue_result = await db.execute(
+            select(Issue).where(Issue.id == override_thread_next_unread_issue_id)
+        )
+        next_issue = issue_result.scalar_one_or_none()
+        if next_issue:
+            override_thread_issue_id = next_issue.id
+            override_thread_issue_number = next_issue.issue_number
 
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
@@ -220,6 +262,12 @@ async def override_roll(
         result=0,
         offset=offset,
         snoozed_count=snoozed_count,
+        issue_id=override_thread_issue_id,
+        issue_number=override_thread_issue_number,
+        next_issue_id=override_thread_issue_id,
+        next_issue_number=override_thread_issue_number,
+        total_issues=override_thread_total_issues,
+        reading_progress=override_thread_reading_progress,
     )
 
 

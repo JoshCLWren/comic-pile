@@ -97,7 +97,7 @@ async def move_thread_position(
     if clear_cache:
         clear_cache()
 
-    return thread_to_response(thread)
+    return await thread_to_response(thread, db)
 
 
 @router.put("/threads/{thread_id}/front/", response_model=ThreadResponse)
@@ -149,7 +149,7 @@ async def move_thread_front(
     if clear_cache:
         clear_cache()
 
-    return thread_to_response(thread)
+    return await thread_to_response(thread, db)
 
 
 @router.put("/threads/{thread_id}/back/", response_model=ThreadResponse)
@@ -201,4 +201,4 @@ async def move_thread_back(
     if clear_cache:
         clear_cache()
 
-    return thread_to_response(thread)
+    return await thread_to_response(thread, db)

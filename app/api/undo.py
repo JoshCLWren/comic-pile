@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Event, Snapshot, Thread
+from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import ActiveThreadInfo, SessionResponse
@@ -129,6 +129,29 @@ async def undo_to_snapshot(
                         thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
                     if state.get("last_review_at"):
                         thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
+
+                    if "issue_states" in state and state["issue_states"] is not None:
+                        await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
+                        for issue_state in state["issue_states"]:
+                            issue = Issue(
+                                id=issue_state["id"],
+                                thread_id=thread_id_int,
+                                issue_number=issue_state["number"],
+                                status=issue_state["status"],
+                                read_at=datetime.fromisoformat(issue_state["read_at"])
+                                if issue_state["read_at"]
+                                else None,
+                                created_at=datetime.now(UTC),
+                            )
+                            db.add(issue)
+                        thread.total_issues = state.get("total_issues")
+                        thread.next_unread_issue_id = state.get("next_unread_issue_id")
+                        thread.reading_progress = state.get("reading_progress")
+                        thread.issues_remaining = await thread.get_issues_remaining(db)
+                    else:
+                        thread.issues_remaining = state.get(
+                            "issues_remaining", thread.issues_remaining
+                        )
                 else:
                     new_thread = Thread(
                         id=thread_id,
@@ -153,6 +176,26 @@ async def undo_to_snapshot(
                     if state.get("last_review_at"):
                         new_thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
                     db.add(new_thread)
+
+                    if "issue_states" in state and state["issue_states"] is not None:
+                        for issue_state in state["issue_states"]:
+                            issue = Issue(
+                                id=issue_state["id"],
+                                thread_id=thread_id,
+                                issue_number=issue_state["number"],
+                                status=issue_state["status"],
+                                read_at=datetime.fromisoformat(issue_state["read_at"])
+                                if issue_state["read_at"]
+                                else None,
+                                created_at=datetime.now(UTC),
+                            )
+                            db.add(issue)
+                        new_thread.total_issues = state.get("total_issues")
+                        new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
+                        new_thread.reading_progress = state.get("reading_progress")
+                        new_thread.issues_remaining = await new_thread.get_issues_remaining(db)
+                    else:
+                        new_thread.issues_remaining = state.get("issues_remaining", 0)
 
             if snapshot.session_state:
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)

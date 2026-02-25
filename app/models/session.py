@@ -10,6 +10,7 @@ from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.event import Event
+    from app.models.issue import Issue
     from app.models.snapshot import Snapshot
     from app.models.thread import Thread
     from app.models.user import User
@@ -31,6 +32,9 @@ class Session(Base):
     pending_thread_id: Mapped[int | None] = mapped_column(
         ForeignKey("threads.id", ondelete="SET NULL"), nullable=True
     )
+    pending_issue_id: Mapped[int | None] = mapped_column(
+        ForeignKey("issues.id", ondelete="SET NULL"), nullable=True
+    )
     pending_thread_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -46,6 +50,9 @@ class Session(Base):
     user: Mapped["User"] = relationship("User", back_populates="sessions", lazy="raise")
     pending_thread: Mapped["Thread"] = relationship(
         "Thread", foreign_keys=[pending_thread_id], lazy="raise"
+    )
+    pending_issue: Mapped["Issue | None"] = relationship(
+        "Issue", foreign_keys=[pending_issue_id], lazy="raise"
     )
     events: Mapped[list["Event"]] = relationship(
         "Event", back_populates="session", cascade="all, delete-orphan", lazy="raise"

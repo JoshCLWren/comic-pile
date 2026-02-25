@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Snapshot, Thread, User
+from app.models import Event, Issue, Snapshot, Thread, User
 from app.models import Session as SessionModel
 from app.schemas import (
     ActiveThreadInfo,
@@ -56,7 +56,7 @@ async def get_session_with_thread_safe(
         .order_by(Event.timestamp.desc(), Event.id.desc())
     )
     latest_event = event_result.scalars().first()
-    
+
     event = latest_event if latest_event and latest_event.type == "roll" else None
 
     last_rolled_result = event.result if event else None
@@ -70,11 +70,12 @@ async def get_session_with_thread_safe(
         )
         pending_thread = pending_result.scalar_one_or_none()
         if pending_thread:
+            issues_remaining = await pending_thread.get_issues_remaining(db)
             return session, ActiveThreadInfo(
                 id=pending_thread.id,
                 title=pending_thread.title,
                 format=pending_thread.format,
-                issues_remaining=pending_thread.issues_remaining,
+                issues_remaining=issues_remaining,
                 queue_position=pending_thread.queue_position,
                 last_rolled_result=last_rolled_result,
             )
@@ -83,11 +84,12 @@ async def get_session_with_thread_safe(
     if event and event.selected_thread_id:
         thread = await db.get(Thread, event.selected_thread_id)
         if thread and thread.user_id == session.user_id:
+            issues_remaining = await thread.get_issues_remaining(db)
             return session, ActiveThreadInfo(
                 id=thread.id,
                 title=thread.title,
                 format=thread.format,
-                issues_remaining=thread.issues_remaining,
+                issues_remaining=issues_remaining,
                 queue_position=thread.queue_position,
                 last_rolled_result=last_rolled_result,
             )
@@ -101,11 +103,12 @@ async def get_session_with_thread_safe(
             and rated_thread.user_id == session.user_id
             and rated_thread.status == "completed"
         ):
+            issues_remaining = await rated_thread.get_issues_remaining(db)
             return session, ActiveThreadInfo(
                 id=rated_thread.id,
                 title=rated_thread.title,
                 format=rated_thread.format,
-                issues_remaining=rated_thread.issues_remaining,
+                issues_remaining=issues_remaining,
                 queue_position=rated_thread.queue_position,
                 last_rolled_result=last_rolled_result,
             )
@@ -224,11 +227,12 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
     if not thread:
         return None
 
+    issues_remaining = await thread.get_issues_remaining(db)
     return ActiveThreadInfo(
         id=thread.id,
         title=thread.title,
         format=thread.format,
-        issues_remaining=thread.issues_remaining,
+        issues_remaining=issues_remaining,
         queue_position=thread.queue_position,
         last_rolled_result=event.result,
     )
@@ -447,11 +451,12 @@ async def list_sessions(
             if sid_events and sid_events[0].selected_thread_id:
                 thread = threads_by_id.get(sid_events[0].selected_thread_id)
                 if thread:
+                    issues_remaining = await thread.get_issues_remaining(db)
                     active_threads_dict[sid] = ActiveThreadInfo(
                         id=thread.id,
                         title=thread.title,
                         format=thread.format,
-                        issues_remaining=thread.issues_remaining,
+                        issues_remaining=issues_remaining,
                         queue_position=thread.queue_position,
                         last_rolled_result=sid_events[0].result,
                     )
@@ -778,6 +783,29 @@ async def restore_session_start(
                         thread.last_activity_at = datetime.fromisoformat(state["last_activity_at"])
                     if state.get("last_review_at"):
                         thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
+
+                    if "issue_states" in state and state["issue_states"] is not None:
+                        await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
+                        for issue_state in state["issue_states"]:
+                            issue = Issue(
+                                id=issue_state["id"],
+                                thread_id=thread_id_int,
+                                issue_number=issue_state["number"],
+                                status=issue_state["status"],
+                                read_at=datetime.fromisoformat(issue_state["read_at"])
+                                if issue_state["read_at"]
+                                else None,
+                                created_at=datetime.now(UTC),
+                            )
+                            db.add(issue)
+                        thread.total_issues = state.get("total_issues")
+                        thread.next_unread_issue_id = state.get("next_unread_issue_id")
+                        thread.reading_progress = state.get("reading_progress")
+                        thread.issues_remaining = await thread.get_issues_remaining(db)
+                    else:
+                        thread.issues_remaining = state.get(
+                            "issues_remaining", thread.issues_remaining
+                        )
                 else:
                     new_thread = Thread(
                         id=thread_id_int,
@@ -802,6 +830,26 @@ async def restore_session_start(
                     if state.get("last_review_at"):
                         new_thread.last_review_at = datetime.fromisoformat(state["last_review_at"])
                     db.add(new_thread)
+
+                    if "issue_states" in state and state["issue_states"] is not None:
+                        for issue_state in state["issue_states"]:
+                            issue = Issue(
+                                id=issue_state["id"],
+                                thread_id=thread_id_int,
+                                issue_number=issue_state["number"],
+                                status=issue_state["status"],
+                                read_at=datetime.fromisoformat(issue_state["read_at"])
+                                if issue_state["read_at"]
+                                else None,
+                                created_at=datetime.now(UTC),
+                            )
+                            db.add(issue)
+                        new_thread.total_issues = state.get("total_issues")
+                        new_thread.next_unread_issue_id = state.get("next_unread_issue_id")
+                        new_thread.reading_progress = state.get("reading_progress")
+                        new_thread.issues_remaining = await new_thread.get_issues_remaining(db)
+                    else:
+                        new_thread.issues_remaining = state.get("issues_remaining", 0)
 
             if snapshot.session_state:
                 session.start_die = snapshot.session_state.get("start_die", session.start_die)
