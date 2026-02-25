@@ -3,7 +3,18 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -95,7 +106,7 @@ class Thread(Base):
         back_populates="thread",
         cascade="all, delete-orphan",
         lazy="raise",
-        order_by="Issue.issue_number",
+        order_by=text("CAST(issue_number AS INTEGER)"),
         foreign_keys="[Issue.thread_id]",
     )
     next_unread_issue: Mapped["Issue | None"] = relationship(

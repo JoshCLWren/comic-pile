@@ -181,7 +181,7 @@ async def undo_to_snapshot(
                         for issue_state in state["issue_states"]:
                             issue = Issue(
                                 id=issue_state["id"],
-                                thread_id=thread_id,
+                                thread_id=thread_id_int,
                                 issue_number=issue_state["number"],
                                 status=issue_state["status"],
                                 read_at=datetime.fromisoformat(issue_state["read_at"])

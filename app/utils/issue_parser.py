@@ -9,7 +9,7 @@ def parse_issue_ranges(input_str: str) -> list[str]:
     Supports formats:
     - "1-25" -> ["1", "2", ..., "25"]
     - "1, 3, 5-7" -> ["1", "3", "5", "6", "7"]
-    - "25" -> ["1", "2", ..., "25"] (treated as count from 1)
+    - "25" -> ["25"] (single issue number)
 
     Annuals/specials should be SEPARATE THREADS with dependencies (not part of main series issue list).
     This parser only handles numeric issues.
@@ -62,11 +62,12 @@ def parse_issue_ranges(input_str: str) -> list[str]:
         else:
             try:
                 issue_num = int(part)
-                if issue_num < 1:
-                    raise ValueError("Issue numbers must be positive")
-                result.append(str(issue_num))
             except ValueError:
                 raise ValueError(f"Invalid issue number: {part}") from None
+
+            if issue_num < 1:
+                raise ValueError("Issue numbers must be positive")
+            result.append(str(issue_num))
 
     seen = set()
     unique_result = []

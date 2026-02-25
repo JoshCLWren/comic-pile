@@ -88,7 +88,7 @@ def test_parse_issue_ranges_out_of_order():
 
 def test_parse_issue_ranges_zero_rejected():
     """Test that zero is rejected."""
-    with pytest.raises(ValueError, match="Invalid issue number"):
+    with pytest.raises(ValueError, match="Issue numbers must be positive"):
         parse_issue_ranges("0")
 
     with pytest.raises(ValueError, match="Issue numbers must be positive"):

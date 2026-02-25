@@ -154,9 +154,10 @@ async def import_reading_orders() -> None:
                         await db.flush()
                         first_issue_id = issue.id
 
-                thread.total_issues = issues_count
-                thread.reading_progress = "not_started" if issues_count > 0 else None
-                thread.next_unread_issue_id = first_issue_id
+                if issues_count > 0:
+                    thread.total_issues = issues_count
+                    thread.reading_progress = "not_started"
+                    thread.next_unread_issue_id = first_issue_id
 
                 imported_count += 1
 
