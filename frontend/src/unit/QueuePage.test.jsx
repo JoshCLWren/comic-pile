@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
+import { CollectionProvider } from '../contexts/CollectionContext'
 import {
   useCreateThread,
   useDeleteThread,
@@ -42,6 +43,24 @@ vi.mock('../services/api', () => ({
   threadsApi: {
     setPending: vi.fn(),
   },
+  collectionsApi: {
+    list: vi.fn().mockResolvedValue([]),
+  },
+}))
+
+vi.mock('../contexts/CollectionContext', () => ({
+  CollectionProvider: ({ children }) => children,
+  useCollections: vi.fn().mockReturnValue({
+    collections: [],
+    activeCollectionId: null,
+    activeCollection: null,
+    setActiveCollectionId: vi.fn(),
+    createCollection: vi.fn(),
+    updateCollection: vi.fn(),
+    deleteCollection: vi.fn(),
+    moveCollection: vi.fn(),
+    isLoading: false,
+  }),
 }))
 
 beforeEach(() => {

@@ -7,6 +7,51 @@ const api = axios.create({
 
 let refreshTokenPromise = null
 let isRedirectingToLogin = false
+let redirectTimeoutId = null
+
+/**
+ * Check if currently on an auth page to prevent redirect loops.
+ * @returns {boolean} True if on login or register page
+ */
+function isOnAuthPage() {
+  const pathname = window.location.pathname
+  return pathname === '/login' || pathname === '/register'
+}
+
+/**
+ * Safely redirect to login page with protection against loops.
+ * Clears invalid tokens before redirecting.
+ */
+function redirectToLogin() {
+  // Prevent redirect if already on auth pages
+  if (isOnAuthPage()) {
+    return
+  }
+
+  // Prevent multiple rapid redirects
+  if (isRedirectingToLogin) {
+    return
+  }
+
+  isRedirectingToLogin = true
+
+  // Clear any existing timeout to prevent memory leaks
+  if (redirectTimeoutId) {
+    clearTimeout(redirectTimeoutId)
+  }
+
+  // Clear invalid tokens before redirect
+  localStorage.removeItem('auth_token')
+  localStorage.removeItem('refresh_token')
+
+  // Set a timeout to reset the flag in case redirect doesn't complete
+  redirectTimeoutId = setTimeout(() => {
+    isRedirectingToLogin = false
+    redirectTimeoutId = null
+  }, 5000)
+
+  window.location.href = '/login'
+}
 
 api.interceptors.request.use(
   (config) => {
@@ -24,6 +69,12 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
+    // Handle network errors (no response object)
+    if (!error.response) {
+      console.error('Network Error:', error.message)
+      return Promise.reject(new Error('Network error. Please check your connection and try again.'))
+    }
+
     // Log full error details for debugging
     if (error.response?.status === 400) {
       console.error('API Validation Error Details:', {
@@ -36,6 +87,11 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       const isAuthEndpoint = originalRequest.url.includes('/auth/login') || originalRequest.url.includes('/auth/register')
       if (isAuthEndpoint) {
+        return Promise.reject(error)
+      }
+
+      // Skip redirect if explicitly requested (for graceful auth handling)
+      if (originalRequest.skipAuthRedirect) {
         return Promise.reject(error)
       }
 
@@ -61,21 +117,11 @@ api.interceptors.response.use(
           return api(originalRequest)
         } catch (refreshError) {
           refreshTokenPromise = null
-          if (!isRedirectingToLogin) {
-            isRedirectingToLogin = true
-            localStorage.removeItem('auth_token')
-            localStorage.removeItem('refresh_token')
-            window.location.href = '/login'
-          }
+          redirectToLogin()
           return Promise.reject(refreshError)
         }
       } else {
-        if (!isRedirectingToLogin) {
-          isRedirectingToLogin = true
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('refresh_token')
-          window.location.href = '/login'
-        }
+        redirectToLogin()
       }
     }
 
@@ -151,4 +197,14 @@ export const tasksApi = {
 export const snoozeApi = {
   snooze: () => api.post('/snooze/'),
   unsnooze: (threadId) => api.post(`/snooze/${threadId}/unsnooze`),
+}
+
+export const collectionsApi = {
+  list: () => api.get('/v1/collections/'),
+  get: (id) => api.get(`/v1/collections/${id}`),
+  create: (data) => api.post('/v1/collections/', data),
+  update: (id, data) => api.put(`/v1/collections/${id}`, data),
+  delete: (id) => api.delete(`/v1/collections/${id}`),
+  moveThreadToCollection: (threadId, collectionId) =>
+    api.post(`/threads/${threadId}:moveToCollection`, null, { params: { collection_id: collectionId } }),
 }
