@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select, update
+from sqlalchemy import cast, Integer, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -63,7 +63,9 @@ async def snapshot_thread_states(
 
         if thread.uses_issue_tracking():
             issues_result = await db.execute(
-                select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.issue_number)
+                select(Issue)
+                .where(Issue.thread_id == thread.id)
+                .order_by(cast(Issue.issue_number, Integer))
             )
             issues = issues_result.scalars().all()
 
@@ -211,22 +213,31 @@ async def rate_thread(
         )
 
     # Comic Pile reads one issue per rating action by design.
+    issues_read = 0
+    rated_issue_id: int | None = None
+    rated_issue_number: str | None = None
+
     if thread.uses_issue_tracking():
         if thread.next_unread_issue_id:
             issue_result = await db.execute(
-                select(Issue).where(Issue.id == thread.next_unread_issue_id)
+                select(Issue)
+                .where(Issue.id == thread.next_unread_issue_id)
+                .where(Issue.thread_id == thread.id)
             )
             issue = issue_result.scalar_one_or_none()
 
-            if issue:
+            if issue and issue.status == "unread":
                 issue.status = "read"
                 issue.read_at = datetime.now(UTC)
+                rated_issue_id = issue.id
+                rated_issue_number = issue.issue_number
+                issues_read = 1
 
                 next_result = await db.execute(
                     select(Issue)
                     .where(Issue.thread_id == thread.id)
                     .where(Issue.status == "unread")
-                    .order_by(Issue.issue_number)
+                    .order_by(cast(Issue.issue_number, Integer), Issue.id)
                     .limit(1)
                 )
                 next_issue = next_result.scalar_one_or_none()
@@ -241,7 +252,6 @@ async def rate_thread(
                     thread.status = "completed"
                     thread.issues_remaining = 0
 
-        issues_read = 1
         thread_issues_remaining = thread.issues_remaining
     else:
         issues_read = 1 if thread.issues_remaining > 0 else 0
@@ -264,6 +274,8 @@ async def rate_thread(
         issues_read=issues_read,
         die=current_die,
         die_after=new_die,
+        issue_id=rated_issue_id,
+        issue_number=rated_issue_number,
     )
     db.add(event)
 

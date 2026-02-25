@@ -651,7 +651,8 @@ async def move_thread_to_collection(
 
     thread.collection_id = collection_id
 
+    response = await thread_to_response(thread, db)
     await db.commit()
     if clear_cache:
         clear_cache()
-    return await thread_to_response(thread, db)
+    return response

@@ -179,6 +179,8 @@ class Thread(Base):
             )
             db.add(issue)
 
+        await db.flush()
+
         self.total_issues = total_issues
 
         if last_issue_read < total_issues:
@@ -198,7 +200,5 @@ class Thread(Base):
             self.status = "completed"
 
         self.issues_remaining = total_issues - last_issue_read
-
-        await db.flush()
 
         return self

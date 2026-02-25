@@ -803,6 +803,11 @@ async def restore_session_start(
                         thread.reading_progress = state.get("reading_progress")
                         thread.issues_remaining = await thread.get_issues_remaining(db)
                     else:
+                        # Clear migrated state when restoring to legacy
+                        await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
+                        thread.total_issues = None
+                        thread.next_unread_issue_id = None
+                        thread.reading_progress = None
                         thread.issues_remaining = state.get(
                             "issues_remaining", thread.issues_remaining
                         )
