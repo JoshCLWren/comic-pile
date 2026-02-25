@@ -88,13 +88,22 @@ function PublicRoute({ children }) {
   return children
 }
 
-function AppLayout({ children }) {
-  const { isAuthenticated } = useAuth()
-  
+function AuthenticatedLayout({ children }) {
   return (
     <div className="flex min-h-screen">
-      {isAuthenticated && <Sidebar />}
-      <main className={`flex-1 container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24 ${isAuthenticated ? 'lg:ml-64' : ''}`}>
+      <Sidebar />
+      <main className="flex-1 container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24 lg:ml-64">
+        {children}
+      </main>
+      <Navigation />
+    </div>
+  )
+}
+
+function PublicLayout({ children }) {
+  return (
+    <div className="min-h-screen">
+      <main className="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
         {children}
       </main>
       <Navigation />
@@ -104,72 +113,84 @@ function AppLayout({ children }) {
 
 function AppRoutes() {
   return (
-    <AppLayout>
-      <Suspense fallback={<div className="text-center text-slate-500">Loading page...</div>}>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <PublicRoute>
+    <Suspense fallback={<div className="text-center text-slate-500">Loading page...</div>}>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <PublicLayout>
                 <LoginPage />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/register"
-            element={
-              <PublicRoute>
+              </PublicLayout>
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <PublicLayout>
                 <RegisterPage />
-              </PublicRoute>
-            }
-          />
-          <Route
-            path="/rate"
-            element={<Navigate to="/" replace />}
-          />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
+              </PublicLayout>
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/rate"
+          element={<Navigate to="/" replace />}
+        />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
                 <RollPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/queue"
-            element={
-              <ProtectedRoute>
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/queue"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
                 <QueuePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/history"
-            element={
-              <ProtectedRoute>
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
                 <HistoryPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/sessions/:id"
-            element={
-              <ProtectedRoute>
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sessions/:id"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
                 <SessionPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/analytics"
-            element={
-              <ProtectedRoute>
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
                 <AnalyticsPage />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </Suspense>
-    </AppLayout>
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </Suspense>
   )
 }
 
