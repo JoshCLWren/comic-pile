@@ -13,6 +13,12 @@ from app.schemas.dependency import (
     DependencyResponse,
     ThreadDependenciesResponse,
 )
+from app.schemas.issue import (
+    IssueCreate,
+    IssueListResponse,
+    IssueResponse,
+    IssueUpdate,
+)
 from app.schemas.rate import RateRequest
 from app.schemas.roll import OverrideRequest, RollResponse
 from app.schemas.session import (
@@ -46,6 +52,11 @@ __all__ = [
     "DependencyResponse",
     "BlockingExplanation",
     "ThreadDependenciesResponse",
+    # Issue
+    "IssueCreate",
+    "IssueUpdate",
+    "IssueResponse",
+    "IssueListResponse",
     # Roll
     "RollResponse",
     "OverrideRequest",

@@ -21,33 +21,66 @@ from comic_pile.session import get_current_die, get_or_create
 router = APIRouter(tags=["threads"])
 
 
-def thread_to_response(thread: Thread) -> ThreadResponse:
-    """Convert a Thread model to ThreadResponse schema.
+async def thread_to_response(
+    thread: Thread, db: AsyncSession, include_blocking_info: bool = True
+) -> ThreadResponse:
+    """Convert Thread model to ThreadResponse.
 
     Args:
-        thread: The Thread model to convert.
+        thread: Thread model instance
+        db: Database session for computing issues_remaining
+        include_blocking_info: Whether to compute blocking reasons
 
     Returns:
-        ThreadResponse with all thread fields.
+        ThreadResponse schema
     """
-    return ThreadResponse(
-        id=thread.id,
-        title=thread.title,
-        format=thread.format,
-        issues_remaining=thread.issues_remaining,
-        queue_position=thread.queue_position,
-        status=thread.status,
-        last_rating=thread.last_rating,
-        last_activity_at=thread.last_activity_at,
-        review_url=thread.review_url,
-        last_review_at=thread.last_review_at,
-        notes=thread.notes,
-        is_test=thread.is_test,
-        is_blocked=thread.is_blocked,
+    issues_remaining = await thread.get_issues_remaining(db)
+
+    thread_id = thread.id
+    title = thread.title
+    format_val = thread.format
+    queue_position = thread.queue_position
+    status = thread.status
+    last_rating = thread.last_rating
+    last_activity_at = thread.last_activity_at
+    review_url = thread.review_url
+    last_review_at = thread.last_review_at
+    notes = thread.notes
+    is_test = thread.is_test
+    is_blocked = thread.is_blocked
+    collection_id = thread.collection_id
+    created_at = thread.created_at
+    total_issues = thread.total_issues
+    reading_progress = thread.reading_progress
+    next_unread_issue_id = thread.next_unread_issue_id
+    blocked_by_thread_ids = thread.blocked_by_thread_ids or []
+    blocked_by_issue_ids = thread.blocked_by_issue_ids or []
+
+    response = ThreadResponse(
+        id=thread_id,
+        title=title,
+        format=format_val,
+        issues_remaining=issues_remaining,
+        queue_position=queue_position,
+        status=status,
+        last_rating=last_rating,
+        last_activity_at=last_activity_at,
+        review_url=review_url,
+        last_review_at=last_review_at,
+        notes=notes,
+        is_test=is_test,
+        is_blocked=is_blocked,
+        collection_id=collection_id,
+        created_at=created_at,
+        total_issues=total_issues,
+        reading_progress=reading_progress,
+        next_unread_issue_id=next_unread_issue_id,
+        blocked_by_thread_ids=blocked_by_thread_ids,
+        blocked_by_issue_ids=blocked_by_issue_ids,
         blocking_reasons=[],
-        collection_id=thread.collection_id,
-        created_at=thread.created_at,
     )
+
+    return response
 
 
 @router.get("/stale", response_model=list[ThreadResponse])
@@ -77,7 +110,7 @@ async def list_stale_threads(
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )
     threads = result.scalars().all()
-    return [thread_to_response(thread) for thread in threads]
+    return [await thread_to_response(thread, db) for thread in threads]
 
 
 clear_cache = None
@@ -116,13 +149,14 @@ async def list_threads(
         query = query.order_by(Thread.queue_position)
         result = await db.execute(query)
         threads = result.scalars().all()
+        return [await thread_to_response(thread, db) for thread in threads]
     elif get_threads_cached and collection_id is None:
         threads = await get_threads_cached(db, current_user.id)
     else:
         query = query.order_by(Thread.queue_position)
         result = await db.execute(query)
         threads = result.scalars().all()
-    return [thread_to_response(thread) for thread in threads]
+    return [await thread_to_response(thread, db) for thread in threads]
 
 
 @router.get("/completed", response_class=HTMLResponse)
@@ -250,7 +284,7 @@ async def create_thread(
             await db.refresh(new_thread)
             if clear_cache:
                 clear_cache()
-            return thread_to_response(new_thread)
+            return await thread_to_response(new_thread, db)
         except OperationalError as e:
             if "deadlock" in str(e).lower():
                 await db.rollback()
@@ -290,7 +324,7 @@ async def get_thread(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
         )
-    return thread_to_response(thread)
+    return await thread_to_response(thread, db)
 
 
 @router.put("/{thread_id}", response_model=ThreadResponse)
@@ -325,11 +359,12 @@ async def update_thread(
     if thread_data.format is not None:
         thread.format = thread_data.format
     if thread_data.issues_remaining is not None:
-        thread.issues_remaining = thread_data.issues_remaining
-        if thread.issues_remaining == 0:
-            thread.status = "completed"
-        else:
-            thread.status = "active"
+        if not thread.uses_issue_tracking():
+            thread.issues_remaining = thread_data.issues_remaining
+            if thread.issues_remaining == 0:
+                thread.status = "completed"
+            else:
+                thread.status = "active"
     if thread_data.notes is not None:
         thread.notes = thread_data.notes
     if thread_data.is_test is not None:
@@ -351,7 +386,7 @@ async def update_thread(
     await db.refresh(thread)
     if clear_cache:
         clear_cache()
-    return thread_to_response(thread)
+    return await thread_to_response(thread, db)
 
 
 @router.delete("/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -439,14 +474,47 @@ async def reactivate_thread(
         .where(Thread.status == "active")
         .values(queue_position=Thread.queue_position + 1)
     )
-    thread.issues_remaining = request.issues_to_add
+
+    if thread.uses_issue_tracking():
+        from app.models import Issue
+        from sqlalchemy import func, select
+
+        existing_count_result = await db.execute(
+            select(func.count(Issue.id)).where(Issue.thread_id == thread.id)
+        )
+        existing_total = existing_count_result.scalar() or 0
+
+        for i in range(existing_total + 1, existing_total + request.issues_to_add + 1):
+            new_issue = Issue(
+                thread_id=thread.id,
+                issue_number=str(i),
+                status="unread",
+            )
+            db.add(new_issue)
+
+        thread.total_issues = existing_total + request.issues_to_add
+        thread.reading_progress = "in_progress"
+        thread.issues_remaining = request.issues_to_add
+
+        result = await db.execute(
+            select(Issue).where(
+                Issue.thread_id == thread.id,
+                Issue.issue_number == str(existing_total + 1),
+            )
+        )
+        next_issue = result.scalar_one_or_none()
+        if next_issue:
+            thread.next_unread_issue_id = next_issue.id
+    else:
+        thread.issues_remaining = request.issues_to_add
+
     thread.status = "active"
     thread.queue_position = 1
     await db.commit()
     await db.refresh(thread)
     if clear_cache:
         clear_cache()
-    return thread_to_response(thread)
+    return await thread_to_response(thread, db)
 
 
 @router.post("/{thread_id}/set-pending", response_model=RollResponse)
@@ -583,10 +651,8 @@ async def move_thread_to_collection(
 
     thread.collection_id = collection_id
 
-    # Extract thread attributes before commit to avoid MissingGreenlet error
-    thread_response = thread_to_response(thread)
-
+    response = await thread_to_response(thread, db)
     await db.commit()
     if clear_cache:
         clear_cache()
-    return thread_response
+    return response

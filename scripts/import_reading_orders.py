@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, select
 
 from app.database import AsyncSessionLocal
-from app.models import Thread, User
+from app.models import Issue, Thread, User
 
 # Data from Google Sheets
 READING_ORDERS = [
@@ -116,10 +116,10 @@ async def import_reading_orders() -> None:
                     except ValueError:
                         pass
 
-                issues_remaining = 0
+                issues_count = 0
                 if issues_remaining_str.strip():
                     try:
-                        issues_remaining = int(issues_remaining_str)
+                        issues_count = int(issues_remaining_str)
                     except ValueError:
                         pass
 
@@ -130,7 +130,7 @@ async def import_reading_orders() -> None:
                 thread = Thread(
                     title=full_title[:200],
                     format=format_val.strip() if format_val.strip() else "Unknown",
-                    issues_remaining=issues_remaining,
+                    issues_remaining=issues_count,
                     queue_position=queue_position,
                     status="active",
                     last_rating=last_rating,
@@ -138,6 +138,27 @@ async def import_reading_orders() -> None:
                     last_activity_at=datetime.now(UTC),
                 )
                 db.add(thread)
+
+                await db.flush()
+
+                first_issue_id = None
+                for i in range(1, issues_count + 1):
+                    issue = Issue(
+                        thread_id=thread.id,
+                        issue_number=str(i),
+                        status="unread",
+                        read_at=None,
+                    )
+                    db.add(issue)
+                    if i == 1:
+                        await db.flush()
+                        first_issue_id = issue.id
+
+                if issues_count > 0:
+                    thread.total_issues = issues_count
+                    thread.reading_progress = "not_started"
+                    thread.next_unread_issue_id = first_issue_id
+
                 imported_count += 1
 
             await db.commit()

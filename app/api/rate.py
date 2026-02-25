@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select, update
+from sqlalchemy import cast, Integer, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -11,7 +11,7 @@ from app.auth import get_current_user
 from app.config import get_rating_settings
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Snapshot, Thread
+from app.models import Event, Issue, Snapshot, Thread
 from app.models import Session as SessionModel
 from app.models.user import User
 from app.schemas import RateRequest, ThreadResponse
@@ -36,12 +36,14 @@ async def snapshot_thread_states(
         user_id: The user ID to snapshot threads for.
         commit: Whether to commit inside this helper.
     """
+    from app.models import Issue
+
     result = await db.execute(select(Thread).where(Thread.user_id == user_id))
     threads = result.scalars().all()
 
     thread_states = {}
     for thread in threads:
-        thread_states[thread.id] = {
+        base_state = {
             "title": thread.title,
             "format": thread.format,
             "issues_remaining": thread.issues_remaining,
@@ -58,6 +60,34 @@ async def snapshot_thread_states(
             "created_at": thread.created_at.isoformat(),
             "user_id": thread.user_id,
         }
+
+        if thread.uses_issue_tracking():
+            issues_result = await db.execute(
+                select(Issue)
+                .where(Issue.thread_id == thread.id)
+                .order_by(cast(Issue.issue_number, Integer))
+            )
+            issues = issues_result.scalars().all()
+
+            base_state["issue_states"] = [
+                {
+                    "id": issue.id,
+                    "number": issue.issue_number,
+                    "status": issue.status,
+                    "read_at": issue.read_at.isoformat() if issue.read_at else None,
+                }
+                for issue in issues
+            ]
+            base_state["total_issues"] = thread.total_issues
+            base_state["next_unread_issue_id"] = thread.next_unread_issue_id
+            base_state["reading_progress"] = thread.reading_progress
+        else:
+            base_state["issue_states"] = None
+            base_state["total_issues"] = None
+            base_state["next_unread_issue_id"] = None
+            base_state["reading_progress"] = None
+
+        thread_states[thread.id] = base_state
 
     session = await db.get(SessionModel, session_id)
     session_state = None
@@ -183,11 +213,53 @@ async def rate_thread(
         )
 
     # Comic Pile reads one issue per rating action by design.
-    issues_read = 1 if thread.issues_remaining > 0 else 0
-    thread.issues_remaining -= issues_read
+    issues_read = 0
+    rated_issue_id: int | None = None
+    rated_issue_number: str | None = None
+
+    if thread.uses_issue_tracking():
+        if thread.next_unread_issue_id:
+            issue_result = await db.execute(
+                select(Issue)
+                .where(Issue.id == thread.next_unread_issue_id)
+                .where(Issue.thread_id == thread.id)
+            )
+            issue = issue_result.scalar_one_or_none()
+
+            if issue and issue.status == "unread":
+                issue.status = "read"
+                issue.read_at = datetime.now(UTC)
+                rated_issue_id = issue.id
+                rated_issue_number = issue.issue_number
+                issues_read = 1
+
+                next_result = await db.execute(
+                    select(Issue)
+                    .where(Issue.thread_id == thread.id)
+                    .where(Issue.status == "unread")
+                    .order_by(cast(Issue.issue_number, Integer), Issue.id)
+                    .limit(1)
+                )
+                next_issue = next_result.scalar_one_or_none()
+
+                if next_issue:
+                    thread.next_unread_issue_id = next_issue.id
+                    thread.reading_progress = "in_progress"
+                    thread.issues_remaining = await thread.get_issues_remaining(db)
+                else:
+                    thread.next_unread_issue_id = None
+                    thread.reading_progress = "completed"
+                    thread.status = "completed"
+                    thread.issues_remaining = 0
+
+        thread_issues_remaining = thread.issues_remaining
+    else:
+        issues_read = 1 if thread.issues_remaining > 0 else 0
+        thread.issues_remaining -= issues_read
+        thread_issues_remaining = thread.issues_remaining
+
     thread.last_rating = rate_data.rating
     thread.last_activity_at = datetime.now(UTC)
-    thread_issues_remaining = thread.issues_remaining
 
     if rate_data.rating >= rating_threshold:
         new_die = step_down(current_die)
@@ -202,6 +274,8 @@ async def rate_thread(
         issues_read=issues_read,
         die=current_die,
         die_after=new_die,
+        issue_id=rated_issue_id,
+        issue_number=rated_issue_number,
     )
     db.add(event)
 
@@ -263,4 +337,4 @@ async def rate_thread(
             detail=f"Thread {thread_id} not found",
         )
 
-    return thread_to_response(updated_thread)
+    return await thread_to_response(updated_thread, db)

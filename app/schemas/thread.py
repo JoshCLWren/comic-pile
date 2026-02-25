@@ -46,6 +46,11 @@ class ThreadResponse(BaseModel):
     blocking_reasons: list[str] = []
     collection_id: int | None = None
     created_at: datetime
+    total_issues: int | None = None
+    reading_progress: str | None = None
+    next_unread_issue_id: int | None = None
+    blocked_by_thread_ids: list[int] = []
+    blocked_by_issue_ids: list[int] = []
 
 
 class ReactivateRequest(BaseModel):

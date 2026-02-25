@@ -3,6 +3,7 @@
 from app.models.collection import Collection
 from app.models.dependency import Dependency
 from app.models.event import Event
+from app.models.issue import Issue
 from app.models.revoked_token import RevokedToken
 from app.models.session import Session
 from app.models.snapshot import Snapshot
@@ -13,6 +14,7 @@ __all__ = [
     "Collection",
     "Dependency",
     "Event",
+    "Issue",
     "RevokedToken",
     "Session",
     "Snapshot",

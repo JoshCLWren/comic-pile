@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.issue import Issue
     from app.models.session import Session
     from app.models.snapshot import Snapshot
     from app.models.thread import Thread
@@ -69,6 +70,10 @@ class Event(Base):
     # Foreign key to threads table for events that act on a thread
     # Used by: "rate" events (thread that was read) and "rolled_but_skipped" events
     thread_id: Mapped[int | None] = mapped_column(ForeignKey("threads.id"), nullable=True)
+    issue_id: Mapped[int | None] = mapped_column(
+        ForeignKey("issues.id", ondelete="SET NULL"), nullable=True
+    )
+    issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     __table_args__ = (
         Index("ix_event_session_id", "session_id"),
@@ -79,6 +84,7 @@ class Event(Base):
 
     session: Mapped["Session"] = relationship("Session", back_populates="events", lazy="raise")
     thread: Mapped["Thread"] = relationship("Thread", back_populates="events", lazy="raise")
+    issue: Mapped["Issue | None"] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
     snapshots: Mapped[list["Snapshot"]] = relationship(
         "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
     )

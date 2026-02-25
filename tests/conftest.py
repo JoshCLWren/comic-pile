@@ -21,7 +21,7 @@ from sqlalchemy.engine import Connection, make_url
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import Event, Thread, User
+from app.models import Event, Issue, Thread, User
 from app.models import Session as SessionModel
 
 
@@ -290,6 +290,8 @@ async def sample_data(
             status="active",
             user_id=user.id,
             created_at=now,
+            total_issues=10,
+            reading_progress="in_progress",
         ),
         Thread(
             title="Wonder Woman",
@@ -326,6 +328,25 @@ async def sample_data(
 
     for thread in threads:
         await async_db.refresh(thread)
+
+    # Create Issue records for migrated threads (Batman only)
+    # Batman: 10 total, issues 1-5 read, 6-10 unread (5 remaining)
+    batman_issues = []
+    for i in range(1, 11):
+        issue = Issue(
+            thread_id=threads[1].id,
+            issue_number=str(i),
+            status="read" if i <= 5 else "unread",
+            read_at=now if i <= 5 else None,
+        )
+        async_db.add(issue)
+        batman_issues.append(issue)
+    await async_db.flush()
+    for issue in batman_issues:
+        await async_db.refresh(issue)
+    threads[1].next_unread_issue_id = batman_issues[5].id
+
+    await async_db.flush()
 
     sessions = [
         SessionModel(
