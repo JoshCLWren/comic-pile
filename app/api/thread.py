@@ -15,7 +15,14 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas import ReactivateRequest, RollResponse, ThreadCreate, ThreadResponse, ThreadUpdate
+from app.schemas import (
+    MigrateToIssuesRequest,
+    ReactivateRequest,
+    RollResponse,
+    ThreadCreate,
+    ThreadResponse,
+    ThreadUpdate,
+)
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
@@ -656,3 +663,100 @@ async def move_thread_to_collection(
     if clear_cache:
         clear_cache()
     return response
+
+
+@router.post("/{thread_id}:migrateToIssues", response_model=ThreadResponse)
+async def migrate_thread_to_issues(
+    thread_id: int,
+    request: MigrateToIssuesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Migrate an old-style thread to use issue tracking.
+
+    Creates issue records #1 through total_issues.
+    Marks #1 through last_issue_read as read.
+    Updates thread with issue tracking fields.
+
+    Args:
+        thread_id: The thread ID to migrate
+        request: Migration data with last_issue_read and total_issues
+        current_user: The authenticated user
+        db: Database session
+
+    Returns:
+        ThreadResponse with updated thread
+
+    Raises:
+        HTTPException: 404 if thread not found, 400 if validation fails
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    if thread.total_issues is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} already uses issue tracking",
+        )
+
+    if request.last_issue_read > request.total_issues:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="last_issue_read cannot exceed total_issues",
+        )
+
+    await thread.migrate_to_issues(request.last_issue_read, request.total_issues, db)
+
+    thread_id_val = thread.id
+    title = thread.title
+    format_val = thread.format
+    queue_position = thread.queue_position
+    status_val = thread.status
+    last_rating = thread.last_rating
+    last_activity_at = thread.last_activity_at
+    review_url = thread.review_url
+    last_review_at = thread.last_review_at
+    notes = thread.notes
+    is_test = thread.is_test
+    is_blocked = thread.is_blocked
+    collection_id = thread.collection_id
+    created_at = thread.created_at
+    total_issues = thread.total_issues
+    reading_progress = thread.reading_progress
+    next_unread_issue_id = thread.next_unread_issue_id
+    blocked_by_thread_ids = thread.blocked_by_thread_ids or []
+    blocked_by_issue_ids = thread.blocked_by_issue_ids or []
+
+    await db.commit()
+    if clear_cache:
+        clear_cache()
+
+    issues_remaining = await thread.get_issues_remaining(db)
+
+    return ThreadResponse(
+        id=thread_id_val,
+        title=title,
+        format=format_val,
+        issues_remaining=issues_remaining,
+        queue_position=queue_position,
+        status=status_val,
+        last_rating=last_rating,
+        last_activity_at=last_activity_at,
+        review_url=review_url,
+        last_review_at=last_review_at,
+        notes=notes,
+        is_test=is_test,
+        is_blocked=is_blocked,
+        collection_id=collection_id,
+        created_at=created_at,
+        total_issues=total_issues,
+        reading_progress=reading_progress,
+        next_unread_issue_id=next_unread_issue_id,
+        blocked_by_thread_ids=blocked_by_thread_ids,
+        blocked_by_issue_ids=blocked_by_issue_ids,
+        blocking_reasons=[],
+    )

@@ -208,3 +208,7 @@ export const collectionsApi = {
   moveThreadToCollection: (threadId, collectionId) =>
     api.post(`/threads/${threadId}:moveToCollection`, null, { params: { collection_id: collectionId } }),
 }
+
+export const migrationApi = {
+  migrateThread: (threadId, data) => api.post(`/threads/${threadId}:migrateToIssues`, data),
+}
