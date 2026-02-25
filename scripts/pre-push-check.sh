@@ -40,18 +40,18 @@ fi
 echo -e "${GREEN}✅ Unit tests passed${NC}"
 echo ""
 
-# 4. Run E2E API tests
-echo -e "${YELLOW}[4/6] Running E2E API tests...${NC}"
-E2E_TEST_FILES=$(ls tests_e2e/*.py 2>/dev/null || echo "")
+# 4. Run Python E2E tests (NOT Playwright - those are CI-only)
+echo -e "${YELLOW}[4/6] Running Python E2E tests (API workflows, dice ladder)...${NC}"
+E2E_TEST_FILES=$(ls tests_e2e/*.py 2>/dev/null | grep -v conftest | grep -v __init__ || echo "")
 if [ -z "$E2E_TEST_FILES" ]; then
-    echo -e "${YELLOW}No E2E Python tests found - skipping${NC}"
+    echo -e "${YELLOW}No Python E2E tests found - skipping${NC}"
 else
     if ! uv run pytest tests_e2e/ --no-cov -q 2>&1 | tail -3; then
-        echo -e "${RED}❌ E2E tests failed${NC}"
+        echo -e "${RED}❌ Python E2E tests failed${NC}"
         echo "Fix test failures before pushing"
         exit 1
     fi
-    echo -e "${GREEN}✅ E2E tests passed${NC}"
+    echo -e "${GREEN}✅ Python E2E tests passed${NC}"
 fi
 echo ""
 

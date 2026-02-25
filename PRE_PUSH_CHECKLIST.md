@@ -26,13 +26,16 @@ uv run pytest tests/ --no-cov -q
 - Located in `tests/` directory
 - No failures, no errors
 
-### 4. E2E API Tests ✅
+### 4. Python E2E Tests ✅
 ```bash
-uv run pytest tests_e2e/test_api.py --no-cov -q
+uv run pytest tests_e2e/ --no-cov -q
 ```
 - Integration tests must pass
 - Located in `tests_e2e/` directory
-- Tests API endpoints end-to-end
+- **Files:**
+  - `test_api_workflows.py` - API endpoint integration tests
+  - `test_dice_ladder_e2e.py` - Dice ladder workflow tests
+- **NOT including** Playwright tests (those are TypeScript in frontend/)
 
 ### 5. Frontend Build Check (if frontend changed) ✅
 ```bash
@@ -48,14 +51,29 @@ cd frontend && npm run build
 
 ## Test Suites
 
-| Suite | Command | Location | Required |
-|-------|---------|----------|----------|
-| Unit Tests | `pytest tests/` | `tests/` | ✅ Always |
-| E2E API | `pytest tests_e2e/test_api.py` | `tests_e2e/` | ✅ Always |
-| E2E Playwright | `npm run test:e2e` | `frontend/` | ⏭️ CI only (slow) |
-| E2E Dice Ladder | Specialized | `tests_e2e/` | ⏭️ CI only |
+| Suite | Command | Location | Pre-Push | CI |
+|-------|---------|----------|----------|-----|
+| **Unit Tests** | `pytest tests/` | `tests/` | ✅ Required | ✅ Always |
+| **Python E2E** | `pytest tests_e2e/` | `tests_e2e/` | ✅ Required | ✅ Always |
+| - test_api_workflows.py | | | | |
+| - test_dice_ladder_e2e.py | | | | |
+| **Playwright E2E** | `npm run test:e2e` | `frontend/src/test/` | ⏭️ Too slow | ✅ Sharded |
+| - accessibility.spec.ts | | | | |
+| - auth.spec.ts | | | | |
+| - roll.spec.ts | | | | |
+| - rate.spec.ts | | | | |
+| - (11 more spec files) | | | | |
 
-**Note**: Playwright and Dice Ladder E2E tests are run in CI only due to complexity and execution time.
+**Why Playwright is CI-only:**
+- Requires frontend build (`npm run build`)
+- Requires backend server running
+- Takes 8-10 minutes even with 4 shards
+- Too slow for pre-push verification
+
+**Pre-push Strategy:**
+- ✅ Unit tests (333 tests, ~75 seconds)
+- ✅ Python E2E tests (10 tests, ~5 seconds)
+- ⏭️ Playwright tests (run in CI with proper backend/frontend setup)
 
 ## Only After ALL Checks Pass:
 ```bash
