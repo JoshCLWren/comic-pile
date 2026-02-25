@@ -106,7 +106,7 @@ class Thread(Base):
         back_populates="thread",
         cascade="all, delete-orphan",
         lazy="raise",
-        order_by=text("CAST(issue_number AS INTEGER)"),
+        order_by="Issue.issue_number",
         foreign_keys="[Issue.thread_id]",
     )
     next_unread_issue: Mapped["Issue | None"] = relationship(
