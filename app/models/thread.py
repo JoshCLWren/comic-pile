@@ -13,7 +13,6 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
-    text,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
