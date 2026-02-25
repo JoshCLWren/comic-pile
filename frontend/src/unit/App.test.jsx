@@ -3,6 +3,25 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { useEffect } from 'react'
 
+// Create mock function for API get
+const mockApiGet = vi.fn()
+
+// Mock the API module with a factory that doesn't reference outer scope
+vi.mock('../services/api', () => {
+  return {
+    default: {
+      get: (...args) => mockApiGet(...args),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    },
+  }
+})
+
 vi.mock('../pages/LoginPage', () => ({
   default: () => <div data-testid="login-page">Welcome Back</div>,
 }))
@@ -40,11 +59,14 @@ const renderWithAuth = (initialEntry = '/') => {
   )
 }
 
-test('renders navigation labels', () => {
+test('renders navigation labels', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   localStorage.setItem('auth_token', 'test-token')
   renderWithAuth('/')
 
-  expect(screen.getByText('Roll')).toBeInTheDocument()
+  await waitFor(() => {
+    expect(screen.getByText('Roll')).toBeInTheDocument()
+  })
   expect(screen.getByText('Queue')).toBeInTheDocument()
   expect(screen.getByText('History')).toBeInTheDocument()
   expect(screen.getByText('Analytics')).toBeInTheDocument()
@@ -53,6 +75,7 @@ test('renders navigation labels', () => {
 describe('route guards', () => {
   beforeEach(() => {
     localStorage.clear()
+    mockApiGet.mockReset()
   })
 
   afterEach(() => {
@@ -67,11 +90,14 @@ describe('route guards', () => {
     })
   })
 
-  test('allows authenticated users to access protected routes', () => {
+  test('allows authenticated users to access protected routes', async () => {
+    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
     localStorage.setItem('auth_token', 'fake-token')
     renderWithAuth('/')
 
-    expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
+    })
   })
 
   test('allows unauthenticated users to access /login', () => {
@@ -88,18 +114,24 @@ describe('route guards', () => {
     })
   })
 
-  test('redirects authenticated users from /login to home', () => {
+  test('redirects authenticated users from /login to home', async () => {
+    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
     localStorage.setItem('auth_token', 'fake-token')
     renderWithAuth('/login')
 
-    expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
+    })
   })
 
-  test('redirects authenticated users from /register to home', () => {
+  test('redirects authenticated users from /register to home', async () => {
+    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
     localStorage.setItem('auth_token', 'fake-token')
     renderWithAuth('/register')
 
-    expect(screen.queryByTestId('register-page')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('register-page')).not.toBeInTheDocument()
+    })
   })
 })
 
@@ -107,6 +139,7 @@ describe('auth state race condition regression', () => {
   beforeEach(() => {
     localStorage.clear()
     authContextValue = null
+    mockApiGet.mockReset()
   })
 
   afterEach(() => {
@@ -114,6 +147,8 @@ describe('auth state race condition regression', () => {
   })
 
   test('auth state updates immediately after login - no redirect loop', async () => {
+    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+
     renderWithAuth('/login')
 
     await waitFor(() => {
@@ -124,8 +159,8 @@ describe('auth state race condition regression', () => {
       expect(authContextValue).not.toBeNull()
     })
 
-    act(() => {
-      authContextValue.login('test-token')
+    await act(async () => {
+      await authContextValue.login('test-token')
     })
 
     await waitFor(() => {
@@ -134,6 +169,8 @@ describe('auth state race condition regression', () => {
   })
 
   test('auth state updates immediately after register - no redirect loop', async () => {
+    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+
     renderWithAuth('/register')
 
     await waitFor(() => {
@@ -144,8 +181,8 @@ describe('auth state race condition regression', () => {
       expect(authContextValue).not.toBeNull()
     })
 
-    act(() => {
-      authContextValue.login('test-token')
+    await act(async () => {
+      await authContextValue.login('test-token')
     })
 
     await waitFor(() => {

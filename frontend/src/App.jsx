@@ -2,6 +2,7 @@ import { lazy, Suspense, createContext, useContext, useState, useEffect } from '
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Navigation from './components/Navigation'
 import Sidebar from './components/Sidebar'
+import api from './services/api'
 import './index.css'
 
 const RollPage = lazy(() => import('./pages/RollPage'))
@@ -14,6 +15,7 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 
 const AuthContext = createContext(null)
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext)
 }
@@ -21,38 +23,87 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('auth_token')
-    setIsAuthenticated(!!token)
-    setIsLoading(false)
+    let isMounted = true
+
+    const validateToken = async () => {
+      const token = localStorage.getItem('auth_token')
+
+      if (!token) {
+        if (isMounted) {
+          setIsAuthenticated(false)
+          setIsLoading(false)
+        }
+        return
+      }
+
+      try {
+        const response = await api.get('/auth/me')
+        if (isMounted) {
+          setUser(response)
+          setIsAuthenticated(true)
+        }
+      } catch {
+        if (isMounted) {
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('refresh_token')
+          setIsAuthenticated(false)
+          setUser(null)
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    validateToken()
 
     const handleStorageChange = (event) => {
       if (event.key === 'auth_token' || event.key === null) {
         const newToken = localStorage.getItem('auth_token')
-        setIsAuthenticated(!!newToken)
+        if (!newToken) {
+          setIsAuthenticated(false)
+          setUser(null)
+        }
       }
     }
 
     window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
+    return () => {
+      isMounted = false
+      window.removeEventListener('storage', handleStorageChange)
+    }
   }, [])
 
-  const login = (accessToken, refreshToken = null) => {
+  const login = async (accessToken, refreshToken = null) => {
     localStorage.setItem('auth_token', accessToken)
     if (refreshToken) {
       localStorage.setItem('refresh_token', refreshToken)
     }
-    setIsAuthenticated(true)
+    try {
+      const response = await api.get('/auth/me')
+      setUser(response)
+      setIsAuthenticated(true)
+    } catch (error) {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('refresh_token')
+      setIsAuthenticated(false)
+      setUser(null)
+      throw error
+    }
   }
 
   const logout = () => {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('refresh_token')
     setIsAuthenticated(false)
+    setUser(null)
   }
 
-  const value = { isAuthenticated, isLoading, login, logout }
+  const value = { isAuthenticated, isLoading, user, login, logout }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

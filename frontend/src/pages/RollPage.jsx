@@ -45,11 +45,22 @@ export default function RollPage() {
   const rollTimeoutRef = useRef(null)
   const suppressPendingAutoOpenRef = useRef(false)
 
-  const { data: session, refetch: refetchSession } = useSession()
+  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   const { data: threads, refetch: refetchThreads } = useThreads()
   const { data: staleThreads } = useStaleThreads(7)
 
   const navigate = useNavigate()
+
+  // Handle session API errors - redirect to login on 401
+  useEffect(() => {
+    if (isSessionError && sessionError) {
+      const status = sessionError.response?.status
+      if (status === 401) {
+        navigate('/login')
+      }
+    }
+  }, [isSessionError, sessionError, navigate])
+
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
   const rollMutation = useRoll()
@@ -485,8 +496,40 @@ export default function RollPage() {
       })
   }
 
-  if (!session) {
+  // Show loading state only when loading and no error
+  if (isSessionLoading && !isSessionError) {
     return <div className="text-center py-10 text-slate-500 font-black uppercase tracking-widest text-[10px]">Loading...</div>
+  }
+
+  // Show error state when session API fails
+  if (isSessionError || !session) {
+    const errorDetail = sessionError?.response?.data?.detail || sessionError?.message || 'Failed to load session'
+    const status = sessionError?.response?.status
+
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <div className="text-4xl">⚠️</div>
+          <h2 className="text-xl font-black text-slate-200 uppercase tracking-wider">Session Error</h2>
+          <p className="text-sm text-slate-400">{errorDetail}</p>
+          {status === 401 ? (
+            <button
+              onClick={() => navigate('/login')}
+              className="px-4 py-2 bg-teal-500/20 border border-teal-500/50 rounded-lg text-xs font-black uppercase tracking-widest text-teal-400 hover:bg-teal-500/30 transition-colors"
+            >
+              Go to Login
+            </button>
+          ) : (
+            <button
+              onClick={() => refetchSession()}
+              className="px-4 py-2 bg-teal-500/20 border border-teal-500/50 rounded-lg text-xs font-black uppercase tracking-widest text-teal-400 hover:bg-teal-500/30 transition-colors"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (

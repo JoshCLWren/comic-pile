@@ -57,7 +57,7 @@ export default function RegisterPage() {
 
     try {
       const response = await api.post('/auth/register', { username: username.trim(), email: email.trim(), password })
-      login(response.access_token, response.refresh_token)
+      await login(response.access_token, response.refresh_token)
       navigate('/')
     } catch (err) {
       if (err.response?.data?.detail) {

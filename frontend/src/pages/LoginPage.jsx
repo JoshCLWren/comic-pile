@@ -39,7 +39,7 @@ export default function LoginPage() {
 
     try {
       const response = await api.post('/auth/login', { username: username.trim(), password })
-      login(response.access_token, response.refresh_token)
+      await login(response.access_token, response.refresh_token)
       navigate('/')
     } catch (err) {
       if (err.response?.data?.detail) {

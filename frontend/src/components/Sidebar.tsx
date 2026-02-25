@@ -17,6 +17,8 @@ export default function Sidebar() {
     setActiveCollectionId,
     deleteCollection,
     isLoading,
+    error,
+    retry,
   } = useCollections()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
@@ -55,9 +57,32 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {isLoading ? (
-          <div className="sidebar__loading">Loading...</div>
-        ) : (
+        {isLoading && (
+          <div className="sidebar__loading">
+            <div className="sidebar__spinner" aria-label="Loading collections" />
+            <span>Loading collections...</span>
+          </div>
+        )}
+
+        {error && !isLoading && (
+          <div className="sidebar__error">
+            <div className="sidebar__error-message">
+              {error.status === 401
+                ? 'Please log in to view collections'
+                : error.message || 'Failed to load collections'}
+            </div>
+            <button
+              type="button"
+              onClick={retry}
+              className="sidebar__retry-btn"
+              aria-label="Retry loading collections"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !error && (
           <ul className="sidebar__list">
             <li className={`sidebar__item ${activeCollectionId === null ? 'sidebar__item--active' : ''}`}>
               <button

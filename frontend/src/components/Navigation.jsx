@@ -15,23 +15,56 @@ export default function Navigation() {
   const { isAuthenticated, logout } = useAuth()
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [hasError, setHasError] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
-      api.get('/auth/me')
-        .then(user => setUsername(user.username))
-        .catch(err => console.error('Failed to fetch user:', err))
+      // Check if token exists before fetching to avoid unnecessary requests
+      const token = localStorage.getItem('auth_token')
+      if (!token) {
+        // Token was removed but isAuthenticated is still true - clear auth state
+        logout()
+        return
+      }
+
+      setIsLoading(true)
+      setHasError(false)
+
+      // Use skipAuthRedirect to handle 401 gracefully without page redirect
+      api.get('/auth/me', { skipAuthRedirect: true })
+        .then(user => {
+          setUsername(user.username || '')
+          setHasError(false)
+        })
+        .catch(err => {
+          console.error('Failed to fetch user:', err)
+
+          // Handle 401 by clearing auth state instead of redirecting
+          if (err.response?.status === 401) {
+            logout()
+            // Don't navigate - let the auth state change trigger re-render
+          } else {
+            // For other errors, show error state but don't break auth
+            setHasError(true)
+          }
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
     } else {
       setUsername('')
+      setHasError(false)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, logout])
 
   const isActive = (path) => location.pathname === path
 
   const handleLogout = async () => {
     try {
-      await api.post('/auth/logout')
+      await api.post('/auth/logout', null, { skipAuthRedirect: true })
     } catch (err) {
+      // Logout endpoint might fail if token is invalid - that's ok, we still clear local state
       console.error('Logout API failed:', err)
     }
     logout()
@@ -65,11 +98,19 @@ export default function Navigation() {
         </div>
       </nav>
       <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
-        {username && (
+        {isLoading ? (
+          <span className="text-xs text-slate-500 font-medium px-2 py-1">
+            Loading...
+          </span>
+        ) : hasError ? (
+          <span className="text-xs text-amber-500 font-medium px-2 py-1" title="Failed to load user data">
+            User
+          </span>
+        ) : username ? (
           <span className="text-xs text-slate-400 font-medium px-2 py-1">
             {username}
           </span>
-        )}
+        ) : null}
         <button
           onClick={handleLogout}
           className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-black/50 hover:bg-black/70 rounded-lg transition-colors"

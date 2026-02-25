@@ -176,6 +176,11 @@ export const test = base.extend<TestFixtures>({
   },
 
   authenticatedPage: async ({ page, request }, use) => {
+    // Clear any existing auth state first for clean test isolation
+    // Navigate to login page first (public route, won't redirect)
+    await page.goto('/login');
+    await page.evaluate(() => localStorage.clear());
+
     const counter = ++fixtureUserCounter;
     const timestamp = Date.now();
     const workerId = process.pid ?? 0;
@@ -191,11 +196,39 @@ export const test = base.extend<TestFixtures>({
       localStorage.setItem('auth_token', token);
     }, accessToken);
 
+    // Navigate to home page
     await page.goto('/');
+
+    // Wait for auth state to stabilize:
+    // 1. Wait for "Checking authentication..." to disappear
+    await page.waitForSelector('text=Checking authentication...', { state: 'detached', timeout: 10000 }).catch(() => {
+      // Element may not exist if auth is fast, that's OK
+    });
+
+    // 2. Wait for "Loading..." states to disappear (from Sidebar, CollectionSwitcher)
+    await page.waitForSelector('text=Loading...', { state: 'detached', timeout: 10000 }).catch(() => {
+      // Element may not exist, that's OK
+    });
+
+    // 3. Wait for the main content to be visible (sidebar indicates auth is ready)
+    await page.waitForSelector('.sidebar', { state: 'visible', timeout: 10000 });
+
+    // 4. Wait for network to be idle to ensure all API calls completed
+    await page.waitForLoadState('networkidle');
 
     await use(page);
 
+    // Cleanup: clear localStorage and attempt logout
     await page.evaluate(() => localStorage.clear());
+    try {
+      await request.post('/api/auth/logout', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+    } catch (e) {
+      // Ignore logout errors during cleanup
+    }
   },
 
   authenticatedWithThreadsPage: async ({ page, request }, use) => {

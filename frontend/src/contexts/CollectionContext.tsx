@@ -1,6 +1,11 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react'
 import { collectionsApi } from '../services/api'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
+
+interface CollectionError {
+  message: string
+  status?: number
+}
 
 interface CollectionContextType {
   collections: Collection[]
@@ -11,11 +16,15 @@ interface CollectionContextType {
   deleteCollection: (id: number) => Promise<void>
   moveCollection: (id: number, newPosition: number) => Promise<void>
   isLoading: boolean
+  error: CollectionError | null
+  retry: () => void
 }
 
 const CollectionContext = createContext<CollectionContextType | null>(null)
 
 const STORAGE_KEY = 'comic_pile_active_collection_id'
+const MAX_RETRIES = 3
+const RETRY_DELAY = 1000
 
 interface CollectionProviderProps {
   children: ReactNode
@@ -25,19 +34,40 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   const [collections, setCollections] = useState<Collection[]>([])
   const [activeCollectionId, setActiveCollectionIdState] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<CollectionError | null>(null)
+  const retryCountRef = useRef(0)
 
   const sortedCollections = collections.sort((a, b) => a.position - b.position)
 
   const fetchCollections = useCallback(async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const response = await collectionsApi.list()
       const fetchedCollections: Collection[] = response.collections || []
       setCollections(fetchedCollections)
+      retryCountRef.current = 0
+    } catch (err) {
+      const axiosError = err as { response?: { status: number; data?: { detail?: string } }; message?: string }
+      const status = axiosError.response?.status
+      const message = axiosError.response?.data?.detail || axiosError.message || 'Failed to load collections'
+      setError({ message, status })
+      console.error('Failed to fetch collections:', err)
+      if (status !== 401 && retryCountRef.current < MAX_RETRIES) {
+        retryCountRef.current += 1
+        setTimeout(() => {
+          fetchCollections()
+        }, RETRY_DELAY * retryCountRef.current)
+      }
     } finally {
       setIsLoading(false)
     }
   }, [])
+
+  const retry = useCallback(() => {
+    retryCountRef.current = 0
+    fetchCollections()
+  }, [fetchCollections])
 
   useEffect(() => {
     fetchCollections()
@@ -116,6 +146,8 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
         deleteCollection,
         moveCollection,
         isLoading,
+        error,
+        retry,
       }}
     >
       {children}
