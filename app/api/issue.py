@@ -17,7 +17,7 @@ from app.utils.issue_parser import parse_issue_ranges
 router = APIRouter(prefix="/api/v1", tags=["issues"])
 
 
-async def issue_to_response(issue: Issue) -> IssueResponse:
+def issue_to_response(issue: Issue) -> IssueResponse:
     """Convert Issue model to IssueResponse.
 
     Args:
@@ -91,8 +91,9 @@ async def list_issues(
             cursor_id = int(parts[1])
             query = query.where(
                 or_(
-                    Issue.issue_number > cursor_number,
-                    (Issue.issue_number == cursor_number) & (Issue.id > cursor_id),
+                    cast(Issue.issue_number, Integer) > int(cursor_number),
+                    (cast(Issue.issue_number, Integer) == int(cursor_number))
+                    & (Issue.id > cursor_id),
                 )
             )
         except ValueError:
@@ -109,7 +110,7 @@ async def list_issues(
     has_more = len(issues) > page_size
     issues_to_return = issues[:page_size]
 
-    issue_responses = [await issue_to_response(issue) for issue in issues_to_return]
+    issue_responses = [issue_to_response(issue) for issue in issues_to_return]
 
     total_count_result = await db.execute(
         select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
@@ -217,17 +218,16 @@ async def create_issues(
 
     thread_id_val = thread.id
 
-    issue_responses = [await issue_to_response(issue) for issue in new_issues]
-
-    await db.commit()
-
     event = Event(
         type="issues_created",
         timestamp=datetime.now(UTC),
         thread_id=thread_id_val,
     )
     db.add(event)
+
     await db.commit()
+
+    issue_responses = [issue_to_response(issue) for issue in new_issues]
 
     return IssueListResponse(
         issues=issue_responses,
@@ -270,7 +270,7 @@ async def get_issue(
             detail=f"Issue {issue_id} not found",
         )
 
-    return await issue_to_response(issue)
+    return issue_to_response(issue)
 
 
 @router.post("/issues/{issue_id}:markRead", status_code=status.HTTP_204_NO_CONTENT)
@@ -337,8 +337,6 @@ async def mark_issue_read(
         thread.issues_remaining = 0
         thread.status = "completed"
 
-    await db.commit()
-
     event = Event(
         type="issue_read",
         timestamp=datetime.now(UTC),
@@ -346,6 +344,7 @@ async def mark_issue_read(
         issue_id=issue_id,
     )
     db.add(event)
+
     await db.commit()
 
 
@@ -406,8 +405,6 @@ async def mark_issue_unread(
     if thread_was_completed:
         thread.status = "active"
 
-    await db.commit()
-
     event = Event(
         type="issue_unread",
         timestamp=datetime.now(UTC),
@@ -415,6 +412,7 @@ async def mark_issue_unread(
         issue_id=issue_id,
     )
     db.add(event)
+
     await db.commit()
 
 
@@ -432,16 +430,19 @@ async def should_update_next_unread(
         db: Database session.
 
     Returns:
-        True if next_unread should be updated to this issue, False otherwise.
-    """
-    if not next_unread_issue_id:
-        return True
+        True if issue_number is earlier than current next unread issue.
 
+    Raises:
+        ValueError: If issue numbers cannot be compared numerically.
+    """
     next_issue = await db.get(Issue, next_unread_issue_id)
     if not next_issue:
         return True
 
     try:
         return int(issue_number) < int(next_issue.issue_number)
-    except ValueError:
-        return issue_number < next_issue.issue_number
+    except ValueError as e:
+        raise ValueError(
+            f"Cannot compare issue numbers: '{issue_number}' and '{next_issue.issue_number}'. "
+            f"Both must be numeric for proper ordering."
+        ) from e
