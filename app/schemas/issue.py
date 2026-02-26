@@ -38,3 +38,11 @@ class IssueListResponse(BaseModel):
     total_count: int
     page_size: int
     next_page_token: str | None = None
+
+
+class IssueCreateRange(BaseModel):
+    """Schema for creating issues from range format."""
+
+    issue_range: str = Field(
+        ..., min_length=1, description="Issue range like '1-25' or '1, 3, 5-7'"
+    )
