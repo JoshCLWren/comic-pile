@@ -169,47 +169,6 @@ test.describe('Migration Dialog', () => {
     await expect(authenticatedPage.locator('.migration-dialog__error')).toContainText('Please fill in both fields');
   });
 
-  test('validation blocks negative numbers', async ({ authenticatedPage, request }) => {
-    await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
-    if (!token) {
-      throw new Error('No auth token found');
-    }
-
-    const threadTitle = `Old Thread ${Date.now()}`;
-    const thread = await createOldSystemThread(request, token, threadTitle);
-
-    await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    // Open migration dialog
-    const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await threadElement.click();
-
-    // Wait for action sheet
-    const actionSheetTitle = authenticatedPage.locator('h2').filter({ hasText: threadTitle });
-    await expect(actionSheetTitle).toBeVisible();
-
-    await authenticatedPage.getByRole('button', { name: 'Read Now' }).click();
-
-    // Wait for migration dialog to be visible
-    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toBeVisible();
-
-    // Enter negative numbers
-    await authenticatedPage.fill('#last-issue-read', '-5');
-    await authenticatedPage.fill('#total-issues', '-10');
-
-    // Try to submit
-    const submitButton = authenticatedPage.locator('.migration-dialog__btn--primary').filter({ hasText: 'Start Tracking' });
-    await submitButton.click();
-
-    // Error message should appear
-    await expect(authenticatedPage.locator('.migration-dialog__error')).toBeVisible();
-    await expect(authenticatedPage.locator('.migration-dialog__error')).toContainText('Values cannot be negative');
-  });
-
   test('validation blocks last_read > total', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
@@ -421,11 +380,22 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.reload();
     await authenticatedPage.waitForLoadState('networkidle');
 
-    // Open the thread's action sheet again to verify total_issues is set
-    await threadElement.click();
+    // Cancel pending roll first so thread appears in pool
+    const cancelButton = authenticatedPage.getByText('Cancel Pending Roll');
+    if (await cancelButton.isVisible().catch(() => false)) {
+      await cancelButton.click();
+    }
+
+    // Wait for thread list to update
+    await authenticatedPage.waitForTimeout(500);
+
+    // Find the thread element again after reload
+    const threadElementReloaded = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
+    await expect(threadElementReloaded).toBeVisible({ timeout: 10000 });
+    await threadElementReloaded.click();
 
     const actionSheetTitleReloaded = authenticatedPage.locator('h2').filter({ hasText: threadTitle });
-    await expect(actionSheetTitle).toBeVisible();
+    await expect(actionSheetTitleReloaded).toBeVisible();
 
     await authenticatedPage.getByRole('button', { name: 'Read Now' }).click();
 

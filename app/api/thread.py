@@ -563,6 +563,22 @@ async def set_pending_thread(
     thread_format = thread.format
     thread_issues = thread.issues_remaining
     thread_position = thread.queue_position
+    thread_total_issues = thread.total_issues
+    thread_reading_progress = thread.reading_progress
+    thread_next_unread_issue_id = thread.next_unread_issue_id
+
+    thread_issue_id = None
+    thread_issue_number = None
+    if thread.uses_issue_tracking() and thread_next_unread_issue_id:
+        from app.models import Issue
+
+        issue_result = await db.execute(
+            select(Issue).where(Issue.id == thread_next_unread_issue_id)
+        )
+        next_issue = issue_result.scalar_one_or_none()
+        if next_issue:
+            thread_issue_id = next_issue.id
+            thread_issue_number = next_issue.issue_number
 
     if thread_issues <= 0:
         raise HTTPException(
@@ -615,6 +631,12 @@ async def set_pending_thread(
         result=result,
         offset=offset,
         snoozed_count=snoozed_count,
+        issue_id=thread_issue_id,
+        issue_number=thread_issue_number,
+        next_issue_id=thread_issue_id,
+        next_issue_number=thread_issue_number,
+        total_issues=thread_total_issues,
+        reading_progress=thread_reading_progress,
     )
 
 
