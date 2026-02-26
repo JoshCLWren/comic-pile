@@ -5,17 +5,15 @@ Revises: 2ec78b5b393a, 8268a870faef
 Create Date: 2026-01-07 12:32:42.733509
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
 revision: str = '208af6b025aa'
-down_revision: Union[str, Sequence[str], None] = ('2ec78b5b393a', '8268a870faef')
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = ('2ec78b5b393a', '8268a870faef')
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
