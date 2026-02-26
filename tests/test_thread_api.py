@@ -265,3 +265,127 @@ async def test_migrate_thread_to_issues_unread(
 
     read_issues = [i for i in issues if i.status == "read"]
     assert len(read_issues) == 0
+
+
+@pytest.mark.asyncio
+async def test_create_thread_without_total_issues_maintains_backward_compat(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Creating thread without total_issues uses old system (backward compat)."""
+    response = await auth_client.post(
+        "/api/threads/",
+        json={
+            "title": "Old Style Thread",
+            "format": "Comic",
+            "issues_remaining": 10,
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "Old Style Thread"
+    assert data["issues_remaining"] == 10
+    assert data["total_issues"] is None
+    assert data["reading_progress"] is None
+
+    thread = await async_db.get(Thread, data["id"])
+    assert thread is not None
+    assert thread.issues_remaining == 10
+    assert thread.total_issues is None
+    assert not thread.uses_issue_tracking()
+
+
+@pytest.mark.asyncio
+async def test_create_thread_with_total_issues_enables_tracking(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Creating thread with total_issues enables issue tracking."""
+    response = await auth_client.post(
+        "/api/threads/",
+        json={
+            "title": "New Style Thread",
+            "format": "Comic",
+            "issues_remaining": 10,
+            "total_issues": 25,
+        },
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "New Style Thread"
+    assert data["total_issues"] == 25
+    assert data["reading_progress"] is None
+
+    thread = await async_db.get(Thread, data["id"])
+    assert thread is not None
+    assert thread.total_issues == 25
+    assert thread.uses_issue_tracking()
+
+    result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))
+    issues = result.scalars().all()
+    assert len(issues) == 0
+
+
+@pytest.mark.asyncio
+async def test_thread_create_schema_accepts_total_issues(
+    auth_client: AsyncClient,
+) -> None:
+    """ThreadCreate schema accepts optional total_issues field."""
+    from app.schemas import ThreadCreate
+
+    schema = ThreadCreate(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=10,
+        total_issues=25,
+    )
+    assert schema.total_issues == 25
+
+    schema_without = ThreadCreate(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=10,
+    )
+    assert schema_without.total_issues is None
+
+
+@pytest.mark.asyncio
+async def test_migration_enables_issue_tracking(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Migrating a thread enables issue tracking."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Old Thread",
+        format="Comic",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    assert thread.total_issues is None
+    assert not thread.uses_issue_tracking()
+
+    response = await auth_client.post(
+        f"/api/threads/{thread.id}:migrateToIssues",
+        json={"last_issue_read": 15, "total_issues": 25},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_issues"] == 25
+    assert data["reading_progress"] == "in_progress"
+
+    await async_db.refresh(thread)
+    assert thread.total_issues == 25
+    assert thread.uses_issue_tracking()
+
+    result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))
+    issues = result.scalars().all()
+    assert len(issues) == 25
