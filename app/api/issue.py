@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import Integer, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -80,7 +80,7 @@ async def list_issues(
     if status_filter:
         query = query.where(Issue.status == status_filter)
 
-    query = query.order_by(Issue.issue_number)
+    query = query.order_by(cast(Issue.issue_number, Integer))
 
     if page_token:
         try:
@@ -217,6 +217,8 @@ async def create_issues(
 
     thread_id_val = thread.id
 
+    issue_responses = [await issue_to_response(issue) for issue in new_issues]
+
     await db.commit()
 
     event = Event(
@@ -226,8 +228,6 @@ async def create_issues(
     )
     db.add(event)
     await db.commit()
-
-    issue_responses = [await issue_to_response(issue) for issue in new_issues]
 
     return IssueListResponse(
         issues=issue_responses,
@@ -322,7 +322,7 @@ async def mark_issue_read(
             Issue.thread_id == thread_id,
             Issue.status == "unread",
         )
-        .order_by(Issue.issue_number)
+        .order_by(cast(Issue.issue_number, Integer))
         .limit(1)
     )
     next_unread = next_unread_result.scalar_one_or_none()
