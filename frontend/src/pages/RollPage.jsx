@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
+import MigrationDialog from '../components/MigrationDialog'
 import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../components/diceLadder'
 import { useSession } from '../hooks/useSession'
@@ -34,6 +35,10 @@ export default function RollPage() {
   const [selectedThread, setSelectedThread] = useState(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState(null)
+
+  // Migration state
+  const [showMigrationDialog, setShowMigrationDialog] = useState(false)
+  const [threadToMigrate, setThreadToMigrate] = useState(null)
 
   // Rating state
   const [isRatingView, setIsRatingView] = useState(false)
@@ -84,7 +89,22 @@ export default function RollPage() {
   async function handleReadStale() {
     try {
       const response = await threadsApi.setPending(staleThread.id)
-      enterRatingView(response.thread_id, response.result, response)
+      const threadMetadata = {
+        id: response.thread_id,
+        title: response.title,
+        format: response.format,
+        issues_remaining: response.issues_remaining,
+        queue_position: response.queue_position,
+        total_issues: response.total_issues,
+      }
+      
+      // Check if thread needs migration
+      if (!response.total_issues) {
+        setThreadToMigrate(threadMetadata)
+        setShowMigrationDialog(true)
+      } else {
+        enterRatingView(response.thread_id, response.result, response)
+      }
     } catch (error) {
       console.error('Failed to set pending thread:', error)
     }
@@ -128,6 +148,28 @@ export default function RollPage() {
     setIsRatingView(true)
   }
 
+  const handleMigrationComplete = useCallback((migratedThread) => {
+    refetchThreads()
+    refetchSession()
+    setShowMigrationDialog(false)
+    setThreadToMigrate(null)
+    // Proceed to rating
+    enterRatingView(migratedThread.id, null, migratedThread)
+  }, [refetchThreads, refetchSession])
+
+  const handleMigrationSkip = useCallback(() => {
+    setShowMigrationDialog(false)
+    // Proceed with old system rating
+    if (threadToMigrate) {
+      enterRatingView(threadToMigrate.id, null, threadToMigrate)
+    }
+  }, [threadToMigrate])
+
+  const handleMigrationClose = useCallback(() => {
+    setShowMigrationDialog(false)
+    setThreadToMigrate(null)
+  }, [])
+
   async function handleAction(action) {
     if (!selectedThread) return
 
@@ -140,7 +182,23 @@ export default function RollPage() {
         case 'read':
           {
             const response = await threadsApi.setPending(selectedThread.id)
-            enterRatingView(response.thread_id, response.result, response)
+            const threadMetadata = {
+              id: response.thread_id,
+              title: response.title,
+              format: response.format,
+              issues_remaining: response.issues_remaining,
+              queue_position: response.queue_position,
+              total_issues: response.total_issues,
+              last_rolled_result: response.result ?? response.last_rolled_result ?? null,
+            }
+            
+            // Check if thread needs migration
+            if (!response.total_issues) {
+              setThreadToMigrate(threadMetadata)
+              setShowMigrationDialog(true)
+            } else {
+              enterRatingView(response.thread_id, response.result, threadMetadata)
+            }
           }
           break
         case 'move-front':
@@ -897,6 +955,15 @@ export default function RollPage() {
         </div>
 
         <div id="explosion-layer" className="explosion-wrap"></div>
+
+        {showMigrationDialog && threadToMigrate && (
+          <MigrationDialog
+            thread={threadToMigrate}
+            onComplete={handleMigrationComplete}
+            onSkip={handleMigrationSkip}
+            onClose={handleMigrationClose}
+          />
+        )}
 
         <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>
           <form className="space-y-4" onSubmit={handleOverrideSubmit}>

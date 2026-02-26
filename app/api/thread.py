@@ -15,7 +15,14 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas import ReactivateRequest, RollResponse, ThreadCreate, ThreadResponse, ThreadUpdate
+from app.schemas import (
+    MigrateToIssuesRequest,
+    ReactivateRequest,
+    RollResponse,
+    ThreadCreate,
+    ThreadResponse,
+    ThreadUpdate,
+)
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
@@ -273,6 +280,7 @@ async def create_thread(
                 title=thread_data.title,
                 format=thread_data.format,
                 issues_remaining=thread_data.issues_remaining,
+                total_issues=thread_data.total_issues,
                 queue_position=max_position + 1,
                 user_id=current_user.id,
                 notes=thread_data.notes,
@@ -555,6 +563,22 @@ async def set_pending_thread(
     thread_format = thread.format
     thread_issues = thread.issues_remaining
     thread_position = thread.queue_position
+    thread_total_issues = thread.total_issues
+    thread_reading_progress = thread.reading_progress
+    thread_next_unread_issue_id = thread.next_unread_issue_id
+
+    thread_issue_id = None
+    thread_issue_number = None
+    if thread.uses_issue_tracking() and thread_next_unread_issue_id:
+        from app.models import Issue
+
+        issue_result = await db.execute(
+            select(Issue).where(Issue.id == thread_next_unread_issue_id)
+        )
+        next_issue = issue_result.scalar_one_or_none()
+        if next_issue:
+            thread_issue_id = next_issue.id
+            thread_issue_number = next_issue.issue_number
 
     if thread_issues <= 0:
         raise HTTPException(
@@ -607,6 +631,12 @@ async def set_pending_thread(
         result=result,
         offset=offset,
         snoozed_count=snoozed_count,
+        issue_id=thread_issue_id,
+        issue_number=thread_issue_number,
+        next_issue_id=thread_issue_id,
+        next_issue_number=thread_issue_number,
+        total_issues=thread_total_issues,
+        reading_progress=thread_reading_progress,
     )
 
 
@@ -655,4 +685,59 @@ async def move_thread_to_collection(
     await db.commit()
     if clear_cache:
         clear_cache()
+    return response
+
+
+@router.post("/{thread_id}:migrateToIssues", response_model=ThreadResponse)
+async def migrate_thread_to_issues(
+    thread_id: int,
+    request: MigrateToIssuesRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Migrate an old-style thread to use issue tracking.
+
+    Creates issue records #1 through total_issues.
+    Marks #1 through last_issue_read as read.
+    Updates thread with issue tracking fields.
+
+    Args:
+        thread_id: The thread ID to migrate
+        request: Migration data with last_issue_read and total_issues
+        current_user: The authenticated user
+        db: Database session
+
+    Returns:
+        ThreadResponse with updated thread
+
+    Raises:
+        HTTPException: 404 if thread not found, 400 if validation fails
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    if thread.total_issues is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} already uses issue tracking",
+        )
+
+    if request.last_issue_read > request.total_issues:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="last_issue_read cannot exceed total_issues",
+        )
+
+    await thread.migrate_to_issues(request.last_issue_read, request.total_issues, db)
+
+    response = await thread_to_response(thread, db)
+
+    await db.commit()
+    if clear_cache:
+        clear_cache()
+
     return response

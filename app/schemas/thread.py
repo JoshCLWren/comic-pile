@@ -11,6 +11,7 @@ class ThreadCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     format: str = Field(..., min_length=1)
     issues_remaining: int = Field(..., ge=0)
+    total_issues: int | None = Field(None, ge=1)
     notes: str | None = None
     is_test: bool = False
     collection_id: int | None = None

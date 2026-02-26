@@ -41,6 +41,9 @@ test.describe('Rate Thread Feature', () => {
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     ]);
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    // Wait a bit for UI to update
+    await authenticatedWithThreadsPage.waitForTimeout(500);
+
     const stillRating = await authenticatedWithThreadsPage
       .locator(SELECTORS.rate.ratingInput)
       .isVisible()
