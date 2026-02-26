@@ -327,9 +327,7 @@ async def test_create_thread_with_total_issues_enables_tracking(
 
 
 @pytest.mark.asyncio
-async def test_thread_create_schema_accepts_total_issues(
-    auth_client: AsyncClient,
-) -> None:
+async def test_thread_create_schema_accepts_total_issues() -> None:
     """ThreadCreate schema accepts optional total_issues field."""
     from app.schemas import ThreadCreate
 
