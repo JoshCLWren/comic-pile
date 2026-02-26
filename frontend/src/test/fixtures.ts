@@ -99,6 +99,7 @@ async function createThreadsForUser(request: Request, accessToken: string, threa
           title: `Test Thread ${i + 1}`,
           format: 'issue',
           issues_remaining: 10,
+          total_issues: 20,
         },
         timeout: 10000,
       });

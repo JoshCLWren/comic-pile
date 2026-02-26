@@ -62,9 +62,14 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
 
 export async function createThread(
   page: Page,
-  threadData: { title: string; format: string; issues_remaining: number }
+  threadData: { title: string; format: string; issues_remaining: number; total_issues?: number }
 ): Promise<void> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+
+  const dataWithTotal = {
+    ...threadData,
+    total_issues: threadData.total_issues ?? (threadData.issues_remaining + 10),
+  };
 
   let success = false;
   let attempts = 0;
@@ -72,7 +77,7 @@ export async function createThread(
 
   while (!success && attempts < maxAttempts) {
     const response = await page.request.post('/api/threads/', {
-      data: threadData,
+      data: dataWithTotal,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

@@ -280,6 +280,7 @@ async def create_thread(
                 title=thread_data.title,
                 format=thread_data.format,
                 issues_remaining=thread_data.issues_remaining,
+                total_issues=thread_data.total_issues,
                 queue_position=max_position + 1,
                 user_id=current_user.id,
                 notes=thread_data.notes,
