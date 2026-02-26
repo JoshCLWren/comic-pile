@@ -711,52 +711,10 @@ async def migrate_thread_to_issues(
 
     await thread.migrate_to_issues(request.last_issue_read, request.total_issues, db)
 
-    thread_id_val = thread.id
-    title = thread.title
-    format_val = thread.format
-    queue_position = thread.queue_position
-    status_val = thread.status
-    last_rating = thread.last_rating
-    last_activity_at = thread.last_activity_at
-    review_url = thread.review_url
-    last_review_at = thread.last_review_at
-    notes = thread.notes
-    is_test = thread.is_test
-    is_blocked = thread.is_blocked
-    collection_id = thread.collection_id
-    created_at = thread.created_at
-    total_issues = thread.total_issues
-    reading_progress = thread.reading_progress
-    next_unread_issue_id = thread.next_unread_issue_id
-    blocked_by_thread_ids = thread.blocked_by_thread_ids or []
-    blocked_by_issue_ids = thread.blocked_by_issue_ids or []
+    response = await thread_to_response(thread, db)
 
     await db.commit()
     if clear_cache:
         clear_cache()
 
-    issues_remaining = await thread.get_issues_remaining(db)
-
-    return ThreadResponse(
-        id=thread_id_val,
-        title=title,
-        format=format_val,
-        issues_remaining=issues_remaining,
-        queue_position=queue_position,
-        status=status_val,
-        last_rating=last_rating,
-        last_activity_at=last_activity_at,
-        review_url=review_url,
-        last_review_at=last_review_at,
-        notes=notes,
-        is_test=is_test,
-        is_blocked=is_blocked,
-        collection_id=collection_id,
-        created_at=created_at,
-        total_issues=total_issues,
-        reading_progress=reading_progress,
-        next_unread_issue_id=next_unread_issue_id,
-        blocked_by_thread_ids=blocked_by_thread_ids,
-        blocked_by_issue_ids=blocked_by_issue_ids,
-        blocking_reasons=[],
-    )
+    return response

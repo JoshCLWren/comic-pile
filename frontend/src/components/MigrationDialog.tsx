@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { Thread } from '../types'
+import axios from 'axios'
 import { migrationApi } from '../services/api'
 import './MigrationDialog.css'
 
@@ -128,7 +129,9 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
       } as MigrationData)
       onComplete(updatedThread)
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred'
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.data?.detail || err.response?.data?.message || err.message
+        : err instanceof Error ? err.message : 'An unexpected error occurred'
       setError(errorMessage)
     } finally {
       setIsSubmitting(false)

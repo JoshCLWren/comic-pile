@@ -298,7 +298,7 @@ test.describe('Migration Dialog', () => {
     await expect(authenticatedPage.locator('.migration-preview')).toContainText('#16');
   });
 
-  test('edge case warnings display appropriately', async ({ authenticatedPage, request }) => {
+  test('shows migration dialog when reading an old system thread', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
@@ -415,6 +415,24 @@ test.describe('Migration Dialog', () => {
     await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0, { timeout: 15000 });
 
     // Rating view should appear (migration proceeded to rating)
+    await expect(authenticatedPage.locator('#rating-input')).toBeVisible();
+
+    // Verify migration persists after reload
+    await authenticatedPage.reload();
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Open the thread's action sheet again to verify total_issues is set
+    await threadElement.click();
+
+    const actionSheetTitleReloaded = authenticatedPage.locator('h2').filter({ hasText: threadTitle });
+    await expect(actionSheetTitle).toBeVisible();
+
+    await authenticatedPage.getByRole('button', { name: 'Read Now' }).click();
+
+    // Migration dialog should NOT appear (thread is already migrated)
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0);
+
+    // Rating view should appear directly
     await expect(authenticatedPage.locator('#rating-input')).toBeVisible();
   });
 
