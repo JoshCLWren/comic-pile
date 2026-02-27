@@ -15,6 +15,7 @@ from app.schemas.dependency import (
 )
 from app.schemas.issue import (
     IssueCreate,
+    IssueCreateRange,
     IssueListResponse,
     IssueResponse,
     IssueUpdate,
@@ -55,6 +56,7 @@ __all__ = [
     "ThreadDependenciesResponse",
     # Issue
     "IssueCreate",
+    "IssueCreateRange",
     "IssueUpdate",
     "IssueResponse",
     "IssueListResponse",

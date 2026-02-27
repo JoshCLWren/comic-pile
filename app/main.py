@@ -23,7 +23,21 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import admin, analytics, auth, collection, dependency, queue, rate, roll, session, snooze, thread, undo
+from app.api import (
+    admin,
+    analytics,
+    auth,
+    collection,
+    dependency,
+    issue,
+    queue,
+    rate,
+    roll,
+    session,
+    snooze,
+    thread,
+    undo,
+)
 from app.config import get_app_settings, get_database_settings
 from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
@@ -380,6 +394,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(collection.router, prefix="/api/v1/collections", tags=["collections"])
+    app.include_router(issue.router, tags=["issues"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
     app.include_router(session.router, prefix="/api", tags=["session"])
@@ -459,11 +474,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 return FileResponse(str(spa_index), headers=cache_headers)
             if app_settings.environment == "production":
                 raise StarletteHTTPException(status_code=503, detail="Frontend assets unavailable")
-            fallback_html = (
-                "<!doctype html><html><body>"
-                "<div id='root'></div>"
-                "</body></html>"
-            )
+            fallback_html = "<!doctype html><html><body><div id='root'></div></body></html>"
             return HTMLResponse(fallback_html, headers=cache_headers)
 
         @app.get("/")
@@ -517,6 +528,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             )
 
     if serve_frontend:
+
         @app.get("/{full_path:path}")
         async def serve_react_spa(full_path: str):
             """Serve the React SPA for non-API routes.
