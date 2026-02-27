@@ -1,4 +1,11 @@
 /**
+ * Maximum number of issues allowed in a single range.
+ * Prevents denial-of-service attacks from ranges like "1-999999999" that would
+ * exhaust memory and crash the application.
+ */
+const MAX_ISSUES = 10000;
+
+/**
  * Parse issue range string and return count.
  * Simple client-side version for preview.
  *
@@ -88,6 +95,10 @@ export function parseIssueRange(input: string): number {
       seen.add(issue);
       uniqueResult.push(issue);
     }
+  }
+
+  if (uniqueResult.length > MAX_ISSUES) {
+    throw new Error(`Cannot create more than ${MAX_ISSUES} issues at once`);
   }
 
   return uniqueResult.length;

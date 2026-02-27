@@ -2,6 +2,8 @@
 
 import re
 
+MAX_ISSUES = 10000
+
 
 def parse_issue_ranges(input_str: str) -> list[str]:
     """Parse issue range input into individual issue numbers.
@@ -75,6 +77,9 @@ def parse_issue_ranges(input_str: str) -> list[str]:
         if issue not in seen:
             seen.add(issue)
             unique_result.append(issue)
+
+    if len(unique_result) > MAX_ISSUES:
+        raise ValueError(f"Cannot create more than {MAX_ISSUES} issues at once")
 
     return unique_result
 
