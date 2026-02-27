@@ -1,0 +1,182 @@
+/* Dependency Flowchart Styles */
+
+.flowchart-container {
+  position: relative;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.dependency-flowchart {
+  display: block;
+  width: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dependency-flowchart:active {
+  cursor: grabbing;
+}
+
+/* Edges */
+.flowchart-edge {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.4);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.flowchart-edge-blocking {
+  fill: none;
+  stroke: rgba(239, 68, 68, 0.7);
+  stroke-width: 2.5;
+  animation: pulse-edge 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Arrowhead marker */
+.flowchart-arrowhead {
+  fill: rgba(148, 163, 184, 0.6);
+}
+
+.flowchart-arrowhead-blocking {
+  fill: rgba(239, 68, 68, 0.7);
+}
+
+/* Nodes */
+.flowchart-node {
+  cursor: grab;
+}
+
+.flowchart-node:active {
+  cursor: grabbing;
+}
+
+.flowchart-node-rect {
+  fill: rgba(30, 41, 59, 0.9);
+  stroke: rgba(148, 163, 184, 0.3);
+  stroke-width: 1.5;
+  rx: 8;
+  ry: 8;
+  transition: stroke 0.15s ease;
+}
+
+.flowchart-node:hover .flowchart-node-rect {
+  stroke: rgba(148, 163, 184, 0.6);
+}
+
+.flowchart-node-blocked .flowchart-node-rect {
+  fill: rgba(127, 29, 29, 0.5);
+  stroke: rgba(239, 68, 68, 0.5);
+}
+
+.flowchart-node-title {
+  fill: rgba(226, 232, 240, 0.95);
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+  pointer-events: none;
+  user-select: none;
+}
+
+.flowchart-node-blocked-icon {
+  font-size: 14px;
+  text-anchor: end;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Tooltip */
+.flowchart-tooltip {
+  position: absolute;
+  z-index: 60;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(226, 232, 240, 0.95);
+  font-size: 0.75rem;
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Controls */
+.flowchart-controls {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 0.25rem;
+}
+
+.flowchart-controls button {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.flowchart-controls button:hover {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Warning */
+.flowchart-warning {
+  padding: 1rem;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  text-align: center;
+}
+
+.flowchart-warning h3 {
+  margin: 0 0 0.5rem;
+  color: rgba(251, 191, 36, 0.9);
+  font-size: 0.875rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.flowchart-warning p {
+  margin: 0;
+  color: rgba(203, 213, 225, 0.8);
+  font-size: 0.75rem;
+}
+
+/* Empty state */
+.flowchart-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: rgba(148, 163, 184, 0.6);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Pulse animation for blocking edges */
+@keyframes pulse-edge {
+  0%, 100% {
+    stroke-opacity: 0.7;
+  }
+  50% {
+    stroke-opacity: 0.3;
+  }
+}

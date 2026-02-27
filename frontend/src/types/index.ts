@@ -109,6 +109,76 @@ export interface IssueListResponse {
 }
 
 /**
+ * Represents a dependency between two threads
+ */
+export interface Dependency {
+  /** Unique identifier for the dependency */
+  id: number;
+  /** ID of the thread that must be completed first (source blocks target) */
+  source_thread_id: number;
+  /** ID of the thread that is blocked */
+  target_thread_id: number;
+  /** ISO 8601 timestamp when the dependency was created */
+  created_at: string;
+}
+
+/**
+ * Response from the thread dependencies endpoint
+ */
+export interface ThreadDependenciesResponse {
+  /** Dependencies where this thread blocks others */
+  blocking: Dependency[];
+  /** Dependencies where this thread is blocked by others */
+  blocked_by: Dependency[];
+}
+
+/**
+ * A positioned node for the dependency flowchart
+ */
+export interface FlowchartNode {
+  /** Thread ID */
+  id: number;
+  /** Thread title */
+  title: string;
+  /** X position */
+  x: number;
+  /** Y position */
+  y: number;
+  /** Whether this thread is blocked */
+  isBlocked: boolean;
+}
+
+/**
+ * An edge between two nodes in the dependency flowchart
+ */
+export interface FlowchartEdge {
+  /** Unique edge identifier */
+  id: string;
+  /** Source node ID */
+  sourceId: number;
+  /** Target node ID */
+  targetId: number;
+  /** SVG path data */
+  path: string;
+  /** Whether this edge represents a blocking relationship */
+  isBlocking: boolean;
+}
+
+/**
+ * Result of laying out a dependency graph
+ */
+export interface GraphLayout {
+  /** Positioned nodes */
+  nodes: FlowchartNode[];
+  /** Edges with computed paths */
+  edges: FlowchartEdge[];
+  /** Total width of the layout */
+  width: number;
+  /** Total height of the layout */
+  height: number;
+}
+
+/**
  * Response data from the dice roll endpoint
  */
 export interface RollResponse {
