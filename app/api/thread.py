@@ -42,6 +42,7 @@ async def thread_to_response(
         ThreadResponse schema
     """
     issues_remaining = await thread.get_issues_remaining(db)
+    reading_progress = thread.reading_progress
 
     thread_id = thread.id
     title = thread.title
@@ -58,7 +59,6 @@ async def thread_to_response(
     collection_id = thread.collection_id
     created_at = thread.created_at
     total_issues = thread.total_issues
-    reading_progress = thread.reading_progress
     next_unread_issue_id = thread.next_unread_issue_id
     blocked_by_thread_ids = thread.blocked_by_thread_ids or []
     blocked_by_issue_ids = thread.blocked_by_issue_ids or []

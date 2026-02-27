@@ -63,21 +63,23 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
 export async function createThread(
   page: Page,
   threadData: { title: string; format: string; issues_remaining: number; total_issues?: number }
-): Promise<void> {
+): Promise<{ id: number } | void> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token'));
 
-  const dataWithTotal = {
-    ...threadData,
-    total_issues: threadData.total_issues ?? (threadData.issues_remaining + 10),
+  const dataWithoutTotal = {
+    title: threadData.title,
+    format: threadData.format,
+    issues_remaining: threadData.issues_remaining,
   };
 
   let success = false;
   let attempts = 0;
   const maxAttempts = 7;
+  let threadId: number | null = null;
 
   while (!success && attempts < maxAttempts) {
     const response = await page.request.post('/api/threads/', {
-      data: dataWithTotal,
+      data: dataWithoutTotal,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -86,19 +88,50 @@ export async function createThread(
 
     if (response.ok()) {
       success = true;
+      const thread = await response.json();
+      threadId = thread.id;
+
+      // If total_issues is specified, create the issues
+      if (threadData.total_issues && threadId) {
+        const issueRange = `1-${threadData.total_issues}`;
+        
+        let issueSuccess = false;
+        let issueAttempts = 0;
+        while (!issueSuccess && issueAttempts < 3) {
+          const issuesResponse = await page.request.post(`/api/v1/threads/${threadId}/issues`, {
+            data: { issue_range: issueRange },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            },
+          });
+
+          if (issuesResponse.ok()) {
+            issueSuccess = true;
+          } else if (issuesResponse.status() === 429) {
+            issueAttempts++;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } else {
+            const errorText = await issuesResponse.text();
+            throw new Error(`Failed to create issues: ${issuesResponse.status()} ${errorText}`);
+          }
+        }
+      }
     } else if (response.status() === 429) {
       attempts++;
       const jitter = Math.random() * 1000;
       const backoffMs = Math.min(3000 * Math.pow(1.5, attempts - 1) + jitter, 20000);
       await new Promise(resolve => setTimeout(resolve, backoffMs));
     } else {
-      throw new Error(`Failed to create thread: ${response.status()} ${response.statusText()}`);
+      throw new Error(`Failed to create thread: ${response.status()} ${response.statusText}`);
     }
   }
 
   if (!success) {
     throw new Error(`Failed to create thread after ${maxAttempts} attempts`);
   }
+
+  return threadId ? { id: threadId } : undefined;
 }
 
 export async function setupAuthenticatedPage(
@@ -188,5 +221,28 @@ export const SELECTORS = {
   },
   history: {
     sessionsList: '#sessions-list',
+  },
+  issues: {
+    issueList: '.issue-list',
+    issueItem: '.issue-item',
+    issueNumber: '.issue-number',
+    nextBadge: '.next-badge',
+    progressBar: '.progress-bar',
+    progressFill: '.progress-fill',
+    progressText: '.progress-text',
+    filter: 'select[aria-label="Filter issues"]',
+    issueIcon: '.issue-icon',
+    readDate: '.read-date',
+  },
+  threadCreate: {
+    issuesInput: 'input[placeholder*="1-25"]',
+    issuePreview: 'p:has-text("Will create")',
+  },
+  rollResult: {
+    issueNumber: '.reading-progress', // Use the reading progress container which contains issue info
+    readingProgress: '.reading-progress',
+    issueOf: 'span:has-text("of")',
+    completedLabel: 'span:has-text("Completed")',
+    inProgressLabel: 'span:has-text("In Progress")',
   },
 } as const;

@@ -16,6 +16,7 @@ import {
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../services/api'
+import { issuesApi } from '../services/api-issues'
 import { useCollections } from '../contexts/CollectionContext'
 
 /**
@@ -40,6 +41,7 @@ const DEFAULT_CREATE_STATE = {
   format: '',
   issuesRemaining: 1,
   notes: '',
+  issues: '',
 }
 
 export default function QueuePage() {
@@ -76,6 +78,8 @@ export default function QueuePage() {
   const [blockingReasonMap, setBlockingReasonMap] = useState({})
   const [dependencyThread, setDependencyThread] = useState(null)
   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
+  const [issuePreview, setIssuePreview] = useState(null)
+  const [issueParseError, setIssueParseError] = useState(null)
 
   useEffect(() => {
     if (location.state?.editThreadId && threads) {
@@ -120,6 +124,27 @@ export default function QueuePage() {
     if (!threads) return
     refreshBlockedState()
   }, [threads])
+
+  useEffect(() => {
+    const calculatePreview = async () => {
+      if (createForm.issues) {
+        try {
+          const { parseIssueRange } = await import('../utils/issueParser')
+          const total = parseIssueRange(createForm.issues)
+          setIssuePreview(total)
+          setIssueParseError(null)
+        } catch (err) {
+          setIssuePreview(null)
+          setIssueParseError(err.message)
+        }
+      } else {
+        setIssuePreview(null)
+        setIssueParseError(null)
+      }
+    }
+
+    calculatePreview()
+  }, [createForm.issues])
 
   const activeThreads = threads
     ?.filter((thread) => thread.status === 'active')
@@ -192,17 +217,36 @@ export default function QueuePage() {
     event.preventDefault()
 
     try {
-      await createMutation.mutate({
+      const hasIssueRange = createForm.issues && createForm.issues.trim()
+
+      let issuesRemaining = Number(createForm.issuesRemaining)
+      if (hasIssueRange) {
+        const { parseIssueRange } = await import('../utils/issueParser')
+        issuesRemaining = parseIssueRange(createForm.issues)
+      }
+
+      const result = await createMutation.mutate({
         title: createForm.title,
         format: createForm.format,
-        issues_remaining: Number(createForm.issuesRemaining),
+        issues_remaining: issuesRemaining,
         notes: createForm.notes || null,
       })
+
+      if (hasIssueRange && result?.id) {
+        try {
+          await issuesApi.create(result.id, createForm.issues)
+        } catch (issueError) {
+          console.error('Thread created but failed to create issues:', issueError)
+          alert(`Thread created successfully, but failed to create individual issues: ${issueError.response?.data?.detail || issueError.message}`)
+        }
+      }
+
       setCreateForm(DEFAULT_CREATE_STATE)
       setIsCreateOpen(false)
       refetch()
-    } catch {
-      console.error('Failed to create thread')
+    } catch (error) {
+      console.error('Failed to create thread:', error)
+      alert(`Failed to create thread: ${error.response?.data?.detail || error.message || 'Unknown error'}`)
     }
   }
 
@@ -599,6 +643,24 @@ export default function QueuePage() {
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
               required
             />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues (optional)</label>
+            <input
+              type="text"
+              value={createForm.issues}
+              onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              placeholder="1-25 or 1, 3, 5-7"
+            />
+            {issuePreview !== null && (
+              <p className="text-xs text-slate-400">
+                Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}: #1-{issuePreview}
+              </p>
+            )}
+            {issueParseError && (
+              <p className="text-xs text-red-400">{issueParseError}</p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Notes</label>
