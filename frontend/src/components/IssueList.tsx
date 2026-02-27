@@ -53,7 +53,6 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
 
   const getStatusIcon = (issue: Issue): string => {
     if (issue.status === 'read') return '✅'
-    if (issue.status === 'skipped') return '⏭️'
     return '🟢'
   }
 

@@ -87,7 +87,7 @@ export interface Issue {
   /** Issue number (e.g., '1', '2', 'Annual 1') */
   issue_number: string;
   /** Current reading status */
-  status: 'unread' | 'read' | 'skipped';
+  status: 'unread' | 'read';
   /** ISO 8601 timestamp when the issue was marked as read (null if unread) */
   read_at: string | null;
   /** ISO 8601 timestamp when the issue was created */
