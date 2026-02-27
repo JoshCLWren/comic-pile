@@ -66,9 +66,10 @@ export async function createThread(
 ): Promise<{ id: number } | void> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token'));
 
-  const dataWithTotal = {
-    ...threadData,
-    total_issues: threadData.total_issues ?? (threadData.issues_remaining + 10),
+  const dataWithoutTotal = {
+    title: threadData.title,
+    format: threadData.format,
+    issues_remaining: threadData.issues_remaining,
   };
 
   let success = false;
@@ -78,7 +79,7 @@ export async function createThread(
 
   while (!success && attempts < maxAttempts) {
     const response = await page.request.post('/api/threads/', {
-      data: dataWithTotal,
+      data: dataWithoutTotal,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -92,8 +93,6 @@ export async function createThread(
 
       // If total_issues is specified, create the issues
       if (threadData.total_issues && threadId) {
-        // Use unique timestamp to avoid duplicate issue range errors
-        const timestamp = Date.now();
         const issueRange = `1-${threadData.total_issues}`;
         
         let issueSuccess = false;
@@ -107,15 +106,14 @@ export async function createThread(
             },
           });
 
-          if (issuesResponse.ok() || issuesResponse.status() === 400) {
-            // 400 means issues already exist, which is fine
+          if (issuesResponse.ok()) {
             issueSuccess = true;
           } else if (issuesResponse.status() === 429) {
             issueAttempts++;
             await new Promise(resolve => setTimeout(resolve, 1000));
           } else {
-            console.warn(`Issue creation failed: ${issuesResponse.status()}`);
-            issueSuccess = true; // Continue anyway
+            const errorText = await issuesResponse.text();
+            throw new Error(`Failed to create issues: ${issuesResponse.status()} ${errorText}`);
           }
         }
       }
@@ -125,7 +123,7 @@ export async function createThread(
       const backoffMs = Math.min(3000 * Math.pow(1.5, attempts - 1) + jitter, 20000);
       await new Promise(resolve => setTimeout(resolve, backoffMs));
     } else {
-      throw new Error(`Failed to create thread: ${response.status()} ${response.statusText()}`);
+      throw new Error(`Failed to create thread: ${response.status()} ${response.statusText}`);
     }
   }
 

@@ -42,7 +42,7 @@ async def thread_to_response(
         ThreadResponse schema
     """
     issues_remaining = await thread.get_issues_remaining(db)
-    reading_progress = await thread.get_reading_progress_percentage(db)
+    reading_progress = thread.reading_progress
 
     thread_id = thread.id
     title = thread.title

@@ -33,19 +33,21 @@ test.describe('Thread Creation with Issue Ranges', () => {
     
     // Verify preview shows "Will create 25 issues"
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 25 issues');
-    
-    // Submit form
+
+    // Submit form and wait for both thread creation and issue creation
     await Promise.all([
-      authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
-        response.request().method() === 'POST' &&
-        response.status() < 300
-      ),
+      authenticatedPage.waitForResponse(async (response) => {
+        const url = response.url();
+        const method = response.request().method();
+        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
+        const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
+        return isThreadCreate || isIssueCreate;
+      }),
       authenticatedPage.click('button[type="submit"]'),
     ]);
-    
+
     await authenticatedPage.waitForLoadState('networkidle');
-    
+
     // Verify thread was created with issues
     const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     expect(response.ok()).toBeTruthy();
@@ -71,19 +73,21 @@ test.describe('Thread Creation with Issue Ranges', () => {
     
     // Verify preview shows "Will create 5 issues"
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 5 issues');
-    
-    // Submit form
+
+    // Submit form and wait for both thread creation and issue creation
     await Promise.all([
-      authenticatedPage.waitForResponse((response) =>
-        response.url().includes('/api/threads/') &&
-        response.request().method() === 'POST' &&
-        response.status() < 300
-      ),
+      authenticatedPage.waitForResponse(async (response) => {
+        const url = response.url();
+        const method = response.request().method();
+        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
+        const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
+        return isThreadCreate || isIssueCreate;
+      }),
       authenticatedPage.click('button[type="submit"]'),
     ]);
-    
+
     await authenticatedPage.waitForLoadState('networkidle');
-    
+
     // Verify thread was created with correct number of issues
     const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     expect(response.ok()).toBeTruthy();
@@ -428,8 +432,8 @@ test.describe('Progress Tracking', () => {
     const threads = await threadsResponse.json();
     const thread = threads.find((t: any) => t.title.startsWith('Progress Test'));
 
-    // Initial progress: 0%
-    expect(thread.reading_progress).toBe('0%');
+    // Initial progress: not_started
+    expect(thread.reading_progress).toBe('not_started');
 
     // Get issues
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -443,17 +447,17 @@ test.describe('Progress Tracking', () => {
     // Check progress updated
     const updatedThreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
     const updatedThread = await updatedThreadResponse.json();
-    expect(updatedThread.reading_progress).toBe('30%');
+    expect(updatedThread.reading_progress).toBe('in_progress');
 
     // Mark remaining issues
     for (let i = 3; i < 10; i++) {
       await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}:markRead`);
     }
 
-    // Check progress is 100%
+    // Check progress is completed
     const finalThreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
     const finalThread = await finalThreadResponse.json();
-    expect(finalThread.reading_progress).toBe('100%');
+    expect(finalThread.reading_progress).toBe('completed');
     expect(finalThread.status).toBe('completed');
   });
 
@@ -483,8 +487,7 @@ test.describe('Progress Tracking', () => {
     // Check progress
     const updatedThreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
     const updatedThread = await updatedThreadResponse.json();
-    const expectedProgress = Math.round((halfCount / 25) * 100);
-    expect(updatedThread.reading_progress).toBe(`${expectedProgress}%`);
+    expect(updatedThread.reading_progress).toBe('in_progress');
   });
 });
 
