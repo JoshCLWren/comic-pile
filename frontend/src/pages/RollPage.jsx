@@ -128,6 +128,10 @@ export default function RollPage() {
         format: threadMetadata.format,
         issues_remaining: threadMetadata.issues_remaining,
         queue_position: threadMetadata.queue_position,
+        issue_id: threadMetadata.issue_id ?? null,
+        issue_number: threadMetadata.issue_number ?? null,
+        total_issues: threadMetadata.total_issues ?? null,
+        reading_progress: threadMetadata.reading_progress ?? null,
         last_rolled_result:
           threadMetadata.result ?? threadMetadata.last_rolled_result ?? result ?? null,
       })
@@ -288,6 +292,10 @@ export default function RollPage() {
         format: pendingMetadata.format,
         issues_remaining: pendingMetadata.issues_remaining,
         queue_position: pendingMetadata.queue_position,
+        issue_id: pendingMetadata.issue_id ?? null,
+        issue_number: pendingMetadata.issue_number ?? null,
+        total_issues: pendingMetadata.total_issues ?? null,
+        reading_progress: pendingMetadata.reading_progress ?? null,
         last_rolled_result:
           pendingMetadata.result ?? pendingMetadata.last_rolled_result ?? pendingResult,
       })
@@ -534,6 +542,12 @@ export default function RollPage() {
     }
   }
 
+  function getProgressPercentage(thread) {
+    if (!thread || !thread.total_issues) return 0
+    const readCount = thread.total_issues - (thread.issues_remaining || 0)
+    return Math.round((readCount / thread.total_issues) * 100)
+  }
+
   const handleRollComplete = useCallback(() => {
     setDiceState('rolled')
   }, [])
@@ -696,17 +710,53 @@ export default function RollPage() {
             ) : (
               <div className="p-4 space-y-8 relative z-10">
                 <div id="thread-info" role="status" aria-live="polite">
-                  <div className="space-y-2 text-center">
-                    <h2 className="text-2xl font-black text-slate-100">{activeRatingThread?.title || 'Loading...'}</h2>
-                    <div className="flex items-center justify-center gap-3">
-                      <span className="bg-teal-500/20 text-teal-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-teal-500/20">
-                        Queue #{activeRatingThread?.queue_position ?? '-'}
-                      </span>
-                      <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/20">
-                        {activeRatingThread?.format || '...'}
-                      </span>
-                      <span className="text-slate-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} Issues left</span>
-                    </div>
+                  <div className="space-y-3 text-center">
+                    {activeRatingThread?.issue_number ? (
+                      <>
+                        <h2 className="text-2xl font-black text-slate-100">{activeRatingThread?.title || 'Loading...'}</h2>
+                        <div className="flex items-center justify-center gap-3 flex-wrap">
+                          <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg text-sm font-black uppercase tracking-[0.2em] border border-amber-500/20">
+                            #{activeRatingThread.issue_number}
+                          </span>
+                          {activeRatingThread.total_issues && (
+                            <span className="text-slate-400 text-xs font-bold">
+                              (#{activeRatingThread.issue_number} of {activeRatingThread.total_issues})
+                            </span>
+                          )}
+                          <span className="bg-teal-500/20 text-teal-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-teal-500/20">
+                            Queue #{activeRatingThread?.queue_position ?? '-'}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h2 className="text-2xl font-black text-slate-100">{activeRatingThread?.title || 'Loading...'}</h2>
+                        <div className="flex items-center justify-center gap-3">
+                          <span className="bg-teal-500/20 text-teal-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-teal-500/20">
+                            Queue #{activeRatingThread?.queue_position ?? '-'}
+                          </span>
+                          <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/20">
+                            {activeRatingThread?.format || '...'}
+                          </span>
+                          <span className="text-slate-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} Issues left</span>
+                        </div>
+                      </>
+                    )}
+                    {activeRatingThread?.reading_progress && activeRatingThread?.total_issues && (
+                      <div className="reading-progress max-w-md mx-auto">
+                        <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-emerald-500 transition-all duration-300"
+                            style={{
+                              width: `${getProgressPercentage(activeRatingThread)}%`
+                            }}
+                          />
+                        </div>
+                        <span className="mt-1 block text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                          {activeRatingThread.reading_progress === 'completed' ? 'Completed' : 'In Progress'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
