@@ -234,7 +234,7 @@ export default function QueuePage() {
 
       if (hasIssueRange && result?.id) {
         try {
-          await issuesApi.create(result.id, { issue_range: createForm.issues })
+          await issuesApi.create(result.id, createForm.issues)
         } catch (issueError) {
           console.error('Thread created but failed to create issues:', issueError)
           alert(`Thread created successfully, but failed to create individual issues: ${issueError.response?.data?.detail || issueError.message}`)

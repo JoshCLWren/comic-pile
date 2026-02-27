@@ -68,7 +68,7 @@ export const issuesApi = {
    * @returns The updated thread object
    */
   migrateThread: async (threadId: number, lastIssueRead: number, totalIssues: number): Promise<Thread> => {
-    return api.post(`/threads/${threadId}:migrateToIssues`, {
+    return api.post(`/v1/threads/${threadId}:migrateToIssues`, {
       last_issue_read: lastIssueRead,
       total_issues: totalIssues,
     })
