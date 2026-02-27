@@ -147,6 +147,37 @@ class Thread(Base):
             return result.scalar() or 0
         return self.issues_remaining
 
+    async def get_reading_progress_percentage(self, db: AsyncSession) -> str | None:
+        """Get the reading progress as a percentage string.
+
+        For migrated threads, calculates based on read issues vs total.
+        For unmigrated threads, returns None.
+
+        Args:
+            db: Database session for querying Issue count
+
+        Returns:
+            Progress percentage string like "50%" or None if not tracking issues
+        """
+        if not self.uses_issue_tracking() or self.total_issues is None:
+            return None
+
+        from sqlalchemy import func, select
+
+        result = await db.execute(
+            select(func.count())
+            .select_from(Issue)
+            .where(Issue.thread_id == self.id)
+            .where(Issue.status == "read")
+        )
+        read_count = result.scalar() or 0
+
+        if self.total_issues == 0:
+            return "0%"
+
+        percentage = round((read_count / self.total_issues) * 100)
+        return f"{percentage}%"
+
     async def migrate_to_issues(
         self,
         last_issue_read: int,

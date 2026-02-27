@@ -241,7 +241,7 @@ test.describe('Issue List Display', () => {
     const issuesData = await issuesResponse.json();
     const firstIssueId = issuesData.issues[0].id;
 
-    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${firstIssueId}/mark-read`);
+    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${firstIssueId}:markRead`);
     
     // Fetch all issues
     const allIssuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -282,7 +282,7 @@ test.describe('Issue Status Toggle', () => {
     expect(firstIssue.status).toBe('unread');
 
     // Mark as read
-    const markReadResponse = await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${firstIssue.id}/mark-read`);
+    const markReadResponse = await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${firstIssue.id}:markRead`);
     expect(markReadResponse.ok()).toBeTruthy();
 
     // Verify status changed
@@ -293,7 +293,7 @@ test.describe('Issue Status Toggle', () => {
     expect(updatedIssue.read_at).not.toBeNull();
 
     // Mark as unread
-    const markUnreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${firstIssue.id}/mark-unread`);
+    const markUnreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${firstIssue.id}:markUnread`);
     expect(markUnreadResponse.ok()).toBeTruthy();
 
     // Verify status changed back
@@ -322,7 +322,7 @@ test.describe('Issue Status Toggle', () => {
     const issuesData = await issuesResponse.json();
     const firstIssue = issuesData.issues[0];
 
-    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${firstIssue.id}/mark-read`);
+      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${firstIssue.id}:markRead`);
 
     // Refresh thread data
     const updatedThreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
@@ -399,7 +399,7 @@ test.describe('Roll Result with Issue Display', () => {
     const issuesData = await issuesResponse.json();
     
     for (let i = 0; i < 3; i++) {
-      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}/mark-read`);
+      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}:markRead`);
     }
 
     // Set thread as active
@@ -437,7 +437,7 @@ test.describe('Progress Tracking', () => {
 
     // Mark 3 issues as read
     for (let i = 0; i < 3; i++) {
-      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}/mark-read`);
+      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}:markRead`);
     }
 
     // Check progress updated
@@ -447,7 +447,7 @@ test.describe('Progress Tracking', () => {
 
     // Mark remaining issues
     for (let i = 3; i < 10; i++) {
-      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}/mark-read`);
+      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}:markRead`);
     }
 
     // Check progress is 100%
@@ -477,7 +477,7 @@ test.describe('Progress Tracking', () => {
     // Mark exactly half (rounded) of issues
     const halfCount = Math.floor(25 / 2);
     for (let i = 0; i < halfCount; i++) {
-      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}/mark-read`);
+      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}:markRead`);
     }
 
     // Check progress
@@ -510,7 +510,7 @@ test.describe('Thread Completion', () => {
 
     // Mark first 4 issues as read
     for (let i = 0; i < 4; i++) {
-      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}/mark-read`);
+      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}:markRead`);
     }
 
     let updatedThreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
@@ -518,7 +518,7 @@ test.describe('Thread Completion', () => {
     expect(updatedThread.status).not.toBe('completed');
 
     // Mark last issue as read
-    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[4].id}/mark-read`);
+    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[4].id}:markRead`);
 
     // Verify thread status changed to completed
     const finalThreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
@@ -545,7 +545,7 @@ test.describe('Thread Completion', () => {
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
     const issuesData = await issuesResponse.json();
 
-    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[0].id}/mark-read`);
+    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[0].id}:markRead`);
 
     // Verify thread is completed
     const finalThreadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
@@ -684,7 +684,7 @@ test.describe('API Integration', () => {
 
     // Mark multiple issues as read concurrently
     const promises = issuesData.issues.slice(0, 5).map((issue: any) =>
-      makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issue.id}/mark-read`)
+      makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issue.id}:markRead`)
     );
 
     const results = await Promise.all(promises);
@@ -700,7 +700,7 @@ test.describe('API Integration', () => {
   });
 
   test('should return 404 for non-existent issue', async ({ authenticatedPage }) => {
-    const response = await makeAuthenticatedRequest(authenticatedPage, 'POST', '/api/issues/99999/mark-read');
+    const response = await makeAuthenticatedRequest(authenticatedPage, 'POST', '/api/v1/issues/99999:markRead');
     expect(response.status()).toBe(404);
   });
 
