@@ -163,15 +163,10 @@ async def create_issues(
             detail=f"Thread {thread_id} not found",
         )
 
-    existing_issues_result = await db.execute(
-        select(func.count(Issue.id)).where(Issue.thread_id == thread_id)
-    )
-    existing_count = existing_issues_result.scalar() or 0
-
-    if existing_count > 0:
+    if thread.total_issues is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} already has issues created",
+            detail=f"Thread {thread_id} already uses issue tracking",
         )
 
     try:
