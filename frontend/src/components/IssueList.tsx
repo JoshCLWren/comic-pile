@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, Thread } from '../types'
 import './IssueList.css'
@@ -10,18 +10,14 @@ interface IssueListProps {
 
 export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   const [issues, setIssues] = useState<Issue[]>([])
-  const [filter, setFilter] = useState<string>('all')
+  const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    loadIssues()
-  }, [thread.id, filter])
-
-  const loadIssues = async () => {
+  const loadIssues = useCallback(async () => {
     setIsLoading(true)
     try {
       const response = await issuesApi.list(thread.id, {
-        status: filter === 'all' ? undefined : (filter as 'unread' | 'read')
+        status: filter === 'all' ? undefined : filter
       })
       setIssues(response.issues)
     } catch (error) {
@@ -29,7 +25,11 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [thread.id, filter])
+
+  useEffect(() => {
+    loadIssues()
+  }, [loadIssues])
 
   const toggleIssueStatus = async (issue: Issue) => {
     try {
