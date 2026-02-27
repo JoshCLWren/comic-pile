@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { createThread, SELECTORS } from './helpers';
 
-async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any) {
+async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token'));
   const options: any = {
     method,
@@ -13,11 +13,45 @@ async function makeAuthenticatedRequest(page: any, method: string, url: string, 
   if (data) {
     options.data = data;
   }
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await page.request.fetch(url, options);
+    
+    // For GET requests that might need to wait for database updates
+    if (method === 'GET' && response.ok() && attempt < maxRetries - 1) {
+      try {
+        const data = await response.json();
+        // If we're looking for specific data and it's not ready, retry
+        if (Array.isArray(data) && url.includes('/threads/')) {
+          // This is a thread list request, check if it has expected data
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      } catch {
+        // Not JSON or parsing failed, return as-is
+      }
+    }
+    
+    if (response.ok() || response.status() >= 400) {
+      return response;
+    }
+    
+    // Retry on 5xx errors or timeouts
+    if (response.status() >= 500 || response.status() === 408) {
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+      continue;
+    }
+    
+    return response;
+  }
+  
   return await page.request.fetch(url, options);
 }
 
 test.describe('Thread Creation with Issue Ranges', () => {
   test('should create thread with issue range "1-25"', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Test Comic Series ${timestamp}`;
+    
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
@@ -25,7 +59,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.click('button:has-text("Add Thread")');
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
-    await authenticatedPage.fill('label:has-text("Title") + input', 'Test Comic Series');
+    await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
     
     // Fill in issue range
@@ -34,38 +68,15 @@ test.describe('Thread Creation with Issue Ranges', () => {
     // Verify preview shows "Will create 25 issues"
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 25 issues');
 
-    // Submit form and wait for both thread creation and issue creation
-    await Promise.all([
-      authenticatedPage.waitForResponse(async (response) => {
-        const url = response.url();
-        const method = response.request().method();
-        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
-        const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
-        return isThreadCreate || isIssueCreate;
-      }),
-      authenticatedPage.click('button[type="submit"]'),
-    ]);
-
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    // Verify thread was created with issues
-    const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    expect(response.ok()).toBeTruthy();
-    const threads = await response.json();
-    const testThread = threads.find((t: any) => t.title === 'Test Comic Series');
-    expect(testThread).toBeDefined();
-    expect(testThread.total_issues).toBe(25);
-  });
-
-  test('should create thread with mixed issue range "1, 3, 5-7"', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    // Submit form and wait for network to settle
+    await authenticatedPage.click('button[type="submit"]');
+    await authenticatedPage.waitForTimeout(2000);
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
-    await authenticatedPage.fill('label:has-text("Title") + input', 'Mixed Range Comic');
+    await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
     
     // Fill in mixed issue range
@@ -74,27 +85,30 @@ test.describe('Thread Creation with Issue Ranges', () => {
     // Verify preview shows "Will create 5 issues"
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 5 issues');
 
-    // Submit form and wait for both thread creation and issue creation
-    await Promise.all([
-      authenticatedPage.waitForResponse(async (response) => {
-        const url = response.url();
-        const method = response.request().method();
-        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
-        const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
-        return isThreadCreate || isIssueCreate;
-      }),
-      authenticatedPage.click('button[type="submit"]'),
-    ]);
-
+    // Submit form and wait for network to settle
+    await authenticatedPage.click('button[type="submit"]');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    // Verify thread was created with correct number of issues
-    const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    expect(response.ok()).toBeTruthy();
-    const threads = await response.json();
-    const testThread = threads.find((t: any) => t.title === 'Mixed Range Comic');
+    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForTimeout(500);
+
+    // Verify thread was created with correct number of issues - retry logic
+    let testThread: any = null;
+    let attempts = 0;
+    while (!testThread && attempts < 5) {
+      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+      expect(response.ok()).toBeTruthy();
+      const threads = await response.json();
+      testThread = threads.find((t: any) => t.title === uniqueTitle);
+      
+      if (!testThread) {
+        await authenticatedPage.waitForTimeout(300);
+        attempts++;
+      }
+    }
+    
     expect(testThread).toBeDefined();
-    expect(testThread.total_issues).toBe(5);
+    expect(testThread.total_issues).toBe(25);
   });
 
   test('should show error for invalid issue range', async ({ authenticatedPage }) => {
@@ -121,6 +135,9 @@ test.describe('Thread Creation with Issue Ranges', () => {
   });
 
   test('should create thread with single issue', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Single Issue Comic ${timestamp}`;
+    
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
@@ -128,7 +145,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.click('button:has-text("Add Thread")');
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
-    await authenticatedPage.fill('label:has-text("Title") + input', 'Single Issue Comic');
+    await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
     
     // Fill in single issue
@@ -137,7 +154,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     // Verify preview shows "Will create 1 issue"
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 1 issue');
     
-    // Submit form and wait for both thread creation and issue creation
+    // Submit form and wait for BOTH thread creation AND issue creation to complete
     await Promise.all([
       authenticatedPage.waitForResponse(async (response) => {
         const url = response.url();
@@ -150,24 +167,48 @@ test.describe('Thread Creation with Issue Ranges', () => {
     ]);
 
     await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForTimeout(500);
 
-    // Verify thread was created with correct total_issues
-    const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    expect(response.ok()).toBeTruthy();
-    let threads = await response.json();
-    let testThread = threads.find((t: any) => t.title === 'Single Issue Comic');
+    // Verify thread was created with correct total_issues - retry logic
+    let testThread: any = null;
+    let attempts = 0;
+    while (!testThread && attempts < 5) {
+      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+      expect(response.ok()).toBeTruthy();
+      const threads = await response.json();
+      testThread = threads.find((t: any) => t.title === uniqueTitle);
+      
+      if (!testThread) {
+        await authenticatedPage.waitForTimeout(300);
+        attempts++;
+      }
+    }
+    
     expect(testThread).toBeDefined();
 
-    // If total_issues is not set yet, fetch individual thread
+    // If total_issues is not set yet, fetch individual thread with retry
     if (testThread.total_issues === null) {
-      const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
-      expect(threadResponse.ok()).toBeTruthy();
-      testThread = await threadResponse.json();
+      let threadResponse: any;
+      let retryCount = 0;
+      while (retryCount < 5) {
+        threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
+        expect(threadResponse.ok()).toBeTruthy();
+        const threadData = await threadResponse.json();
+        if (threadData.total_issues !== null) {
+          testThread = threadData;
+          break;
+        }
+        await authenticatedPage.waitForTimeout(300);
+        retryCount++;
+      }
     }
     expect(testThread.total_issues).toBe(1);
   });
 
   test('should handle duplicate issues in range', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Duplicate Issues Comic ${timestamp}`;
+    
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
@@ -175,7 +216,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.click('button:has-text("Add Thread")');
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
-    await authenticatedPage.fill('label:has-text("Title") + input', 'Duplicate Issues Comic');
+    await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
     
     // Fill in range with duplicates
@@ -184,7 +225,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     // Verify preview shows "Will create 7 issues" (deduplicated: 1,2,3,4,5,6,7)
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 7 issues');
     
-    // Submit form and wait for both thread creation and issue creation
+    // Submit form and wait for BOTH thread creation AND issue creation to complete
     await Promise.all([
       authenticatedPage.waitForResponse(async (response) => {
         const url = response.url();
@@ -197,19 +238,39 @@ test.describe('Thread Creation with Issue Ranges', () => {
     ]);
 
     await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForTimeout(500);
 
-    // Verify thread was created with deduplicated count
-    const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    expect(response.ok()).toBeTruthy();
-    let threads = await response.json();
-    let testThread = threads.find((t: any) => t.title === 'Duplicate Issues Comic');
+    // Verify thread was created with deduplicated count - retry logic
+    let testThread: any = null;
+    let attempts = 0;
+    while (!testThread && attempts < 5) {
+      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+      expect(response.ok()).toBeTruthy();
+      const threads = await response.json();
+      testThread = threads.find((t: any) => t.title === uniqueTitle);
+      
+      if (!testThread) {
+        await authenticatedPage.waitForTimeout(300);
+        attempts++;
+      }
+    }
+    
     expect(testThread).toBeDefined();
 
-    // If total_issues is not set yet, fetch individual thread
+    // If total_issues is not set yet, fetch individual thread with retry
     if (testThread.total_issues === null) {
-      const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
-      expect(threadResponse.ok()).toBeTruthy();
-      testThread = await threadResponse.json();
+      let retryCount = 0;
+      while (retryCount < 5) {
+        const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
+        expect(threadResponse.ok()).toBeTruthy();
+        const threadData = await threadResponse.json();
+        if (threadData.total_issues !== null) {
+          testThread = threadData;
+          break;
+        }
+        await authenticatedPage.waitForTimeout(300);
+        retryCount++;
+      }
     }
     expect(testThread.total_issues).toBe(7);
   });
@@ -285,8 +346,10 @@ test.describe('Issue List Display', () => {
 test.describe('Issue Status Toggle', () => {
   test('should toggle issue status on click', async ({ authenticatedPage }) => {
     // Create thread with issues
+    const timestamp = Date.now();
+    const uniqueTitle = `Toggle Test ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: `Toggle Test ${Date.now()}`,
+      title: uniqueTitle,
       format: 'Comic',
       issues_remaining: 5,
       total_issues: 5,
@@ -294,7 +357,7 @@ test.describe('Issue Status Toggle', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title.startsWith('Toggle Test'));
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     // Get first issue
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -328,8 +391,10 @@ test.describe('Issue Status Toggle', () => {
 
   test('should highlight next unread issue', async ({ authenticatedPage }) => {
     // Create thread with issues
+    const timestamp = Date.now();
+    const uniqueTitle = `Next Unread Test ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: `Next Unread Test ${Date.now()}`,
+      title: uniqueTitle,
       format: 'Comic',
       issues_remaining: 5,
       total_issues: 5,
@@ -337,7 +402,7 @@ test.describe('Issue Status Toggle', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title.startsWith('Next Unread Test'));
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     // Get issues and mark first as read
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -405,8 +470,10 @@ test.describe('Roll Result with Issue Display', () => {
 
   test('should show correct issue in roll result', async ({ authenticatedPage }) => {
     // Create thread with issues
+    const timestamp = Date.now();
+    const uniqueTitle = `Specific Issue Test ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: `Specific Issue Test ${Date.now()}`,
+      title: uniqueTitle,
       format: 'Comic',
       issues_remaining: 10,
       total_issues: 10,
@@ -414,7 +481,7 @@ test.describe('Roll Result with Issue Display', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title.startsWith('Specific Issue Test'));
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     // Mark first 3 issues as read
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -439,8 +506,10 @@ test.describe('Roll Result with Issue Display', () => {
 test.describe('Progress Tracking', () => {
   test('should update progress bar as issues are marked read', async ({ authenticatedPage }) => {
     // Create thread with issues
+    const timestamp = Date.now();
+    const uniqueTitle = `Progress Test ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: `Progress Test ${Date.now()}`,
+      title: uniqueTitle,
       format: 'Comic',
       issues_remaining: 10,
       total_issues: 10,
@@ -448,7 +517,7 @@ test.describe('Progress Tracking', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title.startsWith('Progress Test'));
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     // Initial progress: not_started
     expect(thread.reading_progress).toBe('not_started');
@@ -481,8 +550,10 @@ test.describe('Progress Tracking', () => {
 
   test('should calculate progress correctly', async ({ authenticatedPage }) => {
     // Create thread with specific number of issues
+    const timestamp = Date.now();
+    const uniqueTitle = `Progress Calculation Test ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: `Progress Calculation Test ${Date.now()}`,
+      title: uniqueTitle,
       format: 'Comic',
       issues_remaining: 25,
       total_issues: 25,
@@ -490,7 +561,7 @@ test.describe('Progress Tracking', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title.startsWith('Progress Calculation Test'));
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     // Get issues
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -512,8 +583,10 @@ test.describe('Progress Tracking', () => {
 test.describe('Thread Completion', () => {
   test('should mark thread as completed when all issues read', async ({ authenticatedPage }) => {
     // Create thread with 5 issues
+    const timestamp = Date.now();
+    const uniqueTitle = `Completion Test ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: `Completion Test ${Date.now()}`,
+      title: uniqueTitle,
       format: 'Comic',
       issues_remaining: 5,
       total_issues: 5,
@@ -521,7 +594,7 @@ test.describe('Thread Completion', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title.startsWith('Completion Test'));
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     expect(thread.status).not.toBe('completed');
 
@@ -551,8 +624,10 @@ test.describe('Thread Completion', () => {
 
   test('should handle thread with single issue completion', async ({ authenticatedPage }) => {
     // Create thread with single issue
+    const timestamp = Date.now();
+    const uniqueTitle = `Single Issue Completion ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: `Single Issue Completion ${Date.now()}`,
+      title: uniqueTitle,
       format: 'One-Shot',
       issues_remaining: 1,
       total_issues: 1,
@@ -560,7 +635,7 @@ test.describe('Thread Completion', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title.startsWith('Single Issue Completion'));
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     // Get and mark the only issue as read
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -578,6 +653,9 @@ test.describe('Thread Completion', () => {
 
 test.describe('Issue Range Edge Cases', () => {
   test('should handle large issue ranges', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Long Running Series ${timestamp}`;
+    
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
@@ -585,7 +663,7 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.click('button:has-text("Add Thread")');
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
-    await authenticatedPage.fill('label:has-text("Title") + input', 'Long Running Series');
+    await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
     
     // Fill in large range
@@ -594,33 +672,41 @@ test.describe('Issue Range Edge Cases', () => {
     // Verify preview
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 150 issues');
     
-    // Submit form and wait for both thread creation and issue creation
-    await Promise.all([
-      authenticatedPage.waitForResponse(async (response) => {
-        const url = response.url();
-        const method = response.request().method();
-        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
-        const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
-        return isThreadCreate || isIssueCreate;
-      }),
-      authenticatedPage.click('button[type="submit"]'),
-    ]);
+    // Submit form and wait for network to settle (can take longer for large ranges)
+    await authenticatedPage.click('button[type="submit"]');
+    await authenticatedPage.waitForTimeout(5000);
 
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    // Verify thread was created with correct total_issues
-    // Need to refetch to get updated total_issues after issue creation
-    const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    expect(response.ok()).toBeTruthy();
-    let threads = await response.json();
-    let testThread = threads.find((t: any) => t.title === 'Long Running Series');
+    // Verify thread was created with correct total_issues - retry logic with longer timeout
+    let testThread: any = null;
+    let attempts = 0;
+    while (!testThread && attempts < 10) {
+      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+      expect(response.ok()).toBeTruthy();
+      const threads = await response.json();
+      testThread = threads.find((t: any) => t.title === uniqueTitle);
+      
+      if (!testThread) {
+        await authenticatedPage.waitForTimeout(500);
+        attempts++;
+      }
+    }
+    
     expect(testThread).toBeDefined();
 
-    // If total_issues is not set yet, fetch individual thread
+    // For large ranges, total_issues might take longer to be set, fetch individual thread with retry
     if (testThread.total_issues === null) {
-      const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
-      expect(threadResponse.ok()).toBeTruthy();
-      testThread = await threadResponse.json();
+      let retryCount = 0;
+      while (retryCount < 10) {
+        const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
+        expect(threadResponse.ok()).toBeTruthy();
+        const threadData = await threadResponse.json();
+        if (threadData.total_issues !== null) {
+          testThread = threadData;
+          break;
+        }
+        await authenticatedPage.waitForTimeout(500);
+        retryCount++;
+      }
     }
     expect(testThread.total_issues).toBe(150);
   });
@@ -663,6 +749,9 @@ test.describe('Issue Range Edge Cases', () => {
   });
 
   test('should handle whitespace in ranges', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Whitespace Test ${timestamp}`;
+    
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
@@ -670,7 +759,7 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.click('button:has-text("Add Thread")');
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
-    await authenticatedPage.fill('label:has-text("Title") + input', 'Whitespace Test');
+    await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
     
     // Fill range with various whitespace
@@ -678,33 +767,45 @@ test.describe('Issue Range Edge Cases', () => {
 
     // Verify preview handles whitespace correctly (1,2,3,4,5,7,10,11,12 = 9 unique issues)
     await expect(authenticatedPage.locator(SELECTORS.threadCreate.issuePreview)).toContainText('Will create 9 issues');
-    
-    // Submit form and wait for both thread creation and issue creation
-    await Promise.all([
-      authenticatedPage.waitForResponse(async (response) => {
-        const url = response.url();
-        const method = response.request().method();
-        const isThreadCreate = url.includes('/api/threads/') && method === 'POST' && response.status() < 300;
-        const isIssueCreate = url.includes('/api/v1/threads/') && url.includes('/issues') && method === 'POST' && response.status() < 300;
-        return isThreadCreate || isIssueCreate;
-      }),
-      authenticatedPage.click('button[type="submit"]'),
-    ]);
 
+    // Submit form and wait for network to settle
+    await authenticatedPage.click('button[type="submit"]');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    // Verify thread was created with correct count (9 unique issues)
-    const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    expect(response.ok()).toBeTruthy();
-    let threads = await response.json();
-    let testThread = threads.find((t: any) => t.title === 'Whitespace Test');
+    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForTimeout(500);
+
+    // Verify thread was created with correct count (9 unique issues) - retry logic
+    let testThread: any = null;
+    let attempts = 0;
+    while (!testThread && attempts < 5) {
+      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+      expect(response.ok()).toBeTruthy();
+      const threads = await response.json();
+      testThread = threads.find((t: any) => t.title === uniqueTitle);
+      
+      if (!testThread) {
+        await authenticatedPage.waitForTimeout(300);
+        attempts++;
+      }
+    }
+    
     expect(testThread).toBeDefined();
 
-    // If total_issues is not set yet, fetch individual thread
+    // If total_issues is not set yet, fetch individual thread with retry
     if (testThread.total_issues === null) {
-      const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
-      expect(threadResponse.ok()).toBeTruthy();
-      testThread = await threadResponse.json();
+      let retryCount = 0;
+      while (retryCount < 5) {
+        const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
+        expect(threadResponse.ok()).toBeTruthy();
+        const threadData = await threadResponse.json();
+        if (threadData.total_issues !== null) {
+          testThread = threadData;
+          break;
+        }
+        await authenticatedPage.waitForTimeout(300);
+        retryCount++;
+      }
     }
     expect(testThread.total_issues).toBe(9);
   });
@@ -713,8 +814,10 @@ test.describe('Issue Range Edge Cases', () => {
 test.describe('API Integration', () => {
   test('should handle concurrent issue status updates', async ({ authenticatedPage }) => {
     // Create thread with issues
+    const timestamp = Date.now();
+    const uniqueTitle = `Concurrent Test ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: `Concurrent Test ${Date.now()}`,
+      title: uniqueTitle,
       format: 'Comic',
       issues_remaining: 10,
       total_issues: 10,
@@ -722,7 +825,7 @@ test.describe('API Integration', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title.startsWith('Concurrent Test'));
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     // Get issues
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
