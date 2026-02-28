@@ -771,8 +771,10 @@ export default function Dice3D({
   if (!isRolling) debugPrevIsRollingRef.current = false;
   // #endregion
 
+  const debugLabelRef = useRef(debugLabel);
   isRollingRef.current = isRolling;
   onRollCompleteRef.current = onRollComplete;
+  debugLabelRef.current = debugLabel;
 
   // Sync ref in layout so the animation loop sees it before the next frame.
   useLayoutEffect(() => {
@@ -887,9 +889,9 @@ export default function Dice3D({
       const rolling = isRollingRef.current;
       if (rolling && !debugLastRollingRef.current) {
         const el = rendererRef.current?.domElement;
-        const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:animate', message: 'entered rolling branch', data: { debugLabel, lockMotion, freeze, hasTarget: !!targetRotationRef.current, canvasW: el?.clientWidth, canvasH: el?.clientHeight }, hypothesisId: 'A', timestamp: Date.now() };
+        const payload = { sessionId: 'ee8105', location: 'Dice3D.jsx:animate', message: 'entered rolling branch', data: { debugLabel: debugLabelRef.current, lockMotion, freeze, hasTarget: !!targetRotationRef.current, canvasW: el?.clientWidth, canvasH: el?.clientHeight }, hypothesisId: 'A', timestamp: Date.now() };
         fetch('http://127.0.0.1:7495/ingest/fcb87d7b-4113-40d8-96f1-79d60a7ea40f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'ee8105' }, body: JSON.stringify(payload) }).catch(() => { });
-        (debugLabel === 'main' ? console.warn : console.debug)('[roll-debug]', payload);
+        (debugLabelRef.current === 'main' ? console.warn : console.debug)('[roll-debug]', payload);
         debugLastRollingRef.current = true;
       }
       if (!rolling) debugLastRollingRef.current = false;

@@ -115,7 +115,7 @@ export default function RollPage() {
     setIsActionSheetOpen(true)
   }
 
-  function enterRatingView(threadId, result = null, threadMetadata = null) {
+  const enterRatingView = useCallback((threadId, result = null, threadMetadata = null) => {
     suppressPendingAutoOpenRef.current = false
 
     if (threadId) setSelectedThreadId(threadId)
@@ -150,7 +150,7 @@ export default function RollPage() {
 
     setPredictedDie(initialPredicted)
     setIsRatingView(true)
-  }
+  }, [session, currentDie])
 
   const handleMigrationComplete = useCallback((migratedThread) => {
     refetchThreads()
@@ -159,7 +159,7 @@ export default function RollPage() {
     setThreadToMigrate(null)
     // Proceed to rating
     enterRatingView(migratedThread.id, null, migratedThread)
-  }, [refetchThreads, refetchSession])
+  }, [refetchThreads, refetchSession, enterRatingView])
 
   const handleMigrationSkip = useCallback(() => {
     setShowMigrationDialog(false)
@@ -167,7 +167,7 @@ export default function RollPage() {
     if (threadToMigrate) {
       enterRatingView(threadToMigrate.id, null, threadToMigrate)
     }
-  }, [threadToMigrate])
+  }, [threadToMigrate, enterRatingView])
 
   const handleMigrationClose = useCallback(() => {
     setShowMigrationDialog(false)

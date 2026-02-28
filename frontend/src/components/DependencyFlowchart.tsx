@@ -114,12 +114,13 @@ export default function DependencyFlowchart({
     })
   }, [layout.edges, adjustedNodes])
 
-  // Reset state when threads change
+  // Reset state when the set of threads changes
+  const threadKey = useMemo(() => threads.map((t) => t.id).join(','), [threads])
   useEffect(() => {
     setPage(0)
     setNodeOffsets(new Map())
     setTransform({ x: 0, y: 0, scale: 1 })
-  }, [threads.length])
+  }, [threadKey])
 
   const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault()
