@@ -206,13 +206,13 @@ export const test = base.extend<TestFixtures>({
       // Element may not exist if auth is fast, that's OK
     });
 
-    // 2. Wait for "Loading..." states to disappear (from Sidebar, CollectionSwitcher)
+    // 2. Wait for "Loading..." states to disappear
     await page.waitForSelector('text=Loading...', { state: 'detached', timeout: 10000 }).catch(() => {
       // Element may not exist, that's OK
     });
 
-    // 3. Wait for the main content to be visible (sidebar indicates auth is ready)
-    await page.waitForSelector('.sidebar', { state: 'visible', timeout: 10000 });
+    // 3. Wait for the roll page to be ready
+    await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 });
 
     // 4. Wait for network to be idle to ensure all API calls completed
     await page.waitForLoadState('networkidle');

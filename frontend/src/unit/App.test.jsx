@@ -65,11 +65,11 @@ test('renders navigation labels', async () => {
   renderWithAuth('/')
 
   await waitFor(() => {
-    expect(screen.getByText('Roll')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /roll page/i })).toBeInTheDocument()
   })
-  expect(screen.getByText('Queue')).toBeInTheDocument()
-  expect(screen.getByText('History')).toBeInTheDocument()
-  expect(screen.getByText('Analytics')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()
 })
 
 describe('route guards', () => {
