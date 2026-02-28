@@ -63,7 +63,7 @@ test.describe('Dependency Flowchart', () => {
 
     // Create dependency via API
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
-    await authenticatedPage.request.post('/api/v1/dependencies/', {
+    const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
         source_type: 'thread',
@@ -72,6 +72,7 @@ test.describe('Dependency Flowchart', () => {
         target_id: targetResult?.id,
       },
     })
+    expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
@@ -128,7 +129,7 @@ test.describe('Dependency Flowchart', () => {
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
-    await authenticatedPage.request.post('/api/v1/dependencies/', {
+    const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
         source_type: 'thread',
@@ -137,6 +138,7 @@ test.describe('Dependency Flowchart', () => {
         target_id: targetResult?.id,
       },
     })
+    expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
@@ -183,7 +185,7 @@ test.describe('Dependency Flowchart', () => {
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
-    await authenticatedPage.request.post('/api/v1/dependencies/', {
+    const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
         source_type: 'thread',
@@ -192,6 +194,7 @@ test.describe('Dependency Flowchart', () => {
         target_id: targetResult?.id,
       },
     })
+    expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
@@ -231,7 +234,7 @@ test.describe('Dependency Flowchart', () => {
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
-    await authenticatedPage.request.post('/api/v1/dependencies/', {
+    const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
         source_type: 'thread',
@@ -240,6 +243,7 @@ test.describe('Dependency Flowchart', () => {
         target_id: targetResult?.id,
       },
     })
+    expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
@@ -276,7 +280,7 @@ test.describe('Dependency Flowchart', () => {
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
-    await authenticatedPage.request.post('/api/v1/dependencies/', {
+    const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
         source_type: 'thread',
@@ -285,6 +289,7 @@ test.describe('Dependency Flowchart', () => {
         target_id: targetResult?.id,
       },
     })
+    expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')

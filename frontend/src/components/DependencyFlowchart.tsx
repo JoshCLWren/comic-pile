@@ -5,7 +5,7 @@
  * blocking edge pulse animation, pagination for large graphs.
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { layoutGraph, NODE_WIDTH, NODE_HEIGHT } from '../utils/graphLayout'
 import type { Thread, Dependency, FlowchartNode } from '../types'
 import './DependencyFlowchart.css'
@@ -72,40 +72,47 @@ export default function DependencyFlowchart({
 
   // Pagination: slice threads for display
   const totalPages = Math.ceil(threads.length / PAGE_SIZE)
-  const paginatedThreads = threads.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
-  // Filter dependencies to only include visible threads
-  const visibleThreadIds = new Set(paginatedThreads.map((t) => t.id))
-  const visibleDependencies = dependencies.filter(
-    (d) => visibleThreadIds.has(d.source_thread_id) && visibleThreadIds.has(d.target_thread_id),
-  )
-
-  const layout = layoutGraph(paginatedThreads, visibleDependencies, blockedIds)
+  // Memoize layout computation so pan/drag don't trigger expensive recalculation
+  const layout = useMemo(() => {
+    const paginatedThreads = threads.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+    const visibleThreadIds = new Set(paginatedThreads.map((t) => t.id))
+    const visibleDependencies = dependencies.filter(
+      (d) => visibleThreadIds.has(d.source_thread_id) && visibleThreadIds.has(d.target_thread_id),
+    )
+    return layoutGraph(paginatedThreads, visibleDependencies, blockedIds)
+  }, [threads, page, dependencies, blockedIds])
 
   // Apply node drag offsets
-  const adjustedNodes = layout.nodes.map((node) => {
-    const offset = nodeOffsets.get(node.id)
-    if (offset) {
-      return { ...node, x: node.x + offset.dx, y: node.y + offset.dy }
-    }
-    return node
-  })
+  const adjustedNodes = useMemo(
+    () =>
+      layout.nodes.map((node) => {
+        const offset = nodeOffsets.get(node.id)
+        if (offset) {
+          return { ...node, x: node.x + offset.dx, y: node.y + offset.dy }
+        }
+        return node
+      }),
+    [layout.nodes, nodeOffsets],
+  )
 
   // Recompute edge paths with adjusted positions
-  const nodePositions = new Map(adjustedNodes.map((n) => [n.id, n]))
-  const adjustedEdges = layout.edges.map((edge) => {
-    const source = nodePositions.get(edge.sourceId)
-    const target = nodePositions.get(edge.targetId)
-    if (!source || !target) return edge
+  const adjustedEdges = useMemo(() => {
+    const nodePositions = new Map(adjustedNodes.map((n) => [n.id, n]))
+    return layout.edges.map((edge) => {
+      const source = nodePositions.get(edge.sourceId)
+      const target = nodePositions.get(edge.targetId)
+      if (!source || !target) return edge
 
-    const sx = source.x + NODE_WIDTH / 2
-    const sy = source.y + NODE_HEIGHT
-    const tx = target.x + NODE_WIDTH / 2
-    const ty = target.y
-    const midY = (sy + ty) / 2
-    const path = `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`
-    return { ...edge, path }
-  })
+      const sx = source.x + NODE_WIDTH / 2
+      const sy = source.y + NODE_HEIGHT
+      const tx = target.x + NODE_WIDTH / 2
+      const ty = target.y
+      const midY = (sy + ty) / 2
+      const path = `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`
+      return { ...edge, path }
+    })
+  }, [layout.edges, adjustedNodes])
 
   // Reset state when threads change
   useEffect(() => {
@@ -223,8 +230,8 @@ export default function DependencyFlowchart({
       setNodeOffsets((prev) => {
         const next = new Map(prev)
         next.set(nodeId, {
-          dx: currentX - originalNode.x + (svgX - svgX),
-          dy: currentY - originalNode.y + (svgY - svgY),
+          dx: currentX - originalNode.x,
+          dy: currentY - originalNode.y,
         })
         return next
       })
