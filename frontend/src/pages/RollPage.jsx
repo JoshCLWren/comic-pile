@@ -3,10 +3,12 @@ import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import MigrationDialog from '../components/MigrationDialog'
+import CollectionDialog from '../components/CollectionDialog'
 import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../components/diceLadder'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
+import { useCollections } from '../contexts/CollectionContext'
 import {
   useClearManualDie,
   useDismissPending,
@@ -35,6 +37,7 @@ export default function RollPage() {
   const [selectedThread, setSelectedThread] = useState(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState(null)
+  const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
 
   // Migration state
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
@@ -51,7 +54,13 @@ export default function RollPage() {
   const suppressPendingAutoOpenRef = useRef(false)
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-  const { data: threads, refetch: refetchThreads } = useThreads()
+  const {
+    collections = [],
+    activeCollectionId = null,
+    setActiveCollectionId,
+    isLoading: isCollectionsLoading = false,
+  } = useCollections()
+  const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
 
   const navigate = useNavigate()
@@ -552,6 +561,11 @@ export default function RollPage() {
     setDiceState('rolled')
   }, [])
 
+  function handleCollectionChange(event) {
+    const value = event.target.value
+    setActiveCollectionId(value === 'all' ? null : Number(value))
+  }
+
   function handleOverrideSubmit(event) {
     event.preventDefault()
     if (!overrideThreadId) return
@@ -883,7 +897,30 @@ export default function RollPage() {
 
               <div className="flex items-center gap-2 shrink-0 mb-4">
                 <div className="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_15px_var(--accent-teal)]"></div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Roll Pool</span>
+                <div className="flex-1 flex items-center gap-2">
+                  <select
+                    value={activeCollectionId ?? 'all'}
+                    onChange={handleCollectionChange}
+                    className="min-w-0 w-full max-w-[240px] bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+                    aria-label="Roll pool collection"
+                    disabled={isCollectionsLoading}
+                  >
+                    <option value="all">Roll Pool: All Collections</option>
+                    {collections.map((collection) => (
+                      <option key={collection.id} value={collection.id}>
+                        Roll Pool: {collection.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setIsCollectionDialogOpen(true)}
+                    className="shrink-0 px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-300 hover:bg-white/10 transition-colors"
+                    aria-label="Add collection"
+                  >
+                    + New
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -1005,6 +1042,10 @@ export default function RollPage() {
         </div>
 
         <div id="explosion-layer" className="explosion-wrap"></div>
+
+        {isCollectionDialogOpen && (
+          <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />
+        )}
 
         {showMigrationDialog && threadToMigrate && (
           <MigrationDialog

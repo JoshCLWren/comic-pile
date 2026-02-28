@@ -14,6 +14,7 @@ import {
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
+import { useCollections } from '../contexts/CollectionContext'
 
 const navigateSpy = vi.fn()
 
@@ -55,6 +56,7 @@ vi.mock('../hooks', async (importOriginal) => {
     useRate: vi.fn(),
   }
 })
+vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
 
 beforeEach(() => {
   const mockSessionData = {
@@ -86,6 +88,12 @@ beforeEach(() => {
   useMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   useRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  useCollections.mockReturnValue({
+    collections: [],
+    activeCollectionId: null,
+    setActiveCollectionId: vi.fn(),
+    isLoading: false,
+  })
 })
 
 afterEach(() => {
@@ -313,7 +321,8 @@ describe('Rating View', () => {
       thread_id: 1,
       title: 'Saga',
       format: 'Comic',
-      issues_remaining: 5
+      issues_remaining: 5,
+      total_issues: 50,
     })
 
     useSession.mockReturnValue({
@@ -350,7 +359,8 @@ describe('Rating View', () => {
       title: 'Fresh X-Men',
       format: 'HC',
       issues_remaining: 10,
-      result: 5
+      result: 5,
+      total_issues: 50,
     }
     const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue(freshMetadata)
 
@@ -391,7 +401,8 @@ describe('Rating View', () => {
       result: 3,
       title: 'Saga',
       format: 'Comic',
-      issues_remaining: 5
+      issues_remaining: 5,
+      total_issues: 50,
     })
 
     const mockRate = vi.fn().mockResolvedValue({})
@@ -432,7 +443,8 @@ describe('Rating View', () => {
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
       thread_id: 1,
       title: 'Saga',
-      result: 3
+      result: 3,
+      total_issues: 50,
     })
 
     const user = userEvent.setup()
@@ -447,10 +459,11 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Read Now'))
 
     // In rating view, Saga should be HIDDEN from the pool at the bottom
-    const poolContainer = screen.getByText('Roll Pool').parentElement.parentElement
-    expect(within(poolContainer).queryByText('Saga')).not.toBeInTheDocument()
+    const poolHeader = screen.getByLabelText('Roll pool collection').parentElement.parentElement
+    const poolList = poolHeader.nextElementSibling
+    expect(within(poolList).queryByText('Saga')).not.toBeInTheDocument()
     // Other threads (X-Men) should still be there
-    expect(within(poolContainer).getByText('X-Men')).toBeInTheDocument()
+    expect(within(poolList).getByText('X-Men')).toBeInTheDocument()
   })
 
   it('[P4] refetches threads after successful rating', async () => {
@@ -460,7 +473,8 @@ describe('Rating View', () => {
       result: 3,
       title: 'Saga',
       format: 'Comic',
-      issues_remaining: 5
+      issues_remaining: 5,
+      total_issues: 50,
     })
 
     const mockRate = vi.fn().mockResolvedValue({})
@@ -496,7 +510,8 @@ describe('Rating View', () => {
       result: 3,
       title: 'Saga',
       format: 'Comic',
-      issues_remaining: 5
+      issues_remaining: 5,
+      total_issues: 50,
     })
 
     const mockRate = vi.fn().mockResolvedValue({})
@@ -545,7 +560,8 @@ describe('Rating View', () => {
       result: 3,
       title: 'Saga',
       format: 'Comic',
-      issues_remaining: 5
+      issues_remaining: 5,
+      total_issues: 50,
     })
 
     const mockRate = vi.fn().mockResolvedValue({})
@@ -595,7 +611,8 @@ describe('Rating View', () => {
       result: 3,
       title: 'Final Issue Thread',
       format: 'Comic',
-      issues_remaining: 1 // Only 1 issue left
+      issues_remaining: 1, // Only 1 issue left
+      total_issues: 50,
     })
 
     const mockRate = vi.fn().mockResolvedValue({})
@@ -628,7 +645,8 @@ describe('Rating View', () => {
       result: 3,
       title: 'Ongoing Thread',
       format: 'Comic',
-      issues_remaining: 5
+      issues_remaining: 5,
+      total_issues: 50,
     })
 
     const mockRate = vi.fn().mockResolvedValue({})
@@ -654,7 +672,8 @@ describe('Rating View', () => {
       result: 3,
       title: 'Saga',
       format: 'Comic',
-      issues_remaining: 5
+      issues_remaining: 5,
+      total_issues: 50,
     })
 
     const user = userEvent.setup()

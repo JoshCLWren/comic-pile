@@ -1,7 +1,6 @@
 import { lazy, Suspense, createContext, useContext, useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Navigation from './components/Navigation'
-import Sidebar from './components/Sidebar'
 import api from './services/api'
 import './index.css'
 
@@ -142,8 +141,7 @@ function PublicRoute({ children }) {
 function AuthenticatedLayout({ children }) {
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24 lg:ml-64">
+      <main className="flex-1 container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
         {children}
       </main>
       <Navigation />
