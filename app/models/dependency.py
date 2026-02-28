@@ -54,8 +54,14 @@ class Dependency(Base):
         "Thread", foreign_keys=[target_thread_id], back_populates="dependencies_in", lazy="raise"
     )
     source_issue: Mapped["Issue | None"] = relationship(
-        "Issue", foreign_keys=[source_issue_id], lazy="raise"
+        "Issue",
+        foreign_keys=[source_issue_id],
+        back_populates="dependencies_out",
+        lazy="raise",
     )
     target_issue: Mapped["Issue | None"] = relationship(
-        "Issue", foreign_keys=[target_issue_id], lazy="raise"
+        "Issue",
+        foreign_keys=[target_issue_id],
+        back_populates="dependencies_in",
+        lazy="raise",
     )

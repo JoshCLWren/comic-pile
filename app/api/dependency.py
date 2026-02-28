@@ -244,7 +244,18 @@ async def _is_dependency_owned_by_user(
     user_id: int,
     db: AsyncSession,
 ) -> bool:
-    """Return True when dependency belongs to the user."""
+    """Return whether a dependency belongs to the given user.
+
+    Args:
+        dependency: Dependency row to validate ownership for.
+        user_id: Authenticated user ID to compare against.
+        db: Database session used for related Thread/Issue lookups.
+
+    Returns:
+        True when the dependency belongs to the user; otherwise False.
+        For thread dependencies, ownership is checked through source_thread_id.
+        For issue dependencies, ownership is checked through source_issue_id -> thread.user_id.
+    """
     if dependency.source_thread_id is not None:
         source_thread = await db.get(Thread, dependency.source_thread_id)
         return bool(source_thread and source_thread.user_id == user_id)

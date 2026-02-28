@@ -3,8 +3,12 @@ import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
 import { dependenciesApi, threadsApi } from '../services/api'
 
+function getDefaultDependencyMode(thread) {
+  return thread?.next_unread_issue_id ? 'issue' : 'thread'
+}
+
 export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }) {
-  const [dependencyMode, setDependencyMode] = useState('issue')
+  const [dependencyMode, setDependencyMode] = useState(getDefaultDependencyMode(thread))
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [selectedThreadId, setSelectedThreadId] = useState(null)
@@ -89,7 +93,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     setError('')
     setShowFlowchart(false)
     setShowIssueOnlyNotice(false)
-    setDependencyMode('issue')
+    setDependencyMode(getDefaultDependencyMode(thread))
     loadDependencies()
   }, [isOpen, thread?.id, loadDependencies])
 
@@ -130,8 +134,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   async function handleCreateDependency() {
     if (!thread?.id || !selectedThreadId) return
 
-    const targetNeedsIssueTracking = !thread.next_unread_issue_id
-    if (dependencyMode === 'issue' && targetNeedsIssueTracking) {
+    const targetHasIssueTracking = Boolean(thread.next_unread_issue_id)
+    if (dependencyMode === 'issue' && !targetHasIssueTracking) {
       setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
       return
     }
