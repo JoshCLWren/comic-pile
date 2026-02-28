@@ -15,7 +15,8 @@ IMAGE_TAG="comic-pile-ci:local"
 PG_CONTAINER="comic-pile-ci-postgres"
 CI_NETWORK="comic-pile-ci-net-$RANDOM"
 API_PORT="8000"
-DB_URL="postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test"
+DEFAULT_DB_NAME="comic_pile_test"
+DB_URL="postgresql+asyncpg://postgres:postgres@postgres:5432/${DEFAULT_DB_NAME}"
 
 RUN_BACKEND=1
 RUN_API_E2E=1
@@ -96,16 +97,29 @@ done
 
 run_in_ci_image() {
   local cmd="$1"
+  local db_url="${2:-${DB_URL}}"
   docker run --rm --network "${CI_NETWORK}" \
     -e CI=true \
     -e SECRET_KEY=test-secret-key-for-testing-only \
-    -e DATABASE_URL="${DB_URL}" \
-    -e TEST_DATABASE_URL="${DB_URL}" \
+    -e DATABASE_URL="${db_url}" \
+    -e TEST_DATABASE_URL="${db_url}" \
     -e PGUSER=postgres \
-    -v "${ROOT_DIR}:/repo" \
-    -w /repo \
     "${IMAGE_TAG}" \
     bash -lc "export PATH=/workspace/.venv/bin:\$PATH; ${cmd}"
+}
+
+create_database_if_missing() {
+  local db_name="$1"
+  docker run --rm --network "${CI_NETWORK}" \
+    -e PGPASSWORD=postgres \
+    postgres:16 \
+    psql -h postgres -U postgres -d postgres -v ON_ERROR_STOP=1 \
+    -c "SELECT 1 FROM pg_database WHERE datname='${db_name}'" \
+    | rg -q "1" || docker run --rm --network "${CI_NETWORK}" \
+      -e PGPASSWORD=postgres \
+      postgres:16 \
+      psql -h postgres -U postgres -d postgres -v ON_ERROR_STOP=1 \
+      -c "CREATE DATABASE ${db_name}"
 }
 
 start_postgres() {
@@ -148,6 +162,8 @@ fi
 echo "Starting PostgreSQL service container..."
 start_postgres
 
+create_database_if_missing "${DEFAULT_DB_NAME}"
+
 if [[ "${RUN_BACKEND}" -eq 1 ]]; then
   echo "Running backend tests..."
   run_in_ci_image "rm -f .env .envrc .env.local .env.production 2>/dev/null || true; /workspace/.venv/bin/python -m pytest tests/ --cov=comic_pile --cov-report=xml"
@@ -165,22 +181,24 @@ fi
 
 if [[ "${RUN_PLAYWRIGHT}" -eq 1 ]]; then
   local_shards=("${PLAYWRIGHT_SHARDS[@]}")
+  shard_pids=()
+  shard_names=()
   for shard in "${local_shards[@]}"; do
-    echo "Running Playwright shard ${shard}..."
+    shard_index="${shard%/*}"
+    shard_db="comic_pile_test_pw_${shard_index}"
+    shard_db_url="postgresql+asyncpg://postgres:postgres@postgres:5432/${shard_db}"
+    create_database_if_missing "${shard_db}"
+    echo "Starting Playwright shard ${shard} in background..."
     docker run --rm --network "${CI_NETWORK}" --shm-size=2gb --memory=8gb --cpus=4 \
       -e CI=true \
       -e SECRET_KEY=test-secret-key-for-testing-only \
-      -e DATABASE_URL="${DB_URL}" \
-      -e TEST_DATABASE_URL="${DB_URL}" \
+      -e DATABASE_URL="${shard_db_url}" \
+      -e TEST_DATABASE_URL="${shard_db_url}" \
       -e BASE_URL="http://localhost:8000" \
       -e API_PORT="${API_PORT}" \
       -e PGUSER=postgres \
-      -v "${ROOT_DIR}:/repo" \
-      -w /repo \
       "${IMAGE_TAG}" \
       bash -lc "export PATH=/workspace/.venv/bin:\$PATH; rm -f .env .envrc .env.local .env.production 2>/dev/null || true; \
-        cd /repo/frontend && npm ci && npx playwright install --with-deps chromium && npm run build; \
-        cd /repo; \
         export AUTO_BACKUP_ENABLED=false; \
         /workspace/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port ${API_PORT} --workers 4 --log-level warning >/tmp/backend.log 2>&1 & \
         ready=0; \
@@ -193,8 +211,24 @@ if [[ "${RUN_PLAYWRIGHT}" -eq 1 ]]; then
           cat /tmp/backend.log || true; \
           exit 1; \
         fi; \
-        cd /repo/frontend && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium --shard=${shard}"
+        cd /workspace/frontend && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium --shard=${shard}" &
+    shard_pids+=("$!")
+    shard_names+=("${shard}")
   done
+
+  failed=0
+  for i in "${!shard_pids[@]}"; do
+    if ! wait "${shard_pids[$i]}"; then
+      echo "Playwright shard ${shard_names[$i]} failed"
+      failed=1
+    else
+      echo "Playwright shard ${shard_names[$i]} passed"
+    fi
+  done
+  if [[ "${failed}" -ne 0 ]]; then
+    echo "One or more Playwright shards failed"
+    exit 1
+  fi
 fi
 
 echo "Local CI run completed."
