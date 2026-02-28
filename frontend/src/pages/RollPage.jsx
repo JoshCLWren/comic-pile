@@ -60,7 +60,7 @@ export default function RollPage() {
     setActiveCollectionId,
     isLoading: isCollectionsLoading = false,
   } = useCollections()
-  const { data: threads, refetch: refetchThreads } = useThreads(activeCollectionId)
+  const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
 
   const navigate = useNavigate()
