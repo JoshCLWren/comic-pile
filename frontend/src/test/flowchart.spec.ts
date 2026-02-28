@@ -40,7 +40,7 @@ test.describe('Dependency Flowchart', () => {
           response.request().method() === 'POST' &&
           response.status() < 300,
       ),
-      authenticatedPage.click('button:has-text("Block with:")'),
+      authenticatedPage.click('button:has-text("Block")'),
     ])
 
     // The flowchart toggle button should appear

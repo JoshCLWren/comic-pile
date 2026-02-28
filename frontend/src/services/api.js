@@ -180,11 +180,11 @@ export const dependenciesApi = {
   listBlockedThreadIds: () => api.get('/v1/dependencies/blocked'),
   listThreadDependencies: (threadId) => api.get(`/v1/threads/${threadId}/dependencies`),
   getBlockingInfo: (threadId) => api.post(`/v1/threads/${threadId}:getBlockingInfo`),
-  createDependency: ({ sourceId, targetId }) =>
+  createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }) =>
     api.post('/v1/dependencies/', {
-      source_type: 'thread',
+      source_type: sourceType,
       source_id: sourceId,
-      target_type: 'thread',
+      target_type: targetType,
       target_id: targetId,
     }),
   deleteDependency: (dependencyId) => api.delete(`/v1/dependencies/${dependencyId}`),

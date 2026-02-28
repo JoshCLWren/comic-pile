@@ -13,6 +13,7 @@ from app.models import Event, Issue, Thread
 from app.models.user import User
 from app.schemas import IssueCreateRange, IssueListResponse, IssueResponse
 from app.utils.issue_parser import parse_issue_ranges
+from comic_pile.dependencies import refresh_user_blocked_status
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
 
@@ -345,6 +346,7 @@ async def mark_issue_read(
     )
     db.add(event)
 
+    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
 
@@ -413,6 +415,7 @@ async def mark_issue_unread(
     )
     db.add(event)
 
+    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
 

@@ -4,6 +4,7 @@ import DependencyFlowchart from './DependencyFlowchart'
 import { dependenciesApi, threadsApi } from '../services/api'
 
 export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }) {
+  const [dependencyMode, setDependencyMode] = useState('issue')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [selectedThreadId, setSelectedThreadId] = useState(null)
@@ -51,7 +52,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       // Collect all related thread IDs
       const relatedIds = new Set([thread.id])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
-      for (const dep of allDeps) {
+      const threadDeps = allDeps.filter(
+        (dep) => dep.source_thread_id !== null && dep.target_thread_id !== null
+      )
+      for (const dep of threadDeps) {
         relatedIds.add(dep.source_thread_id)
         relatedIds.add(dep.target_thread_id)
       }
@@ -61,7 +65,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       const relatedThreads = allThreads.filter((t) => relatedIds.has(t.id))
 
       setFlowchartThreads(relatedThreads)
-      setFlowchartDependencies(allDeps)
+      setFlowchartDependencies(threadDeps)
       setBlockedIds(new Set(allBlockedIds))
     } catch {
       // Flowchart is a non-critical enhancement
@@ -77,6 +81,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     setSelectedThreadId(null)
     setError('')
     setShowFlowchart(false)
+    setDependencyMode('issue')
     loadDependencies()
   }, [isOpen, thread?.id, loadDependencies])
 
@@ -117,10 +122,36 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   async function handleCreateDependency() {
     if (!thread?.id || !selectedThreadId) return
 
+    const targetNeedsIssueTracking = !thread.next_unread_issue_id
+    if (dependencyMode === 'issue' && targetNeedsIssueTracking) {
+      setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
+      return
+    }
+
+    const selected = searchResults.find((candidate) => candidate.id === selectedThreadId)
+    if (dependencyMode === 'issue' && !selected?.next_unread_issue_id) {
+      setError('Selected prerequisite thread has no next unread issue to depend on.')
+      return
+    }
+
     setIsSaving(true)
     setError('')
     try {
-      await dependenciesApi.createDependency({ sourceId: selectedThreadId, targetId: thread.id })
+      if (dependencyMode === 'issue') {
+        await dependenciesApi.createDependency({
+          sourceType: 'issue',
+          sourceId: selected.next_unread_issue_id,
+          targetType: 'issue',
+          targetId: thread.next_unread_issue_id,
+        })
+      } else {
+        await dependenciesApi.createDependency({
+          sourceType: 'thread',
+          sourceId: selectedThreadId,
+          targetType: 'thread',
+          targetId: thread.id,
+        })
+      }
       setSearchQuery('')
       setSearchResults([])
       setSelectedThreadId(null)
@@ -159,6 +190,41 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
       <div className="space-y-4">
         <div className="space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            Dependency type
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setDependencyMode('issue')}
+              className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
+                dependencyMode === 'issue'
+                  ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
+                  : 'bg-white/5 border-white/10 text-slate-400'
+              }`}
+            >
+              Issue Level
+            </button>
+            <button
+              type="button"
+              onClick={() => setDependencyMode('thread')}
+              className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
+                dependencyMode === 'thread'
+                  ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
+                  : 'bg-white/5 border-white/10 text-slate-400'
+              }`}
+            >
+              Thread Level
+            </button>
+          </div>
+          {dependencyMode === 'issue' && (
+            <p className="text-xs text-slate-500">
+              Uses each thread&apos;s next unread issue.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
           <label htmlFor="search-prereq-thread" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
             Search prerequisite thread
           </label>
@@ -196,7 +262,13 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
             disabled={!selectedThread || isSaving}
             className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
           >
-            {isSaving ? 'Adding dependency…' : selectedThread ? `Block with: ${selectedThread.title}` : 'Select a prerequisite'}
+            {isSaving
+              ? 'Adding dependency…'
+              : selectedThread
+                ? dependencyMode === 'issue'
+                  ? `Block next issue with: ${selectedThread.title}`
+                  : `Block with thread: ${selectedThread.title}`
+                : 'Select a prerequisite'}
           </button>
         </div>
 
@@ -211,8 +283,12 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
               <DependencyRow
                 key={dep.id}
                 dependencyId={dep.id}
-                title={`Thread #${dep.source_thread_id}`}
-                subtitle={`Blocks this thread`}
+                title={
+                  dep.source_issue_id
+                    ? `Issue #${dep.source_issue_id}`
+                    : `Thread #${dep.source_thread_id}`
+                }
+                subtitle={dep.source_issue_id ? 'Blocks next unread issue' : 'Blocks this thread'}
                 onDelete={handleDeleteDependency}
               />
             ))
@@ -230,8 +306,12 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
               <DependencyRow
                 key={dep.id}
                 dependencyId={dep.id}
-                title={`Thread #${dep.target_thread_id}`}
-                subtitle={`Depends on this thread`}
+                title={
+                  dep.target_issue_id
+                    ? `Issue #${dep.target_issue_id}`
+                    : `Thread #${dep.target_thread_id}`
+                }
+                subtitle={dep.target_issue_id ? 'Depends on next unread issue' : 'Depends on this thread'}
                 onDelete={handleDeleteDependency}
               />
             ))

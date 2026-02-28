@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.models import Dependency, Thread, User
+from app.models import Dependency, Issue, Thread, User
 from comic_pile.dependencies import (
     detect_circular_dependency,
     get_blocked_thread_ids,
@@ -57,8 +57,8 @@ async def test_circular_dependency_detected(async_db):
     ])
     await async_db.commit()
 
-    assert await detect_circular_dependency(c.id, a.id, async_db) is True
-    assert await detect_circular_dependency(a.id, c.id, async_db) is False
+    assert await detect_circular_dependency(c.id, a.id, "thread", async_db) is True
+    assert await detect_circular_dependency(a.id, c.id, "thread", async_db) is False
 
 
 @pytest.mark.asyncio
@@ -96,7 +96,7 @@ async def test_roll_pool_excludes_blocked_threads(async_db):
 @pytest.mark.asyncio
 async def test_circular_dependency_detects_self_reference(async_db):
     """Self-dependency should always be treated as circular."""
-    assert await detect_circular_dependency(123, 123, async_db) is True
+    assert await detect_circular_dependency(123, 123, "thread", async_db) is True
 
 
 @pytest.mark.asyncio
@@ -121,7 +121,7 @@ async def test_circular_dependency_handles_revisited_nodes(async_db):
     ])
     await async_db.commit()
 
-    assert await detect_circular_dependency(999999, t1.id, async_db) is False
+    assert await detect_circular_dependency(999999, t1.id, "thread", async_db) is False
 
 
 @pytest.mark.asyncio
@@ -158,3 +158,65 @@ async def test_update_thread_blocked_status_updates_target(async_db):
     await async_db.refresh(target)
 
     assert target.is_blocked is True
+
+
+@pytest.mark.asyncio
+async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
+    """Issue dependency should block a thread until prerequisite issue is read."""
+    user = User(username="issue_dep_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    source_thread = Thread(
+        title="Source",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="not_started",
+    )
+    target_thread = Thread(
+        title="Target",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="not_started",
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue_1 = Issue(thread_id=source_thread.id, issue_number="1", status="unread")
+    source_issue_2 = Issue(thread_id=source_thread.id, issue_number="2", status="unread")
+    target_issue_1 = Issue(thread_id=target_thread.id, issue_number="1", status="unread")
+    target_issue_2 = Issue(thread_id=target_thread.id, issue_number="2", status="unread")
+    async_db.add_all([source_issue_1, source_issue_2, target_issue_1, target_issue_2])
+    await async_db.flush()
+
+    source_thread.next_unread_issue_id = source_issue_1.id
+    target_thread.next_unread_issue_id = target_issue_1.id
+
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue_1.id,
+            target_issue_id=target_issue_1.id,
+        )
+    )
+    await async_db.commit()
+
+    blocked = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id in blocked
+
+    reasons = await get_blocking_explanations(target_thread.id, user.id, async_db)
+    assert any("issue #1" in reason.lower() for reason in reasons)
+
+    source_issue_1.status = "read"
+    source_issue_1.read_at = datetime.now(UTC)
+    await async_db.commit()
+
+    blocked_after = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id not in blocked_after

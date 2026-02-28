@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Dependency, Thread
+from app.models import Dependency, Issue, Thread
 from app.models.user import User
 from app.schemas.dependency import (
     BlockingExplanation,
@@ -47,8 +47,23 @@ async def list_thread_dependencies(
     if not thread or thread.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Thread {thread_id} not found")
 
-    blocking_result = await db.execute(select(Dependency).where(Dependency.source_thread_id == thread_id))
-    blocked_by_result = await db.execute(select(Dependency).where(Dependency.target_thread_id == thread_id))
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+
+    blocking_result = await db.execute(
+        select(Dependency)
+        .outerjoin(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .where(
+            (Dependency.source_thread_id == thread_id) | (source_issue.c.thread_id == thread_id)
+        )
+    )
+    blocked_by_result = await db.execute(
+        select(Dependency)
+        .outerjoin(target_issue, Dependency.target_issue_id == target_issue.c.id)
+        .where(
+            (Dependency.target_thread_id == thread_id) | (target_issue.c.thread_id == thread_id)
+        )
+    )
 
     return ThreadDependenciesResponse(
         blocking=[DependencyResponse.model_validate(dep, from_attributes=True) for dep in blocking_result.scalars().all()],
@@ -81,31 +96,69 @@ async def create_dependency(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> DependencyResponse:
-    """Create a hard-block dependency between two owned threads."""
+    """Create a hard-block dependency between owned threads or owned issues."""
+    if dependency_data.source_type != dependency_data.target_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Mixed thread/issue dependencies are not supported",
+        )
+
     if dependency_data.source_id == dependency_data.target_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot create dependency on self")
 
-    source_thread = await db.get(Thread, dependency_data.source_id)
-    target_thread = await db.get(Thread, dependency_data.target_id)
+    if dependency_data.source_type == "thread":
+        source_thread = await db.get(Thread, dependency_data.source_id)
+        target_thread = await db.get(Thread, dependency_data.target_id)
 
-    if (
-        not source_thread
-        or source_thread.user_id != current_user.id
-        or not target_thread
-        or target_thread.user_id != current_user.id
-    ):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+        if (
+            not source_thread
+            or source_thread.user_id != current_user.id
+            or not target_thread
+            or target_thread.user_id != current_user.id
+        ):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
 
-    if await detect_circular_dependency(dependency_data.source_id, dependency_data.target_id, db):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot create dependency: would create circular dependency",
+        if await detect_circular_dependency(
+            dependency_data.source_id, dependency_data.target_id, "thread", db
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot create dependency: would create circular dependency",
+            )
+
+        dependency = Dependency(
+            source_thread_id=dependency_data.source_id,
+            target_thread_id=dependency_data.target_id,
+        )
+    else:
+        source_issue = await db.get(Issue, dependency_data.source_id)
+        target_issue = await db.get(Issue, dependency_data.target_id)
+        if not source_issue or not target_issue:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+
+        source_thread = await db.get(Thread, source_issue.thread_id)
+        target_thread = await db.get(Thread, target_issue.thread_id)
+        if (
+            not source_thread
+            or source_thread.user_id != current_user.id
+            or not target_thread
+            or target_thread.user_id != current_user.id
+        ):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+
+        if await detect_circular_dependency(
+            dependency_data.source_id, dependency_data.target_id, "issue", db
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot create dependency: would create circular dependency",
+            )
+
+        dependency = Dependency(
+            source_issue_id=dependency_data.source_id,
+            target_issue_id=dependency_data.target_id,
         )
 
-    dependency = Dependency(
-        source_thread_id=dependency_data.source_id,
-        target_thread_id=dependency_data.target_id,
-    )
     db.add(dependency)
     await db.flush()
 
@@ -123,14 +176,10 @@ async def get_dependency(
     db: AsyncSession = Depends(get_db),
 ) -> DependencyResponse:
     """Fetch a single dependency owned by the current user."""
-    result = await db.execute(
-        select(Dependency)
-        .join(Thread, Dependency.source_thread_id == Thread.id)
-        .where(Dependency.id == dependency_id)
-        .where(Thread.user_id == current_user.id)
-    )
-    dependency = result.scalar_one_or_none()
+    dependency = await db.get(Dependency, dependency_id)
     if not dependency:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dependency {dependency_id} not found")
+    if not await _is_dependency_owned_by_user(dependency, current_user.id, db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dependency {dependency_id} not found")
     return DependencyResponse.model_validate(dependency, from_attributes=True)
 
@@ -142,17 +191,31 @@ async def delete_dependency(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Delete a dependency and refresh denormalized blocked flags."""
-    result = await db.execute(
-        select(Dependency)
-        .join(Thread, Dependency.source_thread_id == Thread.id)
-        .where(Dependency.id == dependency_id)
-        .where(Thread.user_id == current_user.id)
-    )
-    dependency = result.scalar_one_or_none()
+    dependency = await db.get(Dependency, dependency_id)
     if not dependency:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dependency {dependency_id} not found")
+    if not await _is_dependency_owned_by_user(dependency, current_user.id, db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dependency {dependency_id} not found")
 
     await db.delete(dependency)
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     return {"message": "Dependency deleted"}
+
+
+async def _is_dependency_owned_by_user(
+    dependency: Dependency,
+    user_id: int,
+    db: AsyncSession,
+) -> bool:
+    """Return True when dependency belongs to the user."""
+    if dependency.source_thread_id is not None:
+        source_thread = await db.get(Thread, dependency.source_thread_id)
+        return bool(source_thread and source_thread.user_id == user_id)
+    if dependency.source_issue_id is not None:
+        source_issue = await db.get(Issue, dependency.source_issue_id)
+        if not source_issue:
+            return False
+        source_thread = await db.get(Thread, source_issue.thread_id)
+        return bool(source_thread and source_thread.user_id == user_id)
+    return False

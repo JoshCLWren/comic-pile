@@ -115,9 +115,13 @@ export interface Dependency {
   /** Unique identifier for the dependency */
   id: number;
   /** ID of the thread that must be completed first (source blocks target) */
-  source_thread_id: number;
+  source_thread_id: number | null;
   /** ID of the thread that is blocked */
-  target_thread_id: number;
+  target_thread_id: number | null;
+  /** Source issue ID for issue-level dependencies */
+  source_issue_id: number | null;
+  /** Target issue ID for issue-level dependencies */
+  target_issue_id: number | null;
   /** ISO 8601 timestamp when the dependency was created */
   created_at: string;
 }
