@@ -89,7 +89,7 @@ export default function QueuePage() {
         navigate(location.pathname, { replace: true, state: {} })
       }
     }
-  }, [location.state, threads, navigate])
+  }, [location.state, location.pathname, threads, navigate])
 
   async function refreshBlockedState() {
     try {

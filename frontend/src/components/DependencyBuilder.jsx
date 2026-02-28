@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal'
+import DependencyFlowchart from './DependencyFlowchart'
 import { dependenciesApi, threadsApi } from '../services/api'
 
 export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }) {
@@ -11,6 +12,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [error, setError] = useState('')
   const [dependencies, setDependencies] = useState({ blocking: [], blocked_by: [] })
   const [isLoadingDeps, setIsLoadingDeps] = useState(false)
+  const [showFlowchart, setShowFlowchart] = useState(false)
+  const [flowchartThreads, setFlowchartThreads] = useState([])
+  const [flowchartDependencies, setFlowchartDependencies] = useState([])
+  const [blockedIds, setBlockedIds] = useState(new Set())
 
   const selectedThread = useMemo(
     () => searchResults.find((candidate) => candidate.id === selectedThreadId) || null,
@@ -31,12 +36,47 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     }
   }, [thread?.id])
 
+  /**
+   * Build the full graph of threads and dependencies for the flowchart.
+   * Collects all related threads (this thread + all threads in blocking/blocked_by).
+   */
+  const loadFlowchartData = useCallback(async () => {
+    if (!thread?.id) return
+    try {
+      const [depsData, allBlockedIds] = await Promise.all([
+        dependenciesApi.listThreadDependencies(thread.id),
+        dependenciesApi.listBlockedThreadIds(),
+      ])
+
+      // Collect all related thread IDs
+      const relatedIds = new Set([thread.id])
+      const allDeps = [...depsData.blocking, ...depsData.blocked_by]
+      for (const dep of allDeps) {
+        relatedIds.add(dep.source_thread_id)
+        relatedIds.add(dep.target_thread_id)
+      }
+
+      // Fetch all threads to get their details
+      const allThreads = await threadsApi.list()
+      const relatedThreads = allThreads.filter((t) => relatedIds.has(t.id))
+
+      setFlowchartThreads(relatedThreads)
+      setFlowchartDependencies(allDeps)
+      setBlockedIds(new Set(allBlockedIds))
+    } catch {
+      // Flowchart is a non-critical enhancement
+      setFlowchartThreads([])
+      setFlowchartDependencies([])
+    }
+  }, [thread?.id])
+
   useEffect(() => {
     if (!isOpen || !thread?.id) return
     setSearchQuery('')
     setSearchResults([])
     setSelectedThreadId(null)
     setError('')
+    setShowFlowchart(false)
     loadDependencies()
   }, [isOpen, thread?.id, loadDependencies])
 
@@ -85,6 +125,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       setSearchResults([])
       setSelectedThreadId(null)
       await loadDependencies()
+      if (showFlowchart) await loadFlowchartData()
       onChanged?.()
     } catch (saveError) {
       setError(saveError?.response?.data?.detail || 'Failed to create dependency.')
@@ -98,11 +139,21 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     try {
       await dependenciesApi.deleteDependency(dependencyId)
       await loadDependencies()
+      if (showFlowchart) await loadFlowchartData()
       onChanged?.()
     } catch (deleteError) {
       setError(deleteError?.response?.data?.detail || 'Failed to remove dependency.')
     }
   }
+
+  async function handleToggleFlowchart() {
+    if (!showFlowchart) {
+      await loadFlowchartData()
+    }
+    setShowFlowchart((prev) => !prev)
+  }
+
+  const hasDependencies = dependencies.blocking.length > 0 || dependencies.blocked_by.length > 0
 
   return (
     <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
@@ -186,6 +237,28 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
             ))
           )}
         </div>
+
+        {/* Flowchart toggle */}
+        {hasDependencies && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleToggleFlowchart}
+              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest"
+              data-testid="toggle-flowchart"
+            >
+              {showFlowchart ? '▲ Hide Flowchart' : '▼ View Flowchart'}
+            </button>
+
+            {showFlowchart && (
+              <DependencyFlowchart
+                threads={flowchartThreads}
+                dependencies={flowchartDependencies}
+                blockedIds={blockedIds}
+              />
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs">
