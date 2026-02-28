@@ -127,3 +127,64 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
 
     delete_resp = await auth_client.delete(f"/api/v1/dependencies/{dep_id}")
     assert delete_resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_issue_dependency_api_negative_cases(auth_client, async_db, test_username):
+    """Issue dependency API should reject self and mixed-type payloads."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    source_thread = Thread(
+        title="Negative Source Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    target_thread = Thread(
+        title="Negative Target Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=source_thread.id, issue_number="1", status="unread")
+    target_issue = Issue(thread_id=target_thread.id, issue_number="1", status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+    await async_db.commit()
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
+    await async_db.refresh(source_thread)
+
+    self_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": source_issue.id,
+        },
+    )
+    assert self_resp.status_code == 400
+    assert "self" in self_resp.json()["detail"].lower()
+
+    mixed_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "thread",
+            "source_id": source_thread.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
+        },
+    )
+    assert mixed_resp.status_code == 400
+    assert "mixed" in mixed_resp.json()["detail"].lower()

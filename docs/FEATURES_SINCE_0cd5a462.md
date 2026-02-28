@@ -128,7 +128,7 @@ Queue creation now accepts issue-range input.
 Behavior:
 - The app parses and deduplicates issue numbers.
 - Invalid ranges show inline parse errors.
-- Successful creation initializes issue tracking metadata for the thread.
+- Successful creation initializes issue-tracking metadata for the thread.
 
 ## Roll Experience Changes
 

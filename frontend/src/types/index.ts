@@ -108,23 +108,40 @@ export interface IssueListResponse {
   next_page_token: string | null;
 }
 
-/**
- * Represents a dependency between two threads
- */
-export interface Dependency {
+export interface ThreadDependency {
   /** Unique identifier for the dependency */
   id: number;
   /** ID of the thread that must be completed first (source blocks target) */
-  source_thread_id: number | null;
+  source_thread_id: number;
   /** ID of the thread that is blocked */
-  target_thread_id: number | null;
-  /** Source issue ID for issue-level dependencies */
-  source_issue_id: number | null;
-  /** Target issue ID for issue-level dependencies */
-  target_issue_id: number | null;
+  target_thread_id: number;
+  /** Never populated for thread-level dependencies */
+  source_issue_id?: never;
+  /** Never populated for thread-level dependencies */
+  target_issue_id?: never;
   /** ISO 8601 timestamp when the dependency was created */
   created_at: string;
 }
+
+export interface IssueDependency {
+  /** Unique identifier for the dependency */
+  id: number;
+  /** Never populated for issue-level dependencies */
+  source_thread_id?: never;
+  /** Never populated for issue-level dependencies */
+  target_thread_id?: never;
+  /** Source issue ID for issue-level dependencies */
+  source_issue_id: number;
+  /** Target issue ID for issue-level dependencies */
+  target_issue_id: number;
+  /** ISO 8601 timestamp when the dependency was created */
+  created_at: string;
+}
+
+/**
+ * Represents a dependency between threads or issues.
+ */
+export type Dependency = ThreadDependency | IssueDependency;
 
 /**
  * Response from the thread dependencies endpoint

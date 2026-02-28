@@ -17,6 +17,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [flowchartThreads, setFlowchartThreads] = useState([])
   const [flowchartDependencies, setFlowchartDependencies] = useState([])
   const [blockedIds, setBlockedIds] = useState(new Set())
+  const [showIssueOnlyNotice, setShowIssueOnlyNotice] = useState(false)
 
   const selectedThread = useMemo(
     () => searchResults.find((candidate) => candidate.id === selectedThreadId) || null,
@@ -53,7 +54,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       const relatedIds = new Set([thread.id])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
       const threadDeps = allDeps.filter(
-        (dep) => dep.source_thread_id !== null && dep.target_thread_id !== null
+        (dep) => dep.source_thread_id != null && dep.target_thread_id != null
+      )
+      const issueOnlyDeps = allDeps.filter(
+        (dep) => dep.source_thread_id == null || dep.target_thread_id == null
       )
       for (const dep of threadDeps) {
         relatedIds.add(dep.source_thread_id)
@@ -63,14 +67,17 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       // Fetch all threads to get their details
       const allThreads = await threadsApi.list()
       const relatedThreads = allThreads.filter((t) => relatedIds.has(t.id))
+      const hasIssueOnlyWithoutThreadDeps = threadDeps.length === 0 && issueOnlyDeps.length > 0
 
       setFlowchartThreads(relatedThreads)
       setFlowchartDependencies(threadDeps)
       setBlockedIds(new Set(allBlockedIds))
+      setShowIssueOnlyNotice(hasIssueOnlyWithoutThreadDeps)
     } catch {
       // Flowchart is a non-critical enhancement
       setFlowchartThreads([])
       setFlowchartDependencies([])
+      setShowIssueOnlyNotice(false)
     }
   }, [thread?.id])
 
@@ -81,6 +88,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     setSelectedThreadId(null)
     setError('')
     setShowFlowchart(false)
+    setShowIssueOnlyNotice(false)
     setDependencyMode('issue')
     loadDependencies()
   }, [isOpen, thread?.id, loadDependencies])
@@ -285,10 +293,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                 dependencyId={dep.id}
                 title={
                   dep.source_issue_id
-                    ? `Issue #${dep.source_issue_id}`
-                    : `Thread #${dep.source_thread_id}`
+                    ? `Issue Record ID #${dep.source_issue_id}`
+                    : `Thread ID #${dep.source_thread_id}`
                 }
-                subtitle={dep.source_issue_id ? 'Blocks next unread issue' : 'Blocks this thread'}
+                subtitle={dep.source_issue_id ? 'Blocks via issue record ID' : 'Blocks this thread'}
                 onDelete={handleDeleteDependency}
               />
             ))
@@ -308,10 +316,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                 dependencyId={dep.id}
                 title={
                   dep.target_issue_id
-                    ? `Issue #${dep.target_issue_id}`
-                    : `Thread #${dep.target_thread_id}`
+                    ? `Issue Record ID #${dep.target_issue_id}`
+                    : `Thread ID #${dep.target_thread_id}`
                 }
-                subtitle={dep.target_issue_id ? 'Depends on next unread issue' : 'Depends on this thread'}
+                subtitle={dep.target_issue_id ? 'Depends on issue record ID' : 'Depends on this thread'}
                 onDelete={handleDeleteDependency}
               />
             ))
@@ -331,11 +339,17 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
             </button>
 
             {showFlowchart && (
-              <DependencyFlowchart
-                threads={flowchartThreads}
-                dependencies={flowchartDependencies}
-                blockedIds={blockedIds}
-              />
+              showIssueOnlyNotice ? (
+                <p className="text-xs text-slate-500">
+                  Issue-level dependencies are not visualized here.
+                </p>
+              ) : (
+                <DependencyFlowchart
+                  threads={flowchartThreads}
+                  dependencies={flowchartDependencies}
+                  blockedIds={blockedIds}
+                />
+              )
             )}
           </div>
         )}

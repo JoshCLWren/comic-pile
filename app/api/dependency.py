@@ -45,7 +45,10 @@ async def list_thread_dependencies(
     """List dependencies where a thread blocks others and where it is blocked."""
     thread = await db.get(Thread, thread_id)
     if not thread or thread.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Thread {thread_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
 
     source_issue = Issue.__table__.alias("source_issue")
     target_issue = Issue.__table__.alias("target_issue")
@@ -66,8 +69,14 @@ async def list_thread_dependencies(
     )
 
     return ThreadDependenciesResponse(
-        blocking=[DependencyResponse.model_validate(dep, from_attributes=True) for dep in blocking_result.scalars().all()],
-        blocked_by=[DependencyResponse.model_validate(dep, from_attributes=True) for dep in blocked_by_result.scalars().all()],
+        blocking=[
+            DependencyResponse.model_validate(dep, from_attributes=True)
+            for dep in blocking_result.scalars().all()
+        ],
+        blocked_by=[
+            DependencyResponse.model_validate(dep, from_attributes=True)
+            for dep in blocked_by_result.scalars().all()
+        ],
     )
 
 
@@ -80,7 +89,10 @@ async def get_thread_blocking_info(
     """Return blocked status and human-readable blocking reasons for a thread."""
     thread = await db.get(Thread, thread_id)
     if not thread or thread.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Thread {thread_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
 
     blocked_ids = await get_blocked_thread_ids(current_user.id, db)
     if thread_id not in blocked_ids:
@@ -104,7 +116,10 @@ async def create_dependency(
         )
 
     if dependency_data.source_id == dependency_data.target_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot create dependency on self")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create dependency on self",
+        )
 
     if dependency_data.source_type == "thread":
         source_thread = await db.get(Thread, dependency_data.source_id)
@@ -116,7 +131,10 @@ async def create_dependency(
             or not target_thread
             or target_thread.user_id != current_user.id
         ):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Thread not found",
+            )
 
         if await detect_circular_dependency(
             dependency_data.source_id, dependency_data.target_id, "thread", db
@@ -134,7 +152,10 @@ async def create_dependency(
         source_issue = await db.get(Issue, dependency_data.source_id)
         target_issue = await db.get(Issue, dependency_data.target_id)
         if not source_issue or not target_issue:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Issue not found",
+            )
 
         source_thread = await db.get(Thread, source_issue.thread_id)
         target_thread = await db.get(Thread, target_issue.thread_id)
@@ -144,7 +165,10 @@ async def create_dependency(
             or not target_thread
             or target_thread.user_id != current_user.id
         ):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Issue not found",
+            )
 
         if await detect_circular_dependency(
             dependency_data.source_id, dependency_data.target_id, "issue", db
@@ -178,9 +202,15 @@ async def get_dependency(
     """Fetch a single dependency owned by the current user."""
     dependency = await db.get(Dependency, dependency_id)
     if not dependency:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dependency {dependency_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
     if not await _is_dependency_owned_by_user(dependency, current_user.id, db):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dependency {dependency_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
     return DependencyResponse.model_validate(dependency, from_attributes=True)
 
 
@@ -193,9 +223,15 @@ async def delete_dependency(
     """Delete a dependency and refresh denormalized blocked flags."""
     dependency = await db.get(Dependency, dependency_id)
     if not dependency:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dependency {dependency_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
     if not await _is_dependency_owned_by_user(dependency, current_user.id, db):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Dependency {dependency_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
 
     await db.delete(dependency)
     await refresh_user_blocked_status(current_user.id, db)

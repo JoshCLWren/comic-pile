@@ -77,6 +77,10 @@ def downgrade() -> None:
     op.drop_constraint("fk_dependencies_target_issue_id_issues", "dependencies", type_="foreignkey")
     op.drop_constraint("fk_dependencies_source_issue_id_issues", "dependencies", type_="foreignkey")
 
+    op.execute(
+        "DELETE FROM dependencies WHERE source_thread_id IS NULL OR target_thread_id IS NULL"
+    )
+
     op.alter_column("dependencies", "target_thread_id", existing_type=sa.Integer(), nullable=False)
     op.alter_column("dependencies", "source_thread_id", existing_type=sa.Integer(), nullable=False)
 

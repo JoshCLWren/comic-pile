@@ -47,10 +47,10 @@ class Dependency(Base):
         UniqueConstraint("source_issue_id", "target_issue_id", name="uq_dependency_issue_edge"),
     )
 
-    source_thread: Mapped["Thread"] = relationship(
+    source_thread: Mapped["Thread | None"] = relationship(
         "Thread", foreign_keys=[source_thread_id], back_populates="dependencies_out", lazy="raise"
     )
-    target_thread: Mapped["Thread"] = relationship(
+    target_thread: Mapped["Thread | None"] = relationship(
         "Thread", foreign_keys=[target_thread_id], back_populates="dependencies_in", lazy="raise"
     )
     source_issue: Mapped["Issue | None"] = relationship(

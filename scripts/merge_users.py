@@ -22,12 +22,26 @@ from app.database import AsyncSessionLocal
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
+    """Hash a password using bcrypt.
+
+    Args:
+        password: Plain-text password to hash.
+
+    Returns:
+        Bcrypt-hashed password string for storage.
+    """
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def safe_rowcount(result: object) -> int:
-    """Return rowcount when available, otherwise 0."""
+    """Return rowcount when available, otherwise 0.
+
+    Args:
+        result: SQLAlchemy execute result or similar object.
+
+    Returns:
+        Integer row count when available; otherwise 0.
+    """
     count = getattr(result, "rowcount", None)
     return count if isinstance(count, int) else 0
 
@@ -40,9 +54,24 @@ async def merge_users(
     collection_names: dict[str, str],
     dry_run: bool = False,
 ) -> None:
-    """Merge old users into a single new user with separate collections."""
+    """Merge old users into a single new user with separate collections.
+
+    Args:
+        new_username: Username for the new merged account.
+        password: Plain-text password for the new account.
+        old_users: Two existing usernames to merge.
+        collection_names: Mapping of old username to destination collection name.
+        dry_run: Whether to only print planned actions without persisting changes.
+
+    Returns:
+        None.
+    """
     async with AsyncSessionLocal() as db:
         try:
+            if len(old_users) != 2:
+                raise ValueError("Exactly two old users are required.")
+            first_old_name, second_old_name = old_users
+
             # 1. Verify old users exist
             old_user_ids: dict[str, int] = {}
             for username in old_users:
@@ -70,14 +99,16 @@ async def merge_users(
                     text("SELECT COUNT(*) FROM threads WHERE user_id = :uid"), {"uid": uid}
                 )
                 row = r.fetchone()
-                assert row is not None
+                if row is None:
+                    raise RuntimeError(f"Expected thread count row for user_id={uid} not found")
                 print(f"  {username}: {row[0]} threads")
 
                 r = await db.execute(
                     text("SELECT COUNT(*) FROM sessions WHERE user_id = :uid"), {"uid": uid}
                 )
                 row = r.fetchone()
-                assert row is not None
+                if row is None:
+                    raise RuntimeError(f"Expected session count row for user_id={uid} not found")
                 print(f"  {username}: {row[0]} sessions")
 
                 r = await db.execute(
@@ -106,7 +137,8 @@ async def merge_users(
                 text("SELECT id FROM users WHERE username = :u"), {"u": new_username}
             )
             row = r.fetchone()
-            assert row is not None
+            if row is None:
+                raise RuntimeError(f"Expected newly created user '{new_username}' not found")
             new_user_id = row[0]
             print(f"\nCreated user '{new_username}' (id={new_user_id})")
 
@@ -134,7 +166,10 @@ async def merge_users(
                     {"uid": new_user_id, "name": col_name},
                 )
                 row = r.fetchone()
-                assert row is not None
+                if row is None:
+                    raise RuntimeError(
+                        f"Expected collection '{col_name}' for user_id={new_user_id} not found"
+                    )
                 collection_ids[username] = row[0]
                 print(f"Created collection '{col_name}' (id={row[0]}, default={is_default})")
 
@@ -144,13 +179,16 @@ async def merge_users(
                 text(
                     "SELECT COALESCE(MAX(queue_position), 0) FROM threads WHERE user_id = :uid"
                 ),
-                {"uid": old_user_ids["Josh"]},
+                {"uid": old_user_ids[first_old_name]},
             )
             row = r.fetchone()
-            assert row is not None
-            max_pos_josh = row[0]
+            if row is None:
+                raise RuntimeError(
+                    f"Expected max queue position row for user '{first_old_name}' not found"
+                )
+            max_pos_first = row[0]
 
-            # Move Josh's threads (keep their queue positions)
+            # Move first user's threads (keep their queue positions)
             r = await db.execute(
                 text(
                     "UPDATE threads SET user_id = :new_uid, collection_id = :col_id "
@@ -158,13 +196,13 @@ async def merge_users(
                 ),
                 {
                     "new_uid": new_user_id,
-                    "col_id": collection_ids["Josh"],
-                    "old_uid": old_user_ids["Josh"],
+                    "col_id": collection_ids[first_old_name],
+                    "old_uid": old_user_ids[first_old_name],
                 },
             )
-            print(f"Moved {safe_rowcount(r)} threads from Josh")
+            print(f"Moved {safe_rowcount(r)} threads from {first_old_name}")
 
-            # Move Josh_Digital_Comics' threads (offset queue positions)
+            # Move second user's threads (offset queue positions)
             r = await db.execute(
                 text(
                     "UPDATE threads SET user_id = :new_uid, collection_id = :col_id, "
@@ -173,14 +211,14 @@ async def merge_users(
                 ),
                 {
                     "new_uid": new_user_id,
-                    "col_id": collection_ids["Josh_Digital_Comics"],
-                    "old_uid": old_user_ids["Josh_Digital_Comics"],
-                    "offset": max_pos_josh,
+                    "col_id": collection_ids[second_old_name],
+                    "old_uid": old_user_ids[second_old_name],
+                    "offset": max_pos_first,
                 },
             )
             print(
                 "Moved "
-                f"{safe_rowcount(r)} threads from Josh_Digital_Comics (offset by {max_pos_josh})"
+                f"{safe_rowcount(r)} threads from {second_old_name} (offset by {max_pos_first})"
             )
 
             # 6. Reassign sessions
