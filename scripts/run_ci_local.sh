@@ -75,6 +75,10 @@ while [[ $# -gt 0 ]]; do
         usage
         exit 1
       fi
+      # --shard alone should behave like --job playwright for parity with usage text.
+      RUN_BACKEND=0
+      RUN_API_E2E=0
+      RUN_DICE_E2E=0
       PLAYWRIGHT_SHARDS=("${2:-}")
       RUN_PLAYWRIGHT=1
       shift 2
@@ -110,16 +114,24 @@ run_in_ci_image() {
 
 create_database_if_missing() {
   local db_name="$1"
+  local exists
+  exists="$(
+    docker run --rm --network "${CI_NETWORK}" \
+      -e PGPASSWORD=postgres \
+      postgres:16 \
+      psql -h postgres -U postgres -d postgres -tA -v ON_ERROR_STOP=1 \
+      -c "SELECT 1 FROM pg_database WHERE datname='${db_name}'"
+  )"
+
+  if [[ "${exists}" == "1" ]]; then
+    return
+  fi
+
   docker run --rm --network "${CI_NETWORK}" \
     -e PGPASSWORD=postgres \
     postgres:16 \
     psql -h postgres -U postgres -d postgres -v ON_ERROR_STOP=1 \
-    -c "SELECT 1 FROM pg_database WHERE datname='${db_name}'" \
-    | rg -q "1" || docker run --rm --network "${CI_NETWORK}" \
-      -e PGPASSWORD=postgres \
-      postgres:16 \
-      psql -h postgres -U postgres -d postgres -v ON_ERROR_STOP=1 \
-      -c "CREATE DATABASE ${db_name}"
+    -c "CREATE DATABASE ${db_name}"
 }
 
 start_postgres() {
