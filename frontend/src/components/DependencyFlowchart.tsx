@@ -244,43 +244,7 @@ export default function DependencyFlowchart({
     setTooltip(null)
   }, [])
 
-  // Show warning for very large graphs
-  if (threads.length > LARGE_GRAPH_THRESHOLD) {
-    return (
-      <div className="flowchart-warning" data-testid="flowchart-warning">
-        <h3>⚠️ Large Dependency Graph</h3>
-        <p>
-          This view has {threads.length} related threads. Showing {PAGE_SIZE} threads per page for
-          performance.
-        </p>
-        {totalPages > 1 && (
-          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
-              style={{ padding: '0.25rem 0.75rem' }}
-            >
-              Prev
-            </button>
-            <span style={{ color: 'rgba(203, 213, 225, 0.8)', fontSize: '0.75rem', alignSelf: 'center' }}>
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page === totalPages - 1}
-              className="glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
-              style={{ padding: '0.25rem 0.75rem' }}
-            >
-              Next
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  }
+  const isLargeGraph = threads.length > LARGE_GRAPH_THRESHOLD
 
   if (adjustedNodes.length === 0) {
     return (
@@ -295,6 +259,15 @@ export default function DependencyFlowchart({
 
   return (
     <div className="flowchart-container" ref={containerRef} data-testid="flowchart-container">
+      {isLargeGraph && (
+        <div className="flowchart-warning" data-testid="flowchart-warning">
+          <h3>⚠️ Large Dependency Graph</h3>
+          <p>
+            This view has {threads.length} related threads. Showing {PAGE_SIZE} threads per page for
+            performance.
+          </p>
+        </div>
+      )}
       <svg
         ref={svgRef}
         className="dependency-flowchart"
@@ -424,9 +397,8 @@ export default function DependencyFlowchart({
             type="button"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="flowchart-controls"
+            className="flowchart-control-button"
             style={{
-              position: 'static',
               opacity: page === 0 ? 0.4 : 1,
             }}
             aria-label="Previous page"
@@ -446,9 +418,8 @@ export default function DependencyFlowchart({
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
             disabled={page === totalPages - 1}
-            className="flowchart-controls"
+            className="flowchart-control-button"
             style={{
-              position: 'static',
               opacity: page === totalPages - 1 ? 0.4 : 1,
             }}
             aria-label="Next page"

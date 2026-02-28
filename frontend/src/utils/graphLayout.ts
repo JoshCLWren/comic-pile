@@ -182,21 +182,18 @@ export function layoutGraph(
 
     // Position nodes
     const nodes: FlowchartNode[] = []
+    const totalMaxWidth = Math.max(
+        ...layerGroups.map((g) => g.length * NODE_WIDTH + (g.length - 1) * HORIZONTAL_GAP),
+    )
     for (let layerIndex = 0; layerIndex < layerGroups.length; layerIndex++) {
         const group = layerGroups[layerIndex]
         const layerWidth = group.length * NODE_WIDTH + (group.length - 1) * HORIZONTAL_GAP
-        const startX = PADDING + (group.length > 1 ? 0 : 0)
+        const offsetX = (totalMaxWidth - layerWidth) / 2
 
         for (let nodeIndex = 0; nodeIndex < group.length; nodeIndex++) {
             const threadId = group[nodeIndex]
             const thread = threadMap.get(threadId)
             if (!thread) continue
-
-            // Center the layer horizontally
-            const totalMaxWidth = Math.max(
-                ...layerGroups.map((g) => g.length * NODE_WIDTH + (g.length - 1) * HORIZONTAL_GAP),
-            )
-            const offsetX = (totalMaxWidth - layerWidth) / 2
 
             nodes.push({
                 id: threadId,

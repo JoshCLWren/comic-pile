@@ -171,6 +171,28 @@
   letter-spacing: 0.1em;
 }
 
+/* Pagination button (reuses zoom-button styles outside the controls container) */
+.flowchart-control-button {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.flowchart-control-button:hover {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 /* Pulse animation for blocking edges */
 @keyframes pulse-edge {
   0%, 100% {
@@ -178,5 +200,13 @@
   }
   50% {
     stroke-opacity: 0.3;
+  }
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .flowchart-edge-blocking {
+    animation: none;
+    stroke-opacity: 0.7;
   }
 }

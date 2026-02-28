@@ -31,15 +31,17 @@ test.describe('Dependency Flowchart', () => {
       state: 'visible',
     })
     await authenticatedPage.click('button:has-text("Flowchart Source")')
-    await authenticatedPage.click('button:has-text("Block with:")')
 
-    // Wait for dependency to be created
-    await authenticatedPage.waitForResponse(
-      (response) =>
-        response.url().includes('/api/v1/dependencies/') &&
-        response.request().method() === 'POST' &&
-        response.status() < 300,
-    )
+    // Register response wait before clicking to avoid missing fast responses
+    await Promise.all([
+      authenticatedPage.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/dependencies/') &&
+          response.request().method() === 'POST' &&
+          response.status() < 300,
+      ),
+      authenticatedPage.click('button:has-text("Block with:")'),
+    ])
 
     // The flowchart toggle button should appear
     await expect(authenticatedPage.locator('[data-testid="toggle-flowchart"]')).toBeVisible()
