@@ -490,7 +490,7 @@ test.describe('Migration Dialog', () => {
     await expect(authenticatedPage.locator('#rating-input')).toHaveCount(0);
   });
 
-  test('escape key closes dialog', async ({ authenticatedPage, request }) => {
+  test('warning messages appear appropriately', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
@@ -535,7 +535,7 @@ test.describe('Migration Dialog', () => {
     await expect(authenticatedPage.locator('.migration-warning')).toContainText('One issue away');
   });
 
-  test('backdrop click closes dialog', async ({ authenticatedPage, request }) => {
+  test('escape key closes dialog', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
@@ -568,5 +568,261 @@ test.describe('Migration Dialog', () => {
 
     // Migration dialog should be closed
     await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0);
+  });
+});
+
+test.describe('Migrating from Edit Modal', () => {
+  test('migration button only shows for unmigrated threads', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const oldThreadTitle = `Old Thread ${Date.now()}`;
+    const migratedThreadTitle = `Migrated Thread ${Date.now()}`;
+    await createOldSystemThread(request, token, oldThreadTitle);
+    await createMigratedThread(request, token, migratedThreadTitle, 50);
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Click the Edit button for old thread
+    const oldThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: oldThreadTitle }).first();
+    await oldThreadCard.locator('button[aria-label="Edit thread"]').click();
+
+    const oldEditModal = authenticatedPage.locator('.edit-modal__overlay');
+    await expect(oldEditModal).toBeVisible();
+
+    await expect(authenticatedPage.locator('.edit-modal__migration-button')).toBeVisible();
+
+    await authenticatedPage.keyboard.press('Escape');
+
+    await expect(oldEditModal).toHaveCount(0);
+
+    // Click the Edit button for migrated thread
+    const migratedThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: migratedThreadTitle }).first();
+    await migratedThreadCard.locator('button[aria-label="Edit thread"]').click();
+
+    const migratedEditModal = authenticatedPage.locator('.edit-modal__overlay');
+    await expect(migratedEditModal).toBeVisible();
+
+    await expect(authenticatedPage.locator('.edit-modal__migration-button')).toHaveCount(0);
+  });
+
+  test('successful migration from edit modal', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const threadTitle = `Old Thread ${Date.now()}`;
+    const thread = await createOldSystemThread(request, token, threadTitle);
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Click the Edit button, not the thread card
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
+
+    const editModal = authenticatedPage.locator('.edit-modal__overlay');
+    await expect(editModal).toBeVisible();
+
+    await expect(authenticatedPage.locator('.edit-modal__migration-button')).toBeVisible();
+
+    await authenticatedPage.locator('.edit-modal__migration-button').click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toBeVisible();
+
+    await authenticatedPage.fill('#last-issue-read', '5');
+    await authenticatedPage.fill('#total-issues', '10');
+
+    const submitButton = authenticatedPage.locator('.migration-dialog__btn--primary').filter({ hasText: 'Start Tracking' });
+    await submitButton.click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0, { timeout: 15000 });
+
+    await expect(editModal).toBeVisible();
+
+    const threadData = await request.get(`/api/threads/${thread.id}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    const updatedThread = await threadData.json();
+    expect(updatedThread.total_issues).toBe(10);
+  });
+
+  test('migration validation blocks empty inputs from edit modal', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const threadTitle = `Old Thread ${Date.now()}`;
+    await createOldSystemThread(request, token, threadTitle);
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Click the Edit button, not the thread card itself
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
+
+    const editModal = authenticatedPage.locator('.edit-modal__overlay');
+    await expect(editModal).toBeVisible();
+
+    await authenticatedPage.locator('.edit-modal__migration-button').click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toBeVisible();
+
+    const submitButton = authenticatedPage.locator('.migration-dialog__btn--primary');
+    await submitButton.click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__error')).toBeVisible();
+    await expect(authenticatedPage.locator('.migration-dialog__error')).toContainText('Please fill in both fields');
+
+    await expect(editModal).toBeVisible();
+  });
+
+  test('migration validation blocks last_read > total from edit modal', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const threadTitle = `Old Thread ${Date.now()}`;
+    await createOldSystemThread(request, token, threadTitle);
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Click the Edit button, not the thread card itself
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
+
+    const editModal = authenticatedPage.locator('.edit-modal__overlay');
+    await expect(editModal).toBeVisible();
+
+    await authenticatedPage.locator('.edit-modal__migration-button').click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toBeVisible();
+
+    await authenticatedPage.fill('#last-issue-read', '15');
+    await authenticatedPage.fill('#total-issues', '10');
+
+    const submitButton = authenticatedPage.locator('.migration-dialog__btn--primary');
+    await submitButton.click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__error')).toBeVisible();
+    await expect(authenticatedPage.locator('.migration-dialog__error')).toContainText('Last issue read cannot exceed total issues');
+
+    await expect(editModal).toBeVisible();
+  });
+
+  test('migration from edit modal updates preview correctly', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const threadTitle = `Old Thread ${Date.now()}`;
+    await createOldSystemThread(request, token, threadTitle);
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Click the Edit button, not the thread card
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
+
+    const editModal = authenticatedPage.locator('.edit-modal__overlay');
+    await expect(editModal).toBeVisible();
+
+    await authenticatedPage.locator('.edit-modal__migration-button').click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toBeVisible();
+
+    await expect(authenticatedPage.locator('.migration-preview')).toHaveCount(0);
+
+    await authenticatedPage.fill('#total-issues', '25');
+
+    await expect(authenticatedPage.locator('.migration-preview')).toHaveCount(0);
+
+    await authenticatedPage.fill('#last-issue-read', '15');
+
+    await expect(authenticatedPage.locator('.migration-preview')).toBeVisible();
+    await expect(authenticatedPage.locator('.migration-preview')).toContainText('#1-#15');
+    await expect(authenticatedPage.locator('.migration-preview')).toContainText('#16-#25');
+    await expect(authenticatedPage.locator('.migration-preview')).toContainText('#16');
+  });
+
+  test('canceling migration from edit modal keeps modal open', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const threadTitle = `Old Thread ${Date.now()}`;
+    await createOldSystemThread(request, token, threadTitle);
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Click the Edit button, not the thread card
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
+
+    const editModal = authenticatedPage.locator('.edit-modal__overlay');
+    await expect(editModal).toBeVisible();
+
+    await authenticatedPage.locator('.edit-modal__migration-button').click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toBeVisible();
+
+    const closeButton = authenticatedPage.locator('.migration-dialog__close-btn');
+    await closeButton.click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0);
+
+    await expect(editModal).toBeVisible();
+  });
+
+  test('skipping migration from edit modal allows rating to proceed', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+
+    const threadTitle = `Old Thread ${Date.now()}`;
+    await createOldSystemThread(request, token, threadTitle);
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Click the Edit button, not the thread card
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
+
+    const editModal = authenticatedPage.locator('.edit-modal__overlay');
+    await expect(editModal).toBeVisible();
+
+    await authenticatedPage.locator('.edit-modal__migration-button').click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toBeVisible();
+
+    const skipButton = authenticatedPage.locator('.migration-dialog__btn--secondary').filter({ hasText: 'Skip' });
+    await skipButton.click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__confirm-overlay')).toBeVisible();
+    await expect(authenticatedPage.locator('.migration-dialog__confirm-title')).toContainText('Skip migration?');
+
+    const confirmButton = authenticatedPage.locator('.migration-dialog__confirm-actions .migration-dialog__btn--primary').filter({ hasText: 'Yes, Skip' });
+    await confirmButton.click();
+
+    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0);
+
+    await expect(editModal).toBeVisible();
   });
 });

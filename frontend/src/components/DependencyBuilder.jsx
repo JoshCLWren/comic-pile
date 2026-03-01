@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
 import { dependenciesApi, threadsApi } from '../services/api'
+import { issuesApi } from '../services/api-issues'
 
 function getDefaultDependencyMode(thread) {
   return thread?.next_unread_issue_id ? 'issue' : 'thread'
@@ -22,6 +23,12 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [flowchartDependencies, setFlowchartDependencies] = useState([])
   const [blockedIds, setBlockedIds] = useState(new Set())
   const [showIssueOnlyNotice, setShowIssueOnlyNotice] = useState(false)
+  const [sourceIssueId, setSourceIssueId] = useState(null)
+  const [targetIssueId, setTargetIssueId] = useState(null)
+  const [sourceIssues, setSourceIssues] = useState([])
+  const [targetIssues, setTargetIssues] = useState([])
+  const [isLoadingSourceIssues, setIsLoadingSourceIssues] = useState(false)
+  const [isLoadingTargetIssues, setIsLoadingTargetIssues] = useState(false)
 
   const selectedThread = useMemo(
     () => searchResults.find((candidate) => candidate.id === selectedThreadId) || null,
@@ -94,7 +101,12 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     setShowFlowchart(false)
     setShowIssueOnlyNotice(false)
     setDependencyMode(getDefaultDependencyMode(thread))
+    setSourceIssueId(null)
+    setTargetIssueId(null)
+    setSourceIssues([])
+    setTargetIssues([])
     loadDependencies()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, thread?.id, loadDependencies])
 
   useEffect(() => {
@@ -120,8 +132,9 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         setError(searchError?.response?.data?.detail || 'Thread search failed.')
         setSearchResults([])
       } finally {
-        if (!isCurrent) return
-        setIsSearching(false)
+        if (isCurrent) {
+          setIsSearching(false)
+        }
       }
     }, 300)
 
@@ -131,18 +144,63 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     }
   }, [searchQuery, isOpen, thread?.id])
 
+  useEffect(() => {
+    if (!isOpen || dependencyMode !== 'issue' || !selectedThreadId || !thread?.id) {
+      setSourceIssues([])
+      setTargetIssues([])
+      setSourceIssueId(null)
+      setTargetIssueId(null)
+      return
+    }
+
+    let isCurrent = true
+    const fetchIssues = async () => {
+      setIsLoadingSourceIssues(true)
+      setIsLoadingTargetIssues(true)
+      setError('')
+      try {
+        const [sourceData, targetData] = await Promise.all([
+          issuesApi.list(selectedThreadId),
+          issuesApi.list(thread.id),
+        ])
+        if (!isCurrent) return
+        setSourceIssues(sourceData.issues || [])
+        setTargetIssues(targetData.issues || [])
+        setSourceIssueId(sourceData.issues?.find((i) => i.status === 'unread')?.id || null)
+        setTargetIssueId(targetData.issues?.find((i) => i.status === 'unread')?.id || null)
+      } catch (issuesError) {
+        if (!isCurrent) return
+        setError(issuesError?.response?.data?.detail || 'Failed to load issues.')
+        setSourceIssues([])
+        setTargetIssues([])
+        setSourceIssueId(null)
+        setTargetIssueId(null)
+      } finally {
+        if (isCurrent) {
+          setIsLoadingSourceIssues(false)
+          setIsLoadingTargetIssues(false)
+        }
+      }
+    }
+
+    fetchIssues()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [selectedThreadId, dependencyMode, isOpen, thread?.id])
+
   async function handleCreateDependency() {
     if (!thread?.id || !selectedThreadId) return
 
-    const targetHasIssueTracking = Boolean(thread.next_unread_issue_id)
+    const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
     if (dependencyMode === 'issue' && !targetHasIssueTracking) {
       setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
       return
     }
 
-    const selected = searchResults.find((candidate) => candidate.id === selectedThreadId)
-    if (dependencyMode === 'issue' && !selected?.next_unread_issue_id) {
-      setError('Selected prerequisite thread has no next unread issue to depend on.')
+    if (dependencyMode === 'issue' && (!sourceIssueId || !targetIssueId)) {
+      setError('Both prerequisite issue and target issue must be selected.')
       return
     }
 
@@ -152,9 +210,9 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       if (dependencyMode === 'issue') {
         await dependenciesApi.createDependency({
           sourceType: 'issue',
-          sourceId: selected.next_unread_issue_id,
+          sourceId: sourceIssueId,
           targetType: 'issue',
-          targetId: thread.next_unread_issue_id,
+          targetId: targetIssueId,
         })
       } else {
         await dependenciesApi.createDependency({
@@ -167,6 +225,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       setSearchQuery('')
       setSearchResults([])
       setSelectedThreadId(null)
+      setSourceIssueId(null)
+      setTargetIssueId(null)
+      setSourceIssues([])
+      setTargetIssues([])
       await loadDependencies()
       if (showFlowchart) await loadFlowchartData()
       onChanged?.()
@@ -267,22 +329,72 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                 </button>
               ))}
             </div>
-          )}
-          <button
-            type="button"
-            onClick={handleCreateDependency}
-            disabled={!selectedThread || isSaving}
-            className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
-          >
-            {isSaving
-              ? 'Adding dependency…'
-              : selectedThread
-                ? dependencyMode === 'issue'
-                  ? `Block next issue with: ${selectedThread.title}`
-                  : `Block with thread: ${selectedThread.title}`
-                : 'Select a prerequisite'}
-          </button>
-        </div>
+           )}
+           {dependencyMode === 'issue' && selectedThread && (
+             <div className="space-y-2">
+               {isLoadingSourceIssues || isLoadingTargetIssues ? (
+                 <p className="text-xs text-slate-500">Loading issues…</p>
+               ) : (
+                 <>
+                   <div>
+                     <label htmlFor="source-issue" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                       Prerequisite issue
+                     </label>
+                     <select
+                       id="source-issue"
+                       value={sourceIssueId || ''}
+                       onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
+                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                     >
+                       <option value="">Select an issue</option>
+                        {sourceIssues.map((issue) => (
+                          <option key={issue.id} value={issue.id}>
+                            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
+                          </option>
+                        ))}
+                     </select>
+                   </div>
+                   <div>
+                     <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                       Target issue
+                     </label>
+                     <select
+                       id="target-issue"
+                       value={targetIssueId || ''}
+                       onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
+                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                     >
+                       <option value="">Select an issue</option>
+                        {targetIssues.map((issue) => (
+                          <option key={issue.id} value={issue.id}>
+                            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
+                          </option>
+                        ))}
+                     </select>
+                   </div>
+                 </>
+               )}
+             </div>
+           )}
+           <button
+             type="button"
+             onClick={handleCreateDependency}
+             disabled={
+               dependencyMode === 'issue'
+                 ? !selectedThread || !sourceIssueId || !targetIssueId || isSaving
+                 : !selectedThread || isSaving
+             }
+             className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
+           >
+              {isSaving
+                ? 'Adding dependency…'
+                : selectedThread
+                  ? dependencyMode === 'issue'
+                    ? `Block issue #${targetIssues.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
+                    : `Block with thread: ${selectedThread.title}`
+                  : 'Select a prerequisite'}
+           </button>
+         </div>
 
         <div className="space-y-2">
           <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">This thread is blocked by</h3>

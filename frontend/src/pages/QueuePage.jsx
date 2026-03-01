@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../components/Modal'
 import PositionSlider from '../components/PositionSlider'
 import Tooltip from '../components/Tooltip'
 import LoadingSpinner from '../components/LoadingSpinner'
 import DependencyBuilder from '../components/DependencyBuilder'
+import MigrationDialog from '../components/MigrationDialog'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
 import {
   useCreateThread,
@@ -74,6 +75,8 @@ export default function QueuePage() {
   const [reorderError, setReorderError] = useState(null)
   const [selectedThread, setSelectedThread] = useState(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+  const [showMigrationDialog, setShowMigrationDialog] = useState(false)
+  const [threadToMigrate, setThreadToMigrate] = useState(null)
   const [blockedThreadIds, setBlockedThreadIds] = useState([])
   const [blockingReasonMap, setBlockingReasonMap] = useState({})
   const [dependencyThread, setDependencyThread] = useState(null)
@@ -305,6 +308,29 @@ export default function QueuePage() {
       console.error('Failed to reactivate thread')
     }
   }
+
+  const handleMigrationComplete = useCallback(async (migratedThread) => {
+    try {
+      await refetch()
+      await refetchSession()
+    } catch (error) {
+      console.error('Failed to refresh data after migration:', error)
+      alert('Failed to refresh data. Please refresh the page.')
+    }
+    setShowMigrationDialog(false)
+    setThreadToMigrate(null)
+    setEditingThread(migratedThread)
+  }, [refetch, refetchSession])
+
+  const handleMigrationSkip = useCallback(() => {
+    setShowMigrationDialog(false)
+    setThreadToMigrate(null)
+  }, [])
+
+  const handleMigrationClose = useCallback(() => {
+    setShowMigrationDialog(false)
+    setThreadToMigrate(null)
+  }, [])
 
   const openCreateModal = () => {
     setCreateForm(DEFAULT_CREATE_STATE)
@@ -680,7 +706,7 @@ export default function QueuePage() {
         </form>
       </Modal>
 
-      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => setIsEditOpen(false)}>
+      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => setIsEditOpen(false)} overlayClassName="edit-modal__overlay">
         <form className="space-y-4" onSubmit={handleEditSubmit}>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Title</label>
@@ -708,6 +734,24 @@ export default function QueuePage() {
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200 min-h-[80px]"
             ></textarea>
           </div>
+          {editingThread?.total_issues === null && (
+            <div className="space-y-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setThreadToMigrate(editingThread)
+                  setShowMigrationDialog(true)
+                }}
+                className="edit-modal__migration-button w-full py-3 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left text-xs font-black text-amber-300 hover:bg-amber-500/20 transition-all flex items-center gap-3"
+              >
+                <span className="text-lg">📊</span>
+                <div className="flex-1">
+                  <div className="font-bold">Migrate to Issue Tracking</div>
+                  <div className="font-normal text-slate-400 mt-0.5">Track individual issues instead of remaining count</div>
+                </div>
+              </button>
+            </div>
+          )}
           <button
             type="submit"
             disabled={updateMutation.isPending}
@@ -838,6 +882,15 @@ export default function QueuePage() {
           await refreshBlockedState()
         }}
       />
+
+      {showMigrationDialog && threadToMigrate && (
+        <MigrationDialog
+          thread={threadToMigrate}
+          onComplete={handleMigrationComplete}
+          onSkip={handleMigrationSkip}
+          onClose={handleMigrationClose}
+        />
+      )}
     </div>
   )
 }
