@@ -132,8 +132,9 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         setError(searchError?.response?.data?.detail || 'Thread search failed.')
         setSearchResults([])
       } finally {
-        if (!isCurrent) return
-        setIsSearching(false)
+        if (isCurrent) {
+          setIsSearching(false)
+        }
       }
     }, 300)
 
@@ -175,9 +176,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         setSourceIssueId(null)
         setTargetIssueId(null)
       } finally {
-        if (!isCurrent) return
-        setIsLoadingSourceIssues(false)
-        setIsLoadingTargetIssues(false)
+        if (isCurrent) {
+          setIsLoadingSourceIssues(false)
+          setIsLoadingTargetIssues(false)
+        }
       }
     }
 
@@ -191,7 +193,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   async function handleCreateDependency() {
     if (!thread?.id || !selectedThreadId) return
 
-    const targetHasIssueTracking = Boolean(thread.next_unread_issue_id)
+    const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
     if (dependencyMode === 'issue' && !targetHasIssueTracking) {
       setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
       return
