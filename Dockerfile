@@ -34,11 +34,16 @@ FROM node:22.13.1-bookworm-slim AS frontend-builder
 
 WORKDIR /app/frontend
 
+# Copy dependency files first for layer caching
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
+# Copy source files - this layer invalidates when any source changes
 COPY frontend/ ./
-RUN npm run build
+
+# Build with explicit cache bust by touching a file that changes each build
+# This ensures npm run build always executes when source changes
+RUN echo "Build timestamp: $(date -u +%s)" > /tmp/build-stamp && npm run build
 
 # Vite writes to /app/static/react based on outDir in vite config
 
@@ -73,9 +78,15 @@ COPY app/ ./app/
 COPY comic_pile/ ./comic_pile/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./alembic.ini
-COPY static/ ./static/
 
-# Copy compiled frontend assets produced by Vite
+# Copy static directory structure (without react build artifacts)
+COPY static/assets ./static/assets
+COPY static/css ./static/css
+COPY static/favicon.svg ./static/favicon.svg
+COPY static/index.html ./static/index.html
+COPY static/vite.svg ./static/vite.svg
+
+# Copy compiled frontend assets produced by Vite (ALWAYS do this last)
 COPY --from=frontend-builder /app/static/react ./static/react
 
 # Fix ownership

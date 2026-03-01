@@ -16,6 +16,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.staticfiles import StaticFiles as StarletteStaticFiles
+from starlette.responses import Response as StarletteResponse
+from starlette.types import Scope
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import exc as sqlalchemy_exc
@@ -437,12 +440,28 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         """
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
 
+    class CacheControlledStaticFiles(StarletteStaticFiles):
+        """StaticFiles with explicit cache-control headers for hashed assets."""
+
+        async def get_response(self, path: str, scope: Scope) -> StarletteResponse:
+            response = await super().get_response(path, scope)
+            # Add cache headers for hashed assets (they have content hashes in filename)
+            if hasattr(response, "headers"):
+                # Cache hashed assets (contain hash like index-DsWHcseo.js) for 1 year
+                # These never change content for the same URL
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            return response
+
     if serve_frontend:
         # Mount static files. In production, enforce artifact presence before mounting.
         if app_settings.environment == "production":
             _assert_production_frontend_assets()
             app.mount("/static", StaticFiles(directory="static"), name="static")
-            app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+            app.mount(
+                "/assets",
+                CacheControlledStaticFiles(directory="static/react/assets"),
+                name="assets",
+            )
         else:
             if Path("static").exists():
                 app.mount("/static", StaticFiles(directory="static"), name="static")

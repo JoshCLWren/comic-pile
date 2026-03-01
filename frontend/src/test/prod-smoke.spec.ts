@@ -193,4 +193,100 @@ test.describe('Production Smoke', () => {
     expect(afterData.active_thread?.id).toBe(activeBefore);
     expect(afterData.active_thread?.title).toBe(titleBefore);
   });
+
+  test('double roll animation works correctly', async ({ page }) => {
+    // This test specifically checks the dice animation on consecutive rolls
+    // which has been reported as not working in production
+    const health = await page.request.get('/health');
+    expect(health.ok()).toBeTruthy();
+
+    const token = await createAuthenticatedUser(page);
+    await seedThreads(page, token, [
+      { title: 'Double Roll Test A', format: 'Comic', issues_remaining: 5 },
+      { title: 'Double Roll Test B', format: 'Manga', issues_remaining: 5 },
+      { title: 'Double Roll Test C', format: 'Novel', issues_remaining: 5 },
+    ]);
+
+    await page.addInitScript((authToken: string) => {
+      localStorage.setItem('auth_token', authToken);
+    }, token);
+
+    // Collect browser console logs
+    const consoleLogs: Array<{ type: string; text: string }> = [];
+    page.on('console', (msg) => {
+      consoleLogs.push({ type: msg.type(), text: msg.text() });
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const mainDie = page.locator('#main-die-3d');
+    await expect(mainDie).toBeVisible();
+
+    // Helper function to check rolling state
+    const getDieState = async () => {
+      return mainDie.evaluate((el) => ({
+        className: el.className,
+        hasRollingClass: el.classList.contains('dice-state-rolling'),
+      }));
+    };
+
+    // ========== FIRST ROLL ==========
+    console.log('Starting first roll...');
+    const beforeFirst = await getDieState();
+    expect(beforeFirst.hasRollingClass).toBe(false);
+
+    await mainDie.click();
+
+    // Check animation started
+    await page.waitForTimeout(100);
+    const duringFirst = await getDieState();
+    console.log('First roll state:', duringFirst);
+
+    // Wait for rating view
+    await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
+    console.log('First roll completed - rating view visible');
+
+    // ========== RETURN TO ROLL VIEW ==========
+    // Click Save & Continue
+    await page.click(SELECTORS.rate.submitButton);
+
+    // Wait for navigation back to roll page
+    await expect(mainDie).toBeVisible({ timeout: 15000 });
+    console.log('Back at roll view after first rating');
+
+    // Wait for state to fully settle
+    await page.waitForTimeout(1000);
+
+    // ========== SECOND ROLL ==========
+    console.log('Starting second roll...');
+    const beforeSecond = await getDieState();
+    console.log('Before second roll:', beforeSecond);
+
+    // The die should NOT be in rolling state before we click
+    expect(beforeSecond.hasRollingClass).toBe(false);
+
+    await mainDie.click();
+
+    // Check animation started for second roll
+    await page.waitForTimeout(100);
+    const duringSecond = await getDieState();
+    console.log('Second roll state:', duringSecond);
+
+    // THIS IS THE KEY ASSERTION - the animation should be playing
+    expect(
+      duringSecond.hasRollingClass,
+      `Second roll animation should be active. ` +
+        `Before: ${JSON.stringify(beforeSecond)}, ` +
+        `After: ${JSON.stringify(duringSecond)}. ` +
+        `Relevant logs: ${consoleLogs
+          .filter((l) => l.text.includes('isRolling') || l.text.includes('rolling'))
+          .map((l) => `[${l.type}]${l.text}`)
+          .join('; ')}`
+    ).toBe(true);
+
+    // Wait for second rating view to confirm roll completed
+    await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
+    console.log('Second roll completed successfully');
+  });
 });
