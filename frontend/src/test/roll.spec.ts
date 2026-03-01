@@ -169,4 +169,29 @@ test.describe('Roll Dice Feature', () => {
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 2000 });
     expect(new URL(authenticatedWithThreadsPage.url()).pathname).toBe('/');
   });
+
+  test('regression: animation should play on consecutive rolls after rating', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+
+    // First roll
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
+
+    // Submit rating to return to roll view
+    await authenticatedWithThreadsPage.fill(SELECTORS.rate.ratingInput, '5');
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+
+    // Wait to return to roll view
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 5000 });
+
+    // Second roll (same denomination) - animation should play
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+
+    // Verify rating view appears (means animation played and roll succeeded)
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
+
+    // Verify still on home page (not redirected)
+    expect(new URL(authenticatedWithThreadsPage.url()).pathname).toBe('/');
+  });
 });
