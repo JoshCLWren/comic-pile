@@ -371,6 +371,8 @@ Three.js is lazy-loaded on demand via `LazyDice3D`:
 - `Dice3D` chunk: ~16 KB (~6 KB gzipped)
 - `three` chunk: ~489 KB (~124 KB gzipped)
 
+_Measured via `cd frontend && npm run build` Vite output, March 2026. Re-run after significant dependency changes to keep these numbers accurate._
+
 ## Development Workflow
 
 ### Linting

@@ -53,8 +53,15 @@ frontend/src/
 
 ### Running E2E Tests
 
+`npm run test:e2e` builds the frontend automatically before running. If you
+invoke Playwright directly (e.g. `npx playwright test`), build first:
+
 ```bash
-# Run all E2E tests
+cd frontend && npm run build
+```
+
+```bash
+# Run all E2E tests (builds frontend first)
 cd frontend && npm run test:e2e
 
 # Run tests in UI mode (interactive)
@@ -66,10 +73,10 @@ npm run test:e2e:headed
 # Debug tests
 npm run test:e2e:debug
 
-# Run specific test file
+# Run specific test file (requires prior npm run build)
 npx playwright test auth.spec.ts
 
-# Run tests matching a pattern
+# Run tests matching a pattern (requires prior npm run build)
 npx playwright test -g "should login"
 ```
 
