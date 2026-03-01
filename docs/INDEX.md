@@ -7,6 +7,7 @@ This index provides a comprehensive map of all documentation in the comic-pile p
 - [README.md](../README.md) — Project overview, quick start, and development workflow.
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — Development workflow, code quality standards, and testing guidelines.
 - [LOCAL_TESTING.md](../LOCAL_TESTING.md) — Local test environment setup with sample data and fixtures.
+- [FEATURES_SINCE_0cd5a462.md](FEATURES_SINCE_0cd5a462.md) — How to use new app features added after commit `0cd5a462ef405f96f591ec31abb66531a1e99a9e`.
 
 ## Architecture & Design
 

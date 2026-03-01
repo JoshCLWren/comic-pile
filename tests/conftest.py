@@ -67,6 +67,8 @@ def _missing_model_columns(conn: Connection) -> bool:
         "users",
         "sessions",
         "threads",
+        "issues",
+        "dependencies",
         "events",
         "snapshots",
         "revoked_tokens",
@@ -109,7 +111,8 @@ async def ensure_test_schema() -> None:
                         "Refusing to reset schema on non-test database. "
                         f"Database '{make_url(database_url).database}' must include 'test'."
                     )
-                Base.metadata.drop_all(bind=conn)
+                conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+                conn.exec_driver_sql("CREATE SCHEMA public")
             Base.metadata.create_all(bind=conn)
 
         await conn.run_sync(_check_and_drop)

@@ -6,6 +6,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.dependency import Dependency
+from app.models.issue import Issue
 from app.models.thread import Thread
 
 
@@ -22,7 +23,24 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
         .where(target.c.user_id == user_id)
         .where(source.c.status != "completed")
     )
-    return {row[0] for row in result.all()}
+    blocked_by_threads = {row[0] for row in result.all()}
+
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+    target_thread = Thread.__table__.alias("target_thread")
+
+    issue_result = await db.execute(
+        select(target_thread.c.id)
+        .join(target_issue, target_thread.c.next_unread_issue_id == target_issue.c.id)
+        .join(Dependency, Dependency.target_issue_id == target_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source, source_issue.c.thread_id == source.c.id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+    )
+    blocked_by_issues = {row[0] for row in issue_result.all()}
+    return blocked_by_threads | blocked_by_issues
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[str]:
@@ -30,7 +48,7 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
     source = Thread.__table__.alias("source_thread")
     target = Thread.__table__.alias("target_thread")
 
-    result = await db.execute(
+    thread_result = await db.execute(
         select(source.c.id, source.c.title)
         .join(Dependency, Dependency.source_thread_id == source.c.id)
         .join(target, Dependency.target_thread_id == target.c.id)
@@ -39,24 +57,61 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .where(target.c.user_id == user_id)
         .where(source.c.status != "completed")
     )
-    return [f"Blocked by {title} (thread #{sid})" for sid, title in result.all()]
+    thread_reasons = [f"Blocked by {title} (thread #{sid})" for sid, title in thread_result.all()]
+
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+    source_thread = Thread.__table__.alias("source_thread")
+    target_thread = Thread.__table__.alias("target_thread")
+
+    issue_result = await db.execute(
+        select(
+            source_thread.c.id,
+            source_thread.c.title,
+            source_issue.c.id,
+            source_issue.c.issue_number,
+        )
+        .select_from(target_thread)
+        .join(target_issue, target_thread.c.next_unread_issue_id == target_issue.c.id)
+        .join(Dependency, Dependency.target_issue_id == target_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(target_thread.c.id == thread_id)
+        .where(target_thread.c.user_id == user_id)
+        .where(source_thread.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+    )
+    issue_reasons = [
+        f"Blocked by issue #{issue_number} in {thread_title} (thread #{thread_id_val})"
+        for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
+    ]
+    return thread_reasons + issue_reasons
 
 
 async def detect_circular_dependency(
-    source_thread_id: int,
-    target_thread_id: int,
+    source_id: int,
+    target_id: int,
+    dependency_type: str,
     db: AsyncSession,
 ) -> bool:
     """Return True if adding source->target would introduce a cycle."""
-    if source_thread_id == target_thread_id:
+    if source_id == target_id:
         return True
 
-    result = await db.execute(select(Dependency.source_thread_id, Dependency.target_thread_id))
+    if dependency_type == "thread":
+        result = await db.execute(select(Dependency.source_thread_id, Dependency.target_thread_id))
+    elif dependency_type == "issue":
+        result = await db.execute(select(Dependency.source_issue_id, Dependency.target_issue_id))
+    else:
+        return False
+
     adjacency: dict[int, set[int]] = defaultdict(set)
     for src, tgt in result.all():
+        if src is None or tgt is None:
+            continue
         adjacency[src].add(tgt)
 
-    queue = deque([target_thread_id])
+    queue = deque([target_id])
     visited: set[int] = set()
 
     while queue:
@@ -64,7 +119,7 @@ async def detect_circular_dependency(
         if node in visited:
             continue
         visited.add(node)
-        if node == source_thread_id:
+        if node == source_id:
             return True
         queue.extend(adjacency.get(node, set()))
 

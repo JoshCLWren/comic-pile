@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.dependency import Dependency
     from app.models.thread import Thread
 
 
@@ -37,4 +38,16 @@ class Issue(Base):
 
     thread: Mapped["Thread"] = relationship(
         "Thread", back_populates="issues", lazy="raise", foreign_keys=[thread_id]
+    )
+    dependencies_out: Mapped[list["Dependency"]] = relationship(
+        "Dependency",
+        foreign_keys="Dependency.source_issue_id",
+        back_populates="source_issue",
+        lazy="raise",
+    )
+    dependencies_in: Mapped[list["Dependency"]] = relationship(
+        "Dependency",
+        foreign_keys="Dependency.target_issue_id",
+        back_populates="target_issue",
+        lazy="raise",
     )

@@ -24,7 +24,7 @@ test.describe('Dependencies', () => {
     await authenticatedPage.fill('input#search-prereq-thread', 'Source')
     await authenticatedPage.waitForSelector('button:has-text("Source Thread")', { state: 'visible' })
     await authenticatedPage.click('button:has-text("Source Thread")')
-    await authenticatedPage.click('button:has-text("Block with:")')
+    await authenticatedPage.click('button:has-text("Block")')
 
     await authenticatedPage.waitForResponse(
       (response) => response.url().includes('/api/v1/dependencies/') && response.request().method() === 'POST' && response.status() < 300

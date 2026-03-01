@@ -7,11 +7,11 @@ from pydantic import BaseModel
 
 
 class DependencyCreate(BaseModel):
-    """Schema for creating thread dependencies."""
+    """Schema for creating dependencies."""
 
-    source_type: Literal["thread"]
+    source_type: Literal["thread", "issue"]
     source_id: int
-    target_type: Literal["thread"]
+    target_type: Literal["thread", "issue"]
     target_id: int
 
 
@@ -19,8 +19,10 @@ class DependencyResponse(BaseModel):
     """Schema for dependency payload."""
 
     id: int
-    source_thread_id: int
-    target_thread_id: int
+    source_thread_id: int | None
+    target_thread_id: int | None
+    source_issue_id: int | None
+    target_issue_id: int | None
     created_at: datetime
 
 
