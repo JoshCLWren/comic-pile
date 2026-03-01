@@ -16,6 +16,20 @@ export default defineConfig(() => ({
   build: {
     outDir: '../static/react',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('three')) {
+            return 'three'
+          }
+          if (id.includes('node_modules')) {
+            return 'vendor'
+          }
+          return undefined
+        },
+      },
+    },
+    chunkSizeWarningLimit: 550,
   },
   resolve: {
     alias: {
