@@ -1,29 +1,67 @@
-# E2E Tests
+# Frontend Tests
+
+## Unit Tests (Vitest)
+
+Fast, in-process tests — no server required.
+
+**Location:** `frontend/src/unit/`
+
+**Run:**
+```bash
+cd frontend && npm test
+```
+
+**What belongs here:**
+- Pure logic: hooks, utility functions, geometry helpers
+- Component rendering: props, state transitions, conditional output
+- Regression guards: e.g. `no-debug-artifacts.test.js` scans source for banned patterns
+
+**What belongs in E2E instead:**
+- Full user flows (roll → rate → history)
+- Real API calls and database state
+- Browser-specific behaviour (drag-and-drop, animations, scroll)
+
+---
+
+## E2E Tests (Playwright)
 
 Playwright end-to-end tests for the Comic Pile application.
 
-## Test Structure
+### Test Structure
 
 ```
-frontend/src/test/
-├── fixtures.ts          # Test fixtures (auth, pages)
-├── helpers.ts           # Test utilities and factories
-├── auth.spec.ts         # Authentication flow tests
-├── threads.spec.ts      # Thread management tests
-├── roll.spec.ts         # Dice rolling feature tests
-├── rate.spec.ts         # Rating functionality tests
-├── analytics.spec.ts    # Analytics dashboard tests
-├── history.spec.ts      # Session history tests
-├── accessibility.spec.ts # WCAG accessibility tests
-├── visual.spec.ts       # Visual regression tests
-├── network.spec.ts      # Network/API integration tests
-└── edge-cases.spec.ts   # Edge case and error handling tests
+frontend/src/
+├── unit/                # Vitest unit tests (no server needed)
+│   ├── api.test.js
+│   ├── Dice3D.test.jsx
+│   ├── no-debug-artifacts.test.js
+│   └── ...
+└── test/                # Playwright E2E tests (requires backend)
+    ├── fixtures.ts          # Test fixtures (auth, pages)
+    ├── helpers.ts           # Test utilities and factories
+    ├── auth.spec.ts         # Authentication flow tests
+    ├── threads.spec.ts      # Thread management tests
+    ├── roll.spec.ts         # Dice rolling feature tests
+    ├── rate.spec.ts         # Rating functionality tests
+    ├── analytics.spec.ts    # Analytics dashboard tests
+    ├── history.spec.ts      # Session history tests
+    ├── accessibility.spec.ts # WCAG accessibility tests
+    ├── visual.spec.ts       # Visual regression tests
+    ├── network.spec.ts      # Network/API integration tests
+    └── edge-cases.spec.ts   # Edge case and error handling tests
 ```
 
-## Running Tests
+### Running E2E Tests
+
+`npm run test:e2e` builds the frontend automatically before running. If you
+invoke Playwright directly (e.g. `npx playwright test`), build first:
 
 ```bash
-# Run all E2E tests
+cd frontend && npm run build
+```
+
+```bash
+# Run all E2E tests (builds frontend first)
 cd frontend && npm run test:e2e
 
 # Run tests in UI mode (interactive)
@@ -35,10 +73,10 @@ npm run test:e2e:headed
 # Debug tests
 npm run test:e2e:debug
 
-# Run specific test file
+# Run specific test file (requires prior npm run build)
 npx playwright test auth.spec.ts
 
-# Run tests matching a pattern
+# Run tests matching a pattern (requires prior npm run build)
 npx playwright test -g "should login"
 ```
 

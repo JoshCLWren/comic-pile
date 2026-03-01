@@ -57,9 +57,14 @@ To test the hook manually: `make githook` or `bash scripts/lint.sh`
 
 ### Frontend Development
 
-- React components live in `frontend/src/` with JSX syntax
-- Style with Tailwind CSS (mobile-first, touch targets ≥44px)
-- Keep custom JavaScript to a minimum (React handles most interactivity)
+- Install deps:    `cd frontend && npm install`
+- Dev server:      `npm run dev` (proxies `/api` → localhost:8000; backend must be running)
+- Build:           `npm run build` (outputs to `static/react/`)
+- Lint:            `npm run lint`
+- Unit tests:      `npm test` (vitest, no server needed)
+- E2E tests:       `npm run test:e2e` (requires backend server)
+
+React components live in `frontend/src/` with JSX syntax. Style with Tailwind CSS (mobile-first, touch targets ≥44px).
 
 ### Database Migrations
 
@@ -74,7 +79,8 @@ make migrate  # or: alembic upgrade head
 ## Code quality standards
 
 - Run linting after each change:
-  - `make lint` or `bash scripts/lint.sh`
+  - `make lint` or `bash scripts/lint.sh` (Python)
+  - `cd frontend && npm run lint` (JavaScript/JSX)
 - Use specific types instead of `Any` in type annotations (ruff ANN401 rule)
 - Run tests when you touch logic or input handling:
   - `pytest` or `make pytest`
