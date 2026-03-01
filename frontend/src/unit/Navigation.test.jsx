@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { expect, test, afterEach, vi } from 'vitest'
+import { expect, test, beforeEach, afterEach, vi } from 'vitest'
 import App, { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 

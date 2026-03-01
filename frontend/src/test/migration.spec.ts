@@ -490,7 +490,7 @@ test.describe('Migration Dialog', () => {
     await expect(authenticatedPage.locator('#rating-input')).toHaveCount(0);
   });
 
-  test('escape key closes dialog', async ({ authenticatedPage, request }) => {
+  test('warning messages appear appropriately', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
@@ -535,7 +535,7 @@ test.describe('Migration Dialog', () => {
     await expect(authenticatedPage.locator('.migration-warning')).toContainText('One issue away');
   });
 
-  test('backdrop click closes dialog', async ({ authenticatedPage, request }) => {
+  test('escape key closes dialog', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
