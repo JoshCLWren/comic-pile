@@ -322,7 +322,12 @@ test.describe('Dependencies', () => {
       await authenticatedPage.selectOption('#source-issue', '')
       await authenticatedPage.selectOption('#target-issue', { index: 1 })
 
-      await authenticatedPage.click('button:has-text("Select a prerequisite")')
+      // Button should be disabled when source issue not selected
+      const addButton = authenticatedPage.locator('button[type="button"]:has-text("Block issue")')
+      await expect(addButton).toBeDisabled()
+
+      // Try clicking anyway - error should appear
+      await addButton.click({ force: true })
 
       await expect(authenticatedPage.locator('text=Both prerequisite issue and target issue must be selected')).toBeVisible()
     })
