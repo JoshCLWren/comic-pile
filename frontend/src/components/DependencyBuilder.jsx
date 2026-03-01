@@ -165,8 +165,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         if (!isCurrent) return
         setSourceIssues(sourceData.issues || [])
         setTargetIssues(targetData.issues || [])
-        setSourceIssueId(sourceData.issues?.find((i) => !i.read)?.id || null)
-        setTargetIssueId(targetData.issues?.find((i) => !i.read)?.id || null)
+        setSourceIssueId(sourceData.issues?.find((i) => i.status === 'unread')?.id || null)
+        setTargetIssueId(targetData.issues?.find((i) => i.status === 'unread')?.id || null)
       } catch (issuesError) {
         if (!isCurrent) return
         setError(issuesError?.response?.data?.detail || 'Failed to load issues.')
@@ -345,11 +345,11 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
                      >
                        <option value="">Select an issue</option>
-                       {sourceIssues.map((issue) => (
-                         <option key={issue.id} value={issue.id}>
-                           #{issue.number} {issue.read ? '✅' : '🟢'}
-                         </option>
-                       ))}
+                        {sourceIssues.map((issue) => (
+                          <option key={issue.id} value={issue.id}>
+                            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
+                          </option>
+                        ))}
                      </select>
                    </div>
                    <div>
@@ -363,11 +363,11 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
                      >
                        <option value="">Select an issue</option>
-                       {targetIssues.map((issue) => (
-                         <option key={issue.id} value={issue.id}>
-                           #{issue.number} {issue.read ? '✅' : '🟢'}
-                         </option>
-                       ))}
+                        {targetIssues.map((issue) => (
+                          <option key={issue.id} value={issue.id}>
+                            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
+                          </option>
+                        ))}
                      </select>
                    </div>
                  </>
@@ -384,13 +384,13 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
              }
              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
            >
-             {isSaving
-               ? 'Adding dependency…'
-               : selectedThread
-                 ? dependencyMode === 'issue'
-                   ? `Block issue #${targetIssues.find((i) => i.id === targetIssueId)?.number || '?'} with: ${selectedThread.title} #${sourceIssues.find((i) => i.id === sourceIssueId)?.number || '?'}`
-                   : `Block with thread: ${selectedThread.title}`
-                 : 'Select a prerequisite'}
+              {isSaving
+                ? 'Adding dependency…'
+                : selectedThread
+                  ? dependencyMode === 'issue'
+                    ? `Block issue #${targetIssues.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
+                    : `Block with thread: ${selectedThread.title}`
+                  : 'Select a prerequisite'}
            </button>
          </div>
 
