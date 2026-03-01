@@ -706,7 +706,7 @@ export default function QueuePage() {
         </form>
       </Modal>
 
-      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => setIsEditOpen(false)}>
+      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => setIsEditOpen(false)} overlayClassName="edit-modal__overlay">
         <form className="space-y-4" onSubmit={handleEditSubmit}>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Title</label>
@@ -742,7 +742,7 @@ export default function QueuePage() {
                   setThreadToMigrate(editingThread)
                   setShowMigrationDialog(true)
                 }}
-                className="w-full py-3 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left text-xs font-black text-amber-300 hover:bg-amber-500/20 transition-all flex items-center gap-3"
+                className="edit-modal__migration-button w-full py-3 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left text-xs font-black text-amber-300 hover:bg-amber-500/20 transition-all flex items-center gap-3"
               >
                 <span className="text-lg">📊</span>
                 <div className="flex-1">
