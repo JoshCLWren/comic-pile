@@ -413,6 +413,7 @@ export default function RollPage() {
       });
 
       suppressPendingAutoOpenRef.current = true
+      setIsRolling(false)
       setIsRatingView(false);
       setRolledResult(null);
       setSelectedThreadId(null);
@@ -437,6 +438,7 @@ export default function RollPage() {
       await snoozeMutation.mutate();
       await refetchSession();
       await refetchThreads();
+      setIsRolling(false)
       setIsRatingView(false);
       setRolledResult(null);
       setSelectedThreadId(null);
