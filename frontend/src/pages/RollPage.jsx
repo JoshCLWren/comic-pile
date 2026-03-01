@@ -489,7 +489,7 @@ export default function RollPage() {
 
   function handleRoll() {
     if (isRolling) return
-    if (session?.pending_thread_id) {
+    if (session?.pending_thread_id && !suppressPendingAutoOpenRef.current) {
       const pendingId = Number(session.pending_thread_id)
       const pendingMetadata =
         session?.active_thread && session.active_thread.id === pendingId
