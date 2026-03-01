@@ -1,8 +1,23 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { expect, test, afterEach } from 'vitest'
+import { expect, test, afterEach, vi } from 'vitest'
 import App, { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
+
+const mockApiGet = vi.fn()
+
+vi.mock('../services/api', () => {
+  return {
+    default: {
+      get: (...args) => mockApiGet(...args),
+      post: vi.fn(),
+    },
+  }
+})
+
+beforeEach(() => {
+  mockApiGet.mockReset()
+})
 
 afterEach(() => {
   localStorage.clear()
@@ -30,10 +45,13 @@ const renderWithoutAuth = () => {
   )
 }
 
-test('renders navigation links when authenticated', () => {
+test('renders navigation links when authenticated', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth()
 
-  expect(screen.getByRole('link', { name: /roll page/i })).toBeInTheDocument()
+  await waitFor(() => {
+    expect(screen.getByRole('link', { name: /roll page/i })).toBeInTheDocument()
+  })
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()
@@ -45,8 +63,11 @@ test('does not render when not authenticated', () => {
   expect(container).toBeEmptyDOMElement()
 })
 
-test('shows logout button when authenticated', () => {
+test('shows logout button when authenticated', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth()
 
-  expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
+  })
 })
