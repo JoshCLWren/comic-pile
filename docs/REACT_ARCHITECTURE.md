@@ -263,38 +263,6 @@ app.mount("/react", StaticFiles(directory="static/react", html=True), name="reac
 
 **API Endpoints**: `http://localhost:8000/api/*` (same backend, no changes needed)
 
-## Migration Strategy
-
-### Phase 1: Architecture & Setup (Complete) ✅
-- React app created with Vite
-- Tailwind CSS configured
-- Build pipeline configured
-- FastAPI static file serving
-- API service layer created
-- React Router configured
-
-### Phase 2: Core Components & Routing (Next)
-- Create layout components (Header, Footer)
-- Create page components (RollPage, RatePage, QueuePage, HistoryPage, SessionPage)
-- Implement navigation between pages
-- Preserve URL patterns
-
-### Phase 3: State Management & API Integration (Next)
-- Implement custom hooks for all endpoints
-- Create mutations with proper error handling
-- Set up Context providers for global state
-- Replace mock data with real API calls
-
-### Phase 4: Migrate 3D Dice & HTMX Interactions (Next)
-- Port dice3d.js to React component (Dice3D.jsx)
-- Replace HTMX attributes with React event handlers
-- Implement real-time updates with custom hooks polling
-
-### Phase 5: Remove HTMX & Cleanup (Final)
-- Delete Jinja2 templates
-- Remove HTMX dependencies
-- Update documentation
-
 ## Styling Approach
 
 ### Tailwind CSS Configuration
@@ -333,38 +301,22 @@ Use existing Tailwind classes from Jinja2 templates:
 
 ### Three.js Integration
 
-The Dice3D component wraps the existing `dice3d.js` logic:
+`components/Dice3D.jsx` renders an interactive Three.js die inside a `position: relative` container. It is wrapped by `components/LazyDice3D.jsx`, which suspends Three.js loading until first render; `RollPage.jsx` uses `LazyDice3D` to avoid blocking the initial page load.
 
-```jsx
-import { useEffect, useRef } from 'react'
+**Prop interface:**
 
-function Dice3D({ dieValue, dieType, isRolling }) {
-  const containerRef = useRef(null)
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `sides` | number | `6` | Die type: 4, 6, 8, 10, 12, or 20 |
+| `value` | number | `1` | Face to show when settled |
+| `isRolling` | bool | `false` | Drives the tumbling animation |
+| `freeze` | bool | `false` | Stops idle rotation when `true` |
+| `lockMotion` | bool | `false` | Snaps to target face immediately (no lerp) |
+| `color` | number | `0xffffff` | Three.js hex color tint |
+| `onRollComplete` | func | `null` | Called once the settle animation finishes |
+| `renderConfig` | object | `null` | Override texture/UV config (see `diceRenderConfig.js`) |
 
-  useEffect(() => {
-    let isMounted = true
-    
-    // Initialize Three.js scene
-    const dice = new Dice3D(containerRef.current, dieType)
-    
-    // Update die value on prop change
-    if (dieValue && isMounted) {
-      dice.setValue(dieValue)
-    }
-
-    // Cleanup on unmount
-    return () => {
-      isMounted = false
-      dice.destroy()
-    }
-  }, [dieValue, dieType])
-
-  return <div ref={containerRef} className="dice-container" />
-}
-```
-
-**Lifecycle**: `useEffect` handles Three.js init and cleanup with isMounted guard
-**Reactivity**: Props trigger dice updates
+**Lifecycle**: Three.js scene and renderer are created once on mount and disposed on unmount. Geometry and texture are rebuilt whenever `sides`, `color`, or `renderConfig` change. The animation loop restarts when `freeze`, `lockMotion`, or `isRolling` change so the loop always sees the current ref values.
 
 ## Testing Strategy
 
@@ -413,9 +365,11 @@ const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 
 ### Bundle Size
 
-Initial bundle: ~180 KB (58 KB gzipped)
-- Includes React, React Router, Axios
-- Additional 3D dice library (Three.js) loaded on demand
+Initial bundle: ~180 KB (~58 KB gzipped) — includes React, React Router, Axios.
+
+Three.js is lazy-loaded on demand via `LazyDice3D`:
+- `Dice3D` chunk: ~16 KB (~6 KB gzipped)
+- `three` chunk: ~489 KB (~124 KB gzipped)
 
 ## Development Workflow
 
