@@ -713,7 +713,7 @@ describe('Rating View', () => {
 
     await waitFor(() => {
       expect(screen.getByText('How was it?')).toBeInTheDocument()
-      expect(screen.getByText('Queue #2')).toBeInTheDocument()
+      expect(screen.getByText('Queue #1')).toBeInTheDocument()
       expect(screen.getByText('Rolled 6 on d6')).toBeInTheDocument()
     })
   })
@@ -767,7 +767,7 @@ describe('Rating View', () => {
     rerender(<RollPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Queue #3')).toBeInTheDocument()
+      expect(screen.getByText('Queue #1')).toBeInTheDocument()
       expect(screen.getByText('X-Men')).toBeInTheDocument()
     })
   })
@@ -858,8 +858,8 @@ describe('Rating View', () => {
     })
     useThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 2 },
         { id: 2, title: 'X-Men', format: 'Comic', status: 'active', queue_position: 1 },
+        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 2 },
       ],
       refetch: vi.fn(),
     })

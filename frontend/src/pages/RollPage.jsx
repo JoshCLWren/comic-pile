@@ -457,6 +457,11 @@ export default function RollPage() {
   const hasValidRolledResult =
     Number.isInteger(rolledResult) && rolledResult >= 1 && rolledResult <= currentDie
 
+  // Compute visual queue position from sorted array index (DB positions may have gaps)
+  const ratingThreadVisualPosition = activeRatingThread
+    ? activeThreads.findIndex(t => t.id === activeRatingThread.id) + 1 || activeRatingThread.queue_position
+    : null
+
   async function handleSetDie(die) {
     setCurrentDie(die)
     await setDieMutation.mutate(die)
@@ -749,7 +754,7 @@ export default function RollPage() {
                             </span>
                           )}
                           <span className="bg-teal-500/20 text-teal-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-teal-500/20">
-                            Queue #{activeRatingThread?.queue_position ?? '-'}
+                            Queue #{ratingThreadVisualPosition ?? '-'}
                           </span>
                         </div>
                       </>
@@ -758,7 +763,7 @@ export default function RollPage() {
                         <h2 className="text-2xl font-black text-slate-100">{activeRatingThread?.title || 'Loading...'}</h2>
                         <div className="flex items-center justify-center gap-3">
                           <span className="bg-teal-500/20 text-teal-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-teal-500/20">
-                            Queue #{activeRatingThread?.queue_position ?? '-'}
+                            Queue #{ratingThreadVisualPosition ?? '-'}
                           </span>
                           <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/20">
                             {activeRatingThread?.format || '...'}
@@ -966,7 +971,7 @@ export default function RollPage() {
                           }`}
                       >
                         <span className="text-lg font-black text-slate-500/50 group-hover:text-slate-400/50 transition-colors">
-                          #{thread.queue_position ?? index + 1}
+                          #{index + 1}
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="font-black text-slate-300 truncate text-sm">{thread.title}</p>
