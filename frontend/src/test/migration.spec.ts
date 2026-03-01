@@ -586,8 +586,9 @@ test.describe('Migrating from Edit Modal', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const oldThreadElement = authenticatedPage.locator('role=button').filter({ hasText: oldThreadTitle }).first();
-    await oldThreadElement.click();
+    // Click the Edit button for old thread
+    const oldThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: oldThreadTitle }).first();
+    await oldThreadCard.locator('button[aria-label="Edit thread"]').click();
 
     const oldEditModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(oldEditModal).toBeVisible();
@@ -598,8 +599,9 @@ test.describe('Migrating from Edit Modal', () => {
 
     await expect(oldEditModal).toHaveCount(0);
 
-    const migratedThreadElement = authenticatedPage.locator('role=button').filter({ hasText: migratedThreadTitle }).first();
-    await migratedThreadElement.click();
+    // Click the Edit button for migrated thread
+    const migratedThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: migratedThreadTitle }).first();
+    await migratedThreadCard.locator('button[aria-label="Edit thread"]').click();
 
     const migratedEditModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(migratedEditModal).toBeVisible();
@@ -619,8 +621,9 @@ test.describe('Migrating from Edit Modal', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await threadElement.click();
+    // Click the Edit button, not the thread card
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -663,8 +666,9 @@ test.describe('Migrating from Edit Modal', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await threadElement.click();
+    // Click the Edit button, not the thread card itself
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -694,8 +698,9 @@ test.describe('Migrating from Edit Modal', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await threadElement.click();
+    // Click the Edit button, not the thread card itself
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -728,8 +733,9 @@ test.describe('Migrating from Edit Modal', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await threadElement.click();
+    // Click the Edit button, not the thread card
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -764,8 +770,9 @@ test.describe('Migrating from Edit Modal', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await threadElement.click();
+    // Click the Edit button, not the thread card
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -794,8 +801,9 @@ test.describe('Migrating from Edit Modal', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await threadElement.click();
+    // Click the Edit button, not the thread card
+    const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
