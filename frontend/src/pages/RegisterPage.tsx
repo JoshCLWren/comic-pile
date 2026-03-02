@@ -1,4 +1,5 @@
 import type { FormEvent } from 'react'
+import axios from 'axios'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
@@ -65,10 +66,9 @@ export default function RegisterPage() {
       await login(response.access_token)
       navigate('/')
     } catch (err: unknown) {
-      const apiError = err as { response?: { data?: { detail?: string }; status?: number } }
-      if (apiError.response?.data?.detail) {
-        setError(apiError.response.data.detail)
-      } else if (apiError.response?.status === 409) {
+      if (axios.isAxiosError<{ detail?: string }>(err) && err.response?.data?.detail) {
+        setError(err.response.data.detail)
+      } else if (axios.isAxiosError(err) && err.response?.status === 409) {
         setError('An account with this email already exists')
       } else {
         setError('Registration failed. Please try again.')

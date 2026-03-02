@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import axios from 'axios'
 import { useAuth } from '../App'
 import api from '../services/api'
 import type { AuthUser } from '../types'
@@ -32,10 +33,9 @@ export default function Navigation() {
         })
         .catch((err: unknown) => {
           console.error('Failed to fetch user:', err)
-          const apiError = err as { response?: { status?: number } }
 
           // Handle 401 by clearing auth state instead of redirecting
-          if (apiError.response?.status === 401) {
+          if (axios.isAxiosError(err) && err.response?.status === 401) {
             logout()
             // Don't navigate - let the auth state change trigger re-render
           } else {

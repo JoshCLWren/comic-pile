@@ -197,6 +197,7 @@ class TestAuth:
         login_data = {"username": "cookie_refresh_user", "password": "password123"}
         login_response = await client.post("/api/auth/login", json=login_data)
         assert login_response.status_code == 200
+        assert client.cookies.get("refresh_token") is not None
 
         refresh_response = await client.post("/api/auth/refresh")
         assert refresh_response.status_code == 200

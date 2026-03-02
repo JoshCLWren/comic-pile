@@ -32,13 +32,24 @@ router = APIRouter(tags=["auth"])
 REFRESH_COOKIE_NAME = "refresh_token"
 
 
+def _is_secure_request(request: Request) -> bool:
+    """Determine whether the original client request was HTTPS.
+
+    Respects reverse-proxy forwarded proto headers when present.
+    """
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    if forwarded_proto:
+        return forwarded_proto == "https"
+    return request.url.scheme == "https"
+
+
 def _set_refresh_cookie(response: Response, request: Request, refresh_token: str) -> None:
     """Set refresh token in a secure HttpOnly cookie."""
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
-        secure=request.url.scheme == "https",
+        secure=_is_secure_request(request),
         samesite="lax",
         path="/api/auth",
         max_age=60 * 60 * 24 * 30,
@@ -293,7 +304,7 @@ async def logout_user(
         key=REFRESH_COOKIE_NAME,
         path="/api/auth",
         httponly=True,
-        secure=request.url.scheme == "https",
+        secure=_is_secure_request(request),
         samesite="lax",
     )
     return {"message": "Successfully logged out"}

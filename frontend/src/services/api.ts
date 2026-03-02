@@ -33,13 +33,13 @@ type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
 }
 
 interface ApiClient extends Omit<AxiosInstance, 'request' | 'get' | 'delete' | 'head' | 'post' | 'put' | 'patch'> {
-  request<T = any, D = unknown>(config: ApiRequestConfig<D>): Promise<T>
-  get<T = any>(url: string, config?: ApiRequestConfig): Promise<T>
-  delete<T = any>(url: string, config?: ApiRequestConfig): Promise<T>
-  head<T = any>(url: string, config?: ApiRequestConfig): Promise<T>
-  post<T = any, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
-  put<T = any, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
-  patch<T = any, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
+  request<T = unknown, D = unknown>(config: ApiRequestConfig<D>): Promise<T>
+  get<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
+  delete<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
+  head<T = unknown>(url: string, config?: ApiRequestConfig): Promise<T>
+  post<T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
+  put<T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
+  patch<T = unknown, D = unknown>(url: string, data?: D, config?: ApiRequestConfig<D>): Promise<T>
 }
 
 const rawApi = axios.create({
@@ -56,10 +56,6 @@ let accessToken: string | null = null
 
 export function setAccessToken(token: string | null): void {
   accessToken = token
-  if (typeof window !== 'undefined') {
-    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
-      token ?? undefined
-  }
 }
 
 export function getAccessToken(): string | null {
@@ -68,9 +64,6 @@ export function getAccessToken(): string | null {
 
 export function clearAccessToken(): void {
   accessToken = null
-  if (typeof window !== 'undefined') {
-    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
-  }
 }
 
 function isOnAuthPage(): boolean {

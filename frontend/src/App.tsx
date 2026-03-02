@@ -46,10 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true
+    const authChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('comic-pile-auth') : null
 
     const validateSession = async () => {
       if (window.__COMIC_PILE_ACCESS_TOKEN) {
         setAccessToken(window.__COMIC_PILE_ACCESS_TOKEN)
+        delete window.__COMIC_PILE_ACCESS_TOKEN
       }
       try {
         const response = await api.get<AuthUser>('/auth/me')
@@ -70,9 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    if (authChannel) {
+      authChannel.onmessage = (event: MessageEvent<{ type?: string }>) => {
+        if (event.data?.type === 'logout') {
+          clearAccessToken()
+          setIsAuthenticated(false)
+          setUser(null)
+        }
+      }
+    }
+
     validateSession()
     return () => {
       isMounted = false
+      authChannel?.close()
     }
   }, [])
 
@@ -94,6 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAccessToken()
     setIsAuthenticated(false)
     setUser(null)
+    if (typeof BroadcastChannel !== 'undefined') {
+      const authChannel = new BroadcastChannel('comic-pile-auth')
+      authChannel.postMessage({ type: 'logout' })
+      authChannel.close()
+    }
   }
 
   const value = { isAuthenticated, isLoading, user, login, logout }

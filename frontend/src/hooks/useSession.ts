@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react'
+import axios from 'axios'
 import { sessionApi } from '../services/api'
 import type { SessionCurrent, SessionDetails, SessionSnapshotsResponse, SessionSummary } from '../types'
 
@@ -8,7 +9,7 @@ export function useSession() {
   const [data, setData] = useState<SessionCurrent | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const fetchSession = useCallback(async () => {
     setIsPending(true)
@@ -18,9 +19,9 @@ export function useSession() {
       const result = await sessionApi.getCurrent()
       setData(result)
       return result
-    } catch (err) {
+    } catch (err: unknown) {
       setIsError(true)
-      setError(err)
+      setError(err instanceof Error ? err : new Error('Failed to fetch current session'))
     } finally {
       setIsPending(false)
     }
@@ -46,7 +47,7 @@ export function useSessions(params = EMPTY_PARAMS) {
   const [data, setData] = useState<SessionSummary[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const effectiveParams = params ?? EMPTY_PARAMS
 
@@ -57,9 +58,9 @@ export function useSessions(params = EMPTY_PARAMS) {
     try {
       const result = await sessionApi.list(effectiveParams)
       setData(result)
-    } catch (err) {
+    } catch (err: unknown) {
       setIsError(true)
-      setError(err)
+      setError(err instanceof Error ? err : new Error('Failed to fetch sessions'))
     } finally {
       setIsPending(false)
     }
@@ -72,11 +73,11 @@ export function useSessions(params = EMPTY_PARAMS) {
   return { data, isPending, isError, error, refetch: fetchSessions }
 }
 
-export function useSessionDetails(id) {
+export function useSessionDetails(id: number | string | null | undefined) {
   const [data, setData] = useState<SessionDetails | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const fetchDetails = useCallback(async () => {
     if (!id) {
@@ -92,9 +93,9 @@ export function useSessionDetails(id) {
     try {
       const result = await sessionApi.getDetails(id)
       setData(result)
-    } catch (err) {
+    } catch (err: unknown) {
       setIsError(true)
-      setError(err)
+      setError(err instanceof Error ? err : new Error('Failed to fetch session details'))
     } finally {
       setIsPending(false)
     }
@@ -107,11 +108,11 @@ export function useSessionDetails(id) {
   return { data, isPending, isError, error, refetch: fetchDetails }
 }
 
-export function useSessionSnapshots(id) {
+export function useSessionSnapshots(id: number | string | null | undefined) {
   const [data, setData] = useState<SessionSnapshotsResponse | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const fetchSnapshots = useCallback(async () => {
     if (!id) {
@@ -127,9 +128,9 @@ export function useSessionSnapshots(id) {
     try {
       const result = await sessionApi.getSnapshots(id)
       setData(result)
-    } catch (err) {
+    } catch (err: unknown) {
       setIsError(true)
-      setError(err)
+      setError(err instanceof Error ? err : new Error('Failed to fetch session snapshots'))
     } finally {
       setIsPending(false)
     }
@@ -145,7 +146,7 @@ export function useSessionSnapshots(id) {
 export function useRestoreSessionStart() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   const mutate = useCallback(async (sessionId: number | string) => {
     setIsPending(true)
@@ -154,10 +155,15 @@ export function useRestoreSessionStart() {
     try {
       const result = await sessionApi.restoreSessionStart(sessionId)
       return result
-    } catch (err) {
+    } catch (err: unknown) {
       setIsError(true)
-      setError(err)
-      console.error('Failed to restore session:', err.response?.data?.detail || err.message)
+      const normalizedError = err instanceof Error ? err : new Error('Failed to restore session')
+      setError(normalizedError)
+      if (axios.isAxiosError(err)) {
+        console.error('Failed to restore session:', err.response?.data?.detail || err.message)
+      } else {
+        console.error('Failed to restore session:', normalizedError.message)
+      }
       throw err
     } finally {
       setIsPending(false)
