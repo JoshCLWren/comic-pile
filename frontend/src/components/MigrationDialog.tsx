@@ -5,7 +5,7 @@ import { migrationApi } from '../services/api'
 import './MigrationDialog.css'
 
 interface MigrationDialogProps {
-  thread: Thread
+  thread: Pick<Thread, 'id' | 'title'>
   onComplete: (thread: Thread) => void
   onSkip: () => void
   onClose: () => void

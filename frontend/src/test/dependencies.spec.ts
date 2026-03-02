@@ -54,7 +54,7 @@ test.describe('Dependencies', () => {
       issues_remaining: 2,
     })
 
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
     const threadsResponse = await authenticatedPage.request.get('/api/threads/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -199,7 +199,7 @@ test.describe('Dependencies', () => {
         total_issues: 10,
       })
 
-      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
 
       await authenticatedPage.request.post(`/api/v1/threads/${sourceThread.id}/issues`, {
         headers: {
@@ -450,7 +450,7 @@ test.describe('Dependencies', () => {
         total_issues: 5,
       })
 
-      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
 
       // Mark all but the last issue as read
       await authenticatedPage.request.patch(`/api/v1/threads/${sourceThread.id}/issues/1`, {

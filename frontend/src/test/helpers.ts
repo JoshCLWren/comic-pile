@@ -32,7 +32,7 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
 
   try {
     await page.waitForURL('**/', { timeout: 5000 });
-  } catch (error) {
+  } catch {
     const url = page.url();
     const bodyText = await page.locator('body').textContent();
     throw new Error(
@@ -53,8 +53,14 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
   const data = await response.json();
   user.accessToken = data.access_token;
 
+  await page.evaluate((token: string) => {
+    localStorage.setItem('auth_token', token);
+    (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
+  }, user.accessToken);
+
   await page.addInitScript((token: string) => {
     localStorage.setItem('auth_token', token);
+    (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
   }, user.accessToken);
 
   return user.accessToken;
@@ -64,7 +70,10 @@ export async function createThread(
   page: Page,
   threadData: { title: string; format: string; issues_remaining: number; total_issues?: number }
 ): Promise<{ id: number } | void> {
-  const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+  const token = await page.evaluate(() => {
+    const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
+    return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null
+  });
 
   const dataWithoutTotal = {
     title: threadData.title,
@@ -169,9 +178,10 @@ export async function setupAuthenticatedPage(
   return testUser;
 }
 
-export async function cleanupTestUser(page: Page, user: TestUser): Promise<void> {
+export async function cleanupTestUser(page: Page, _user: TestUser): Promise<void> {
   await page.evaluate(() => {
     localStorage.clear();
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
   });
 }
 

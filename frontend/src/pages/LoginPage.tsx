@@ -1,6 +1,9 @@
+import type { FormEvent } from 'react'
+import axios from 'axios'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
+import type { AuthTokens } from '../types'
 import { useAuth } from '../App'
 
 export default function LoginPage() {
@@ -27,7 +30,7 @@ export default function LoginPage() {
     return true
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
 
@@ -38,13 +41,16 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.post('/auth/login', { username: username.trim(), password })
-      await login(response.access_token, response.refresh_token)
+      const response = await api.post<AuthTokens, { username: string; password: string }>('/auth/login', {
+        username: username.trim(),
+        password,
+      })
+      await login(response.access_token)
       navigate('/')
-    } catch (err) {
-      if (err.response?.data?.detail) {
+    } catch (err: unknown) {
+      if (axios.isAxiosError<{ detail?: string }>(err) && err.response?.data?.detail) {
         setError(err.response.data.detail)
-      } else if (err.response?.status === 401) {
+      } else if (axios.isAxiosError(err) && err.response?.status === 401) {
         setError('Invalid username or password')
       } else {
         setError('Login failed. Please try again.')

@@ -2,9 +2,9 @@ import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
 
 export default function HistoryPage() {
-  const { data: sessions, isLoading, error } = useSessions()
+  const { data: sessions, isPending, error } = useSessions()
 
-  if (isLoading) {
+  if (isPending) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
@@ -31,23 +31,25 @@ export default function HistoryPage() {
     )
   }
 
-  const formatDate = (dateStr) => {
+  const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return ''
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  const formatTime = (dateStr) => {
+  const formatTime = (dateStr: string | null | undefined) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return ''
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
-  const formatDuration = (startedAt, endedAt) => {
+  const formatDuration = (startedAt: string | null | undefined, endedAt: string | null | undefined) => {
     if (!startedAt || !endedAt) return null
     const start = new Date(startedAt)
     const end = new Date(endedAt)
-    const diffMs = end - start
+    const diffMs = end.getTime() - start.getTime()
     if (!Number.isFinite(diffMs) || diffMs < 0) return null
     const diffMins = Math.floor(diffMs / 60000)
     const hours = Math.floor(diffMins / 60)
@@ -57,7 +59,7 @@ export default function HistoryPage() {
     return `${hours}h ${mins}m`
   }
 
-  const formatDiceProgression = (ladderPath) => {
+  const formatDiceProgression = (ladderPath: string | null | undefined) => {
     if (!ladderPath) return ''
     const dice = ladderPath.split(' → ')
     return dice.map(d => `d${d}`).join(' → ')

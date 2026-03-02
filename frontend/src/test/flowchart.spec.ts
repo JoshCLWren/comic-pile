@@ -62,7 +62,7 @@ test.describe('Dependency Flowchart', () => {
     })
 
     // Create dependency via API
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
@@ -128,7 +128,7 @@ test.describe('Dependency Flowchart', () => {
       issues_remaining: 1,
     })
 
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
@@ -184,7 +184,7 @@ test.describe('Dependency Flowchart', () => {
       issues_remaining: 1,
     })
 
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
@@ -233,7 +233,7 @@ test.describe('Dependency Flowchart', () => {
       issues_remaining: 1,
     })
 
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
@@ -279,7 +279,7 @@ test.describe('Dependency Flowchart', () => {
       issues_remaining: 1,
     })
 
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'))
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {

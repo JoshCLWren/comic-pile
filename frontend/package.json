@@ -8,6 +8,8 @@
     "dice:playground": "vite --host 127.0.0.1 --port 4174 --strictPort",
     "build": "vite build",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "preview": "vite preview",
     "test": "vitest",
     "test:watch": "vitest --watch",
@@ -38,8 +40,11 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.3.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
     "@vitejs/plugin-react": "^5.1.4",
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
@@ -52,6 +57,7 @@
     "msw": "^2.12.10",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
     "vite": "^7.2.4",
     "vitest": "^4.0.18"
   }

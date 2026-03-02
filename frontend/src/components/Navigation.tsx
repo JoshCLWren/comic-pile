@@ -1,7 +1,9 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import axios from 'axios'
 import { useAuth } from '../App'
 import api from '../services/api'
+import type { AuthUser } from '../types'
 
 /**
  * Main navigation component that displays a bottom navigation bar
@@ -20,28 +22,20 @@ export default function Navigation() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Check if token exists before fetching to avoid unnecessary requests
-      const token = localStorage.getItem('auth_token')
-      if (!token) {
-        // Token was removed but isAuthenticated is still true - clear auth state
-        logout()
-        return
-      }
-
       setIsLoading(true)
       setHasError(false)
 
       // Use skipAuthRedirect to handle 401 gracefully without page redirect
-      api.get('/auth/me', { skipAuthRedirect: true })
+      api.get<AuthUser>('/auth/me', { skipAuthRedirect: true })
         .then(user => {
           setUsername(user.username || '')
           setHasError(false)
         })
-        .catch(err => {
+        .catch((err: unknown) => {
           console.error('Failed to fetch user:', err)
 
           // Handle 401 by clearing auth state instead of redirecting
-          if (err.response?.status === 401) {
+          if (axios.isAxiosError(err) && err.response?.status === 401) {
             logout()
             // Don't navigate - let the auth state change trigger re-render
           } else {
@@ -63,7 +57,7 @@ export default function Navigation() {
   const handleLogout = async () => {
     try {
       await api.post('/auth/logout', null, { skipAuthRedirect: true })
-    } catch (err) {
+    } catch (err: unknown) {
       // Logout endpoint might fail if token is invalid - that's ok, we still clear local state
       console.error('Logout API failed:', err)
     }

@@ -69,6 +69,7 @@ export default function DependencyFlowchart({
 
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const dragAnchorRef = useRef<{ x: number; y: number } | null>(null)
 
   // Pagination: slice threads for display
   const totalPages = Math.ceil(threads.length / PAGE_SIZE)
@@ -191,11 +192,13 @@ export default function DependencyFlowchart({
         const originalNode = layout.nodes.find((n) => n.id === draggedNodeId)
         if (!originalNode) return
 
+        const anchor = dragAnchorRef.current ?? { x: 0, y: 0 }
+
         setNodeOffsets((prev) => {
           const next = new Map(prev)
           next.set(draggedNodeId, {
-            dx: svgX - originalNode.x - NODE_WIDTH / 2,
-            dy: svgY - originalNode.y - NODE_HEIGHT / 2,
+            dx: svgX - originalNode.x - NODE_WIDTH / 2 - anchor.x,
+            dy: svgY - originalNode.y - NODE_HEIGHT / 2 - anchor.y,
           })
           return next
         })
@@ -208,6 +211,7 @@ export default function DependencyFlowchart({
     setIsPanning(false)
     setPanStart(null)
     setDraggedNodeId(null)
+    dragAnchorRef.current = null
   }, [])
 
   const handleNodeMouseDown = useCallback(
@@ -224,20 +228,15 @@ export default function DependencyFlowchart({
       const originalNode = layout.nodes.find((n) => n.id === nodeId)
       if (!originalNode) return
 
-      const currentOffset = nodeOffsets.get(nodeId)
-      const currentX = originalNode.x + (currentOffset?.dx ?? 0)
-      const currentY = originalNode.y + (currentOffset?.dy ?? 0)
-
-      setNodeOffsets((prev) => {
-        const next = new Map(prev)
-        next.set(nodeId, {
-          dx: currentX - originalNode.x,
-          dy: currentY - originalNode.y,
-        })
-        return next
-      })
+      const currentOffset = nodeOffsets.get(nodeId) ?? { dx: 0, dy: 0 }
+      const currentCenterX = originalNode.x + currentOffset.dx + NODE_WIDTH / 2
+      const currentCenterY = originalNode.y + currentOffset.dy + NODE_HEIGHT / 2
+      dragAnchorRef.current = {
+        x: svgX - currentCenterX,
+        y: svgY - currentCenterY,
+      }
     },
-    [transform, layout.nodes, nodeOffsets],
+    [layout.nodes, nodeOffsets, transform.x, transform.y, transform.scale],
   )
 
   const handleNodeMouseEnter = useCallback(

@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { createThread, SELECTORS } from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
-  const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+  const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
   const options: any = {
     method,
     headers: {

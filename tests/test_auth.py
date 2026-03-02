@@ -165,6 +165,47 @@ class TestAuth:
         assert new_tokens["refresh_token"] != tokens["refresh_token"]
 
     @pytest.mark.asyncio
+    async def test_login_sets_refresh_cookie(self, client: AsyncClient, async_db: AsyncSession) -> None:
+        """Login sets refresh token in HttpOnly cookie."""
+        user_data = {
+            "username": "cookieuser",
+            "email": "cookie@example.com",
+            "password": "password123",
+        }
+        register_response = await client.post("/api/auth/register", json=user_data)
+        assert register_response.status_code == 200
+
+        login_data = {"username": "cookieuser", "password": "password123"}
+        login_response = await client.post("/api/auth/login", json=login_data)
+        assert login_response.status_code == 200
+
+        set_cookie = login_response.headers.get("set-cookie", "")
+        assert "refresh_token=" in set_cookie
+        assert "HttpOnly" in set_cookie
+
+    @pytest.mark.asyncio
+    async def test_refresh_token_success_with_cookie(self, client: AsyncClient, async_db: AsyncSession) -> None:
+        """Refresh endpoint accepts refresh token from HttpOnly cookie."""
+        user_data = {
+            "username": "cookie_refresh_user",
+            "email": "cookie_refresh@example.com",
+            "password": "password123",
+        }
+        register_response = await client.post("/api/auth/register", json=user_data)
+        assert register_response.status_code == 200
+
+        login_data = {"username": "cookie_refresh_user", "password": "password123"}
+        login_response = await client.post("/api/auth/login", json=login_data)
+        assert login_response.status_code == 200
+        assert client.cookies.get("refresh_token") is not None
+
+        refresh_response = await client.post("/api/auth/refresh")
+        assert refresh_response.status_code == 200
+        refreshed = refresh_response.json()
+        assert "access_token" in refreshed
+        assert "refresh_token" in refreshed
+
+    @pytest.mark.asyncio
     async def test_refresh_token_invalid(self, client: AsyncClient) -> None:
         """Test refresh with invalid token fails."""
         refresh_data = {"refresh_token": "invalid.jwt.token"}

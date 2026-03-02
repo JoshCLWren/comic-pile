@@ -157,13 +157,17 @@ export const test = base.extend<TestFixtures>({
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
+      (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
     await page.goto('/');
 
     await use(page);
 
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => {
+      localStorage.clear();
+      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
+    });
 
     try {
       await request.post('/api/auth/logout', {
@@ -195,6 +199,7 @@ export const test = base.extend<TestFixtures>({
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
+      (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
     // Navigate to home page
@@ -220,14 +225,17 @@ export const test = base.extend<TestFixtures>({
     await use(page);
 
     // Cleanup: clear localStorage and attempt logout
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => {
+      localStorage.clear();
+      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
+    });
     try {
       await request.post('/api/auth/logout', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
       });
-    } catch (e) {
+    } catch {
       // Ignore logout errors during cleanup
     }
   },
@@ -247,13 +255,17 @@ export const test = base.extend<TestFixtures>({
 
     await page.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
+      (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
     await page.goto('/');
 
     await use(page);
 
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => {
+      localStorage.clear();
+      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
+    });
   },
 
   testUser: async ({}, use) => {

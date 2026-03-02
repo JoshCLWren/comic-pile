@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
+import axios from 'axios'
 import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
@@ -20,28 +22,73 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { threadsApi } from '../services/api'
+import type { RollResponse, SessionThread, Thread } from '../types'
 
 const RATING_THRESHOLD = 4.0
 
+type RatingThread = Pick<
+  Thread,
+  'id' | 'title' | 'format' | 'issues_remaining' | 'queue_position' | 'total_issues' | 'reading_progress'
+> &
+  Pick<SessionThread, 'issue_id' | 'issue_number' | 'last_rolled_result'>
+
+type ApiErrorPayload = { detail?: string }
+type ApiLikeError = { response?: { status?: number; data?: ApiErrorPayload } }
+
+function getApiErrorStatus(error: unknown): number | null {
+  if (axios.isAxiosError(error)) {
+    return error.response?.status ?? null
+  }
+  if (error && typeof error === 'object' && 'response' in error) {
+    return (error as ApiLikeError).response?.status ?? null
+  }
+  return null
+}
+
+function getApiErrorDetail(error: unknown): string | null {
+  if (axios.isAxiosError<ApiErrorPayload>(error)) {
+    return error.response?.data?.detail ?? null
+  }
+  if (error && typeof error === 'object' && 'response' in error) {
+    return (error as ApiLikeError).response?.data?.detail ?? null
+  }
+  return null
+}
+
+function mapSessionThreadToRatingThread(thread: SessionThread): RatingThread {
+  return {
+    id: thread.id,
+    title: thread.title,
+    format: thread.format,
+    issues_remaining: thread.issues_remaining ?? 0,
+    queue_position: thread.queue_position ?? 0,
+    total_issues: thread.total_issues ?? null,
+    reading_progress: thread.reading_progress ?? null,
+    issue_id: thread.issue_id ?? null,
+    issue_number: thread.issue_number ?? null,
+    last_rolled_result: thread.last_rolled_result ?? null,
+  }
+}
+
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
-  const [rolledResult, setRolledResult] = useState(null)
-  const [selectedThreadId, setSelectedThreadId] = useState(null)
+  const [rolledResult, setRolledResult] = useState<number | null>(null)
+  const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
   const [currentDie, setCurrentDie] = useState(6)
   const [diceState, setDiceState] = useState('idle')
-  const [staleThread, setStaleThread] = useState(null)
+  const [staleThread, setStaleThread] = useState<(Thread & { days: number }) | null>(null)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
-  const [selectedThread, setSelectedThread] = useState(null)
+  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
-  const [activeRatingThread, setActiveRatingThread] = useState(null)
+  const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
   const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
 
   // Migration state
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
-  const [threadToMigrate, setThreadToMigrate] = useState(null)
+  const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
 
   // Rating state
   const [isRatingView, setIsRatingView] = useState(false)
@@ -49,8 +96,8 @@ export default function RollPage() {
   const [predictedDie, setPredictedDie] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
 
-  const rollIntervalRef = useRef(null)
-  const rollTimeoutRef = useRef(null)
+  const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const rollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suppressPendingAutoOpenRef = useRef(false)
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
@@ -68,7 +115,7 @@ export default function RollPage() {
   // Handle session API errors - redirect to login on 401
   useEffect(() => {
     if (isSessionError && sessionError) {
-      const status = sessionError.response?.status
+      const status = getApiErrorStatus(sessionError)
       if (status === 401) {
         navigate('/login')
       }
@@ -86,7 +133,7 @@ export default function RollPage() {
   const moveToBackMutation = useMoveToBack()
   const rateMutation = useRate()
 
-  async function handleUnsnooze(threadId) {
+  async function handleUnsnooze(threadId: number) {
     try {
       await unsnoozeMutation.mutate(threadId)
       await refetchSession()
@@ -96,6 +143,9 @@ export default function RollPage() {
   }
 
   async function handleReadStale() {
+    if (!staleThread) {
+      return
+    }
     try {
       const response = await threadsApi.setPending(staleThread.id)
       const threadMetadata = {
@@ -105,6 +155,7 @@ export default function RollPage() {
         issues_remaining: response.issues_remaining,
         queue_position: response.queue_position,
         total_issues: response.total_issues,
+        reading_progress: response.reading_progress ?? null,
       }
       
       // Check if thread needs migration
@@ -119,12 +170,12 @@ export default function RollPage() {
     }
   }
 
-  function handleThreadClick(thread) {
+  function handleThreadClick(thread: Thread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
   }
 
-  const enterRatingView = useCallback((threadId, result = null, threadMetadata = null) => {
+  const enterRatingView = useCallback((threadId: number | null, result: number | null = null, threadMetadata: Partial<RollResponse & SessionThread> | null = null) => {
     suppressPendingAutoOpenRef.current = false
 
     if (threadId) setSelectedThreadId(threadId)
@@ -145,9 +196,9 @@ export default function RollPage() {
           threadMetadata.result ?? threadMetadata.last_rolled_result ?? result ?? null,
       })
     } else if (!threadId && session?.active_thread) {
-      setActiveRatingThread(session.active_thread)
+      setActiveRatingThread(mapSessionThreadToRatingThread(session.active_thread))
     } else if (session?.active_thread && session.active_thread.id === Number(threadId)) {
-      setActiveRatingThread(session.active_thread)
+      setActiveRatingThread(mapSessionThreadToRatingThread(session.active_thread))
     }
 
     setRating(4.0)
@@ -161,7 +212,7 @@ export default function RollPage() {
     setIsRatingView(true)
   }, [session, currentDie])
 
-  const handleMigrationComplete = useCallback((migratedThread) => {
+  const handleMigrationComplete = useCallback((migratedThread: Thread) => {
     refetchThreads()
     refetchSession()
     setShowMigrationDialog(false)
@@ -183,7 +234,7 @@ export default function RollPage() {
     setThreadToMigrate(null)
   }, [])
 
-  async function handleAction(action) {
+  async function handleAction(action: string) {
     if (!selectedThread) return
 
     setIsActionSheetOpen(false)
@@ -202,6 +253,7 @@ export default function RollPage() {
               issues_remaining: response.issues_remaining,
               queue_position: response.queue_position,
               total_issues: response.total_issues,
+              reading_progress: response.reading_progress ?? null,
               last_rolled_result: response.result ?? response.last_rolled_result ?? null,
             }
             
@@ -287,7 +339,8 @@ export default function RollPage() {
         : null
 
     const pendingResult = pendingFromSession?.last_rolled_result ?? session?.last_rolled_result ?? null
-    const pendingMetadata = pendingFromSession ?? pendingFromThreads
+    const pendingMetadata =
+      (pendingFromSession ?? pendingFromThreads) as Partial<RollResponse & RatingThread> | null
     const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection
 
     setSelectedThreadId(pendingId)
@@ -296,7 +349,7 @@ export default function RollPage() {
     }
     if (pendingMetadata && pendingMetadata.title) {
       setActiveRatingThread({
-        id: pendingMetadata.id ?? pendingMetadata.thread_id ?? pendingId,
+        id: pendingMetadata.id ?? pendingId,
         title: pendingMetadata.title,
         format: pendingMetadata.format,
         issues_remaining: pendingMetadata.issues_remaining,
@@ -305,8 +358,7 @@ export default function RollPage() {
         issue_number: pendingMetadata.issue_number ?? null,
         total_issues: pendingMetadata.total_issues ?? null,
         reading_progress: pendingMetadata.reading_progress ?? null,
-        last_rolled_result:
-          pendingMetadata.result ?? pendingMetadata.last_rolled_result ?? pendingResult,
+        last_rolled_result: pendingMetadata.last_rolled_result ?? pendingResult,
       })
     }
     if (shouldInitializeRatingView) {
@@ -331,7 +383,7 @@ export default function RollPage() {
     if (staleThreads && staleThreads.length > 0) {
       const thread = staleThreads[0]
       const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
-      const diffMs = new Date() - lastActivity
+      const diffMs = Date.now() - lastActivity.getTime()
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
       if (diffDays >= 7) {
@@ -356,7 +408,7 @@ export default function RollPage() {
     }
   }, [])
 
-  function updateRatingUI(val) {
+  function updateRatingUI(val: string) {
     const num = parseFloat(val)
     setRating(num)
     let newPredictedDie = currentDie
@@ -428,8 +480,9 @@ export default function RollPage() {
       if (threadsRefreshResult.status === 'rejected') {
         console.error('Failed to refresh threads after rating:', threadsRefreshResult.reason)
       }
-    } catch (error) {
-      setErrorMessage(error.response?.data?.detail || 'Failed to save rating');
+    } catch (error: unknown) {
+      const detail = getApiErrorDetail(error)
+      setErrorMessage(detail || 'Failed to save rating');
     }
   }
 
@@ -443,8 +496,9 @@ export default function RollPage() {
       setRolledResult(null);
       setSelectedThreadId(null);
       setActiveRatingThread(null);
-    } catch (error) {
-      setErrorMessage(error.response?.data?.detail || 'Failed to snooze thread');
+    } catch (error: unknown) {
+      const detail = getApiErrorDetail(error)
+      setErrorMessage(detail || 'Failed to snooze thread');
     }
   }
 
@@ -462,7 +516,7 @@ export default function RollPage() {
     ? activeThreads.findIndex(t => t.id === activeRatingThread.id) + 1 || activeRatingThread.queue_position
     : null
 
-  async function handleSetDie(die) {
+  async function handleSetDie(die: number) {
     setCurrentDie(die)
     await setDieMutation.mutate(die)
   }
@@ -540,12 +594,14 @@ export default function RollPage() {
             const response = await rollMutation.mutate()
             enterRatingView(response.thread_id, response.result, response)
             setIsRolling(false)
-          } catch (error) {
-            if (error?.response?.status === 409) {
+          } catch (error: unknown) {
+            const status = getApiErrorStatus(error)
+            const detail = getApiErrorDetail(error)
+            if (status === 409) {
               const recovered = await recoverPendingRollConflict()
               if (!recovered) {
                 setErrorMessage(
-                  error.response?.data?.detail ||
+                  detail ||
                     'A roll is already pending. Rate, snooze, or cancel it before rolling again.',
                 )
               }
@@ -553,7 +609,7 @@ export default function RollPage() {
               return
             }
             console.error('Roll failed:', error)
-            setErrorMessage(error.response?.data?.detail || 'Failed to roll')
+            setErrorMessage(detail || 'Failed to roll')
             setIsRolling(false)
           }
         }, 400)
@@ -561,14 +617,16 @@ export default function RollPage() {
     }, 80)
   }
 
-  function handleKeyDown(event) {
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       handleRoll()
     }
   }
 
-  function getProgressPercentage(thread) {
+  function getProgressPercentage(
+    thread: { total_issues?: number | null; issues_remaining?: number | null } | null,
+  ) {
     if (!thread || !thread.total_issues) return 0
     const readCount = thread.total_issues - (thread.issues_remaining || 0)
     return Math.round((readCount / thread.total_issues) * 100)
@@ -578,12 +636,12 @@ export default function RollPage() {
     setDiceState('rolled')
   }, [])
 
-  function handleCollectionChange(event) {
+  function handleCollectionChange(event: ChangeEvent<HTMLSelectElement>) {
     const value = event.target.value
     setActiveCollectionId(value === 'all' ? null : Number(value))
   }
 
-  function handleOverrideSubmit(event) {
+  function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!overrideThreadId) return
 
@@ -606,8 +664,8 @@ export default function RollPage() {
 
   // Show error state when session API fails
   if (isSessionError || !session) {
-    const errorDetail = sessionError?.response?.data?.detail || sessionError?.message || 'Failed to load session'
-    const status = sessionError?.response?.status
+    const errorDetail = getApiErrorDetail(sessionError) || sessionError?.message || 'Failed to load session'
+    const status = getApiErrorStatus(sessionError)
 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -1154,7 +1212,7 @@ export default function RollPage() {
           </div>
         </Modal>
 
-        <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
+        <Modal isOpen={isActionSheetOpen} title={selectedThread?.title ?? ''} onClose={() => setIsActionSheetOpen(false)}>
           <div className="space-y-2">
             <button
               type="button"

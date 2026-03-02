@@ -1,10 +1,13 @@
-import { expect, test, vi, beforeEach, afterEach, describe } from 'vitest'
+import { expect, test, vi, beforeEach, describe } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { useEffect } from 'react'
+import type { AuthContextValue } from '../App'
 
 // Create mock function for API get
 const mockApiGet = vi.fn()
+const mockSetAccessToken = vi.fn()
+const mockClearAccessToken = vi.fn()
 
 // Mock the API module with a factory that doesn't reference outer scope
 vi.mock('../services/api', () => {
@@ -19,6 +22,8 @@ vi.mock('../services/api', () => {
         response: { use: vi.fn() },
       },
     },
+    setAccessToken: (...args) => mockSetAccessToken(...args),
+    clearAccessToken: (...args) => mockClearAccessToken(...args),
   }
 })
 
@@ -35,11 +40,11 @@ vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="histor
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
 vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
 
-import App, { AuthProvider, AppRoutes, useAuth } from '../App'
+import { AuthProvider, AppRoutes, useAuth } from '../App'
 
-let authContextValue = null
+let authContextValue: AuthContextValue | null = null
 
-const TestAuthConsumer = ({ onAuth }) => {
+const TestAuthConsumer = ({ onAuth }: { onAuth?: (auth: AuthContextValue) => void }) => {
   const auth = useAuth()
   useEffect(() => {
     authContextValue = auth
@@ -61,7 +66,6 @@ const renderWithAuth = (initialEntry = '/') => {
 
 test('renders navigation labels', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-  localStorage.setItem('auth_token', 'test-token')
   renderWithAuth('/')
 
   await waitFor(() => {
@@ -74,12 +78,11 @@ test('renders navigation labels', async () => {
 
 describe('route guards', () => {
   beforeEach(() => {
-    localStorage.clear()
     mockApiGet.mockReset()
-  })
-
-  afterEach(() => {
-    localStorage.clear()
+    mockSetAccessToken.mockReset()
+    mockClearAccessToken.mockReset()
+    mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
   test('redirects unauthenticated users to /login when accessing protected routes', async () => {
@@ -92,7 +95,8 @@ describe('route guards', () => {
 
   test('allows authenticated users to access protected routes', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    localStorage.setItem('auth_token', 'fake-token')
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
+      'fake-token'
     renderWithAuth('/')
 
     await waitFor(() => {
@@ -100,13 +104,17 @@ describe('route guards', () => {
     })
   })
 
-  test('allows unauthenticated users to access /login', () => {
+  test('allows unauthenticated users to access /login', async () => {
+    mockApiGet.mockRejectedValue(new Error('unauthenticated'))
     renderWithAuth('/login')
 
-    expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    })
   })
 
   test('allows unauthenticated users to access /register', async () => {
+    mockApiGet.mockRejectedValue(new Error('unauthenticated'))
     renderWithAuth('/register')
 
     await waitFor(() => {
@@ -116,7 +124,8 @@ describe('route guards', () => {
 
   test('redirects authenticated users from /login to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    localStorage.setItem('auth_token', 'fake-token')
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
+      'fake-token'
     renderWithAuth('/login')
 
     await waitFor(() => {
@@ -126,7 +135,8 @@ describe('route guards', () => {
 
   test('redirects authenticated users from /register to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    localStorage.setItem('auth_token', 'fake-token')
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
+      'fake-token'
     renderWithAuth('/register')
 
     await waitFor(() => {
@@ -137,17 +147,18 @@ describe('route guards', () => {
 
 describe('auth state race condition regression', () => {
   beforeEach(() => {
-    localStorage.clear()
     authContextValue = null
     mockApiGet.mockReset()
-  })
-
-  afterEach(() => {
-    localStorage.clear()
+    mockSetAccessToken.mockReset()
+    mockClearAccessToken.mockReset()
+    mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
   test('auth state updates immediately after login - no redirect loop', async () => {
-    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+    mockApiGet
+      .mockRejectedValueOnce(new Error('unauthenticated'))
+      .mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
 
     renderWithAuth('/login')
 
@@ -160,6 +171,9 @@ describe('auth state race condition regression', () => {
     })
 
     await act(async () => {
+      if (!authContextValue) {
+        throw new Error('auth context not available')
+      }
       await authContextValue.login('test-token')
     })
 
@@ -169,7 +183,9 @@ describe('auth state race condition regression', () => {
   })
 
   test('auth state updates immediately after register - no redirect loop', async () => {
-    mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+    mockApiGet
+      .mockRejectedValueOnce(new Error('unauthenticated'))
+      .mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
 
     renderWithAuth('/register')
 
@@ -182,6 +198,9 @@ describe('auth state race condition regression', () => {
     })
 
     await act(async () => {
+      if (!authContextValue) {
+        throw new Error('auth context not available')
+      }
       await authContextValue.login('test-token')
     })
 
