@@ -52,6 +52,19 @@ const api = rawApi as unknown as ApiClient
 let refreshTokenPromise: Promise<AuthTokens> | null = null
 let isRedirectingToLogin = false
 let redirectTimeoutId: ReturnType<typeof setTimeout> | null = null
+let accessToken: string | null = null
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token
+}
+
+export function getAccessToken(): string | null {
+  return accessToken
+}
+
+export function clearAccessToken(): void {
+  accessToken = null
+}
 
 function isOnAuthPage(): boolean {
   const pathname = window.location.pathname
@@ -69,8 +82,7 @@ function redirectToLogin(): void {
     clearTimeout(redirectTimeoutId)
   }
 
-  localStorage.removeItem('auth_token')
-  localStorage.removeItem('refresh_token')
+  clearAccessToken()
 
   redirectTimeoutId = setTimeout(() => {
     isRedirectingToLogin = false
@@ -82,7 +94,7 @@ function redirectToLogin(): void {
 
 rawApi.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('auth_token')
+    const token = getAccessToken()
     if (token) {
       ;(config.headers as Record<string, string>).Authorization = `Bearer ${token}`
     }
@@ -123,33 +135,26 @@ rawApi.interceptors.response.use(
 
       originalRequest._retry = true
 
-      const refreshToken = localStorage.getItem('refresh_token')
-      if (refreshToken) {
-        try {
-          if (!refreshTokenPromise) {
-            refreshTokenPromise = api.post<AuthTokens>('/auth/refresh', {
-              refresh_token: refreshToken,
-            })
-          }
-
-          const response = await refreshTokenPromise
-          refreshTokenPromise = null
-
-          const { access_token, refresh_token: newRefreshToken } = response
-          localStorage.setItem('auth_token', access_token)
-          localStorage.setItem('refresh_token', newRefreshToken)
-
-          originalRequest.headers = originalRequest.headers ?? {}
-          ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
-          return api.request(originalRequest)
-        } catch (refreshError) {
-          refreshTokenPromise = null
-          redirectToLogin()
-          return Promise.reject(refreshError)
+      try {
+        if (!refreshTokenPromise) {
+          // Refresh token is held in an HttpOnly cookie; request body is optional.
+          refreshTokenPromise = api.post<AuthTokens>('/auth/refresh')
         }
-      }
 
-      redirectToLogin()
+        const response = await refreshTokenPromise
+        refreshTokenPromise = null
+
+        const { access_token } = response
+        setAccessToken(access_token)
+
+        originalRequest.headers = originalRequest.headers ?? {}
+        ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
+        return api.request(originalRequest)
+      } catch (refreshError) {
+        refreshTokenPromise = null
+        redirectToLogin()
+        return Promise.reject(refreshError)
+      }
     }
 
     console.error('API Error:', error)

@@ -3,7 +3,7 @@
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import exc as sqlalchemy_exc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,16 +29,35 @@ from app.schemas.auth import (
 
 router = APIRouter(tags=["auth"])
 
+REFRESH_COOKIE_NAME = "refresh_token"
+
+
+def _set_refresh_cookie(response: Response, request: Request, refresh_token: str) -> None:
+    """Set refresh token in a secure HttpOnly cookie."""
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+        path="/api/auth",
+        max_age=60 * 60 * 24 * 30,
+    )
+
 
 @router.post("/register", response_model=TokenResponse)
 async def register_user(
     user_data: UserRegisterRequest,
+    request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
     """Register a new user and return tokens.
 
     Args:
         user_data: User registration data (username, email, password).
+        request: Incoming request used for cookie security policy.
+        response: Outgoing response used to set auth cookies.
         db: SQLAlchemy session for database operations.
 
     Returns:
@@ -90,6 +109,7 @@ async def register_user(
     jti = secrets.token_urlsafe(32)
     access_token = create_access_token(data={"sub": username, "jti": jti})
     refresh_token = create_refresh_token(data={"sub": username, "jti": jti})
+    _set_refresh_cookie(response, request, refresh_token)
 
     return TokenResponse(
         access_token=access_token,
@@ -100,12 +120,16 @@ async def register_user(
 @router.post("/login", response_model=TokenResponse)
 async def login_user(
     login_data: UserLoginRequest,
+    request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
     """Authenticate user and return tokens.
 
     Args:
         login_data: User login data (username, password).
+        request: Incoming request used for cookie security policy.
+        response: Outgoing response used to set auth cookies.
         db: SQLAlchemy session for database operations.
 
     Returns:
@@ -132,6 +156,7 @@ async def login_user(
     jti = secrets.token_urlsafe(32)
     access_token = create_access_token(data={"sub": user.username, "jti": jti})
     refresh_token = create_refresh_token(data={"sub": user.username, "jti": jti})
+    _set_refresh_cookie(response, request, refresh_token)
 
     return TokenResponse(
         access_token=access_token,
@@ -141,12 +166,16 @@ async def login_user(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_access_token(
-    refresh_data: RefreshTokenRequest,
+    request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
+    refresh_data: RefreshTokenRequest | None = None,
 ) -> TokenResponse:
     """Refresh access token using refresh token.
 
     Args:
+        request: Incoming request used to read refresh token cookies.
+        response: Outgoing response used to rotate refresh cookies.
         refresh_data: Refresh token request.
         db: SQLAlchemy session for database operations.
 
@@ -157,7 +186,13 @@ async def refresh_access_token(
         HTTPException: If refresh token is invalid or revoked.
     """
     try:
-        payload = verify_token(refresh_data.refresh_token)
+        refresh_token = refresh_data.refresh_token if refresh_data else request.cookies.get(REFRESH_COOKIE_NAME)
+        if not refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing refresh token",
+            )
+        payload = verify_token(refresh_token)
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -208,6 +243,7 @@ async def refresh_access_token(
     new_jti = secrets.token_urlsafe(32)
     access_token = create_access_token(data={"sub": user.username, "jti": new_jti})
     refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti})
+    _set_refresh_cookie(response, request, refresh_token)
 
     return TokenResponse(
         access_token=access_token,
@@ -218,12 +254,14 @@ async def refresh_access_token(
 @router.post("/logout")
 async def logout_user(
     request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Logout user by revoking their current token if valid.
 
     Args:
         request: FastAPI Request object for accessing authorization header.
+        response: Response object used to clear auth cookies.
         db: SQLAlchemy session for database operations.
 
     Returns:
@@ -251,6 +289,13 @@ async def logout_user(
             # Token is invalid/expired - that's ok, just return success
             pass
 
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        path="/api/auth",
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+    )
     return {"message": "Successfully logged out"}
 
 

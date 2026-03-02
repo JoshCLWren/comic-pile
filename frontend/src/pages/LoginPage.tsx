@@ -1,6 +1,8 @@
+import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
+import type { AuthTokens } from '../types'
 import { useAuth } from '../App'
 
 export default function LoginPage() {
@@ -27,7 +29,7 @@ export default function LoginPage() {
     return true
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
 
@@ -38,13 +40,17 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.post('/auth/login', { username: username.trim(), password })
-      await login(response.access_token, response.refresh_token)
+      const response = await api.post<AuthTokens, { username: string; password: string }>('/auth/login', {
+        username: username.trim(),
+        password,
+      })
+      await login(response.access_token)
       navigate('/')
-    } catch (err) {
-      if (err.response?.data?.detail) {
-        setError(err.response.data.detail)
-      } else if (err.response?.status === 401) {
+    } catch (err: unknown) {
+      const apiError = err as { response?: { data?: { detail?: string }; status?: number } }
+      if (apiError.response?.data?.detail) {
+        setError(apiError.response.data.detail)
+      } else if (apiError.response?.status === 401) {
         setError('Invalid username or password')
       } else {
         setError('Login failed. Please try again.')

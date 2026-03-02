@@ -1,6 +1,8 @@
+import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
+import type { AuthTokens } from '../types'
 import { useAuth } from '../App'
 
 export default function RegisterPage() {
@@ -13,7 +15,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
 
-  const validateEmail = (emailValue) => {
+  const validateEmail = (emailValue: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)
   }
 
@@ -45,7 +47,7 @@ export default function RegisterPage() {
     return true
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
 
@@ -56,13 +58,17 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.post('/auth/register', { username: username.trim(), email: email.trim(), password })
-      await login(response.access_token, response.refresh_token)
+      const response = await api.post<AuthTokens, { username: string; email: string; password: string }>(
+        '/auth/register',
+        { username: username.trim(), email: email.trim(), password },
+      )
+      await login(response.access_token)
       navigate('/')
-    } catch (err) {
-      if (err.response?.data?.detail) {
-        setError(err.response.data.detail)
-      } else if (err.response?.status === 409) {
+    } catch (err: unknown) {
+      const apiError = err as { response?: { data?: { detail?: string }; status?: number } }
+      if (apiError.response?.data?.detail) {
+        setError(apiError.response.data.detail)
+      } else if (apiError.response?.status === 409) {
         setError('An account with this email already exists')
       } else {
         setError('Registration failed. Please try again.')

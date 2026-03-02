@@ -1,10 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { expect, test, beforeEach, afterEach, vi } from 'vitest'
-import App, { AuthProvider } from '../App'
+import { expect, test, beforeEach, vi } from 'vitest'
+import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 
 const mockApiGet = vi.fn()
+const mockSetAccessToken = vi.fn()
+const mockClearAccessToken = vi.fn()
 
 vi.mock('../services/api', () => {
   return {
@@ -12,19 +14,20 @@ vi.mock('../services/api', () => {
       get: (...args) => mockApiGet(...args),
       post: vi.fn(),
     },
+    setAccessToken: (...args) => mockSetAccessToken(...args),
+    clearAccessToken: (...args) => mockClearAccessToken(...args),
   }
 })
 
 beforeEach(() => {
   mockApiGet.mockReset()
-})
-
-afterEach(() => {
-  localStorage.clear()
+  mockSetAccessToken.mockReset()
+  mockClearAccessToken.mockReset()
 })
 
 const renderWithAuth = () => {
-  localStorage.setItem('auth_token', 'test-token')
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  mockSetAccessToken.mockImplementation(() => undefined)
 
   return render(
     <MemoryRouter initialEntries={['/']}>
@@ -36,6 +39,7 @@ const renderWithAuth = () => {
 }
 
 const renderWithoutAuth = () => {
+  mockApiGet.mockRejectedValue(new Error('unauthenticated'))
   return render(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
@@ -46,7 +50,6 @@ const renderWithoutAuth = () => {
 }
 
 test('renders navigation links when authenticated', async () => {
-  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   renderWithAuth()
 
   await waitFor(() => {
@@ -57,10 +60,12 @@ test('renders navigation links when authenticated', async () => {
   expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()
 })
 
-test('does not render when not authenticated', () => {
+test('does not render when not authenticated', async () => {
   const { container } = renderWithoutAuth()
 
-  expect(container).toBeEmptyDOMElement()
+  await waitFor(() => {
+    expect(container).toBeEmptyDOMElement()
+  })
 })
 
 test('shows logout button when authenticated', async () => {
