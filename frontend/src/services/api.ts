@@ -56,6 +56,10 @@ let accessToken: string | null = null
 
 export function setAccessToken(token: string | null): void {
   accessToken = token
+  if (typeof window !== 'undefined') {
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
+      token ?? undefined
+  }
 }
 
 export function getAccessToken(): string | null {
@@ -64,6 +68,9 @@ export function getAccessToken(): string | null {
 
 export function clearAccessToken(): void {
   accessToken = null
+  if (typeof window !== 'undefined') {
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
+  }
 }
 
 function isOnAuthPage(): boolean {
