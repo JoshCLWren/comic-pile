@@ -55,6 +55,7 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
 
   await page.addInitScript((token: string) => {
     localStorage.setItem('auth_token', token);
+    (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
   }, user.accessToken);
 
   return user.accessToken;
@@ -172,6 +173,7 @@ export async function setupAuthenticatedPage(
 export async function cleanupTestUser(page: Page, _user: TestUser): Promise<void> {
   await page.evaluate(() => {
     localStorage.clear();
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
   });
 }
 

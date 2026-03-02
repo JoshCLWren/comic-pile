@@ -6,6 +6,12 @@ import api, { clearAccessToken, setAccessToken } from './services/api'
 import type { AuthUser } from './types'
 import './index.css'
 
+declare global {
+  interface Window {
+    __COMIC_PILE_ACCESS_TOKEN?: string
+  }
+}
+
 const RollPage = lazy(() => import('./pages/RollPage'))
 const QueuePage = lazy(() => import('./pages/QueuePage'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
@@ -42,6 +48,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true
 
     const validateSession = async () => {
+      if (window.__COMIC_PILE_ACCESS_TOKEN) {
+        setAccessToken(window.__COMIC_PILE_ACCESS_TOKEN)
+      }
       try {
         const response = await api.get<AuthUser>('/auth/me')
         if (isMounted) {
