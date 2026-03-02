@@ -63,7 +63,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -100,7 +100,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -136,7 +136,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -173,7 +173,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -214,7 +214,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -261,7 +261,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -293,7 +293,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -338,7 +338,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -410,7 +410,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -455,7 +455,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -494,7 +494,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -539,7 +539,7 @@ test.describe('Migration Dialog', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -573,7 +573,7 @@ test.describe('Migration Dialog', () => {
 
 test.describe('Migrating from Edit Modal', () => {
   test('migration button only shows for unmigrated threads', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -610,7 +610,7 @@ test.describe('Migrating from Edit Modal', () => {
   });
 
   test('successful migration from edit modal', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -655,7 +655,7 @@ test.describe('Migrating from Edit Modal', () => {
   });
 
   test('migration validation blocks empty inputs from edit modal', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -687,7 +687,7 @@ test.describe('Migrating from Edit Modal', () => {
   });
 
   test('migration validation blocks last_read > total from edit modal', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -722,7 +722,7 @@ test.describe('Migrating from Edit Modal', () => {
   });
 
   test('migration from edit modal updates preview correctly', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -759,7 +759,7 @@ test.describe('Migrating from Edit Modal', () => {
   });
 
   test('canceling migration from edit modal keeps modal open', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }
@@ -790,7 +790,7 @@ test.describe('Migrating from Edit Modal', () => {
   });
 
   test('skipping migration from edit modal allows rating to proceed', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
       throw new Error('No auth token found');
     }

@@ -92,6 +92,7 @@ test.describe('Production Smoke', () => {
     ]);
 
     await page.addInitScript((authToken: string) => {
+      localStorage.setItem('auth_token', authToken);
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
         authToken;
     }, token);
@@ -131,6 +132,7 @@ test.describe('Production Smoke', () => {
     const token = await loginExistingUser(page, username as string, password as string);
 
     await page.addInitScript((authToken: string) => {
+      localStorage.setItem('auth_token', authToken);
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
         authToken;
     }, token);
@@ -160,6 +162,7 @@ test.describe('Production Smoke', () => {
     const token = await loginExistingUser(page, username as string, password as string);
 
     await page.addInitScript((authToken: string) => {
+      localStorage.setItem('auth_token', authToken);
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
         authToken;
     }, token);
@@ -211,6 +214,7 @@ test.describe('Production Smoke', () => {
     ]);
 
     await page.addInitScript((authToken: string) => {
+      localStorage.setItem('auth_token', authToken);
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
         authToken;
     }, token);

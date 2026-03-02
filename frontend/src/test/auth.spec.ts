@@ -95,9 +95,10 @@ test.describe('Authentication Flow', () => {
   test('should logout and redirect to login', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
 
-    const hasTokenBefore = await authenticatedPage.evaluate(() =>
-      !!(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
-    );
+    const hasTokenBefore = await authenticatedPage.evaluate(() => {
+      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
+      return Boolean(localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN)
+    });
     expect(hasTokenBefore).toBe(true);
 
     await authenticatedPage.click('button:has-text("Log Out")');

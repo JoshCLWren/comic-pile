@@ -156,6 +156,7 @@ export const test = base.extend<TestFixtures>({
     const { accessToken } = await registerWithRetry(request, testUser);
 
     await page.addInitScript((token: string) => {
+      localStorage.setItem('auth_token', token);
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
@@ -197,6 +198,7 @@ export const test = base.extend<TestFixtures>({
     const { accessToken } = await registerWithRetry(request, testUser);
 
     await page.addInitScript((token: string) => {
+      localStorage.setItem('auth_token', token);
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
@@ -252,6 +254,7 @@ export const test = base.extend<TestFixtures>({
     await createThreadsForUser(request, accessToken, 3);
 
     await page.addInitScript((token: string) => {
+      localStorage.setItem('auth_token', token);
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 

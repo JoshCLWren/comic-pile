@@ -30,7 +30,7 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
   });
 
   test('should return correct RollResponse structure when setting thread as pending', async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
     const threadsResponse = await authenticatedWithThreadsPage.request.get('/api/threads/', {
       headers: {
@@ -74,7 +74,7 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
   });
 
   test('should update session pending_thread_id', async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
     const threadsResponse = await authenticatedWithThreadsPage.request.get('/api/threads/', {
       headers: {
@@ -110,7 +110,7 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
   });
 
   test('should return 404 for non-existent thread', async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
     const response = await authenticatedWithThreadsPage.request.post('/api/threads/99999/set-pending', {
       headers: {
@@ -123,7 +123,7 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
   });
 
   test('should return 400 for thread with no issues remaining', async ({ authenticatedWithThreadsPage, request }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
     const createResponse = await request.post('/api/threads/', {
       headers: {
