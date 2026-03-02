@@ -110,6 +110,7 @@ test.describe('Edge Cases & Error Handling', () => {
 
     await page2.addInitScript((token: string) => {
       localStorage.setItem('auth_token', token);
+      (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, token!);
 
     await page1.goto('/threads');
@@ -258,8 +259,8 @@ test.describe('Edge Cases & Error Handling', () => {
     await page.click(SELECTORS.auth.submitButton);
     await page.waitForURL('**/', { timeout: 5000 });
 
-    const hasToken = await page.evaluate(() => !!localStorage.getItem('auth_token'));
-    expect(hasToken).toBe(true);
+    const isAuthenticated = await page.locator('[aria-label="Roll pool collection"]').isVisible();
+    expect(isAuthenticated).toBe(true);
 
     await page.close();
   });

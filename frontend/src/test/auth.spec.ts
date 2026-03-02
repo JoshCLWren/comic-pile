@@ -56,8 +56,10 @@ test.describe('Authentication Flow', () => {
     await page.click(SELECTORS.auth.submitButton);
     await page.waitForURL('/', { timeout: 5000 });
 
+    await page.request.post('/api/auth/logout');
     await page.evaluate(() => {
       localStorage.clear();
+      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
       window.location.assign('/login');
     });
     await page.waitForURL('**/login', { timeout: 10000 });
@@ -103,7 +105,8 @@ test.describe('Authentication Flow', () => {
     await authenticatedPage.waitForURL('/login', { timeout: 5000 });
 
     const hasTokenAfter = await authenticatedPage.evaluate(() =>
-      !!localStorage.getItem('auth_token')
+      !!localStorage.getItem('auth_token') ||
+      !!(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
     );
     expect(hasTokenAfter).toBe(false);
 
