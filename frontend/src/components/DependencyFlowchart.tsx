@@ -218,9 +218,6 @@ export default function DependencyFlowchart({
       const svgRect = svgRef.current?.getBoundingClientRect()
       if (!svgRect) return
 
-      const svgX = (e.clientX - svgRect.left - transform.x) / transform.scale
-      const svgY = (e.clientY - svgRect.top - transform.y) / transform.scale
-
       const originalNode = layout.nodes.find((n) => n.id === nodeId)
       if (!originalNode) return
 
@@ -237,7 +234,7 @@ export default function DependencyFlowchart({
         return next
       })
     },
-    [transform, layout.nodes, nodeOffsets],
+    [layout.nodes, nodeOffsets],
   )
 
   const handleNodeMouseEnter = useCallback(

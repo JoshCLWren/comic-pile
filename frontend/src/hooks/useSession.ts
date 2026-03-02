@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, useMemo } from 'react'
 import { sessionApi } from '../services/api'
+import type { SessionCurrent, SessionDetails, SessionSnapshotsResponse, SessionSummary } from '../types'
 
 const EMPTY_PARAMS = Object.freeze({})
 
 export function useSession() {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<SessionCurrent | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState(null)
@@ -42,7 +43,7 @@ export function useSession() {
 }
 
 export function useSessions(params = EMPTY_PARAMS) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<SessionSummary[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState(null)
@@ -72,7 +73,7 @@ export function useSessions(params = EMPTY_PARAMS) {
 }
 
 export function useSessionDetails(id) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<SessionDetails | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState(null)
@@ -107,7 +108,7 @@ export function useSessionDetails(id) {
 }
 
 export function useSessionSnapshots(id) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<SessionSnapshotsResponse | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState(null)
@@ -146,7 +147,7 @@ export function useRestoreSessionStart() {
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState(null)
 
-  const mutate = useCallback(async (sessionId) => {
+  const mutate = useCallback(async (sessionId: number | string) => {
     setIsPending(true)
     setIsError(false)
     setError(null)

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { tasksApi } from '../services/api'
+import type { AnalyticsMetrics } from '../types'
 
 export function useAnalytics() {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<AnalyticsMetrics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
 

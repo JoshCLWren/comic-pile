@@ -19,6 +19,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import { useCollections } from '../contexts/CollectionContext'
+import type { Thread } from '../types'
 
 /**
  * Badge component displaying collection name for a thread.
@@ -45,6 +46,8 @@ const DEFAULT_CREATE_STATE = {
   issues: '',
 }
 
+type QueueFormState = typeof DEFAULT_CREATE_STATE
+
 export default function QueuePage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -64,25 +67,25 @@ export default function QueuePage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isReactivateOpen, setIsReactivateOpen] = useState(false)
-  const [createForm, setCreateForm] = useState(DEFAULT_CREATE_STATE)
-  const [editForm, setEditForm] = useState(DEFAULT_CREATE_STATE)
-  const [editingThread, setEditingThread] = useState(null)
+  const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  const [editingThread, setEditingThread] = useState<Thread | null>(null)
   const [reactivateThreadId, setReactivateThreadId] = useState('')
   const [issuesToAdd, setIssuesToAdd] = useState(1)
-  const [draggedThreadId, setDraggedThreadId] = useState(null)
-  const [dragOverThreadId, setDragOverThreadId] = useState(null)
-  const [repositioningThread, setRepositioningThread] = useState(null)
+  const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
+  const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
+  const [repositioningThread, setRepositioningThread] = useState<Thread | null>(null)
   const [reorderError, setReorderError] = useState(null)
-  const [selectedThread, setSelectedThread] = useState(null)
+  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
-  const [threadToMigrate, setThreadToMigrate] = useState(null)
-  const [blockedThreadIds, setBlockedThreadIds] = useState([])
-  const [blockingReasonMap, setBlockingReasonMap] = useState({})
-  const [dependencyThread, setDependencyThread] = useState(null)
+  const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
+  const [blockedThreadIds, setBlockedThreadIds] = useState<number[]>([])
+  const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
+  const [dependencyThread, setDependencyThread] = useState<Thread | null>(null)
   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
-  const [issuePreview, setIssuePreview] = useState(null)
-  const [issueParseError, setIssueParseError] = useState(null)
+  const [issuePreview, setIssuePreview] = useState<number | null>(null)
+  const [issueParseError, setIssueParseError] = useState<string | null>(null)
 
   useEffect(() => {
     if (location.state?.editThreadId && threads) {
@@ -104,16 +107,16 @@ export default function QueuePage() {
         return
       }
 
-      const details = await Promise.all(
+      const details: Array<[number, string[]]> = await Promise.all(
         blockedIds.map(async (threadId) => {
-          try {
-            const info = await dependenciesApi.getBlockingInfo(threadId)
-            return [threadId, info.blocking_reasons || []]
-          } catch {
-            return [threadId, []]
-          }
-        })
-      )
+            try {
+              const info = await dependenciesApi.getBlockingInfo(threadId)
+              return [threadId, info.blocking_reasons || []]
+            } catch {
+              return [threadId, []]
+            }
+          })
+        )
 
       setBlockingReasonMap(Object.fromEntries(details))
     } catch {
@@ -138,7 +141,7 @@ export default function QueuePage() {
           setIssueParseError(null)
         } catch (err) {
           setIssuePreview(null)
-          setIssueParseError(err.message)
+          setIssueParseError(err instanceof Error ? err.message : 'Invalid issue range')
         }
       } else {
         setIssuePreview(null)
@@ -174,19 +177,19 @@ export default function QueuePage() {
     })
   }
 
-  const handleDragStart = (threadId) => (event) => {
+  const handleDragStart = (threadId: number) => (event: React.DragEvent<HTMLElement>) => {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', String(threadId))
     setDraggedThreadId(threadId)
     setReorderError(null)
   }
 
-  const handleDragOver = (threadId) => (event) => {
+  const handleDragOver = (threadId: number) => (event: React.DragEvent<HTMLElement>) => {
     event.preventDefault()
     setDragOverThreadId(threadId)
   }
 
-  const handleDrop = (threadId) => (event) => {
+  const handleDrop = (threadId: number) => (event: React.DragEvent<HTMLElement>) => {
     event.preventDefault()
 
     if (!draggedThreadId || draggedThreadId === threadId) {
@@ -216,7 +219,7 @@ export default function QueuePage() {
     setDragOverThreadId(null)
   }
 
-  const handleCreateSubmit = async (event) => {
+  const handleCreateSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
 
     try {
@@ -253,7 +256,7 @@ export default function QueuePage() {
     }
   }
 
-  const handleEditSubmit = async (event) => {
+  const handleEditSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!editingThread) return
 
@@ -274,24 +277,25 @@ export default function QueuePage() {
     }
   }
 
-  const openEditModal = (thread) => {
+  const openEditModal = (thread: Thread) => {
     setEditingThread(thread)
     setEditForm({
       title: thread.title,
       format: thread.format,
       issuesRemaining: thread.issues_remaining,
       notes: thread.notes || '',
+      issues: '',
     })
     setIsEditOpen(true)
   }
 
-  const openReactivateModal = (thread) => {
+  const openReactivateModal = (thread: Thread) => {
     setReactivateThreadId(thread?.id ? String(thread.id) : '')
     setIssuesToAdd(1)
     setIsReactivateOpen(true)
   }
 
-  const handleReactivateSubmit = async (event) => {
+  const handleReactivateSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!reactivateThreadId) return
 
@@ -309,7 +313,7 @@ export default function QueuePage() {
     }
   }
 
-  const handleMigrationComplete = useCallback(async (migratedThread) => {
+  const handleMigrationComplete = useCallback(async (migratedThread: Thread) => {
     try {
       await refetch()
       await refetchSession()
@@ -337,11 +341,11 @@ export default function QueuePage() {
     setIsCreateOpen(true)
   }
 
-  const openRepositionModal = (thread) => {
+  const openRepositionModal = (thread: Thread) => {
     setRepositioningThread(thread)
   }
 
-  function handleThreadClick(thread) {
+  function handleThreadClick(thread: Thread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
   }
@@ -400,7 +404,7 @@ export default function QueuePage() {
     }
   }
 
-  const handleRepositionConfirm = async (targetPosition) => {
+  const handleRepositionConfirm = async (targetPosition: number) => {
     if (!repositioningThread) return
 
     if (targetPosition < 1 || targetPosition > activeThreads.length) {
@@ -665,7 +669,12 @@ export default function QueuePage() {
               type="number"
               min="0"
               value={createForm.issuesRemaining}
-              onChange={(event) => setCreateForm({ ...createForm, issuesRemaining: event.target.value })}
+              onChange={(event) =>
+                setCreateForm({
+                  ...createForm,
+                  issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
+                })
+              }
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
               required
             />
@@ -774,7 +783,7 @@ export default function QueuePage() {
             >
               <option value="">Select a thread...</option>
               {completedThreads.map((thread) => (
-                <option key={thread.id} value={thread.id}>
+                  <option key={thread.id} value={String(thread.id)}>
                   {thread.title} ({thread.format})
                 </option>
               ))}
@@ -786,7 +795,7 @@ export default function QueuePage() {
               type="number"
               min="1"
               value={issuesToAdd}
-              onChange={(event) => setIssuesToAdd(event.target.value)}
+              onChange={(event) => setIssuesToAdd(Number.parseInt(event.target.value, 10) || 1)}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
               required
             />

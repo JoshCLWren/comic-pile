@@ -122,7 +122,7 @@ export default function AnalyticsPage() {
                             : 'text-slate-300'
                     }`}
                   >
-                    {count}
+                    {String(count)}
                   </span>
                 </div>
               ))}

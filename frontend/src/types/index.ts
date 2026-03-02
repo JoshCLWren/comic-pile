@@ -48,8 +48,154 @@ export interface Thread {
   blocking_reasons: string[];
   /** ID of the collection this thread belongs to (null if uncategorized) */
   collection_id: number | null;
+  /** Optional free-form notes */
+  notes?: string | null;
+  /** Timestamp of last activity when available */
+  last_activity_at?: string | null;
   /** ISO 8601 timestamp when the thread was created */
   created_at: string;
+}
+
+export interface AuthUser {
+  id?: number;
+  username: string;
+  email?: string;
+}
+
+export interface AuthTokens {
+  access_token: string;
+  refresh_token: string;
+}
+
+export interface ThreadQueryParams {
+  search?: string;
+  collection_id?: number;
+}
+
+export interface ThreadCreatePayload {
+  title: string;
+  format: string;
+  issues_remaining: number;
+  notes?: string | null;
+}
+
+export interface ThreadUpdatePayload {
+  title?: string;
+  format?: string;
+  notes?: string | null;
+}
+
+export interface ReactivateThreadPayload {
+  thread_id: number;
+  issues_to_add: number;
+}
+
+export interface SessionThread {
+  id: number;
+  title: string;
+  format: string;
+  notes?: string | null;
+  issues_remaining?: number;
+  queue_position?: number;
+  total_issues?: number | null;
+  reading_progress?: string | null;
+  issue_id?: number | null;
+  issue_number?: string | null;
+  last_rolled_result?: number | null;
+}
+
+export interface SessionCurrent {
+  current_die: number;
+  start_die?: number;
+  manual_die?: number | null;
+  pending_thread_id?: number | null;
+  last_rolled_result?: number | null;
+  ladder_path?: string;
+  active_thread?: SessionThread | null;
+  snoozed_threads?: SessionThread[];
+}
+
+export interface SessionSummary {
+  id: number;
+  started_at: string;
+  ended_at: string | null;
+  ladder_path: string | null;
+  active_thread: SessionThread | null;
+  last_rolled_result: number | null;
+  current_die: number | null;
+  snapshot_count: number | null;
+}
+
+export interface SessionEvent {
+  id: number;
+  timestamp: string;
+  type: string;
+  thread_title?: string | null;
+  rating?: number | null;
+  result?: number | null;
+  die?: number | null;
+  queue_move?: string | null;
+}
+
+export interface SessionSnapshot {
+  id: number;
+  description?: string | null;
+  created_at: string;
+}
+
+export interface SessionSnapshotsResponse {
+  snapshots: SessionSnapshot[];
+}
+
+export interface SessionDetails {
+  session_id: number;
+  started_at: string;
+  ended_at: string | null;
+  start_die: number;
+  current_die: number;
+  ladder_path: string;
+  narrative_summary: Record<string, string[]>;
+  events: SessionEvent[];
+}
+
+export interface AnalyticsSession {
+  id: number;
+  start_die: number;
+  started_at: string;
+  ended_at: string | null;
+}
+
+export interface TopRatedThread {
+  id: number;
+  title: string;
+  rating: number;
+  format: string;
+}
+
+export interface AnalyticsMetrics {
+  total_threads: number;
+  active_threads: number;
+  completed_threads: number;
+  completion_rate: number;
+  average_session_hours: number;
+  recent_sessions: AnalyticsSession[];
+  event_stats: Record<string, number>;
+  top_rated_threads: TopRatedThread[];
+}
+
+export interface CollectionListResponse {
+  collections: Collection[];
+}
+
+export interface BlockingInfoResponse {
+  blocking_reasons: string[];
+}
+
+export interface DependencyCreatePayload {
+  sourceType?: 'thread' | 'issue';
+  sourceId: number;
+  targetType?: 'thread' | 'issue';
+  targetId: number;
 }
 
 /**
@@ -233,4 +379,6 @@ export interface RollResponse {
   total_issues: number | null;
   /** Reading progress percentage */
   reading_progress: string | null;
+  /** Last rolled result for active thread context (when present) */
+  last_rolled_result?: number | null;
 }

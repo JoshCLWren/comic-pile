@@ -32,7 +32,7 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
 
   try {
     await page.waitForURL('**/', { timeout: 5000 });
-  } catch (error) {
+  } catch {
     const url = page.url();
     const bodyText = await page.locator('body').textContent();
     throw new Error(
@@ -169,7 +169,7 @@ export async function setupAuthenticatedPage(
   return testUser;
 }
 
-export async function cleanupTestUser(page: Page, user: TestUser): Promise<void> {
+export async function cleanupTestUser(page: Page, _user: TestUser): Promise<void> {
   await page.evaluate(() => {
     localStorage.clear();
   });

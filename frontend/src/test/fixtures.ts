@@ -227,7 +227,7 @@ export const test = base.extend<TestFixtures>({
           'Authorization': `Bearer ${accessToken}`,
         },
       });
-    } catch (e) {
+    } catch {
       // Ignore logout errors during cleanup
     }
   },

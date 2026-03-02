@@ -1,10 +1,26 @@
 import { useEffect } from 'react'
 
-export default function Modal({ isOpen, title, onClose, children, 'data-testid': testId, overlayClassName }) {
+interface ModalProps {
+  isOpen: boolean
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+  'data-testid'?: string
+  overlayClassName?: string
+}
+
+export default function Modal({
+  isOpen,
+  title,
+  onClose,
+  children,
+  'data-testid': testId,
+  overlayClassName,
+}: ModalProps) {
   useEffect(() => {
     if (!isOpen) return
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose()
       }

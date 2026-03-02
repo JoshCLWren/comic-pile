@@ -20,28 +20,42 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { threadsApi } from '../services/api'
+import type { RollResponse, SessionThread, Thread } from '../types'
 
 const RATING_THRESHOLD = 4.0
 
+type RatingThread = {
+  id: number
+  title: string
+  format: string
+  issues_remaining: number
+  queue_position: number
+  total_issues?: number | null
+  reading_progress?: string | null
+  issue_id?: number | null
+  issue_number?: string | null
+  last_rolled_result?: number | null
+}
+
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
-  const [rolledResult, setRolledResult] = useState(null)
-  const [selectedThreadId, setSelectedThreadId] = useState(null)
+  const [rolledResult, setRolledResult] = useState<number | null>(null)
+  const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
   const [currentDie, setCurrentDie] = useState(6)
   const [diceState, setDiceState] = useState('idle')
-  const [staleThread, setStaleThread] = useState(null)
+  const [staleThread, setStaleThread] = useState<(Thread & { days: number }) | null>(null)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
-  const [selectedThread, setSelectedThread] = useState(null)
+  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
-  const [activeRatingThread, setActiveRatingThread] = useState(null)
+  const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
   const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
 
   // Migration state
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
-  const [threadToMigrate, setThreadToMigrate] = useState(null)
+  const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
 
   // Rating state
   const [isRatingView, setIsRatingView] = useState(false)
@@ -49,8 +63,8 @@ export default function RollPage() {
   const [predictedDie, setPredictedDie] = useState(6)
   const [errorMessage, setErrorMessage] = useState('')
 
-  const rollIntervalRef = useRef(null)
-  const rollTimeoutRef = useRef(null)
+  const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const rollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suppressPendingAutoOpenRef = useRef(false)
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
@@ -86,7 +100,7 @@ export default function RollPage() {
   const moveToBackMutation = useMoveToBack()
   const rateMutation = useRate()
 
-  async function handleUnsnooze(threadId) {
+  async function handleUnsnooze(threadId: number) {
     try {
       await unsnoozeMutation.mutate(threadId)
       await refetchSession()
@@ -119,12 +133,12 @@ export default function RollPage() {
     }
   }
 
-  function handleThreadClick(thread) {
+  function handleThreadClick(thread: Thread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
   }
 
-  const enterRatingView = useCallback((threadId, result = null, threadMetadata = null) => {
+  const enterRatingView = useCallback((threadId: number | null, result: number | null = null, threadMetadata: Partial<RollResponse & SessionThread> | null = null) => {
     suppressPendingAutoOpenRef.current = false
 
     if (threadId) setSelectedThreadId(threadId)
@@ -145,9 +159,9 @@ export default function RollPage() {
           threadMetadata.result ?? threadMetadata.last_rolled_result ?? result ?? null,
       })
     } else if (!threadId && session?.active_thread) {
-      setActiveRatingThread(session.active_thread)
+      setActiveRatingThread(session.active_thread as RatingThread)
     } else if (session?.active_thread && session.active_thread.id === Number(threadId)) {
-      setActiveRatingThread(session.active_thread)
+      setActiveRatingThread(session.active_thread as RatingThread)
     }
 
     setRating(4.0)
@@ -161,7 +175,7 @@ export default function RollPage() {
     setIsRatingView(true)
   }, [session, currentDie])
 
-  const handleMigrationComplete = useCallback((migratedThread) => {
+  const handleMigrationComplete = useCallback((migratedThread: Thread) => {
     refetchThreads()
     refetchSession()
     setShowMigrationDialog(false)
@@ -287,7 +301,8 @@ export default function RollPage() {
         : null
 
     const pendingResult = pendingFromSession?.last_rolled_result ?? session?.last_rolled_result ?? null
-    const pendingMetadata = pendingFromSession ?? pendingFromThreads
+    const pendingMetadata =
+      (pendingFromSession ?? pendingFromThreads) as Partial<RollResponse & RatingThread> | null
     const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection
 
     setSelectedThreadId(pendingId)
@@ -296,7 +311,7 @@ export default function RollPage() {
     }
     if (pendingMetadata && pendingMetadata.title) {
       setActiveRatingThread({
-        id: pendingMetadata.id ?? pendingMetadata.thread_id ?? pendingId,
+        id: pendingMetadata.id ?? pendingId,
         title: pendingMetadata.title,
         format: pendingMetadata.format,
         issues_remaining: pendingMetadata.issues_remaining,
@@ -305,8 +320,7 @@ export default function RollPage() {
         issue_number: pendingMetadata.issue_number ?? null,
         total_issues: pendingMetadata.total_issues ?? null,
         reading_progress: pendingMetadata.reading_progress ?? null,
-        last_rolled_result:
-          pendingMetadata.result ?? pendingMetadata.last_rolled_result ?? pendingResult,
+        last_rolled_result: pendingMetadata.last_rolled_result ?? pendingResult,
       })
     }
     if (shouldInitializeRatingView) {
@@ -331,7 +345,7 @@ export default function RollPage() {
     if (staleThreads && staleThreads.length > 0) {
       const thread = staleThreads[0]
       const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
-      const diffMs = new Date() - lastActivity
+      const diffMs = Date.now() - lastActivity.getTime()
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
       if (diffDays >= 7) {
@@ -356,7 +370,7 @@ export default function RollPage() {
     }
   }, [])
 
-  function updateRatingUI(val) {
+  function updateRatingUI(val: string) {
     const num = parseFloat(val)
     setRating(num)
     let newPredictedDie = currentDie
@@ -1154,7 +1168,7 @@ export default function RollPage() {
           </div>
         </Modal>
 
-        <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
+        <Modal isOpen={isActionSheetOpen} title={selectedThread?.title ?? ''} onClose={() => setIsActionSheetOpen(false)}>
           <div className="space-y-2">
             <button
               type="button"

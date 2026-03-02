@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { threadsApi } from '../services/api'
+import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadQueryParams, ThreadUpdatePayload } from '../types'
 
 export function useThreads(searchTerm = '', collectionId = null) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<Thread[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
@@ -10,7 +11,7 @@ export function useThreads(searchTerm = '', collectionId = null) {
     setIsPending(true)
     setIsError(false)
     try {
-      const params = {}
+      const params: ThreadQueryParams = {}
       if (searchTerm?.trim()) {
         params.search = searchTerm.trim()
       }
@@ -34,7 +35,7 @@ export function useThreads(searchTerm = '', collectionId = null) {
 }
 
 export function useThread(id) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<Thread | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
@@ -78,7 +79,7 @@ export function useThread(id) {
 }
 
 export function useStaleThreads(days = 30) {
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<Thread[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
@@ -118,7 +119,7 @@ export function useCreateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async (data) => {
+  const mutate = useCallback(async (data: ThreadCreatePayload) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -139,7 +140,7 @@ export function useUpdateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async ({ id, data }) => {
+  const mutate = useCallback(async ({ id, data }: { id: number; data: ThreadUpdatePayload }) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -160,7 +161,7 @@ export function useDeleteThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async (id) => {
+  const mutate = useCallback(async (id: number) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -181,7 +182,7 @@ export function useReactivateThread() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async (data) => {
+  const mutate = useCallback(async (data: ReactivateThreadPayload) => {
     setIsPending(true)
     setIsError(false)
     try {

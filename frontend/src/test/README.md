@@ -14,7 +14,7 @@ cd frontend && npm test
 **What belongs here:**
 - Pure logic: hooks, utility functions, geometry helpers
 - Component rendering: props, state transitions, conditional output
-- Regression guards: e.g. `no-debug-artifacts.test.js` scans source for banned patterns
+- Regression guards: e.g. `no-debug-artifacts.test.ts` scans source for banned patterns
 
 **What belongs in E2E instead:**
 - Full user flows (roll → rate → history)
@@ -32,9 +32,9 @@ Playwright end-to-end tests for the Comic Pile application.
 ```
 frontend/src/
 ├── unit/                # Vitest unit tests (no server needed)
-│   ├── api.test.js
-│   ├── Dice3D.test.jsx
-│   ├── no-debug-artifacts.test.js
+│   ├── api.test.ts
+│   ├── Dice3D.test.tsx
+│   ├── no-debug-artifacts.test.ts
 │   └── ...
 └── test/                # Playwright E2E tests (requires backend)
     ├── fixtures.ts          # Test fixtures (auth, pages)

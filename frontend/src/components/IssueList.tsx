@@ -72,7 +72,10 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
     <div className="issue-list">
       <div className="issue-list-header">
         <h3>Issues</h3>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as 'all' | 'unread' | 'read')}
+        >
           <option value="all">All</option>
           <option value="unread">Unread</option>
           <option value="read">Read</option>

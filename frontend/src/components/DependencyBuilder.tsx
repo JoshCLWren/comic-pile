@@ -3,30 +3,38 @@ import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
+import type { Dependency, Issue, Thread, ThreadDependenciesResponse } from '../types'
 
-function getDefaultDependencyMode(thread) {
+function getDefaultDependencyMode(thread: Thread | null): 'thread' | 'issue' {
   return thread?.next_unread_issue_id ? 'issue' : 'thread'
 }
 
-export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }) {
+interface DependencyBuilderProps {
+  thread: Thread | null
+  isOpen: boolean
+  onClose: () => void
+  onChanged?: () => void
+}
+
+export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }: DependencyBuilderProps) {
   const [dependencyMode, setDependencyMode] = useState(getDefaultDependencyMode(thread))
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState([])
-  const [selectedThreadId, setSelectedThreadId] = useState(null)
+  const [searchResults, setSearchResults] = useState<Thread[]>([])
+  const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
-  const [dependencies, setDependencies] = useState({ blocking: [], blocked_by: [] })
+  const [dependencies, setDependencies] = useState<ThreadDependenciesResponse>({ blocking: [], blocked_by: [] })
   const [isLoadingDeps, setIsLoadingDeps] = useState(false)
   const [showFlowchart, setShowFlowchart] = useState(false)
-  const [flowchartThreads, setFlowchartThreads] = useState([])
-  const [flowchartDependencies, setFlowchartDependencies] = useState([])
-  const [blockedIds, setBlockedIds] = useState(new Set())
+  const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
+  const [flowchartDependencies, setFlowchartDependencies] = useState<Dependency[]>([])
+  const [blockedIds, setBlockedIds] = useState<Set<number>>(new Set())
   const [showIssueOnlyNotice, setShowIssueOnlyNotice] = useState(false)
-  const [sourceIssueId, setSourceIssueId] = useState(null)
-  const [targetIssueId, setTargetIssueId] = useState(null)
-  const [sourceIssues, setSourceIssues] = useState([])
-  const [targetIssues, setTargetIssues] = useState([])
+  const [sourceIssueId, setSourceIssueId] = useState<number | null>(null)
+  const [targetIssueId, setTargetIssueId] = useState<number | null>(null)
+  const [sourceIssues, setSourceIssues] = useState<Issue[]>([])
+  const [targetIssues, setTargetIssues] = useState<Issue[]>([])
   const [isLoadingSourceIssues, setIsLoadingSourceIssues] = useState(false)
   const [isLoadingTargetIssues, setIsLoadingTargetIssues] = useState(false)
 
