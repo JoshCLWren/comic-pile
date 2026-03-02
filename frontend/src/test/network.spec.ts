@@ -3,7 +3,7 @@ import { createThread, SELECTORS } from './helpers';
 
 test.describe('Network & API Tests', () => {
   test('should make successful API call to create thread', async ({ authenticatedPage }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
@@ -22,7 +22,7 @@ test.describe('Network & API Tests', () => {
   });
 
   test('should handle API errors gracefully', async ({ authenticatedPage }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
@@ -66,7 +66,7 @@ test.describe('Network & API Tests', () => {
     await authenticatedPage.waitForLoadState('networkidle');
     await authenticatedPage.waitForLoadState("networkidle");
 
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
     // Ensure we trigger enough requests to test retry logic
     if (attemptCount < 2) {
@@ -143,7 +143,7 @@ test.describe('Network & API Tests', () => {
       await route.continue();
     });
 
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
     await authenticatedPage.goto('/queue');
 
@@ -174,7 +174,7 @@ test.describe('Network & API Tests', () => {
   });
 
   test('should handle concurrent requests', async ({ authenticatedPage }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     const promises = [];
     for (let i = 0; i < 5; i++) {
       promises.push(
@@ -200,7 +200,7 @@ test.describe('Network & API Tests', () => {
   });
 
   test('should respect rate limiting', async ({ authenticatedPage }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     const responses = [];
     for (let i = 0; i < 20; i++) {
       const response = await authenticatedPage.request.post('/api/threads/', {

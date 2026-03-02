@@ -96,7 +96,7 @@ test.describe('Authentication Flow', () => {
     await authenticatedPage.goto('/');
 
     const hasTokenBefore = await authenticatedPage.evaluate(() =>
-      !!localStorage.getItem('auth_token')
+      !!(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
     );
     expect(hasTokenBefore).toBe(true);
 

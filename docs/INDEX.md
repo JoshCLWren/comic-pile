@@ -28,6 +28,7 @@ This index provides a comprehensive map of all documentation in the comic-pile p
 ## Project Health
 
 - [../TECH_DEBT.md](../TECH_DEBT.md) — Technical debt tracker with prioritized items and resolution history.
+- [TYPESCRIPT_STRICTNESS_ROADMAP.md](TYPESCRIPT_STRICTNESS_ROADMAP.md) — Frontend TypeScript strict-mode rollout plan and staged enforcement.
 - [../AGENTS.md](../AGENTS.md) — AI agent guidelines and project conventions.
 
 ## Testing

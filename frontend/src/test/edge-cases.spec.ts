@@ -14,7 +14,9 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle very long thread titles', async ({ authenticatedPage }) => {
     const longTitle = 'A'.repeat(500);
 
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(
+      () => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN,
+    );
     const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
@@ -106,10 +108,11 @@ test.describe('Edge Cases & Error Handling', () => {
 
     await registerUser(page1, user);
     await loginUser(page1, user);
-    const token = await page1.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await page1.evaluate(
+      () => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN,
+    );
 
     await page2.addInitScript((token: string) => {
-      localStorage.setItem('auth_token', token);
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, token!);
 
@@ -137,7 +140,9 @@ test.describe('Edge Cases & Error Handling', () => {
   });
 
   test('should handle extremely large issues_remaining', async ({ authenticatedPage }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(
+      () => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN,
+    );
     const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
@@ -154,7 +159,9 @@ test.describe('Edge Cases & Error Handling', () => {
   });
 
   test('should handle negative issues_remaining', async ({ authenticatedPage }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(
+      () => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN,
+    );
     const response = await authenticatedPage.request.post('/api/threads/', {
       headers: {
         'Content-Type': 'application/json',
@@ -299,7 +306,7 @@ test.describe('Edge Cases & Error Handling', () => {
 
   test('should handle session timeout', async ({ authenticatedPage }) => {
     await authenticatedPage.evaluate(() => {
-      localStorage.removeItem('auth_token');
+      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
     });
 
     await authenticatedPage.reload();

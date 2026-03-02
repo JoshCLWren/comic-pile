@@ -58,7 +58,7 @@ async function createThreadInCollection(
 
 test.describe('Collections', () => {
   test('create and switch collections from roll pool dropdown', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) throw new Error('No auth token found');
 
     const collectionName = `Test Collection ${Date.now()}`;
@@ -74,7 +74,7 @@ test.describe('Collections', () => {
   });
 
   test('shows collection badge on threads', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) throw new Error('No auth token found');
 
     const collectionName = `Comics Collection ${Date.now()}`;
@@ -91,7 +91,7 @@ test.describe('Collections', () => {
   });
 
   test('deletes collection and moves threads', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) throw new Error('No auth token found');
 
     const collectionName = `Delete Me ${Date.now()}`;
@@ -110,7 +110,7 @@ test.describe('Collections', () => {
   });
 
   test('filters queue threads by selected collection', async ({ authenticatedPage, request }) => {
-    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) throw new Error('No auth token found');
 
     const collectionAName = `Collection A ${Date.now()}`;

@@ -82,6 +82,7 @@ describe('route guards', () => {
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
   test('redirects unauthenticated users to /login when accessing protected routes', async () => {
@@ -94,7 +95,8 @@ describe('route guards', () => {
 
   test('allows authenticated users to access protected routes', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    localStorage.setItem('auth_token', 'fake-token')
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
+      'fake-token'
     renderWithAuth('/')
 
     await waitFor(() => {
@@ -122,7 +124,8 @@ describe('route guards', () => {
 
   test('redirects authenticated users from /login to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    localStorage.setItem('auth_token', 'fake-token')
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
+      'fake-token'
     renderWithAuth('/login')
 
     await waitFor(() => {
@@ -132,7 +135,8 @@ describe('route guards', () => {
 
   test('redirects authenticated users from /register to home', async () => {
     mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-    localStorage.setItem('auth_token', 'fake-token')
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN =
+      'fake-token'
     renderWithAuth('/register')
 
     await waitFor(() => {
@@ -148,6 +152,7 @@ describe('auth state race condition regression', () => {
     mockSetAccessToken.mockReset()
     mockClearAccessToken.mockReset()
     mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
   })
 
   test('auth state updates immediately after login - no redirect loop', async () => {

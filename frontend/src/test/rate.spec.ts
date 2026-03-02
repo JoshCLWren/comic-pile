@@ -56,7 +56,7 @@ test.describe('Rate Thread Feature', () => {
   });
 
   test('should keep the same active thread when leaving and returning home before submit', async ({ authenticatedWithThreadsPage }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedWithThreadsPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     expect(token).toBeTruthy();
 
     const beforeResponse = await authenticatedWithThreadsPage.request.get('/api/sessions/current/', {
@@ -189,7 +189,7 @@ test.describe('Rate Thread Feature', () => {
   test('should not return 500 when finishing a session on a completed thread', async ({
     authenticatedWithThreadsPage,
   }) => {
-    const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
+    const token = await authenticatedWithThreadsPage.evaluate(() => (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     expect(token).toBeTruthy();
 
     const createResponse = await authenticatedWithThreadsPage.request.post('/api/threads/', {

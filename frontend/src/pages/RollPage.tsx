@@ -55,6 +55,21 @@ function getApiErrorDetail(error: unknown): string | null {
   return null
 }
 
+function mapSessionThreadToRatingThread(thread: SessionThread): RatingThread {
+  return {
+    id: thread.id,
+    title: thread.title,
+    format: thread.format,
+    issues_remaining: thread.issues_remaining ?? 0,
+    queue_position: thread.queue_position ?? 0,
+    total_issues: thread.total_issues ?? null,
+    reading_progress: thread.reading_progress ?? null,
+    issue_id: thread.issue_id ?? null,
+    issue_number: thread.issue_number ?? null,
+    last_rolled_result: thread.last_rolled_result ?? null,
+  }
+}
+
 export default function RollPage() {
   const [isRolling, setIsRolling] = useState(false)
   const [rolledResult, setRolledResult] = useState<number | null>(null)
@@ -181,9 +196,9 @@ export default function RollPage() {
           threadMetadata.result ?? threadMetadata.last_rolled_result ?? result ?? null,
       })
     } else if (!threadId && session?.active_thread) {
-      setActiveRatingThread(session.active_thread as RatingThread)
+      setActiveRatingThread(mapSessionThreadToRatingThread(session.active_thread))
     } else if (session?.active_thread && session.active_thread.id === Number(threadId)) {
-      setActiveRatingThread(session.active_thread as RatingThread)
+      setActiveRatingThread(mapSessionThreadToRatingThread(session.active_thread))
     }
 
     setRating(4.0)

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
+import axios from 'axios'
 import { threadsApi } from '../services/api'
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadQueryParams, ThreadUpdatePayload } from '../types'
 
-export function useThreads(searchTerm = '', collectionId = null) {
+export function useThreads(searchTerm = '', collectionId: number | null = null) {
   const [data, setData] = useState<Thread[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
@@ -34,7 +35,7 @@ export function useThreads(searchTerm = '', collectionId = null) {
   return { data, isPending, isError, refetch: fetchData }
 }
 
-export function useThread(id) {
+export function useThread(id: number | null | undefined) {
   const [data, setData] = useState<Thread | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
@@ -124,8 +125,13 @@ export function useCreateThread() {
     setIsError(false)
     try {
       return await threadsApi.create(data)
-    } catch (error) {
-      console.error('Failed to create thread:', error.response?.data?.detail || error.message)
+    } catch (error: unknown) {
+      const detail = axios.isAxiosError<{ detail?: string }>(error)
+        ? error.response?.data?.detail || error.message
+        : error instanceof Error
+          ? error.message
+          : 'Unknown error'
+      console.error('Failed to create thread:', detail)
       setIsError(true)
       throw error
     } finally {
@@ -145,8 +151,13 @@ export function useUpdateThread() {
     setIsError(false)
     try {
       return await threadsApi.update(id, data)
-    } catch (error) {
-      console.error('Failed to update thread:', error.response?.data?.detail || error.message)
+    } catch (error: unknown) {
+      const detail = axios.isAxiosError<{ detail?: string }>(error)
+        ? error.response?.data?.detail || error.message
+        : error instanceof Error
+          ? error.message
+          : 'Unknown error'
+      console.error('Failed to update thread:', detail)
       setIsError(true)
       throw error
     } finally {
@@ -166,8 +177,13 @@ export function useDeleteThread() {
     setIsError(false)
     try {
       return await threadsApi.delete(id)
-    } catch (error) {
-      console.error('Failed to delete thread:', error.response?.data?.detail || error.message)
+    } catch (error: unknown) {
+      const detail = axios.isAxiosError<{ detail?: string }>(error)
+        ? error.response?.data?.detail || error.message
+        : error instanceof Error
+          ? error.message
+          : 'Unknown error'
+      console.error('Failed to delete thread:', detail)
       setIsError(true)
       throw error
     } finally {
@@ -187,8 +203,13 @@ export function useReactivateThread() {
     setIsError(false)
     try {
       return await threadsApi.reactivate(data)
-    } catch (error) {
-      console.error('Failed to reactivate thread:', error.response?.data?.detail || error.message)
+    } catch (error: unknown) {
+      const detail = axios.isAxiosError<{ detail?: string }>(error)
+        ? error.response?.data?.detail || error.message
+        : error instanceof Error
+          ? error.message
+          : 'Unknown error'
+      console.error('Failed to reactivate thread:', detail)
       setIsError(true)
       throw error
     } finally {

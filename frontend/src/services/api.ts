@@ -47,6 +47,8 @@ const rawApi = axios.create({
   timeout: 10000,
 })
 
+// Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
+// Cast once at the boundary so callers get strongly typed payload methods.
 const api = rawApi as unknown as ApiClient
 
 let refreshTokenPromise: Promise<AuthTokens> | null = null
