@@ -1,7 +1,5 @@
 """Parse issue range strings into individual issue numbers."""
 
-import re
-
 MAX_ISSUES = 10000
 
 
@@ -10,31 +8,29 @@ def parse_issue_ranges(input_str: str) -> list[str]:
 
     Supports formats:
     - "1-25" -> ["1", "2", ..., "25"]
+    - "0-18" -> ["0", "1", ..., "18"]
     - "1, 3, 5-7" -> ["1", "3", "5", "6", "7"]
     - "25" -> ["25"] (single issue number)
+    - "0, 1-18, Annual 1" -> ["0", "1", ..., "18", "Annual 1"]
+    - "½" -> ["½"] (literal identifier)
 
-    Annuals/specials should be SEPARATE THREADS with dependencies (not part of main series issue list).
-    This parser only handles numeric issues.
+    Tokens containing a dash are attempted as integer ranges first (both
+    endpoints must be integers >= 0).  If that fails the entire token is
+    stored as a literal string identifier.
 
     Args:
-        input_str: Range string like "1-25" or "1, 3, 5-7"
+        input_str: Range string like "1-25" or "0, Annual 1, 5-7"
 
     Returns:
-        List of issue number strings
+        List of issue identifier strings
 
     Raises:
-        ValueError: If format is invalid or contains non-numeric issues
+        ValueError: If format is invalid or result exceeds MAX_ISSUES
     """
     if not input_str or not input_str.strip():
         raise ValueError("Issue range cannot be empty")
 
-    if re.search(r"[^0-9,\-\s]", input_str.strip()):
-        raise ValueError(
-            "Non-numeric issues detected. "
-            "Annuals and specials should be created as separate threads."
-        )
-
-    result = []
+    result: list[str] = []
 
     parts = input_str.split(",")
 
@@ -44,35 +40,37 @@ def parse_issue_ranges(input_str: str) -> list[str]:
             continue
 
         if "-" in part:
-            range_parts = part.split("-")
-            if len(range_parts) != 2:
-                raise ValueError(f"Invalid range format: {part}")
-
-            try:
-                start = int(range_parts[0].strip())
-                end = int(range_parts[1].strip())
-            except ValueError:
-                raise ValueError(f"Invalid issue numbers in range: {part}") from None
-
-            if start < 1 or end < 1:
-                raise ValueError("Issue numbers must be positive")
-
-            if start > end:
-                raise ValueError(f"Range start ({start}) cannot exceed end ({end})")
-
-            result.extend(str(i) for i in range(start, end + 1))
+            # Try to parse as an integer range
+            range_parts = part.split("-", 1)
+            if len(range_parts) == 2:
+                left = range_parts[0].strip()
+                right = range_parts[1].strip()
+                try:
+                    start = int(left)
+                    end = int(right)
+                    if start < 0 or end < 0:
+                        raise ValueError("Range endpoints must be >= 0")
+                    if start > end:
+                        raise ValueError(
+                            f"Range start ({start}) cannot exceed end ({end})"
+                        )
+                    result.extend(str(i) for i in range(start, end + 1))
+                    continue
+                except ValueError as exc:
+                    # If conversion failed because it's not an integer,
+                    # fall through to store as literal
+                    if "invalid literal" in str(exc):
+                        result.append(part)
+                        continue
+                    raise
+            # More than one dash and not a valid range — store as literal
+            result.append(part)
         else:
-            try:
-                issue_num = int(part)
-            except ValueError:
-                raise ValueError(f"Invalid issue number: {part}") from None
+            # Single token — accept any non-empty string as a literal identifier
+            result.append(part)
 
-            if issue_num < 1:
-                raise ValueError("Issue numbers must be positive")
-            result.append(str(issue_num))
-
-    seen = set()
-    unique_result = []
+    seen: set[str] = set()
+    unique_result: list[str] = []
     for issue in result:
         if issue not in seen:
             seen.add(issue)

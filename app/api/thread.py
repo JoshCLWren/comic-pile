@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Thread
+from app.models import Event, Issue, Thread
 from app.models.user import User
 from app.schemas import (
     MigrateToIssuesRequest,
@@ -60,6 +60,11 @@ async def thread_to_response(
     created_at = thread.created_at
     total_issues = thread.total_issues
     next_unread_issue_id = thread.next_unread_issue_id
+    next_unread_issue_number: str | None = None
+    if next_unread_issue_id is not None:
+        next_issue = await db.get(Issue, next_unread_issue_id)
+        if next_issue:
+            next_unread_issue_number = next_issue.issue_number
     blocked_by_thread_ids = thread.blocked_by_thread_ids or []
     blocked_by_issue_ids = thread.blocked_by_issue_ids or []
 
@@ -82,6 +87,7 @@ async def thread_to_response(
         total_issues=total_issues,
         reading_progress=reading_progress,
         next_unread_issue_id=next_unread_issue_id,
+        next_unread_issue_number=next_unread_issue_number,
         blocked_by_thread_ids=blocked_by_thread_ids,
         blocked_by_issue_ids=blocked_by_issue_ids,
         blocking_reasons=[],

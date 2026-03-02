@@ -7,7 +7,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { layoutGraph, NODE_WIDTH, NODE_HEIGHT } from '../utils/graphLayout'
-import type { Thread, Dependency, FlowchartNode } from '../types'
+import type { Thread, FlowchartDependency, FlowchartNode } from '../types'
 import './DependencyFlowchart.css'
 
 const PAGE_SIZE = 50
@@ -18,7 +18,7 @@ const ZOOM_STEP = 1.2
 
 interface DependencyFlowchartProps {
   threads: Thread[]
-  dependencies: Dependency[]
+  dependencies: FlowchartDependency[]
   blockedIds: Set<number>
 }
 
@@ -312,15 +312,25 @@ export default function DependencyFlowchart({
 
         <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
           {/* Render edges */}
-          {adjustedEdges.map((edge) => (
-            <path
-              key={edge.id}
-              d={edge.path}
-              className={edge.isBlocking ? 'flowchart-edge-blocking' : 'flowchart-edge'}
-              markerEnd={edge.isBlocking ? 'url(#arrowhead-blocking)' : 'url(#arrowhead)'}
-              data-testid={`flowchart-edge-${edge.sourceId}-${edge.targetId}`}
-            />
-          ))}
+          {adjustedEdges.map((edge) => {
+            const edgeClass = edge.isIssueLevel
+              ? 'flowchart-edge edge--issue-level'
+              : edge.isBlocking
+                ? 'flowchart-edge-blocking'
+                : 'flowchart-edge'
+            const marker = edge.isBlocking && !edge.isIssueLevel
+              ? 'url(#arrowhead-blocking)'
+              : 'url(#arrowhead)'
+            return (
+              <path
+                key={edge.id}
+                d={edge.path}
+                className={edgeClass}
+                markerEnd={marker}
+                data-testid={`flowchart-edge-${edge.sourceId}-${edge.targetId}`}
+              />
+            )
+          })}
 
           {/* Render nodes */}
           {adjustedNodes.map((node) => (

@@ -36,6 +36,8 @@ export interface Thread {
   total_issues: number | null;
   /** ID of the next unread issue (nullable if all read) */
   next_unread_issue_id: number | null;
+  /** Issue number of the next unread issue */
+  next_unread_issue_number?: string | null;
   /** Reading progress percentage (0-100, nullable) */
   reading_progress: string | null;
   /** Position in the reading queue */
@@ -267,6 +269,14 @@ export interface ThreadDependency {
   target_issue_id?: never;
   /** ISO 8601 timestamp when the dependency was created */
   created_at: string;
+  /** Human-readable label for the source */
+  source_label?: string | null;
+  /** Human-readable label for the target */
+  target_label?: string | null;
+  /** Parent thread ID of the source issue (only for issue-level deps) */
+  source_issue_thread_id?: number | null;
+  /** Parent thread ID of the target issue (only for issue-level deps) */
+  target_issue_thread_id?: number | null;
 }
 
 export interface IssueDependency {
@@ -282,6 +292,14 @@ export interface IssueDependency {
   target_issue_id: number;
   /** ISO 8601 timestamp when the dependency was created */
   created_at: string;
+  /** Human-readable label for the source */
+  source_label?: string | null;
+  /** Human-readable label for the target */
+  target_label?: string | null;
+  /** Parent thread ID of the source issue */
+  source_issue_thread_id?: number | null;
+  /** Parent thread ID of the target issue */
+  target_issue_thread_id?: number | null;
 }
 
 /**
@@ -329,6 +347,22 @@ export interface FlowchartEdge {
   path: string;
   /** Whether this edge represents a blocking relationship */
   isBlocking: boolean;
+  /** Whether this edge was synthesized from issue-level dependencies */
+  isIssueLevel?: boolean;
+}
+
+/**
+ * Dependency shape used by the flowchart layout engine.
+ * Thread-level deps use this directly; issue-level deps are converted to this
+ * form as "virtual edges" mapping to parent thread IDs.
+ */
+export interface FlowchartDependency {
+  id: number;
+  source_thread_id: number;
+  target_thread_id: number;
+  /** True when this edge was synthesized from issue-level dependencies */
+  is_issue_level?: boolean;
+  created_at: string;
 }
 
 /**

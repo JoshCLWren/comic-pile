@@ -26,6 +26,49 @@ from comic_pile.dependencies import (
 router = APIRouter(tags=["dependencies"])
 
 
+async def enrich_dependency(dep: Dependency, db: AsyncSession) -> DependencyResponse:
+    """Build a DependencyResponse with human-readable labels for source/target.
+
+    For issue-level deps, labels include thread title and issue number.
+    For thread-level deps, labels are just the thread title.
+    """
+    source_label: str | None = None
+    target_label: str | None = None
+    source_issue_thread_id: int | None = None
+    target_issue_thread_id: int | None = None
+
+    if dep.source_issue_id is not None:
+        source_issue = await db.get(Issue, dep.source_issue_id)
+        if source_issue:
+            source_issue_thread_id = source_issue.thread_id
+            source_thread = await db.get(Thread, source_issue.thread_id)
+            if source_thread:
+                source_label = f"{source_thread.title} #{source_issue.issue_number}"
+    elif dep.source_thread_id is not None:
+        source_thread = await db.get(Thread, dep.source_thread_id)
+        if source_thread:
+            source_label = source_thread.title
+
+    if dep.target_issue_id is not None:
+        target_issue = await db.get(Issue, dep.target_issue_id)
+        if target_issue:
+            target_issue_thread_id = target_issue.thread_id
+            target_thread = await db.get(Thread, target_issue.thread_id)
+            if target_thread:
+                target_label = f"{target_thread.title} #{target_issue.issue_number}"
+    elif dep.target_thread_id is not None:
+        target_thread = await db.get(Thread, dep.target_thread_id)
+        if target_thread:
+            target_label = target_thread.title
+
+    response = DependencyResponse.model_validate(dep, from_attributes=True)
+    response.source_label = source_label
+    response.target_label = target_label
+    response.source_issue_thread_id = source_issue_thread_id
+    response.target_issue_thread_id = target_issue_thread_id
+    return response
+
+
 @router.get("/dependencies/blocked", response_model=list[int])
 async def get_all_blocked_thread_ids(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -68,15 +111,12 @@ async def list_thread_dependencies(
         )
     )
 
+    blocking_deps = blocking_result.scalars().all()
+    blocked_by_deps = blocked_by_result.scalars().all()
+
     return ThreadDependenciesResponse(
-        blocking=[
-            DependencyResponse.model_validate(dep, from_attributes=True)
-            for dep in blocking_result.scalars().all()
-        ],
-        blocked_by=[
-            DependencyResponse.model_validate(dep, from_attributes=True)
-            for dep in blocked_by_result.scalars().all()
-        ],
+        blocking=[await enrich_dependency(dep, db) for dep in blocking_deps],
+        blocked_by=[await enrich_dependency(dep, db) for dep in blocked_by_deps],
     )
 
 
@@ -190,7 +230,7 @@ async def create_dependency(
     await db.commit()
     await db.refresh(dependency)
 
-    return DependencyResponse.model_validate(dependency, from_attributes=True)
+    return await enrich_dependency(dependency, db)
 
 
 @router.get("/dependencies/{dependency_id}", response_model=DependencyResponse)
@@ -211,7 +251,7 @@ async def get_dependency(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dependency {dependency_id} not found",
         )
-    return DependencyResponse.model_validate(dependency, from_attributes=True)
+    return await enrich_dependency(dependency, db)
 
 
 @router.delete("/dependencies/{dependency_id}")

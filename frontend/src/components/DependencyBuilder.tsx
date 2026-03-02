@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import type { Dependency, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import type { Dependency, FlowchartDependency, Issue, Thread, ThreadDependenciesResponse } from '../types'
 
 function getDefaultDependencyMode(thread: Thread | null): 'thread' | 'issue' {
   return thread?.next_unread_issue_id ? 'issue' : 'thread'
@@ -28,15 +29,19 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [isLoadingDeps, setIsLoadingDeps] = useState(false)
   const [showFlowchart, setShowFlowchart] = useState(false)
   const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
-  const [flowchartDependencies, setFlowchartDependencies] = useState<Dependency[]>([])
+  const [flowchartDependencies, setFlowchartDependencies] = useState<FlowchartDependency[]>([])
   const [blockedIds, setBlockedIds] = useState<Set<number>>(new Set())
-  const [showIssueOnlyNotice, setShowIssueOnlyNotice] = useState(false)
   const [sourceIssueId, setSourceIssueId] = useState<number | null>(null)
   const [targetIssueId, setTargetIssueId] = useState<number | null>(null)
   const [sourceIssues, setSourceIssues] = useState<Issue[]>([])
   const [targetIssues, setTargetIssues] = useState<Issue[]>([])
   const [isLoadingSourceIssues, setIsLoadingSourceIssues] = useState(false)
   const [isLoadingTargetIssues, setIsLoadingTargetIssues] = useState(false)
+  // Inline migration state (item 7)
+  const [showInlineMigration, setShowInlineMigration] = useState(false)
+  const [migrationLastRead, setMigrationLastRead] = useState('')
+  const [migrationTotal, setMigrationTotal] = useState('')
+  const [isMigrating, setIsMigrating] = useState(false)
 
   const selectedThread = useMemo(
     () => searchResults.find((candidate) => candidate.id === selectedThreadId) || null,
@@ -50,8 +55,9 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     try {
       const data = await dependenciesApi.listThreadDependencies(thread.id)
       setDependencies(data)
-    } catch (loadError) {
-      setError(loadError?.response?.data?.detail || 'Failed to load dependencies.')
+    } catch (loadError: unknown) {
+      const detail = (loadError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Failed to load dependencies.')
     } finally {
       setIsLoadingDeps(false)
     }
@@ -59,7 +65,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
 
   /**
    * Build the full graph of threads and dependencies for the flowchart.
-   * Collects all related threads (this thread + all threads in blocking/blocked_by).
+   * Synthesizes virtual thread-level edges from issue-level deps so they
+   * show as dashed connections in the flowchart.
    */
   const loadFlowchartData = useCallback(async () => {
     if (!thread?.id) return
@@ -69,34 +76,54 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         dependenciesApi.listBlockedThreadIds(),
       ])
 
-      // Collect all related thread IDs
       const relatedIds = new Set([thread.id])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
-      const threadDeps = allDeps.filter(
-        (dep) => dep.source_thread_id != null && dep.target_thread_id != null
-      )
+
+      // Thread-level deps map directly to FlowchartDependency
+      const threadDeps: FlowchartDependency[] = allDeps
+        .filter((dep) => dep.source_thread_id != null && dep.target_thread_id != null)
+        .map((dep) => ({
+          id: dep.id,
+          source_thread_id: dep.source_thread_id as number,
+          target_thread_id: dep.target_thread_id as number,
+          created_at: dep.created_at,
+        }))
+
+      // Issue-level deps → virtual thread edges (dashed)
       const issueOnlyDeps = allDeps.filter(
         (dep) => dep.source_thread_id == null || dep.target_thread_id == null
       )
+      const virtualEdges: FlowchartDependency[] = issueOnlyDeps
+        .filter((d) => d.source_issue_thread_id && d.target_issue_thread_id)
+        .map((d) => ({
+          id: d.id,
+          source_thread_id: d.source_issue_thread_id as number,
+          target_thread_id: d.target_issue_thread_id as number,
+          is_issue_level: true,
+          created_at: d.created_at,
+        }))
+
+      // Collect related thread IDs from BOTH real and virtual edges
       for (const dep of threadDeps) {
         relatedIds.add(dep.source_thread_id)
         relatedIds.add(dep.target_thread_id)
       }
+      for (const edge of virtualEdges) {
+        relatedIds.add(edge.source_thread_id)
+        relatedIds.add(edge.target_thread_id)
+      }
 
-      // Fetch all threads to get their details
+      const allEdges = [...threadDeps, ...virtualEdges]
+
       const allThreads = await threadsApi.list()
       const relatedThreads = allThreads.filter((t) => relatedIds.has(t.id))
-      const hasIssueOnlyWithoutThreadDeps = threadDeps.length === 0 && issueOnlyDeps.length > 0
 
       setFlowchartThreads(relatedThreads)
-      setFlowchartDependencies(threadDeps)
+      setFlowchartDependencies(allEdges)
       setBlockedIds(new Set(allBlockedIds))
-      setShowIssueOnlyNotice(hasIssueOnlyWithoutThreadDeps)
     } catch {
-      // Flowchart is a non-critical enhancement
       setFlowchartThreads([])
       setFlowchartDependencies([])
-      setShowIssueOnlyNotice(false)
     }
   }, [thread?.id])
 
@@ -107,12 +134,12 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     setSelectedThreadId(null)
     setError('')
     setShowFlowchart(false)
-    setShowIssueOnlyNotice(false)
     setDependencyMode(getDefaultDependencyMode(thread))
     setSourceIssueId(null)
     setTargetIssueId(null)
     setSourceIssues([])
     setTargetIssues([])
+    setShowInlineMigration(false)
     loadDependencies()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, thread?.id, loadDependencies])
@@ -139,9 +166,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
             ? candidates
             : candidates.filter((candidate) => candidate.id !== currentThreadId)
         setSearchResults(filtered)
-      } catch (searchError) {
+      } catch (searchError: unknown) {
         if (!isCurrent) return
-        setError(searchError?.response?.data?.detail || 'Thread search failed.')
+        const detail = (searchError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        setError(detail || 'Thread search failed.')
         setSearchResults([])
       } finally {
         if (isCurrent) {
@@ -156,8 +184,23 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     }
   }, [searchQuery, isOpen, thread?.id])
 
+  // Check if selected thread needs migration when in issue mode
+  const selectedThreadNeedsMigration = useMemo(() => {
+    if (dependencyMode !== 'issue' || !selectedThread) return false
+    return selectedThread.total_issues === null || selectedThread.total_issues === undefined
+  }, [dependencyMode, selectedThread])
+
   useEffect(() => {
     if (!isOpen || dependencyMode !== 'issue' || !selectedThreadId || !thread?.id) {
+      setSourceIssues([])
+      setTargetIssues([])
+      setSourceIssueId(null)
+      setTargetIssueId(null)
+      return
+    }
+
+    // Don't fetch issues if the source thread needs migration
+    if (selectedThreadNeedsMigration) {
       setSourceIssues([])
       setTargetIssues([])
       setSourceIssueId(null)
@@ -180,9 +223,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         setTargetIssues(targetData.issues || [])
         setSourceIssueId(sourceData.issues?.find((i) => i.status === 'unread')?.id || null)
         setTargetIssueId(targetData.issues?.find((i) => i.status === 'unread')?.id || null)
-      } catch (issuesError) {
+      } catch (issuesError: unknown) {
         if (!isCurrent) return
-        setError(issuesError?.response?.data?.detail || 'Failed to load issues.')
+        const detail = (issuesError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        setError(detail || 'Failed to load issues.')
         setSourceIssues([])
         setTargetIssues([])
         setSourceIssueId(null)
@@ -200,7 +244,36 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     return () => {
       isCurrent = false
     }
-  }, [selectedThreadId, dependencyMode, isOpen, thread?.id])
+  }, [selectedThreadId, dependencyMode, isOpen, thread?.id, selectedThreadNeedsMigration])
+
+  async function handleInlineMigration(e: FormEvent) {
+    e.preventDefault()
+    if (!selectedThreadId) return
+    const lastRead = Number(migrationLastRead)
+    const total = Number(migrationTotal)
+    if (Number.isNaN(lastRead) || Number.isNaN(total) || total < 1 || lastRead < 0 || lastRead > total) {
+      setError('Invalid migration values. Last read must be 0-total.')
+      return
+    }
+
+    setIsMigrating(true)
+    setError('')
+    try {
+      const updatedThread = await issuesApi.migrateThread(selectedThreadId, lastRead, total)
+      // Refresh search results with updated thread data
+      setSearchResults((prev) =>
+        prev.map((t) => (t.id === selectedThreadId ? updatedThread : t))
+      )
+      setShowInlineMigration(false)
+      setMigrationLastRead('')
+      setMigrationTotal('')
+    } catch (migrationError: unknown) {
+      const detail = (migrationError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Migration failed.')
+    } finally {
+      setIsMigrating(false)
+    }
+  }
 
   async function handleCreateDependency() {
     if (!thread?.id || !selectedThreadId) return
@@ -222,9 +295,9 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       if (dependencyMode === 'issue') {
         await dependenciesApi.createDependency({
           sourceType: 'issue',
-          sourceId: sourceIssueId,
+          sourceId: sourceIssueId!,
           targetType: 'issue',
-          targetId: targetIssueId,
+          targetId: targetIssueId!,
         })
       } else {
         await dependenciesApi.createDependency({
@@ -244,22 +317,24 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       await loadDependencies()
       if (showFlowchart) await loadFlowchartData()
       onChanged?.()
-    } catch (saveError) {
-      setError(saveError?.response?.data?.detail || 'Failed to create dependency.')
+    } catch (saveError: unknown) {
+      const detail = (saveError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Failed to create dependency.')
     } finally {
       setIsSaving(false)
     }
   }
 
-  async function handleDeleteDependency(dependencyId) {
+  async function handleDeleteDependency(dependencyId: number) {
     setError('')
     try {
       await dependenciesApi.deleteDependency(dependencyId)
       await loadDependencies()
       if (showFlowchart) await loadFlowchartData()
       onChanged?.()
-    } catch (deleteError) {
-      setError(deleteError?.response?.data?.detail || 'Failed to remove dependency.')
+    } catch (deleteError: unknown) {
+      const detail = (deleteError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Failed to remove dependency.')
     }
   }
 
@@ -342,7 +417,60 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
               ))}
             </div>
            )}
-           {dependencyMode === 'issue' && selectedThread && (
+
+           {/* Inline migration prompt (item 7) */}
+           {dependencyMode === 'issue' && selectedThread && selectedThreadNeedsMigration && (
+             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2">
+               <p className="text-xs text-amber-300 font-bold">
+                 {selectedThread.title} isn&apos;t tracking issues yet.
+               </p>
+               {!showInlineMigration ? (
+                 <button
+                   type="button"
+                   onClick={() => setShowInlineMigration(true)}
+                   className="text-xs font-black uppercase tracking-widest text-amber-200 hover:text-amber-100"
+                 >
+                   Migrate Now
+                 </button>
+               ) : (
+                 <form onSubmit={handleInlineMigration} className="space-y-2">
+                   <div className="flex gap-2">
+                     <div className="flex-1">
+                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Last issue read</label>
+                       <input
+                         type="number"
+                         min="0"
+                         value={migrationLastRead}
+                         onChange={(e) => setMigrationLastRead(e.target.value)}
+                         className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200"
+                         required
+                       />
+                     </div>
+                     <div className="flex-1">
+                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total issues</label>
+                       <input
+                         type="number"
+                         min="1"
+                         value={migrationTotal}
+                         onChange={(e) => setMigrationTotal(e.target.value)}
+                         className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200"
+                         required
+                       />
+                     </div>
+                   </div>
+                   <button
+                     type="submit"
+                     disabled={isMigrating}
+                     className="w-full py-1.5 bg-amber-500/20 border border-amber-500/30 rounded-lg text-xs font-black uppercase tracking-widest text-amber-200 disabled:opacity-50"
+                   >
+                     {isMigrating ? 'Migrating…' : 'Migrate'}
+                   </button>
+                 </form>
+               )}
+             </div>
+           )}
+
+           {dependencyMode === 'issue' && selectedThread && !selectedThreadNeedsMigration && (
              <div className="space-y-2">
                {isLoadingSourceIssues || isLoadingTargetIssues ? (
                  <p className="text-xs text-slate-500">Loading issues…</p>
@@ -393,7 +521,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
              onClick={handleCreateDependency}
              disabled={
                dependencyMode === 'issue'
-                 ? !selectedThread || !sourceIssueId || !targetIssueId || isSaving
+                 ? !selectedThread || selectedThreadNeedsMigration || !sourceIssueId || !targetIssueId || isSaving
                  : !selectedThread || isSaving
              }
              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
@@ -419,12 +547,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
               <DependencyRow
                 key={dep.id}
                 dependencyId={dep.id}
-                title={
-                  dep.source_issue_id
-                    ? `Issue Record ID #${dep.source_issue_id}`
-                    : `Thread ID #${dep.source_thread_id}`
-                }
-                subtitle={dep.source_issue_id ? 'Blocks via issue record ID' : 'Blocks this thread'}
+                title={dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Thread #${dep.source_thread_id}`)}
+                subtitle={dep.source_issue_id ? 'Issue-level block' : 'Thread-level block'}
                 onDelete={handleDeleteDependency}
               />
             ))
@@ -442,12 +566,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
               <DependencyRow
                 key={dep.id}
                 dependencyId={dep.id}
-                title={
-                  dep.target_issue_id
-                    ? `Issue Record ID #${dep.target_issue_id}`
-                    : `Thread ID #${dep.target_thread_id}`
-                }
-                subtitle={dep.target_issue_id ? 'Depends on issue record ID' : 'Depends on this thread'}
+                title={dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Thread #${dep.target_thread_id}`)}
+                subtitle={dep.target_issue_id ? 'Issue-level block' : 'Thread-level block'}
                 onDelete={handleDeleteDependency}
               />
             ))
@@ -467,17 +587,11 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
             </button>
 
             {showFlowchart && (
-              showIssueOnlyNotice ? (
-                <p className="text-xs text-slate-500">
-                  Issue-level dependencies are not visualized here.
-                </p>
-              ) : (
-                <DependencyFlowchart
-                  threads={flowchartThreads}
-                  dependencies={flowchartDependencies}
-                  blockedIds={blockedIds}
-                />
-              )
+              <DependencyFlowchart
+                threads={flowchartThreads}
+                dependencies={flowchartDependencies}
+                blockedIds={blockedIds}
+              />
             )}
           </div>
         )}
@@ -492,7 +606,14 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   )
 }
 
-function DependencyRow({ dependencyId, title, subtitle, onDelete }) {
+interface DependencyRowProps {
+  dependencyId: number
+  title: string
+  subtitle: string
+  onDelete: (id: number) => void
+}
+
+function DependencyRow({ dependencyId, title, subtitle, onDelete }: DependencyRowProps) {
   return (
     <div className="flex items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
       <div className="min-w-0">

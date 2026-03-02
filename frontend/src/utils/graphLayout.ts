@@ -5,7 +5,7 @@
  * to position nodes in a directed acyclic graph. No external dependencies.
  */
 
-import type { Thread, Dependency, GraphLayout, FlowchartNode, FlowchartEdge } from '../types'
+import type { Thread, FlowchartDependency, GraphLayout, FlowchartNode, FlowchartEdge } from '../types'
 
 /** Width of each node rectangle in the flowchart */
 const NODE_WIDTH = 160
@@ -27,7 +27,7 @@ const PADDING = 40
  */
 function buildAdjacencyList(
     threadIds: Set<number>,
-    dependencies: Dependency[],
+    dependencies: FlowchartDependency[],
 ): Map<number, number[]> {
     const adjacency = new Map<number, number[]>()
     for (const id of threadIds) {
@@ -167,7 +167,7 @@ function computeEdgePath(
  */
 export function layoutGraph(
     threads: Thread[],
-    dependencies: Dependency[],
+    dependencies: FlowchartDependency[],
     blockedIds: Set<number>,
 ): GraphLayout {
     if (threads.length === 0) {
@@ -226,6 +226,7 @@ export function layoutGraph(
             targetId: dep.target_thread_id,
             path: computeEdgePath(sourceCenterX, sourceBottomY, targetCenterX, targetTopY),
             isBlocking: blockedIds.has(dep.target_thread_id),
+            isIssueLevel: dep.is_issue_level ?? false,
         })
     }
 

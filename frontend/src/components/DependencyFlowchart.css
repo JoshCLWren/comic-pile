@@ -36,6 +36,13 @@
   pointer-events: none;
 }
 
+.edge--issue-level {
+  stroke-dasharray: 6 4;
+  stroke-opacity: 0.6;
+  stroke: rgba(56, 189, 248, 0.6);
+  stroke-width: 2;
+}
+
 /* Arrowhead marker */
 .flowchart-arrowhead {
   fill: rgba(148, 163, 184, 0.6);
