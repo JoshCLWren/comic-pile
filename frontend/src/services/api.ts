@@ -105,14 +105,19 @@ rawApi.interceptors.response.use(
       console.error('API Validation Error Details:', {
         status: error.response.status,
         data: error.response.data,
-        config: error.config,
       })
     }
 
     if (error.response.status === 401 && !originalRequest._retry) {
       const requestUrl = originalRequest.url ?? ''
-      const isAuthEndpoint = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register')
+      const isAuthEndpoint =
+        requestUrl.includes('/auth/login') ||
+        requestUrl.includes('/auth/register') ||
+        requestUrl.includes('/auth/refresh')
       if (isAuthEndpoint || originalRequest.skipAuthRedirect) {
+        if (requestUrl.includes('/auth/refresh')) {
+          redirectToLogin()
+        }
         return Promise.reject(error)
       }
 

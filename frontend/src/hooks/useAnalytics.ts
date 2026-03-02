@@ -5,7 +5,7 @@ import type { AnalyticsMetrics } from '../types'
 export function useAnalytics() {
   const [data, setData] = useState<AnalyticsMetrics | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
     async function fetchMetrics() {
@@ -15,7 +15,7 @@ export function useAnalytics() {
         const metrics = await tasksApi.getMetrics()
         setData(metrics)
       } catch (err) {
-        setError(err)
+        setError(err instanceof Error ? err : new Error(String(err)))
       } finally {
         setIsLoading(false)
       }

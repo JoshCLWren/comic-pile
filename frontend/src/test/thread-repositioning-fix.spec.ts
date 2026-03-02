@@ -7,7 +7,7 @@ test.describe('Thread Repositioning Fix Demo', () => {
     const testPassword = process.env.TEST_PASSWORD
 
     if (!testUsername || !testPassword) {
-      throw new Error('TEST_USERNAME and TEST_PASSWORD environment variables must be set');
+      test.skip(true, 'TEST_USERNAME and TEST_PASSWORD environment variables are not set');
     }
 
     // Login before each test using env vars

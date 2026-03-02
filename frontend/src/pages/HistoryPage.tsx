@@ -34,12 +34,14 @@ export default function HistoryPage() {
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return ''
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
   const formatTime = (dateStr: string | null | undefined) => {
     if (!dateStr) return ''
     const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return ''
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 

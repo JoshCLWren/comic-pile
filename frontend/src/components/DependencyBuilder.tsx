@@ -133,7 +133,11 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       try {
         const candidates = await threadsApi.list({ search: query })
         if (!isCurrent) return
-        const filtered = candidates.filter((candidate) => candidate.id !== thread.id)
+        const currentThreadId = thread?.id
+        const filtered =
+          currentThreadId == null
+            ? candidates
+            : candidates.filter((candidate) => candidate.id !== currentThreadId)
         setSearchResults(filtered)
       } catch (searchError) {
         if (!isCurrent) return

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import type { DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../components/Modal'
 import PositionSlider from '../components/PositionSlider'
@@ -177,19 +178,19 @@ export default function QueuePage() {
     })
   }
 
-  const handleDragStart = (threadId: number) => (event: React.DragEvent<HTMLElement>) => {
+  const handleDragStart = (threadId: number) => (event: DragEvent<HTMLElement>) => {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', String(threadId))
     setDraggedThreadId(threadId)
     setReorderError(null)
   }
 
-  const handleDragOver = (threadId: number) => (event: React.DragEvent<HTMLElement>) => {
+  const handleDragOver = (threadId: number) => (event: DragEvent<HTMLElement>) => {
     event.preventDefault()
     setDragOverThreadId(threadId)
   }
 
-  const handleDrop = (threadId: number) => (event: React.DragEvent<HTMLElement>) => {
+  const handleDrop = (threadId: number) => (event: DragEvent<HTMLElement>) => {
     event.preventDefault()
 
     if (!draggedThreadId || draggedThreadId === threadId) {
@@ -219,7 +220,7 @@ export default function QueuePage() {
     setDragOverThreadId(null)
   }
 
-  const handleCreateSubmit = async (event: React.FormEvent) => {
+  const handleCreateSubmit = async (event: FormEvent) => {
     event.preventDefault()
 
     try {
@@ -256,7 +257,7 @@ export default function QueuePage() {
     }
   }
 
-  const handleEditSubmit = async (event: React.FormEvent) => {
+  const handleEditSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (!editingThread) return
 
@@ -289,13 +290,13 @@ export default function QueuePage() {
     setIsEditOpen(true)
   }
 
-  const openReactivateModal = (thread: Thread) => {
+  const openReactivateModal = (thread: Thread | null) => {
     setReactivateThreadId(thread?.id ? String(thread.id) : '')
     setIssuesToAdd(1)
     setIsReactivateOpen(true)
   }
 
-  const handleReactivateSubmit = async (event: React.FormEvent) => {
+  const handleReactivateSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (!reactivateThreadId) return
 
