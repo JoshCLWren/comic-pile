@@ -21,6 +21,7 @@ import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import { useCollections } from '../contexts/CollectionContext'
 import type { Issue, Thread } from '../types'
+import { getApiErrorDetail } from '../utils/apiError'
 
 const FORMAT_OPTIONS = ['Comics', 'Manga', 'Trade Paperback', 'Graphic Novel', 'Other'] as const
 
@@ -78,6 +79,7 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
   const [isLoading, setIsLoading] = useState(true)
   const [addRange, setAddRange] = useState('')
   const [isAdding, setIsAdding] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
   const [toggling, setToggling] = useState<Set<number>>(new Set())
 
   const loadIssues = useCallback(async () => {
@@ -98,17 +100,26 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
   }, [loadIssues])
 
   async function handleToggle(issue: Issue) {
+    const newStatus = issue.status === 'read' ? 'unread' : 'read'
+
+    // Optimistic update
+    setIssues((prev) =>
+      prev.map((i) => (i.id === issue.id ? { ...i, status: newStatus } : i))
+    )
     setToggling((prev) => new Set(prev).add(issue.id))
+
     try {
       if (issue.status === 'read') {
         await issuesApi.markUnread(issue.id)
       } else {
         await issuesApi.markRead(issue.id)
       }
-      await loadIssues()
       onIssuesChanged?.()
     } catch {
-      // Ignore individual toggle failures
+      // Revert on failure
+      setIssues((prev) =>
+        prev.map((i) => (i.id === issue.id ? { ...i, status: issue.status } : i))
+      )
     } finally {
       setToggling((prev) => {
         const next = new Set(prev)
@@ -122,14 +133,14 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
     e.preventDefault()
     if (!addRange.trim()) return
     setIsAdding(true)
+    setAddError(null)
     try {
       await issuesApi.create(threadId, addRange.trim())
       setAddRange('')
       await loadIssues()
       onIssuesChanged?.()
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      alert(detail || 'Failed to add issues')
+      setAddError(getApiErrorDetail(err))
     } finally {
       setIsAdding(false)
     }
@@ -174,6 +185,9 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
           {isAdding ? '…' : 'Add'}
         </button>
       </form>
+      {addError && (
+        <p className="text-xs text-red-400">{addError}</p>
+      )}
     </div>
   )
 }
@@ -302,10 +316,7 @@ export default function QueuePage() {
   const handleDelete = (threadId: number) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
       deleteMutation.mutate(threadId).then(() => refetch()).catch((err: unknown) => {
-        const detail = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
-          || (err as { message?: string })?.message
-          || 'Unknown error'
-        alert(`Failed to delete thread: ${detail}`)
+        alert(`Failed to delete thread: ${getApiErrorDetail(err)}`)
       })
     }
   }
@@ -392,9 +403,7 @@ export default function QueuePage() {
           await issuesApi.migrateThread(result.id, lastRead, totalIssues)
         } catch (issueError: unknown) {
           console.error('Thread created but failed to create issues:', issueError)
-          const detail = (issueError as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
-            || (issueError as { message?: string })?.message
-          alert(`Thread created successfully, but failed to create individual issues: ${detail}`)
+          alert(`Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`)
         }
       }
 
@@ -403,10 +412,7 @@ export default function QueuePage() {
       refetch()
     } catch (error: unknown) {
       console.error('Failed to create thread:', error)
-      const detail = (error as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
-        || (error as { message?: string })?.message
-        || 'Unknown error'
-      alert(`Failed to create thread: ${detail}`)
+      alert(`Failed to create thread: ${getApiErrorDetail(error)}`)
     }
   }
 
@@ -563,10 +569,7 @@ export default function QueuePage() {
       }
     } catch (error: unknown) {
       console.error('Action failed:', error)
-      const detail = (error as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
-        || (error as { message?: string })?.message
-        || 'Unknown error'
-      alert(`Action failed: ${detail}`)
+      alert(`Action failed: ${getApiErrorDetail(error)}`)
     }
   }
 

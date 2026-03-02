@@ -1,6 +1,11 @@
-"""Parse issue range strings into individual issue numbers."""
+"""Parse issue range strings into individual issue numbers.
+
+NOTE: The frontend has a parallel parser at frontend/src/utils/issueParser.ts
+that must be kept in sync with this logic.
+"""
 
 MAX_ISSUES = 10000
+MAX_LITERAL_LENGTH = 100
 
 
 def parse_issue_ranges(input_str: str) -> list[str]:
@@ -64,9 +69,17 @@ def parse_issue_ranges(input_str: str) -> list[str]:
                         continue
                     raise
             # More than one dash and not a valid range — store as literal
+            if len(part) > MAX_LITERAL_LENGTH:
+                raise ValueError(
+                    f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)"
+                )
             result.append(part)
         else:
             # Single token — accept any non-empty string as a literal identifier
+            if len(part) > MAX_LITERAL_LENGTH:
+                raise ValueError(
+                    f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)"
+                )
             result.append(part)
 
     seen: set[str] = set()

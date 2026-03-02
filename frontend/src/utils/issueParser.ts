@@ -4,10 +4,14 @@
  * exhaust memory and crash the application.
  */
 const MAX_ISSUES = 10000;
+const MAX_LITERAL_LENGTH = 100;
 
 /**
  * Parse issue range string and return count.
  * Simple client-side version for preview.
+ *
+ * NOTE: The backend has a parallel parser at app/utils/issue_parser.py
+ * that must be kept in sync with this logic.
  *
  * Supports formats:
  * - "1-25" -> count = 25
@@ -59,10 +63,16 @@ export function parseIssueRange(input: string): number {
         }
       } else {
         // Not a valid integer range — store as literal
+        if (trimmedPart.length > MAX_LITERAL_LENGTH) {
+          throw new Error(`Issue identifier too long (max ${MAX_LITERAL_LENGTH} chars)`);
+        }
         result.push(trimmedPart);
       }
     } else {
       // Single token — accept any non-empty string
+      if (trimmedPart.length > MAX_LITERAL_LENGTH) {
+        throw new Error(`Issue identifier too long (max ${MAX_LITERAL_LENGTH} chars)`);
+      }
       result.push(trimmedPart);
     }
   }

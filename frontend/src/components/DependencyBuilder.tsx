@@ -5,6 +5,7 @@ import DependencyFlowchart from './DependencyFlowchart'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Dependency, FlowchartDependency, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import { getApiErrorDetail } from '../utils/apiError'
 
 function getDefaultDependencyMode(thread: Thread | null): 'thread' | 'issue' {
   return thread?.next_unread_issue_id ? 'issue' : 'thread'
@@ -56,8 +57,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       const data = await dependenciesApi.listThreadDependencies(thread.id)
       setDependencies(data)
     } catch (loadError: unknown) {
-      const detail = (loadError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || 'Failed to load dependencies.')
+      setError(getApiErrorDetail(loadError))
     } finally {
       setIsLoadingDeps(false)
     }
@@ -89,19 +89,25 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
           created_at: dep.created_at,
         }))
 
-      // Issue-level deps → virtual thread edges (dashed)
+      // Issue-level deps → virtual thread edges (dashed), deduplicated by thread pair
       const issueOnlyDeps = allDeps.filter(
         (dep) => dep.source_thread_id == null || dep.target_thread_id == null
       )
-      const virtualEdges: FlowchartDependency[] = issueOnlyDeps
-        .filter((d) => d.source_issue_thread_id && d.target_issue_thread_id)
-        .map((d) => ({
-          id: d.id,
-          source_thread_id: d.source_issue_thread_id as number,
-          target_thread_id: d.target_issue_thread_id as number,
+      const seenPairs = new Set<string>()
+      const virtualEdges: FlowchartDependency[] = []
+      for (const d of issueOnlyDeps) {
+        if (!d.source_issue_thread_id || !d.target_issue_thread_id) continue
+        const pairKey = `${d.source_issue_thread_id}->${d.target_issue_thread_id}`
+        if (seenPairs.has(pairKey)) continue
+        seenPairs.add(pairKey)
+        virtualEdges.push({
+          id: -(d.source_issue_thread_id * 100000 + d.target_issue_thread_id),
+          source_thread_id: d.source_issue_thread_id,
+          target_thread_id: d.target_issue_thread_id,
           is_issue_level: true,
           created_at: d.created_at,
-        }))
+        })
+      }
 
       // Collect related thread IDs from BOTH real and virtual edges
       for (const dep of threadDeps) {
@@ -168,8 +174,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         setSearchResults(filtered)
       } catch (searchError: unknown) {
         if (!isCurrent) return
-        const detail = (searchError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        setError(detail || 'Thread search failed.')
+        setError(getApiErrorDetail(searchError))
         setSearchResults([])
       } finally {
         if (isCurrent) {
@@ -225,8 +230,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         setTargetIssueId(targetData.issues?.find((i) => i.status === 'unread')?.id || null)
       } catch (issuesError: unknown) {
         if (!isCurrent) return
-        const detail = (issuesError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        setError(detail || 'Failed to load issues.')
+        setError(getApiErrorDetail(issuesError))
         setSourceIssues([])
         setTargetIssues([])
         setSourceIssueId(null)
@@ -249,6 +253,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   async function handleInlineMigration(e: FormEvent) {
     e.preventDefault()
     if (!selectedThreadId) return
+    if (!migrationLastRead.trim() || !migrationTotal.trim()) {
+      setError('Both fields are required for migration.')
+      return
+    }
     const lastRead = Number(migrationLastRead)
     const total = Number(migrationTotal)
     if (Number.isNaN(lastRead) || Number.isNaN(total) || total < 1 || lastRead < 0 || lastRead > total) {
@@ -268,8 +276,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       setMigrationLastRead('')
       setMigrationTotal('')
     } catch (migrationError: unknown) {
-      const detail = (migrationError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || 'Migration failed.')
+      setError(getApiErrorDetail(migrationError))
     } finally {
       setIsMigrating(false)
     }
@@ -318,8 +325,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       if (showFlowchart) await loadFlowchartData()
       onChanged?.()
     } catch (saveError: unknown) {
-      const detail = (saveError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || 'Failed to create dependency.')
+      setError(getApiErrorDetail(saveError))
     } finally {
       setIsSaving(false)
     }
@@ -333,8 +339,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       if (showFlowchart) await loadFlowchartData()
       onChanged?.()
     } catch (deleteError: unknown) {
-      const detail = (deleteError as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || 'Failed to remove dependency.')
+      setError(getApiErrorDetail(deleteError))
     }
   }
 

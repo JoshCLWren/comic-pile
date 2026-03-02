@@ -26,47 +26,86 @@ from comic_pile.dependencies import (
 router = APIRouter(tags=["dependencies"])
 
 
-async def enrich_dependency(dep: Dependency, db: AsyncSession) -> DependencyResponse:
-    """Build a DependencyResponse with human-readable labels for source/target.
+async def enrich_dependencies(
+    deps: list[Dependency], db: AsyncSession
+) -> list[DependencyResponse]:
+    """Batch-enrich dependencies with human-readable labels.
 
-    For issue-level deps, labels include thread title and issue number.
-    For thread-level deps, labels are just the thread title.
+    Collects all referenced issue/thread IDs, fetches them in bulk,
+    then builds DependencyResponse objects from the lookup dicts.
     """
-    source_label: str | None = None
-    target_label: str | None = None
-    source_issue_thread_id: int | None = None
-    target_issue_thread_id: int | None = None
+    if not deps:
+        return []
 
-    if dep.source_issue_id is not None:
-        source_issue = await db.get(Issue, dep.source_issue_id)
-        if source_issue:
-            source_issue_thread_id = source_issue.thread_id
-            source_thread = await db.get(Thread, source_issue.thread_id)
+    # Collect all IDs we need to look up
+    issue_ids: set[int] = set()
+    thread_ids: set[int] = set()
+    for dep in deps:
+        if dep.source_issue_id is not None:
+            issue_ids.add(dep.source_issue_id)
+        if dep.target_issue_id is not None:
+            issue_ids.add(dep.target_issue_id)
+        if dep.source_thread_id is not None:
+            thread_ids.add(dep.source_thread_id)
+        if dep.target_thread_id is not None:
+            thread_ids.add(dep.target_thread_id)
+
+    # Bulk fetch issues
+    issue_map: dict[int, Issue] = {}
+    if issue_ids:
+        result = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
+        for issue in result.scalars():
+            issue_map[issue.id] = issue
+            # We'll also need the parent threads for issue labels
+            thread_ids.add(issue.thread_id)
+
+    # Bulk fetch threads
+    thread_map: dict[int, Thread] = {}
+    if thread_ids:
+        result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+        for thread in result.scalars():
+            thread_map[thread.id] = thread
+
+    # Build enriched responses
+    responses: list[DependencyResponse] = []
+    for dep in deps:
+        source_label: str | None = None
+        target_label: str | None = None
+        source_issue_thread_id: int | None = None
+        target_issue_thread_id: int | None = None
+
+        if dep.source_issue_id is not None:
+            source_issue = issue_map.get(dep.source_issue_id)
+            if source_issue:
+                source_issue_thread_id = source_issue.thread_id
+                source_thread = thread_map.get(source_issue.thread_id)
+                if source_thread:
+                    source_label = f"{source_thread.title} #{source_issue.issue_number}"
+        elif dep.source_thread_id is not None:
+            source_thread = thread_map.get(dep.source_thread_id)
             if source_thread:
-                source_label = f"{source_thread.title} #{source_issue.issue_number}"
-    elif dep.source_thread_id is not None:
-        source_thread = await db.get(Thread, dep.source_thread_id)
-        if source_thread:
-            source_label = source_thread.title
+                source_label = source_thread.title
 
-    if dep.target_issue_id is not None:
-        target_issue = await db.get(Issue, dep.target_issue_id)
-        if target_issue:
-            target_issue_thread_id = target_issue.thread_id
-            target_thread = await db.get(Thread, target_issue.thread_id)
+        if dep.target_issue_id is not None:
+            target_issue = issue_map.get(dep.target_issue_id)
+            if target_issue:
+                target_issue_thread_id = target_issue.thread_id
+                target_thread = thread_map.get(target_issue.thread_id)
+                if target_thread:
+                    target_label = f"{target_thread.title} #{target_issue.issue_number}"
+        elif dep.target_thread_id is not None:
+            target_thread = thread_map.get(dep.target_thread_id)
             if target_thread:
-                target_label = f"{target_thread.title} #{target_issue.issue_number}"
-    elif dep.target_thread_id is not None:
-        target_thread = await db.get(Thread, dep.target_thread_id)
-        if target_thread:
-            target_label = target_thread.title
+                target_label = target_thread.title
 
-    response = DependencyResponse.model_validate(dep, from_attributes=True)
-    response.source_label = source_label
-    response.target_label = target_label
-    response.source_issue_thread_id = source_issue_thread_id
-    response.target_issue_thread_id = target_issue_thread_id
-    return response
+        response = DependencyResponse.model_validate(dep, from_attributes=True)
+        response.source_label = source_label
+        response.target_label = target_label
+        response.source_issue_thread_id = source_issue_thread_id
+        response.target_issue_thread_id = target_issue_thread_id
+        responses.append(response)
+
+    return responses
 
 
 @router.get("/dependencies/blocked", response_model=list[int])
@@ -114,9 +153,13 @@ async def list_thread_dependencies(
     blocking_deps = blocking_result.scalars().all()
     blocked_by_deps = blocked_by_result.scalars().all()
 
+    all_deps = list(blocking_deps) + list(blocked_by_deps)
+    enriched = await enrich_dependencies(all_deps, db)
+    blocking_count = len(blocking_deps)
+
     return ThreadDependenciesResponse(
-        blocking=[await enrich_dependency(dep, db) for dep in blocking_deps],
-        blocked_by=[await enrich_dependency(dep, db) for dep in blocked_by_deps],
+        blocking=enriched[:blocking_count],
+        blocked_by=enriched[blocking_count:],
     )
 
 
@@ -230,7 +273,7 @@ async def create_dependency(
     await db.commit()
     await db.refresh(dependency)
 
-    return await enrich_dependency(dependency, db)
+    return (await enrich_dependencies([dependency], db))[0]
 
 
 @router.get("/dependencies/{dependency_id}", response_model=DependencyResponse)
@@ -251,7 +294,7 @@ async def get_dependency(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dependency {dependency_id} not found",
         )
-    return await enrich_dependency(dependency, db)
+    return (await enrich_dependencies([dependency], db))[0]
 
 
 @router.delete("/dependencies/{dependency_id}")

@@ -29,7 +29,10 @@ router = APIRouter(tags=["threads"])
 
 
 async def thread_to_response(
-    thread: Thread, db: AsyncSession, include_blocking_info: bool = True
+    thread: Thread,
+    db: AsyncSession,
+    include_blocking_info: bool = True,
+    issue_number_map: dict[int, str] | None = None,
 ) -> ThreadResponse:
     """Convert Thread model to ThreadResponse.
 
@@ -37,6 +40,8 @@ async def thread_to_response(
         thread: Thread model instance
         db: Database session for computing issues_remaining
         include_blocking_info: Whether to compute blocking reasons
+        issue_number_map: Pre-fetched mapping of issue ID → issue_number.
+            When provided, avoids per-thread DB lookups for next_unread_issue_number.
 
     Returns:
         ThreadResponse schema
@@ -44,56 +49,68 @@ async def thread_to_response(
     issues_remaining = await thread.get_issues_remaining(db)
     reading_progress = thread.reading_progress
 
-    thread_id = thread.id
-    title = thread.title
-    format_val = thread.format
-    queue_position = thread.queue_position
-    status = thread.status
-    last_rating = thread.last_rating
-    last_activity_at = thread.last_activity_at
-    review_url = thread.review_url
-    last_review_at = thread.last_review_at
-    notes = thread.notes
-    is_test = thread.is_test
-    is_blocked = thread.is_blocked
-    collection_id = thread.collection_id
-    created_at = thread.created_at
-    total_issues = thread.total_issues
     next_unread_issue_id = thread.next_unread_issue_id
     next_unread_issue_number: str | None = None
     if next_unread_issue_id is not None:
-        next_issue = await db.get(Issue, next_unread_issue_id)
-        if next_issue:
-            next_unread_issue_number = next_issue.issue_number
-    blocked_by_thread_ids = thread.blocked_by_thread_ids or []
-    blocked_by_issue_ids = thread.blocked_by_issue_ids or []
+        if issue_number_map is not None:
+            next_unread_issue_number = issue_number_map.get(next_unread_issue_id)
+        else:
+            next_issue = await db.get(Issue, next_unread_issue_id)
+            if next_issue:
+                next_unread_issue_number = next_issue.issue_number
 
-    response = ThreadResponse(
-        id=thread_id,
-        title=title,
-        format=format_val,
+    return ThreadResponse(
+        id=thread.id,
+        title=thread.title,
+        format=thread.format,
         issues_remaining=issues_remaining,
-        queue_position=queue_position,
-        status=status,
-        last_rating=last_rating,
-        last_activity_at=last_activity_at,
-        review_url=review_url,
-        last_review_at=last_review_at,
-        notes=notes,
-        is_test=is_test,
-        is_blocked=is_blocked,
-        collection_id=collection_id,
-        created_at=created_at,
-        total_issues=total_issues,
+        queue_position=thread.queue_position,
+        status=thread.status,
+        last_rating=thread.last_rating,
+        last_activity_at=thread.last_activity_at,
+        review_url=thread.review_url,
+        last_review_at=thread.last_review_at,
+        notes=thread.notes,
+        is_test=thread.is_test,
+        is_blocked=thread.is_blocked,
+        collection_id=thread.collection_id,
+        created_at=thread.created_at,
+        total_issues=thread.total_issues,
         reading_progress=reading_progress,
         next_unread_issue_id=next_unread_issue_id,
         next_unread_issue_number=next_unread_issue_number,
-        blocked_by_thread_ids=blocked_by_thread_ids,
-        blocked_by_issue_ids=blocked_by_issue_ids,
+        blocked_by_thread_ids=thread.blocked_by_thread_ids or [],
+        blocked_by_issue_ids=thread.blocked_by_issue_ids or [],
         blocking_reasons=[],
     )
 
-    return response
+
+async def _bulk_issue_number_map(
+    threads: list[Thread], db: AsyncSession
+) -> dict[int, str]:
+    """Batch-fetch issue numbers for all threads' next_unread_issue_id values."""
+    issue_ids = {
+        t.next_unread_issue_id
+        for t in threads
+        if t.next_unread_issue_id is not None
+    }
+    if not issue_ids:
+        return {}
+    result = await db.execute(
+        select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids))
+    )
+    return {row.id: row.issue_number for row in result}
+
+
+async def _threads_to_responses(
+    threads: list[Thread], db: AsyncSession
+) -> list[ThreadResponse]:
+    """Convert a list of Thread models to ThreadResponses with batched lookups."""
+    issue_map = await _bulk_issue_number_map(threads, db)
+    return [
+        await thread_to_response(thread, db, issue_number_map=issue_map)
+        for thread in threads
+    ]
 
 
 @router.get("/stale", response_model=list[ThreadResponse])
@@ -122,8 +139,8 @@ async def list_stale_threads(
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )
-    threads = result.scalars().all()
-    return [await thread_to_response(thread, db) for thread in threads]
+    threads = list(result.scalars().all())
+    return await _threads_to_responses(threads, db)
 
 
 clear_cache = None
@@ -161,15 +178,15 @@ async def list_threads(
         query = query.where(Thread.title.ilike(f"%{normalized_search}%"))
         query = query.order_by(Thread.queue_position)
         result = await db.execute(query)
-        threads = result.scalars().all()
-        return [await thread_to_response(thread, db) for thread in threads]
+        threads = list(result.scalars().all())
+        return await _threads_to_responses(threads, db)
     elif get_threads_cached and collection_id is None:
         threads = await get_threads_cached(db, current_user.id)
     else:
         query = query.order_by(Thread.queue_position)
         result = await db.execute(query)
-        threads = result.scalars().all()
-    return [await thread_to_response(thread, db) for thread in threads]
+        threads = list(result.scalars().all())
+    return await _threads_to_responses(threads, db)
 
 
 @router.get("/completed", response_class=HTMLResponse)
