@@ -105,8 +105,7 @@ test.describe('Authentication Flow', () => {
     await authenticatedPage.waitForURL('/login', { timeout: 5000 });
 
     const hasTokenAfter = await authenticatedPage.evaluate(() =>
-      !!localStorage.getItem('auth_token') ||
-      !!(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN
+      !!localStorage.getItem('auth_token')
     );
     expect(hasTokenAfter).toBe(false);
 
