@@ -774,10 +774,10 @@ async def test_rate_final_issue_completes_thread_but_keeps_session_active(
 
 
 @pytest.mark.asyncio
-async def test_rate_auto_advance_skips_nonpositive_queue_positions(
+async def test_rate_save_and_continue_clears_pending_thread(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Auto-advance should only select active threads with queue_position >= 1."""
+    """Save & Continue should clear pending instead of auto-advancing to another thread."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -803,18 +803,22 @@ async def test_rate_auto_advance_skips_nonpositive_queue_positions(
         status="active",
         user_id=user.id,
     )
-    next_thread = Thread(
-        title="Next Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=2,
-        status="active",
-        user_id=user.id,
+    async_db.add_all(
+        [
+            rated_thread,
+            skipped_thread,
+            Thread(
+                title="Next Thread",
+                format="Comic",
+                issues_remaining=5,
+                queue_position=2,
+                status="active",
+                user_id=user.id,
+            ),
+        ]
     )
-    async_db.add_all([rated_thread, skipped_thread, next_thread])
     await async_db.commit()
     await async_db.refresh(rated_thread)
-    await async_db.refresh(next_thread)
 
     roll_event = Event(
         type="roll",
@@ -833,9 +837,72 @@ async def test_rate_auto_advance_skips_nonpositive_queue_positions(
     )
     assert response.status_code == 200
 
-    # After rating, auto-advance should select the next eligible thread (queue_position >= 1).
     await async_db.refresh(session)
-    assert session.pending_thread_id == next_thread.id
+    assert session.pending_thread_id is None
+    assert session.pending_thread_updated_at is None
+
+
+@pytest.mark.asyncio
+async def test_rate_requires_new_roll_before_second_rating(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Regression: roll(A)->rate(A) must not allow rating again without a fresh roll."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    rated_thread = Thread(
+        title="Rated Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    other_thread = Thread(
+        title="Other Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add_all([rated_thread, other_thread])
+    await async_db.commit()
+    await async_db.refresh(rated_thread)
+
+    session.pending_thread_id = rated_thread.id
+    roll_event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=rated_thread.id,
+        session_id=session.id,
+        thread_id=rated_thread.id,
+    )
+    async_db.add(roll_event)
+    await async_db.commit()
+
+    first_rate = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 4.0, "issues_read": 1, "finish_session": False},
+    )
+    assert first_rate.status_code == 200
+
+    await async_db.refresh(session)
+    assert session.pending_thread_id is None
+
+    second_rate = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 4.0, "issues_read": 1, "finish_session": False},
+    )
+    assert second_rate.status_code == 400
+    assert "No active thread" in second_rate.json()["detail"]
 
 
 @pytest.mark.asyncio

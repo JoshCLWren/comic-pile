@@ -558,10 +558,10 @@ export default function RollPage() {
       return
     }
 
-    // After Save & Continue the backend pre-selects a pending thread.
-    // Dismiss it so the roll API can produce a fresh random result.
-    const needsDismiss = suppressPendingAutoOpenRef.current && session?.pending_thread_id
-    if (needsDismiss) {
+    // Ignore stale pending state once immediately after Save & Continue.
+    // The backend clears pending now, so this only guards against stale client session data.
+    const ignorePendingOnce = suppressPendingAutoOpenRef.current && session?.pending_thread_id
+    if (ignorePendingOnce) {
       suppressPendingAutoOpenRef.current = false
     }
 
@@ -588,9 +588,6 @@ export default function RollPage() {
         rollTimeoutRef.current = setTimeout(async () => {
           rollTimeoutRef.current = null
           try {
-            if (needsDismiss) {
-              await dismissPendingMutation.mutate()
-            }
             const response = await rollMutation.mutate()
             enterRatingView(response.thread_id, response.result, response)
             setIsRolling(false)

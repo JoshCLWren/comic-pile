@@ -120,7 +120,7 @@ test.describe('Production Smoke', () => {
     expect(chunkFailures, `Chunk load failures: ${chunkFailures.join(', ')}`).toEqual([]);
   });
 
-  test('roll, rate, save and continue routes back to roll view (existing prod user)', async ({
+  test('roll, rate, save and continue clears pending and returns to roll view (existing prod user)', async ({
     page,
   }) => {
     const health = await page.request.get('/health');
@@ -148,6 +148,14 @@ test.describe('Production Smoke', () => {
     await page.click(SELECTORS.rate.submitButton);
     await page.waitForURL('**/', { timeout: 10000 });
     await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible();
+    await expect(page.locator(SELECTORS.rate.ratingInput)).toHaveCount(0);
+
+    const currentSession = await page.request.get('/api/sessions/current/', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(currentSession.ok()).toBeTruthy();
+    const sessionData = await currentSession.json();
+    expect(sessionData.pending_thread_id).toBeNull();
   });
 
   test('leave and return to / before submit keeps same active thread (existing prod user)', async ({

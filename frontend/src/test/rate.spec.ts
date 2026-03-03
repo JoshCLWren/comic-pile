@@ -41,18 +41,26 @@ test.describe('Rate Thread Feature', () => {
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     ]);
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-    // Wait a bit for UI to update
-    await authenticatedWithThreadsPage.waitForTimeout(500);
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toHaveCount(0);
+  });
 
-    const stillRating = await authenticatedWithThreadsPage
-      .locator(SELECTORS.rate.ratingInput)
-      .isVisible()
-      .catch(() => false);
-    const backToRoll = await authenticatedWithThreadsPage
-      .locator(SELECTORS.roll.mainDie)
-      .isVisible()
-      .catch(() => false);
-    expect(stillRating || backToRoll).toBeTruthy();
+  test('should require rolling again before rating again after save and continue', async ({ authenticatedWithThreadsPage }) => {
+    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
+    await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse((response) =>
+        response.url().includes('/api/rate/') && response.request().method() === 'POST'
+      ),
+      authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
+    ]);
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toHaveCount(0);
+    await authenticatedWithThreadsPage.waitForTimeout(1000);
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toHaveCount(0);
+
+    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible();
   });
 
   test('should keep the same active thread when leaving and returning home before submit', async ({ authenticatedWithThreadsPage }) => {
