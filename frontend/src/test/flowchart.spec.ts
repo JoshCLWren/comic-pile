@@ -1,6 +1,21 @@
 import { test, expect } from './fixtures'
 import { createThread } from './helpers'
 
+async function getIssueIdByNumber(authenticatedPage: any, threadId: number, issueNumber: string, token: string | null | undefined): Promise<number> {
+  if (!token) {
+    throw new Error('No auth token available')
+  }
+  const response = await authenticatedPage.request.get(`/api/v1/threads/${threadId}/issues`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  const data = await response.json()
+  const issue = data.issues.find((i: { issue_number: string }) => i.issue_number === issueNumber)
+  if (!issue?.id) {
+    throw new Error(`Issue #${issueNumber} not found in thread ${threadId}`)
+  }
+  return issue.id
+}
+
 test.describe('Dependency Flowchart', () => {
   test('shows flowchart toggle after creating a dependency', async ({ authenticatedPage }) => {
     await createThread(authenticatedPage, {
@@ -369,6 +384,23 @@ test.describe('Dependency Flowchart', () => {
       })
 
       // Create issue-level dependency: Animal Man #17 blocks Swamp Thing #15
+      // First get the actual issue IDs
+      const sourceIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${sourceThread.id}/issues`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      const sourceIssuesData = await sourceIssuesResponse.json()
+      const issue17 = sourceIssuesData.issues.find((i: { issue_number: string }) => i.issue_number === '17')
+
+      const targetIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${targetThread.id}/issues`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      const targetIssuesData = await targetIssuesResponse.json()
+      const issue15 = targetIssuesData.issues.find((i: { issue_number: string }) => i.issue_number === '15')
+
+      if (!issue17?.id || !issue15?.id) {
+        throw new Error('Failed to find required issues')
+      }
+
       const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
           'Content-Type': 'application/json',
@@ -376,11 +408,9 @@ test.describe('Dependency Flowchart', () => {
         },
         data: {
           source_type: 'issue',
-          source_id: sourceThread.id,
-          source_issue_id: 17,
+          source_id: issue17.id,
           target_type: 'issue',
-          target_id: targetThread.id,
-          target_issue_id: 15,
+          target_id: issue15.id,
         },
       })
       expect(depResponse.ok()).toBe(true)
@@ -393,16 +423,25 @@ test.describe('Dependency Flowchart', () => {
         .filter({ hasText: 'Swamp Thing' })
         .first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+
+      // Wait for toggle button to appear
+      await authenticatedPage.waitForSelector('[data-testid="toggle-flowchart"]', { state: 'visible', timeout: 10000 })
+
+      // Click the toggle button
       await authenticatedPage.click('[data-testid="toggle-flowchart"]')
 
+      // Wait for toggle button text to change to "Hide Flowchart"
+      await authenticatedPage.waitForSelector('[data-testid="toggle-flowchart"]:has-text("Hide Flowchart")', { timeout: 5000 })
+
+      // Wait for flowchart container to appear
       await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
 
       // Should have issue nodes (using negative IDs)
       await expect(
-        authenticatedPage.locator('[data-testid="flowchart-node--17"]'),
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue17.id}"]`),
       ).toBeVisible()
       await expect(
-        authenticatedPage.locator('[data-testid="flowchart-node--15"]'),
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue15.id}"]`),
       ).toBeVisible()
 
       // Should have dashed cyan edge for issue-level dependency
@@ -450,6 +489,14 @@ test.describe('Dependency Flowchart', () => {
 
       // Create bidirectional issue dependencies (Rotworld crossover):
       // Animal Man #17 → Swamp Thing #15
+      if (!animalMan || !swampThing) {
+        throw new Error('Failed to create threads')
+      }
+      const issue17Id = await getIssueIdByNumber(authenticatedPage, animalMan.id, '17', token)
+      const issue15Id = await getIssueIdByNumber(authenticatedPage, swampThing.id, '15', token)
+      const issue16Id = await getIssueIdByNumber(authenticatedPage, swampThing.id, '16', token)
+      const issue18Id = await getIssueIdByNumber(authenticatedPage, animalMan.id, '18', token)
+
       const dep1Response = await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
           'Content-Type': 'application/json',
@@ -457,11 +504,9 @@ test.describe('Dependency Flowchart', () => {
         },
         data: {
           source_type: 'issue',
-          source_id: animalMan.id,
-          source_issue_id: 17,
+          source_id: issue17Id,
           target_type: 'issue',
-          target_id: swampThing.id,
-          target_issue_id: 15,
+          target_id: issue15Id,
         },
       })
       expect(dep1Response.ok()).toBe(true)
@@ -474,11 +519,9 @@ test.describe('Dependency Flowchart', () => {
         },
         data: {
           source_type: 'issue',
-          source_id: swampThing.id,
-          source_issue_id: 16,
+          source_id: issue16Id,
           target_type: 'issue',
-          target_id: animalMan.id,
-          target_issue_id: 18,
+          target_id: issue18Id,
         },
       })
       expect(dep2Response.ok()).toBe(true)
@@ -497,10 +540,10 @@ test.describe('Dependency Flowchart', () => {
       await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
 
       // Should have 4 distinct issue nodes visible
-      await expect(authenticatedPage.locator('[data-testid="flowchart-node--17"]')).toBeVisible()
-      await expect(authenticatedPage.locator('[data-testid="flowchart-node--15"]')).toBeVisible()
-      await expect(authenticatedPage.locator('[data-testid="flowchart-node--16"]')).toBeVisible()
-      await expect(authenticatedPage.locator('[data-testid="flowchart-node--18"]')).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue17Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue15Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue16Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue18Id}"]`)).toBeVisible()
 
       // Should have 2 issue-level edges
       const issueEdges = authenticatedPage.locator('.edge--issue-level')
@@ -508,11 +551,11 @@ test.describe('Dependency Flowchart', () => {
       expect(edgeCount).toBe(2)
 
       // Verify node tooltips show correct issue labels
-      await authenticatedPage.locator('[data-testid="flowchart-node--17"]').hover()
+      await authenticatedPage.locator(`[data-testid="flowchart-node--${issue17Id}"]`).hover()
       await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toBeVisible()
       await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toContainText('Animal Man #17')
 
-      await authenticatedPage.locator('[data-testid="flowchart-node--16"]').hover()
+      await authenticatedPage.locator(`[data-testid="flowchart-node--${issue16Id}"]`).hover()
       await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toContainText('Swamp Thing #16')
     })
 
@@ -553,6 +596,9 @@ test.describe('Dependency Flowchart', () => {
         data: { issue_range: '1-10' },
       })
 
+      const issue5Id = await getIssueIdByNumber(authenticatedPage, sourceThread.id, '5', token)
+      const issue3Id = await getIssueIdByNumber(authenticatedPage, targetThread.id, '3', token)
+
       await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
           'Content-Type': 'application/json',
@@ -560,11 +606,9 @@ test.describe('Dependency Flowchart', () => {
         },
         data: {
           source_type: 'issue',
-          source_id: sourceThread.id,
-          source_issue_id: 5,
+          source_id: issue5Id,
           target_type: 'issue',
-          target_id: targetThread.id,
-          target_issue_id: 3,
+          target_id: issue3Id,
         },
       })
 
@@ -579,7 +623,7 @@ test.describe('Dependency Flowchart', () => {
       await authenticatedPage.click('[data-testid="toggle-flowchart"]')
 
       // Check issue node styling
-      const issueNode = authenticatedPage.locator('[data-testid="flowchart-node--5"]')
+      const issueNode = authenticatedPage.locator(`[data-testid="flowchart-node--${issue5Id}"]`)
       await expect(issueNode).toHaveClass(/flowchart-node--issue/)
 
       // Verify the rect element has the correct fill and rx attributes
@@ -625,6 +669,9 @@ test.describe('Dependency Flowchart', () => {
         data: { issue_range: '1-10' },
       })
 
+      const issue7Id = await getIssueIdByNumber(authenticatedPage, sourceThread.id, '7', token)
+      const issue4Id = await getIssueIdByNumber(authenticatedPage, targetThread.id, '4', token)
+
       await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
           'Content-Type': 'application/json',
@@ -632,11 +679,9 @@ test.describe('Dependency Flowchart', () => {
         },
         data: {
           source_type: 'issue',
-          source_id: sourceThread.id,
-          source_issue_id: 7,
+          source_id: issue7Id,
           target_type: 'issue',
-          target_id: targetThread.id,
-          target_issue_id: 4,
+          target_id: issue4Id,
         },
       })
 
@@ -652,7 +697,7 @@ test.describe('Dependency Flowchart', () => {
 
       // Issue node should not have lock icon
       const issueNodeIcon = authenticatedPage
-        .locator('[data-testid="flowchart-node--4"]')
+        .locator(`[data-testid="flowchart-node--${issue4Id}"]`)
         .locator('.flowchart-node-blocked-icon')
       await expect(issueNodeIcon).not.toBeVisible()
 
@@ -700,6 +745,9 @@ test.describe('Dependency Flowchart', () => {
         data: { issue_range: '1-5' },
       })
 
+      const issue3Id = await getIssueIdByNumber(authenticatedPage, sourceThread.id, '3', token)
+      const issue2Id = await getIssueIdByNumber(authenticatedPage, targetThread.id, '2', token)
+
       await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
           'Content-Type': 'application/json',
@@ -707,11 +755,9 @@ test.describe('Dependency Flowchart', () => {
         },
         data: {
           source_type: 'issue',
-          source_id: sourceThread.id,
-          source_issue_id: 3,
+          source_id: issue3Id,
           target_type: 'issue',
-          target_id: targetThread.id,
-          target_issue_id: 2,
+          target_id: issue2Id,
         },
       })
 
@@ -794,6 +840,9 @@ test.describe('Dependency Flowchart', () => {
       })
 
       // Issue-level dependency: Alpha #5 blocks Beta #3
+      const issue5Id = await getIssueIdByNumber(authenticatedPage, threadA.id, '5', token)
+      const issue3Id = await getIssueIdByNumber(authenticatedPage, threadB.id, '3', token)
+
       await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
           'Content-Type': 'application/json',
@@ -801,11 +850,9 @@ test.describe('Dependency Flowchart', () => {
         },
         data: {
           source_type: 'issue',
-          source_id: threadA.id,
-          source_issue_id: 5,
+          source_id: issue5Id,
           target_type: 'issue',
-          target_id: threadB.id,
-          target_issue_id: 3,
+          target_id: issue3Id,
         },
       })
 
@@ -829,10 +876,10 @@ test.describe('Dependency Flowchart', () => {
 
       // Should have issue nodes
       await expect(
-        authenticatedPage.locator('[data-testid="flowchart-node--5"]'),
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue5Id}"]`),
       ).toBeVisible()
       await expect(
-        authenticatedPage.locator('[data-testid="flowchart-node--3"]'),
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue3Id}"]`),
       ).toBeVisible()
 
       // Should have both thread-level and issue-level edges

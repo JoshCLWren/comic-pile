@@ -26,9 +26,7 @@ from comic_pile.dependencies import (
 router = APIRouter(tags=["dependencies"])
 
 
-async def enrich_dependencies(
-    deps: list[Dependency], db: AsyncSession
-) -> list[DependencyResponse]:
+async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[DependencyResponse]:
     """Batch-enrich dependencies with human-readable labels.
 
     Collects all referenced issue/thread IDs, fetches them in bulk,
@@ -103,6 +101,9 @@ async def enrich_dependencies(
         response.target_label = target_label
         response.source_issue_thread_id = source_issue_thread_id
         response.target_issue_thread_id = target_issue_thread_id
+        response.is_issue_level = (
+            dep.source_issue_id is not None and dep.target_issue_id is not None
+        )
         responses.append(response)
 
     return responses
@@ -138,16 +139,12 @@ async def list_thread_dependencies(
     blocking_result = await db.execute(
         select(Dependency)
         .outerjoin(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .where(
-            (Dependency.source_thread_id == thread_id) | (source_issue.c.thread_id == thread_id)
-        )
+        .where((Dependency.source_thread_id == thread_id) | (source_issue.c.thread_id == thread_id))
     )
     blocked_by_result = await db.execute(
         select(Dependency)
         .outerjoin(target_issue, Dependency.target_issue_id == target_issue.c.id)
-        .where(
-            (Dependency.target_thread_id == thread_id) | (target_issue.c.thread_id == thread_id)
-        )
+        .where((Dependency.target_thread_id == thread_id) | (target_issue.c.thread_id == thread_id))
     )
 
     blocking_deps = blocking_result.scalars().all()
@@ -185,7 +182,9 @@ async def get_thread_blocking_info(
     return BlockingExplanation(is_blocked=True, blocking_reasons=reasons)
 
 
-@router.post("/dependencies/", response_model=DependencyResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/dependencies/", response_model=DependencyResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_dependency(
     dependency_data: DependencyCreate,
     current_user: Annotated[User, Depends(get_current_user)],

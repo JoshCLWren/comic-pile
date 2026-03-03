@@ -31,7 +31,6 @@ router = APIRouter(tags=["threads"])
 async def thread_to_response(
     thread: Thread,
     db: AsyncSession,
-    include_blocking_info: bool = True,
     issue_number_map: dict[int, str] | None = None,
 ) -> ThreadResponse:
     """Convert Thread model to ThreadResponse.
@@ -39,7 +38,6 @@ async def thread_to_response(
     Args:
         thread: Thread model instance
         db: Database session for computing issues_remaining
-        include_blocking_info: Whether to compute blocking reasons
         issue_number_map: Pre-fetched mapping of issue ID → issue_number.
             When provided, avoids per-thread DB lookups for next_unread_issue_number.
 

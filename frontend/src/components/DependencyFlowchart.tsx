@@ -59,7 +59,7 @@ export default function DependencyFlowchart({
   blockedIds,
   issueNodes = [],
 }: DependencyFlowchartProps) {
-  const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 })
+   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 })
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   const [draggedNodeId, setDraggedNodeId] = useState<number | null>(null)
   const [nodeOffsets, setNodeOffsets] = useState<Map<number, { dx: number; dy: number }>>(
@@ -82,9 +82,24 @@ export default function DependencyFlowchart({
     const visibleThreadIds = new Set(paginatedThreads.map((t) => t.id))
     
     // Filter dependencies to only those involving visible nodes
-    const visibleDependencies = dependencies.filter(
-      (d) => visibleThreadIds.has(d.source_thread_id) && visibleThreadIds.has(d.target_thread_id),
-    )
+    const visibleDependencies = dependencies.filter((d) => {
+      // Issue-level dependency: check parent thread IDs from issue nodes
+      if (d.is_issue_level) {
+        const sourceParent = issueNodes?.find((n) => n.id === d.source_thread_id)
+        const targetParent = issueNodes?.find((n) => n.id === d.target_thread_id)
+        if (sourceParent?.parentThreadId && targetParent?.parentThreadId) {
+          return visibleThreadIds.has(sourceParent.parentThreadId) && visibleThreadIds.has(targetParent.parentThreadId)
+        }
+        return false
+      }
+      // Thread-level dependency: check thread IDs
+      return (
+        d.source_thread_id !== null &&
+        d.target_thread_id !== null &&
+        visibleThreadIds.has(d.source_thread_id) &&
+        visibleThreadIds.has(d.target_thread_id)
+      )
+    })
     
     // Filter issue nodes to only those whose parent threads are visible
     const visibleIssueNodes = (issueNodes ?? []).filter(
