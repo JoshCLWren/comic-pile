@@ -362,10 +362,10 @@ async def test_create_issues_skips_duplicates(
 
 
 @pytest.mark.asyncio
-async def test_create_issues_invalid_range_non_numeric(
+async def test_create_issues_literal_range_identifier(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /threads/{thread_id}/issues returns 400 for non-numeric range."""
+    """POST /threads/{thread_id}/issues accepts non-numeric ranges as literal identifiers."""
     user = await get_or_create_user_async(async_db)
 
     thread = Thread(
@@ -383,8 +383,11 @@ async def test_create_issues_invalid_range_non_numeric(
     response = await auth_client.post(
         f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "1-Annual, 3"}
     )
-    assert response.status_code == 400
-    assert "non-numeric" in response.json()["detail"].lower()
+    assert response.status_code == 201
+    data = response.json()
+    # "1-Annual" is accepted as a literal identifier, "3" as a number
+    issue_numbers = {issue["issue_number"] for issue in data["issues"]}
+    assert issue_numbers == {"1-Annual", "3"}
 
 
 @pytest.mark.asyncio

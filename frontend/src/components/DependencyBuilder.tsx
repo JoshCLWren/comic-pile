@@ -287,8 +287,16 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     }
     const lastRead = Number(migrationLastRead)
     const total = Number(migrationTotal)
-    if (Number.isNaN(lastRead) || Number.isNaN(total) || total < 1 || lastRead < 0 || lastRead > total) {
-      setError('Invalid migration values. Last read must be 0-total.')
+    if (
+      Number.isNaN(lastRead) ||
+      Number.isNaN(total) ||
+      !Number.isInteger(lastRead) ||
+      !Number.isInteger(total) ||
+      total < 1 ||
+      lastRead < 0 ||
+      lastRead > total
+    ) {
+      setError('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
       return
     }
 
@@ -467,30 +475,32 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                  </button>
                ) : (
                  <form onSubmit={handleInlineMigration} className="space-y-2">
-                   <div className="flex gap-2">
-                     <div className="flex-1">
-                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Last issue read</label>
-                       <input
-                         type="number"
-                         min="0"
-                         value={migrationLastRead}
-                         onChange={(e) => setMigrationLastRead(e.target.value)}
-                         className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200"
-                         required
-                       />
-                     </div>
-                     <div className="flex-1">
-                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total issues</label>
-                       <input
-                         type="number"
-                         min="1"
-                         value={migrationTotal}
-                         onChange={(e) => setMigrationTotal(e.target.value)}
-                         className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200"
-                         required
-                       />
-                     </div>
-                   </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label htmlFor="migration-last-read" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Last issue read</label>
+                        <input
+                          id="migration-last-read"
+                          type="number"
+                          min="0"
+                          value={migrationLastRead}
+                          onChange={(e) => setMigrationLastRead(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200"
+                          required
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label htmlFor="migration-total" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total issues</label>
+                        <input
+                          id="migration-total"
+                          type="number"
+                          min="1"
+                          value={migrationTotal}
+                          onChange={(e) => setMigrationTotal(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200"
+                          required
+                        />
+                      </div>
+                    </div>
                    <button
                      type="submit"
                      disabled={isMigrating}

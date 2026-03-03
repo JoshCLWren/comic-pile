@@ -61,6 +61,9 @@ def parse_issue_ranges(input_str: str) -> list[str]:
                     range_size = end - start + 1
                     if range_size > MAX_ISSUES:
                         raise ValueError(f"Range too large: {range_size} issues (max {MAX_ISSUES})")
+                    # Check cumulative total to prevent combining multiple large ranges
+                    if len(result) + range_size > MAX_ISSUES:
+                        raise ValueError(f"Total issues would exceed maximum of {MAX_ISSUES}")
                     result.extend(str(i) for i in range(start, end + 1))
                     continue
                 except ValueError as exc:
