@@ -256,17 +256,23 @@ export interface IssueListResponse {
   next_page_token: string | null;
 }
 
-export interface ThreadDependency {
+/**
+ * Represents a dependency between threads or issues.
+ * The API returns all fields as nullable; is_issue_level indicates the type.
+ */
+export interface Dependency {
   /** Unique identifier for the dependency */
   id: number;
-  /** ID of the thread that must be completed first (source blocks target) */
-  source_thread_id: number;
-  /** ID of the thread that is blocked */
-  target_thread_id: number;
-  /** Never populated for thread-level dependencies */
-  source_issue_id?: never;
-  /** Never populated for thread-level dependencies */
-  target_issue_id?: never;
+  /** ID of the source thread (null for issue-level deps) */
+  source_thread_id: number | null;
+  /** ID of the target thread (null for issue-level deps) */
+  target_thread_id: number | null;
+  /** Source issue ID (null for thread-level deps) */
+  source_issue_id: number | null;
+  /** Target issue ID (null for thread-level deps) */
+  target_issue_id: number | null;
+  /** True if this is an issue-level dependency */
+  is_issue_level?: boolean;
   /** ISO 8601 timestamp when the dependency was created */
   created_at: string;
   /** Human-readable label for the source */
@@ -278,34 +284,6 @@ export interface ThreadDependency {
   /** Parent thread ID of the target issue (only for issue-level deps) */
   target_issue_thread_id?: number | null;
 }
-
-export interface IssueDependency {
-  /** Unique identifier for the dependency */
-  id: number;
-  /** Never populated for issue-level dependencies */
-  source_thread_id?: never;
-  /** Never populated for issue-level dependencies */
-  target_thread_id?: never;
-  /** Source issue ID for issue-level dependencies */
-  source_issue_id: number;
-  /** Target issue ID for issue-level dependencies */
-  target_issue_id: number;
-  /** ISO 8601 timestamp when the dependency was created */
-  created_at: string;
-  /** Human-readable label for the source */
-  source_label?: string | null;
-  /** Human-readable label for the target */
-  target_label?: string | null;
-  /** Parent thread ID of the source issue */
-  source_issue_thread_id?: number | null;
-  /** Parent thread ID of the target issue */
-  target_issue_thread_id?: number | null;
-}
-
-/**
- * Represents a dependency between threads or issues.
- */
-export type Dependency = ThreadDependency | IssueDependency;
 
 /**
  * Response from the thread dependencies endpoint
