@@ -366,23 +366,6 @@ test.describe('Dependency Flowchart', () => {
 
       const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
 
-      // Create issues for both threads
-      await authenticatedPage.request.post(`/api/v1/threads/${sourceThread.id}/issues`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { issue_range: '1-20' },
-      })
-
-      await authenticatedPage.request.post(`/api/v1/threads/${targetThread.id}/issues`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { issue_range: '1-20' },
-      })
-
       // Create issue-level dependency: Animal Man #17 blocks Swamp Thing #15
       // First get the actual issue IDs
       const sourceIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${sourceThread.id}/issues`, {
