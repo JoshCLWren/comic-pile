@@ -78,7 +78,7 @@ async def test_both_buttons_available_when_thread_complete(
 async def test_can_still_rate_after_thread_complete(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """After one thread completes, pending next thread can be resolved and rolled."""
+    """After one thread completes, user must roll again before rating another thread."""
     # Create user
     from tests.conftest import get_or_create_user_async
 
@@ -142,19 +142,12 @@ async def test_can_still_rate_after_thread_complete(
     await async_db.refresh(session)
     assert session.ended_at is None
 
-    # Backend auto-advances a pending thread. Confirm next thread is pending.
+    # Save & Continue should leave no pending thread selected.
     current_session_response = await auth_client.get("/api/sessions/current/")
     assert current_session_response.status_code == 200
-    assert current_session_response.json()["pending_thread_id"] == thread2.id
+    assert current_session_response.json()["pending_thread_id"] is None
 
-    # Rolling is blocked while pending exists.
-    blocked_roll = await auth_client.post("/api/roll/")
-    assert blocked_roll.status_code == 409
-
-    # After dismissing pending state, rolling should select thread2.
-    dismiss_response = await auth_client.post("/api/roll/dismiss-pending")
-    assert dismiss_response.status_code == 204
-
+    # User can roll again immediately.
     roll_response = await auth_client.post("/api/roll/")
     assert roll_response.status_code == 200
     data = roll_response.json()

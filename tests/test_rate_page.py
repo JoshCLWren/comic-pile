@@ -470,10 +470,10 @@ async def test_rate_api_with_max_rating(auth_client: AsyncClient, async_db: Asyn
 
 
 @pytest.mark.asyncio
-async def test_rate_api_sets_pending_thread_to_next(
+async def test_rate_api_save_and_continue_clears_pending_thread(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /rate/ sets pending_thread_id to next thread when threads remain after rating."""
+    """POST /rate/ with finish_session=False clears pending_thread_id after rating."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -520,16 +520,19 @@ async def test_rate_api_sets_pending_thread_to_next(
     response = await auth_client.post("/api/rate/", json={"rating": 4.0})
     assert response.status_code == 200
 
+    await async_db.refresh(thread2)
+    assert thread2.issues_remaining == 3
+
     await async_db.refresh(session)
-    assert session.pending_thread_id is not None
-    assert session.pending_thread_id != thread1.id
+    assert session.pending_thread_id is None
+    assert session.pending_thread_updated_at is None
 
 
 @pytest.mark.asyncio
-async def test_rate_api_redirects_pending_thread_to_next_available(
+async def test_rate_api_completed_thread_still_clears_pending_thread(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /rate/ redirects pending_thread_id to next thread when one remains."""
+    """Completing a thread via rate still clears pending_thread_id after Save & Continue."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -577,15 +580,19 @@ async def test_rate_api_redirects_pending_thread_to_next_available(
     response = await auth_client.post("/api/rate/", json={"rating": 4.0})
     assert response.status_code == 200
 
+    await async_db.refresh(thread2)
+    assert thread2.issues_remaining == 5
+
     await async_db.refresh(session)
-    assert session.pending_thread_id == thread2.id
+    assert session.pending_thread_id is None
+    assert session.pending_thread_updated_at is None
 
 
 @pytest.mark.asyncio
-async def test_rate_api_sets_pending_thread_to_next_available(
+async def test_rate_api_with_multiple_threads_keeps_pending_cleared(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /rate/ sets pending_thread_id to next available thread when multiple threads exist."""
+    """POST /rate/ should not auto-select a next thread even when multiple threads exist."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -633,9 +640,12 @@ async def test_rate_api_sets_pending_thread_to_next_available(
     response = await auth_client.post("/api/rate/", json={"rating": 4.0})
     assert response.status_code == 200
 
+    await async_db.refresh(thread2)
+    assert thread2.issues_remaining == 5
+
     await async_db.refresh(session)
-    assert session.pending_thread_id is not None
-    assert session.pending_thread_id != thread1.id
+    assert session.pending_thread_id is None
+    assert session.pending_thread_updated_at is None
 
 
 @pytest.mark.asyncio
@@ -739,6 +749,9 @@ async def test_rate_api_no_pending_thread_when_finish_session(
         json={"rating": 4.0, "finish_session": True},
     )
 
+    await async_db.refresh(thread2)
+    assert thread2.issues_remaining == 5
+
     await async_db.refresh(session)
     assert session.pending_thread_id is None
     assert session.pending_thread_updated_at is None
@@ -746,10 +759,10 @@ async def test_rate_api_no_pending_thread_when_finish_session(
 
 
 @pytest.mark.asyncio
-async def test_rate_api_sets_pending_thread_when_not_finish_session(
+async def test_rate_api_save_and_continue_does_not_set_pending_thread(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /rate/ with finish_session=False sets pending_thread_id to next thread."""
+    """POST /rate/ with finish_session=False leaves session without pending thread."""
     from tests.conftest import get_or_create_user_async
 
     user = await get_or_create_user_async(async_db)
@@ -798,6 +811,9 @@ async def test_rate_api_sets_pending_thread_when_not_finish_session(
         json={"rating": 4.0, "finish_session": False},
     )
 
+    await async_db.refresh(thread2)
+    assert thread2.issues_remaining == 5
+
     await async_db.refresh(session)
-    assert session.pending_thread_id is not None
-    assert session.pending_thread_updated_at is not None
+    assert session.pending_thread_id is None
+    assert session.pending_thread_updated_at is None

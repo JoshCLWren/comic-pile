@@ -18,7 +18,7 @@ from app.schemas import RateRequest, ThreadResponse
 from app.api.thread import thread_to_response
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
-from comic_pile.queue import get_roll_pool, move_to_back, move_to_front
+from comic_pile.queue import move_to_back, move_to_front
 from comic_pile.session import get_current_die
 
 router = APIRouter()
@@ -177,13 +177,16 @@ async def rate_thread(
         result = await db.execute(
             select(Event)
             .where(Event.session_id == current_session_id)
-            .where(Event.type == "roll")
-            .where(Event.selected_thread_id.is_not(None))
-            .order_by(Event.timestamp.desc())
+            .where(Event.type.in_(["roll", "rate", "snooze", "rolled_but_skipped"]))
+            .order_by(Event.timestamp.desc(), Event.id.desc())
         )
-        last_roll_event = result.scalars().first()
+        latest_action_event = result.scalars().first()
 
-        if not last_roll_event:
+        if (
+            not latest_action_event
+            or latest_action_event.type != "roll"
+            or latest_action_event.selected_thread_id is None
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No active thread. Please roll the dice first.",
@@ -191,14 +194,14 @@ async def rate_thread(
 
         result = await db.execute(
             select(Thread)
-            .where(Thread.id == last_roll_event.selected_thread_id)
+            .where(Thread.id == latest_action_event.selected_thread_id)
             .where(Thread.user_id == user_id)
         )
         thread = result.scalar_one_or_none()
         if not thread:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Thread {last_roll_event.selected_thread_id} not found",
+                detail=f"Thread {latest_action_event.selected_thread_id} not found",
             )
     thread_id = thread.id
 
@@ -304,22 +307,8 @@ async def rate_thread(
     if clear_cache:
         clear_cache()
 
-    if rate_data.finish_session:
-        current_session.pending_thread_id = None
-        current_session.pending_thread_updated_at = None
-    else:
-        snoozed_ids = current_session.snoozed_thread_ids or []
-        roll_pool = await get_roll_pool(user_id, db, snoozed_ids)
-
-        next_pending_thread_id = next(
-            (candidate.id for candidate in roll_pool if candidate.id != thread_id),
-            roll_pool[0].id if roll_pool else None,
-        )
-
-        current_session.pending_thread_id = next_pending_thread_id
-        current_session.pending_thread_updated_at = (
-            datetime.now(UTC) if next_pending_thread_id is not None else None
-        )
+    current_session.pending_thread_id = None
+    current_session.pending_thread_updated_at = None
 
     await db.flush()
     await db.refresh(event)

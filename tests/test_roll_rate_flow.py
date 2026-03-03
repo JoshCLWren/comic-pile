@@ -84,8 +84,16 @@ async def test_roll_rate_history_consistency(
 
     expected_die = step_down(roll_data["die_size"])
     assert rated_data["current_die"] == expected_die
-    
-    # After rating, backend preselects the next available thread.
-    assert rated_data["active_thread"] is not None
-    assert rated_data["active_thread"]["id"] != roll_data["thread_id"]
+
+    # After rating with Save & Continue, no new pending target is auto-selected.
+    assert rated_data["pending_thread_id"] is None
+    assert rated_data["active_thread"] is None
     assert rated_data["last_rolled_result"] is None
+
+    # Regression check: rating again without a new roll is blocked.
+    second_rate = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 4.5, "issues_read": 1, "finish_session": False},
+    )
+    assert second_rate.status_code == 400
+    assert "No active thread" in second_rate.json()["detail"]
