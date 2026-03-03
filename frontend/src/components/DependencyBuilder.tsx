@@ -80,15 +80,6 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       const relatedIds = new Set([thread.id])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
 
-      console.log('[loadFlowchartData] allDeps:', allDeps.length, allDeps.map((d: any) => ({
-        id: d.id,
-        is_issue_level: d.is_issue_level,
-        source_issue_id: d.source_issue_id,
-        target_issue_id: d.target_issue_id,
-        source_thread_id: d.source_thread_id,
-        target_thread_id: d.target_thread_id,
-      })))
-
       // Thread-level deps map directly to FlowchartDependency
       const threadDeps: FlowchartDependency[] = allDeps
         .filter((dep) => dep.source_thread_id != null && dep.target_thread_id != null)
