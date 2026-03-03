@@ -85,32 +85,19 @@ async def thread_to_response(
     )
 
 
-async def _bulk_issue_number_map(
-    threads: list[Thread], db: AsyncSession
-) -> dict[int, str]:
+async def _bulk_issue_number_map(threads: list[Thread], db: AsyncSession) -> dict[int, str]:
     """Batch-fetch issue numbers for all threads' next_unread_issue_id values."""
-    issue_ids = {
-        t.next_unread_issue_id
-        for t in threads
-        if t.next_unread_issue_id is not None
-    }
+    issue_ids = {t.next_unread_issue_id for t in threads if t.next_unread_issue_id is not None}
     if not issue_ids:
         return {}
-    result = await db.execute(
-        select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids))
-    )
+    result = await db.execute(select(Issue.id, Issue.issue_number).where(Issue.id.in_(issue_ids)))
     return {row.id: row.issue_number for row in result}
 
 
-async def _threads_to_responses(
-    threads: list[Thread], db: AsyncSession
-) -> list[ThreadResponse]:
+async def _threads_to_responses(threads: list[Thread], db: AsyncSession) -> list[ThreadResponse]:
     """Convert a list of Thread models to ThreadResponses with batched lookups."""
     issue_map = await _bulk_issue_number_map(threads, db)
-    return [
-        await thread_to_response(thread, db, issue_number_map=issue_map)
-        for thread in threads
-    ]
+    return [await thread_to_response(thread, db, issue_number_map=issue_map) for thread in threads]
 
 
 @router.get("/stale", response_model=list[ThreadResponse])
@@ -457,8 +444,15 @@ async def delete_thread(
         thread_id=None,
     )
     db.add(delete_event)
-    await db.delete(thread)
-    await db.commit()
+    try:
+        await db.delete(thread)
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete thread: {exc}",
+        ) from exc
     if clear_cache:
         clear_cache()
 

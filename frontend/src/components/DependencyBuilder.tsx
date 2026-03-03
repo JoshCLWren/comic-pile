@@ -133,7 +133,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         }
 
         issueEdges.push({
-          id: -(d.source_issue_id * 100000 + d.target_issue_id),
+          id: -Date.now() - Math.floor(Math.random() * 1000000),
           source_thread_id: srcNodeId,
           target_thread_id: tgtNodeId,
           is_issue_level: true,

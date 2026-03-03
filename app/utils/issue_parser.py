@@ -56,30 +56,32 @@ def parse_issue_ranges(input_str: str) -> list[str]:
                     if start < 0 or end < 0:
                         raise ValueError("Range endpoints must be >= 0")
                     if start > end:
-                        raise ValueError(
-                            f"Range start ({start}) cannot exceed end ({end})"
-                        )
+                        raise ValueError(f"Range start ({start}) cannot exceed end ({end})")
+                    # Check range size BEFORE expansion to prevent DoS
+                    range_size = end - start + 1
+                    if range_size > MAX_ISSUES:
+                        raise ValueError(f"Range too large: {range_size} issues (max {MAX_ISSUES})")
                     result.extend(str(i) for i in range(start, end + 1))
                     continue
                 except ValueError as exc:
                     # If conversion failed because it's not an integer,
-                    # fall through to store as literal
+                    # fall through to store as literal after length check
                     if "invalid literal" in str(exc):
+                        if len(part) > MAX_LITERAL_LENGTH:
+                            raise ValueError(
+                                f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)"
+                            ) from None
                         result.append(part)
                         continue
                     raise
-            # More than one dash and not a valid range — store as literal
+            # More than one dash and not a valid range — store as literal after length check
             if len(part) > MAX_LITERAL_LENGTH:
-                raise ValueError(
-                    f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)"
-                )
+                raise ValueError(f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)")
             result.append(part)
         else:
             # Single token — accept any non-empty string as a literal identifier
             if len(part) > MAX_LITERAL_LENGTH:
-                raise ValueError(
-                    f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)"
-                )
+                raise ValueError(f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)")
             result.append(part)
 
     seen: set[str] = set()
