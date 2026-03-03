@@ -295,7 +295,7 @@ export default function RollPage() {
     }
   }
   const activeThreads = useMemo(
-    () => threads?.filter((thread) => thread.status === 'active') ?? [],
+    () => threads?.filter((thread) => thread.status === 'active' && !thread.is_blocked) ?? [],
     [threads],
   )
 
@@ -994,7 +994,7 @@ export default function RollPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2" data-roll-pool>
                 {pool.length === 0 ? (
                   <div className="text-center py-10 space-y-3">
                     <div className="text-3xl">📚</div>

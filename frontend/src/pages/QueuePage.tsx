@@ -86,7 +86,7 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
     setIsLoading(true)
     try {
       // Load all issues (use large page size)
-      const data = await issuesApi.list(threadId, { page_size: 9999 })
+      const data = await issuesApi.list(threadId, { page_size: 100 })
       setIssues(data.issues || [])
     } catch {
       // Non-critical

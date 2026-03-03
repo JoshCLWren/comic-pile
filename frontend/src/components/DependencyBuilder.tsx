@@ -4,7 +4,7 @@ import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
-import type { Dependency, FlowchartDependency, Issue, Thread, ThreadDependenciesResponse } from '../types'
+import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
 import { getApiErrorDetail } from '../utils/apiError'
 
 function getDefaultDependencyMode(thread: Thread | null): 'thread' | 'issue' {
@@ -31,6 +31,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [showFlowchart, setShowFlowchart] = useState(false)
   const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
   const [flowchartDependencies, setFlowchartDependencies] = useState<FlowchartDependency[]>([])
+  const [flowchartIssueNodes, setFlowchartIssueNodes] = useState<FlowchartNode[]>([])
   const [blockedIds, setBlockedIds] = useState<Set<number>>(new Set())
   const [sourceIssueId, setSourceIssueId] = useState<number | null>(null)
   const [targetIssueId, setTargetIssueId] = useState<number | null>(null)
@@ -89,47 +90,74 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
           created_at: dep.created_at,
         }))
 
-      // Issue-level deps → virtual thread edges (dashed), deduplicated by thread pair
-      const issueOnlyDeps = allDeps.filter(
-        (dep) => dep.source_thread_id == null || dep.target_thread_id == null
-      )
-      const seenPairs = new Set<string>()
-      const virtualEdges: FlowchartDependency[] = []
-      for (const d of issueOnlyDeps) {
-        if (!d.source_issue_thread_id || !d.target_issue_thread_id) continue
-        const pairKey = `${d.source_issue_thread_id}->${d.target_issue_thread_id}`
-        if (seenPairs.has(pairKey)) continue
-        seenPairs.add(pairKey)
-        virtualEdges.push({
-          id: -(d.source_issue_thread_id * 100000 + d.target_issue_thread_id),
-          source_thread_id: d.source_issue_thread_id,
-          target_thread_id: d.target_issue_thread_id,
-          is_issue_level: true,
-          created_at: d.created_at,
-        })
-      }
-
-      // Collect related thread IDs from BOTH real and virtual edges
+      // Collect related thread IDs from thread-level deps
       for (const dep of threadDeps) {
         relatedIds.add(dep.source_thread_id)
         relatedIds.add(dep.target_thread_id)
       }
-      for (const edge of virtualEdges) {
-        relatedIds.add(edge.source_thread_id)
-        relatedIds.add(edge.target_thread_id)
+
+      // Issue-level deps → issue nodes + direct edges between them
+      const issueOnlyDeps = allDeps.filter(
+        (dep) => dep.source_thread_id == null || dep.target_thread_id == null
+      )
+      const issueNodeMap = new Map<number, FlowchartNode>()
+      const issueEdges: FlowchartDependency[] = []
+
+      for (const d of issueOnlyDeps) {
+        if (!d.source_issue_id || !d.target_issue_id) continue
+        if (!d.source_issue_thread_id || !d.target_issue_thread_id) continue
+
+        // Use negative issue ID to avoid thread ID collisions
+        const srcNodeId = -d.source_issue_id
+        if (!issueNodeMap.has(srcNodeId)) {
+          issueNodeMap.set(srcNodeId, {
+            id: srcNodeId,
+            title: d.source_label ?? `Issue #${d.source_issue_id}`,
+            x: 0, y: 0,
+            isBlocked: false,
+            isIssueNode: true,
+            parentThreadId: d.source_issue_thread_id,
+          })
+        }
+
+        const tgtNodeId = -d.target_issue_id
+        if (!issueNodeMap.has(tgtNodeId)) {
+          issueNodeMap.set(tgtNodeId, {
+            id: tgtNodeId,
+            title: d.target_label ?? `Issue #${d.target_issue_id}`,
+            x: 0, y: 0,
+            isBlocked: false,
+            isIssueNode: true,
+            parentThreadId: d.target_issue_thread_id,
+          })
+        }
+
+        issueEdges.push({
+          id: -(d.source_issue_id * 100000 + d.target_issue_id),
+          source_thread_id: srcNodeId,
+          target_thread_id: tgtNodeId,
+          is_issue_level: true,
+          created_at: d.created_at,
+        })
+
+        // Ensure parent threads are loaded for context
+        relatedIds.add(d.source_issue_thread_id)
+        relatedIds.add(d.target_issue_thread_id)
       }
 
-      const allEdges = [...threadDeps, ...virtualEdges]
+      const allEdges = [...threadDeps, ...issueEdges]
 
       const allThreads = await threadsApi.list()
       const relatedThreads = allThreads.filter((t) => relatedIds.has(t.id))
 
       setFlowchartThreads(relatedThreads)
       setFlowchartDependencies(allEdges)
+      setFlowchartIssueNodes(Array.from(issueNodeMap.values()))
       setBlockedIds(new Set(allBlockedIds))
     } catch {
       setFlowchartThreads([])
       setFlowchartDependencies([])
+      setFlowchartIssueNodes([])
     }
   }, [thread?.id])
 
@@ -596,6 +624,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                 threads={flowchartThreads}
                 dependencies={flowchartDependencies}
                 blockedIds={blockedIds}
+                issueNodes={flowchartIssueNodes}
               />
             )}
           </div>

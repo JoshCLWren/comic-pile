@@ -321,9 +321,9 @@ export interface ThreadDependenciesResponse {
  * A positioned node for the dependency flowchart
  */
 export interface FlowchartNode {
-  /** Thread ID */
+  /** Thread ID (or negative issue ID for issue nodes) */
   id: number;
-  /** Thread title */
+  /** Thread or issue title */
   title: string;
   /** X position */
   x: number;
@@ -331,6 +331,10 @@ export interface FlowchartNode {
   y: number;
   /** Whether this thread is blocked */
   isBlocked: boolean;
+  /** True for issue-level nodes (smaller, different style) */
+  isIssueNode?: boolean;
+  /** Which thread this issue belongs to (only for issue nodes) */
+  parentThreadId?: number;
 }
 
 /**

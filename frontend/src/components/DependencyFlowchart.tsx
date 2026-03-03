@@ -6,7 +6,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
-import { layoutGraph, NODE_WIDTH, NODE_HEIGHT } from '../utils/graphLayout'
+import { layoutGraph, NODE_WIDTH, NODE_HEIGHT, ISSUE_NODE_WIDTH, ISSUE_NODE_HEIGHT } from '../utils/graphLayout'
 import type { Thread, FlowchartDependency, FlowchartNode } from '../types'
 import './DependencyFlowchart.css'
 
@@ -20,6 +20,7 @@ interface DependencyFlowchartProps {
   threads: Thread[]
   dependencies: FlowchartDependency[]
   blockedIds: Set<number>
+  issueNodes?: FlowchartNode[]
 }
 
 interface Transform {
@@ -56,6 +57,7 @@ export default function DependencyFlowchart({
   threads,
   dependencies,
   blockedIds,
+  issueNodes = [],
 }: DependencyFlowchartProps) {
   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 })
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
@@ -78,11 +80,19 @@ export default function DependencyFlowchart({
   const layout = useMemo(() => {
     const paginatedThreads = threads.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
     const visibleThreadIds = new Set(paginatedThreads.map((t) => t.id))
+    
+    // Filter dependencies to only those involving visible nodes
     const visibleDependencies = dependencies.filter(
       (d) => visibleThreadIds.has(d.source_thread_id) && visibleThreadIds.has(d.target_thread_id),
     )
-    return layoutGraph(paginatedThreads, visibleDependencies, blockedIds)
-  }, [threads, page, dependencies, blockedIds])
+    
+    // Filter issue nodes to only those whose parent threads are visible
+    const visibleIssueNodes = (issueNodes ?? []).filter(
+      (n) => n.parentThreadId !== undefined && visibleThreadIds.has(n.parentThreadId)
+    )
+    
+    return layoutGraph(paginatedThreads, visibleDependencies, blockedIds, visibleIssueNodes)
+  }, [threads, page, dependencies, blockedIds, issueNodes])
 
   // Apply node drag offsets
   const adjustedNodes = useMemo(
@@ -105,9 +115,13 @@ export default function DependencyFlowchart({
       const target = nodePositions.get(edge.targetId)
       if (!source || !target) return edge
 
-      const sx = source.x + NODE_WIDTH / 2
-      const sy = source.y + NODE_HEIGHT
-      const tx = target.x + NODE_WIDTH / 2
+      const srcW = source.isIssueNode ? ISSUE_NODE_WIDTH : NODE_WIDTH
+      const srcH = source.isIssueNode ? ISSUE_NODE_HEIGHT : NODE_HEIGHT
+      const tgtW = target.isIssueNode ? ISSUE_NODE_WIDTH : NODE_WIDTH
+
+      const sx = source.x + srcW / 2
+      const sy = source.y + srcH
+      const tx = target.x + tgtW / 2
       const ty = target.y
       const midY = (sy + ty) / 2
       const path = `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`
@@ -192,13 +206,15 @@ export default function DependencyFlowchart({
         const originalNode = layout.nodes.find((n) => n.id === draggedNodeId)
         if (!originalNode) return
 
+        const nodeW = originalNode.isIssueNode ? ISSUE_NODE_WIDTH : NODE_WIDTH
+        const nodeH = originalNode.isIssueNode ? ISSUE_NODE_HEIGHT : NODE_HEIGHT
         const anchor = dragAnchorRef.current ?? { x: 0, y: 0 }
 
         setNodeOffsets((prev) => {
           const next = new Map(prev)
           next.set(draggedNodeId, {
-            dx: svgX - originalNode.x - NODE_WIDTH / 2 - anchor.x,
-            dy: svgY - originalNode.y - NODE_HEIGHT / 2 - anchor.y,
+            dx: svgX - originalNode.x - nodeW / 2 - anchor.x,
+            dy: svgY - originalNode.y - nodeH / 2 - anchor.y,
           })
           return next
         })
@@ -228,9 +244,11 @@ export default function DependencyFlowchart({
       const originalNode = layout.nodes.find((n) => n.id === nodeId)
       if (!originalNode) return
 
+      const nodeW = originalNode.isIssueNode ? ISSUE_NODE_WIDTH : NODE_WIDTH
+      const nodeH = originalNode.isIssueNode ? ISSUE_NODE_HEIGHT : NODE_HEIGHT
       const currentOffset = nodeOffsets.get(nodeId) ?? { dx: 0, dy: 0 }
-      const currentCenterX = originalNode.x + currentOffset.dx + NODE_WIDTH / 2
-      const currentCenterY = originalNode.y + currentOffset.dy + NODE_HEIGHT / 2
+      const currentCenterX = originalNode.x + currentOffset.dx + nodeW / 2
+      const currentCenterY = originalNode.y + currentOffset.dy + nodeH / 2
       dragAnchorRef.current = {
         x: svgX - currentCenterX,
         y: svgY - currentCenterY,
@@ -333,40 +351,47 @@ export default function DependencyFlowchart({
           })}
 
           {/* Render nodes */}
-          {adjustedNodes.map((node) => (
-            <g
-              key={node.id}
-              transform={`translate(${node.x}, ${node.y})`}
-              className={`flowchart-node ${node.isBlocked ? 'flowchart-node-blocked' : ''}`}
-              onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
-              onMouseEnter={(e) => handleNodeMouseEnter(e, node)}
-              onMouseLeave={handleNodeMouseLeave}
-              data-testid={`flowchart-node-${node.id}`}
-            >
-              <rect
-                width={NODE_WIDTH}
-                height={NODE_HEIGHT}
-                className="flowchart-node-rect"
-              />
-              <text
-                x={NODE_WIDTH / 2}
-                y={NODE_HEIGHT / 2 + 4}
-                className="flowchart-node-title"
+          {adjustedNodes.map((node) => {
+            const nodeW = node.isIssueNode ? ISSUE_NODE_WIDTH : NODE_WIDTH
+            const nodeH = node.isIssueNode ? ISSUE_NODE_HEIGHT : NODE_HEIGHT
+            const maxChars = node.isIssueNode ? 14 : 18
+            
+            return (
+              <g
+                key={node.id}
+                transform={`translate(${node.x}, ${node.y})`}
+                className={`flowchart-node ${node.isBlocked ? 'flowchart-node-blocked' : ''} ${node.isIssueNode ? 'flowchart-node--issue' : ''}`}
+                onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
+                onMouseEnter={(e) => handleNodeMouseEnter(e, node)}
+                onMouseLeave={handleNodeMouseLeave}
+                data-testid={`flowchart-node-${node.id}`}
               >
-                {truncateTitle(node.title, 18)}
-              </text>
-
-              {node.isBlocked && (
+                <rect
+                  width={nodeW}
+                  height={nodeH}
+                  className="flowchart-node-rect"
+                  rx={node.isIssueNode ? 12 : 0}
+                />
                 <text
-                  x={NODE_WIDTH - 8}
-                  y={16}
-                  className="flowchart-node-blocked-icon"
+                  x={nodeW / 2}
+                  y={nodeH / 2 + (node.isIssueNode ? 3 : 4)}
+                  className="flowchart-node-title"
                 >
-                  🔒
+                  {truncateTitle(node.title, maxChars)}
                 </text>
-              )}
-            </g>
-          ))}
+
+                {node.isBlocked && !node.isIssueNode && (
+                  <text
+                    x={nodeW - 8}
+                    y={16}
+                    className="flowchart-node-blocked-icon"
+                  >
+                    🔒
+                  </text>
+                )}
+              </g>
+            )
+          })}
         </g>
       </svg>
 
