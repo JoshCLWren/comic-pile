@@ -22,7 +22,7 @@ export default defineConfig({
         ['list'],
       ],
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:9000',
+    baseURL: process.env.BASE_URL || (process.env.CI ? 'http://localhost:8000' : 'http://localhost:9000'),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -42,7 +42,7 @@ export default defineConfig({
     command: process.env.CI
       ? 'echo "CI mode - reusing existing server"'
       : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4"',
-    port: parseInt(process.env.API_PORT || '9000'),
+    port: parseInt(process.env.API_PORT || (process.env.CI ? '8000' : '9000')),
     reuseExistingServer: !!process.env.CI,  // Only reuse in CI, never locally
     timeout: 120000,
   },
