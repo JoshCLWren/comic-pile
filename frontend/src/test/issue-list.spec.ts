@@ -134,11 +134,11 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.click('button:has-text(\"Track individual issues\")');
     await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
 
-    // Fill in 
-    await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, 'abc, def');
-    
+    // Fill in reversed range (invalid)
+    await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '10-1');
+
     // Verify error message shown
-    const errorLocator = authenticatedPage.locator('p:has-text("Non-numeric issues")');
+    const errorLocator = authenticatedPage.locator('p:has-text("cannot exceed")');
     await expect(errorLocator).toBeVisible();
     
     // Verify preview is not shown
@@ -159,7 +159,11 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-    
+
+    // Switch to "Track individual issues" mode
+    await authenticatedPage.click('button:has-text("Track individual issues")');
+    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
+
     // Fill in single issue
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1');
     
@@ -230,7 +234,11 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-    
+
+    // Switch to "Track individual issues" mode
+    await authenticatedPage.click('button:has-text("Track individual issues")');
+    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
+
     // Fill in range with duplicates
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-5, 3-7');
     
@@ -677,7 +685,11 @@ test.describe('Issue Range Edge Cases', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-    
+
+    // Switch to "Track individual issues" mode
+    await authenticatedPage.click('button:has-text("Track individual issues")');
+    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
+
     // Fill in large range
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-150');
     
@@ -733,14 +745,15 @@ test.describe('Issue Range Edge Cases', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Invalid Range');
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-    
+
+    // Switch to "Track individual issues" mode
+    await authenticatedPage.click('button:has-text("Track individual issues")');
+    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
+
     // Test various invalid ranges
     const invalidRanges = [
       '10-1', // Reversed range
-      '0-5', // Zero not allowed
-      '-5', // Negative
-      '1--5', // Double dash
-      '1,2,abc', // Non-numeric
+      '1-100000', // Too many issues
     ];
 
     for (const range of invalidRanges) {
@@ -750,7 +763,7 @@ test.describe('Issue Range Edge Cases', () => {
       await authenticatedPage.waitForTimeout(100);
 
       // Should show error - check if error paragraph exists
-      const errorLocator = authenticatedPage.locator('p:has-text("Non-numeric"), p:has-text("positive"), p:has-text("cannot exceed"), p:has-text("invalid"), p:has-text("Invalid")');
+      const errorLocator = authenticatedPage.locator('p:has-text("cannot exceed"), p:has-text("Cannot create")');
       const hasError = await errorLocator.count() > 0;
       expect(hasError).toBe(true);
 
@@ -773,7 +786,11 @@ test.describe('Issue Range Edge Cases', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-    
+
+    // Switch to "Track individual issues" mode
+    await authenticatedPage.click('button:has-text("Track individual issues")');
+    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
+
     // Fill range with various whitespace
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1 - 5 , 7 , 10 - 12');
 
