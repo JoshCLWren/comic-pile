@@ -60,7 +60,11 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
+    
+    // Switch to "Track individual issues" mode
+    await authenticatedPage.click('button:has-text("Track individual issues")');
+    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
     
     // Fill in issue range
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-25');
@@ -77,8 +81,12 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
-    
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
+
+    // Switch to "Track individual issues" mode
+    await authenticatedPage.click('button:has-text("Track individual issues")');
+    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
+
     // Fill in mixed issue range
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1, 3, 5-7');
     
@@ -120,9 +128,13 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Invalid Range Comic');
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
     
-    // Fill in invalid issue range
+    // Switch to \"Track individual issues\" mode
+    await authenticatedPage.click('button:has-text(\"Track individual issues\")');
+    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
+
+    // Fill in 
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, 'abc, def');
     
     // Verify error message shown
@@ -146,7 +158,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
     
     // Fill in single issue
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1');
@@ -217,7 +229,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
     
     // Fill in range with duplicates
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-5, 3-7');
@@ -282,7 +294,7 @@ test.describe('Issue List Display', () => {
     const timestamp = Date.now();
     await createThread(authenticatedPage, {
       title: `Issue List Test ${timestamp}`,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 10,
       total_issues: 10,
     });
@@ -310,7 +322,7 @@ test.describe('Issue List Display', () => {
     const timestamp = Date.now();
     await createThread(authenticatedPage, {
       title: `Filter Test ${timestamp}`,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 5,
     });
@@ -350,7 +362,7 @@ test.describe('Issue Status Toggle', () => {
     const uniqueTitle = `Toggle Test ${timestamp}`;
     await createThread(authenticatedPage, {
       title: uniqueTitle,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 5,
     });
@@ -395,7 +407,7 @@ test.describe('Issue Status Toggle', () => {
     const uniqueTitle = `Next Unread Test ${timestamp}`;
     await createThread(authenticatedPage, {
       title: uniqueTitle,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 5,
     });
@@ -425,7 +437,7 @@ test.describe('Roll Result with Issue Display', () => {
     // Create thread with issues
     await createThread(authenticatedPage, {
       title: 'Roll Issue Test',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 10,
       total_issues: 10,
     });
@@ -474,7 +486,7 @@ test.describe('Roll Result with Issue Display', () => {
     const uniqueTitle = `Specific Issue Test ${timestamp}`;
     await createThread(authenticatedPage, {
       title: uniqueTitle,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 10,
       total_issues: 10,
     });
@@ -510,7 +522,7 @@ test.describe('Progress Tracking', () => {
     const uniqueTitle = `Progress Test ${timestamp}`;
     await createThread(authenticatedPage, {
       title: uniqueTitle,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 10,
       total_issues: 10,
     });
@@ -554,7 +566,7 @@ test.describe('Progress Tracking', () => {
     const uniqueTitle = `Progress Calculation Test ${timestamp}`;
     await createThread(authenticatedPage, {
       title: uniqueTitle,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 25,
       total_issues: 25,
     });
@@ -587,7 +599,7 @@ test.describe('Thread Completion', () => {
     const uniqueTitle = `Completion Test ${timestamp}`;
     await createThread(authenticatedPage, {
       title: uniqueTitle,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 5,
     });
@@ -664,7 +676,7 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
     
     // Fill in large range
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-150');
@@ -720,7 +732,7 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Invalid Range');
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
     
     // Test various invalid ranges
     const invalidRanges = [
@@ -760,7 +772,7 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
     
     // Fill range with various whitespace
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1 - 5 , 7 , 10 - 12');
@@ -818,7 +830,7 @@ test.describe('API Integration', () => {
     const uniqueTitle = `Concurrent Test ${timestamp}`;
     await createThread(authenticatedPage, {
       title: uniqueTitle,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 10,
       total_issues: 10,
     });

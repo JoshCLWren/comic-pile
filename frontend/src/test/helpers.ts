@@ -219,7 +219,7 @@ export const SELECTORS = {
     threadItem: '[data-testid=\"queue-thread-item\"]',
     newThreadButton: 'button:has-text("Add Thread")',
     titleInput: 'label:has-text("Title") + input',
-    formatInput: 'label:has-text("Format") + input',
+    formatSelect: 'label:has-text("Format") + select',
     issuesRemainingInput: 'label:has-text("Issues Remaining") + input, label:has-text("Issues") + input',
   },
   roll: {
@@ -265,7 +265,7 @@ export const SELECTORS = {
     readDate: '.read-date',
   },
   threadCreate: {
-    issuesInput: 'input[placeholder*="1-25"]',
+    issuesInput: 'input[placeholder*="0-25"]',
     issuePreview: 'p:has-text("Will create")',
   },
   rollResult: {
