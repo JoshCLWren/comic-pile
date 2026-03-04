@@ -80,6 +80,16 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       const relatedIds = new Set([thread.id])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
 
+      console.log('[loadFlowchartData] Fetched', allDeps.length, 'deps for thread', thread.id)
+      console.log('[loadFlowchartData] Deps:', allDeps.map((d: any) => ({
+        id: d.id,
+        source_thread_id: d.source_thread_id,
+        target_thread_id: d.target_thread_id,
+        source_issue_id: d.source_issue_id,
+        target_issue_id: d.target_issue_id,
+        is_issue_level: d.is_issue_level,
+      })))
+
       // Thread-level deps map directly to FlowchartDependency
       const threadDeps: FlowchartDependency[] = allDeps
         .filter((dep) => dep.source_thread_id != null && dep.target_thread_id != null)
@@ -102,6 +112,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       )
       const issueNodeMap = new Map<number, FlowchartNode>()
       const issueEdges: FlowchartDependency[] = []
+
+      console.log('[loadFlowchartData] Issue-only deps:', issueOnlyDeps.length)
 
       for (const d of issueOnlyDeps) {
         if (!d.source_issue_id || !d.target_issue_id) continue
@@ -145,16 +157,22 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         relatedIds.add(d.target_issue_thread_id)
       }
 
+      console.log('[loadFlowchartData] Created', issueNodeMap.size, 'issue nodes and', issueEdges.length, 'issue edges')
+      console.log('[loadFlowchartData] Related thread IDs:', Array.from(relatedIds))
+
       const allEdges = [...threadDeps, ...issueEdges]
 
       const allThreads = await threadsApi.list()
       const relatedThreads = allThreads.filter((t) => relatedIds.has(t.id))
 
+      console.log('[loadFlowchartData] Found', relatedThreads.length, 'related threads')
+
       setFlowchartThreads(relatedThreads)
       setFlowchartDependencies(allEdges)
       setFlowchartIssueNodes(Array.from(issueNodeMap.values()))
       setBlockedIds(new Set(allBlockedIds))
-    } catch {
+    } catch (err) {
+      console.error('[loadFlowchartData] Error:', err)
       setFlowchartThreads([])
       setFlowchartDependencies([])
       setFlowchartIssueNodes([])
