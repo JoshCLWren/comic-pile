@@ -73,7 +73,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await authenticatedPage.waitForLoadState("networkidle");
     await authenticatedPage.goBack();
 
-    await expect(authenticatedPage).toHaveURL('http://localhost:8000/');
+    await expect(authenticatedPage).toHaveURL('http://localhost:9000/');
   });
 
   test('should handle browser forward button', async ({ authenticatedPage }) => {
@@ -83,7 +83,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await authenticatedPage.waitForLoadState("networkidle");
     await authenticatedPage.goForward();
 
-    await expect(authenticatedPage).toHaveURL('http://localhost:8000/queue');
+    await expect(authenticatedPage).toHaveURL('http://localhost:9000/queue');
   });
 
   test('should handle page refresh during form submission', async ({ authenticatedPage }) => {

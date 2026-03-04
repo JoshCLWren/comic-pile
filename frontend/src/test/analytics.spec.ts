@@ -92,7 +92,7 @@ test.describe('Analytics Dashboard', () => {
     await expect(analyticsLink.first()).toBeVisible({ timeout: 5000 });
 
     await analyticsLink.first().click();
-    await expect(authenticatedPage).toHaveURL('http://localhost:8000/analytics');
+    await expect(authenticatedPage).toHaveURL('http://localhost:9000/analytics');
   });
 
   test('should handle empty data gracefully', async ({ authenticatedPage }) => {

@@ -222,7 +222,7 @@ test.describe('Network & API Tests', () => {
   });
 
   test('should handle CORS correctly', async ({ page, request }) => {
-    const baseUrl = process.env.BASE_URL || 'http://localhost:8000';
+    const baseUrl = process.env.BASE_URL || 'http://localhost:9000';
     const response = await request.get(`${baseUrl}/api/threads/`, {
       headers: {
         'Origin': 'http://localhost:3000',
