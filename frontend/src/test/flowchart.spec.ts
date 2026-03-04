@@ -345,7 +345,7 @@ test.describe('Dependency Flowchart', () => {
   })
 
   test.describe('Issue-level flowchart nodes', () => {
-    test.skip('displays issue nodes for issue-level dependencies', async ({ authenticatedPage }) => {
+    test('displays issue nodes for issue-level dependencies', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Animal Man',
         format: 'Comic',
@@ -432,7 +432,7 @@ test.describe('Dependency Flowchart', () => {
       await expect(issueEdge).toBeAttached()
     })
 
-    test.skip('crossover dependencies: two comics with bidirectional issue deps (Rotworld scenario)', async ({ authenticatedPage }) => {
+    test('crossover dependencies: two comics with bidirectional issue deps (Rotworld scenario)', async ({ authenticatedPage }) => {
       const animalMan = await createThread(authenticatedPage, {
         title: 'Animal Man',
         format: 'Comic',
@@ -542,7 +542,7 @@ test.describe('Dependency Flowchart', () => {
       await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toContainText('Swamp Thing #16')
     })
 
-    test.skip('issue nodes have distinct styling (cyan fill, pill shape, smaller size)', async ({ authenticatedPage }) => {
+    test('issue nodes have distinct styling (cyan fill, pill shape, smaller size)', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Source Series',
         format: 'Comic',
@@ -615,7 +615,7 @@ test.describe('Dependency Flowchart', () => {
       expect(rx).toBe('12')
     })
 
-    test.skip('issue nodes do not show lock icon even when parent thread is blocked', async ({ authenticatedPage }) => {
+    test('issue nodes do not show lock icon even when parent thread is blocked', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Blocking Source',
         format: 'Comic',
@@ -691,7 +691,7 @@ test.describe('Dependency Flowchart', () => {
       await expect(threadNodeIcon).toBeVisible()
     })
 
-    test.skip('issue-level edges are styled with dashed cyan stroke', async ({ authenticatedPage }) => {
+    test('issue-level edges are styled with dashed cyan stroke', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Edge Source',
         format: 'Comic',
@@ -763,7 +763,7 @@ test.describe('Dependency Flowchart', () => {
       expect(strokeDasharray).toBeTruthy()
     })
 
-    test.skip('mixed thread-level and issue-level dependencies render correctly', async ({ authenticatedPage }) => {
+    test('mixed thread-level and issue-level dependencies render correctly', async ({ authenticatedPage }) => {
       const threadA = await createThread(authenticatedPage, {
         title: 'Thread Alpha',
         format: 'Comic',
