@@ -165,7 +165,10 @@ test.describe('Production Smoke', () => {
     expect(health.ok()).toBeTruthy();
 
     const { username, password } = getExistingUserCredentials();
-    test.skip(!username || !password, 'Set PROD_TEST_USERNAME and PROD_TEST_PASSWORD for existing-user smoke');
+
+    if (!username || !password) {
+      throw new Error('PROD_TEST_USERNAME and PROD_TEST_PASSWORD must be set for production smoke tests');
+    }
 
     const token = await loginExistingUser(page, username as string, password as string);
 
