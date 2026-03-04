@@ -22,7 +22,7 @@ export default defineConfig({
         ['list'],
       ],
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:8000',
+    baseURL: process.env.BASE_URL || 'http://localhost:9000',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -41,8 +41,8 @@ export default defineConfig({
   webServer: {
     command: process.env.REUSE_EXISTING_SERVER
       ? 'echo "Reusing existing server"'
-      : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"',
-    port: 8000,
+      : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4"',
+    port: 9000,
     reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
     timeout: 120000,
   },
