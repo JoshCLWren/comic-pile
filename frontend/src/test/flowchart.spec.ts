@@ -421,10 +421,10 @@ test.describe('Dependency Flowchart', () => {
 
       // Should have issue nodes (using negative IDs)
       await expect(
-        authenticatedPage.locator(`[data-testid="flowchart-node---${issue17.id}"]`),
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue17.id}"]`),
       ).toBeVisible()
       await expect(
-        authenticatedPage.locator(`[data-testid="flowchart-node---${issue15.id}"]`),
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue15.id}"]`),
       ).toBeVisible()
 
       // Should have dashed cyan edge for issue-level dependency
@@ -523,10 +523,10 @@ test.describe('Dependency Flowchart', () => {
       await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
 
       // Should have 4 distinct issue nodes visible
-      await expect(authenticatedPage.locator(`[data-testid="flowchart-node---${issue17Id}"]`)).toBeVisible()
-      await expect(authenticatedPage.locator(`[data-testid="flowchart-node---${issue15Id}"]`)).toBeVisible()
-      await expect(authenticatedPage.locator(`[data-testid="flowchart-node---${issue16Id}"]`)).toBeVisible()
-      await expect(authenticatedPage.locator(`[data-testid="flowchart-node---${issue18Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue17Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue15Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue16Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue18Id}"]`)).toBeVisible()
 
       // Should have 2 issue-level edges
       const issueEdges = authenticatedPage.locator('.edge--issue-level')
@@ -534,11 +534,11 @@ test.describe('Dependency Flowchart', () => {
       expect(edgeCount).toBe(2)
 
       // Verify node tooltips show correct issue labels
-      await authenticatedPage.locator(`[data-testid="flowchart-node---${issue17Id}"]`).hover()
+      await authenticatedPage.locator(`[data-testid="flowchart-node--${issue17Id}"]`).hover()
       await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toBeVisible()
       await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toContainText('Animal Man #17')
 
-      await authenticatedPage.locator(`[data-testid="flowchart-node---${issue16Id}"]`).hover()
+      await authenticatedPage.locator(`[data-testid="flowchart-node--${issue16Id}"]`).hover()
       await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toContainText('Swamp Thing #16')
     })
 
@@ -606,7 +606,7 @@ test.describe('Dependency Flowchart', () => {
       await authenticatedPage.click('[data-testid="toggle-flowchart"]')
 
       // Check issue node styling
-      const issueNode = authenticatedPage.locator(`[data-testid="flowchart-node---${issue5Id}"]`)
+      const issueNode = authenticatedPage.locator(`[data-testid="flowchart-node--${issue5Id}"]`)
       await expect(issueNode).toHaveClass(/flowchart-node--issue/)
 
       // Verify the rect element has the correct fill and rx attributes
@@ -680,7 +680,7 @@ test.describe('Dependency Flowchart', () => {
 
       // Issue node should not have lock icon
       const issueNodeIcon = authenticatedPage
-        .locator(`[data-testid="flowchart-node---${issue4Id}"]`)
+        .locator(`[data-testid="flowchart-node--${issue4Id}"]`)
         .locator('.flowchart-node-blocked-icon')
       await expect(issueNodeIcon).not.toBeVisible()
 
@@ -859,10 +859,10 @@ test.describe('Dependency Flowchart', () => {
 
       // Should have issue nodes
       await expect(
-        authenticatedPage.locator(`[data-testid="flowchart-node---${issue5Id}"]`),
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue5Id}"]`),
       ).toBeVisible()
       await expect(
-        authenticatedPage.locator(`[data-testid="flowchart-node---${issue3Id}"]`),
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue3Id}"]`),
       ).toBeVisible()
 
       // Should have both thread-level and issue-level edges
