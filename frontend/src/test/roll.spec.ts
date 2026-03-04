@@ -267,7 +267,7 @@ test.describe('Roll Dice Feature', () => {
       expect(rollPoolText).toContain('Unblocked Thread A')
     })
 
-    test.skip('roll only selects from unblocked threads', async ({ authenticatedPage }) => {
+    test('roll only selects from unblocked threads', async ({ authenticatedPage }) => {
       const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
 
       // Create threads with specific names to verify roll result

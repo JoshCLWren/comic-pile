@@ -86,7 +86,7 @@ test.describe('Production Smoke', () => {
 
     const token = await createAuthenticatedUser(page);
     await seedThreads(page, token, [
-      { title: 'Prod Smoke A', format: 'Comic', issues_remaining: 3 },
+      { title: 'Prod Smoke A', format: 'Comics', issues_remaining: 3 },
       { title: 'Prod Smoke B', format: 'Manga', issues_remaining: 2 },
       { title: 'Prod Smoke C', format: 'Novel', issues_remaining: 4 },
     ]);
@@ -216,7 +216,7 @@ test.describe('Production Smoke', () => {
 
     const token = await createAuthenticatedUser(page);
     await seedThreads(page, token, [
-      { title: 'Double Roll Test A', format: 'Comic', issues_remaining: 5 },
+      { title: 'Double Roll Test A', format: 'Comics', issues_remaining: 5 },
       { title: 'Double Roll Test B', format: 'Manga', issues_remaining: 5 },
       { title: 'Double Roll Test C', format: 'Novel', issues_remaining: 5 },
     ]);

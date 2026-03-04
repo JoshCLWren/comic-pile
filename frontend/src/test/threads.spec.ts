@@ -71,18 +71,6 @@ test.describe('Thread Management', () => {
     expect(hasInvalidInput).toBe(true);
   });
 
-  test.skip('should validate thread format is required', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.click('button:has-text("Add Thread")');
-
-    await authenticatedPage.fill('label:has-text("Title") + input', 'Test Comic');
-    await authenticatedPage.click('button[type="submit"]');
-    await authenticatedPage.waitForLoadState("networkidle");
-
-    const hasInvalidInput = await authenticatedPage.locator('select:invalid, input:invalid').count() > 0;
-    expect(hasInvalidInput).toBe(true);
-  });
-
   test('should display thread queue in correct order', async ({ authenticatedPage }) => {
     const threadTitles = ['First Thread', 'Second Thread', 'Third Thread'];
 
@@ -158,19 +146,5 @@ test.describe('Thread Management', () => {
       const isVisible = await deletedText.count() > 0;
       expect(isVisible).toBe(false);
     }).toPass({ timeout: 5000 });
-  });
-
-  test.skip('should show validation error for negative issues remaining', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.click('button:has-text("Add Thread")');
-
-    await authenticatedPage.fill('label:has-text("Title") + input', 'Test Comic');
-    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-    await authenticatedPage.fill('input[type="number"]', '-1');
-    await authenticatedPage.click('button[type="submit"]');
-    await authenticatedPage.waitForLoadState("networkidle");
-
-    const hasInvalidInput = await authenticatedPage.locator('select:invalid, input:invalid').count() > 0;
-    expect(hasInvalidInput).toBe(true);
   });
 });

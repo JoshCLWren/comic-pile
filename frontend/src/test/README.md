@@ -1,5 +1,19 @@
 # Frontend Tests
 
+## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+
+**TESTS MUST NEVER BE SKIPPED - EVER.**
+
+When a frontend test fails:
+- ✅ Fix the test
+- ✅ Fix the code that breaks the test
+- ✅ Investigate root cause (timing, async issues, race conditions)
+- ❌ **NEVER skip the test**
+- ❌ **NEVER use `test.skip()` to work around failures**
+- ❌ **NEVER mark tests as flaky without fixing them**
+
+Frontend tests catch real user-facing bugs. Respect them. Fix them.
+
 ## Unit Tests (Vitest)
 
 Fast, in-process tests — no server required.

@@ -11,7 +11,7 @@ test.describe('Network & API Tests', () => {
       },
       data: {
         title: 'API Test Comic',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 5,
       },
     });
@@ -110,7 +110,7 @@ test.describe('Network & API Tests', () => {
   test('should cache responses appropriately', async ({ authenticatedPage }) => {
     await createThread(authenticatedPage, {
       title: 'Cache Test Comic',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
     });
 
@@ -150,7 +150,8 @@ test.describe('Network & API Tests', () => {
     try {
       await authenticatedPage.click(SELECTORS.threadList.newThreadButton, { timeout: 5000 });
       await authenticatedPage.fill(SELECTORS.threadList.titleInput, 'Payload Test');
-      await authenticatedPage.fill(SELECTORS.threadList.formatInput, 'Comic');
+      await authenticatedPage.selectOption(SELECTORS.threadList.formatSelect, 'Comics');
+      await authenticatedPage.fill(SELECTORS.threadList.issuesRemainingInput, '5');
       await authenticatedPage.click(SELECTORS.auth.submitButton);
       await authenticatedPage.waitForLoadState("networkidle");
     } catch (e) {
@@ -161,7 +162,7 @@ test.describe('Network & API Tests', () => {
         },
         data: {
           title: 'Payload Test',
-          format: 'Comic',
+          format: 'Comics',
           issues_remaining: 5,
         },
       });
@@ -185,7 +186,7 @@ test.describe('Network & API Tests', () => {
           },
           data: {
             title: `Concurrent Comic ${i}`,
-            format: 'Comic',
+            format: 'Comics',
             issues_remaining: 5,
           },
         })
@@ -210,7 +211,7 @@ test.describe('Network & API Tests', () => {
         },
         data: {
           title: `Rate Limit Test ${i}`,
-          format: 'Comic',
+          format: 'Comics',
           issues_remaining: 5,
         },
       });
@@ -239,7 +240,7 @@ test.describe('Network & API Tests', () => {
     const response = await authenticatedPage.request.post('/api/threads/', {
       data: {
         title: maliciousInput,
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 5,
       },
     });

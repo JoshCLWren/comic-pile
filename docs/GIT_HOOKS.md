@@ -2,6 +2,23 @@
 
 This repository uses git hooks to enforce code quality checks.
 
+## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+
+**TESTS MUST NEVER BE SKIPPED - EVER.**
+
+Git hooks that block on test failures are there for YOUR protection.
+
+When a hook blocks your commit/push:
+- ✅ Fix the failing tests
+- ✅ Fix the code that breaks the tests
+- ✅ Investigate root cause
+- ❌ **NEVER use `--no-verify` to bypass hooks**
+- ❌ **NEVER skip hooks to "save time"**
+
+**Using `git commit --no-verify` or `git push --no-verify` is unacceptable.**
+
+If a hook is blocking you, it's telling you something is wrong. **Fix it.**
+
 ## Available Hooks
 
 ### Pre-Commit Hook

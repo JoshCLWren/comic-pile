@@ -60,7 +60,7 @@ test.describe('Accessibility Tests', () => {
 
     await createThread(page, {
       title: 'A11y Test Comic',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
     });
 
@@ -278,7 +278,7 @@ test.describe('Accessibility Tests', () => {
 
     await createThread(page, {
       title: 'A11y Comic',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
     });
 

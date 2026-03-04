@@ -20,13 +20,13 @@ test.describe('Dependency Flowchart', () => {
   test('shows flowchart toggle after creating a dependency', async ({ authenticatedPage }) => {
     await createThread(authenticatedPage, {
       title: 'Flowchart Source',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 3,
     })
 
     await createThread(authenticatedPage, {
       title: 'Flowchart Target',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 3,
     })
 
@@ -66,13 +66,13 @@ test.describe('Dependency Flowchart', () => {
     // Create two threads via API
     const sourceResult = await createThread(authenticatedPage, {
       title: 'FC Node Source',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 2,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'FC Node Target',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 2,
     })
 
@@ -133,13 +133,13 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart zoom controls work', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Zoom Source',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Zoom Target',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -189,13 +189,13 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart shows tooltip on node hover', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Hover Source Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Hover Target Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -238,13 +238,13 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Blocker Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Blocked Thread FC',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -284,13 +284,13 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart toggle hides and shows', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Toggle Source',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Toggle Target',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -327,7 +327,7 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart shows empty state when no dependencies', async ({ authenticatedPage }) => {
     await createThread(authenticatedPage, {
       title: 'Lonely Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -348,14 +348,14 @@ test.describe('Dependency Flowchart', () => {
     test('displays issue nodes for issue-level dependencies', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Animal Man',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 5,
         total_issues: 20,
       })
 
       const targetThread = await createThread(authenticatedPage, {
         title: 'Swamp Thing',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 5,
         total_issues: 20,
       })
@@ -435,14 +435,14 @@ test.describe('Dependency Flowchart', () => {
     test('crossover dependencies: two comics with bidirectional issue deps (Rotworld scenario)', async ({ authenticatedPage }) => {
       const animalMan = await createThread(authenticatedPage, {
         title: 'Animal Man',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 8,
         total_issues: 20,
       })
 
       const swampThing = await createThread(authenticatedPage, {
         title: 'Swamp Thing',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 8,
         total_issues: 20,
       })
@@ -545,14 +545,14 @@ test.describe('Dependency Flowchart', () => {
     test('issue nodes have distinct styling (cyan fill, pill shape, smaller size)', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Source Series',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 3,
         total_issues: 10,
       })
 
       const targetThread = await createThread(authenticatedPage, {
         title: 'Target Series',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 3,
         total_issues: 10,
       })
@@ -618,14 +618,14 @@ test.describe('Dependency Flowchart', () => {
     test('issue nodes do not show lock icon even when parent thread is blocked', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Blocking Source',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 2,
         total_issues: 10,
       })
 
       const targetThread = await createThread(authenticatedPage, {
         title: 'Blocked Target',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 2,
         total_issues: 10,
       })
@@ -694,14 +694,14 @@ test.describe('Dependency Flowchart', () => {
     test('issue-level edges are styled with dashed cyan stroke', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Edge Source',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 2,
         total_issues: 5,
       })
 
       const targetThread = await createThread(authenticatedPage, {
         title: 'Edge Target',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 2,
         total_issues: 5,
       })
@@ -765,21 +765,21 @@ test.describe('Dependency Flowchart', () => {
     test('mixed thread-level and issue-level dependencies render correctly', async ({ authenticatedPage }) => {
       const threadA = await createThread(authenticatedPage, {
         title: 'Thread Alpha',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 3,
         total_issues: 10,
       })
 
       const threadB = await createThread(authenticatedPage, {
         title: 'Thread Beta',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 3,
         total_issues: 10,
       })
 
       const threadC = await createThread(authenticatedPage, {
         title: 'Thread Gamma',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 3,
         total_issues: 10,
       })

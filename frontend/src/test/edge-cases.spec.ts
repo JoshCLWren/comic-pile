@@ -24,7 +24,7 @@ test.describe('Edge Cases & Error Handling', () => {
       },
       data: {
         title: longTitle,
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 5,
       },
     });
@@ -38,7 +38,7 @@ test.describe('Edge Cases & Error Handling', () => {
 
     await createThread(authenticatedPage, {
       title: specialTitle,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
     });
 
@@ -90,7 +90,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.click('button:has-text("Add Thread")');
     await authenticatedPage.fill('label:has-text("Title") + input', 'Refresh Test');
-    await authenticatedPage.fill('label:has-text("Format") + input', 'Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
 
     await authenticatedPage.reload();
 
@@ -122,7 +122,7 @@ test.describe('Edge Cases & Error Handling', () => {
 
     await createThread(page1, {
       title: 'Concurrent Tab Test',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
     });
 
@@ -151,7 +151,7 @@ test.describe('Edge Cases & Error Handling', () => {
       },
       data: {
         title: 'Large Number Test',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 999999,
       },
     });
@@ -170,7 +170,7 @@ test.describe('Edge Cases & Error Handling', () => {
       },
       data: {
         title: 'Negative Test',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: -5,
       },
     });
@@ -181,7 +181,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle zero issues_remaining', async ({ authenticatedPage }) => {
     await createThread(authenticatedPage, {
       title: 'Zero Issues Test',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 0,
     });
 
@@ -324,7 +324,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle duplicate thread creation', async ({ authenticatedPage }) => {
     const threadData = {
       title: 'Duplicate Test',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
     };
 
