@@ -336,12 +336,12 @@ export interface FlowchartEdge {
 /**
  * Dependency shape used by the flowchart layout engine.
  * Thread-level deps use this directly; issue-level deps are converted to this
- * form as "virtual edges" mapping to parent thread IDs.
+ * form with negative IDs to distinguish from thread IDs.
  */
 export interface FlowchartDependency {
   id: number;
-  source_thread_id: number;
-  target_thread_id: number;
+  source_id: number;
+  target_id: number;
   /** True when this edge was synthesized from issue-level dependencies */
   is_issue_level?: boolean;
   created_at: string;

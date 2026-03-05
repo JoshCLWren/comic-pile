@@ -41,8 +41,8 @@ function buildAdjacencyList(
         adjacency.set(id, [])
     }
     for (const dep of dependencies) {
-        if (nodeIds.has(dep.source_thread_id) && nodeIds.has(dep.target_thread_id)) {
-            adjacency.get(dep.source_thread_id)!.push(dep.target_thread_id)
+        if (nodeIds.has(dep.source_id) && nodeIds.has(dep.target_id)) {
+            adjacency.get(dep.source_id)!.push(dep.target_id)
         }
     }
     return adjacency
@@ -234,8 +234,8 @@ export function layoutGraph(
     // Compute edges with per-node dimensions
     const edges: FlowchartEdge[] = []
     for (const dep of dependencies) {
-        const source = nodePositions.get(dep.source_thread_id)
-        const target = nodePositions.get(dep.target_thread_id)
+        const source = nodePositions.get(dep.source_id)
+        const target = nodePositions.get(dep.target_id)
         if (!source || !target) continue
 
         const { w: srcW, h: srcH } = nodeDimensions(source)
@@ -248,10 +248,10 @@ export function layoutGraph(
 
         edges.push({
             id: `edge-${dep.id}`,
-            sourceId: dep.source_thread_id,
-            targetId: dep.target_thread_id,
+            sourceId: dep.source_id,
+            targetId: dep.target_id,
             path: computeEdgePath(sourceCenterX, sourceBottomY, targetCenterX, targetTopY),
-            isBlocking: blockedIds.has(dep.target_thread_id),
+            isBlocking: blockedIds.has(dep.target_id),
             isIssueLevel: dep.is_issue_level ?? false,
         })
     }

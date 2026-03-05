@@ -95,15 +95,15 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         .filter((dep) => dep.source_thread_id != null && dep.target_thread_id != null)
         .map((dep) => ({
           id: dep.id,
-          source_thread_id: dep.source_thread_id as number,
-          target_thread_id: dep.target_thread_id as number,
+          source_id: dep.source_thread_id as number,
+          target_id: dep.target_thread_id as number,
           created_at: dep.created_at,
         }))
 
       // Collect related thread IDs from thread-level deps
       for (const dep of threadDeps) {
-        relatedIds.add(dep.source_thread_id)
-        relatedIds.add(dep.target_thread_id)
+        relatedIds.add(dep.source_id)
+        relatedIds.add(dep.target_id)
       }
 
       // Issue-level deps → issue nodes + direct edges between them
@@ -146,8 +146,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
 
         issueEdges.push({
           id: -Date.now() - Math.floor(Math.random() * 1000000),
-          source_thread_id: srcNodeId,
-          target_thread_id: tgtNodeId,
+          source_id: srcNodeId,
+          target_id: tgtNodeId,
           is_issue_level: true,
           created_at: d.created_at,
         })
