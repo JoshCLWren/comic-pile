@@ -171,3 +171,7 @@ playwright-report/
 prod_dump*.sql
 prod_dump*.sql.gz
 scripts/clone_prod_users.sh
+
+# Documentation screenshots
+*.png
+!frontend/src/test/visual.spec.ts-snapshots/*.png
