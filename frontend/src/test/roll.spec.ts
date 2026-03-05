@@ -279,7 +279,7 @@ test.describe('Roll Dice Feature', () => {
       data: {
         title: 'Rollable Thread',
         format: 'Comics',
-        issues_remaining: 3,
+        issues_remaining: 10,
       },
       })
       const unblockedThread = await unblockedResponse.json()

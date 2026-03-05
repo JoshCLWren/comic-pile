@@ -72,8 +72,8 @@ beforeEach(() => {
   })
   useThreads.mockReturnValue({
     data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active' },
-      { id: 2, title: 'X-Men', format: 'Comic', status: 'active' },
+      { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
+      { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
     ],
     refetch: vi.fn()
   })
@@ -135,8 +135,8 @@ describe('Action Sheet', () => {
     })
     useThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active' },
-        { id: 2, title: 'X-Men', format: 'Comic', status: 'active' },
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
+        { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
       ],
       refetch: mockRefetchThreads,
     })
@@ -284,7 +284,7 @@ describe('Rating View', () => {
       result: 4,
       thread_id: 1,
       title: 'Saga',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5
     })
     useRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
@@ -295,7 +295,7 @@ describe('Rating View', () => {
         current_die: 6,
         last_rolled_result: 4,
         manual_die: null,
-        active_thread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5 }
+        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5 }
       },
       refetch: vi.fn()
     })
@@ -320,7 +320,7 @@ describe('Rating View', () => {
       result: 3,
       thread_id: 1,
       title: 'Saga',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 50,
     })
@@ -330,7 +330,7 @@ describe('Rating View', () => {
         current_die: 6,
         last_rolled_result: 3,
         manual_die: null,
-        active_thread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5 }
+        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5 }
       },
       refetch: vi.fn()
     })
@@ -369,7 +369,7 @@ describe('Rating View', () => {
       data: {
         current_die: 6,
         last_rolled_result: 1,
-        active_thread: { id: 1, title: 'Old Saga', format: 'Comic', issues_remaining: 5 }
+        active_thread: { id: 1, title: 'Old Saga', format: 'Comics', issues_remaining: 5 }
       },
       refetch: vi.fn()
     })
@@ -400,7 +400,7 @@ describe('Rating View', () => {
       thread_id: 1,
       result: 3,
       title: 'Saga',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 50,
     })
@@ -472,7 +472,7 @@ describe('Rating View', () => {
       thread_id: 1,
       result: 3,
       title: 'Saga',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 50,
     })
@@ -482,7 +482,7 @@ describe('Rating View', () => {
 
     const mockRefetchThreads = vi.fn()
     useThreads.mockReturnValue({
-      data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }],
+      data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
       refetch: mockRefetchThreads
     })
 
@@ -509,7 +509,7 @@ describe('Rating View', () => {
       thread_id: 1,
       result: 3,
       title: 'Saga',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 50,
     })
@@ -533,8 +533,8 @@ describe('Rating View', () => {
     const mockRefetchThreads = vi.fn().mockRejectedValue(new Error('threads refresh failed'))
     useThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active' },
-        { id: 2, title: 'X-Men', format: 'Comic', status: 'active' },
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
+        { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
       ],
       refetch: mockRefetchThreads,
     })
@@ -559,7 +559,7 @@ describe('Rating View', () => {
       thread_id: 1,
       result: 3,
       title: 'Saga',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 50,
     })
@@ -582,8 +582,8 @@ describe('Rating View', () => {
     const mockRefetchThreads = vi.fn().mockRejectedValue(new Error('threads refresh failed'))
     useThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active' },
-        { id: 2, title: 'X-Men', format: 'Comic', status: 'active' },
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
+        { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
       ],
       refetch: mockRefetchThreads,
     })
@@ -610,7 +610,7 @@ describe('Rating View', () => {
       thread_id: 1,
       result: 3,
       title: 'Final Issue Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1, // Only 1 issue left
       total_issues: 50,
     })
@@ -644,7 +644,7 @@ describe('Rating View', () => {
       thread_id: 1,
       result: 3,
       title: 'Ongoing Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 50,
     })
@@ -671,7 +671,7 @@ describe('Rating View', () => {
       thread_id: 1,
       result: 3,
       title: 'Saga',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 5,
       total_issues: 50,
     })
@@ -701,7 +701,7 @@ describe('Rating View', () => {
         active_thread: {
           id: 1,
           title: 'Saga',
-          format: 'Comic',
+          format: 'Comics',
           issues_remaining: 5,
           queue_position: 2,
         },
@@ -727,7 +727,7 @@ describe('Rating View', () => {
       active_thread: {
         id: 1,
         title: 'Saga',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 5,
         queue_position: 1,
       },
@@ -757,7 +757,7 @@ describe('Rating View', () => {
       {
         id: 2,
         title: 'X-Men',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 7,
         queue_position: 3,
         status: 'active',
@@ -782,7 +782,7 @@ describe('Rating View', () => {
         active_thread: {
           id: 1,
           title: 'Saga',
-          format: 'Comic',
+          format: 'Comics',
           issues_remaining: 5,
           queue_position: 2,
         },
@@ -808,7 +808,7 @@ describe('Rating View', () => {
         active_thread: {
           id: 1,
           title: 'Saga',
-          format: 'Comic',
+          format: 'Comics',
           issues_remaining: 5,
           queue_position: 2,
         },
@@ -839,7 +839,7 @@ describe('Rating View', () => {
       active_thread: {
         id: 2,
         title: 'X-Men',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 7,
         queue_position: 1,
       },
@@ -858,8 +858,8 @@ describe('Rating View', () => {
     })
     useThreads.mockReturnValue({
       data: [
-        { id: 2, title: 'X-Men', format: 'Comic', status: 'active', queue_position: 1 },
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 2 },
+        { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 1 },
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 2 },
       ],
       refetch: vi.fn(),
     })
@@ -892,7 +892,7 @@ describe('Rating View', () => {
         active_thread: {
           id: 1,
           title: 'Saga',
-          format: 'Comic',
+          format: 'Comics',
           issues_remaining: 5,
           queue_position: 2,
         },
@@ -930,7 +930,7 @@ describe('Rating View', () => {
         active_thread: {
           id: 1,
           title: 'Saga',
-          format: 'Comic',
+          format: 'Comics',
           issues_remaining: 5,
           queue_position: 1,
         },
@@ -939,8 +939,8 @@ describe('Rating View', () => {
     })
     useThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1 },
-        { id: 2, title: 'X-Men', format: 'Comic', status: 'active', queue_position: 2 },
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 1 },
+        { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 2 },
       ],
       refetch: refetchThreadsSpy,
     })
