@@ -51,12 +51,17 @@ export function parseIssueRange(input: string): number {
       const start = Number.parseInt(left, 10);
       const end = Number.parseInt(right, 10);
 
-      if (!Number.isNaN(start) && !Number.isNaN(end) && String(start) === left && String(end) === right) {
+      if (!Number.isNaN(start) && !Number.isNaN(end)) {
         if (start < 0 || end < 0) {
           throw new Error('Range endpoints must be >= 0');
         }
         if (start > end) {
           throw new Error(`Range start (${start}) cannot exceed end (${end})`);
+        }
+        // Check range size BEFORE expansion to prevent DoS (matches backend check)
+        const rangeSize = end - start + 1;
+        if (rangeSize > MAX_ISSUES) {
+          throw new Error(`Range too large: ${rangeSize} issues (max ${MAX_ISSUES})`);
         }
         for (let i = start; i <= end; i++) {
           result.push(String(i));
