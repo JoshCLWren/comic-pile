@@ -763,7 +763,7 @@ test.describe('Issue Range Edge Cases', () => {
       await authenticatedPage.waitForTimeout(100);
 
       // Should show error - check if error paragraph exists
-      const errorLocator = authenticatedPage.locator('p:has-text("cannot exceed"), p:has-text("Cannot create")');
+      const errorLocator = authenticatedPage.locator('p:has-text("Range too large"), p:has-text("cannot exceed"), p:has-text("Cannot create")');
       const hasError = await errorLocator.count() > 0;
       expect(hasError).toBe(true);
 
