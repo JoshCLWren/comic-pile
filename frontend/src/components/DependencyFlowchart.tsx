@@ -85,8 +85,8 @@ export default function DependencyFlowchart({
     const visibleDependencies = dependencies.filter((d) => {
       // Issue-level dependency: check parent thread IDs from issue nodes
       if (d.is_issue_level) {
-        const sourceParent = issueNodes?.find((n) => n.id === d.source_thread_id)
-        const targetParent = issueNodes?.find((n) => n.id === d.target_thread_id)
+        const sourceParent = issueNodes?.find((n) => n.id === d.source_id)
+        const targetParent = issueNodes?.find((n) => n.id === d.target_id)
         if (sourceParent?.parentThreadId && targetParent?.parentThreadId) {
           return visibleThreadIds.has(sourceParent.parentThreadId) && visibleThreadIds.has(targetParent.parentThreadId)
         }
@@ -94,10 +94,8 @@ export default function DependencyFlowchart({
       }
       // Thread-level dependency: check thread IDs
       return (
-        d.source_thread_id !== null &&
-        d.target_thread_id !== null &&
-        visibleThreadIds.has(d.source_thread_id) &&
-        visibleThreadIds.has(d.target_thread_id)
+        visibleThreadIds.has(d.source_id) &&
+        visibleThreadIds.has(d.target_id)
       )
     })
     
