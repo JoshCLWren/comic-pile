@@ -166,3 +166,8 @@ static/react/
 test-results/
 frontend/test-results/
 playwright-report/
+
+# Production database dumps
+prod_dump*.sql
+prod_dump*.sql.gz
+scripts/clone_prod_users.sh
