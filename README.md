@@ -4,11 +4,19 @@ A dice-driven comic reading tracker built with FastAPI, React, and Tailwind CSS.
 
 ## Features
 
-- **Dice-driven reading**: Roll for your next comic using a ladder system (d4 → d20)
-- **Queue management**: Drag and drop to prioritize comics
-- **Session tracking**: Automatically groups reading sessions with narrative summaries
-- **Mobile-first**: Touch-friendly interface designed for tablets and phones
-- **Local network access**: Use on any device in your home network
+## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+
+**TESTS MUST NEVER BE SKIPPED - THIS IS NON-NEGOTIABLE.**
+
+When tests fail:
+- ✅ Fix the test
+- ✅ Fix the code that breaks the test
+- ✅ Investigate the root cause
+- ❌ **NEVER skip, disable, or work around the test**
+
+This applies to ALL developers, ALL test suites, and ALL situations. No exceptions.
+
+Skipped tests create technical debt and hide broken functionality. If a test is failing, it's telling you something is broken. **Fix it.**
 
 ## Tech Stack
 

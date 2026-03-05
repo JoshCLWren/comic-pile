@@ -23,7 +23,12 @@ class DependencyResponse(BaseModel):
     target_thread_id: int | None
     source_issue_id: int | None
     target_issue_id: int | None
+    is_issue_level: bool = False
     created_at: datetime
+    source_label: str | None = None
+    target_label: str | None = None
+    source_issue_thread_id: int | None = None
+    target_issue_thread_id: int | None = None
 
 
 class BlockingExplanation(BaseModel):

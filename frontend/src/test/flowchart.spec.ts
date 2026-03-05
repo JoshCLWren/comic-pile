@@ -1,17 +1,32 @@
 import { test, expect } from './fixtures'
 import { createThread } from './helpers'
 
+async function getIssueIdByNumber(authenticatedPage: any, threadId: number, issueNumber: string, token: string | null | undefined): Promise<number> {
+  if (!token) {
+    throw new Error('No auth token available')
+  }
+  const response = await authenticatedPage.request.get(`/api/v1/threads/${threadId}/issues`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  const data = await response.json()
+  const issue = data.issues.find((i: { issue_number: string }) => i.issue_number === issueNumber)
+  if (!issue?.id) {
+    throw new Error(`Issue #${issueNumber} not found in thread ${threadId}`)
+  }
+  return issue.id
+}
+
 test.describe('Dependency Flowchart', () => {
   test('shows flowchart toggle after creating a dependency', async ({ authenticatedPage }) => {
     await createThread(authenticatedPage, {
       title: 'Flowchart Source',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 3,
     })
 
     await createThread(authenticatedPage, {
       title: 'Flowchart Target',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 3,
     })
 
@@ -51,13 +66,13 @@ test.describe('Dependency Flowchart', () => {
     // Create two threads via API
     const sourceResult = await createThread(authenticatedPage, {
       title: 'FC Node Source',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 2,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'FC Node Target',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 2,
     })
 
@@ -118,13 +133,13 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart zoom controls work', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Zoom Source',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Zoom Target',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -174,13 +189,13 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart shows tooltip on node hover', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Hover Source Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Hover Target Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -223,13 +238,13 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Blocker Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Blocked Thread FC',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -269,13 +284,13 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart toggle hides and shows', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Toggle Source',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Toggle Target',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -312,7 +327,7 @@ test.describe('Dependency Flowchart', () => {
   test('flowchart shows empty state when no dependencies', async ({ authenticatedPage }) => {
     await createThread(authenticatedPage, {
       title: 'Lonely Thread',
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 1,
     })
 
@@ -327,5 +342,535 @@ test.describe('Dependency Flowchart', () => {
 
     // Should not show flowchart toggle when there are no dependencies
     await expect(authenticatedPage.locator('[data-testid="toggle-flowchart"]')).not.toBeVisible()
+  })
+
+  test.describe('Issue-level flowchart nodes', () => {
+    test('displays issue nodes for issue-level dependencies', async ({ authenticatedPage }) => {
+      const sourceThread = await createThread(authenticatedPage, {
+        title: 'Animal Man',
+        format: 'Comics',
+        issues_remaining: 5,
+        total_issues: 20,
+      })
+
+      const targetThread = await createThread(authenticatedPage, {
+        title: 'Swamp Thing',
+        format: 'Comics',
+        issues_remaining: 5,
+        total_issues: 20,
+      })
+
+      if (!sourceThread?.id || !targetThread?.id) {
+        throw new Error('Failed to create threads')
+      }
+
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      // Create issue-level dependency: Animal Man #17 blocks Swamp Thing #15
+      // First get the actual issue IDs
+      const sourceIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${sourceThread.id}/issues`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      const sourceIssuesData = await sourceIssuesResponse.json()
+      const issue17 = sourceIssuesData.issues.find((i: { issue_number: string }) => i.issue_number === '17')
+
+      const targetIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${targetThread.id}/issues`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      const targetIssuesData = await targetIssuesResponse.json()
+      const issue15 = targetIssuesData.issues.find((i: { issue_number: string }) => i.issue_number === '15')
+
+      if (!issue17?.id || !issue15?.id) {
+        throw new Error('Failed to find required issues')
+      }
+
+      const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'issue',
+          source_id: issue17.id,
+          target_type: 'issue',
+          target_id: issue15.id,
+        },
+      })
+      expect(depResponse.ok()).toBe(true)
+
+      await authenticatedPage.goto('/queue')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      const targetCard = authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'Swamp Thing' })
+        .first()
+      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+
+      // Wait for toggle button to appear
+      await authenticatedPage.waitForSelector('[data-testid="toggle-flowchart"]', { state: 'visible', timeout: 10000 })
+
+      // Click the toggle button
+      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+
+      // Wait for toggle button text to change to "Hide Flowchart"
+      await authenticatedPage.waitForSelector('[data-testid="toggle-flowchart"]:has-text("Hide Flowchart")', { timeout: 5000 })
+
+      // Wait for flowchart container to appear
+      await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
+
+      // Should have issue nodes (using negative IDs)
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue17.id}"]`),
+      ).toBeVisible()
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue15.id}"]`),
+      ).toBeVisible()
+
+      // Should have dashed cyan edge for issue-level dependency
+      const issueEdge = authenticatedPage.locator('.edge--issue-level')
+      await expect(issueEdge).toBeAttached()
+    })
+
+    test('crossover dependencies: two comics with bidirectional issue deps (Rotworld scenario)', async ({ authenticatedPage }) => {
+      const animalMan = await createThread(authenticatedPage, {
+        title: 'Animal Man',
+        format: 'Comics',
+        issues_remaining: 8,
+        total_issues: 20,
+      })
+
+      const swampThing = await createThread(authenticatedPage, {
+        title: 'Swamp Thing',
+        format: 'Comics',
+        issues_remaining: 8,
+        total_issues: 20,
+      })
+
+      if (!animalMan?.id || !swampThing?.id) {
+        throw new Error('Failed to create threads')
+      }
+
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      // Create issues for both threads
+      await authenticatedPage.request.post(`/api/v1/threads/${animalMan.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-20' },
+      })
+
+      await authenticatedPage.request.post(`/api/v1/threads/${swampThing.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-20' },
+      })
+
+      // Create bidirectional issue dependencies (Rotworld crossover):
+      // Animal Man #17 → Swamp Thing #15
+      if (!animalMan || !swampThing) {
+        throw new Error('Failed to create threads')
+      }
+      const issue17Id = await getIssueIdByNumber(authenticatedPage, animalMan.id, '17', token)
+      const issue15Id = await getIssueIdByNumber(authenticatedPage, swampThing.id, '15', token)
+      const issue16Id = await getIssueIdByNumber(authenticatedPage, swampThing.id, '16', token)
+      const issue18Id = await getIssueIdByNumber(authenticatedPage, animalMan.id, '18', token)
+
+      const dep1Response = await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'issue',
+          source_id: issue17Id,
+          target_type: 'issue',
+          target_id: issue15Id,
+        },
+      })
+      expect(dep1Response.ok()).toBe(true)
+
+      // Swamp Thing #16 → Animal Man #18
+      const dep2Response = await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'issue',
+          source_id: issue16Id,
+          target_type: 'issue',
+          target_id: issue18Id,
+        },
+      })
+      expect(dep2Response.ok()).toBe(true)
+
+      await authenticatedPage.goto('/queue')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      // Open Animal Man dependencies
+      const animalManCard = authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'Animal Man' })
+        .first()
+      await animalManCard.locator('button[aria-label="Manage dependencies"]').click()
+      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+
+      await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
+
+      // Should have 4 distinct issue nodes visible
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue17Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue15Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue16Id}"]`)).toBeVisible()
+      await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue18Id}"]`)).toBeVisible()
+
+      // Should have 2 issue-level edges
+      const issueEdges = authenticatedPage.locator('.edge--issue-level')
+      const edgeCount = await issueEdges.count()
+      expect(edgeCount).toBe(2)
+
+      // Verify node tooltips show correct issue labels
+      await authenticatedPage.locator(`[data-testid="flowchart-node--${issue17Id}"]`).hover()
+      await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toBeVisible()
+      await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toContainText('Animal Man #17')
+
+      await authenticatedPage.locator(`[data-testid="flowchart-node--${issue16Id}"]`).hover()
+      await expect(authenticatedPage.locator('[data-testid="flowchart-tooltip"]')).toContainText('Swamp Thing #16')
+    })
+
+    test('issue nodes have distinct styling (cyan fill, pill shape, smaller size)', async ({ authenticatedPage }) => {
+      const sourceThread = await createThread(authenticatedPage, {
+        title: 'Source Series',
+        format: 'Comics',
+        issues_remaining: 3,
+        total_issues: 10,
+      })
+
+      const targetThread = await createThread(authenticatedPage, {
+        title: 'Target Series',
+        format: 'Comics',
+        issues_remaining: 3,
+        total_issues: 10,
+      })
+
+      if (!sourceThread?.id || !targetThread?.id) {
+        throw new Error('Failed to create threads')
+      }
+
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      await authenticatedPage.request.post(`/api/v1/threads/${sourceThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-10' },
+      })
+
+      await authenticatedPage.request.post(`/api/v1/threads/${targetThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-10' },
+      })
+
+      const issue5Id = await getIssueIdByNumber(authenticatedPage, sourceThread.id, '5', token)
+      const issue3Id = await getIssueIdByNumber(authenticatedPage, targetThread.id, '3', token)
+
+      await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'issue',
+          source_id: issue5Id,
+          target_type: 'issue',
+          target_id: issue3Id,
+        },
+      })
+
+      await authenticatedPage.goto('/queue')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      const targetCard = authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'Target Series' })
+        .first()
+      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+
+      // Check issue node styling
+      const issueNode = authenticatedPage.locator(`[data-testid="flowchart-node--${issue5Id}"]`)
+      await expect(issueNode).toHaveClass(/flowchart-node--issue/)
+
+      // Verify the rect element has the correct fill and rx attributes
+      const issueNodeRect = issueNode.locator('.flowchart-node-rect')
+      const rx = await issueNodeRect.getAttribute('rx')
+      expect(rx).toBe('12')
+    })
+
+    test('issue nodes do not show lock icon even when parent thread is blocked', async ({ authenticatedPage }) => {
+      const sourceThread = await createThread(authenticatedPage, {
+        title: 'Blocking Source',
+        format: 'Comics',
+        issues_remaining: 2,
+        total_issues: 10,
+      })
+
+      const targetThread = await createThread(authenticatedPage, {
+        title: 'Blocked Target',
+        format: 'Comics',
+        issues_remaining: 2,
+        total_issues: 10,
+      })
+
+      if (!sourceThread?.id || !targetThread?.id) {
+        throw new Error('Failed to create threads')
+      }
+
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      await authenticatedPage.request.post(`/api/v1/threads/${sourceThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-10' },
+      })
+
+      await authenticatedPage.request.post(`/api/v1/threads/${targetThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-10' },
+      })
+
+      const issue1Id = await getIssueIdByNumber(authenticatedPage, sourceThread.id, '1', token)
+      const issue1TargetId = await getIssueIdByNumber(authenticatedPage, targetThread.id, '1', token)
+
+      await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'issue',
+          source_id: issue1Id,
+          target_type: 'issue',
+          target_id: issue1TargetId,
+        },
+      })
+
+      await authenticatedPage.goto('/queue')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      const targetCard = authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'Blocked Target' })
+        .first()
+      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+
+      // Issue node should not have lock icon
+      const issueNodeIcon = authenticatedPage
+        .locator(`[data-testid="flowchart-node--${issue1TargetId}"]`)
+        .locator('.flowchart-node-blocked-icon')
+      await expect(issueNodeIcon).not.toBeVisible()
+
+      // But parent thread node should have lock icon
+      const threadNodeIcon = authenticatedPage
+        .locator(`[data-testid="flowchart-node-${targetThread.id}"]`)
+        .locator('.flowchart-node-blocked-icon')
+      await expect(threadNodeIcon).toBeVisible()
+    })
+
+    test('issue-level edges are styled with dashed cyan stroke', async ({ authenticatedPage }) => {
+      const sourceThread = await createThread(authenticatedPage, {
+        title: 'Edge Source',
+        format: 'Comics',
+        issues_remaining: 2,
+        total_issues: 5,
+      })
+
+      const targetThread = await createThread(authenticatedPage, {
+        title: 'Edge Target',
+        format: 'Comics',
+        issues_remaining: 2,
+        total_issues: 5,
+      })
+
+      if (!sourceThread?.id || !targetThread?.id) {
+        throw new Error('Failed to create threads')
+      }
+
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      await authenticatedPage.request.post(`/api/v1/threads/${sourceThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      await authenticatedPage.request.post(`/api/v1/threads/${targetThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      const issue3Id = await getIssueIdByNumber(authenticatedPage, sourceThread.id, '3', token)
+      const issue2Id = await getIssueIdByNumber(authenticatedPage, targetThread.id, '2', token)
+
+      await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'issue',
+          source_id: issue3Id,
+          target_type: 'issue',
+          target_id: issue2Id,
+        },
+      })
+
+      await authenticatedPage.goto('/queue')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      const targetCard = authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'Edge Target' })
+        .first()
+      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+
+      // Check that issue-level edge has the dashed cyan class
+      const issueEdge = authenticatedPage.locator('.edge--issue-level')
+      await expect(issueEdge).toBeAttached()
+
+      // Verify the edge has the styling class
+      await expect(issueEdge).toHaveClass(/edge--issue-level/)
+    })
+
+    test('mixed thread-level and issue-level dependencies render correctly', async ({ authenticatedPage }) => {
+      const threadA = await createThread(authenticatedPage, {
+        title: 'Thread Alpha',
+        format: 'Comics',
+        issues_remaining: 3,
+        total_issues: 10,
+      })
+
+      const threadB = await createThread(authenticatedPage, {
+        title: 'Thread Beta',
+        format: 'Comics',
+        issues_remaining: 3,
+        total_issues: 10,
+      })
+
+      const threadC = await createThread(authenticatedPage, {
+        title: 'Thread Gamma',
+        format: 'Comics',
+        issues_remaining: 3,
+        total_issues: 10,
+      })
+
+      if (!threadA?.id || !threadB?.id || !threadC?.id) {
+        throw new Error('Failed to create threads')
+      }
+
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      // Create issues
+      await authenticatedPage.request.post(`/api/v1/threads/${threadA.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-10' },
+      })
+
+      await authenticatedPage.request.post(`/api/v1/threads/${threadB.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: { issue_range: '1-10' },
+      })
+
+      // Thread-level dependency: Alpha blocks Beta
+      await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'thread',
+          source_id: threadA.id,
+          target_type: 'thread',
+          target_id: threadB.id,
+        },
+      })
+
+      // Issue-level dependency: Alpha #5 blocks Beta #3
+      const issue5Id = await getIssueIdByNumber(authenticatedPage, threadA.id, '5', token)
+      const issue3Id = await getIssueIdByNumber(authenticatedPage, threadB.id, '3', token)
+
+      await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'issue',
+          source_id: issue5Id,
+          target_type: 'issue',
+          target_id: issue3Id,
+        },
+      })
+
+      await authenticatedPage.goto('/queue')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      const betaCard = authenticatedPage
+        .locator('#queue-container .glass-card')
+        .filter({ hasText: 'Thread Beta' })
+        .first()
+      await betaCard.locator('button[aria-label="Manage dependencies"]').click()
+      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+
+      // Should have both thread nodes
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node-${threadA.id}"]`),
+      ).toBeVisible()
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node-${threadB.id}"]`),
+      ).toBeVisible()
+
+      // Should have issue nodes
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue5Id}"]`),
+      ).toBeVisible()
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue3Id}"]`),
+      ).toBeVisible()
+
+      // Should have both thread-level and issue-level edges
+      const allEdges = await authenticatedPage.locator('.flowchart-edge, .flowchart-edge-blocking').count()
+      const issueEdges = await authenticatedPage.locator('.edge--issue-level').count()
+
+      expect(allEdges).toBeGreaterThan(0)
+      expect(issueEdges).toBeGreaterThan(0)
+      expect(allEdges).toBeGreaterThan(issueEdges)
+    })
   })
 })

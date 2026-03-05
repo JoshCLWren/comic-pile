@@ -1,6 +1,18 @@
 # E2E Tests
 
-Playwright end-to-end tests for the Comic Pile application.
+## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+
+**TESTS MUST NEVER BE SKIPPED - EVER.**
+
+When an E2E test fails:
+- ✅ Fix the test
+- ✅ Fix the code that breaks the test
+- ✅ Investigate root cause (timing, selectors, flakiness)
+- ❌ **NEVER skip the test**
+- ❌ **NEVER mark it as flaky without fixing it**
+- ❌ **NEVER use `.skip()` to work around failures**
+
+E2E tests are your last line of defense against broken user experiences. Treat them with respect.
 
 ## Test Suites
 

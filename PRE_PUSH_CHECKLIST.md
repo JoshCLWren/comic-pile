@@ -1,5 +1,28 @@
 # Pre-Push Checklist - MANDATORY
 
+## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+
+**THIS CHECKLIST EXISTS FOR A REASON: TO PREVENT BROKEN CODE FROM BEING PUSHED.**
+
+**TESTS MUST NEVER BE SKIPPED - EVER.**
+
+If a test fails:
+- ✅ FIX THE TEST
+- ✅ FIX THE CODE THAT BREAKS THE TEST
+- ✅ INVESTIGATE ROOT CAUSE
+- ❌ **NEVER SKIP THE TEST**
+- ❌ **NEVER USE `--no-verify` TO BYPASS THIS CHECKLIST**
+
+**There are NO exceptions to this rule.**
+
+"Pre-existing test failures" are still failures that must be fixed.
+"I'm in a hurry" is not a valid excuse.
+"It's just a small change" is not a valid excuse.
+
+**Fix the tests. Then push.**
+
+---
+
 ## CRITICAL: These checks MUST pass before pushing
 
 Running: `bash scripts/pre-push-check.sh`

@@ -132,7 +132,7 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
       },
       data: {
         title: 'No Issues Thread',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 0,
       },
     });

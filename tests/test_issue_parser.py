@@ -39,28 +39,34 @@ def test_parse_issue_ranges_empty_input():
         parse_issue_ranges("   ")
 
 
-def test_parse_issue_ranges_rejects_annuals():
-    """Test that non-numeric issues are rejected."""
-    with pytest.raises(ValueError, match="Non-numeric issues"):
-        parse_issue_ranges("Annual 1-5")
+def test_parse_issue_ranges_accepts_literals():
+    """Test that non-numeric identifiers are accepted as literals."""
+    result = parse_issue_ranges("Annual 1-5")
+    assert result == ["Annual 1-5"]
 
-    with pytest.raises(ValueError, match="Non-numeric issues"):
-        parse_issue_ranges("Special 1")
+    result = parse_issue_ranges("Special 1")
+    assert result == ["Special 1"]
+
+    result = parse_issue_ranges("0, 1-18, Annual 1")
+    assert result == [str(i) for i in range(0, 19)] + ["Annual 1"]
+
+    result = parse_issue_ranges("½")
+    assert result == ["½"]
 
 
 def test_parse_issue_ranges_invalid_format():
     """Test invalid range formats."""
-    # Invalid range
-    with pytest.raises(ValueError, match="Invalid range format"):
-        parse_issue_ranges("1-5-10")
+    # "1-5-10": split("-", 1) → ["1", "5-10"], int("5-10") fails → stored as literal
+    result = parse_issue_ranges("1-5-10")
+    assert result == ["1-5-10"]
 
-    # Non-numeric
-    with pytest.raises(ValueError, match="Non-numeric issues"):
-        parse_issue_ranges("abc")
+    # Non-numeric single token — accepted as literal identifier
+    result = parse_issue_ranges("abc")
+    assert result == ["abc"]
 
-    # Negative (appears as range with missing start)
-    with pytest.raises(ValueError, match="Invalid issue numbers in range"):
-        parse_issue_ranges("-5")
+    # Negative (dash with empty left side) — stored as literal
+    result = parse_issue_ranges("-5")
+    assert result == ["-5"]
 
     # Range start > end
     with pytest.raises(ValueError, match="Range start.*cannot exceed end"):
@@ -86,13 +92,13 @@ def test_parse_issue_ranges_out_of_order():
     assert result == ["5", "6", "7", "1", "2", "3"]
 
 
-def test_parse_issue_ranges_zero_rejected():
-    """Test that zero is rejected."""
-    with pytest.raises(ValueError, match="Issue numbers must be positive"):
-        parse_issue_ranges("0")
+def test_parse_issue_ranges_zero_accepted():
+    """Test that zero is accepted as a valid issue number."""
+    result = parse_issue_ranges("0")
+    assert result == ["0"]
 
-    with pytest.raises(ValueError, match="Issue numbers must be positive"):
-        parse_issue_ranges("0-5")
+    result = parse_issue_ranges("0-5")
+    assert result == ["0", "1", "2", "3", "4", "5"]
 
 
 def test_parse_issue_ranges_large_numbers():
@@ -132,8 +138,8 @@ def test_get_total_from_range_validates_input():
     with pytest.raises(ValueError, match="Issue range cannot be empty"):
         get_total_from_range("")
 
-    with pytest.raises(ValueError, match="Non-numeric issues"):
-        get_total_from_range("Annual 1")
+    # Non-numeric literals are now accepted
+    assert get_total_from_range("Annual 1") == 1
 
 
 def test_parse_issue_ranges_preserves_string_format():

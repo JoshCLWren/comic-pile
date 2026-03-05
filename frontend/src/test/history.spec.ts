@@ -127,7 +127,7 @@ test.describe('History Page', () => {
       const count = await historyLink.count();
       if (count > 0) {
         await historyLink.first().click();
-        await expect(authenticatedPage).toHaveURL('http://localhost:8000/history');
+        await expect(authenticatedPage).toHaveURL('http://localhost:9000/history');
       }
     }).toPass({ timeout: 5000 });
   });

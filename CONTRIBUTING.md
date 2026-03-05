@@ -18,6 +18,33 @@ The hook will block commits containing `# type: ignore`, `# noqa`, `# ruff: igno
 
 To test the hook manually: `make githook` or `bash scripts/lint.sh`
 
+## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+
+**⚠️ THIS IS THE MOST IMPORTANT RULE IN THIS PROJECT.**
+
+**TESTS MUST NEVER BE SKIPPED - EVER.**
+
+When a test fails:
+1. ✅ Fix the test
+2. ✅ Fix the code that breaks the test
+3. ✅ Investigate root cause
+4. ❌ **NEVER skip the test**
+
+**This applies to:**
+- All automated tests (unit, integration, E2E)
+- All contributors (human and AI)
+- All situations (no exceptions)
+
+**Consequences of skipping tests:**
+- Broken code gets merged
+- Technical debt accumulates
+- Confidence in the test suite is lost
+- Other developers waste time debugging
+
+**If you're tempted to use `--no-verify`, skip a test, or disable a check, DON'T.**
+
+Fix the problem instead.
+
 ## Development workflow
 
 ### Getting Started

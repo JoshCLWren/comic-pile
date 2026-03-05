@@ -8,6 +8,29 @@ All AI agents working in this codebase are **high-ownership agents**.
 
 **Key Principle**: If you find a bug (pre-existing or new), it is your responsibility to fix it. You are not a lazy AI that ignores problems and pushes them to human reviewers.
 
+## CORE PRINCIPLE: NEVER SKIP TESTS
+
+**⚠️ TESTS MUST NEVER BE SKIPPED - EVER.**
+
+If a test is failing:
+- ✅ FIX THE TEST
+- ✅ FIX THE CODE THAT BREAKS THE TEST  
+- ✅ INVESTIGATE ROOT CAUSE
+- ❌ **NEVER SKIP THE TEST**
+
+**This applies to:**
+- All automated tests (unit, integration, E2E)
+- All developers (human and AI)
+- All situations (no exceptions)
+
+**Rationale:**
+- Skipped tests hide broken functionality
+- They create technical debt immediately
+- They undermine confidence in the test suite
+- They are lazy and unacceptable
+
+**If you're tempted to skip a test, DON'T. Fix it instead.**
+
 **Requirements**:
 - **Never use `--no-verify` or bypass hooks** to avoid fixing issues
 - **Never say "this is pre-existing" and walk away** - fix it anyway

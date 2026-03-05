@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { DragEvent, FormEvent } from 'react'
+import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../components/Modal'
 import PositionSlider from '../components/PositionSlider'
@@ -20,13 +20,15 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import { useCollections } from '../contexts/CollectionContext'
-import type { Thread } from '../types'
+import type { Issue, Thread } from '../types'
+import { getApiErrorDetail } from '../utils/apiError'
+
+const FORMAT_OPTIONS = ['Comics', 'Manga', 'Trade Paperback', 'Graphic Novel', 'Other'] as const
 
 /**
  * Badge component displaying collection name for a thread.
- * @param {{ collectionId: number }} props
  */
-function CollectionBadge({ collectionId }) {
+function CollectionBadge({ collectionId }: { collectionId: number }) {
   const { collections } = useCollections()
   const collection = collections.find(c => c.id === collectionId)
 
@@ -39,12 +41,165 @@ function CollectionBadge({ collectionId }) {
   )
 }
 
+/**
+ * Dropdown select for format field. If the current value doesn't match
+ * any preset, it's added as an extra option so it isn't lost.
+ */
+function FormatSelect({ value, onChange, required }: {
+  value: string
+  onChange: (value: string) => void
+  required?: boolean
+}) {
+  const hasCustom = value && !FORMAT_OPTIONS.includes(value as typeof FORMAT_OPTIONS[number])
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+      required={required}
+    >
+      <option value="">Select format...</option>
+      {hasCustom && <option value={value}>{value}</option>}
+      {FORMAT_OPTIONS.map((fmt) => (
+        <option key={fmt} value={fmt}>{fmt}</option>
+      ))}
+    </select>
+  )
+}
+
+/**
+ * Inline issue list for migrated threads in the edit modal.
+ */
+function IssueToggleList({ threadId, onIssuesChanged }: {
+  threadId: number
+  onIssuesChanged?: () => void
+}) {
+  const [issues, setIssues] = useState<Issue[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [addRange, setAddRange] = useState('')
+  const [isAdding, setIsAdding] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [toggling, setToggling] = useState<Set<number>>(new Set())
+
+  const loadIssues = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      // Load all issues (use large page size)
+      const data = await issuesApi.list(threadId, { page_size: 100 })
+      setIssues(data.issues || [])
+    } catch {
+      // Non-critical
+    } finally {
+      setIsLoading(false)
+    }
+  }, [threadId])
+
+  useEffect(() => {
+    loadIssues()
+  }, [loadIssues])
+
+  async function handleToggle(issue: Issue) {
+    const newStatus = issue.status === 'read' ? 'unread' : 'read'
+
+    // Optimistic update
+    setIssues((prev) =>
+      prev.map((i) => (i.id === issue.id ? { ...i, status: newStatus } : i))
+    )
+    setToggling((prev) => new Set(prev).add(issue.id))
+
+    try {
+      if (issue.status === 'read') {
+        await issuesApi.markUnread(issue.id)
+      } else {
+        await issuesApi.markRead(issue.id)
+      }
+      onIssuesChanged?.()
+    } catch {
+      // Revert on failure
+      setIssues((prev) =>
+        prev.map((i) => (i.id === issue.id ? { ...i, status: issue.status } : i))
+      )
+    } finally {
+      setToggling((prev) => {
+        const next = new Set(prev)
+        next.delete(issue.id)
+        return next
+      })
+    }
+  }
+
+  async function handleAddIssues(e: FormEvent) {
+    e.preventDefault()
+    if (!addRange.trim()) return
+    setIsAdding(true)
+    setAddError(null)
+    try {
+      await issuesApi.create(threadId, addRange.trim())
+      setAddRange('')
+      await loadIssues()
+      onIssuesChanged?.()
+    } catch (err: unknown) {
+      setAddError(getApiErrorDetail(err))
+    } finally {
+      setIsAdding(false)
+    }
+  }
+
+  if (isLoading) return <p className="text-xs text-slate-500">Loading issues…</p>
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues</p>
+      <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
+        {issues.map((issue) => (
+          <button
+            key={issue.id}
+            type="button"
+            onClick={() => handleToggle(issue)}
+            disabled={toggling.has(issue.id)}
+            className={`px-2 py-0.5 rounded text-xs font-bold border transition-all ${
+              issue.status === 'read'
+                ? 'bg-teal-500/20 border-teal-400/30 text-teal-300'
+                : 'bg-white/5 border-white/10 text-slate-400'
+            } ${toggling.has(issue.id) ? 'opacity-50' : 'hover:opacity-80'}`}
+            title={`#${issue.issue_number}: ${issue.status}`}
+          >
+            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
+          </button>
+        ))}
+      </div>
+      <form onSubmit={handleAddIssues} className="flex gap-2">
+        <input
+          type="text"
+          value={addRange}
+          onChange={(e) => setAddRange(e.target.value)}
+          placeholder="Add issues: 19-24 or 0, Annual 1"
+          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200"
+        />
+        <button
+          type="submit"
+          disabled={isAdding || !addRange.trim()}
+          className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-slate-300 hover:bg-white/10 disabled:opacity-50"
+        >
+          {isAdding ? '…' : 'Add'}
+        </button>
+      </form>
+      {addError && (
+        <p className="text-xs text-red-400">{addError}</p>
+      )}
+    </div>
+  )
+}
+
 const DEFAULT_CREATE_STATE = {
   title: '',
-  format: '',
+  format: 'Comics',
   issuesRemaining: 1,
   notes: '',
   issues: '',
+  trackingMode: 'simple' as 'simple' | 'tracked',
+  lastIssueRead: 0,
 }
 
 type QueueFormState = typeof DEFAULT_CREATE_STATE
@@ -76,7 +231,7 @@ export default function QueuePage() {
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
   const [repositioningThread, setRepositioningThread] = useState<Thread | null>(null)
-  const [reorderError, setReorderError] = useState(null)
+  const [reorderError, setReorderError] = useState<string | null>(null)
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
@@ -121,7 +276,6 @@ export default function QueuePage() {
 
       setBlockingReasonMap(Object.fromEntries(details))
     } catch {
-      // Non-blocking UI enhancement; keep queue usable even if dependency API fails.
       setBlockedThreadIds([])
       setBlockingReasonMap({})
     }
@@ -134,10 +288,11 @@ export default function QueuePage() {
 
   useEffect(() => {
     const calculatePreview = async () => {
-      if (createForm.issues) {
+      const issueInput = createForm.trackingMode === 'tracked' ? createForm.issues : ''
+      if (issueInput) {
         try {
           const { parseIssueRange } = await import('../utils/issueParser')
-          const total = parseIssueRange(createForm.issues)
+          const total = parseIssueRange(issueInput)
           setIssuePreview(total)
           setIssueParseError(null)
         } catch (err) {
@@ -151,28 +306,28 @@ export default function QueuePage() {
     }
 
     calculatePreview()
-  }, [createForm.issues])
+  }, [createForm.issues, createForm.trackingMode])
 
   const activeThreads = threads
     ?.filter((thread) => thread.status === 'active')
     .sort((a, b) => a.queue_position - b.queue_position) ?? []
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
 
-  const handleDelete = (threadId) => {
+  const handleDelete = (threadId: number) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
-      deleteMutation.mutate(threadId).then(() => refetch()).catch(() => {
-        alert('Failed to delete thread. Please try again.')
+      deleteMutation.mutate(threadId).then(() => refetch()).catch((err: unknown) => {
+        alert(`Failed to delete thread: ${getApiErrorDetail(err)}`)
       })
     }
   }
 
-  const handleMoveToFront = (threadId) => {
+  const handleMoveToFront = (threadId: number) => {
     moveToFrontMutation.mutate(threadId).then(() => refetch()).catch(() => {
       alert('Failed to move thread to front. Please try again.')
     })
   }
 
-  const handleMoveToBack = (threadId) => {
+  const handleMoveToBack = (threadId: number) => {
     moveToBackMutation.mutate(threadId).then(() => refetch()).catch(() => {
       alert('Failed to move thread to back. Please try again.')
     })
@@ -206,7 +361,7 @@ export default function QueuePage() {
           refetch()
           setReorderError(null)
         })
-        .catch((error) => {
+        .catch((error: { response?: { data?: { detail?: string } } }) => {
           setReorderError(error.response?.data?.detail || 'Failed to reorder thread. Please try again.')
         })
     }
@@ -224,7 +379,8 @@ export default function QueuePage() {
     event.preventDefault()
 
     try {
-      const hasIssueRange = createForm.issues && createForm.issues.trim()
+      const isTracked = createForm.trackingMode === 'tracked'
+      const hasIssueRange = isTracked && createForm.issues && createForm.issues.trim()
 
       let issuesRemaining = Number(createForm.issuesRemaining)
       if (hasIssueRange) {
@@ -241,19 +397,22 @@ export default function QueuePage() {
 
       if (hasIssueRange && result?.id) {
         try {
-          await issuesApi.create(result.id, createForm.issues)
-        } catch (issueError) {
+          // Use migrateThread to create issues AND mark 1..lastIssueRead as read in one call
+          const lastRead = Number(createForm.lastIssueRead) || 0
+          const totalIssues = issuesRemaining
+          await issuesApi.migrateThread(result.id, lastRead, totalIssues)
+        } catch (issueError: unknown) {
           console.error('Thread created but failed to create issues:', issueError)
-          alert(`Thread created successfully, but failed to create individual issues: ${issueError.response?.data?.detail || issueError.message}`)
+          alert(`Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`)
         }
       }
 
       setCreateForm(DEFAULT_CREATE_STATE)
       setIsCreateOpen(false)
       refetch()
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to create thread:', error)
-      alert(`Failed to create thread: ${error.response?.data?.detail || error.message || 'Unknown error'}`)
+      alert(`Failed to create thread: ${getApiErrorDetail(error)}`)
     }
   }
 
@@ -262,13 +421,20 @@ export default function QueuePage() {
     if (!editingThread) return
 
     try {
+      const updateData: { title: string; format: string; notes: string | null; issues_remaining?: number } = {
+        title: editForm.title,
+        format: editForm.format,
+        notes: editForm.notes || null,
+      }
+
+      // Include issues_remaining for unmigrated threads
+      if (editingThread.total_issues === null) {
+        updateData.issues_remaining = Number(editForm.issuesRemaining)
+      }
+
       await updateMutation.mutate({
         id: editingThread.id,
-        data: {
-          title: editForm.title,
-          format: editForm.format,
-          notes: editForm.notes || null,
-        },
+        data: updateData,
       })
       setEditingThread(null)
       setIsEditOpen(false)
@@ -286,6 +452,8 @@ export default function QueuePage() {
       issuesRemaining: thread.issues_remaining,
       notes: thread.notes || '',
       issues: '',
+      trackingMode: 'simple',
+      lastIssueRead: 0,
     })
     setIsEditOpen(true)
   }
@@ -351,7 +519,7 @@ export default function QueuePage() {
     setIsActionSheetOpen(true)
   }
 
-  async function handleAction(action) {
+  async function handleAction(action: string) {
     if (!selectedThread) return
 
     setIsActionSheetOpen(false)
@@ -399,9 +567,9 @@ export default function QueuePage() {
           openEditModal(selectedThread)
           break
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Action failed:', error)
-      alert(`Action failed: ${error.response?.data?.detail || error.message || 'Unknown error'}`)
+      alert(`Action failed: ${getApiErrorDetail(error)}`)
     }
   }
 
@@ -463,6 +631,7 @@ export default function QueuePage() {
               const isDragOver = dragOverThreadId === thread.id
               const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
               const blockingReasons = blockingReasonMap[thread.id] || []
+              const isMigrated = thread.total_issues !== null
 
               return (
                 <div
@@ -560,7 +729,12 @@ export default function QueuePage() {
                   )}
                   {thread.notes && <p className="text-xs text-slate-500">{thread.notes}</p>}
                   {thread.issues_remaining !== null && (
-                    <p className="text-xs text-slate-500">{thread.issues_remaining} issues remaining</p>
+                    <p className="text-xs text-slate-500">
+                      {isMigrated && thread.next_unread_issue_number
+                        ? `Currently on #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
+                        : `${thread.issues_remaining} issues remaining`
+                      }
+                    </p>
                   )}
                   <div className="flex gap-2 pt-2">
                     <Tooltip content="Move this thread to the front of the queue.">
@@ -644,6 +818,7 @@ export default function QueuePage() {
         )}
       </section>
 
+      {/* Create Thread Modal */}
       <Modal isOpen={isCreateOpen} title="Create Thread" onClose={() => setIsCreateOpen(false)}>
         <form className="space-y-4" onSubmit={handleCreateSubmit}>
           <div className="space-y-2">
@@ -657,47 +832,103 @@ export default function QueuePage() {
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Format</label>
-            <input
+            <FormatSelect
               value={createForm.format}
-              onChange={(event) => setCreateForm({ ...createForm, format: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              onChange={(value) => setCreateForm({ ...createForm, format: value })}
               required
             />
           </div>
+
+          {/* Tracking mode toggle */}
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues Remaining</label>
-            <input
-              type="number"
-              min="0"
-              value={createForm.issuesRemaining}
-              onChange={(event) =>
-                setCreateForm({
-                  ...createForm,
-                  issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
-                })
-              }
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
-              required
-            />
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issue Tracking</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setCreateForm({ ...createForm, trackingMode: 'simple' })}
+                className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
+                  createForm.trackingMode === 'simple'
+                    ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
+                    : 'bg-white/5 border-white/10 text-slate-400'
+                }`}
+              >
+                Simple counter
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreateForm({ ...createForm, trackingMode: 'tracked' })}
+                className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
+                  createForm.trackingMode === 'tracked'
+                    ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
+                    : 'bg-white/5 border-white/10 text-slate-400'
+                }`}
+              >
+                Track individual issues
+              </button>
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues (optional)</label>
-            <input
-              type="text"
-              value={createForm.issues}
-              onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
-              placeholder="1-25 or 1, 3, 5-7"
-            />
-            {issuePreview !== null && (
-              <p className="text-xs text-slate-400">
-                Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}: #1-{issuePreview}
-              </p>
-            )}
-            {issueParseError && (
-              <p className="text-xs text-red-400">{issueParseError}</p>
-            )}
-          </div>
+
+          {createForm.trackingMode === 'simple' ? (
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues Remaining</label>
+              <input
+                type="number"
+                min="0"
+                value={createForm.issuesRemaining}
+                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                  setCreateForm({
+                    ...createForm,
+                    issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
+                  })
+                }
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                required
+              />
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues</label>
+                <input
+                  type="text"
+                  value={createForm.issues}
+                  onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                  placeholder="0-25 or 0, ½, Annual 1, 5-7"
+                  required
+                />
+                {issuePreview !== null && (
+                  <p className="text-xs text-slate-400">
+                    Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
+                  </p>
+                )}
+                {issueParseError && (
+                  <p className="text-xs text-red-400">{issueParseError}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Last issue read (optional)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={createForm.lastIssueRead}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    setCreateForm({
+                      ...createForm,
+                      lastIssueRead: Number.parseInt(event.target.value, 10) || 0,
+                    })
+                  }
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                />
+                {createForm.lastIssueRead > 0 && issuePreview !== null && (
+                  <p className="text-xs text-slate-400">
+                    Issues #1–{createForm.lastIssueRead} will be marked as read
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Notes</label>
             <textarea
@@ -716,6 +947,7 @@ export default function QueuePage() {
         </form>
       </Modal>
 
+      {/* Edit Thread Modal */}
       <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => setIsEditOpen(false)} overlayClassName="edit-modal__overlay">
         <form className="space-y-4" onSubmit={handleEditSubmit}>
           <div className="space-y-2">
@@ -729,13 +961,32 @@ export default function QueuePage() {
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Format</label>
-            <input
+            <FormatSelect
               value={editForm.format}
-              onChange={(event) => setEditForm({ ...editForm, format: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              onChange={(value) => setEditForm({ ...editForm, format: value })}
               required
             />
           </div>
+
+          {/* Issues remaining for unmigrated threads */}
+          {editingThread?.total_issues === null && (
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues Remaining</label>
+              <input
+                type="number"
+                min="0"
+                value={editForm.issuesRemaining}
+                onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                  setEditForm({
+                    ...editForm,
+                    issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
+                  })
+                }
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              />
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Notes</label>
             <textarea
@@ -744,6 +995,15 @@ export default function QueuePage() {
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200 min-h-[80px]"
             ></textarea>
           </div>
+
+          {/* Issue list for migrated threads */}
+          {editingThread && editingThread.total_issues !== null && (
+            <IssueToggleList
+              threadId={editingThread.id}
+              onIssuesChanged={() => refetch()}
+            />
+          )}
+
           {editingThread?.total_issues === null && (
             <div className="space-y-2 pt-2 border-t border-white/10">
               <button

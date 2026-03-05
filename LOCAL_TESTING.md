@@ -1,6 +1,16 @@
 # Local Testing Guide
 
-This guide shows you how to set up a local test environment with sample data.
+## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+
+**TESTS MUST NEVER BE SKIPPED - EVER.**
+
+When running tests locally:
+- ✅ Fix failing tests before moving on
+- ✅ Investigate root causes
+- ❌ **NEVER skip tests to save time**
+- ❌ **NEVER ignore test failures**
+
+Local testing is your opportunity to catch issues before they reach CI. Take advantage of it.
 
 ## Quick Start
 

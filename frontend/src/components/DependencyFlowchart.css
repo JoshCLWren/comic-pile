@@ -36,6 +36,13 @@
   pointer-events: none;
 }
 
+.edge--issue-level {
+  stroke-dasharray: 6 4;
+  stroke-opacity: 0.6;
+  stroke: rgba(56, 189, 248, 0.6);
+  stroke-width: 2;
+}
+
 /* Arrowhead marker */
 .flowchart-arrowhead {
   fill: rgba(148, 163, 184, 0.6);
@@ -70,6 +77,20 @@
 .flowchart-node-blocked .flowchart-node-rect {
   fill: rgba(127, 29, 29, 0.5);
   stroke: rgba(239, 68, 68, 0.5);
+}
+
+.flowchart-node--issue .flowchart-node-rect {
+  fill: rgba(56, 189, 248, 0.15);
+  stroke: rgba(56, 189, 248, 0.4);
+}
+
+.flowchart-node--issue.flowchart-node-blocked .flowchart-node-rect {
+  fill: rgba(239, 68, 68, 0.15);
+  stroke: rgba(239, 68, 68, 0.4);
+}
+
+.flowchart-node--issue .flowchart-node-title {
+  font-size: 11px;
 }
 
 .flowchart-node-title {

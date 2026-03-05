@@ -1,6 +1,8 @@
 import { type Page, expect } from '@playwright/test';
 import type { Violation } from '@axe-core/playwright';
 
+type WindowWithAccessToken = Window & { __COMIC_PILE_ACCESS_TOKEN?: string };
+
 type TestUser = {
   email: string;
   password: string;
@@ -55,25 +57,29 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
 
   await page.evaluate((token: string) => {
     localStorage.setItem('auth_token', token);
-    (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
+    (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN = token;
   }, user.accessToken);
 
   await page.addInitScript((token: string) => {
     localStorage.setItem('auth_token', token);
-    (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
+    (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN = token;
   }, user.accessToken);
 
   return user.accessToken;
+}
+
+export async function getAuthToken(page: Page): Promise<string | null> {
+  return await page.evaluate(() => {
+    const win = window as WindowWithAccessToken;
+    return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null;
+  });
 }
 
 export async function createThread(
   page: Page,
   threadData: { title: string; format: string; issues_remaining: number; total_issues?: number }
 ): Promise<{ id: number } | void> {
-  const token = await page.evaluate(() => {
-    const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
-    return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null
-  });
+  const token = await getAuthToken(page);
 
   const dataWithoutTotal = {
     title: threadData.title,
@@ -181,7 +187,7 @@ export async function setupAuthenticatedPage(
 export async function cleanupTestUser(page: Page, _user: TestUser): Promise<void> {
   await page.evaluate(() => {
     localStorage.clear();
-    delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
+    delete (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN;
   });
 }
 
@@ -219,7 +225,7 @@ export const SELECTORS = {
     threadItem: '[data-testid=\"queue-thread-item\"]',
     newThreadButton: 'button:has-text("Add Thread")',
     titleInput: 'label:has-text("Title") + input',
-    formatInput: 'label:has-text("Format") + input',
+    formatSelect: 'label:has-text("Format") + select',
     issuesRemainingInput: 'label:has-text("Issues Remaining") + input, label:has-text("Issues") + input',
   },
   roll: {
@@ -265,7 +271,7 @@ export const SELECTORS = {
     readDate: '.read-date',
   },
   threadCreate: {
-    issuesInput: 'input[placeholder*="1-25"]',
+    issuesInput: 'input[placeholder*="0-25"]',
     issuePreview: 'p:has-text("Will create")',
   },
   rollResult: {

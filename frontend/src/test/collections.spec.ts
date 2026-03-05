@@ -39,7 +39,7 @@ async function createThreadInCollection(
   const response = await request.post('/api/threads/', {
     data: {
       title,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 10,
       collection_id: collectionId,
     },

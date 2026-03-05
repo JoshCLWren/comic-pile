@@ -11,7 +11,7 @@ async function createOldSystemThread(
   const response = await request.post('/api/threads/', {
     data: {
       title,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 10,
     },
     headers: {
@@ -40,7 +40,7 @@ async function createMigratedThread(
   const response = await request.post('/api/threads/', {
     data: {
       title,
-      format: 'Comic',
+      format: 'Comics',
       issues_remaining: 10,
       total_issues: totalIssues,
     },

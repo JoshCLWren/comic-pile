@@ -4,20 +4,26 @@
  * exhaust memory and crash the application.
  */
 const MAX_ISSUES = 10000;
+const MAX_LITERAL_LENGTH = 100;
 
 /**
  * Parse issue range string and return count.
  * Simple client-side version for preview.
  *
+ * NOTE: The backend has a parallel parser at app/utils/issue_parser.py
+ * that must be kept in sync with this logic.
+ *
  * Supports formats:
  * - "1-25" -> count = 25
+ * - "0-18" -> count = 19 (issues 0..18)
  * - "1, 3, 5-7" -> count = 5 (issues 1, 3, 5, 6, 7)
- * - "25" -> count = 1 (single issue number)
+ * - "0, Annual 1, 5-7" -> count = 5 (issues 0, Annual 1, 5, 6, 7)
+ * - "½" -> count = 1
  *
- * Annuals/specials should be SEPARATE THREADS with dependencies (not part of main series issue list).
- * This parser only handles numeric issues.
+ * Tokens with a dash are attempted as integer ranges (both endpoints >= 0).
+ * If that fails, the whole token is kept as a literal identifier.
  *
- * @param input - Issue range string (e.g., "1-25" or "1, 3, 5-7")
+ * @param input - Issue range string (e.g., "0-25" or "0, Annual 1, 5-7")
  * @returns Total number of issues in the range
  * @throws Error if input is invalid
  */
@@ -27,15 +33,7 @@ export function parseIssueRange(input: string): number {
   }
 
   const trimmedInput = input.trim();
-
-  // Check for non-numeric characters (only allow digits, commas, dashes, spaces)
-  if (/[^\d,\-\s]/.test(trimmedInput)) {
-    throw new Error(
-      'Non-numeric issues detected. Annuals and specials should be created as separate threads.'
-    );
-  }
-
-  const result: number[] = [];
+  const result: string[] = [];
   const parts = trimmedInput.split(',');
 
   for (const part of parts) {
@@ -45,50 +43,55 @@ export function parseIssueRange(input: string): number {
     }
 
     if (trimmedPart.includes('-')) {
-      const rangeParts = trimmedPart.split('-');
-      if (rangeParts.length !== 2) {
-        throw new Error(`Invalid range format: ${trimmedPart}`);
-      }
+      // Try to parse as an integer range
+      const dashIdx = trimmedPart.indexOf('-');
+      const left = trimmedPart.slice(0, dashIdx).trim();
+      const right = trimmedPart.slice(dashIdx + 1).trim();
 
-      const startStr = rangeParts[0].trim();
-      const endStr = rangeParts[1].trim();
+      const start = Number.parseInt(left, 10);
+      const end = Number.parseInt(right, 10);
 
-      const start = parseInt(startStr, 10);
-      const end = parseInt(endStr, 10);
-
-      if (isNaN(start) || isNaN(end)) {
-        throw new Error(`Invalid issue numbers in range: ${trimmedPart}`);
-      }
-
-      if (start < 1 || end < 1) {
-        throw new Error('Issue numbers must be positive');
-      }
-
-      if (start > end) {
-        throw new Error(`Range start (${start}) cannot exceed end (${end})`);
-      }
-
-      for (let i = start; i <= end; i++) {
-        result.push(i);
+      // Verify entire string is numeric (matches backend int() behavior which rejects partial parses like "5a")
+      // Use regex to allow zero-padded numbers while rejecting trailing non-numeric characters
+      const isNumeric = (str: string) => /^\d+$/.test(str);
+      if (!Number.isNaN(start) && !Number.isNaN(end) && isNumeric(left) && isNumeric(right)) {
+        if (start < 0 || end < 0) {
+          throw new Error('Range endpoints must be >= 0');
+        }
+        if (start > end) {
+          throw new Error(`Range start (${start}) cannot exceed end (${end})`);
+        }
+        // Check range size BEFORE expansion to prevent DoS (matches backend check)
+        const rangeSize = end - start + 1;
+        if (rangeSize > MAX_ISSUES) {
+          throw new Error(`Range too large: ${rangeSize} issues (max ${MAX_ISSUES})`);
+        }
+        // Check cumulative total to prevent combining multiple large ranges
+        if (result.length + rangeSize > MAX_ISSUES) {
+          throw new Error(`Total issues would exceed maximum of ${MAX_ISSUES}`);
+        }
+        for (let i = start; i <= end; i++) {
+          result.push(String(i));
+        }
+      } else {
+        // Not a valid integer range — store as literal
+        if (trimmedPart.length > MAX_LITERAL_LENGTH) {
+          throw new Error(`Issue identifier too long (max ${MAX_LITERAL_LENGTH} chars)`);
+        }
+        result.push(trimmedPart);
       }
     } else {
-      const issueNum = parseInt(trimmedPart, 10);
-
-      if (isNaN(issueNum)) {
-        throw new Error(`Invalid issue number: ${trimmedPart}`);
+      // Single token — accept any non-empty string
+      if (trimmedPart.length > MAX_LITERAL_LENGTH) {
+        throw new Error(`Issue identifier too long (max ${MAX_LITERAL_LENGTH} chars)`);
       }
-
-      if (issueNum < 1) {
-        throw new Error('Issue numbers must be positive');
-      }
-
-      result.push(issueNum);
+      result.push(trimmedPart);
     }
   }
 
   // Deduplicate while preserving order
-  const seen = new Set<number>();
-  const uniqueResult: number[] = [];
+  const seen = new Set<string>();
+  const uniqueResult: string[] = [];
 
   for (const issue of result) {
     if (!seen.has(issue)) {

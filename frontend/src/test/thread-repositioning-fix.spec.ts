@@ -1,19 +1,18 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Thread Repositioning Fix Demo', () => {
+const TEST_USERNAME = process.env.TEST_USERNAME;
+const TEST_PASSWORD = process.env.TEST_PASSWORD;
+
+if (!TEST_USERNAME || !TEST_PASSWORD) {
+  throw new Error('TEST_USERNAME and TEST_PASSWORD environment variables must be set for thread-repositioning-fix tests');
+}
+
+test.describe('Thread Repositioning - Fix Verification', () => {
   test.beforeEach(async ({ page }) => {
-    // Get credentials from environment variables
-    const testUsername = process.env.TEST_USERNAME
-    const testPassword = process.env.TEST_PASSWORD
-
-    if (!testUsername || !testPassword) {
-      test.skip(true, 'TEST_USERNAME and TEST_PASSWORD environment variables are not set');
-    }
-
     // Login before each test using env vars
     await page.goto('/login');
-    await page.fill('input[name="username"]', testUsername);
-    await page.fill('input[name="password"]', testPassword);
+    await page.fill('input[name="username"]', TEST_USERNAME);
+    await page.fill('input[name="password"]', TEST_PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForURL('**/');
   });

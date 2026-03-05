@@ -14,7 +14,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE_TAG="comic-pile-ci:local"
 PG_CONTAINER="comic-pile-ci-postgres"
 CI_NETWORK="comic-pile-ci-net-$RANDOM"
-API_PORT="8000"
+API_PORT="9000"
 DEFAULT_DB_NAME="comic_pile_test"
 DB_URL="postgresql+asyncpg://postgres:postgres@postgres:5432/${DEFAULT_DB_NAME}"
 
@@ -206,7 +206,7 @@ if [[ "${RUN_PLAYWRIGHT}" -eq 1 ]]; then
       -e SECRET_KEY=test-secret-key-for-testing-only \
       -e DATABASE_URL="${shard_db_url}" \
       -e TEST_DATABASE_URL="${shard_db_url}" \
-      -e BASE_URL="http://localhost:8000" \
+      -e BASE_URL="http://localhost:9000" \
       -e API_PORT="${API_PORT}" \
       -e PGUSER=postgres \
       "${IMAGE_TAG}" \

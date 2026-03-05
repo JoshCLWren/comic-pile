@@ -2,6 +2,26 @@
 
 This index provides a comprehensive map of all documentation in the comic-pile project.
 
+## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+
+**TESTS MUST NEVER BE SKIPPED - EVER.**
+
+This is the most important rule in the Comic Pile project.
+
+When tests fail:
+- ✅ Fix the test
+- ✅ Fix the code that breaks the test
+- ✅ Investigate root cause
+- ❌ **NEVER skip the test**
+
+This principle is enforced through:
+- Pre-commit hooks (AGENTS.md, CONTRIBUTING.md)
+- Pre-push hooks (PRE_PUSH_CHECKLIST.md)
+- CI/CD pipelines
+- Code review standards
+
+**See AGENTS.md for the full agent testing rules.**
+
 ## Getting Started
 
 - [README.md](../README.md) — Project overview, quick start, and development workflow.
