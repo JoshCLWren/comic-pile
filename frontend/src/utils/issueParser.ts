@@ -51,7 +51,10 @@ export function parseIssueRange(input: string): number {
       const start = Number.parseInt(left, 10);
       const end = Number.parseInt(right, 10);
 
-      if (!Number.isNaN(start) && !Number.isNaN(end)) {
+      // Verify entire string is numeric (matches backend int() behavior which rejects partial parses like "5a")
+      // Use regex to allow zero-padded numbers while rejecting trailing non-numeric characters
+      const isNumeric = (str: string) => /^\d+$/.test(str);
+      if (!Number.isNaN(start) && !Number.isNaN(end) && isNumeric(left) && isNumeric(right)) {
         if (start < 0 || end < 0) {
           throw new Error('Range endpoints must be >= 0');
         }

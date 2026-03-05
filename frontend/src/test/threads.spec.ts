@@ -147,4 +147,22 @@ test.describe('Thread Management', () => {
       expect(isVisible).toBe(false);
     }).toPass({ timeout: 5000 });
   });
+
+  test('should validate issues_remaining is non-negative', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.click('button:has-text("Add Thread")');
+
+    await authenticatedPage.fill('label:has-text("Title") + input', 'Test Comic');
+    await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
+
+    const issuesInput = authenticatedPage.locator('input[type="number"]').first();
+    await issuesInput.fill('-1');
+
+    const isValid = await issuesInput.evaluate((el) => (el as HTMLInputElement).checkValidity());
+    expect(isValid).toBe(false);
+
+    const validationMessage = await issuesInput.evaluate((el) => (el as HTMLInputElement).validationMessage);
+    expect(validationMessage).not.toBe('');
+  });
 });
