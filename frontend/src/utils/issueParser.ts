@@ -63,6 +63,10 @@ export function parseIssueRange(input: string): number {
         if (rangeSize > MAX_ISSUES) {
           throw new Error(`Range too large: ${rangeSize} issues (max ${MAX_ISSUES})`);
         }
+        // Check cumulative total to prevent combining multiple large ranges
+        if (result.length + rangeSize > MAX_ISSUES) {
+          throw new Error(`Total issues would exceed maximum of ${MAX_ISSUES}`);
+        }
         for (let i = start; i <= end; i++) {
           result.push(String(i));
         }
