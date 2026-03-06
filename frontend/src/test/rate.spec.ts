@@ -254,7 +254,7 @@ test.describe('Rate Thread Feature', () => {
   });
 
   test('should show thread metadata (format, issues remaining)', async ({ authenticatedWithThreadsPage }) => {
-    const formatElement = authenticatedWithThreadsPage.locator('#thread-info .bg-indigo-500\\/20');
+    const formatElement = authenticatedWithThreadsPage.locator('#thread-info .bg-red-800\\/20');
     await expect(formatElement.first()).toBeVisible();
 
     const issuesElement = authenticatedWithThreadsPage.locator('text=Issues left');
