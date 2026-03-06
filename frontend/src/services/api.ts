@@ -29,6 +29,7 @@ import type {
 
 type ApiRequestConfig<D = unknown> = AxiosRequestConfig<D> & {
   _retry?: boolean
+  _queued?: boolean
   skipAuthRedirect?: boolean
 }
 
@@ -55,6 +56,12 @@ let refreshTokenPromise: Promise<AuthTokens> | null = null
 let isRedirectingToLogin = false
 let redirectTimeoutId: ReturnType<typeof setTimeout> | null = null
 let accessToken: string | null = null
+let failedQueue: Array<{
+  resolve: (value: unknown) => void
+  reject: (reason: unknown) => void
+  config: ApiRequestConfig
+}> = []
+let isRefreshing = false
 
 export function setAccessToken(token: string | null): void {
   accessToken = token
@@ -105,6 +112,19 @@ rawApi.interceptors.request.use(
   (error: unknown) => Promise.reject(error),
 )
 
+function processQueue(error: unknown | null, token: string | null = null): void {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error)
+    } else if (token) {
+      prom.config.headers = prom.config.headers ?? {}
+      ;(prom.config.headers as Record<string, string>).Authorization = `Bearer ${token}`
+      prom.resolve(api.request(prom.config))
+    }
+  })
+  failedQueue = []
+}
+
 rawApi.interceptors.response.use(
   (response) => response.data,
   async (error: AxiosError) => {
@@ -128,18 +148,29 @@ rawApi.interceptors.response.use(
         requestUrl.includes('/auth/login') ||
         requestUrl.includes('/auth/register') ||
         requestUrl.includes('/auth/refresh')
-      if (isAuthEndpoint || originalRequest.skipAuthRedirect) {
+      if (isAuthEndpoint) {
         if (requestUrl.includes('/auth/refresh')) {
           redirectToLogin()
         }
         return Promise.reject(error)
       }
 
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject, config: originalRequest })
+        }).then((token) => token).catch((err) => {
+          if ((err as AxiosError)?.response?.status === 401) {
+            return Promise.reject(error)
+          }
+          return Promise.reject(err)
+        })
+      }
+
       originalRequest._retry = true
+      isRefreshing = true
 
       try {
         if (!refreshTokenPromise) {
-          // Refresh token is held in an HttpOnly cookie; request body is optional.
           refreshTokenPromise = api.post<AuthTokens>('/auth/refresh')
         }
 
@@ -149,12 +180,19 @@ rawApi.interceptors.response.use(
         const { access_token } = response
         setAccessToken(access_token)
 
+        processQueue(null, access_token)
+        isRefreshing = false
+
         originalRequest.headers = originalRequest.headers ?? {}
         ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
         return api.request(originalRequest)
       } catch (refreshError) {
         refreshTokenPromise = null
-        redirectToLogin()
+        processQueue(refreshError, null)
+        isRefreshing = false
+        if (!originalRequest.skipAuthRedirect) {
+          redirectToLogin()
+        }
         return Promise.reject(refreshError)
       }
     }

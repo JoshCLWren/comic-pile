@@ -1,25 +1,27 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
 :root {
-  --bg-main: #0a0518;
-  --bg-darker: #05020c;
-  --accent-indigo: #4f46e5;
-  --accent-violet: #8b5cf6;
-  --accent-teal: #14b8a6;
-  --accent-amber: #fbbf24;
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --bg-main: #1a1410;
+  --bg-darker: #110e0a;
+  --accent-primary: #d4890e;
+  --accent-red: #c0392b;
+  --accent-amber: var(--accent-primary);
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
   --glass-blur: blur(12px);
+  --text-primary: #e8d5b0;
+  --text-muted: #a0937e;
+  --text-dim: #6b5f50;
 }
 
 body {
   background: radial-gradient(
     circle at top left,
-    #1e1b4b 0%,
+    #2a2018 0%,
     var(--bg-main) 40%,
     var(--bg-darker) 100%
   );
-  color: #f8fafc;
+  color: var(--text-primary);
   font-family: 'Outfit', sans-serif;
   min-height: 100vh;
 }
@@ -29,17 +31,17 @@ body {
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 3px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .threejs-dice-container {
@@ -94,7 +96,7 @@ body {
   justify-content: center;
   font-weight: 900;
   font-size: 1.5rem;
-  color: #f8fafc;
+  color: var(--text-primary);
   text-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
   pointer-events: none;
 }
@@ -104,7 +106,7 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .explosion-wrap {
@@ -165,7 +167,7 @@ body {
 .result-reveal {
   padding: 1rem;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
 
 .result-reveal::-webkit-scrollbar {
@@ -177,14 +179,14 @@ body {
 }
 
 .result-reveal::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
 
 #rating-value {
   font-size: 3.5rem;
   font-weight: 900;
-  text-shadow: 0 0 30px var(--accent-teal);
+  text-shadow: 0 0 30px rgba(212, 137, 14, 0.4);
   transition: all 0.2s;
 }
 
@@ -200,33 +202,32 @@ body {
   left: 0;
   right: 0;
   z-index: 40;
-  background: rgba(5, 2, 12, 0.95);
-  backdrop-filter: blur(20px);
+  background: rgba(17, 14, 10, 0.95);
   border-top: 1px solid var(--glass-border);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
 .nav-item {
-  color: rgba(148, 163, 184, 0.9);
+  color: var(--text-muted);
 }
 
 .nav-item:hover {
-  color: rgba(226, 232, 240, 0.95);
+  color: var(--text-primary);
 }
 
 .nav-item.active {
-  color: #f8fafc;
-  background: rgba(79, 70, 229, 0.18);
+  color: var(--text-primary);
+  background: rgba(212, 137, 14, 0.12);
 }
 
 .nav-item.active .nav-label {
-  color: #f8fafc;
+  color: var(--text-primary);
 }
 
 .glass-card {
   background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
 }
 
 .dice-state-idle {
@@ -238,20 +239,20 @@ body {
 .dice-state-idle:hover {
   opacity: 1;
   filter: brightness(1);
-  box-shadow: 0 0 30px rgba(20, 184, 166, 0.3);
-  border-color: var(--accent-teal);
+  box-shadow: 0 0 30px rgba(212, 137, 14, 0.2);
+  border-color: var(--accent-primary);
 }
 
 .dice-state-rolled {
   opacity: 1;
   filter: brightness(1);
-  box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 40px rgba(212, 137, 14, 0.25);
 }
 
 .dice-state-reroll {
   opacity: 1;
   animation: bounce-in 0.5s ease;
-  box-shadow: 0 0 45px rgba(251, 191, 36, 0.4);
+  box-shadow: 0 0 45px rgba(212, 137, 14, 0.3);
 }
 
 .dice-state-rate-flow {
@@ -260,10 +261,10 @@ body {
 }
 
 .pool-thread-selected {
-  border-color: rgba(20, 184, 166, 0.6);
-  box-shadow: 0 0 20px rgba(20, 184, 166, 0.35);
+  border-color: rgba(212, 137, 14, 0.5);
+  box-shadow: 0 0 20px rgba(212, 137, 14, 0.2);
 }
 
 .text-glow {
-  text-shadow: 0 0 20px rgba(79, 70, 229, 0.5);
+  text-shadow: 0 0 20px rgba(212, 137, 14, 0.3);
 }

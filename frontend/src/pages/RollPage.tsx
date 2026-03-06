@@ -446,7 +446,7 @@ export default function RollPage() {
       p.style.top = '50%';
       p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
       p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
-      p.style.background = i % 2 ? 'var(--accent-teal)' : 'var(--accent-violet)';
+      p.style.background = i % 2 ? 'var(--accent-red)' : 'var(--accent-amber)';
       layer.appendChild(p);
       setTimeout(() => p.remove(), 1000);
     }
@@ -656,7 +656,7 @@ export default function RollPage() {
 
   // Show loading state only when loading and no error
   if (isSessionLoading && !isSessionError) {
-    return <div className="text-center py-10 text-slate-500 font-black uppercase tracking-widest text-[10px]">Loading...</div>
+    return <div className="text-center py-10 text-stone-500 font-black uppercase tracking-widest text-[10px]">Loading...</div>
   }
 
   // Show error state when session API fails
@@ -668,19 +668,19 @@ export default function RollPage() {
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
         <div className="text-center space-y-4">
           <div className="text-4xl">⚠️</div>
-          <h2 className="text-xl font-black text-slate-200 uppercase tracking-wider">Session Error</h2>
-          <p className="text-sm text-slate-400">{errorDetail}</p>
+          <h2 className="text-xl font-black text-stone-300 uppercase tracking-wider">Session Error</h2>
+          <p className="text-sm text-stone-400">{errorDetail}</p>
           {status === 401 ? (
             <button
               onClick={() => navigate('/login')}
-              className="px-4 py-2 bg-teal-500/20 border border-teal-500/50 rounded-lg text-xs font-black uppercase tracking-widest text-teal-400 hover:bg-teal-500/30 transition-colors"
+              className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors"
             >
               Go to Login
             </button>
           ) : (
             <button
               onClick={() => refetchSession()}
-              className="px-4 py-2 bg-teal-500/20 border border-teal-500/50 rounded-lg text-xs font-black uppercase tracking-widest text-teal-400 hover:bg-teal-500/30 transition-colors"
+              className="px-4 py-2 bg-amber-600/20 border border-amber-600/50 rounded-lg text-xs font-black uppercase tracking-widest text-amber-500 hover:bg-amber-600/30 transition-colors"
             >
               Retry
             </button>
@@ -697,8 +697,8 @@ export default function RollPage() {
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
           {session?.snoozed_threads?.length > 0 && (
             <div className="flex items-center gap-2 mt-1">
-              <span className="modifier-badge text-[10px] font-black text-teal-400">+{session.snoozed_threads.length}</span>
-              <span className="text-[9px] text-slate-500 uppercase tracking-wider">snoozed offset active</span>
+              <span className="modifier-badge text-[10px] font-black text-amber-500">+{session.snoozed_threads.length}</span>
+              <span className="text-[9px] text-stone-500 uppercase tracking-wider">snoozed offset active</span>
             </div>
           )}
         </div>
@@ -711,7 +711,7 @@ export default function RollPage() {
                   onClick={() => handleSetDie(die)}
                   disabled={setDieMutation.isPending}
                   className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie
-                    ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                    ? 'bg-amber-600/20 border-amber-600 text-amber-500'
                     : 'bg-white/5 border-white/10 hover:bg-white/10'
                     }`}
                 >
@@ -734,7 +734,7 @@ export default function RollPage() {
               <button
                 onClick={() => setIsDieModalOpen(true)}
                 disabled={setDieMutation.isPending}
-                className="px-3 py-1 text-[10px] font-black rounded-lg border bg-teal-500/20 border-teal-500 text-teal-400 transition-colors"
+                className="px-3 py-1 text-[10px] font-black rounded-lg border bg-amber-600/20 border-amber-600 text-amber-500 transition-colors"
               >
                 d{currentDie}
               </button>
@@ -748,16 +748,16 @@ export default function RollPage() {
             </div>
             <div className="text-right">
               <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. Promotes automatically based on ratings (5→up, 1-2→down)">
-                <span className="block text-[8px] font-black text-slate-500 uppercase tracking-wider cursor-help border-b border-dashed border-slate-600">Ladder</span>
+                <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder</span>
               </Tooltip>
-              <span id="header-die-label" className="text-[10px] font-black text-teal-400">d{currentDie}</span>
+              <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>
             </div>
           </div>
           <Tooltip content="Manually select a thread to override the next roll result.">
             <button
               type="button"
               onClick={() => setIsOverrideOpen(true)}
-              className="px-3 py-2 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+              className="px-3 py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
             >
               Override
             </button>
@@ -767,7 +767,7 @@ export default function RollPage() {
 
       <div className="flex-1 flex flex-col min-h-0">
         <div className="glass-card flex-1 flex flex-col relative">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-amber-900/10 rounded-full blur-[120px] pointer-events-none"></div>
 
           <div className="flex-1 flex flex-col">
             {!isRatingView ? (
@@ -798,32 +798,32 @@ export default function RollPage() {
                   <div className="space-y-3 text-center">
                     {activeRatingThread?.issue_number ? (
                       <>
-                        <h2 className="text-2xl font-black text-slate-100">{activeRatingThread?.title || 'Loading...'}</h2>
+                        <h2 className="text-2xl font-black text-stone-200">{activeRatingThread?.title || 'Loading...'}</h2>
                         <div className="flex items-center justify-center gap-3 flex-wrap">
                           <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg text-sm font-black uppercase tracking-[0.2em] border border-amber-500/20">
                             #{activeRatingThread.issue_number}
                           </span>
                           {activeRatingThread.total_issues && (
-                            <span className="text-slate-400 text-xs font-bold">
+                            <span className="text-stone-400 text-xs font-bold">
                               (#{activeRatingThread.issue_number} of {activeRatingThread.total_issues})
                             </span>
                           )}
-                          <span className="bg-teal-500/20 text-teal-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-teal-500/20">
+                          <span className="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-amber-600/20">
                             Queue #{ratingThreadVisualPosition ?? '-'}
                           </span>
                         </div>
                       </>
                     ) : (
                       <>
-                        <h2 className="text-2xl font-black text-slate-100">{activeRatingThread?.title || 'Loading...'}</h2>
+                        <h2 className="text-2xl font-black text-stone-200">{activeRatingThread?.title || 'Loading...'}</h2>
                         <div className="flex items-center justify-center gap-3">
-                          <span className="bg-teal-500/20 text-teal-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-teal-500/20">
+                          <span className="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-amber-600/20">
                             Queue #{ratingThreadVisualPosition ?? '-'}
                           </span>
-                          <span className="bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/20">
+                          <span className="bg-red-800/20 text-red-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-red-800/20">
                             {activeRatingThread?.format || '...'}
                           </span>
-                          <span className="text-slate-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} Issues left</span>
+                          <span className="text-stone-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} Issues left</span>
                         </div>
                       </>
                     )}
@@ -831,13 +831,13 @@ export default function RollPage() {
                       <div className="reading-progress max-w-md mx-auto">
                         <div className="h-3 bg-white/10 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-emerald-500 transition-all duration-300"
+                            className="h-full bg-amber-600 transition-all duration-300"
                             style={{
                               width: `${getProgressPercentage(activeRatingThread)}%`
                             }}
                           />
                         </div>
-                        <span className="mt-1 block text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        <span className="mt-1 block text-[10px] text-stone-400 font-bold uppercase tracking-wider">
                           {activeRatingThread.reading_progress === 'completed' ? 'Completed' : 'In Progress'}
                         </span>
                       </div>
@@ -862,7 +862,7 @@ export default function RollPage() {
                       />
                     </div>
                     {hasValidRolledResult && (
-                      <p className="mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">
+                      <p className="mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 text-center">
                         Rolled {rolledResult} on d{currentDie}
                       </p>
                     )}
@@ -870,9 +870,9 @@ export default function RollPage() {
 
                   <div className="text-center space-y-4">
                     <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the thread to the front and step the die down. Lower ratings move it back and step the die up.`}>
-                      <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 cursor-help">How was it?</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.4em] text-stone-500 cursor-help">How was it?</p>
                     </Tooltip>
-                    <div id="rating-value" className={`text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-teal-400' : 'text-indigo-400'}`}>
+                    <div id="rating-value" className={`text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-amber-500' : 'text-red-700'}`}>
                       {rating.toFixed(1)}
                     </div>
                     <input
@@ -891,11 +891,11 @@ export default function RollPage() {
 
                   <div
                     className={`p-4 rounded-3xl border shadow-xl ${rating >= RATING_THRESHOLD
-                      ? 'bg-teal-500/5 border-teal-500/20'
-                      : 'bg-indigo-500/5 border-indigo-500/20'
+                      ? 'bg-amber-600/5 border-amber-600/20'
+                      : 'bg-red-800/5 border-red-800/20'
                       }`}
                   >
-                    <p id="queue-effect" className="text-[10px] font-black text-slate-200 text-center uppercase tracking-[0.15em] leading-relaxed">
+                    <p id="queue-effect" className="text-[10px] font-black text-stone-300 text-center uppercase tracking-[0.15em] leading-relaxed">
                       {rating >= RATING_THRESHOLD
                         ? `Excellent! Die steps down 🎲 Move to front${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`
                         : `Okay. Die steps up 🎲 Move to back${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`}
@@ -929,7 +929,7 @@ export default function RollPage() {
                             await refetchThreads()
                           } catch (error) {
                             setErrorMessage(
-                              error.response?.data?.detail || 'Failed to cancel pending roll',
+                              getApiErrorDetail(error) || 'Failed to cancel pending roll',
                             )
                             return
                           }
@@ -939,7 +939,7 @@ export default function RollPage() {
                           setActiveRatingThread(null)
                           setErrorMessage('')
                         }}
-                        className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent hover:border-white/10 rounded-lg transition-all"
+                        className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 hover:bg-white/5 border border-transparent hover:border-white/10 rounded-lg transition-all"
                       >
                         Cancel Pending Roll
                       </button>
@@ -960,19 +960,19 @@ export default function RollPage() {
               {!isRolling && rolledResult === null && !isRatingView && (
                 <p
                   id="tap-instruction"
-                  className="text-slate-500 font-black uppercase tracking-[0.5em] text-[10px] animate-pulse shrink-0 text-center mb-8"
+                  className="text-stone-500 font-black uppercase tracking-[0.5em] text-[10px] animate-pulse shrink-0 text-center mb-8"
                 >
                   Tap Die to Roll
                 </p>
               )}
 
               <div className="flex items-center gap-2 shrink-0 mb-4">
-                <div className="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_15px_var(--accent-teal)]"></div>
+                <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
                 <div className="flex-1 flex items-center gap-2">
                   <select
                     value={activeCollectionId ?? 'all'}
                     onChange={handleCollectionChange}
-                    className="min-w-0 w-full max-w-[240px] bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/40"
+                    className="min-w-0 w-full max-w-[240px] bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-600/40"
                     aria-label="Roll pool collection"
                     disabled={isCollectionsLoading}
                   >
@@ -986,7 +986,7 @@ export default function RollPage() {
                   <button
                     type="button"
                     onClick={() => setIsCollectionDialogOpen(true)}
-                    className="shrink-0 px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-black uppercase tracking-wider text-slate-300 hover:bg-white/10 transition-colors"
+                    className="shrink-0 px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-black uppercase tracking-wider text-stone-300 hover:bg-white/10 transition-colors"
                     aria-label="Add collection"
                   >
                     + New
@@ -998,11 +998,11 @@ export default function RollPage() {
                 {pool.length === 0 ? (
                   <div className="text-center py-10 space-y-3">
                     <div className="text-3xl">📚</div>
-                    <p className="text-xs text-slate-500 font-black uppercase tracking-widest">Queue Empty</p>
-                    <p className="text-[10px] text-slate-600">Add comics to your queue to start rolling</p>
+                    <p className="text-xs text-stone-500 font-black uppercase tracking-widest">Queue Empty</p>
+                    <p className="text-[10px] text-stone-600">Add comics to your queue to start rolling</p>
                     <button
                       onClick={() => navigate('/queue')}
-                      className="mt-2 px-4 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-teal-400 transition-colors"
+                      className="mt-2 px-4 py-2 bg-amber-600/10 hover:bg-amber-600/20 border border-amber-600/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-amber-500 transition-colors"
                     >
                       Add Thread
                     </button>
@@ -1025,12 +1025,12 @@ export default function RollPage() {
                         className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected' : ''
                           }`}
                       >
-                        <span className="text-lg font-black text-slate-500/50 group-hover:text-slate-400/50 transition-colors">
+                        <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors">
                           #{index + 1}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="font-black text-slate-300 truncate text-sm">{thread.title}</p>
-                          <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
+                          <p className="font-black text-stone-300 truncate text-sm">{thread.title}</p>
+                          <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">{thread.format}</p>
                         </div>
                       </div>
                     )
@@ -1073,14 +1073,14 @@ export default function RollPage() {
                   <button
                     type="button"
                     onClick={() => setSnoozedExpanded(!snoozedExpanded)}
-                    className="w-full px-4 py-2 bg-slate-500/5 border border-slate-500/10 rounded-xl flex items-center gap-2 hover:bg-slate-500/10 transition-colors"
+                    className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
                   >
                     <span
-                      className={`text-slate-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
+                      className={`text-stone-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
                     >
                       ▶
                     </span>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
                       Snoozed ({session.snoozed_threads.length})
                     </span>
                   </button>
@@ -1091,7 +1091,7 @@ export default function RollPage() {
                           key={thread.id}
                           className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
                         >
-                          <p className="flex-1 text-sm text-slate-400 truncate">{thread.title}</p>
+                          <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                           <button
                             type="button"
                             onClick={() => handleUnsnooze(thread.id)}
@@ -1129,13 +1129,13 @@ export default function RollPage() {
 
         <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>
           <form className="space-y-4" onSubmit={handleOverrideSubmit}>
-            <p className="text-xs text-slate-400">Pick a thread to force next roll result.</p>
+            <p className="text-xs text-stone-400">Pick a thread to force next roll result.</p>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Thread</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Thread</label>
               <select
                 value={overrideThreadId}
                 onChange={(event) => setOverrideThreadId(event.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
                 required
               >
                 <option value="">Select a thread...</option>
@@ -1182,7 +1182,7 @@ export default function RollPage() {
                 }}
                 disabled={setDieMutation.isPending}
                 className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${die === currentDie
-                  ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                  ? 'bg-amber-600/20 border-amber-600 text-amber-500'
                   : 'bg-white/5 border-white/10 hover:bg-white/10'
                   }`}
               >
@@ -1214,7 +1214,7 @@ export default function RollPage() {
             <button
               type="button"
               onClick={() => handleAction('read')}
-              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
             >
               <span className="text-lg">📖</span>
               <span>Read Now</span>
@@ -1222,7 +1222,7 @@ export default function RollPage() {
             <button
               type="button"
               onClick={() => handleAction('move-front')}
-              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
             >
               <span className="text-lg">⬆️</span>
               <span>Move to Front</span>
@@ -1230,7 +1230,7 @@ export default function RollPage() {
             <button
               type="button"
               onClick={() => handleAction('move-back')}
-              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
             >
               <span className="text-lg">⬇️</span>
               <span>Move to Back</span>
@@ -1238,7 +1238,7 @@ export default function RollPage() {
             <button
               type="button"
               onClick={() => handleAction('snooze')}
-              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
             >
               <span className="text-lg">{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
               <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
@@ -1246,7 +1246,7 @@ export default function RollPage() {
             <button
               type="button"
               onClick={() => handleAction('edit')}
-              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+              className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
             >
               <span className="text-lg">✏️</span>
               <span>Edit Thread</span>

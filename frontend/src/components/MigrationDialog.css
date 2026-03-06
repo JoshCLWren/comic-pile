@@ -7,8 +7,7 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background-color: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(4px);
+  background-color: rgba(17, 14, 10, 0.8);
 }
 
 /* Migration Dialog Container */
@@ -39,7 +38,7 @@
   font-weight: 800;
   letter-spacing: -0.025em;
   text-transform: uppercase;
-  color: #f8fafc;
+  color: #e8d5b0;
   line-height: 1.4;
 }
 
@@ -53,7 +52,7 @@
   font-size: 1.5rem;
   font-weight: 300;
   line-height: 1;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(160, 147, 126, 0.9);
   background: transparent;
   border: none;
   border-radius: 0.5rem;
@@ -63,7 +62,7 @@
 }
 
 .migration-dialog__close-btn:hover {
-  color: #f8fafc;
+  color: #e8d5b0;
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -88,7 +87,7 @@
 .migration-dialog__label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: rgba(226, 232, 240, 0.9);
+  color: rgba(232, 213, 176, 0.9);
 }
 
 .migration-dialog__required {
@@ -99,8 +98,8 @@
 .migration-dialog__input {
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #f8fafc;
-  background: rgba(15, 23, 42, 0.5);
+  color: #e8d5b0;
+  background: rgba(17, 14, 10, 0.5);
   border: 1px solid var(--glass-border);
   border-radius: 0.5rem;
   outline: none;
@@ -108,7 +107,7 @@
 }
 
 .migration-dialog__input::placeholder {
-  color: rgba(148, 163, 184, 0.7);
+  color: rgba(160, 147, 126, 0.7);
 }
 
 .migration-dialog__input:hover {
@@ -116,8 +115,8 @@
 }
 
 .migration-dialog__input:focus {
-  border-color: var(--accent-indigo);
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.3);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(212, 137, 14, 0.3);
 }
 
 .migration-dialog__input:disabled {
@@ -128,21 +127,21 @@
 /* Hint Text */
 .migration-dialog__hint {
   font-size: 0.75rem;
-  color: rgba(148, 163, 184, 0.8);
+  color: rgba(160, 147, 126, 0.8);
 }
 
 /* Preview Section */
 .migration-preview {
   padding: 0.875rem 1rem;
   margin-bottom: 1rem;
-  background: rgba(20, 184, 166, 0.1);
-  border: 1px solid rgba(20, 184, 166, 0.2);
+  background: rgba(212, 137, 14, 0.1);
+  border: 1px solid rgba(212, 137, 14, 0.2);
   border-radius: 0.5rem;
 }
 
 .migration-preview__content {
   font-size: 0.8125rem;
-  color: rgba(45, 212, 191, 0.95);
+  color: rgba(212, 175, 55, 0.95);
   line-height: 1.5;
 }
 
@@ -194,7 +193,7 @@
 }
 
 .migration-dialog__btn--secondary {
-  color: rgba(226, 232, 240, 0.9);
+  color: rgba(232, 213, 176, 0.9);
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -204,11 +203,11 @@
 
 .migration-dialog__btn--primary {
   color: white;
-  background: var(--accent-indigo);
+  background: var(--accent-primary);
 }
 
 .migration-dialog__btn--primary:hover:not(:disabled) {
-  background: #4338ca;
+  background: #b8760c;
 }
 
 /* Confirm Overlay */
@@ -220,8 +219,7 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(4px);
+  background: rgba(17, 14, 10, 0.9);
   border-radius: 0.75rem;
 }
 
@@ -230,7 +228,7 @@
   width: 100%;
   max-width: 24rem;
   padding: 1.5rem;
-  background: rgba(30, 41, 59, 0.95);
+  background: rgba(35, 28, 20, 0.95);
   border: 1px solid var(--glass-border);
   border-radius: 0.75rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
@@ -240,13 +238,13 @@
   margin: 0 0 0.5rem 0;
   font-size: 1rem;
   font-weight: 700;
-  color: #f8fafc;
+  color: #e8d5b0;
 }
 
 .migration-dialog__confirm-message {
   margin: 0 0 1.25rem 0;
   font-size: 0.875rem;
-  color: rgba(226, 232, 240, 0.9);
+  color: rgba(232, 213, 176, 0.9);
   line-height: 1.5;
 }
 

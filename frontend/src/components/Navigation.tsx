@@ -93,7 +93,7 @@ export default function Navigation() {
       </nav>
       <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
         {isLoading ? (
-          <span className="text-xs text-slate-500 font-medium px-2 py-1">
+          <span className="text-xs text-stone-500 font-medium px-2 py-1">
             Loading...
           </span>
         ) : hasError ? (
@@ -101,13 +101,13 @@ export default function Navigation() {
             User
           </span>
         ) : username ? (
-          <span className="text-xs text-slate-400 font-medium px-2 py-1">
+          <span className="text-xs text-stone-400 font-medium px-2 py-1">
             {username}
           </span>
         ) : null}
         <button
           onClick={handleLogout}
-          className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-black/50 hover:bg-black/70 rounded-lg transition-colors"
+          className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors"
           aria-label="Log out"
         >
           Log Out

@@ -19,11 +19,11 @@ export default function LoadingSpinner({ message = 'Loading...', fullScreen = fa
   const content = (
     <div className="flex flex-col items-center justify-center gap-3">
       <div
-        className={`${spinnerClass} border-slate-600 border-t-teal-400 rounded-full animate-spin`}
+        className={`${spinnerClass} border-stone-600 border-t-amber-500 rounded-full animate-spin`}
         role="status"
         aria-label="Loading"
       />
-      {message && <span className="text-slate-400 text-sm">{message}</span>}
+      {message && <span className="text-stone-400 text-sm">{message}</span>}
     </div>
   )
 

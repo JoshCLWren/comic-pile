@@ -24,9 +24,9 @@ export default function HistoryPage() {
               Export Summary
             </a>
           </div>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Your reading session history</p>
+          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your reading session history</p>
         </header>
-        <div className="text-center text-slate-500">No sessions yet</div>
+        <div className="text-center text-stone-500">No sessions yet</div>
       </div>
     )
   }
@@ -76,7 +76,7 @@ export default function HistoryPage() {
             Export Summary
           </a>
         </div>
-        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Your reading session history</p>
+        <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your reading session history</p>
       </header>
 
       <div id="sessions-list" className="space-y-4" role="list" aria-label="Session history">
@@ -87,17 +87,17 @@ export default function HistoryPage() {
               <div className="flex justify-between items-start gap-6 relative z-10">
                 <div className="space-y-4 flex-1 min-w-0">
                   <div className="flex items-center gap-3">
-                    <div className="px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                    <div className="px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black uppercase tracking-widest text-stone-400">
                       {formatDate(session.started_at)}
                     </div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-stone-600">
                       {formatTime(session.started_at)}
                     </span>
                   </div>
 
                   {session.ladder_path && (
                     <div className="space-y-2">
-                      <p className="text-sm font-black text-slate-300">
+                      <p className="text-sm font-black text-stone-300">
                         Dice progression: {formatDiceProgression(session.ladder_path)}
                       </p>
                     </div>
@@ -105,10 +105,10 @@ export default function HistoryPage() {
 
                   {session.active_thread && (
                     <div className="text-sm space-y-1">
-                      <p className="font-black text-slate-300 truncate">{session.active_thread.title}</p>
-                      <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{session.active_thread.format}</p>
+                      <p className="font-black text-stone-300 truncate">{session.active_thread.title}</p>
+                      <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">{session.active_thread.format}</p>
                       {session.last_rolled_result !== null && session.last_rolled_result !== undefined && (
-                        <p className="text-[9px] font-black text-teal-300 uppercase tracking-widest">
+                        <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">
                           Rolled: {session.last_rolled_result} of d{session.current_die}
                         </p>
                       )}
@@ -116,7 +116,7 @@ export default function HistoryPage() {
                   )}
 
                   {session.ended_at && (
-                    <div className="flex items-center gap-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                    <div className="flex items-center gap-2 text-[9px] font-black text-stone-500 uppercase tracking-widest">
                       {duration && (
                         <span>Duration: {duration}</span>
                       )}

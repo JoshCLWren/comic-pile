@@ -65,13 +65,13 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">Welcome Back</h1>
-          <p className="text-sm text-slate-400">Sign in to continue your journey</p>
+          <p className="text-sm text-stone-400">Sign in to continue your journey</p>
         </div>
 
           <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
            <div className="space-y-4">
              <div className="space-y-2">
-               <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+               <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                  Username
                </label>
                <input
@@ -82,13 +82,13 @@ export default function LoginPage() {
                  required
                  value={username}
                  onChange={(e) => setUsername(e.target.value)}
-                 className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                 className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                  placeholder="Enter your username"
                />
              </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                 Password
               </label>
               <input
@@ -99,7 +99,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                 placeholder="••••••••"
               />
             </div>
@@ -114,16 +114,16 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-teal-500 hover:bg-teal-400 disabled:bg-teal-500/50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-[#0a0518]"
+            className="w-full h-12 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-600/50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-[#1a1410]"
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
         <div className="text-center">
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-stone-400">
             Don't have an account?{' '}
-            <Link to="/register" className="text-teal-400 hover:text-teal-300 font-bold transition-colors">
+            <Link to="/register" className="text-amber-500 hover:text-amber-400 font-bold transition-colors">
               Sign up
             </Link>
           </p>

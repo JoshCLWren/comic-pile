@@ -410,7 +410,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
       <div className="space-y-4">
         <div className="space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
             Dependency type
           </p>
           <div className="grid grid-cols-2 gap-2">
@@ -419,8 +419,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
               onClick={() => setDependencyMode('issue')}
               className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
                 dependencyMode === 'issue'
-                  ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
-                  : 'bg-white/5 border-white/10 text-slate-400'
+                  ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
+                  : 'bg-white/5 border-white/10 text-stone-400'
               }`}
             >
               Issue Level
@@ -430,22 +430,22 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
               onClick={() => setDependencyMode('thread')}
               className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
                 dependencyMode === 'thread'
-                  ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
-                  : 'bg-white/5 border-white/10 text-slate-400'
+                  ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
+                  : 'bg-white/5 border-white/10 text-stone-400'
               }`}
             >
               Thread Level
             </button>
           </div>
           {dependencyMode === 'issue' && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-stone-500">
               Uses each thread&apos;s next unread issue.
             </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="search-prereq-thread" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+          <label htmlFor="search-prereq-thread" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
             Search prerequisite thread
           </label>
           <input
@@ -454,11 +454,11 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Type at least 2 characters"
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
           />
-          {isSearching && <p className="text-xs text-slate-500">Searching…</p>}
+          {isSearching && <p className="text-xs text-stone-500">Searching…</p>}
           {!isSearching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
-            <p className="text-xs text-slate-500">No matching threads found.</p>
+            <p className="text-xs text-stone-500">No matching threads found.</p>
           )}
           {searchResults.length > 0 && (
             <div className="max-h-40 overflow-auto border border-white/10 rounded-xl bg-white/5">
@@ -468,10 +468,10 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                   type="button"
                   onClick={() => setSelectedThreadId(candidate.id)}
                   className={`w-full text-left px-3 py-2 text-sm border-b last:border-b-0 border-white/5 hover:bg-white/10 ${
-                    selectedThreadId === candidate.id ? 'bg-white/10 text-white' : 'text-slate-300'
+                    selectedThreadId === candidate.id ? 'bg-white/10 text-white' : 'text-stone-300'
                   }`}
                 >
-                  {candidate.title} <span className="text-xs text-slate-500">({candidate.format})</span>
+                  {candidate.title} <span className="text-xs text-stone-500">({candidate.format})</span>
                 </button>
               ))}
             </div>
@@ -495,26 +495,26 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                  <form onSubmit={handleInlineMigration} className="space-y-2">
                     <div className="flex gap-2">
                       <div className="flex-1">
-                        <label htmlFor="migration-last-read" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Last issue read</label>
+                        <label htmlFor="migration-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read</label>
                         <input
                           id="migration-last-read"
                           type="number"
                           min="0"
                           value={migrationLastRead}
                           onChange={(e) => setMigrationLastRead(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-stone-300"
                           required
                         />
                       </div>
                       <div className="flex-1">
-                        <label htmlFor="migration-total" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total issues</label>
+                        <label htmlFor="migration-total" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Total issues</label>
                         <input
                           id="migration-total"
                           type="number"
                           min="1"
                           value={migrationTotal}
                           onChange={(e) => setMigrationTotal(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-slate-200"
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-stone-300"
                           required
                         />
                       </div>
@@ -534,18 +534,18 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
            {dependencyMode === 'issue' && selectedThread && !selectedThreadNeedsMigration && (
              <div className="space-y-2">
                {isLoadingSourceIssues || isLoadingTargetIssues ? (
-                 <p className="text-xs text-slate-500">Loading issues…</p>
+                 <p className="text-xs text-stone-500">Loading issues…</p>
                ) : (
                  <>
                    <div>
-                     <label htmlFor="source-issue" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                     <label htmlFor="source-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                        Prerequisite issue
                      </label>
                      <select
                        id="source-issue"
                        value={sourceIssueId || ''}
                        onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
                      >
                        <option value="">Select an issue</option>
                         {sourceIssues.map((issue) => (
@@ -556,14 +556,14 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                      </select>
                    </div>
                    <div>
-                     <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                     <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                        Target issue
                      </label>
                      <select
                        id="target-issue"
                        value={targetIssueId || ''}
                        onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
                      >
                        <option value="">Select an issue</option>
                         {targetIssues.map((issue) => (
@@ -598,11 +598,11 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
          </div>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">This thread is blocked by</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This thread is blocked by</h3>
           {isLoadingDeps ? (
-            <p className="text-xs text-slate-500">Loading dependencies…</p>
+            <p className="text-xs text-stone-500">Loading dependencies…</p>
           ) : dependencies.blocked_by.length === 0 ? (
-            <p className="text-xs text-slate-500">No prerequisites yet.</p>
+            <p className="text-xs text-stone-500">No prerequisites yet.</p>
           ) : (
             dependencies.blocked_by.map((dep) => (
               <DependencyRow
@@ -617,11 +617,11 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         </div>
 
         <div className="space-y-2">
-          <h3 className="text-sm font-black uppercase tracking-widest text-slate-300">This thread blocks</h3>
+          <h3 className="text-sm font-black uppercase tracking-widest text-stone-300">This thread blocks</h3>
           {isLoadingDeps ? (
-            <p className="text-xs text-slate-500">Loading dependencies…</p>
+            <p className="text-xs text-stone-500">Loading dependencies…</p>
           ) : dependencies.blocking.length === 0 ? (
-            <p className="text-xs text-slate-500">No dependent threads yet.</p>
+            <p className="text-xs text-stone-500">No dependent threads yet.</p>
           ) : (
             dependencies.blocking.map((dep) => (
               <DependencyRow
@@ -679,8 +679,8 @@ function DependencyRow({ dependencyId, title, subtitle, onDelete }: DependencyRo
   return (
     <div className="flex items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
       <div className="min-w-0">
-        <p className="text-sm text-slate-200 truncate">{title}</p>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{subtitle}</p>
+        <p className="text-sm text-stone-300 truncate">{title}</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{subtitle}</p>
       </div>
       <button
         type="button"
