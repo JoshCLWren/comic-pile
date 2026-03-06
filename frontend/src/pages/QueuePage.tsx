@@ -71,9 +71,8 @@ function FormatSelect({ value, onChange, required }: {
 /**
  * Inline issue list for migrated threads in the edit modal.
  */
-function IssueToggleList({ threadId, onIssuesChanged }: {
+function IssueToggleList({ threadId }: {
   threadId: number
-  onIssuesChanged?: () => void
 }) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -114,7 +113,6 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
       } else {
         await issuesApi.markRead(issue.id)
       }
-      onIssuesChanged?.()
     } catch {
       // Revert on failure
       setIssues((prev) =>
@@ -131,15 +129,23 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
 
   async function handleAddIssues(e: FormEvent) {
     e.preventDefault()
-    if (!addRange.trim()) return
+    console.log('[IssueToggleList] handleAddIssues called', { addRange, threadId })
+    if (!addRange.trim()) {
+      console.log('[IssueToggleList] addRange is empty, returning early')
+      return
+    }
     setIsAdding(true)
     setAddError(null)
     try {
+      console.log('[IssueToggleList] Calling issuesApi.create')
       await issuesApi.create(threadId, addRange.trim())
+      console.log('[IssueToggleList] issuesApi.create succeeded')
       setAddRange('')
+      console.log('[IssueToggleList] Calling loadIssues')
       await loadIssues()
-      onIssuesChanged?.()
+      console.log('[IssueToggleList] loadIssues completed')
     } catch (err: unknown) {
+      console.error('[IssueToggleList] Error adding issues:', err)
       setAddError(getApiErrorDetail(err))
     } finally {
       setIsAdding(false)
@@ -169,18 +175,20 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
           </button>
         ))}
       </div>
-      <form onSubmit={handleAddIssues} className="flex gap-2">
+      <form onSubmit={handleAddIssues} className="flex gap-2" data-testid="issue-add-form">
         <input
           type="text"
           value={addRange}
           onChange={(e) => setAddRange(e.target.value)}
           placeholder="Add issues: 19-24 or 0, Annual 1"
           className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-stone-300"
+          data-testid="issue-add-input"
         />
         <button
           type="submit"
           disabled={isAdding || !addRange.trim()}
           className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
+          data-testid="issue-add-button"
         >
           {isAdding ? '…' : 'Add'}
         </button>
@@ -948,7 +956,7 @@ export default function QueuePage() {
       </Modal>
 
       {/* Edit Thread Modal */}
-      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => setIsEditOpen(false)} overlayClassName="edit-modal__overlay">
+      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => { setIsEditOpen(false); refetch() }} overlayClassName="edit-modal__overlay">
         <form className="space-y-4" onSubmit={handleEditSubmit}>
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
@@ -998,10 +1006,7 @@ export default function QueuePage() {
 
           {/* Issue list for migrated threads */}
           {editingThread && editingThread.total_issues !== null && (
-            <IssueToggleList
-              threadId={editingThread.id}
-              onIssuesChanged={() => refetch()}
-            />
+            <IssueToggleList threadId={editingThread.id} />
           )}
 
           {editingThread?.total_issues === null && (
