@@ -7,8 +7,7 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background-color: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(4px);
+  background-color: rgba(17, 14, 10, 0.8);
 }
 
 /* Collection Dialog Container */
@@ -39,7 +38,7 @@
   font-weight: 800;
   letter-spacing: -0.025em;
   text-transform: uppercase;
-  color: #f8fafc;
+  color: #e8d5b0;
 }
 
 .collection-dialog__close-btn {
@@ -52,7 +51,7 @@
   font-size: 1.5rem;
   font-weight: 300;
   line-height: 1;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(160, 147, 126, 0.9);
   background: transparent;
   border: none;
   border-radius: 0.5rem;
@@ -61,7 +60,7 @@
 }
 
 .collection-dialog__close-btn:hover {
-  color: #f8fafc;
+  color: #e8d5b0;
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -86,7 +85,7 @@
 .collection-dialog__label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: rgba(226, 232, 240, 0.9);
+  color: rgba(232, 213, 176, 0.9);
 }
 
 .collection-dialog__required {
@@ -97,8 +96,8 @@
 .collection-dialog__input {
   padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  color: #f8fafc;
-  background: rgba(15, 23, 42, 0.5);
+  color: #e8d5b0;
+  background: rgba(17, 14, 10, 0.5);
   border: 1px solid var(--glass-border);
   border-radius: 0.5rem;
   outline: none;
@@ -106,7 +105,7 @@
 }
 
 .collection-dialog__input::placeholder {
-  color: rgba(148, 163, 184, 0.7);
+  color: rgba(160, 147, 126, 0.7);
 }
 
 .collection-dialog__input:hover {
@@ -114,15 +113,15 @@
 }
 
 .collection-dialog__input:focus {
-  border-color: var(--accent-indigo);
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.3);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(212, 137, 14, 0.3);
 }
 
 /* Character Count */
 .collection-dialog__char-count {
   align-self: flex-end;
   font-size: 0.75rem;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(160, 147, 126, 0.9);
 }
 
 /* Checkbox Field */
@@ -139,13 +138,13 @@
   height: 1.25rem;
   margin: 0;
   cursor: pointer;
-  accent-color: var(--accent-indigo);
+  accent-color: var(--accent-primary);
   border-radius: 0.25rem;
 }
 
 .collection-dialog__checkbox-text {
   font-size: 0.875rem;
-  color: rgba(226, 232, 240, 0.9);
+  color: rgba(232, 213, 176, 0.9);
 }
 
 /* Error Message */
@@ -184,7 +183,7 @@
 }
 
 .collection-dialog__btn--secondary {
-  color: rgba(226, 232, 240, 0.9);
+  color: rgba(232, 213, 176, 0.9);
   background: rgba(255, 255, 255, 0.1);
 }
 
@@ -194,9 +193,9 @@
 
 .collection-dialog__btn--primary {
   color: white;
-  background: var(--accent-indigo);
+  background: var(--accent-primary);
 }
 
 .collection-dialog__btn--primary:hover:not(:disabled) {
-  background: #4338ca;
+  background: #b8760c;
 }

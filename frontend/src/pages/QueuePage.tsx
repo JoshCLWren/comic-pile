@@ -56,7 +56,7 @@ function FormatSelect({ value, onChange, required }: {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
       required={required}
     >
       <option value="">Select format...</option>
@@ -146,11 +146,11 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
     }
   }
 
-  if (isLoading) return <p className="text-xs text-slate-500">Loading issues…</p>
+  if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
   return (
     <div className="space-y-2">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues</p>
+      <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
         {issues.map((issue) => (
           <button
@@ -160,8 +160,8 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
             disabled={toggling.has(issue.id)}
             className={`px-2 py-0.5 rounded text-xs font-bold border transition-all ${
               issue.status === 'read'
-                ? 'bg-teal-500/20 border-teal-400/30 text-teal-300'
-                : 'bg-white/5 border-white/10 text-slate-400'
+                ? 'bg-amber-600/20 border-amber-500/30 text-amber-400'
+                : 'bg-white/5 border-white/10 text-stone-400'
             } ${toggling.has(issue.id) ? 'opacity-50' : 'hover:opacity-80'}`}
             title={`#${issue.issue_number}: ${issue.status}`}
           >
@@ -175,12 +175,12 @@ function IssueToggleList({ threadId, onIssuesChanged }: {
           value={addRange}
           onChange={(e) => setAddRange(e.target.value)}
           placeholder="Add issues: 19-24 or 0, Annual 1"
-          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-slate-200"
+          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-stone-300"
         />
         <button
           type="submit"
           disabled={isAdding || !addRange.trim()}
-          className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-slate-300 hover:bg-white/10 disabled:opacity-50"
+          className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
         >
           {isAdding ? '…' : 'Add'}
         </button>
@@ -600,7 +600,7 @@ export default function QueuePage() {
       <header className="flex justify-between items-start px-2 gap-4">
         <div>
           <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Your upcoming comics</p>
+          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
         </div>
         <button
           type="button"
@@ -612,7 +612,7 @@ export default function QueuePage() {
       </header>
 
       {activeThreads.length === 0 ? (
-        <div className="text-center text-slate-500">No active threads in queue</div>
+        <div className="text-center text-stone-500">No active threads in queue</div>
       ) : (
         <>
           {reorderError && (
@@ -653,14 +653,14 @@ export default function QueuePage() {
                 >
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <span className="text-2xl font-black text-teal-500/30">
+                      <span className="text-2xl font-black text-amber-600/30">
                         #{index + 1}
                       </span>
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Tooltip content="Drag to reorder within the queue.">
                           <button
                             type="button"
-                            className="text-slate-500 hover:text-slate-300 transition-colors text-lg"
+                            className="text-stone-500 hover:text-stone-300 transition-colors text-lg"
                             draggable
                             onDragStart={handleDragStart(thread.id)}
                             onDragEnd={handleDragEnd}
@@ -686,7 +686,7 @@ export default function QueuePage() {
                             e.stopPropagation()
                             openEditModal(thread)
                           }}
-                          className="text-slate-500 hover:text-white transition-colors text-sm"
+                          className="text-stone-500 hover:text-white transition-colors text-sm"
                           aria-label="Edit thread"
                         >
                           ✎
@@ -700,7 +700,7 @@ export default function QueuePage() {
                             setDependencyThread(thread)
                             setIsDependencyBuilderOpen(true)
                           }}
-                          className="text-slate-500 hover:text-white transition-colors text-sm"
+                          className="text-stone-500 hover:text-white transition-colors text-sm"
                           aria-label="Manage dependencies"
                         >
                           🔗
@@ -713,7 +713,7 @@ export default function QueuePage() {
                             e.stopPropagation()
                             handleDelete(thread.id)
                           }}
-                          className="text-slate-500 hover:text-red-400 transition-colors text-xl"
+                          className="text-stone-500 hover:text-red-400 transition-colors text-xl"
                           aria-label="Delete thread"
                         >
                           &times;
@@ -721,15 +721,15 @@ export default function QueuePage() {
                       </Tooltip>
                     </div>
                   </div>
-                  <p className="text-sm text-slate-400">{thread.format}</p>
+                  <p className="text-sm text-stone-400">{thread.format}</p>
                   {thread.collection_id && (
                     <div className="mt-1">
                       <CollectionBadge collectionId={thread.collection_id} />
                     </div>
                   )}
-                  {thread.notes && <p className="text-xs text-slate-500">{thread.notes}</p>}
+                  {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
                   {thread.issues_remaining !== null && (
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-stone-500">
                       {isMigrated && thread.next_unread_issue_number
                         ? `Currently on #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
                         : `${thread.issues_remaining} issues remaining`
@@ -743,7 +743,7 @@ export default function QueuePage() {
                           e.stopPropagation()
                           handleMoveToFront(thread.id)
                         }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                       >
                         Front
                       </button>
@@ -754,7 +754,7 @@ export default function QueuePage() {
                           e.stopPropagation()
                           openRepositionModal(thread)
                         }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                       >
                         Reposition
                       </button>
@@ -765,7 +765,7 @@ export default function QueuePage() {
                           e.stopPropagation()
                           handleMoveToBack(thread.id)
                         }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                       >
                         Back
                       </button>
@@ -781,37 +781,37 @@ export default function QueuePage() {
       <section className="space-y-4">
         <header className="flex items-center justify-between px-2">
           <div>
-            <h2 className="text-xl font-black uppercase text-slate-200">Completed Threads</h2>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Reactivate finished series</p>
+            <h2 className="text-xl font-black uppercase text-stone-300">Completed Threads</h2>
+            <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Reactivate finished series</p>
           </div>
           <button
             type="button"
             onClick={() => openReactivateModal(null)}
-            className="h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 hover:bg-white/10"
+            className="h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
           >
             Reactivate
           </button>
         </header>
         {completedThreads.length === 0 ? (
-          <div className="text-center text-slate-500">No completed threads yet</div>
+          <div className="text-center text-stone-500">No completed threads yet</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {completedThreads.map((thread) => (
               <div key={thread.id} className="glass-card p-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-200 truncate">{thread.title}</p>
-                    <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{thread.format}</p>
+                    <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
+                    <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">{thread.format}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => openReactivateModal(thread)}
-                    className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-300 hover:bg-white/10"
+                    className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
                   >
                     Reactivate
                   </button>
                 </div>
-                {thread.notes && <p className="text-xs text-slate-500">{thread.notes}</p>}
+                {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
               </div>
             ))}
           </div>
@@ -822,16 +822,16 @@ export default function QueuePage() {
       <Modal isOpen={isCreateOpen} title="Create Thread" onClose={() => setIsCreateOpen(false)}>
         <form className="space-y-4" onSubmit={handleCreateSubmit}>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Title</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
             <input
               value={createForm.title}
               onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
               required
             />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Format</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
             <FormatSelect
               value={createForm.format}
               onChange={(value) => setCreateForm({ ...createForm, format: value })}
@@ -841,15 +841,15 @@ export default function QueuePage() {
 
           {/* Tracking mode toggle */}
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issue Tracking</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issue Tracking</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setCreateForm({ ...createForm, trackingMode: 'simple' })}
                 className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
                   createForm.trackingMode === 'simple'
-                    ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
-                    : 'bg-white/5 border-white/10 text-slate-400'
+                    ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
+                    : 'bg-white/5 border-white/10 text-stone-400'
                 }`}
               >
                 Simple counter
@@ -859,8 +859,8 @@ export default function QueuePage() {
                 onClick={() => setCreateForm({ ...createForm, trackingMode: 'tracked' })}
                 className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
                   createForm.trackingMode === 'tracked'
-                    ? 'bg-teal-500/20 border-teal-400/40 text-teal-200'
-                    : 'bg-white/5 border-white/10 text-slate-400'
+                    ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
+                    : 'bg-white/5 border-white/10 text-stone-400'
                 }`}
               >
                 Track individual issues
@@ -870,7 +870,7 @@ export default function QueuePage() {
 
           {createForm.trackingMode === 'simple' ? (
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues Remaining</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
               <input
                 type="number"
                 min="0"
@@ -881,24 +881,24 @@ export default function QueuePage() {
                     issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
                   })
                 }
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
                 required
               />
             </div>
           ) : (
             <>
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
                 <input
                   type="text"
                   value={createForm.issues}
                   onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
                   placeholder="0-25 or 0, ½, Annual 1, 5-7"
                   required
                 />
                 {issuePreview !== null && (
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-stone-400">
                     Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
                   </p>
                 )}
@@ -907,7 +907,7 @@ export default function QueuePage() {
                 )}
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Last issue read (optional)</label>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
                 <input
                   type="number"
                   min="0"
@@ -918,10 +918,10 @@ export default function QueuePage() {
                       lastIssueRead: Number.parseInt(event.target.value, 10) || 0,
                     })
                   }
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
                 />
                 {createForm.lastIssueRead > 0 && issuePreview !== null && (
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-stone-400">
                     Issues #1–{createForm.lastIssueRead} will be marked as read
                   </p>
                 )}
@@ -930,11 +930,11 @@ export default function QueuePage() {
           )}
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Notes</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
             <textarea
               value={createForm.notes}
               onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200 min-h-[80px]"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
             ></textarea>
           </div>
           <button
@@ -951,16 +951,16 @@ export default function QueuePage() {
       <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => setIsEditOpen(false)} overlayClassName="edit-modal__overlay">
         <form className="space-y-4" onSubmit={handleEditSubmit}>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Title</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
             <input
               value={editForm.title}
               onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
               required
             />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Format</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
             <FormatSelect
               value={editForm.format}
               onChange={(value) => setEditForm({ ...editForm, format: value })}
@@ -971,7 +971,7 @@ export default function QueuePage() {
           {/* Issues remaining for unmigrated threads */}
           {editingThread?.total_issues === null && (
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues Remaining</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
               <input
                 type="number"
                 min="0"
@@ -982,17 +982,17 @@ export default function QueuePage() {
                     issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
                   })
                 }
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
               />
             </div>
           )}
 
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Notes</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
             <textarea
               value={editForm.notes}
               onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200 min-h-[80px]"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
             ></textarea>
           </div>
 
@@ -1017,7 +1017,7 @@ export default function QueuePage() {
                 <span className="text-lg">📊</span>
                 <div className="flex-1">
                   <div className="font-bold">Migrate to Issue Tracking</div>
-                  <div className="font-normal text-slate-400 mt-0.5">Track individual issues instead of remaining count</div>
+                  <div className="font-normal text-stone-400 mt-0.5">Track individual issues instead of remaining count</div>
                 </div>
               </button>
             </div>
@@ -1035,11 +1035,11 @@ export default function QueuePage() {
       <Modal isOpen={isReactivateOpen} title="Reactivate Thread" onClose={() => setIsReactivateOpen(false)}>
         <form className="space-y-4" onSubmit={handleReactivateSubmit}>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Completed Thread</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Completed Thread</label>
             <select
               value={reactivateThreadId}
               onChange={(event) => setReactivateThreadId(event.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
               required
             >
               <option value="">Select a thread...</option>
@@ -1051,13 +1051,13 @@ export default function QueuePage() {
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Issues to Add</label>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues to Add</label>
             <input
               type="number"
               min="1"
               value={issuesToAdd}
               onChange={(event) => setIssuesToAdd(Number.parseInt(event.target.value, 10) || 1)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200"
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
               required
             />
           </div>
@@ -1092,7 +1092,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={() => handleAction('read')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">📖</span>
             <span>Read Now</span>
@@ -1100,7 +1100,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={() => handleAction('move-front')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">⬆️</span>
             <span>Move to Front</span>
@@ -1108,7 +1108,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={() => handleAction('move-back')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">⬇️</span>
             <span>Move to Back</span>
@@ -1116,7 +1116,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={() => handleAction('snooze')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
             <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
@@ -1124,7 +1124,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={() => handleAction('dependencies')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">🔗</span>
             <span>Dependencies</span>
@@ -1132,7 +1132,7 @@ export default function QueuePage() {
           <button
             type="button"
             onClick={() => handleAction('edit')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-slate-300 hover:bg-white/10 transition-all flex items-center gap-3"
+            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
             <span className="text-lg">✏️</span>
             <span>Edit Thread</span>

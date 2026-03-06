@@ -9,14 +9,14 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(160, 147, 126, 0.9);
 }
 
 .collection-switcher__select {
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #f8fafc;
+  color: #e8d5b0;
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
@@ -37,20 +37,20 @@
 
 .collection-switcher__select:focus {
   outline: none;
-  border-color: var(--accent-indigo);
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.3);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(212, 137, 14, 0.3);
 }
 
 .collection-switcher__select option {
   background-color: var(--bg-darker);
-  color: #f8fafc;
+  color: #e8d5b0;
   padding: 0.5rem;
 }
 
 .collection-switcher__loading {
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
-  color: rgba(148, 163, 184, 0.9);
+  color: rgba(160, 147, 126, 0.9);
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);

@@ -83,13 +83,13 @@ export default function RegisterPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-black tracking-tighter text-glow uppercase">Create Account</h1>
-          <p className="text-sm text-slate-400">Start your dice rolling journey</p>
+          <p className="text-sm text-stone-400">Start your dice rolling journey</p>
         </div>
 
         <form onSubmit={handleSubmit} className="glass-card rounded-2xl p-6 space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              <label htmlFor="username" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                 Username
               </label>
               <input
@@ -100,13 +100,13 @@ export default function RegisterPage() {
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                 placeholder="Choose a username"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              <label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                 Email
               </label>
               <input
@@ -117,13 +117,13 @@ export default function RegisterPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                 placeholder="you@example.com"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              <label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                 Password
               </label>
               <input
@@ -134,13 +134,13 @@ export default function RegisterPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                 placeholder="Min 6 characters"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              <label htmlFor="confirmPassword" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                 Confirm Password
               </label>
               <input
@@ -151,7 +151,7 @@ export default function RegisterPage() {
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 transition-colors"
+                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
                 placeholder="Re-enter password"
               />
             </div>
@@ -166,16 +166,16 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full h-12 bg-teal-500 hover:bg-teal-400 disabled:bg-teal-500/50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-[#0a0518]"
+            className="w-full h-12 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-600/50 disabled:cursor-not-allowed rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-900 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-[#1a1410]"
           >
             {isLoading ? 'Creating account...' : 'Create Account'}
           </button>
         </form>
 
         <div className="text-center">
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-stone-400">
             Already have an account?{' '}
-            <Link to="/login" className="text-teal-400 hover:text-teal-300 font-bold transition-colors">
+            <Link to="/login" className="text-amber-500 hover:text-amber-400 font-bold transition-colors">
               Sign in
             </Link>
           </p>

@@ -124,7 +124,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   const location = useLocation()
 
   if (isLoading) {
-    return <div className="text-center text-slate-500">Checking authentication...</div>
+    return <div className="text-center text-stone-500">Checking authentication...</div>
   }
 
   if (!isAuthenticated) {
@@ -139,7 +139,7 @@ function PublicRoute({ children }: { children: ReactNode }) {
   const location = useLocation()
 
   if (isLoading) {
-    return <div className="text-center text-slate-500">Loading...</div>
+    return <div className="text-center text-stone-500">Loading...</div>
   }
 
   if (isAuthenticated) {
@@ -174,7 +174,7 @@ function PublicLayout({ children }: { children: ReactNode }) {
 
 function AppRoutes() {
   return (
-    <Suspense fallback={<div className="text-center text-slate-500">Loading page...</div>}>
+    <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
       <Routes>
         <Route
           path="/login"
