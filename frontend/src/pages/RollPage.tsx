@@ -929,7 +929,7 @@ export default function RollPage() {
                             await refetchThreads()
                           } catch (error) {
                             setErrorMessage(
-                              error.response?.data?.detail || 'Failed to cancel pending roll',
+                              getApiErrorDetail(error) || 'Failed to cancel pending roll',
                             )
                             return
                           }

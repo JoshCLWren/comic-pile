@@ -148,7 +148,7 @@ rawApi.interceptors.response.use(
         requestUrl.includes('/auth/login') ||
         requestUrl.includes('/auth/register') ||
         requestUrl.includes('/auth/refresh')
-      if (isAuthEndpoint || originalRequest.skipAuthRedirect) {
+      if (isAuthEndpoint) {
         if (requestUrl.includes('/auth/refresh')) {
           redirectToLogin()
         }
@@ -190,7 +190,9 @@ rawApi.interceptors.response.use(
         refreshTokenPromise = null
         processQueue(refreshError, null)
         isRefreshing = false
-        redirectToLogin()
+        if (!originalRequest.skipAuthRedirect) {
+          redirectToLogin()
+        }
         return Promise.reject(refreshError)
       }
     }

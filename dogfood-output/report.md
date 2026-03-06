@@ -558,12 +558,12 @@ For future dogfood sessions:
 - `frontend/src/pages/SessionPage.tsx` - Session details and event timeline
 - `frontend/src/utils/dateFormat.ts` - Date formatting utilities
 - `frontend/src/components/CollectionDialog.tsx` - Collection creation dialog
-- `frontend/src/services/api.ts:authService` - Token refresh logic
+- `frontend/src/services/api.ts` - Authentication and API client (token refresh logic in response interceptor)
 
 ### Appendix C: Screenshot References
 
 All screenshots referenced in this report are located in:
-```
+```text
 dogfood-output/screenshots/
 ```
 

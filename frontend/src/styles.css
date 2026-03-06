@@ -5,7 +5,7 @@
   --bg-darker: #110e0a;
   --accent-primary: #d4890e;
   --accent-red: #c0392b;
-  --accent-amber: #d4890e;
+  --accent-amber: var(--accent-primary);
   --glass-bg: rgba(255, 255, 255, 0.04);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-blur: blur(12px);

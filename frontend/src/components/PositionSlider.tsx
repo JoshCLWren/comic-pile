@@ -94,6 +94,11 @@ export default function PositionSlider({ threads, currentThread, onPositionSelec
           max={maxPosition}
           value={sliderValue}
           onChange={(e) => setSliderValue(Number(e.target.value))}
+          aria-label={`Position slider: ${sliderValue} of ${maxPosition}`}
+          aria-valuemin={0}
+          aria-valuemax={maxPosition}
+          aria-valuenow={sliderValue}
+          aria-valuetext={`Position ${sliderValue === 0 ? 'Front' : sliderValue === maxPosition ? 'Back' : sliderValue}`}
           className="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
             [&::-webkit-slider-thumb]:appearance-none
             [&::-webkit-slider-thumb]:w-5
