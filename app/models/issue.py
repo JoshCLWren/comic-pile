@@ -37,7 +37,11 @@ class Issue(Base):
     )
 
     thread: Mapped["Thread"] = relationship(
-        "Thread", back_populates="issues", lazy="raise", foreign_keys=[thread_id]
+        "Thread",
+        back_populates="issues",
+        lazy="raise",
+        foreign_keys=[thread_id],
+        passive_deletes="all",
     )
     dependencies_out: Mapped[list["Dependency"]] = relationship(
         "Dependency",
