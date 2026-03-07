@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Thread
+from app.models import Dependency, Event, Issue, Thread
 from tests.conftest import get_or_create_user_async
 
 
@@ -32,7 +32,8 @@ async def test_add_issues_to_existing_thread(
     await async_db.flush()
 
     existing_issues = [
-        Issue(thread_id=thread.id, issue_number=str(i), status="unread") for i in range(21, 32)
+        Issue(thread_id=thread.id, issue_number=str(i), position=i - 20, status="unread")
+        for i in range(21, 32)
     ]
     for issue in existing_issues:
         async_db.add(issue)
@@ -139,8 +140,8 @@ async def test_deduplicate_existing_issues(
     await async_db.flush()
 
     existing_issues = [
-        Issue(thread_id=thread.id, issue_number="1", status="unread"),
-        Issue(thread_id=thread.id, issue_number="2", status="unread"),
+        Issue(thread_id=thread.id, issue_number="1", position=1, status="unread"),
+        Issue(thread_id=thread.id, issue_number="2", position=2, status="unread"),
     ]
     for issue in existing_issues:
         async_db.add(issue)
@@ -186,7 +187,13 @@ async def test_update_thread_metadata(auth_client: AsyncClient, async_db: AsyncS
     await async_db.flush()
 
     issues = [
-        Issue(thread_id=thread.id, issue_number=str(i), status="read", read_at=datetime.now(UTC))
+        Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            position=i,
+            status="read",
+            read_at=datetime.now(UTC),
+        )
         for i in range(1, 6)
     ]
     for issue in issues:
@@ -255,7 +262,11 @@ async def test_reactivate_completed_thread(
 
     for i in range(1, 11):
         issue = Issue(
-            thread_id=thread.id, issue_number=str(i), status="read", read_at=datetime.now(UTC)
+            thread_id=thread.id,
+            issue_number=str(i),
+            position=i,
+            status="read",
+            read_at=datetime.now(UTC),
         )
         async_db.add(issue)
     await async_db.commit()
@@ -303,7 +314,7 @@ async def test_add_all_duplicate_issues_returns_400(
     await async_db.flush()
 
     for i in range(1, 6):
-        issue = Issue(thread_id=thread.id, issue_number=str(i), status="unread")
+        issue = Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread")
         async_db.add(issue)
     await async_db.commit()
 
@@ -337,7 +348,8 @@ async def test_add_issues_preserves_next_unread(
     await async_db.flush()
 
     issues = [
-        Issue(thread_id=thread.id, issue_number=str(i), status="unread") for i in range(1, 11)
+        Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread")
+        for i in range(1, 11)
     ]
     for issue in issues:
         async_db.add(issue)
@@ -378,7 +390,7 @@ async def test_add_issues_with_mixed_duplicates(
     async_db.add(thread)
     await async_db.flush()
 
-    existing = Issue(thread_id=thread.id, issue_number="3", status="unread")
+    existing = Issue(thread_id=thread.id, issue_number="3", position=3, status="unread")
     async_db.add(existing)
     await async_db.commit()
 
@@ -416,8 +428,8 @@ async def test_add_issues_to_thread_with_annuals(
     async_db.add(thread)
     await async_db.flush()
 
-    annual1 = Issue(thread_id=thread.id, issue_number="Annual 1", status="unread")
-    annual2 = Issue(thread_id=thread.id, issue_number="Annual 2", status="unread")
+    annual1 = Issue(thread_id=thread.id, issue_number="Annual 1", position=1, status="unread")
+    annual2 = Issue(thread_id=thread.id, issue_number="Annual 2", position=2, status="unread")
     async_db.add(annual1)
     async_db.add(annual2)
     await async_db.commit()
@@ -436,3 +448,86 @@ async def test_add_issues_to_thread_with_annuals(
 
     await async_db.refresh(thread)
     assert thread.total_issues == 5
+
+
+@pytest.mark.asyncio
+async def test_reactivate_completed_thread_refreshes_blocked_flags(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Reactivating a completed source thread should refresh dependent blocked flags."""
+    user = await get_or_create_user_async(async_db)
+
+    active_thread = Thread(
+        title="Already Active",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    dependent_thread = Thread(
+        title="Blocked Target",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    completed_source = Thread(
+        title="Completed Source",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=3,
+        status="completed",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="completed",
+        next_unread_issue_id=None,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add_all([active_thread, dependent_thread, completed_source])
+    await async_db.flush()
+
+    async_db.add_all(
+        [
+            Issue(
+                thread_id=completed_source.id,
+                issue_number="1",
+                position=1,
+                status="read",
+                read_at=datetime.now(UTC),
+            ),
+            Issue(
+                thread_id=completed_source.id,
+                issue_number="2",
+                position=2,
+                status="read",
+                read_at=datetime.now(UTC),
+            ),
+            Dependency(
+                source_thread_id=completed_source.id,
+                target_thread_id=dependent_thread.id,
+            ),
+        ]
+    )
+    await async_db.commit()
+
+    assert dependent_thread.is_blocked is False
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{completed_source.id}/issues", json={"issue_range": "3"}
+    )
+    assert response.status_code == 201
+
+    await async_db.refresh(completed_source)
+    await async_db.refresh(dependent_thread)
+
+    assert completed_source.status == "active"
+    assert completed_source.next_unread_issue_id is not None
+    assert dependent_thread.is_blocked is True

@@ -339,6 +339,7 @@ async def sample_data(
         issue = Issue(
             thread_id=threads[1].id,
             issue_number=str(i),
+            position=i,
             status="read" if i <= 5 else "unread",
             read_at=now if i <= 5 else None,
         )

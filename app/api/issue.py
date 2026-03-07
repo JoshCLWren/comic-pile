@@ -360,6 +360,7 @@ async def create_issues(
     )
     db.add(event)
 
+    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
     issue_responses = [issue_to_response(issue) for issue in new_issues]

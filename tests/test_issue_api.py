@@ -30,7 +30,12 @@ async def test_list_issues_success(auth_client: AsyncClient, async_db: AsyncSess
     await async_db.flush()
 
     issues = [
-        Issue(thread_id=thread.id, issue_number=str(i), status="unread" if i > 2 else "read")
+        Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            position=i,
+            status="unread" if i > 2 else "read",
+        )
         for i in range(1, 6)
     ]
     for issue in issues:
@@ -69,7 +74,12 @@ async def test_list_issues_filter_by_unread(
     await async_db.flush()
 
     issues = [
-        Issue(thread_id=thread.id, issue_number=str(i), status="unread" if i > 2 else "read")
+        Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            position=i,
+            status="unread" if i > 2 else "read",
+        )
         for i in range(1, 6)
     ]
     for issue in issues:
@@ -105,7 +115,12 @@ async def test_list_issues_filter_by_read(auth_client: AsyncClient, async_db: As
     await async_db.flush()
 
     issues = [
-        Issue(thread_id=thread.id, issue_number=str(i), status="unread" if i > 2 else "read")
+        Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            position=i,
+            status="unread" if i > 2 else "read",
+        )
         for i in range(1, 6)
     ]
     for issue in issues:
@@ -177,7 +192,7 @@ async def test_list_issues_other_user_thread(
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="unread")
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
     async_db.add(issue)
     await async_db.commit()
 
@@ -206,7 +221,8 @@ async def test_list_issues_pagination(auth_client: AsyncClient, async_db: AsyncS
     await async_db.flush()
 
     issues = [
-        Issue(thread_id=thread.id, issue_number=str(i), status="unread") for i in range(1, 11)
+        Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread")
+        for i in range(1, 11)
     ]
     for issue in issues:
         async_db.add(issue)
@@ -344,7 +360,7 @@ async def test_create_issues_skips_duplicates(
     async_db.add(thread)
     await async_db.flush()
 
-    existing = Issue(thread_id=thread.id, issue_number="1", status="unread")
+    existing = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
     async_db.add(existing)
     await async_db.commit()
 
@@ -431,7 +447,7 @@ async def test_create_issues_all_exist(auth_client: AsyncClient, async_db: Async
     await async_db.flush()
 
     for i in range(1, 4):
-        issue = Issue(thread_id=thread.id, issue_number=str(i), status="unread")
+        issue = Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread")
         async_db.add(issue)
     await async_db.commit()
 
@@ -583,7 +599,7 @@ async def test_mark_issue_read_creates_event(
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="unread")
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
     async_db.add(issue)
     await async_db.commit()
 
@@ -624,7 +640,13 @@ async def test_mark_issue_unread_creates_event(
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="read", read_at=datetime.now(UTC))
+    issue = Issue(
+        thread_id=thread.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
     async_db.add(issue)
     await async_db.commit()
 
@@ -663,7 +685,7 @@ async def test_get_issue_success(auth_client: AsyncClient, async_db: AsyncSessio
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="unread")
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
     async_db.add(issue)
     await async_db.commit()
 
@@ -706,7 +728,7 @@ async def test_get_issue_other_user_issue(auth_client: AsyncClient, async_db: As
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="unread")
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
     async_db.add(issue)
     await async_db.commit()
 
@@ -735,9 +757,27 @@ async def test_mark_issue_read_success(auth_client: AsyncClient, async_db: Async
     async_db.add(thread)
     await async_db.flush()
 
-    issue1 = Issue(thread_id=thread.id, issue_number="1", status="unread", read_at=None)
-    issue2 = Issue(thread_id=thread.id, issue_number="2", status="unread", read_at=None)
-    issue3 = Issue(thread_id=thread.id, issue_number="3", status="unread", read_at=None)
+    issue1 = Issue(
+        thread_id=thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+        read_at=None,
+    )
+    issue2 = Issue(
+        thread_id=thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+        read_at=None,
+    )
+    issue3 = Issue(
+        thread_id=thread.id,
+        issue_number="3",
+        position=3,
+        status="unread",
+        read_at=None,
+    )
     async_db.add(issue1)
     async_db.add(issue2)
     async_db.add(issue3)
@@ -775,7 +815,10 @@ async def test_mark_issue_read_updates_next_unread(
     async_db.add(thread)
     await async_db.flush()
 
-    issues = [Issue(thread_id=thread.id, issue_number=str(i), status="unread") for i in range(1, 6)]
+    issues = [
+        Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread")
+        for i in range(1, 6)
+    ]
     for issue in issues:
         async_db.add(issue)
     await async_db.flush()
@@ -812,9 +855,21 @@ async def test_mark_issue_read_completes_thread(
     await async_db.flush()
 
     issues = [
-        Issue(thread_id=thread.id, issue_number="1", status="read", read_at=datetime.now(UTC)),
-        Issue(thread_id=thread.id, issue_number="2", status="read", read_at=datetime.now(UTC)),
-        Issue(thread_id=thread.id, issue_number="3", status="unread"),
+        Issue(
+            thread_id=thread.id,
+            issue_number="1",
+            position=1,
+            status="read",
+            read_at=datetime.now(UTC),
+        ),
+        Issue(
+            thread_id=thread.id,
+            issue_number="2",
+            position=2,
+            status="read",
+            read_at=datetime.now(UTC),
+        ),
+        Issue(thread_id=thread.id, issue_number="3", position=3, status="unread"),
     ]
     for issue in issues:
         async_db.add(issue)
@@ -851,7 +906,13 @@ async def test_mark_issue_read_already_read(
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="read", read_at=datetime.now(UTC))
+    issue = Issue(
+        thread_id=thread.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
     async_db.add(issue)
     await async_db.commit()
 
@@ -891,7 +952,7 @@ async def test_mark_issue_read_other_user_issue(
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="unread")
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
     async_db.add(issue)
     await async_db.commit()
 
@@ -919,7 +980,13 @@ async def test_mark_issue_unread_success(auth_client: AsyncClient, async_db: Asy
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="3", status="read", read_at=datetime.now(UTC))
+    issue = Issue(
+        thread_id=thread.id,
+        issue_number="3",
+        position=3,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
     async_db.add(issue)
     await async_db.commit()
 
@@ -952,7 +1019,13 @@ async def test_mark_issue_unread_reactivates_thread(
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="2", status="read", read_at=datetime.now(UTC))
+    issue = Issue(
+        thread_id=thread.id,
+        issue_number="2",
+        position=2,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
     async_db.add(issue)
     await async_db.commit()
 
@@ -986,7 +1059,7 @@ async def test_mark_issue_unread_already_unread(
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="unread")
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
     async_db.add(issue)
     await async_db.commit()
 
@@ -1026,7 +1099,13 @@ async def test_mark_issue_unread_other_user_issue(
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(thread_id=thread.id, issue_number="1", status="read", read_at=datetime.now(UTC))
+    issue = Issue(
+        thread_id=thread.id,
+        issue_number="1",
+        position=1,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
     async_db.add(issue)
     await async_db.commit()
 
