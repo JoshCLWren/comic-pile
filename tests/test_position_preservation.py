@@ -1,9 +1,11 @@
 """Test position preservation in snapshots/undo."""
 
-import pytest
 from datetime import UTC, datetime
-from sqlalchemy import select
 from typing import TypedDict
+
+import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread
 
@@ -30,20 +32,22 @@ class ThreadState(TypedDict):
 
 
 @pytest.mark.asyncio
-async def test_snapshot_includes_issue_positions(db, test_user):
+async def test_snapshot_includes_issue_positions(
+    async_db: AsyncSession, default_user
+) -> None:
     """Test that snapshots preserve issue positions."""
     # Create thread with issues at specific positions
     thread = Thread(
         title="Test Thread",
         format="comic",
-        user_id=test_user.id,
+        user_id=default_user.id,
         queue_position=1,
         total_issues=3,
         status="active",
         reading_progress="in_progress",
     )
-    db.add(thread)
-    await db.flush()
+    async_db.add(thread)
+    await async_db.flush()
 
     # Create issues with specific positions
     issue1 = Issue(
@@ -68,8 +72,8 @@ async def test_snapshot_includes_issue_positions(db, test_user):
         position=15,
         status="unread",
     )
-    db.add_all([issue1, issue2, issue3])
-    await db.flush()
+    async_db.add_all([issue1, issue2, issue3])
+    await async_db.flush()
 
     # Create snapshot (simulating rate endpoint behavior)
     thread_states: dict[int, ThreadState] = {}
@@ -82,7 +86,7 @@ async def test_snapshot_includes_issue_positions(db, test_user):
         "issue_states": [],
     }
 
-    issues_result = await db.execute(
+    issues_result = await async_db.execute(
         select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
     )
     issues = issues_result.scalars().all()
@@ -106,7 +110,9 @@ async def test_snapshot_includes_issue_positions(db, test_user):
 
 
 @pytest.mark.asyncio
-async def test_restore_preserves_positions_with_fallback(db, test_user):
+async def test_restore_preserves_positions_with_fallback(
+    async_db: AsyncSession, default_user
+) -> None:
     """Test that session restore preserves positions with safe fallback."""
     # Create snapshot with missing position (legacy data)
     thread_states: dict[int, ThreadState] = {
@@ -138,12 +144,12 @@ async def test_restore_preserves_positions_with_fallback(db, test_user):
         id=999,
         title="Legacy Thread",
         format="comic",
-        user_id=test_user.id,
+        user_id=default_user.id,
         queue_position=1,
         status="active",
     )
-    db.add(thread)
-    await db.flush()
+    async_db.add(thread)
+    await async_db.flush()
 
     # Simulate restoration logic from session.py
     from sqlalchemy import delete
@@ -151,10 +157,10 @@ async def test_restore_preserves_positions_with_fallback(db, test_user):
     state = thread_states[999]
     thread_id_int = 999
 
-    await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
+    await async_db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
 
     # Get existing positions (none exist yet)
-    existing_positions_result = await db.execute(
+    existing_positions_result = await async_db.execute(
         select(Issue.position).where(Issue.thread_id == thread_id_int)
     )
     existing_positions = existing_positions_result.scalars().all()
@@ -176,12 +182,12 @@ async def test_restore_preserves_positions_with_fallback(db, test_user):
             created_at=datetime.now(UTC),
             position=position,
         )
-        db.add(issue)
+        async_db.add(issue)
 
-    await db.flush()
+    await async_db.flush()
 
     # Verify positions were assigned correctly
-    result = await db.execute(
+    result = await async_db.execute(
         select(Issue).where(Issue.thread_id == thread_id_int).order_by(Issue.position)
     )
     issues = result.scalars().all()
@@ -191,19 +197,21 @@ async def test_restore_preserves_positions_with_fallback(db, test_user):
 
 
 @pytest.mark.asyncio
-async def test_restore_avoids_position_collisions(db, test_user):
-    """Test that restore avoids collisions with existing issues."""
-    # Create thread with existing issue at position 10
+async def test_restore_fallback_assigns_sequential_positions_after_replace(
+    async_db: AsyncSession, default_user
+) -> None:
+    """Test that restore fallback renumbers legacy issues sequentially after replace."""
+    # Create thread with pre-existing issues that will be replaced during restore.
     thread = Thread(
         id=888,
         title="Test Thread",
         format="comic",
-        user_id=test_user.id,
+        user_id=default_user.id,
         queue_position=1,
         status="active",
     )
-    db.add(thread)
-    await db.flush()
+    async_db.add(thread)
+    await async_db.flush()
 
     existing_issue = Issue(
         id=300,
@@ -213,8 +221,8 @@ async def test_restore_avoids_position_collisions(db, test_user):
         status="read",
         read_at=datetime.now(UTC),
     )
-    db.add(existing_issue)
-    await db.flush()
+    async_db.add(existing_issue)
+    await async_db.flush()
 
     # Restore snapshot with issues (without position field - legacy)
     from sqlalchemy import delete
@@ -241,10 +249,10 @@ async def test_restore_avoids_position_collisions(db, test_user):
         ],
     }
 
-    await db.execute(delete(Issue).where(Issue.thread_id == thread.id))
+    await async_db.execute(delete(Issue).where(Issue.thread_id == thread.id))
 
     # Get existing positions
-    existing_positions_result = await db.execute(
+    existing_positions_result = await async_db.execute(
         select(Issue.position).where(Issue.thread_id == thread.id)
     )
     existing_positions = existing_positions_result.scalars().all()
@@ -266,16 +274,16 @@ async def test_restore_avoids_position_collisions(db, test_user):
             created_at=datetime.now(UTC),
             position=position,
         )
-        db.add(issue)
+        async_db.add(issue)
 
-    await db.flush()
+    await async_db.flush()
 
     # Verify no collision and sequential positions
-    result = await db.execute(
+    result = await async_db.execute(
         select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
     )
     issues = result.scalars().all()
 
     assert len(issues) == 2
-    assert issues[0].position == 11
-    assert issues[1].position == 12
+    assert issues[0].position == 1
+    assert issues[1].position == 2
