@@ -186,14 +186,24 @@ async def create_issues(
     )
     existing_issues = {row[0]: row[1] for row in existing_issues_result.fetchall()}
 
+    max_position = 0
+    if existing_issues:
+        max_position = max(existing_issues.values())
+
+    offset = 0
+    if issue_numbers and issue_numbers[0] in existing_issues:
+        offset = existing_issues[issue_numbers[0]] - 1
+    else:
+        offset = max_position
+
     new_issues = []
-    for position, issue_number in enumerate(issue_numbers, start=1):
+    for idx, issue_number in enumerate(issue_numbers, start=1):
         if issue_number in existing_issues:
             continue
         issue = Issue(
             thread_id=thread_id,
             issue_number=issue_number,
-            position=position,
+            position=idx + offset,
             status="unread",
         )
         db.add(issue)
