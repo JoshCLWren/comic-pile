@@ -9,8 +9,10 @@ vi.mock('../services/api', () => ({
   },
 }))
 
+const mockedRateApi = vi.mocked(rateApi)
+
 beforeEach(() => {
-  rateApi.rate.mockResolvedValue({})
+  mockedRateApi.rate.mockResolvedValue(undefined as never)
 })
 
 it('submits ratings', async () => {
@@ -20,5 +22,5 @@ it('submits ratings', async () => {
     await result.current.mutate({ rating: 4 })
   })
 
-  expect(rateApi.rate).toHaveBeenCalledWith({ rating: 4 })
+  expect(mockedRateApi.rate).toHaveBeenCalledWith({ rating: 4 })
 })

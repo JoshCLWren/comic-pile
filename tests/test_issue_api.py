@@ -471,14 +471,20 @@ async def test_create_issues_already_migrated(
     async_db.add(thread)
     await async_db.flush()
 
+    issues = []
     for i in range(1, 26):
         issue = Issue(
             thread_id=thread.id,
             issue_number=str(i),
+            position=i,
             status="read" if i <= 15 else "unread",
             read_at=datetime.now(UTC) if i <= 15 else None,
         )
         async_db.add(issue)
+        issues.append(issue)
+
+    await async_db.flush()
+    thread.next_unread_issue_id = issues[15].id
     await async_db.commit()
 
     response = await auth_client.post(
@@ -493,6 +499,7 @@ async def test_create_issues_already_migrated(
     await async_db.refresh(thread)
     assert thread.total_issues == 30
     assert thread.issues_remaining == 15
+    assert thread.next_unread_issue_id == issues[15].id
 
 
 @pytest.mark.asyncio
@@ -1066,6 +1073,17 @@ async def test_create_issues_validates_no_position_duplicates(
         f"Response contains duplicate positions: {positions}"
     )
 
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    db_issues = result.scalars().all()
+    db_positions = [issue.position for issue in db_issues]
+
+    assert len(db_positions) == len(set(db_positions)), (
+        f"Database contains duplicate positions: {db_positions}"
+    )
+    assert db_positions == list(range(1, 11))
+
 
 @pytest.mark.asyncio
 async def test_create_issues_validates_no_position_conflicts_with_existing(
@@ -1099,6 +1117,17 @@ async def test_create_issues_validates_no_position_conflicts_with_existing(
     data = response.json()
     assert len(data["issues"]) == 5
     assert data["total_count"] == 10
+
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    db_issues = result.scalars().all()
+    db_positions = [issue.position for issue in db_issues]
+
+    assert len(db_positions) == len(set(db_positions)), (
+        f"Database contains duplicate positions: {db_positions}"
+    )
+    assert db_positions == list(range(1, 11))
 
 
 @pytest.mark.asyncio

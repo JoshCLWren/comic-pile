@@ -6,8 +6,10 @@ import { useSessions } from '../hooks/useSession'
 
 vi.mock('../hooks/useSession', () => ({ useSessions: vi.fn() }))
 
+const mockedUseSessions = vi.mocked(useSessions) as any
+
 beforeEach(() => {
-  useSessions.mockReturnValue({ data: [], isLoading: false })
+  mockedUseSessions.mockReturnValue({ data: [], isLoading: false })
 })
 
 it('renders empty history state', () => {

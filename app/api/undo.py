@@ -132,7 +132,17 @@ async def undo_to_snapshot(
 
                     if "issue_states" in state and state["issue_states"] is not None:
                         await db.execute(delete(Issue).where(Issue.thread_id == thread_id_int))
+
+                        existing_positions_result = await db.execute(
+                            select(Issue.position).where(Issue.thread_id == thread_id_int)
+                        )
+                        existing_positions = existing_positions_result.scalars().all()
+                        max_position = max(existing_positions) if existing_positions else 0
+
                         for issue_state in state["issue_states"]:
+                            position = issue_state.get("position", max_position + 1)
+                            if position > max_position:
+                                max_position = position
                             issue = Issue(
                                 id=issue_state["id"],
                                 thread_id=thread_id_int,
@@ -142,6 +152,7 @@ async def undo_to_snapshot(
                                 if issue_state["read_at"]
                                 else None,
                                 created_at=datetime.now(UTC),
+                                position=position,
                             )
                             db.add(issue)
                         thread.total_issues = state.get("total_issues")
@@ -178,7 +189,16 @@ async def undo_to_snapshot(
                     db.add(new_thread)
 
                     if "issue_states" in state and state["issue_states"] is not None:
+                        existing_positions_result = await db.execute(
+                            select(Issue.position).where(Issue.thread_id == thread_id_int)
+                        )
+                        existing_positions = existing_positions_result.scalars().all()
+                        max_position = max(existing_positions) if existing_positions else 0
+
                         for issue_state in state["issue_states"]:
+                            position = issue_state.get("position", max_position + 1)
+                            if position > max_position:
+                                max_position = position
                             issue = Issue(
                                 id=issue_state["id"],
                                 thread_id=thread_id_int,
@@ -188,6 +208,7 @@ async def undo_to_snapshot(
                                 if issue_state["read_at"]
                                 else None,
                                 created_at=datetime.now(UTC),
+                                position=position,
                             )
                             db.add(issue)
                         new_thread.total_issues = state.get("total_issues")

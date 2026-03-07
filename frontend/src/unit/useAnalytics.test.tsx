@@ -9,13 +9,15 @@ vi.mock('../services/api', () => ({
   },
 }))
 
+const mockedTasksApi = vi.mocked(tasksApi)
+
 beforeEach(() => {
-  tasksApi.getMetrics.mockResolvedValue({ total_tasks: 10 })
+  mockedTasksApi.getMetrics.mockResolvedValue({ total_tasks: 10 } as never)
 })
 
 it('loads analytics metrics', async () => {
   const { result } = renderHook(() => useAnalytics())
 
   await waitFor(() => expect(result.current.data).toEqual({ total_tasks: 10 }))
-  expect(tasksApi.getMetrics).toHaveBeenCalled()
+  expect(mockedTasksApi.getMetrics).toHaveBeenCalled()
 })

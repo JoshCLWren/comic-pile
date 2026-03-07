@@ -100,7 +100,7 @@ test.describe('Network & API Tests', () => {
     await authenticatedPage.goto('/threads');
 
     const timeoutMessage = authenticatedPage.locator('text=timeout|took too long|try again');
-    const hasTimeout = await timeoutMessage.count({ timeout: 35000 }).then(count => count > 0);
+    const hasTimeout = await timeoutMessage.count().then(count => count > 0);
 
     if (hasTimeout) {
       await expect(timeoutMessage.first()).toBeVisible();

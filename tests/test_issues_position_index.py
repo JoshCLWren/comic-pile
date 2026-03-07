@@ -35,7 +35,7 @@ async def test_issues_position_index_is_used(async_db: AsyncSession):
         issue = Issue(
             thread_id=thread.id,
             issue_number=str(i + 1),
-            position=i,
+            position=i + 1,
             status="unread" if i < 25 else "read",
         )
         async_db.add(issue)
@@ -52,6 +52,7 @@ async def test_issues_position_index_is_used(async_db: AsyncSession):
 
     result = await async_db.execute(explain_query, {"thread_id": thread.id})
     plan = result.scalar()
+    assert plan is not None, "EXPLAIN query should return a plan"
 
     # SQLAlchemy with asyncpg already deserializes JSON
     plan_data = plan if isinstance(plan, list) else [plan]
@@ -122,7 +123,7 @@ async def test_issues_position_index_improves_pagination(async_db: AsyncSession)
         issue = Issue(
             thread_id=thread.id,
             issue_number=str(i + 1),
-            position=i,
+            position=i + 1,
             status="unread",
         )
         async_db.add(issue)
@@ -143,20 +144,18 @@ async def test_issues_position_index_improves_pagination(async_db: AsyncSession)
         query, {"thread_id": thread.id, "cursor_position": cursor_position, "cursor_id": 0}
     )
     plan = result.scalar()
+    assert plan is not None, "EXPLAIN query should return a plan"
 
     # SQLAlchemy with asyncpg already deserializes JSON
     plan_data = plan if isinstance(plan, list) else [plan]
 
-    # Verify the query completes efficiently (should use index)
-    execution_time = plan_data[0].get("Execution Time", 0)
+    def check_index_used(node: dict) -> bool:
+        """Recursively check whether the plan contains an index-backed node."""
+        node_type = node.get("Node Type", "")
+        if "Index" in node_type:
+            return True
+        return any(check_index_used(child) for child in node.get("Plans", []))
 
-    # Execution time can vary significantly based on system load and database state
-    # The primary check is whether the index is used (above), not absolute timing
-    # Log timing for informational purposes without asserting a threshold
-    if execution_time > 10.0:
-        import logging
-
-        logging.warning(
-            f"Query took {execution_time}ms, which is slower than expected "
-            f"even though index is being used. This may indicate system load issues."
-        )
+    assert check_index_used(plan_data[0]["Plan"]), (
+        "Query should use ix_issue_thread_position for efficient pagination"
+    )

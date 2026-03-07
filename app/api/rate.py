@@ -73,6 +73,7 @@ async def snapshot_thread_states(
                     "number": issue.issue_number,
                     "status": issue.status,
                     "read_at": issue.read_at.isoformat() if issue.read_at else None,
+                    "position": issue.position,
                 }
                 for issue in issues
             ]

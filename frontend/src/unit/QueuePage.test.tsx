@@ -63,9 +63,22 @@ vi.mock('../contexts/CollectionContext', () => ({
   }),
 }))
 
+const mockedUseThreads = vi.mocked(useThreads) as any
+const mockedUseCreateThread = vi.mocked(useCreateThread) as any
+const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
+const mockedUseDeleteThread = vi.mocked(useDeleteThread) as any
+const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
+const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
+const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
+const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
+const mockedUseSnooze = vi.mocked(useSnooze) as any
+const mockedThreadsApi = vi.mocked(threadsApi) as any
+
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
-  useThreads.mockReturnValue({
+  mockedUseThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
       { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
@@ -73,20 +86,20 @@ beforeEach(() => {
     isLoading: false,
     refetch: vi.fn(),
   })
-  useCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useDeleteThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useSession.mockReturnValue({
+  mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseDeleteThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseSession.mockReturnValue({
     data: { snoozed_threads: [] },
     refetch: vi.fn(),
   })
-  useUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  threadsApi.setPending.mockResolvedValue({
+  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedThreadsApi.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',
     format: 'Comic',
@@ -96,7 +109,13 @@ beforeEach(() => {
     result: 1,
     offset: 0,
     snoozed_count: 0,
-  })
+    issue_id: null,
+    issue_number: null,
+    next_issue_id: null,
+    next_issue_number: null,
+    total_issues: null,
+    reading_progress: null,
+  } as never)
 })
 
 it('renders queue items and opens create modal', async () => {
@@ -122,8 +141,8 @@ describe('Action Sheet Snooze/Unsnooze', () => {
   beforeEach(() => {
     mockSnoozeMutation.mutate.mockReset()
     mockUnsnoozeMutation.mutate.mockReset()
-    useSnooze.mockReturnValue(mockSnoozeMutation)
-    useUnsnooze.mockReturnValue(mockUnsnoozeMutation)
+    mockedUseSnooze.mockReturnValue(mockSnoozeMutation)
+    mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
   it('opens action sheet when clicking thread card', async () => {
@@ -134,8 +153,11 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     expect(threadCard).toBeInTheDocument()
+    if (!threadCard) {
+      throw new Error('Thread card not found')
+    }
 
     await user.click(threadCard)
     expect(screen.getByText('Read Now')).toBeInTheDocument()
@@ -153,7 +175,10 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+    if (!threadCard) {
+      throw new Error('Thread card not found')
+    }
     await user.click(threadCard)
 
     const snoozeButton = screen.getByText('Snooze')
@@ -164,7 +189,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
   })
 
   it('calls unsnooze mutation when thread is snoozed and unsnooze action is clicked', async () => {
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
       },
@@ -178,7 +203,10 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+    if (!threadCard) {
+      throw new Error('Thread card not found')
+    }
     await user.click(threadCard)
 
     const unsnoozeButton = screen.getByText('Unsnooze')
@@ -191,11 +219,11 @@ describe('Action Sheet Snooze/Unsnooze', () => {
   it('refetches session and threads after snooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: { snoozed_threads: [] },
       refetch: mockRefetchSession,
     })
-    useThreads.mockReturnValue({
+    mockedUseThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
       ],
@@ -210,7 +238,10 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+    if (!threadCard) {
+      throw new Error('Thread card not found')
+    }
     await user.click(threadCard)
 
     const snoozeButton = screen.getByText('Snooze')
@@ -232,7 +263,10 @@ describe('Keyboard Accessibility', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+    if (!threadCard) {
+      throw new Error('Thread card not found')
+    }
     threadCard.focus()
     await user.keyboard('{Enter}')
 
@@ -247,7 +281,10 @@ describe('Keyboard Accessibility', () => {
       </BrowserRouter>
     )
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]')
+    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+    if (!threadCard) {
+      throw new Error('Thread card not found')
+    }
     threadCard.focus()
     await user.keyboard(' ')
 

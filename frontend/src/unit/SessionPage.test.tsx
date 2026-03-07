@@ -22,9 +22,13 @@ vi.mock('../hooks/useUndo', () => ({
 
 const restoreSpy = vi.fn()
 const undoSpy = vi.fn()
+const mockedUseSessionDetails = vi.mocked(useSessionDetails) as any
+const mockedUseSessionSnapshots = vi.mocked(useSessionSnapshots) as any
+const mockedUseRestoreSessionStart = vi.mocked(useRestoreSessionStart) as any
+const mockedUseUndo = vi.mocked(useUndo) as any
 
 beforeEach(() => {
-  useSessionDetails.mockReturnValue({
+  mockedUseSessionDetails.mockReturnValue({
     data: {
       session_id: 12,
       started_at: '2024-05-01T10:00:00Z',
@@ -39,11 +43,11 @@ beforeEach(() => {
     },
     isLoading: false,
   })
-  useSessionSnapshots.mockReturnValue({
+  mockedUseSessionSnapshots.mockReturnValue({
     data: { snapshots: [{ id: 4, description: 'Before twist', created_at: '2024-05-01T10:20:00Z' }] },
   })
-  useRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: false })
-  useUndo.mockReturnValue({ mutate: undoSpy, isPending: false })
+  mockedUseRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: false })
+  mockedUseUndo.mockReturnValue({ mutate: undoSpy, isPending: false })
   restoreSpy.mockReset()
   undoSpy.mockReset()
 })

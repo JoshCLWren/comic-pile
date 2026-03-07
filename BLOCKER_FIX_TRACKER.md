@@ -135,5 +135,5 @@ Users can manually reorder in future if needed.
 - Blocker #1: [ ] Not Started
 - Blocker #2: [ ] Not Started
 - Blocker #3: [ ] Not Started
-- Blocker #4: [ ] Not Started
+- Blocker #4: [x] Completed
 - Blocker #5: [ ] Not Started

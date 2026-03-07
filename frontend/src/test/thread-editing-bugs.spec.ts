@@ -15,8 +15,10 @@ async function makeAuthenticatedRequest(page: any, method: string, url: string, 
     options.data = data;
   }
 
+  let lastResponse: Response | undefined;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const response = await page.request.fetch(url, options);
+    lastResponse = response;
 
     if (response.ok() || (response.status() >= 400 && response.status() < 500 && response.status() !== 408)) {
       return response;
@@ -29,8 +31,20 @@ async function makeAuthenticatedRequest(page: any, method: string, url: string, 
 
     return response;
   }
-  
-  return await page.request.fetch(url, options);
+
+  return lastResponse!;
+}
+
+async function waitForIssueMutation(page: Page, trigger: () => Promise<void>): Promise<void> {
+  await Promise.all([
+    page.waitForResponse(
+      response =>
+        response.request().method() === 'POST' &&
+        response.url().includes('/issues') &&
+        response.status() === 201
+    ),
+    trigger(),
+  ]);
 }
 
 test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
@@ -91,9 +105,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Submit the form - use the button within the modal
     const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
-    await addIssuesButton.click();
-
-    // Step 6: Wait for the add operation to complete
+    await waitForIssueMutation(authenticatedPage, () => addIssuesButton.click());
     await authenticatedPage.waitForLoadState('networkidle');
 
     // CRITICAL CHECK: Verify modal is still open
@@ -158,14 +170,12 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
     await expect(editModal).toBeVisible();
 
-    // Add issues in a specific order: Annual 1 should go between issue 3 and 4
+    // Add issues in request order; backend appends new issues after all existing ones.
     const addIssuesInput = editModal.locator('[data-testid="issue-add-input"]');
     await addIssuesInput.fill('Annual 1, 6-7');
 
     const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
-    await addIssuesButton.click();
-
-    // Wait for operation to complete
+    await waitForIssueMutation(authenticatedPage, () => addIssuesButton.click());
     await authenticatedPage.waitForLoadState('networkidle');
 
     // Verify modal is still open
@@ -181,9 +191,9 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // Should have 8 issues now (5 original + Annual 1 + 6-7)
     expect(issuesData.issues.length).toBe(8);
 
-    // Check that Annual 1 exists
-    const hasAnnual1 = issuesData.issues.some((i: any) => i.issue_number === 'Annual 1');
-    expect(hasAnnual1).toBe(true);
+    const appendedIssues = issuesData.issues.slice(-3);
+    expect(appendedIssues.map((issue: any) => issue.issue_number)).toEqual(['Annual 1', '6', '7']);
+    expect(appendedIssues.map((issue: any) => issue.position)).toEqual([6, 7, 8]);
   });
 
   test('should not trigger full page re-render when adding issues', async ({ authenticatedPage }) => {
@@ -229,9 +239,10 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // Add an issue
     const addIssuesInput = editModal.locator('[data-testid="issue-add-input"]');
     await addIssuesInput.fill('4');
-    await editModal.locator('[data-testid="issue-add-button"]').click();
-
-    // Wait for operation to complete
+    await waitForIssueMutation(
+      authenticatedPage,
+      () => editModal.locator('[data-testid="issue-add-button"]').click()
+    );
     await authenticatedPage.waitForLoadState('networkidle');
 
     // Check if URL changed (indicating full page navigation)
@@ -287,12 +298,14 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
     await expect(addIssuesButton).toBeVisible({ timeout: 5000 });
-    await addIssuesButton.click();
-
+    await waitForIssueMutation(authenticatedPage, () => addIssuesButton.click());
+    await authenticatedPage.waitForResponse(
+      response =>
+        response.request().method() === 'GET' &&
+        response.url().includes('/issues') &&
+        response.status() === 200
+    );
     await authenticatedPage.waitForLoadState('networkidle');
-
-    // Wait a bit for async event handlers to fire
-    await authenticatedPage.waitForTimeout(500);
 
     // Analyze requests
     const requestSummary = {
@@ -370,9 +383,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     await addIssuesInput.fill('Annual 3');
 
     const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
-    await addIssuesButton.click();
-
-    // Step 5: Wait for the add operation to complete
+    await waitForIssueMutation(authenticatedPage, () => addIssuesButton.click());
     await authenticatedPage.waitForLoadState('networkidle');
 
     // CRITICAL CHECK: Verify modal stays open after adding issues

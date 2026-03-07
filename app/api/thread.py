@@ -507,11 +507,18 @@ async def reactivate_thread(
         )
         existing_total = existing_count_result.scalar() or 0
 
+        existing_position_result = await db.execute(
+            select(func.max(Issue.position)).where(Issue.thread_id == thread.id)
+        )
+        max_position = existing_position_result.scalar() or 0
+
         for i in range(existing_total + 1, existing_total + request.issues_to_add + 1):
+            max_position += 1
             new_issue = Issue(
                 thread_id=thread.id,
                 issue_number=str(i),
                 status="unread",
+                position=max_position,
             )
             db.add(new_issue)
 

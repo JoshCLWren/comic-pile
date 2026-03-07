@@ -11,10 +11,12 @@ vi.mock('../services/api', () => ({
   },
 }))
 
+const mockedQueueApi = vi.mocked(queueApi)
+
 beforeEach(() => {
-  queueApi.moveToPosition.mockResolvedValue({})
-  queueApi.moveToFront.mockResolvedValue({})
-  queueApi.moveToBack.mockResolvedValue({})
+  mockedQueueApi.moveToPosition.mockResolvedValue(undefined as never)
+  mockedQueueApi.moveToFront.mockResolvedValue(undefined as never)
+  mockedQueueApi.moveToBack.mockResolvedValue(undefined as never)
 })
 
 it('moves queue position', async () => {
@@ -24,7 +26,7 @@ it('moves queue position', async () => {
     await result.current.mutate({ id: 4, position: 2 })
   })
 
-  expect(queueApi.moveToPosition).toHaveBeenCalledWith(4, 2)
+  expect(mockedQueueApi.moveToPosition).toHaveBeenCalledWith(4, 2)
 })
 
 it('moves thread to front and back', async () => {
@@ -38,6 +40,6 @@ it('moves thread to front and back', async () => {
     await backResult.current.mutate(9)
   })
 
-  expect(queueApi.moveToFront).toHaveBeenCalledWith(8)
-  expect(queueApi.moveToBack).toHaveBeenCalledWith(9)
+  expect(mockedQueueApi.moveToFront).toHaveBeenCalledWith(8)
+  expect(mockedQueueApi.moveToBack).toHaveBeenCalledWith(9)
 })

@@ -331,6 +331,7 @@ async def create_issues(
         thread.reading_progress = "not_started"
         if new_issues:
             thread.next_unread_issue_id = new_issues[0].id
+            thread.status = "active"
     else:
         # Adding issues to existing migrated thread - update counts incrementally
         thread.total_issues += new_issues_count

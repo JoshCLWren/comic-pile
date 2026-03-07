@@ -31,11 +31,11 @@ if needed in a future feature.
 
 ### Testing
 - [ ] Unit test: Add issues to existing migrated thread
- - [ ] Unit test: Annual appends at end after all existing issues
+- [ ] Unit test: Annual appends at end after all existing issues
 - [ ] Unit test: Deduplicate existing issues
 - [ ] Unit test: Update thread metadata correctly
- - [ ] E2E test: User adds "Annual 3" to thread with 21-31
- - [ ] E2E test: Verify annual appears at end (position 12)
+- [ ] E2E test: User adds "Annual 3" to thread with 21-31
+- [ ] E2E test: Verify annual appears at end (position 12)
 - [ ] E2E test: Verify thread counts update
 
 ## Implementation Plan
@@ -51,8 +51,8 @@ if needed in a future feature.
 1. ✅ Add backend unit tests (9 tests created)
 2. ✅ Fix bugs found by tests (ordering + total_issues)
 3. ✅ All backend tests passing
-4. [ ] Add E2E test for user workflow
-5. [ ] Verify no regressions
+4. ✅ Add E2E test for user workflow
+5. ✅ Verify no regressions
 
 ### Phase 3: Polish
 1. Update error messages
@@ -65,10 +65,10 @@ if needed in a future feature.
 - [x] Thread total_issues updates from 11 to 12 (backend updates!)
 - [x] Thread issues_remaining updates appropriately (backend works!)
 - [x] All backend tests pass (9/9 passing ✅)
-- [ ] E2E test passes (modal closes - frontend issue to debug)
-- [ ] No regressions in existing functionality
+- [x] E2E test passes (modal stays open and refreshes in place)
+- [x] No regressions in existing functionality
 
-## Status: FEATURE WORKING! 🎉
+## Status: FEATURE WORKING
 
 ### ✅ COMPLETED (Phase 1 & 2):
 **Backend API now supports adding issues to existing migrated threads!**
@@ -79,66 +79,25 @@ if needed in a future feature.
 4. **Deduplication** - Existing issues are skipped, only new issues created
 5. **9/9 backend tests passing** - Full test coverage including edge cases
 
-### ⚠️ REMAINING (Phase 3):
-**Frontend modal closes when adding issues** (original bug report)
+### ✅ COMPLETED (Phase 3):
+**Frontend modal stays open when adding issues** ✅
 
 - The "Add issues" form works via API ✅
-- But modal closes after adding (UX issue) ❌
-- Frontend fix in place (removed `onIssuesChanged` callback)
-- E2E test reveals the issue
-- Needs debugging/refinement
+- Modal stays open after adding (UX working) ✅
+- Frontend fix complete in `frontend/src/pages/QueuePage.tsx`
+- E2E coverage in `frontend/src/test/thread-editing-bugs.spec.ts` confirms the fix
+- Updated issue list is shown without reopening the modal
 
 ## User Can Now:
 ✅ Add "Annual 3" to thread with issues 21-31 via API
 ✅ Annual 3 appears at position 12 (after all existing issues)
 ✅ Thread counts update correctly (11 → 12 issues)
+✅ Add issues through the edit modal without it closing
+✅ See the updated issue list immediately in the modal
 ✅ Use curl/Postman/api client to add issues
 ✅ Simplified algorithm prevents position collision bugs
 
-## User Cannot Yet (via UI):
-❌ Add issues through the edit modal without it closing
-❌ See the updated issue list without reopening modal
-
-## Phase 4: Debug Modal Closing Issue (PARALLEL TEAM EFFORT)
-
-### Team Assignments:
-
-**Agent 1: Root Cause Analysis**
-- Task: Investigate why modal closes when adding issues
-- Check: Console logs, React DevTools, network requests
-- Deliverable: Detailed root cause report
-
-**Agent 2: State Management Audit**
-- Task: Review QueuePage.tsx state flow
-- Check: isEditOpen, editingThread, refetch behavior
-- Deliverable: State flow diagram with problem points
-
-**Agent 3: IssueToggleList Component Review**
-- Task: Analyze IssueToggleList component behavior
-- Check: loadIssues(), handleAddIssues(), parent re-renders
-- Deliverable: Component lifecycle analysis
-
-**Agent 4: Network Request Analysis**
-- Task: Monitor what happens when "Add" is clicked
-- Check: API calls, response handling, error states
-- Deliverable: Request/response timeline
-
-**Agent 5: Fix Implementation**
-- Task: Implement fix based on team findings
-- Check: Don't break existing functionality
-- Deliverable: Working fix with tests
-
-**Agent 6: Test Coverage**
-- Task: Add tests for the fix
-- Check: Unit tests, E2E tests
-- Deliverable: Passing test suite
-
-**Agent 7: Code Review**
-- Task: Review all changes before merge
-- Check: Code quality, patterns, edge cases
-- Deliverable: Approval or requested changes
-
-### Timeline:
-- Agents 1-4: Investigation (parallel) → 15 min
-- Agent 5: Implementation → 10 min
-- Agents 6-7: Test & Review (parallel) → 10 min
+## Notes
+- Modal-close bug is resolved in this PR.
+- Queue page flow now keeps the edit modal mounted while issue data refreshes.
+- E2E coverage verifies the modal stays open and the updated issue list appears immediately.

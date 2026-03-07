@@ -57,47 +57,49 @@ async def test_concurrent_issue_adds_no_position_collisions(
     await async_db.refresh(thread)
     thread_id = thread.id
 
+    database_url = get_test_database_url()
+    override_engine = create_async_engine(database_url, echo=False, pool_size=20, max_overflow=0)
+    override_session_maker = async_sessionmaker(
+        bind=override_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
     async def add_issues(range_start: int) -> dict:
         """Add issues concurrently using a dedicated client per request."""
-        database_url = get_test_database_url()
-        engine = create_async_engine(database_url, echo=False, pool_size=1, max_overflow=0)
-        async_session_maker = async_sessionmaker(
-            bind=engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                f"/api/v1/threads/{thread_id}/issues",
+                json={"issue_range": f"{range_start}-{range_start + 4}"},
+            )
 
-        async def override_get_db() -> AsyncGenerator[AsyncSession]:
-            async with async_session_maker() as session:
-                yield session
+        assert response.status_code == 201, f"Failed for range {range_start}: {response.text}"
+        return response.json()
 
-        async def override_get_current_user() -> User:
-            return user
+    # Set overrides before all concurrent requests
+    async def override_get_db() -> AsyncGenerator[AsyncSession]:
+        async with override_session_maker() as session:
+            yield session
 
-        app.dependency_overrides[get_db] = override_get_db
-        app.dependency_overrides[get_current_user] = override_get_current_user
+    async def override_get_current_user() -> User:
+        return user
 
-        try:
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
-                response = await client.post(
-                    f"/api/v1/threads/{thread_id}/issues",
-                    json={"issue_range": f"{range_start}-{range_start + 4}"},
-                )
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
 
-            assert response.status_code == 201, f"Failed for range {range_start}: {response.text}"
-            return response.json()
-        finally:
-            app.dependency_overrides.clear()
-            await engine.dispose()
+    try:
+        # Launch 20 concurrent requests: 1-5, 6-10, 11-15, ..., 96-100
+        # Each adds 5 issues, so we expect 100 total issues
+        ranges = list(range(1, 100, 5))
+        tasks = [add_issues(start) for start in ranges]
 
-    # Launch 20 concurrent requests: 1-5, 6-10, 11-15, ..., 96-100
-    # Each adds 5 issues, so we expect 100 total issues
-    ranges = list(range(1, 100, 5))
-    tasks = [add_issues(start) for start in ranges]
-
-    # Run all requests concurrently
-    results = await asyncio.gather(*tasks)
+        # Run all requests concurrently
+        results = await asyncio.gather(*tasks)
+    finally:
+        # Clear overrides ONCE after all requests complete
+        app.dependency_overrides.clear()
+        await override_engine.dispose()
 
     # Count total issues created across all responses
     total_created = sum(len(r["issues"]) for r in results)
@@ -168,52 +170,65 @@ async def test_concurrent_issue_adds_same_thread_different_overlaps(async_db: As
     await async_db.refresh(thread)
     thread_id = thread.id
 
-    async def add_issues(range_str: str) -> dict | None:
+    database_url = get_test_database_url()
+    override_engine = create_async_engine(database_url, echo=False, pool_size=10, max_overflow=0)
+    override_session_maker = async_sessionmaker(
+        bind=override_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    async def add_issues(range_str: str) -> dict:
         """Add issues concurrently."""
-        database_url = get_test_database_url()
-        engine = create_async_engine(database_url, echo=False, pool_size=1, max_overflow=0)
-        async_session_maker = async_sessionmaker(
-            bind=engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-        )
-
-        async def override_get_db() -> AsyncGenerator[AsyncSession]:
-            async with async_session_maker() as session:
-                yield session
-
-        async def override_get_current_user() -> User:
-            return user
-
-        app.dependency_overrides[get_db] = override_get_db
-        app.dependency_overrides[get_current_user] = override_get_current_user
-
-        try:
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
-                response = await client.post(
-                    f"/api/v1/threads/{thread_id}/issues",
-                    json={"issue_range": range_str},
-                )
-
-            # Some may return 400 if all issues already exist (deduplication)
-            # Any other status code is an error
-            assert response.status_code in (201, 400), (
-                f"Unexpected status {response.status_code}: {response.text}"
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                f"/api/v1/threads/{thread_id}/issues",
+                json={"issue_range": range_str},
             )
-            if response.status_code == 201:
-                return response.json()
-            return None
-        finally:
-            app.dependency_overrides.clear()
-            await engine.dispose()
 
-    # Launch 10 concurrent requests with different ranges
-    # Total unique issue numbers: 1-50
-    ranges = ["1-10", "11-20", "21-30", "31-40", "41-50", "1-5", "6-15", "16-25", "26-35", "36-45"]
-    tasks = [add_issues(r) for r in ranges]
+        assert response.status_code in (201, 400), (
+            f"Unexpected status {response.status_code}: {response.text}"
+        )
+        if response.status_code == 400:
+            detail = response.json().get("detail", "")
+            assert "already exist" in detail.lower(), f"Unexpected 400 error: {detail}"
+            return {"issues": []}
+        return response.json()
 
-    results = await asyncio.gather(*tasks)
+    # Set overrides before all concurrent requests
+    async def override_get_db() -> AsyncGenerator[AsyncSession]:
+        async with override_session_maker() as session:
+            yield session
+
+    async def override_get_current_user() -> User:
+        return user
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
+    try:
+        # Launch 10 concurrent requests with different ranges
+        # Total unique issue numbers: 1-50
+        ranges = [
+            "1-10",
+            "11-20",
+            "21-30",
+            "31-40",
+            "41-50",
+            "1-5",
+            "6-15",
+            "16-25",
+            "26-35",
+            "36-45",
+        ]
+        tasks = [add_issues(r) for r in ranges]
+
+        results = await asyncio.gather(*tasks)
+    finally:
+        # Clear overrides ONCE after all requests complete
+        app.dependency_overrides.clear()
+        await override_engine.dispose()
 
     # Count unique issues created
     created_issues = set()

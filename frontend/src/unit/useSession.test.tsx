@@ -19,26 +19,28 @@ vi.mock('../services/api', () => ({
   },
 }))
 
+const mockedSessionApi = vi.mocked(sessionApi)
+
 beforeEach(() => {
-  sessionApi.getCurrent.mockResolvedValue({ id: 1 })
-  sessionApi.list.mockResolvedValue([{ id: 2 }])
-  sessionApi.getDetails.mockResolvedValue({ session_id: 3 })
-  sessionApi.getSnapshots.mockResolvedValue({ snapshots: [] })
-  sessionApi.restoreSessionStart.mockResolvedValue({})
+  mockedSessionApi.getCurrent.mockResolvedValue({ id: 1 } as never)
+  mockedSessionApi.list.mockResolvedValue([{ id: 2 }] as never)
+  mockedSessionApi.getDetails.mockResolvedValue({ session_id: 3 } as never)
+  mockedSessionApi.getSnapshots.mockResolvedValue({ snapshots: [] } as never)
+  mockedSessionApi.restoreSessionStart.mockResolvedValue({} as never)
 })
 
 it('loads current session', async () => {
   const { result } = renderHook(() => useSession())
 
   await waitFor(() => expect(result.current.data).toEqual({ id: 1 }))
-  expect(sessionApi.getCurrent).toHaveBeenCalled()
+  expect(mockedSessionApi.getCurrent).toHaveBeenCalled()
 })
 
 it('loads session list', async () => {
   const { result } = renderHook(() => useSessions({ status: 'done' }))
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
-  expect(sessionApi.list).toHaveBeenCalledWith({ status: 'done' })
+  expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done' })
 })
 
 it('loads session details and snapshots', async () => {
@@ -47,8 +49,8 @@ it('loads session details and snapshots', async () => {
 
   await waitFor(() => expect(detailsResult.current.data).toEqual({ session_id: 3 }))
   await waitFor(() => expect(snapshotsResult.current.data).toEqual({ snapshots: [] }))
-  expect(sessionApi.getDetails).toHaveBeenCalledWith(3)
-  expect(sessionApi.getSnapshots).toHaveBeenCalledWith(3)
+  expect(mockedSessionApi.getDetails).toHaveBeenCalledWith(3)
+  expect(mockedSessionApi.getSnapshots).toHaveBeenCalledWith(3)
 })
 
 it('restores session start', async () => {
@@ -58,5 +60,5 @@ it('restores session start', async () => {
     await result.current.mutate(11)
   })
 
-  expect(sessionApi.restoreSessionStart).toHaveBeenCalledWith(11)
+  expect(mockedSessionApi.restoreSessionStart).toHaveBeenCalledWith(11)
 })

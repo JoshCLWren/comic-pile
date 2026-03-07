@@ -10,16 +10,18 @@ vi.mock('../services/api', () => ({
   },
 }))
 
+const mockedUndoApi = vi.mocked(undoApi)
+
 beforeEach(() => {
-  undoApi.listSnapshots.mockResolvedValue([{ id: 1 }])
-  undoApi.undo.mockResolvedValue({})
+  mockedUndoApi.listSnapshots.mockResolvedValue([{ id: 1 }] as never)
+  mockedUndoApi.undo.mockResolvedValue(undefined as never)
 })
 
 it('loads undo snapshots', async () => {
   const { result } = renderHook(() => useSnapshots(5))
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
-  expect(undoApi.listSnapshots).toHaveBeenCalledWith(5)
+  expect(mockedUndoApi.listSnapshots).toHaveBeenCalledWith(5)
 })
 
 it('undoes snapshot', async () => {
@@ -29,5 +31,5 @@ it('undoes snapshot', async () => {
     await result.current.mutate({ sessionId: 5, snapshotId: 2 })
   })
 
-  expect(undoApi.undo).toHaveBeenCalledWith(5, 2)
+  expect(mockedUndoApi.undo).toHaveBeenCalledWith(5, 2)
 })

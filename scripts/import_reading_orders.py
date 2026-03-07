@@ -148,6 +148,7 @@ async def import_reading_orders() -> None:
                         issue_number=str(i),
                         status="unread",
                         read_at=None,
+                        position=i,
                     )
                     db.add(issue)
                     if i == 1:
