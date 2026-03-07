@@ -200,6 +200,9 @@ test.describe('Rate Thread Feature', () => {
     const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     expect(token).toBeTruthy();
 
+    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
     const createResponse = await authenticatedWithThreadsPage.request.post('/api/threads/', {
       headers: {
         Authorization: `Bearer ${token}`,
