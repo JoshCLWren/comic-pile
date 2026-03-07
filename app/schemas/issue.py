@@ -11,6 +11,7 @@ class IssueResponse(BaseModel):
     id: int
     thread_id: int
     issue_number: str
+    position: int
     status: str
     read_at: datetime | None
     created_at: datetime

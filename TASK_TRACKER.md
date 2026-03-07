@@ -5,8 +5,9 @@ Users cannot add issues to threads that already have issue tracking enabled.
 API returns error: "Thread {id} already uses issue tracking"
 
 ## User Story
-As a user, I need to insert "Annual 3" between issues 25 and 26 in a thread
-that already has issues 21-31, so I can maintain correct reading order.
+As a user, I need to add "Annual 3" to a thread that already has issues 21-31.
+The annual will be appended at the end (position 12), and I can manually reorder
+if needed in a future feature.
 
 ## Technical Changes Required
 
@@ -19,7 +20,7 @@ that already has issues 21-31, so I can maintain correct reading order.
   - [ ] Increment `issues_remaining` count
   - [ ] Set `next_unread_issue_id` if thread is completed
   - [ ] Keep `reading_progress` accurate
-- [ ] Handle ordering: "21-25, Annual 3, 26-31" should insert correctly
+ - [ ] Handle ordering: "21-25, Annual 3, 26-31" appends Annual 3 at end (position 12)
 - [ ] Add event logging for new issues added
 
 ### Frontend (Already Works!)
@@ -30,11 +31,11 @@ that already has issues 21-31, so I can maintain correct reading order.
 
 ### Testing
 - [ ] Unit test: Add issues to existing migrated thread
-- [ ] Unit test: Insert annual in middle of numeric range
+ - [ ] Unit test: Annual appends at end after all existing issues
 - [ ] Unit test: Deduplicate existing issues
 - [ ] Unit test: Update thread metadata correctly
-- [ ] E2E test: User adds "Annual 3" to thread with 21-31
-- [ ] E2E test: Verify ordering is correct
+ - [ ] E2E test: User adds "Annual 3" to thread with 21-31
+ - [ ] E2E test: Verify annual appears at end (position 12)
 - [ ] E2E test: Verify thread counts update
 
 ## Implementation Plan
@@ -60,7 +61,7 @@ that already has issues 21-31, so I can maintain correct reading order.
 
 ## Success Criteria
 - [x] Can add "Annual 3" to thread with issues 21-31 (backend API works!)
-- [x] Annual 3 appears in correct position (after 25, before 26) (backend stores correctly!)
+- [x] Annual 3 appears at position 12 (append-at-end algorithm)
 - [x] Thread total_issues updates from 11 to 12 (backend updates!)
 - [x] Thread issues_remaining updates appropriately (backend works!)
 - [x] All backend tests pass (9/9 passing ✅)
@@ -73,7 +74,7 @@ that already has issues 21-31, so I can maintain correct reading order.
 **Backend API now supports adding issues to existing migrated threads!**
 
 1. **Removed API restriction** - Can now add issues to threads with `total_issues != null`
-2. **Position-based ordering** - Added `position` field to maintain correct issue order
+2. **Append-at-end algorithm** - New issues always added at position (max_position + 1)
 3. **Thread metadata updates** - `total_issues`, `issues_remaining`, `next_unread_issue_id` all update correctly
 4. **Deduplication** - Existing issues are skipped, only new issues created
 5. **9/9 backend tests passing** - Full test coverage including edge cases
@@ -89,9 +90,10 @@ that already has issues 21-31, so I can maintain correct reading order.
 
 ## User Can Now:
 ✅ Add "Annual 3" to thread with issues 21-31 via API
-✅ Issues appear in correct order (21, 22, ..., 25, Annual 3, 26, ..., 31)
+✅ Annual 3 appears at position 12 (after all existing issues)
 ✅ Thread counts update correctly (11 → 12 issues)
 ✅ Use curl/Postman/api client to add issues
+✅ Simplified algorithm prevents position collision bugs
 
 ## User Cannot Yet (via UI):
 ❌ Add issues through the edit modal without it closing

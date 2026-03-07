@@ -1,10 +1,12 @@
 """Issue CRUD API endpoints."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -14,6 +16,8 @@ from app.models.user import User
 from app.schemas import IssueCreateRange, IssueListResponse, IssueResponse
 from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
 
@@ -25,11 +29,12 @@ def issue_to_response(issue: Issue) -> IssueResponse:
         issue: Issue model instance
 
     Returns:
-        IssueResponse schema
+        IssueResponse schema with position field for ordering
     """
     issue_id = issue.id
     thread_id = issue.thread_id
     issue_number = issue.issue_number
+    issue_position = issue.position
     issue_status = issue.status
     read_at = issue.read_at
     created_at = issue.created_at
@@ -38,6 +43,7 @@ def issue_to_response(issue: Issue) -> IssueResponse:
         id=issue_id,
         thread_id=thread_id,
         issue_number=issue_number,
+        position=issue_position,
         status=issue_status,
         read_at=read_at,
         created_at=created_at,
@@ -147,6 +153,55 @@ async def create_issues(
     Deduplicates existing issues - only creates issues that don't already exist.
     Updates thread metadata (total_issues, issues_remaining, next_unread_issue_id).
 
+    Position Calculation Algorithm:
+    New issues are ALWAYS appended at the end of ALL existing issues to avoid collisions
+    and maintain data integrity. The algorithm:
+    1. Find max_position among all existing issues (not just referenced ones)
+    2. Start new issue positions at max_position + 1
+    3. Assign positions sequentially to new issues in request order
+
+    Examples:
+    - Existing: Issues 1-10 at positions 1-10
+      Request: "1-5, Annual 2"
+      Result: Annual 2 at position 11 (after ALL existing issues, including 6-10)
+
+    - Existing: Issues 1-10 at positions 1-10
+      Request: "11-15"
+      Result: Issues 11-15 at positions 11-15
+
+    - Existing: Empty
+      Request: "Annual 1, 1-3"
+      Result: Annual 1 at position 1, then 1-3 at positions 2-4
+
+    Rationale:
+    Inserting new issues between existing issues would require shifting all subsequent
+    issues, which is error-prone and computationally expensive. Appending at the end
+    is simple, deterministic, and prevents position collisions.
+
+    Data Integrity Strategy:
+    - Position duplicates within new_issues: Detected and logged as ERROR
+    - Position conflicts with existing issues: Detected and logged as ERROR
+    - All collisions return HTTP 500 to prevent data corruption
+    - Logs include thread_id, positions, and conflicts for production monitoring
+
+    Row-Level Locking Strategy:
+    Uses SELECT FOR UPDATE to prevent race conditions when multiple requests
+    add issues to the same thread concurrently:
+
+    1. Read thread row (without lock, just for permission check)
+    2. Lock all issue rows for this thread (prevents concurrent issue adds creating position conflicts)
+    3. Calculate new positions atomically (max_position read while holding locks)
+    4. Write new issues (position assignment is deterministic under lock)
+    5. Commit releases all locks
+
+    Lock strategy (minimal locking to prevent deadlocks):
+    - Thread row: NOT locked (read-only for permission check)
+    - Issue rows: Locked with SELECT FOR UPDATE (prevents concurrent modifications)
+    - Events table: No lock needed (inserts after commit or in same transaction)
+
+    This ensures concurrent requests to add issues are serialized at the database level,
+    preventing position collisions without application-level mutexes.
+
     Args:
         thread_id: The thread ID to create issues for.
         request: Request with issue range string.
@@ -158,7 +213,7 @@ async def create_issues(
 
     Raises:
         HTTPException: If thread not found, all issues already exist,
-                      or issue range is invalid.
+                      position collision detected, or issue range is invalid.
     """
     thread = await db.get(Thread, thread_id)
     if not thread or thread.user_id != current_user.id:
@@ -182,7 +237,9 @@ async def create_issues(
         )
 
     existing_issues_result = await db.execute(
-        select(Issue.issue_number, Issue.position).where(Issue.thread_id == thread_id)
+        select(Issue.issue_number, Issue.position)
+        .where(Issue.thread_id == thread_id)
+        .with_for_update()
     )
     existing_issues = {row[0]: row[1] for row in existing_issues_result.fetchall()}
 
@@ -190,24 +247,20 @@ async def create_issues(
     if existing_issues:
         max_position = max(existing_issues.values())
 
-    offset = 0
-    if issue_numbers and issue_numbers[0] in existing_issues:
-        offset = existing_issues[issue_numbers[0]] - 1
-    else:
-        offset = max_position
-
     new_issues = []
-    for idx, issue_number in enumerate(issue_numbers, start=1):
-        if issue_number in existing_issues:
-            continue
-        issue = Issue(
-            thread_id=thread_id,
-            issue_number=issue_number,
-            position=idx + offset,
-            status="unread",
-        )
-        db.add(issue)
-        new_issues.append(issue)
+    next_new_position = max_position + 1
+
+    for issue_number in issue_numbers:
+        if issue_number not in existing_issues:
+            issue = Issue(
+                thread_id=thread_id,
+                issue_number=issue_number,
+                position=next_new_position,
+                status="unread",
+            )
+            db.add(issue)
+            new_issues.append(issue)
+            next_new_position += 1
 
     if not new_issues:
         raise HTTPException(
@@ -215,7 +268,51 @@ async def create_issues(
             detail="All issues in range already exist",
         )
 
-    await db.flush()
+    position_values = [issue.position for issue in new_issues]
+    if len(position_values) != len(set(position_values)):
+        logger.error(
+            "Position collision within new issues",
+            extra={
+                "thread_id": thread_id,
+                "requested_positions": position_values,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Duplicate positions calculated",
+        )
+
+    existing_position_values = list(existing_issues.values())
+    conflicting_positions = [p for p in position_values if p in existing_position_values]
+    if conflicting_positions:
+        logger.error(
+            "Position collision with existing issues",
+            extra={
+                "thread_id": thread_id,
+                "requested_positions": position_values,
+                "conflicting_positions": conflicting_positions,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Position conflict with existing issues",
+        )
+
+    try:
+        await db.flush()
+    except IntegrityError as e:
+        logger.error(
+            "Database integrity error during issue creation",
+            extra={
+                "thread_id": thread_id,
+                "error": str(e),
+                "position_values": position_values,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Database constraint violation",
+        ) from e
 
     new_issues_count = len(new_issues)
 

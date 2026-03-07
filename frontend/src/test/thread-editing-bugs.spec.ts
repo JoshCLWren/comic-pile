@@ -411,8 +411,8 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     
     expect(issue25).toBeDefined();
     expect(issue26).toBeDefined();
-    expect(issue25.display_order).toBeLessThan(annualIssue.display_order);
-    expect(annualIssue.display_order).toBeLessThan(issue26.display_order);
+    expect(issue25.position).toBeLessThan(annualIssue.position);
+    expect(annualIssue.position).toBeLessThan(issue26.position);
 
     // Verify thread metadata was updated
     const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);

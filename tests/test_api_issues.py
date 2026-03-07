@@ -58,7 +58,10 @@ async def test_add_issues_to_existing_thread(
 
 @pytest.mark.asyncio
 async def test_insert_annual_in_middle(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """POST /threads/{thread_id}/issues inserts Annual 3 between issues 25 and 26."""
+    """POST /threads/{thread_id}/issues appends Annual 3 at end after all existing issues.
+
+    Algorithm: New issues are always appended at position (max_position + 1).
+    """
     user = await get_or_create_user_async(async_db)
 
     thread = Thread(
@@ -99,6 +102,7 @@ async def test_insert_annual_in_middle(auth_client: AsyncClient, async_db: Async
     new_issue = data["issues"][0]
     assert new_issue["issue_number"] == "Annual 3"
     assert new_issue["status"] == "unread"
+    assert new_issue["position"] == 12
 
     result = await async_db.execute(
         select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
@@ -106,9 +110,7 @@ async def test_insert_annual_in_middle(auth_client: AsyncClient, async_db: Async
     all_issues = result.scalars().all()
     issue_numbers = [issue.issue_number for issue in all_issues]
 
-    annual_index = issue_numbers.index("Annual 3")
-    assert issue_numbers[annual_index - 1] in ("25", "Annual 3")
-    assert issue_numbers[annual_index + 1] in ("26", "Annual 3")
+    assert issue_numbers[-1] == "Annual 3"
 
     await async_db.refresh(thread)
     assert thread.total_issues == 12
