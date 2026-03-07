@@ -1,8 +1,8 @@
 """Snapshot-related Pydantic schemas for request/response validation."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 
 
 class SnapshotResponse(BaseModel):
@@ -12,6 +12,22 @@ class SnapshotResponse(BaseModel):
     session_id: int
     created_at: datetime
     description: str | None
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime) -> str:
+        """Serialize snapshot created_at to ISO 8601 format with timezone.
+
+        Ensures naive datetimes are treated as UTC for consistent serialization.
+
+        Args:
+            value: The datetime value to serialize.
+
+        Returns:
+            ISO 8601 formatted string with timezone.
+        """
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.isoformat()
 
 
 class SnapshotsListResponse(BaseModel):
