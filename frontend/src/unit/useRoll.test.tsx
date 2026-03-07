@@ -21,7 +21,12 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-const setupMutation = async (hook, args) => {
+const mockedRollApi = vi.mocked(rollApi)
+
+const setupMutation = async (
+  hook: () => { mutate: (args?: unknown) => Promise<unknown> },
+  args?: unknown,
+) => {
   const { result } = renderHook(() => hook())
 
   await act(async () => {
@@ -30,40 +35,40 @@ const setupMutation = async (hook, args) => {
 }
 
 beforeEach(() => {
-  rollApi.roll.mockResolvedValue({})
-  rollApi.override.mockResolvedValue({})
-  rollApi.dismissPending.mockResolvedValue({})
-  rollApi.setDie.mockResolvedValue({})
-  rollApi.clearManualDie.mockResolvedValue({})
-  rollApi.reroll.mockResolvedValue({})
+  mockedRollApi.roll.mockResolvedValue({} as never)
+  mockedRollApi.override.mockResolvedValue({} as never)
+  mockedRollApi.dismissPending.mockResolvedValue(undefined as never)
+  mockedRollApi.setDie.mockResolvedValue(undefined as never)
+  mockedRollApi.clearManualDie.mockResolvedValue(undefined as never)
+  mockedRollApi.reroll.mockResolvedValue({} as never)
 })
 
 it('calls roll mutation', async () => {
   await setupMutation(useRoll, undefined)
-  expect(rollApi.roll).toHaveBeenCalled()
+  expect(mockedRollApi.roll).toHaveBeenCalled()
 })
 
 it('calls override mutation', async () => {
   await setupMutation(useOverrideRoll, { thread_id: 9 })
-  expect(rollApi.override).toHaveBeenCalledWith({ thread_id: 9 })
+  expect(mockedRollApi.override).toHaveBeenCalledWith({ thread_id: 9 })
 })
 
 it('calls dismiss pending mutation', async () => {
   await setupMutation(useDismissPending, undefined)
-  expect(rollApi.dismissPending).toHaveBeenCalled()
+  expect(mockedRollApi.dismissPending).toHaveBeenCalled()
 })
 
 it('calls set die mutation', async () => {
   await setupMutation(useSetDie, 12)
-  expect(rollApi.setDie).toHaveBeenCalledWith(12)
+  expect(mockedRollApi.setDie).toHaveBeenCalledWith(12)
 })
 
 it('calls clear manual die mutation', async () => {
   await setupMutation(useClearManualDie, undefined)
-  expect(rollApi.clearManualDie).toHaveBeenCalled()
+  expect(mockedRollApi.clearManualDie).toHaveBeenCalled()
 })
 
 it('calls reroll mutation', async () => {
   await setupMutation(useReroll, undefined)
-  expect(rollApi.reroll).toHaveBeenCalled()
+  expect(mockedRollApi.reroll).toHaveBeenCalled()
 })

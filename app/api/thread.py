@@ -500,34 +500,46 @@ async def reactivate_thread(
 
     if thread.uses_issue_tracking():
         from app.models import Issue
-        from sqlalchemy import func, select
+        from sqlalchemy import select
 
-        existing_count_result = await db.execute(
-            select(func.count(Issue.id)).where(Issue.thread_id == thread.id)
+        locked_issues = (
+            await db.execute(
+                select(Issue.issue_number, Issue.position)
+                .where(Issue.thread_id == thread.id)
+                .with_for_update()
+            )
         )
-        existing_total = existing_count_result.scalar() or 0
+        existing_issue_rows = locked_issues.all()
+        existing_total = len(existing_issue_rows)
+        max_position = max((row.position for row in existing_issue_rows), default=0)
+        max_numeric_issue_number = max(
+            (int(row.issue_number) for row in existing_issue_rows if row.issue_number.isdigit()),
+            default=0,
+        )
 
-        for i in range(existing_total + 1, existing_total + request.issues_to_add + 1):
+        new_issues: list[Issue] = []
+        for i in range(
+            max_numeric_issue_number + 1,
+            max_numeric_issue_number + request.issues_to_add + 1,
+        ):
+            max_position += 1
             new_issue = Issue(
                 thread_id=thread.id,
                 issue_number=str(i),
                 status="unread",
+                position=max_position,
             )
             db.add(new_issue)
+            new_issues.append(new_issue)
+
+        await db.flush()
 
         thread.total_issues = existing_total + request.issues_to_add
         thread.reading_progress = "in_progress"
         thread.issues_remaining = request.issues_to_add
 
-        result = await db.execute(
-            select(Issue).where(
-                Issue.thread_id == thread.id,
-                Issue.issue_number == str(existing_total + 1),
-            )
-        )
-        next_issue = result.scalar_one_or_none()
-        if next_issue:
-            thread.next_unread_issue_id = next_issue.id
+        if new_issues:
+            thread.next_unread_issue_id = new_issues[0].id
     else:
         thread.issues_remaining = request.issues_to_add
 

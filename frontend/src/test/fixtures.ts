@@ -1,4 +1,4 @@
-import { test as base, type Page, type Request, type GotoOptions } from '@playwright/test';
+import { test as base, type APIRequestContext, type Page } from '@playwright/test';
 
 type TestFixtures = {
   page: Page;
@@ -21,7 +21,11 @@ type TestUser = {
 
 let fixtureUserCounter = 0;
 
-async function registerWithRetry(request: Request, testUser: TestUser, maxRetries = 3): Promise<{ accessToken: string }> {
+async function registerWithRetry(
+  request: APIRequestContext,
+  testUser: TestUser,
+  maxRetries = 3,
+): Promise<{ accessToken: string }> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const registerResponse = await request.post('/api/auth/register', {
@@ -83,7 +87,11 @@ async function registerWithRetry(request: Request, testUser: TestUser, maxRetrie
   throw new Error('Registration retry failed');
 }
 
-async function createThreadsForUser(request: Request, accessToken: string, threadCount: number): Promise<void> {
+async function createThreadsForUser(
+  request: APIRequestContext,
+  accessToken: string,
+  threadCount: number,
+): Promise<void> {
   for (let i = 0; i < threadCount; i++) {
     let success = false;
     let attempts = 0;

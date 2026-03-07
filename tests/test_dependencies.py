@@ -190,10 +190,30 @@ async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
     async_db.add_all([source_thread, target_thread])
     await async_db.flush()
 
-    source_issue_1 = Issue(thread_id=source_thread.id, issue_number="1", status="unread")
-    source_issue_2 = Issue(thread_id=source_thread.id, issue_number="2", status="unread")
-    target_issue_1 = Issue(thread_id=target_thread.id, issue_number="1", status="unread")
-    target_issue_2 = Issue(thread_id=target_thread.id, issue_number="2", status="unread")
+    source_issue_1 = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    source_issue_2 = Issue(
+        thread_id=source_thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
+    target_issue_1 = Issue(
+        thread_id=target_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue_2 = Issue(
+        thread_id=target_thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
     async_db.add_all([source_issue_1, source_issue_2, target_issue_1, target_issue_2])
     await async_db.flush()
 

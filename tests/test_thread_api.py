@@ -11,6 +11,65 @@ from tests.conftest import get_or_create_user_async
 
 
 @pytest.mark.asyncio
+async def test_reactivate_thread_uses_max_numeric_issue_number(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Reactivation appends regular issue numbers after the highest numeric issue."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Completed Thread",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=4,
+        status="completed",
+        user_id=user.id,
+        total_issues=11,
+        reading_progress="completed",
+        next_unread_issue_id=None,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    for position, issue_number in enumerate(
+        [*(str(i) for i in range(1, 11)), "Annual 1"],
+        start=1,
+    ):
+        async_db.add(
+            Issue(
+                thread_id=thread.id,
+                issue_number=issue_number,
+                position=position,
+                status="read",
+                read_at=datetime.now(UTC),
+            )
+        )
+    await async_db.commit()
+
+    response = await auth_client.post(
+        "/api/threads/reactivate",
+        json={"thread_id": thread.id, "issues_to_add": 2},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_issues"] == 13
+    assert data["issues_remaining"] == 2
+    assert data["next_unread_issue_number"] == "11"
+
+    result = await async_db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread.id)
+        .order_by(Issue.position, Issue.id)
+    )
+    issues = result.scalars().all()
+
+    assert [issue.issue_number for issue in issues[-2:]] == ["11", "12"]
+    assert [issue.position for issue in issues[-2:]] == [12, 13]
+
+
+@pytest.mark.asyncio
 async def test_migrate_thread_to_issues_success(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:

@@ -1,5 +1,11 @@
 import { type Page, expect } from '@playwright/test';
-import type { Violation } from '@axe-core/playwright';
+
+type Violation = {
+  id: string;
+  description: string;
+  impact?: string | null;
+  nodes: Array<{ target: unknown[] }>;
+};
 
 type WindowWithAccessToken = Window & { __COMIC_PILE_ACCESS_TOKEN?: string };
 
@@ -77,8 +83,8 @@ export async function getAuthToken(page: Page): Promise<string | null> {
 
 export async function createThread(
   page: Page,
-  threadData: { title: string; format: string; issues_remaining: number; total_issues?: number }
-): Promise<{ id: number } | void> {
+  threadData: { title: string; format: string; issues_remaining: number; total_issues?: number; issue_range?: string }
+): Promise<{ id: number }> {
   const token = await getAuthToken(page);
 
   const dataWithoutTotal = {
@@ -106,9 +112,9 @@ export async function createThread(
       const thread = await response.json();
       threadId = thread.id;
 
-      // If total_issues is specified, create the issues
-      if (threadData.total_issues && threadId) {
-        const issueRange = `1-${threadData.total_issues}`;
+      // If total_issues or issue_range is specified, create the issues
+      if ((threadData.total_issues || threadData.issue_range) && threadId) {
+        const issueRange = threadData.issue_range || `1-${threadData.total_issues}`;
         
         let issueSuccess = false;
         let issueAttempts = 0;
@@ -166,7 +172,11 @@ export async function createThread(
     throw new Error(`Failed to create thread after ${maxAttempts} attempts`);
   }
 
-  return threadId ? { id: threadId } : undefined;
+  if (!threadId) {
+    throw new Error('Thread creation succeeded without returning an id');
+  }
+
+  return { id: threadId };
 }
 
 export async function setupAuthenticatedPage(
@@ -208,7 +218,7 @@ export async function setRangeInput(page: Page, selector: string, value: string)
 export function formatA11yViolations(violations: Violation[]): string {
   if (violations.length === 0) return '';
   return violations
-    .map((v) => `  - ${v.id}: ${v.description} (impact: ${v.impact})\n    Targets: ${v.nodes.map((n) => n.target.join(', ')).join('; ')}`)
+    .map((v) => `  - ${v.id}: ${v.description} (impact: ${v.impact})\n    Targets: ${v.nodes.map((n) => n.target.map(String).join(', ')).join('; ')}`)
     .join('\n');
 }
 

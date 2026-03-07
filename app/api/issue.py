@@ -1,10 +1,12 @@
 """Issue CRUD API endpoints."""
 
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -14,6 +16,8 @@ from app.models.user import User
 from app.schemas import IssueCreateRange, IssueListResponse, IssueResponse
 from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
 
@@ -25,11 +29,12 @@ def issue_to_response(issue: Issue) -> IssueResponse:
         issue: Issue model instance
 
     Returns:
-        IssueResponse schema
+        IssueResponse schema with position field for ordering
     """
     issue_id = issue.id
     thread_id = issue.thread_id
     issue_number = issue.issue_number
+    issue_position = issue.position
     issue_status = issue.status
     read_at = issue.read_at
     created_at = issue.created_at
@@ -38,6 +43,7 @@ def issue_to_response(issue: Issue) -> IssueResponse:
         id=issue_id,
         thread_id=thread_id,
         issue_number=issue_number,
+        position=issue_position,
         status=issue_status,
         read_at=read_at,
         created_at=created_at,
@@ -81,20 +87,19 @@ async def list_issues(
     if status_filter:
         query = query.where(Issue.status == status_filter)
 
-    query = query.order_by(cast(Issue.issue_number, Integer))
+    query = query.order_by(Issue.position)
 
     if page_token:
         try:
             parts = page_token.split(",")
             if len(parts) != 2:
                 raise ValueError("Invalid format")
-            cursor_number = parts[0]
+            cursor_position = int(parts[0])
             cursor_id = int(parts[1])
             query = query.where(
                 or_(
-                    cast(Issue.issue_number, Integer) > int(cursor_number),
-                    (cast(Issue.issue_number, Integer) == int(cursor_number))
-                    & (Issue.id > cursor_id),
+                    Issue.position > cursor_position,
+                    (Issue.position == cursor_position) & (Issue.id > cursor_id),
                 )
             )
         except ValueError:
@@ -121,7 +126,7 @@ async def list_issues(
     next_token = None
     if has_more and issues_to_return:
         last = issues_to_return[-1]
-        next_token = f"{last.issue_number},{last.id}"
+        next_token = f"{last.position},{last.id}"
 
     return IssueListResponse(
         issues=issue_responses,
@@ -144,6 +149,59 @@ async def create_issues(
 ) -> IssueListResponse:
     """Create issues from range format (e.g., "1-25" or "1, 3, 5-7").
 
+    Supports both initial thread migration and adding issues to existing migrated threads.
+    Deduplicates existing issues - only creates issues that don't already exist.
+    Updates thread metadata (total_issues, issues_remaining, next_unread_issue_id).
+
+    Position Calculation Algorithm:
+    New issues are ALWAYS appended at the end of ALL existing issues to avoid collisions
+    and maintain data integrity. The algorithm:
+    1. Find max_position among all existing issues (not just referenced ones)
+    2. Start new issue positions at max_position + 1
+    3. Assign positions sequentially to new issues in request order
+
+    Examples:
+    - Existing: Issues 1-10 at positions 1-10
+      Request: "1-5, Annual 2"
+      Result: Annual 2 at position 11 (after ALL existing issues, including 6-10)
+
+    - Existing: Issues 1-10 at positions 1-10
+      Request: "11-15"
+      Result: Issues 11-15 at positions 11-15
+
+    - Existing: Empty
+      Request: "Annual 1, 1-3"
+      Result: Annual 1 at position 1, then 1-3 at positions 2-4
+
+    Rationale:
+    Inserting new issues between existing issues would require shifting all subsequent
+    issues, which is error-prone and computationally expensive. Appending at the end
+    is simple, deterministic, and prevents position collisions.
+
+    Data Integrity Strategy:
+    - Position duplicates within new_issues: Detected and logged as ERROR
+    - Position conflicts with existing issues: Detected and logged as ERROR
+    - All collisions return HTTP 500 to prevent data corruption
+    - Logs include thread_id, positions, and conflicts for production monitoring
+
+    Row-Level Locking Strategy:
+    Uses SELECT FOR UPDATE to prevent race conditions when multiple requests
+    add issues to the same thread concurrently:
+
+    1. Read thread row (without lock, just for permission check)
+    2. Lock all issue rows for this thread (prevents concurrent issue adds creating position conflicts)
+    3. Calculate new positions atomically (max_position read while holding locks)
+    4. Write new issues (position assignment is deterministic under lock)
+    5. Commit releases all locks
+
+    Lock strategy (minimal locking to prevent deadlocks):
+    - Thread row: NOT locked (read-only for permission check)
+    - Issue rows: Locked with SELECT FOR UPDATE (prevents concurrent modifications)
+    - Events table: No lock needed (inserts after commit or in same transaction)
+
+    This ensures concurrent requests to add issues are serialized at the database level,
+    preventing position collisions without application-level mutexes.
+
     Args:
         thread_id: The thread ID to create issues for.
         request: Request with issue range string.
@@ -151,23 +209,18 @@ async def create_issues(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        IssueListResponse with created issues.
+        IssueListResponse with newly created issues only (not all issues).
 
     Raises:
-        HTTPException: If thread not found, thread already uses issue tracking,
-                      or issue range is invalid.
+        HTTPException: If thread not found, all issues already exist,
+                      position collision detected, or issue range is invalid.
     """
-    thread = await db.get(Thread, thread_id)
+    thread_result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
+    thread = thread_result.scalar_one_or_none()
     if not thread or thread.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
-        )
-
-    if thread.total_issues is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} already uses issue tracking",
         )
 
     try:
@@ -185,21 +238,30 @@ async def create_issues(
         )
 
     existing_issues_result = await db.execute(
-        select(Issue.issue_number).where(Issue.thread_id == thread_id)
+        select(Issue.issue_number, Issue.position)
+        .where(Issue.thread_id == thread_id)
+        .with_for_update()
     )
-    existing_numbers = {row[0] for row in existing_issues_result.fetchall()}
+    existing_issues = {row[0]: row[1] for row in existing_issues_result.fetchall()}
+
+    max_position = 0
+    if existing_issues:
+        max_position = max(existing_issues.values())
 
     new_issues = []
+    next_new_position = max_position + 1
+
     for issue_number in issue_numbers:
-        if issue_number in existing_numbers:
-            continue
-        issue = Issue(
-            thread_id=thread_id,
-            issue_number=issue_number,
-            status="unread",
-        )
-        db.add(issue)
-        new_issues.append(issue)
+        if issue_number not in existing_issues:
+            issue = Issue(
+                thread_id=thread_id,
+                issue_number=issue_number,
+                position=next_new_position,
+                status="unread",
+            )
+            db.add(issue)
+            new_issues.append(issue)
+            next_new_position += 1
 
     if not new_issues:
         raise HTTPException(
@@ -207,15 +269,87 @@ async def create_issues(
             detail="All issues in range already exist",
         )
 
-    await db.flush()
+    position_values = [issue.position for issue in new_issues]
+    if len(position_values) != len(set(position_values)):
+        logger.error(
+            "Position collision within new issues",
+            extra={
+                "thread_id": thread_id,
+                "requested_positions": position_values,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Duplicate positions calculated",
+        )
 
-    total_issues = len(issue_numbers)
-    thread.total_issues = total_issues
-    thread.issues_remaining = total_issues
-    thread.reading_progress = "not_started"
+    existing_position_values = list(existing_issues.values())
+    conflicting_positions = [p for p in position_values if p in existing_position_values]
+    if conflicting_positions:
+        logger.error(
+            "Position collision with existing issues",
+            extra={
+                "thread_id": thread_id,
+                "requested_positions": position_values,
+                "conflicting_positions": conflicting_positions,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Position conflict with existing issues",
+        )
 
-    if new_issues:
-        thread.next_unread_issue_id = new_issues[0].id
+    try:
+        await db.flush()
+    except IntegrityError as e:
+        logger.error(
+            "Database integrity error during issue creation",
+            extra={
+                "thread_id": thread_id,
+                "error": str(e),
+                "position_values": position_values,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Database constraint violation",
+        ) from e
+
+    new_issues_count = len(new_issues)
+
+    # Get existing issue count before new issues were added
+    existing_count_result = await db.execute(
+        select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
+    )
+    existing_issue_count = existing_count_result.scalar() or 0
+
+    # Handle both initial migration and adding to existing migrated threads
+    if thread.total_issues is None:
+        # Initial thread migration - set up issue tracking from scratch
+        thread.total_issues = existing_issue_count
+        thread.issues_remaining = existing_issue_count
+        thread.reading_progress = "not_started"
+        if new_issues:
+            thread.next_unread_issue_id = new_issues[0].id
+            thread.status = "active"
+    else:
+        # Adding issues to existing migrated thread - update counts incrementally
+        thread.total_issues += new_issues_count
+        thread.issues_remaining += new_issues_count
+        thread.reading_progress = "in_progress"
+        # If thread was completed (no next_unread), reactivate with first new issue
+        if thread.next_unread_issue_id is None and new_issues:
+            if thread.status == "completed":
+                await db.execute(
+                    update(Thread)
+                    .where(Thread.user_id == current_user.id)
+                    .where(Thread.status == "active")
+                    .values(queue_position=Thread.queue_position + 1)
+                )
+                thread.queue_position = 1
+            thread.next_unread_issue_id = new_issues[0].id
+            thread.status = "active"
+        # Otherwise keep existing next_unread - no change needed
 
     thread_id_val = thread.id
 
@@ -226,13 +360,14 @@ async def create_issues(
     )
     db.add(event)
 
+    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
     issue_responses = [issue_to_response(issue) for issue in new_issues]
 
     return IssueListResponse(
         issues=issue_responses,
-        total_count=total_issues,
+        total_count=existing_issue_count,
         page_size=len(issue_responses),
         next_page_token=None,
     )
@@ -323,7 +458,7 @@ async def mark_issue_read(
             Issue.thread_id == thread_id,
             Issue.status == "unread",
         )
-        .order_by(cast(Issue.issue_number, Integer))
+        .order_by(Issue.position)
         .limit(1)
     )
     next_unread = next_unread_result.scalar_one_or_none()
@@ -397,7 +532,7 @@ async def mark_issue_unread(
     await db.flush()
 
     if thread.next_unread_issue_id is None or await should_update_next_unread(
-        issue.issue_number, thread.next_unread_issue_id, db
+        issue.id, thread.next_unread_issue_id, db
     ):
         thread.next_unread_issue_id = issue.id
 
@@ -420,32 +555,27 @@ async def mark_issue_unread(
 
 
 async def should_update_next_unread(
-    issue_number: str, next_unread_issue_id: int, db: AsyncSession
+    issue_id: int, next_unread_issue_id: int, db: AsyncSession
 ) -> bool:
     """Check if next_unread_issue_id should be updated to the given issue.
 
-    Returns True if the issue with issue_number should become the next unread
-    (i.e., its issue_number is earlier than the current next unread).
+    Returns True if the issue should become the next unread
+    (i.e., its position is earlier than the current next unread).
 
     Args:
-        issue_number: Issue number to check.
+        issue_id: Issue ID to check.
         next_unread_issue_id: Current next unread issue ID.
         db: Database session.
 
     Returns:
-        True if issue_number is earlier than current next unread issue.
-
-    Raises:
-        ValueError: If issue numbers cannot be compared numerically.
+        True if issue position is earlier than current next unread issue.
     """
     next_issue = await db.get(Issue, next_unread_issue_id)
     if not next_issue:
         return True
 
-    try:
-        return int(issue_number) < int(next_issue.issue_number)
-    except ValueError as e:
-        raise ValueError(
-            f"Cannot compare issue numbers: '{issue_number}' and '{next_issue.issue_number}'. "
-            f"Both must be numeric for proper ordering."
-        ) from e
+    issue = await db.get(Issue, issue_id)
+    if not issue:
+        return False
+
+    return issue.position < next_issue.position

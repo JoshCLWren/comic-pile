@@ -23,6 +23,7 @@ class Issue(Base):
         ForeignKey("threads.id", ondelete="CASCADE"), nullable=False
     )
     issue_number: Mapped[str] = mapped_column(String(50), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="unread", nullable=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -34,6 +35,7 @@ class Issue(Base):
         Index("ix_issue_thread_id", "thread_id"),
         Index("ix_issue_thread_is_read", "thread_id", "status"),
         Index("ix_issue_thread_number", "thread_id", "issue_number"),
+        Index("ix_issue_thread_position", "thread_id", "position"),
     )
 
     thread: Mapped["Thread"] = relationship(

@@ -217,6 +217,7 @@ class Thread(Base):
                 issue_number=str(i),
                 status=status,
                 read_at=read_at,
+                position=i,
             )
             db.add(issue)
 

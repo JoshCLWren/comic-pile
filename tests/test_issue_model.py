@@ -2,6 +2,7 @@
 
 import pytest
 from datetime import UTC, datetime
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue, Thread, User
@@ -28,6 +29,7 @@ async def test_issue_creation(async_db: AsyncSession):
     issue = Issue(
         thread_id=thread.id,
         issue_number="1",
+        position=1,
         status="unread",
     )
     async_db.add(issue)
@@ -64,6 +66,7 @@ async def test_issue_thread_relationship(async_db: AsyncSession):
     issue = Issue(
         thread_id=thread.id,
         issue_number="1",
+        position=1,
         status="read",
     )
     async_db.add(issue)
@@ -105,6 +108,7 @@ async def test_issue_with_read_timestamp(async_db: AsyncSession):
     issue = Issue(
         thread_id=thread.id,
         issue_number="1",
+        position=1,
         status="read",
         read_at=read_time,
     )
@@ -168,11 +172,38 @@ async def test_issue_default_status_unread(async_db: AsyncSession):
     issue = Issue(
         thread_id=thread.id,
         issue_number="1",
+        position=1,
     )
     async_db.add(issue)
     await async_db.flush()
 
     assert issue.status == "unread"
+
+
+@pytest.mark.asyncio
+async def test_issue_requires_explicit_position(async_db: AsyncSession) -> None:
+    """Issue inserts should fail when position is omitted."""
+    user = User(username="test_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    thread = Thread(
+        title="Test Thread",
+        format="comic",
+        issues_remaining=10,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    async_db.add(Issue(thread_id=thread.id, issue_number="1"))
+
+    with pytest.raises(IntegrityError):
+        await async_db.flush()
+
+    await async_db.rollback()
 
 
 @pytest.mark.asyncio
@@ -200,6 +231,7 @@ async def test_multiple_issues_per_thread(async_db: AsyncSession):
         issue = Issue(
             thread_id=thread.id,
             issue_number=str(i),
+            position=i,
             status="read" if i <= 3 else "unread",
         )
         async_db.add(issue)

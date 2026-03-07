@@ -5,8 +5,10 @@ import { useAnalytics } from '../hooks/useAnalytics'
 
 vi.mock('../hooks/useAnalytics', () => ({ useAnalytics: vi.fn() }))
 
+const mockedUseAnalytics = vi.mocked(useAnalytics) as any
+
 beforeEach(() => {
-  useAnalytics.mockReturnValue({
+  mockedUseAnalytics.mockReturnValue({
     data: {
       total_threads: 12,
       active_threads: 8,

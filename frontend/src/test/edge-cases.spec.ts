@@ -211,7 +211,7 @@ test.describe('Edge Cases & Error Handling', () => {
     await authenticatedPage.context().setOffline(true);
 
     const offlineMessage = authenticatedPage.locator('text=offline|no connection|network error');
-    const hasMessage = await offlineMessage.count({ timeout: 5000 }).then(c => c > 0);
+    const hasMessage = await offlineMessage.count().then(c => c > 0);
 
     if (hasMessage) {
       await expect(offlineMessage.first()).toBeVisible();

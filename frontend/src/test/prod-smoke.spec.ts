@@ -128,8 +128,6 @@ test.describe('Production Smoke', () => {
 
     const { username, password } = getExistingUserCredentials();
 
-    const { username, password } = getExistingUserCredentials();
-
     if (!username || !password) {
       throw new Error('PROD_TEST_USERNAME and PROD_TEST_PASSWORD must be set for production smoke tests');
     }

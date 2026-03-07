@@ -4,6 +4,9 @@ import Dice3D from '../components/Dice3D'
 
 vi.mock('three', () => {
   class BufferGeometry {
+    attributes: Record<string, any>
+    index: { count: number; getX: (idx: number) => number }
+
     constructor() {
       this.attributes = {
         position: {
@@ -34,13 +37,19 @@ vi.mock('three', () => {
     dispose() {}
   }
   class BufferAttribute {
-    constructor(array, itemSize) {
+    array: unknown
+    itemSize: number
+
+    constructor(array: unknown, itemSize: number) {
       this.array = array
       this.itemSize = itemSize
     }
   }
   class CanvasTexture {
-    constructor(canvas) {
+    canvas: unknown
+    needsUpdate: boolean
+
+    constructor(canvas: unknown) {
       this.canvas = canvas
       this.needsUpdate = false
     }
@@ -51,11 +60,15 @@ vi.mock('three', () => {
     remove() {}
   }
   class PerspectiveCamera {
+    position: { set: ReturnType<typeof vi.fn> }
+
     constructor() {
       this.position = { set: vi.fn() }
     }
   }
   class WebGLRenderer {
+    domElement: HTMLCanvasElement
+
     constructor() {
       this.domElement = document.createElement('canvas')
     }
@@ -67,18 +80,27 @@ vi.mock('three', () => {
   }
   class AmbientLight {}
   class DirectionalLight {
+    position: { set: ReturnType<typeof vi.fn> }
+
     constructor() {
       this.position = { set: vi.fn() }
     }
   }
   class MeshStandardMaterial {
-    constructor({ map }) {
+    map: unknown
+
+    constructor({ map }: { map: unknown }) {
       this.map = map
     }
     dispose() {}
   }
   class Mesh {
-    constructor(geometry, material) {
+    geometry: unknown
+    material: unknown
+    castShadow: boolean
+    rotation: { x: number; y: number; z: number; set: ReturnType<typeof vi.fn> }
+
+    constructor(geometry: unknown, material: unknown) {
       this.geometry = geometry
       this.material = material
       this.castShadow = false
@@ -87,6 +109,10 @@ vi.mock('three', () => {
   }
 
   class Vector3 {
+    x: number
+    y: number
+    z: number
+
     constructor(x = 0, y = 0, z = 0) {
       this.x = x
       this.y = y
@@ -146,12 +172,12 @@ beforeEach(() => {
     strokeStyle: '',
     lineWidth: 0,
     font: '',
-    textAlign: '',
-    textBaseline: '',
+    textAlign: 'left',
+    textBaseline: 'top',
     fillRect: vi.fn(),
     strokeRect: vi.fn(),
     fillText: vi.fn(),
-  })
+  } as unknown as CanvasRenderingContext2D)
   vi.stubGlobal('requestAnimationFrame', vi.fn())
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
 })

@@ -23,21 +23,23 @@ vi.mock('../services/api', () => ({
   },
 }))
 
+const mockedThreadsApi = vi.mocked(threadsApi)
+
 beforeEach(() => {
-  threadsApi.list.mockResolvedValue([{ id: 1 }])
-  threadsApi.get.mockResolvedValue({ id: 2 })
-  threadsApi.listStale.mockResolvedValue([{ id: 3 }])
-  threadsApi.create.mockResolvedValue({})
-  threadsApi.update.mockResolvedValue({})
-  threadsApi.delete.mockResolvedValue({})
-  threadsApi.reactivate.mockResolvedValue({})
+  mockedThreadsApi.list.mockResolvedValue([{ id: 1 }] as never)
+  mockedThreadsApi.get.mockResolvedValue({ id: 2 } as never)
+  mockedThreadsApi.listStale.mockResolvedValue([{ id: 3 }] as never)
+  mockedThreadsApi.create.mockResolvedValue({} as never)
+  mockedThreadsApi.update.mockResolvedValue({} as never)
+  mockedThreadsApi.delete.mockResolvedValue(undefined as never)
+  mockedThreadsApi.reactivate.mockResolvedValue({} as never)
 })
 
 it('loads threads data', async () => {
   const { result } = renderHook(() => useThreads())
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
-  expect(threadsApi.list).toHaveBeenCalled()
+  expect(mockedThreadsApi.list).toHaveBeenCalled()
 })
 
 it('loads thread details and stale list', async () => {
@@ -46,14 +48,14 @@ it('loads thread details and stale list', async () => {
 
   await waitFor(() => expect(threadResult.current.data).toEqual({ id: 2 }))
   await waitFor(() => expect(staleResult.current.data).toEqual([{ id: 3 }]))
-  expect(threadsApi.get).toHaveBeenCalledWith(2)
-  expect(threadsApi.listStale).toHaveBeenCalledWith(7)
+  expect(mockedThreadsApi.get).toHaveBeenCalledWith(2)
+  expect(mockedThreadsApi.listStale).toHaveBeenCalledWith(7)
 })
 
 it('creates, updates, deletes, and reactivates threads', async () => {
   const { result: createResult } = renderHook(() => useCreateThread())
   await act(async () => {
-    await createResult.current.mutate({ title: 'New' })
+    await createResult.current.mutate({ title: 'New', format: 'Comics', issues_remaining: 5 })
   })
 
   const { result: updateResult } = renderHook(() => useUpdateThread())
@@ -71,8 +73,12 @@ it('creates, updates, deletes, and reactivates threads', async () => {
     await reactivateResult.current.mutate({ thread_id: 7, issues_to_add: 3 })
   })
 
-  expect(threadsApi.create).toHaveBeenCalledWith({ title: 'New' })
-  expect(threadsApi.update).toHaveBeenCalledWith(7, { title: 'Updated' })
-  expect(threadsApi.delete).toHaveBeenCalledWith(7)
-  expect(threadsApi.reactivate).toHaveBeenCalledWith({ thread_id: 7, issues_to_add: 3 })
+  expect(mockedThreadsApi.create).toHaveBeenCalledWith({
+    title: 'New',
+    format: 'Comics',
+    issues_remaining: 5,
+  })
+  expect(mockedThreadsApi.update).toHaveBeenCalledWith(7, { title: 'Updated' })
+  expect(mockedThreadsApi.delete).toHaveBeenCalledWith(7)
+  expect(mockedThreadsApi.reactivate).toHaveBeenCalledWith({ thread_id: 7, issues_to_add: 3 })
 })

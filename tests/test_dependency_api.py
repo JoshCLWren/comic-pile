@@ -86,8 +86,18 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
     async_db.add_all([source_thread, target_thread])
     await async_db.flush()
 
-    source_issue = Issue(thread_id=source_thread.id, issue_number="1", status="unread")
-    target_issue = Issue(thread_id=target_thread.id, issue_number="1", status="unread")
+    source_issue = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue = Issue(
+        thread_id=target_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
     async_db.add_all([source_issue, target_issue])
     await async_db.flush()
 
@@ -156,8 +166,18 @@ async def test_issue_dependency_api_negative_cases(auth_client, async_db, test_u
     async_db.add_all([source_thread, target_thread])
     await async_db.flush()
 
-    source_issue = Issue(thread_id=source_thread.id, issue_number="1", status="unread")
-    target_issue = Issue(thread_id=target_thread.id, issue_number="1", status="unread")
+    source_issue = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue = Issue(
+        thread_id=target_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
     async_db.add_all([source_issue, target_issue])
     await async_db.flush()
     await async_db.commit()

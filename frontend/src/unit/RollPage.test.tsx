@@ -15,6 +15,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
+import type { RollResponse } from '../types'
 
 const navigateSpy = vi.fn()
 
@@ -50,13 +51,54 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToBack: vi.fn(),
 }))
 vi.mock('../hooks', async (importOriginal) => {
-  const actual = await importOriginal()
+  const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
     useRate: vi.fn(),
   }
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
+
+const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseThreads = vi.mocked(useThreads) as any
+const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
+const mockedUseSetDie = vi.mocked(useSetDie) as any
+const mockedUseClearManualDie = vi.mocked(useClearManualDie) as any
+const mockedUseRoll = vi.mocked(useRoll) as any
+const mockedUseOverrideRoll = vi.mocked(useOverrideRoll) as any
+const mockedUseDismissPending = vi.mocked(useDismissPending) as any
+const mockedUseSnooze = vi.mocked(useSnooze) as any
+const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
+const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
+const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+const mockedUseRate = vi.mocked(useRate) as any
+const mockedUseCollections = vi.mocked(useCollections) as any
+
+const baseRollResponse: RollResponse = {
+  thread_id: 1,
+  title: 'Saga',
+  format: 'Comics',
+  issues_remaining: 5,
+  queue_position: 1,
+  die_size: 6,
+  result: 3,
+  offset: 0,
+  snoozed_count: 0,
+  issue_id: null,
+  issue_number: null,
+  next_issue_id: null,
+  next_issue_number: null,
+  total_issues: 50,
+  reading_progress: null,
+}
+
+function getPoolItem(title: string): HTMLElement {
+  const element = screen.getByText(title).closest('[role="button"]')
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`Pool item for ${title} not found`)
+  }
+  return element
+}
 
 beforeEach(() => {
   const mockSessionData = {
@@ -66,29 +108,29 @@ beforeEach(() => {
     has_restore_point: false,
     snoozed_threads: [],
   }
-  useSession.mockReturnValue({
+  mockedUseSession.mockReturnValue({
     data: mockSessionData,
     refetch: vi.fn(),
   })
-  useThreads.mockReturnValue({
+  mockedUseThreads.mockReturnValue({
     data: [
       { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
       { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
     ],
     refetch: vi.fn()
   })
-  useStaleThreads.mockReturnValue({ data: [] })
-  useSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useOverrideRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useDismissPending.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  useCollections.mockReturnValue({
+  mockedUseStaleThreads.mockReturnValue({ data: [] })
+  mockedUseSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseOverrideRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseDismissPending.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseCollections.mockReturnValue({
     collections: [],
     activeCollectionId: null,
     setActiveCollectionId: vi.fn(),
@@ -121,9 +163,9 @@ describe('Action Sheet', () => {
   beforeEach(() => {
     mockSnoozeMutation.mutate.mockReset()
     mockUnsnoozeMutation.mutate.mockReset()
-    useSnooze.mockReturnValue(mockSnoozeMutation)
-    useUnsnooze.mockReturnValue(mockUnsnoozeMutation)
-    useSession.mockReturnValue({
+    mockedUseSnooze.mockReturnValue(mockSnoozeMutation)
+    mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: null,
@@ -133,7 +175,7 @@ describe('Action Sheet', () => {
       },
       refetch: mockRefetchSession,
     })
-    useThreads.mockReturnValue({
+    mockedUseThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
         { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
@@ -146,7 +188,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     await user.click(sagaPoolItem)
 
     expect(screen.getByText('Read Now')).toBeInTheDocument()
@@ -158,12 +200,12 @@ describe('Action Sheet', () => {
 
   it('calls snooze mutation when thread is not snoozed', async () => {
     const { threadsApi } = await import('../services/api')
-    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue({})
+    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     await user.click(sagaPoolItem)
 
     const snoozeButton = screen.getByText('Snooze')
@@ -177,7 +219,7 @@ describe('Action Sheet', () => {
   })
 
   it('calls unsnooze mutation when thread is snoozed', async () => {
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: null,
@@ -192,7 +234,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     await user.click(sagaPoolItem)
 
     const unsnoozeButton = screen.getByText('Unsnooze')
@@ -206,7 +248,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     await user.click(sagaPoolItem)
 
     const editButton = screen.getByText('Edit Thread')
@@ -217,12 +259,12 @@ describe('Action Sheet', () => {
 
   it('refetches threads and session after move-front action', async () => {
     const mockMoveToFront = { mutate: vi.fn(), isPending: false }
-    useMoveToFront.mockReturnValue(mockMoveToFront)
+    mockedUseMoveToFront.mockReturnValue(mockMoveToFront)
 
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     await user.click(sagaPoolItem)
 
     const moveFrontButton = screen.getByText('Move to Front')
@@ -236,12 +278,12 @@ describe('Action Sheet', () => {
 
   it('refetches threads and session after move-back action', async () => {
     const mockMoveToBack = { mutate: vi.fn(), isPending: false }
-    useMoveToBack.mockReturnValue(mockMoveToBack)
+    mockedUseMoveToBack.mockReturnValue(mockMoveToBack)
 
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     await user.click(sagaPoolItem)
 
     const moveBackButton = screen.getByText('Move to Back')
@@ -259,7 +301,7 @@ describe('Keyboard Accessibility', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     sagaPoolItem.focus()
     await user.keyboard('{Enter}')
 
@@ -270,7 +312,7 @@ describe('Keyboard Accessibility', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     sagaPoolItem.focus()
     await user.keyboard(' ')
 
@@ -280,17 +322,11 @@ describe('Keyboard Accessibility', () => {
 
 describe('Rating View', () => {
   it('shows rating view after a successful roll', async () => {
-    const mockRoll = vi.fn().mockResolvedValue({
-      result: 4,
-      thread_id: 1,
-      title: 'Saga',
-      format: 'Comics',
-      issues_remaining: 5
-    })
-    useRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
+    const mockRoll = vi.fn().mockResolvedValue({ ...baseRollResponse, result: 4 })
+    mockedUseRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
 
     // Simulate initial state
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: 4,
@@ -316,16 +352,9 @@ describe('Rating View', () => {
 
   it('shows rating view after clicking Read Now', async () => {
     const { threadsApi } = await import('../services/api')
-    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      result: 3,
-      thread_id: 1,
-      title: 'Saga',
-      format: 'Comics',
-      issues_remaining: 5,
-      total_issues: 50,
-    })
+    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: 3,
@@ -338,7 +367,7 @@ describe('Rating View', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaPoolItem = getPoolItem('Saga')
     await user.click(sagaPoolItem)
 
     const readNowButton = screen.getByText('Read Now')
@@ -354,18 +383,18 @@ describe('Rating View', () => {
 
   it('[P1] uses immediate metadata from API instead of stale session data', async () => {
     const { threadsApi } = await import('../services/api')
-    const freshMetadata = {
+    const freshMetadata: RollResponse = {
+      ...baseRollResponse,
       thread_id: 2,
       title: 'Fresh X-Men',
       format: 'HC',
       issues_remaining: 10,
       result: 5,
-      total_issues: 50,
     }
     const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue(freshMetadata)
 
     // Session still shows Saga (ID 1) as active_thread
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: 1,
@@ -378,7 +407,7 @@ describe('Rating View', () => {
     render(<RollPage />)
 
     // Click X-Men in pool
-    const xmenPoolItem = screen.getByText('X-Men').closest('[role="button"]')
+    const xmenPoolItem = getPoolItem('X-Men')
     await user.click(xmenPoolItem)
 
     const readNowButton = screen.getByText('Read Now')
@@ -396,23 +425,16 @@ describe('Rating View', () => {
 
   it('[P2] resets rating to 4.0 when starting a new flow', async () => {
     const { threadsApi } = await import('../services/api')
-    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      thread_id: 1,
-      result: 3,
-      title: 'Saga',
-      format: 'Comics',
-      issues_remaining: 5,
-      total_issues: 50,
-    })
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const mockRate = vi.fn().mockResolvedValue({})
-    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const user = userEvent.setup()
     render(<RollPage />)
 
     // 1. Enter rating view for first thread
-    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem = getPoolItem('Saga')
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
@@ -429,7 +451,7 @@ describe('Rating View', () => {
     })
 
     // 4. Enter rating view again for same or another thread
-    const sagaItem2 = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem2 = getPoolItem('Saga')
     await user.click(sagaItem2)
     const readNowButton = await screen.findByText('Read Now')
     await user.click(readNowButton)
@@ -440,12 +462,7 @@ describe('Rating View', () => {
 
   it('[P3] filters the rated thread from the pool display', async () => {
     const { threadsApi } = await import('../services/api')
-    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      thread_id: 1,
-      title: 'Saga',
-      result: 3,
-      total_issues: 50,
-    })
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const user = userEvent.setup()
     render(<RollPage />)
@@ -454,34 +471,27 @@ describe('Rating View', () => {
     expect(screen.getByText('Saga')).toBeInTheDocument()
 
     // Enter rating view for Saga
-    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem = getPoolItem('Saga')
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
     // In rating view, Saga should be HIDDEN from the pool at the bottom
     const poolHeader = screen.getByLabelText('Roll pool collection').parentElement.parentElement
     const poolList = poolHeader.nextElementSibling
-    expect(within(poolList).queryByText('Saga')).not.toBeInTheDocument()
+    expect(within(poolList as HTMLElement).queryByText('Saga')).not.toBeInTheDocument()
     // Other threads (X-Men) should still be there
-    expect(within(poolList).getByText('X-Men')).toBeInTheDocument()
+    expect(within(poolList as HTMLElement).getByText('X-Men')).toBeInTheDocument()
   })
 
   it('[P4] refetches threads after successful rating', async () => {
     const { threadsApi } = await import('../services/api')
-    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      thread_id: 1,
-      result: 3,
-      title: 'Saga',
-      format: 'Comics',
-      issues_remaining: 5,
-      total_issues: 50,
-    })
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const mockRate = vi.fn().mockResolvedValue({})
-    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const mockRefetchThreads = vi.fn()
-    useThreads.mockReturnValue({
+    mockedUseThreads.mockReturnValue({
       data: [{ id: 1, title: 'Saga', format: 'Comics', status: 'active' }],
       refetch: mockRefetchThreads
     })
@@ -490,7 +500,7 @@ describe('Rating View', () => {
     render(<RollPage />)
 
     // 1. Enter rating view
-    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem = getPoolItem('Saga')
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
@@ -505,21 +515,14 @@ describe('Rating View', () => {
 
   it('[P5] closes rating view even if post-save refresh fails', async () => {
     const { threadsApi } = await import('../services/api')
-    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      thread_id: 1,
-      result: 3,
-      title: 'Saga',
-      format: 'Comics',
-      issues_remaining: 5,
-      total_issues: 50,
-    })
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const mockRate = vi.fn().mockResolvedValue({})
-    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const refetchSessionError = new Error('session refresh failed')
     const mockRefetchSession = vi.fn().mockRejectedValue(refetchSessionError)
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: null,
@@ -531,7 +534,7 @@ describe('Rating View', () => {
     })
 
     const mockRefetchThreads = vi.fn().mockRejectedValue(new Error('threads refresh failed'))
-    useThreads.mockReturnValue({
+    mockedUseThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
         { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
@@ -542,7 +545,7 @@ describe('Rating View', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem = getPoolItem('Saga')
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
     await user.click(screen.getByText('Save & Continue'))
@@ -555,20 +558,13 @@ describe('Rating View', () => {
 
   it('[P5b] closes rating view when threads refresh fails after session refresh succeeds', async () => {
     const { threadsApi } = await import('../services/api')
-    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      thread_id: 1,
-      result: 3,
-      title: 'Saga',
-      format: 'Comics',
-      issues_remaining: 5,
-      total_issues: 50,
-    })
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const mockRate = vi.fn().mockResolvedValue({})
-    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const mockRefetchSession = vi.fn().mockResolvedValue({})
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: null,
@@ -580,7 +576,7 @@ describe('Rating View', () => {
     })
 
     const mockRefetchThreads = vi.fn().mockRejectedValue(new Error('threads refresh failed'))
-    useThreads.mockReturnValue({
+    mockedUseThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
         { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
@@ -591,7 +587,7 @@ describe('Rating View', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem = getPoolItem('Saga')
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
     await user.click(screen.getByText('Save & Continue'))
@@ -607,22 +603,19 @@ describe('Rating View', () => {
   it('[P6] does not auto-finish session when rating the last issue', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      thread_id: 1,
-      result: 3,
+      ...baseRollResponse,
       title: 'Final Issue Thread',
-      format: 'Comics',
-      issues_remaining: 1, // Only 1 issue left
-      total_issues: 50,
+      issues_remaining: 1,
     })
 
     const mockRate = vi.fn().mockResolvedValue({})
-    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const user = userEvent.setup()
     render(<RollPage />)
 
     // 1. Enter rating view
-    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem = getPoolItem('Saga')
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
@@ -641,22 +634,18 @@ describe('Rating View', () => {
   it('[P7] does not show Save & Finish Session action', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      thread_id: 1,
-      result: 3,
+      ...baseRollResponse,
       title: 'Ongoing Thread',
-      format: 'Comics',
-      issues_remaining: 5,
-      total_issues: 50,
     })
 
     const mockRate = vi.fn().mockResolvedValue({})
-    useRate.mockReturnValue({ mutate: mockRate, isPending: false })
+    mockedUseRate.mockReturnValue({ mutate: mockRate, isPending: false })
 
     const user = userEvent.setup()
     render(<RollPage />)
 
     // 1. Enter rating view
-    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem = getPoolItem('Saga')
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
@@ -667,19 +656,12 @@ describe('Rating View', () => {
 
   it('[P8] cancel clears rating view and roll-selection state', async () => {
     const { threadsApi } = await import('../services/api')
-    vi.spyOn(threadsApi, 'setPending').mockResolvedValue({
-      thread_id: 1,
-      result: 3,
-      title: 'Saga',
-      format: 'Comics',
-      issues_remaining: 5,
-      total_issues: 50,
-    })
+    vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaItem = screen.getByText('Saga').closest('[role="button"]')
+    const sagaItem = getPoolItem('Saga')
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
@@ -692,7 +674,7 @@ describe('Rating View', () => {
   })
 
   it('restores pending rating view from session state on load', async () => {
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: 6,
@@ -737,11 +719,11 @@ describe('Rating View', () => {
     const refetchThreadsSpy = vi.fn()
     let threadsData = []
 
-    useSession.mockImplementation(() => ({
+    mockedUseSession.mockImplementation(() => ({
       data: sessionData,
       refetch: refetchSessionSpy,
     }))
-    useThreads.mockImplementation(() => ({
+    mockedUseThreads.mockImplementation(() => ({
       data: threadsData,
       refetch: refetchThreadsSpy,
     }))
@@ -773,7 +755,7 @@ describe('Rating View', () => {
   })
 
   it('does not render invalid rolled zero text when pending roll result is missing', async () => {
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: null,
@@ -799,7 +781,7 @@ describe('Rating View', () => {
   })
 
   it('does not render invalid rolled zero text when pending roll result is zero', async () => {
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: 0,
@@ -846,8 +828,8 @@ describe('Rating View', () => {
       snoozed_threads: [],
     })
 
-    useRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
-    useSession.mockReturnValue({
+    mockedUseRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: null,
@@ -856,7 +838,7 @@ describe('Rating View', () => {
       },
       refetch: refetchSessionSpy,
     })
-    useThreads.mockReturnValue({
+    mockedUseThreads.mockReturnValue({
       data: [
         { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 1 },
         { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 2 },
@@ -883,7 +865,7 @@ describe('Rating View', () => {
   })
 
   it('renders current die in rating preview (not predicted)', async () => {
-    useSession.mockReturnValue({
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: 6,
@@ -907,12 +889,12 @@ describe('Rating View', () => {
     })
 
     const previewContainer = document.getElementById('rating-preview-dice')
-    const previewDie = within(previewContainer).getByTestId('lazy-dice')
+    const previewDie = within(previewContainer as HTMLElement).getByTestId('lazy-dice')
     expect(previewDie).toHaveAttribute('data-sides', '6')
 
     fireEvent.change(screen.getByLabelText(/rating/i), { target: { value: '1.0' } })
 
-    expect(within(previewContainer).getByTestId('lazy-dice')).toHaveAttribute('data-sides', '6')
+    expect(within(previewContainer as HTMLElement).getByTestId('lazy-dice')).toHaveAttribute('data-sides', '6')
   })
 
   it('cancels pending roll through dismiss mutation', async () => {
@@ -920,8 +902,8 @@ describe('Rating View', () => {
     const refetchSessionSpy = vi.fn().mockResolvedValue({})
     const refetchThreadsSpy = vi.fn().mockResolvedValue({})
 
-    useDismissPending.mockReturnValue({ mutate: dismissSpy, isPending: false })
-    useSession.mockReturnValue({
+    mockedUseDismissPending.mockReturnValue({ mutate: dismissSpy, isPending: false })
+    mockedUseSession.mockReturnValue({
       data: {
         current_die: 6,
         last_rolled_result: 2,
@@ -937,7 +919,7 @@ describe('Rating View', () => {
       },
       refetch: refetchSessionSpy,
     })
-    useThreads.mockReturnValue({
+    mockedUseThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Saga', format: 'Comics', status: 'active', queue_position: 1 },
         { id: 2, title: 'X-Men', format: 'Comics', status: 'active', queue_position: 2 },
