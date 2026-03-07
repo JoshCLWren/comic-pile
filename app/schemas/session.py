@@ -5,6 +5,22 @@ from datetime import UTC, datetime
 from pydantic import BaseModel, field_serializer
 
 
+def _to_utc_iso(value: datetime) -> str:
+    """Convert datetime to ISO 8601 format with timezone.
+
+    Ensures naive datetimes are treated as UTC for consistent serialization.
+
+    Args:
+        value: The datetime value to serialize.
+
+    Returns:
+        ISO 8601 formatted string with timezone.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.isoformat()
+
+
 class SnoozedThreadInfo(BaseModel):
     """Schema for snoozed thread information in session response."""
 
@@ -56,9 +72,7 @@ class SessionResponse(BaseModel):
         """
         if value is None:
             return None
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=UTC)
-        return value.isoformat()
+        return _to_utc_iso(value)
 
 
 class EventDetail(BaseModel):
@@ -88,9 +102,7 @@ class EventDetail(BaseModel):
         Returns:
             ISO 8601 formatted string with timezone.
         """
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=UTC)
-        return value.isoformat()
+        return _to_utc_iso(value)
 
 
 class SessionDetailsResponse(BaseModel):
@@ -119,6 +131,4 @@ class SessionDetailsResponse(BaseModel):
         """
         if value is None:
             return None
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=UTC)
-        return value.isoformat()
+        return _to_utc_iso(value)

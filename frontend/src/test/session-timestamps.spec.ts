@@ -114,30 +114,37 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
   });
 
   test('should handle sessions without events gracefully', async ({ authenticatedPage }) => {
-    // Navigate to history
-    await authenticatedPage.goto('/history');
+    // Get or create the current session (will create if none exists)
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token'));
+
+    const currentResponse = await authenticatedPage.request.get('/api/sessions/current/', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    expect(currentResponse.ok()).toBeTruthy();
+    const sessionData = await currentResponse.json();
+    const sessionId = sessionData.id;
+
+    // Navigate directly to the session URL (note: sessions is plural in the route)
+    await authenticatedPage.goto(`/sessions/${sessionId}`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    // Look for any existing session
-    const sessionLink = authenticatedPage.locator('a[href^="/session/"]').first();
-    const sessionCount = await sessionLink.count();
+    // Page should load without errors even with no events/snapshots
+    await expect(authenticatedPage.locator('h1:has-text("Session Details")')).toBeVisible();
 
-    if (sessionCount > 0) {
-      await sessionLink.first().click();
-      await authenticatedPage.waitForLoadState('networkidle');
+    // Timestamps should still be formatted correctly
+    const startedAtText = await authenticatedPage
+      .locator('p:has-text("Started") + p')
+      .textContent();
 
-      // Page should load without errors even if no events/snapshots
-      await expect(authenticatedPage.locator('h1:has-text("Session Details")')).toBeVisible();
+    expect(startedAtText).toBeTruthy();
+    if (startedAtText) {
+      expect(startedAtText).not.toBe('—');
 
-      // Timestamps should still be formatted correctly if present
-      const startedAtText = await authenticatedPage
-        .locator('p:has-text("Started") + p')
-        .textContent();
-
-      if (startedAtText && startedAtText !== '—') {
-        const timestampPattern = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d{1,2}:\d{2} (AM|PM)$/;
-        expect(startedAtText.trim()).toMatch(timestampPattern);
-      }
+      const timestampPattern = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d{1,2}:\d{2} (AM|PM)$/;
+      expect(startedAtText.trim()).toMatch(timestampPattern);
     }
   });
 });

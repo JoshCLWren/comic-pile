@@ -626,7 +626,9 @@ async def test_get_session_details(auth_client: AsyncClient, sample_data: dict) 
 
 
 @pytest.mark.asyncio
-async def test_session_timestamp_consistency(auth_client: AsyncClient, sample_data: dict) -> None:
+async def test_session_timestamp_consistency(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """Test session timestamps are consistently formatted with timezone info.
 
     Regression test for issue #245. Verifies that /details and /snapshots endpoints
@@ -635,9 +637,27 @@ async def test_session_timestamp_consistency(auth_client: AsyncClient, sample_da
 
     Args:
         auth_client: Authenticated test client.
+        async_db: SQLAlchemy session for database operations.
         sample_data: Sample test data with sessions and events.
     """
-    _ = sample_data
+    from datetime import UTC, datetime
+
+    from app.models import Snapshot
+
+    # Create a snapshot for session 1 to ensure we have snapshot data to test
+    session = sample_data["sessions"][0]
+    event = sample_data["events"][0]
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=event.id,
+        thread_states={},
+        description="Test snapshot for timestamp consistency",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+    await async_db.refresh(snapshot)
 
     details_response = await auth_client.get("/api/sessions/1/details")
     assert details_response.status_code == 200
@@ -671,6 +691,7 @@ async def test_session_timestamp_consistency(auth_client: AsyncClient, sample_da
         assert_has_timezone(event["timestamp"])
 
     # Verify all snapshot timestamps have timezone info
+    assert len(snapshots_data["snapshots"]) > 0, "Should have at least one snapshot"
     for snapshot in snapshots_data["snapshots"]:
         assert_has_timezone(snapshot["created_at"])
 

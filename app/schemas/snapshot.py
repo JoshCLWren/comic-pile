@@ -1,8 +1,10 @@
 """Snapshot-related Pydantic schemas for request/response validation."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, field_serializer
+
+from app.schemas.session import _to_utc_iso
 
 
 class SnapshotResponse(BaseModel):
@@ -25,9 +27,7 @@ class SnapshotResponse(BaseModel):
         Returns:
             ISO 8601 formatted string with timezone.
         """
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=UTC)
-        return value.isoformat()
+        return _to_utc_iso(value)
 
 
 class SnapshotsListResponse(BaseModel):
