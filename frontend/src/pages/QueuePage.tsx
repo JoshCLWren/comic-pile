@@ -175,7 +175,9 @@ function IssueToggleList({ threadId }: {
           onChange={(e) => setAddRange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              handleAddIssues()
+              e.preventDefault()
+              e.stopPropagation()
+              void handleAddIssues()
             }
           }}
           placeholder="Add issues: 19-24 or 0, Annual 1"
@@ -423,8 +425,7 @@ export default function QueuePage() {
     }
   }
 
-  const handleEditSubmit = async (event: FormEvent) => {
-    event.preventDefault()
+  const handleEditSave = async () => {
     if (!editingThread) return
 
     try {
@@ -956,84 +957,91 @@ export default function QueuePage() {
 
       {/* Edit Thread Modal */}
       <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => { setIsEditOpen(false); refetch() }} overlayClassName="edit-modal__overlay">
-        <form className="space-y-4" onSubmit={handleEditSubmit}>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
-            <input
-              value={editForm.title}
-              onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
-            <FormatSelect
-              value={editForm.format}
-              onChange={(value) => setEditForm({ ...editForm, format: value })}
-              required
-            />
-          </div>
-
-          {/* Issues remaining for unmigrated threads */}
-          {editingThread?.total_issues === null && (
+        <div className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
               <input
-                type="number"
-                min="0"
-                value={editForm.issuesRemaining}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  setEditForm({
-                    ...editForm,
-                    issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
-                  })
-                }
+                value={editForm.title}
+                onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+                required
               />
             </div>
-          )}
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
-            <textarea
-              value={editForm.notes}
-              onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
-            ></textarea>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
+              <FormatSelect
+                value={editForm.format}
+                onChange={(value) => setEditForm({ ...editForm, format: value })}
+                required
+              />
+            </div>
+
+            {/* Issues remaining for unmigrated threads */}
+            {editingThread?.total_issues === null && (
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editForm.issuesRemaining}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    setEditForm({
+                      ...editForm,
+                      issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
+                    })
+                  }
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
+              <textarea
+                value={editForm.notes}
+                onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
+              ></textarea>
+            </div>
+
+            {editingThread?.total_issues === null && (
+              <div className="space-y-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThreadToMigrate(editingThread)
+                    setShowMigrationDialog(true)
+                  }}
+                  className="edit-modal__migration-button w-full py-3 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left text-xs font-black text-amber-300 hover:bg-amber-500/20 transition-all flex items-center gap-3"
+                >
+                  <span className="text-lg">📊</span>
+                  <div className="flex-1">
+                    <div className="font-bold">Migrate to Issue Tracking</div>
+                    <div className="font-normal text-stone-400 mt-0.5">Track individual issues instead of remaining count</div>
+                  </div>
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Issue list for migrated threads */}
+          {/* Issue list for migrated threads lives outside the edit form so Enter only adds issues. */}
           {editingThread && editingThread.total_issues !== null && (
             <IssueToggleList threadId={editingThread.id} />
           )}
 
-          {editingThread?.total_issues === null && (
-            <div className="space-y-2 pt-2 border-t border-white/10">
-              <button
-                type="button"
-                onClick={() => {
-                  setThreadToMigrate(editingThread)
-                  setShowMigrationDialog(true)
-                }}
-                className="edit-modal__migration-button w-full py-3 px-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-left text-xs font-black text-amber-300 hover:bg-amber-500/20 transition-all flex items-center gap-3"
-              >
-                <span className="text-lg">📊</span>
-                <div className="flex-1">
-                  <div className="font-bold">Migrate to Issue Tracking</div>
-                  <div className="font-normal text-stone-400 mt-0.5">Track individual issues instead of remaining count</div>
-                </div>
-              </button>
-            </div>
-          )}
           <button
-            type="submit"
+            type="button"
+            onClick={() => {
+              void handleEditSave()
+            }}
             disabled={updateMutation.isPending}
             className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
           >
             {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
           </button>
-        </form>
+        </div>
       </Modal>
 
       <Modal isOpen={isReactivateOpen} title="Reactivate Thread" onClose={() => setIsReactivateOpen(false)}>

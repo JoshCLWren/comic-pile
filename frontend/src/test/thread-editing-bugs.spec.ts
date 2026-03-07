@@ -131,6 +131,51 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     expect(annualIssue).toBeDefined();
   });
 
+  test('should add issues with Enter without submitting the edit form', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Issue Enter Key Test ${timestamp}`;
+
+    await createThread(authenticatedPage, {
+      title: uniqueTitle,
+      format: 'Comics',
+      issues_remaining: 5,
+      total_issues: 5,
+    });
+
+    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+    const threads = await threadsResponse.json();
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
+    expect(thread).toBeDefined();
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await threadItem.locator('button[aria-label="Edit thread"]').click();
+
+    const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
+    await expect(editModal).toBeVisible();
+
+    const addIssuesInput = editModal.locator('[data-testid="issue-add-input"]');
+    await addIssuesInput.fill('Annual 1');
+
+    await waitForIssueMutation(authenticatedPage, () => addIssuesInput.press('Enter'));
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    await expect(editModal).toBeVisible();
+    await expect(editModal.locator('h2')).toContainText('Edit Thread');
+
+    const issuesResponse = await makeAuthenticatedRequest(
+      authenticatedPage,
+      'GET',
+      `/api/v1/threads/${thread.id}/issues`
+    );
+    expect(issuesResponse.ok()).toBeTruthy();
+    const issuesData = await issuesResponse.json();
+    expect(issuesData.issues.length).toBe(6);
+    expect(issuesData.issues.map((issue: any) => issue.issue_number)).toContain('Annual 1');
+  });
+
   test('should handle adding multiple issues including annuals in correct order', async ({ authenticatedPage }) => {
     const timestamp = Date.now();
     const uniqueTitle = `Issue Order Test ${timestamp}`;
