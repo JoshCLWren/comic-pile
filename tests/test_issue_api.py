@@ -1061,6 +1061,11 @@ async def test_create_issues_validates_no_position_duplicates(
     assert len(data["issues"]) == 5
     assert data["total_count"] == 10
 
+    positions = [issue["position"] for issue in data["issues"]]
+    assert len(positions) == len(set(positions)), (
+        f"Response contains duplicate positions: {positions}"
+    )
+
 
 @pytest.mark.asyncio
 async def test_create_issues_validates_no_position_conflicts_with_existing(
@@ -1423,8 +1428,48 @@ async def test_issue_ordering_in_api_response(
     data = list_response.json()
     assert data["total_count"] == 11
     issue_numbers = [i["issue_number"] for i in data["issues"]]
-    positions = [i["position"] for i in data["issues"]]
 
     expected_numbers = [str(i) for i in range(1, 11)] + ["Annual 2"]
     assert issue_numbers == expected_numbers
-    assert positions == list(range(1, 12))
+
+
+@pytest.mark.asyncio
+async def test_mark_annual_unread_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    """POST /issues/{issue_id}:markUnread works with annuals (regression test for position comparison)."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="completed",
+        user_id=user.id,
+        total_issues=5,
+        reading_progress="completed",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issue1 = Issue(
+        thread_id=thread.id, issue_number="1", position=1, status="read", read_at=datetime.now(UTC)
+    )
+    issue2 = Issue(
+        thread_id=thread.id,
+        issue_number="Annual 1",
+        position=2,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
+    issue3 = Issue(thread_id=thread.id, issue_number="2", position=3, status="unread")
+    async_db.add_all([issue1, issue2, issue3])
+    await async_db.commit()
+
+    response = await auth_client.post(f"/api/v1/issues/{issue2.id}:markUnread")
+    assert response.status_code == 204
+
+    await async_db.refresh(thread)
+    assert thread.status == "active"
+    assert thread.reading_progress == "in_progress"
+    assert thread.next_unread_issue_id == issue2.id

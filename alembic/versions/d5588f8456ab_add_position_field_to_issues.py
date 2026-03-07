@@ -22,7 +22,15 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Upgrade schema."""
     op.add_column("issues", sa.Column("position", sa.Integer(), nullable=True))
-    op.execute("UPDATE issues SET position = id")
+    op.execute("""
+        UPDATE issues 
+        SET position = subq.row_num
+        FROM (
+            SELECT id, row_number() OVER (PARTITION BY thread_id ORDER BY id) as row_num
+            FROM issues
+        ) subq
+        WHERE issues.id = subq.id
+    """)
     op.alter_column("issues", "position", nullable=False)
 
 

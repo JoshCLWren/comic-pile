@@ -215,7 +215,8 @@ async def create_issues(
         HTTPException: If thread not found, all issues already exist,
                       position collision detected, or issue range is invalid.
     """
-    thread = await db.get(Thread, thread_id)
+    thread_result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
+    thread = thread_result.scalar_one_or_none()
     if not thread or thread.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -338,6 +339,7 @@ async def create_issues(
         # If thread was completed (no next_unread), reactivate with first new issue
         if thread.next_unread_issue_id is None and new_issues:
             thread.next_unread_issue_id = new_issues[0].id
+            thread.status = "active"
         # Otherwise keep existing next_unread - no change needed
 
     thread_id_val = thread.id
@@ -520,7 +522,7 @@ async def mark_issue_unread(
     await db.flush()
 
     if thread.next_unread_issue_id is None or await should_update_next_unread(
-        issue.issue_number, thread.next_unread_issue_id, db
+        issue.id, thread.next_unread_issue_id, db
     ):
         thread.next_unread_issue_id = issue.id
 
@@ -543,32 +545,27 @@ async def mark_issue_unread(
 
 
 async def should_update_next_unread(
-    issue_number: str, next_unread_issue_id: int, db: AsyncSession
+    issue_id: int, next_unread_issue_id: int, db: AsyncSession
 ) -> bool:
     """Check if next_unread_issue_id should be updated to the given issue.
 
-    Returns True if the issue with issue_number should become the next unread
-    (i.e., its issue_number is earlier than the current next unread).
+    Returns True if the issue should become the next unread
+    (i.e., its position is earlier than the current next unread).
 
     Args:
-        issue_number: Issue number to check.
+        issue_id: Issue ID to check.
         next_unread_issue_id: Current next unread issue ID.
         db: Database session.
 
     Returns:
-        True if issue_number is earlier than current next unread issue.
-
-    Raises:
-        ValueError: If issue numbers cannot be compared numerically.
+        True if issue position is earlier than current next unread issue.
     """
     next_issue = await db.get(Issue, next_unread_issue_id)
     if not next_issue:
         return True
 
-    try:
-        return int(issue_number) < int(next_issue.issue_number)
-    except ValueError as e:
-        raise ValueError(
-            f"Cannot compare issue numbers: '{issue_number}' and '{next_issue.issue_number}'. "
-            f"Both must be numeric for proper ordering."
-        ) from e
+    issue = await db.get(Issue, issue_id)
+    if not issue:
+        return False
+
+    return issue.position < next_issue.position

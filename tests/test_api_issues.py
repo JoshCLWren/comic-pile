@@ -260,7 +260,7 @@ async def test_reactivate_completed_thread(
     assert thread.issues_remaining == 2
     assert thread.reading_progress == "in_progress"
     assert thread.next_unread_issue_id is not None
-    assert thread.status == "completed"
+    assert thread.status == "active"
 
 
 @pytest.mark.asyncio

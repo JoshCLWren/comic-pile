@@ -197,7 +197,10 @@ async def test_concurrent_issue_adds_same_thread_different_overlaps(async_db: As
                 )
 
             # Some may return 400 if all issues already exist (deduplication)
-            # That's fine - we're testing no data corruption
+            # Any other status code is an error
+            assert response.status_code in (201, 400), (
+                f"Unexpected status {response.status_code}: {response.text}"
+            )
             if response.status_code == 201:
                 return response.json()
             return None

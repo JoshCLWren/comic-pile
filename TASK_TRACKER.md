@@ -20,7 +20,7 @@ if needed in a future feature.
   - [ ] Increment `issues_remaining` count
   - [ ] Set `next_unread_issue_id` if thread is completed
   - [ ] Keep `reading_progress` accurate
- - [ ] Handle ordering: "21-25, Annual 3, 26-31" appends Annual 3 at end (position 12)
+- [ ] Handle ordering: "21-25, Annual 3, 26-31" appends Annual 3 at end (position 12)
 - [ ] Add event logging for new issues added
 
 ### Frontend (Already Works!)
