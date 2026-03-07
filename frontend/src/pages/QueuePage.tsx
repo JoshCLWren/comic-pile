@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { ChangeEvent, DragEvent, FormEvent } from 'react'
+import type { ChangeEvent, DragEvent, FormEvent, MouseEvent, KeyboardEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../components/Modal'
 import PositionSlider from '../components/PositionSlider'
@@ -127,23 +127,16 @@ function IssueToggleList({ threadId }: {
     }
   }
 
-  async function handleAddIssues(e: FormEvent) {
-    e.preventDefault()
-    console.log('[IssueToggleList] handleAddIssues called', { addRange, threadId })
+  async function handleAddIssues() {
     if (!addRange.trim()) {
-      console.log('[IssueToggleList] addRange is empty, returning early')
       return
     }
     setIsAdding(true)
     setAddError(null)
     try {
-      console.log('[IssueToggleList] Calling issuesApi.create')
       await issuesApi.create(threadId, addRange.trim())
-      console.log('[IssueToggleList] issuesApi.create succeeded')
       setAddRange('')
-      console.log('[IssueToggleList] Calling loadIssues')
       await loadIssues()
-      console.log('[IssueToggleList] loadIssues completed')
     } catch (err: unknown) {
       console.error('[IssueToggleList] Error adding issues:', err)
       setAddError(getApiErrorDetail(err))
@@ -175,24 +168,30 @@ function IssueToggleList({ threadId }: {
           </button>
         ))}
       </div>
-      <form onSubmit={handleAddIssues} className="flex gap-2" data-testid="issue-add-form">
+      <div className="flex gap-2">
         <input
           type="text"
           value={addRange}
           onChange={(e) => setAddRange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleAddIssues()
+            }
+          }}
           placeholder="Add issues: 19-24 or 0, Annual 1"
           className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-stone-300"
           data-testid="issue-add-input"
         />
         <button
-          type="submit"
+          type="button"
+          onClick={() => handleAddIssues()}
           disabled={isAdding || !addRange.trim()}
           className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
           data-testid="issue-add-button"
         >
           {isAdding ? '…' : 'Add'}
         </button>
-      </form>
+      </div>
       {addError && (
         <p className="text-xs text-red-400">{addError}</p>
       )}

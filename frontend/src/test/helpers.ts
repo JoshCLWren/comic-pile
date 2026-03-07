@@ -77,7 +77,7 @@ export async function getAuthToken(page: Page): Promise<string | null> {
 
 export async function createThread(
   page: Page,
-  threadData: { title: string; format: string; issues_remaining: number; total_issues?: number }
+  threadData: { title: string; format: string; issues_remaining: number; total_issues?: number; issue_range?: string }
 ): Promise<{ id: number } | void> {
   const token = await getAuthToken(page);
 
@@ -106,9 +106,9 @@ export async function createThread(
       const thread = await response.json();
       threadId = thread.id;
 
-      // If total_issues is specified, create the issues
-      if (threadData.total_issues && threadId) {
-        const issueRange = `1-${threadData.total_issues}`;
+      // If total_issues or issue_range is specified, create the issues
+      if ((threadData.total_issues || threadData.issue_range) && threadId) {
+        const issueRange = threadData.issue_range || `1-${threadData.total_issues}`;
         
         let issueSuccess = false;
         let issueAttempts = 0;

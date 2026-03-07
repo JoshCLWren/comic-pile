@@ -454,7 +454,7 @@ async def test_create_issues_thread_not_found(auth_client: AsyncClient) -> None:
 async def test_create_issues_already_migrated(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /threads/{thread_id}/issues returns 400 for thread already using issue tracking."""
+    """POST /threads/{thread_id}/issues adds issues to thread already using issue tracking."""
     user = await get_or_create_user_async(async_db)
 
     thread = Thread(
@@ -469,13 +469,30 @@ async def test_create_issues_already_migrated(
         created_at=datetime.now(UTC),
     )
     async_db.add(thread)
+    await async_db.flush()
+
+    for i in range(1, 26):
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            status="read" if i <= 15 else "unread",
+            read_at=datetime.now(UTC) if i <= 15 else None,
+        )
+        async_db.add(issue)
     await async_db.commit()
 
     response = await auth_client.post(
-        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "1-5"}
+        f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "26-30"}
     )
-    assert response.status_code == 400
-    assert "already uses" in response.json()["detail"].lower()
+    assert response.status_code == 201
+
+    data = response.json()
+    assert data["total_count"] == 30
+    assert len(data["issues"]) == 5
+
+    await async_db.refresh(thread)
+    assert thread.total_issues == 30
+    assert thread.issues_remaining == 15
 
 
 @pytest.mark.asyncio

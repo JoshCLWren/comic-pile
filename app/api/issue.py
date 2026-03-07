@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -81,20 +81,19 @@ async def list_issues(
     if status_filter:
         query = query.where(Issue.status == status_filter)
 
-    query = query.order_by(cast(Issue.issue_number, Integer))
+    query = query.order_by(Issue.position)
 
     if page_token:
         try:
             parts = page_token.split(",")
             if len(parts) != 2:
                 raise ValueError("Invalid format")
-            cursor_number = parts[0]
+            cursor_position = int(parts[0])
             cursor_id = int(parts[1])
             query = query.where(
                 or_(
-                    cast(Issue.issue_number, Integer) > int(cursor_number),
-                    (cast(Issue.issue_number, Integer) == int(cursor_number))
-                    & (Issue.id > cursor_id),
+                    Issue.position > cursor_position,
+                    (Issue.position == cursor_position) & (Issue.id > cursor_id),
                 )
             )
         except ValueError:
@@ -121,7 +120,7 @@ async def list_issues(
     next_token = None
     if has_more and issues_to_return:
         last = issues_to_return[-1]
-        next_token = f"{last.issue_number},{last.id}"
+        next_token = f"{last.position},{last.id}"
 
     return IssueListResponse(
         issues=issue_responses,
@@ -144,6 +143,10 @@ async def create_issues(
 ) -> IssueListResponse:
     """Create issues from range format (e.g., "1-25" or "1, 3, 5-7").
 
+    Supports both initial thread migration and adding issues to existing migrated threads.
+    Deduplicates existing issues - only creates issues that don't already exist.
+    Updates thread metadata (total_issues, issues_remaining, next_unread_issue_id).
+
     Args:
         thread_id: The thread ID to create issues for.
         request: Request with issue range string.
@@ -151,10 +154,10 @@ async def create_issues(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        IssueListResponse with created issues.
+        IssueListResponse with newly created issues only (not all issues).
 
     Raises:
-        HTTPException: If thread not found, thread already uses issue tracking,
+        HTTPException: If thread not found, all issues already exist,
                       or issue range is invalid.
     """
     thread = await db.get(Thread, thread_id)
@@ -162,12 +165,6 @@ async def create_issues(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Thread {thread_id} not found",
-        )
-
-    if thread.total_issues is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Thread {thread_id} already uses issue tracking",
         )
 
     try:
@@ -185,17 +182,18 @@ async def create_issues(
         )
 
     existing_issues_result = await db.execute(
-        select(Issue.issue_number).where(Issue.thread_id == thread_id)
+        select(Issue.issue_number, Issue.position).where(Issue.thread_id == thread_id)
     )
-    existing_numbers = {row[0] for row in existing_issues_result.fetchall()}
+    existing_issues = {row[0]: row[1] for row in existing_issues_result.fetchall()}
 
     new_issues = []
-    for issue_number in issue_numbers:
-        if issue_number in existing_numbers:
+    for position, issue_number in enumerate(issue_numbers, start=1):
+        if issue_number in existing_issues:
             continue
         issue = Issue(
             thread_id=thread_id,
             issue_number=issue_number,
+            position=position,
             status="unread",
         )
         db.add(issue)
@@ -209,13 +207,31 @@ async def create_issues(
 
     await db.flush()
 
-    total_issues = len(issue_numbers)
-    thread.total_issues = total_issues
-    thread.issues_remaining = total_issues
-    thread.reading_progress = "not_started"
+    new_issues_count = len(new_issues)
 
-    if new_issues:
-        thread.next_unread_issue_id = new_issues[0].id
+    # Get existing issue count before new issues were added
+    existing_count_result = await db.execute(
+        select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
+    )
+    existing_issue_count = existing_count_result.scalar() or 0
+
+    # Handle both initial migration and adding to existing migrated threads
+    if thread.total_issues is None:
+        # Initial thread migration - set up issue tracking from scratch
+        thread.total_issues = existing_issue_count
+        thread.issues_remaining = existing_issue_count
+        thread.reading_progress = "not_started"
+        if new_issues:
+            thread.next_unread_issue_id = new_issues[0].id
+    else:
+        # Adding issues to existing migrated thread - update counts incrementally
+        thread.total_issues += new_issues_count
+        thread.issues_remaining += new_issues_count
+        thread.reading_progress = "in_progress"
+        # If thread was completed (no next_unread), reactivate with first new issue
+        if thread.next_unread_issue_id is None and new_issues:
+            thread.next_unread_issue_id = new_issues[0].id
+        # Otherwise keep existing next_unread - no change needed
 
     thread_id_val = thread.id
 
@@ -232,7 +248,7 @@ async def create_issues(
 
     return IssueListResponse(
         issues=issue_responses,
-        total_count=total_issues,
+        total_count=existing_issue_count,
         page_size=len(issue_responses),
         next_page_token=None,
     )
@@ -323,7 +339,7 @@ async def mark_issue_read(
             Issue.thread_id == thread_id,
             Issue.status == "unread",
         )
-        .order_by(cast(Issue.issue_number, Integer))
+        .order_by(Issue.position)
         .limit(1)
     )
     next_unread = next_unread_result.scalar_one_or_none()

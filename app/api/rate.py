@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import cast, Integer, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
@@ -63,9 +63,7 @@ async def snapshot_thread_states(
 
         if thread.uses_issue_tracking():
             issues_result = await db.execute(
-                select(Issue)
-                .where(Issue.thread_id == thread.id)
-                .order_by(cast(Issue.issue_number, Integer))
+                select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
             )
             issues = issues_result.scalars().all()
 
@@ -240,7 +238,7 @@ async def rate_thread(
                     select(Issue)
                     .where(Issue.thread_id == thread.id)
                     .where(Issue.status == "unread")
-                    .order_by(cast(Issue.issue_number, Integer), Issue.id)
+                    .order_by(Issue.position, Issue.id)
                     .limit(1)
                 )
                 next_issue = next_result.scalar_one_or_none()

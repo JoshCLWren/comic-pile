@@ -139,6 +139,18 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
 
+    // Monitor for 401 errors
+    const failedRequests: { url: string; status: number; method: string }[] = [];
+    authenticatedPage.on('response', (response) => {
+      if (response.status() === 401) {
+        failedRequests.push({
+          url: response.url(),
+          status: response.status(),
+          method: response.request().method(),
+        });
+      }
+    });
+
     // Open edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.locator('button[aria-label="Edit thread"]').click();
@@ -159,6 +171,9 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Verify modal is still open
     await expect(editModal).toBeVisible();
+
+    // Check for 401 errors
+    expect(failedRequests).toHaveLength(0);
 
     // Verify issues were added correctly
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -193,6 +208,18 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // Get initial page URL
     const initialUrl = authenticatedPage.url();
 
+    // Monitor for 401 errors
+    const failedRequests: { url: string; status: number; method: string }[] = [];
+    authenticatedPage.on('response', (response) => {
+      if (response.status() === 401) {
+        failedRequests.push({
+          url: response.url(),
+          status: response.status(),
+          method: response.request().method(),
+        });
+      }
+    });
+
     // Open edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.locator('button[aria-label="Edit thread"]').click();
@@ -214,6 +241,9 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Check if modal is still open (if it closed, it might indicate a re-render issue)
     await expect(editModal).toBeVisible();
+
+    // Check for 401 errors
+    expect(failedRequests).toHaveLength(0);
 
     // Verify issue was added
     const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
@@ -278,5 +308,118 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Verify the modal is still open
     await expect(editModal).toBeVisible();
+  });
+
+  test('should add annual issue to existing migrated thread', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Migrated Thread Test ${timestamp}`;
+
+    // Step 1: Create thread with issues 21-31
+    await createThread(authenticatedPage, {
+      title: uniqueTitle,
+      format: 'Comics',
+      issues_remaining: 11,
+      issue_range: '21-31',
+    });
+
+    // Get the thread ID
+    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+    const threads = await threadsResponse.json();
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
+    expect(thread).toBeDefined();
+    expect(thread.id).toBeDefined();
+
+    // Step 2: Navigate to queue page
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+
+    // Step 3: Open the edit modal for the thread
+    const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await threadItem.waitFor({ state: 'visible', timeout: 5000 });
+    await threadItem.locator('button[aria-label="Edit thread"]').click();
+
+    // Wait for edit modal to open
+    await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
+    
+    // Verify modal is open
+    const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
+    await expect(editModal).toBeVisible();
+
+    // Step 3.5: Monitor all network requests for 401 errors during the operation
+    const failedRequests: { url: string; status: number; method: string }[] = [];
+    authenticatedPage.on('response', (response) => {
+      if (response.status() === 401) {
+        failedRequests.push({
+          url: response.url(),
+          status: response.status(),
+          method: response.request().method(),
+        });
+      }
+    });
+
+    // Step 4: Add "Annual 3" using the add issues form
+    const addIssuesInput = editModal.locator('[data-testid="issue-add-input"]');
+    await expect(addIssuesInput).toBeVisible({ timeout: 5000 });
+    await addIssuesInput.fill('Annual 3');
+
+    const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
+    await addIssuesButton.click();
+
+    // Step 5: Wait for the add operation to complete
+    await authenticatedPage.waitForTimeout(2000);
+
+    // CRITICAL CHECK: Verify modal stays open after adding issues
+    // This was the bug - the modal would close unexpectedly
+    const modalStillVisible = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
+    await expect(modalStillVisible).toBeVisible();
+
+    // Check for any 401 errors that occurred during the operation
+    if (failedRequests.length > 0) {
+      console.error('❌ 401 errors detected during issue add operation:', failedRequests);
+    }
+    expect(failedRequests).toHaveLength(0);
+
+    // Wait for network to settle after issues list refresh
+    // The modal's issues list needs to refetch after adding, which involves:
+    // 1. POST request to add the issue
+    // 2. GET request to refresh issues list
+    // 3. React state update and re-render
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    // Verify issues list in modal refreshed and shows the new annual issue
+    // Increased timeout to 10s to account for: network latency, API response time, state update, re-render
+    const annualInModal = editModal.locator('.issue-item').filter({ hasText: 'Annual 3' });
+    await expect(annualInModal).toBeVisible({ timeout: 10000 });
+
+    // Step 6: Verify annual was added by checking the API
+    const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues`);
+    expect(issuesResponse.ok()).toBeTruthy();
+    const issuesData = await issuesResponse.json();
+
+    // Should have 12 issues now (11 original + Annual 3)
+    expect(issuesData.issues.length).toBe(12);
+
+    // Verify Annual 3 is in the list
+    const annualIssue = issuesData.issues.find((i: any) => i.issue_number === 'Annual 3');
+    expect(annualIssue).toBeDefined();
+
+    // Step 7: Verify annual appears in correct position (after 25, before 26)
+    // Find the positions of relevant issues
+    const issue25 = issuesData.issues.find((i: any) => i.issue_number === '25');
+    const issue26 = issuesData.issues.find((i: any) => i.issue_number === '26');
+    
+    expect(issue25).toBeDefined();
+    expect(issue26).toBeDefined();
+    expect(issue25.display_order).toBeLessThan(annualIssue.display_order);
+    expect(annualIssue.display_order).toBeLessThan(issue26.display_order);
+
+    // Verify thread metadata was updated
+    const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${thread.id}`);
+    expect(threadResponse.ok()).toBeTruthy();
+    const threadData = await threadResponse.json();
+    
+    expect(threadData.total_issues).toBe(12);
+    expect(threadData.issues_remaining).toBe(12);
   });
 });
