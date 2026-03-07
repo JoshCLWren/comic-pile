@@ -258,7 +258,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
       title: uniqueTitle,
       format: 'Comics',
       issues_remaining: 2,
-      total_issues: 2,
+      issue_range: '1-2',
     });
 
     await authenticatedPage.goto('/queue');
@@ -282,10 +282,17 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
 
     const addIssuesInput = editModal.locator('[data-testid="issue-add-input"]');
+    await expect(addIssuesInput).toBeVisible({ timeout: 5000 });
     await addIssuesInput.fill('Annual 2');
-    await editModal.locator('[data-testid="issue-add-button"]').click();
+
+    const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
+    await expect(addIssuesButton).toBeVisible({ timeout: 5000 });
+    await addIssuesButton.click();
 
     await authenticatedPage.waitForLoadState('networkidle');
+
+    // Wait a bit for async event handlers to fire
+    await authenticatedPage.waitForTimeout(500);
 
     // Analyze requests
     const requestSummary = {
