@@ -224,11 +224,25 @@ async def test_reactivate_completed_thread(
     """POST /threads/{thread_id}/issues reactivates completed thread when adding issues."""
     user = await get_or_create_user_async(async_db)
 
+    active_thread = Thread(
+        title="Already Active",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(active_thread)
+    await async_db.flush()
+
     thread = Thread(
         title="Test Thread",
         format="Comic",
         issues_remaining=0,
-        queue_position=1,
+        queue_position=2,
         status="completed",
         user_id=user.id,
         total_issues=10,
@@ -261,6 +275,10 @@ async def test_reactivate_completed_thread(
     assert thread.reading_progress == "in_progress"
     assert thread.next_unread_issue_id is not None
     assert thread.status == "active"
+    assert thread.queue_position == 1
+
+    await async_db.refresh(active_thread)
+    assert active_thread.queue_position == 2
 
 
 @pytest.mark.asyncio

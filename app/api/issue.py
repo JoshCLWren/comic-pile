@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -339,6 +339,14 @@ async def create_issues(
         thread.reading_progress = "in_progress"
         # If thread was completed (no next_unread), reactivate with first new issue
         if thread.next_unread_issue_id is None and new_issues:
+            if thread.status == "completed":
+                await db.execute(
+                    update(Thread)
+                    .where(Thread.user_id == current_user.id)
+                    .where(Thread.status == "active")
+                    .values(queue_position=Thread.queue_position + 1)
+                )
+                thread.queue_position = 1
             thread.next_unread_issue_id = new_issues[0].id
             thread.status = "active"
         # Otherwise keep existing next_unread - no change needed

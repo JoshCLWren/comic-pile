@@ -176,6 +176,36 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     expect(issuesData.issues.map((issue: any) => issue.issue_number)).toContain('Annual 1');
   });
 
+  test('should preserve native validation when saving the edit modal', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Issue Validation Test ${timestamp}`;
+
+    await createThread(authenticatedPage, {
+      title: uniqueTitle,
+      format: 'Comics',
+      issues_remaining: 5,
+      total_issues: 5,
+    });
+
+    await authenticatedPage.goto('/queue');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await threadItem.locator('button[aria-label="Edit thread"]').click();
+
+    const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
+    await expect(editModal).toBeVisible();
+
+    const titleInput = editModal.locator('input').first();
+    await titleInput.fill('');
+
+    await editModal.getByRole('button', { name: 'Save Changes' }).click();
+
+    await expect(editModal).toBeVisible();
+    const validationMessage = await titleInput.evaluate((input: HTMLInputElement) => input.validationMessage);
+    expect(validationMessage).not.toBe('');
+  });
+
   test('should handle adding multiple issues including annuals in correct order', async ({ authenticatedPage }) => {
     const timestamp = Date.now();
     const uniqueTitle = `Issue Order Test ${timestamp}`;

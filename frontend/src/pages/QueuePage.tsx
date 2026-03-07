@@ -425,7 +425,8 @@ export default function QueuePage() {
     }
   }
 
-  const handleEditSave = async () => {
+  const handleEditSubmit = async (event: FormEvent) => {
+    event.preventDefault()
     if (!editingThread) return
 
     try {
@@ -958,7 +959,7 @@ export default function QueuePage() {
       {/* Edit Thread Modal */}
       <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => { setIsEditOpen(false); refetch() }} overlayClassName="edit-modal__overlay">
         <div className="space-y-4">
-          <div className="space-y-4">
+          <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
               <input
@@ -1024,7 +1025,7 @@ export default function QueuePage() {
                 </button>
               </div>
             )}
-          </div>
+          </form>
 
           {/* Issue list for migrated threads lives outside the edit form so Enter only adds issues. */}
           {editingThread && editingThread.total_issues !== null && (
@@ -1032,10 +1033,8 @@ export default function QueuePage() {
           )}
 
           <button
-            type="button"
-            onClick={() => {
-              void handleEditSave()
-            }}
+            type="submit"
+            form="edit-thread-form"
             disabled={updateMutation.isPending}
             className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60"
           >
