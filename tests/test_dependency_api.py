@@ -12,8 +12,22 @@ async def test_dependency_api_lifecycle(auth_client, async_db, test_username):
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
 
-    t1 = Thread(title="Source", format="Comic", issues_remaining=2, queue_position=1, status="active", user_id=user.id)
-    t2 = Thread(title="Target", format="Comic", issues_remaining=2, queue_position=2, status="active", user_id=user.id)
+    t1 = Thread(
+        title="Source",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    t2 = Thread(
+        title="Target",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
     async_db.add_all([t1, t2])
     await async_db.commit()
     await async_db.refresh(t1)
@@ -21,7 +35,12 @@ async def test_dependency_api_lifecycle(auth_client, async_db, test_username):
 
     create_resp = await auth_client.post(
         "/api/v1/dependencies/",
-        json={"source_type": "thread", "source_id": t1.id, "target_type": "thread", "target_id": t2.id},
+        json={
+            "source_type": "thread",
+            "source_id": t1.id,
+            "target_type": "thread",
+            "target_id": t2.id,
+        },
     )
     assert create_resp.status_code == 201
     dep_id = create_resp.json()["id"]
@@ -47,16 +66,79 @@ async def test_dependency_rejects_self(auth_client, async_db, test_username):
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
 
-    t1 = Thread(title="Solo", format="Comic", issues_remaining=2, queue_position=1, status="active", user_id=user.id)
+    t1 = Thread(
+        title="Solo",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
     async_db.add(t1)
     await async_db.commit()
     await async_db.refresh(t1)
 
     resp = await auth_client.post(
         "/api/v1/dependencies/",
-        json={"source_type": "thread", "source_id": t1.id, "target_type": "thread", "target_id": t1.id},
+        json={
+            "source_type": "thread",
+            "source_id": t1.id,
+            "target_type": "thread",
+            "target_id": t1.id,
+        },
     )
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_duplicate_thread_dependency_returns_400(auth_client, async_db, test_username):
+    """Creating duplicate thread dependency should return 400, not 500 (issue #255)."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    t1 = Thread(
+        title="Source",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    t2 = Thread(
+        title="Target",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add_all([t1, t2])
+    await async_db.commit()
+    await async_db.refresh(t1)
+    await async_db.refresh(t2)
+
+    create_resp1 = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "thread",
+            "source_id": t1.id,
+            "target_type": "thread",
+            "target_id": t2.id,
+        },
+    )
+    assert create_resp1.status_code == 201
+
+    create_resp2 = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "thread",
+            "source_id": t1.id,
+            "target_type": "thread",
+            "target_id": t2.id,
+        },
+    )
+    assert create_resp2.status_code == 400
+    assert "already exists" in create_resp2.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
@@ -208,3 +290,75 @@ async def test_issue_dependency_api_negative_cases(auth_client, async_db, test_u
     )
     assert mixed_resp.status_code == 400
     assert "mixed" in mixed_resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_dependency_returns_400(auth_client, async_db, test_username):
+    """Creating duplicate dependency should return 400, not 500 (issue #255)."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    source_thread = Thread(
+        title="Dup Source Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    target_thread = Thread(
+        title="Dup Target Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue = Issue(
+        thread_id=target_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    source_thread.next_unread_issue_id = source_issue.id
+    target_thread.next_unread_issue_id = target_issue.id
+    await async_db.commit()
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
+
+    create_resp1 = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
+        },
+    )
+    assert create_resp1.status_code == 201
+
+    create_resp2 = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
+        },
+    )
+    assert create_resp2.status_code == 400
+    assert "already exists" in create_resp2.json()["detail"].lower()
