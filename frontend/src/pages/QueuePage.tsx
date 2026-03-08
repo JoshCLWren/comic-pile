@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent, MouseEvent, KeyboardEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../components/Modal'
@@ -88,8 +88,79 @@ function reorderIssuesForDrop(
   if (!draggedIssue) {
     return issues
   }
-  nextIssues.splice(targetIndex, 0, draggedIssue)
+  const targetIndexAfterRemoval = nextIssues.findIndex((issue) => issue.id === targetIssueId)
+  if (targetIndexAfterRemoval === -1) {
+    return issues
+  }
+  nextIssues.splice(targetIndexAfterRemoval + 1, 0, draggedIssue)
   return nextIssues
+}
+
+type IssueMutation =
+  | { id: number; type: 'delete'; issueId: number }
+  | { id: number; type: 'reorder'; issueIds: number[] }
+  | { id: number; type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
+
+function normalizeIssueOrder(issues: Issue[], issueIds: number[]): number[] {
+  const existingIssueIds = new Set(issues.map((issue) => issue.id))
+  const normalizedIssueIds: number[] = []
+  const seenIssueIds = new Set<number>()
+
+  for (const issueId of issueIds) {
+    if (!existingIssueIds.has(issueId) || seenIssueIds.has(issueId)) {
+      continue
+    }
+    normalizedIssueIds.push(issueId)
+    seenIssueIds.add(issueId)
+  }
+
+  for (const issue of issues) {
+    if (!seenIssueIds.has(issue.id)) {
+      normalizedIssueIds.push(issue.id)
+    }
+  }
+
+  return normalizedIssueIds
+}
+
+function applyIssueMutation(issues: Issue[], mutation: IssueMutation): Issue[] {
+  switch (mutation.type) {
+    case 'toggle':
+      return issues.map((issue) => (
+        issue.id === mutation.issueId
+          ? {
+              ...issue,
+              status: mutation.nextStatus,
+              read_at: mutation.nextStatus === 'read' ? new Date().toISOString() : null,
+            }
+          : issue
+      ))
+    case 'delete':
+      return issues.filter((issue) => issue.id !== mutation.issueId)
+    case 'reorder': {
+      const normalizedIssueIds = normalizeIssueOrder(issues, mutation.issueIds)
+      const issueMap = new Map(issues.map((issue) => [issue.id, issue]))
+      return normalizedIssueIds
+        .map((issueId) => issueMap.get(issueId))
+        .filter((issue): issue is Issue => issue !== undefined)
+    }
+  }
+}
+
+function applyIssueMutations(issues: Issue[], mutations: IssueMutation[]): Issue[] {
+  return mutations.reduce((currentIssues, mutation) => applyIssueMutation(currentIssues, mutation), issues)
+}
+
+function getPendingIssueIds(mutations: IssueMutation[], type: 'delete' | 'toggle'): Set<number> {
+  const pendingIssueIds = new Set<number>()
+
+  for (const mutation of mutations) {
+    if (mutation.type === type) {
+      pendingIssueIds.add(mutation.issueId)
+    }
+  }
+
+  return pendingIssueIds
 }
 
 export function IssueToggleList({ threadId }: {
@@ -105,19 +176,89 @@ export function IssueToggleList({ threadId }: {
   const [deleting, setDeleting] = useState<Set<number>>(new Set())
   const [draggedIssueId, setDraggedIssueId] = useState<number | null>(null)
   const [dragOverIssueId, setDragOverIssueId] = useState<number | null>(null)
+  const baseIssuesRef = useRef<Issue[]>([])
+  const pendingMutationsRef = useRef<IssueMutation[]>([])
+  const isProcessingMutationsRef = useRef(false)
+  const nextMutationIdRef = useRef(1)
+
+  const syncOptimisticIssues = useCallback((baseIssues: Issue[], pendingMutations: IssueMutation[]) => {
+    setIssues(applyIssueMutations(baseIssues, pendingMutations))
+    setToggling(getPendingIssueIds(pendingMutations, 'toggle'))
+    setDeleting(getPendingIssueIds(pendingMutations, 'delete'))
+  }, [])
+
+  const runIssueMutation = useCallback(async (mutation: IssueMutation) => {
+    switch (mutation.type) {
+      case 'toggle':
+        if (mutation.nextStatus === 'read') {
+          await issuesApi.markRead(mutation.issueId)
+        } else {
+          await issuesApi.markUnread(mutation.issueId)
+        }
+        return
+      case 'delete':
+        await issuesApi.delete(mutation.issueId)
+        return
+      case 'reorder':
+        await issuesApi.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
+    }
+  }, [threadId])
+
+  const processIssueMutations = useCallback(async () => {
+    if (isProcessingMutationsRef.current) {
+      return
+    }
+
+    isProcessingMutationsRef.current = true
+
+    try {
+      while (pendingMutationsRef.current.length > 0) {
+        const currentMutation = pendingMutationsRef.current[0]
+        if (!currentMutation) {
+          break
+        }
+
+        try {
+          await runIssueMutation(currentMutation)
+          baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
+        } catch (err: unknown) {
+          setActionError(getApiErrorDetail(err))
+        } finally {
+          pendingMutationsRef.current = pendingMutationsRef.current.filter(
+            (mutation) => mutation.id !== currentMutation.id
+          )
+          syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
+        }
+      }
+    } finally {
+      isProcessingMutationsRef.current = false
+    }
+  }, [runIssueMutation, syncOptimisticIssues])
+
+  const enqueueIssueMutation = useCallback((mutation: Omit<IssueMutation, 'id'>) => {
+    const queuedMutation = {
+      ...mutation,
+      id: nextMutationIdRef.current++,
+    } as IssueMutation
+
+    pendingMutationsRef.current = [...pendingMutationsRef.current, queuedMutation]
+    syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
+    void processIssueMutations()
+  }, [processIssueMutations, syncOptimisticIssues])
 
   const loadIssues = useCallback(async () => {
     setIsLoading(true)
     try {
       // Load all issues (use large page size)
       const data = await issuesApi.list(threadId, { page_size: 100 })
-      setIssues(data.issues || [])
+      baseIssuesRef.current = data.issues || []
+      syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
     } catch {
       // Non-critical
     } finally {
       setIsLoading(false)
     }
-  }, [threadId])
+  }, [syncOptimisticIssues, threadId])
 
   useEffect(() => {
     loadIssues()
@@ -126,31 +267,12 @@ export function IssueToggleList({ threadId }: {
   async function handleToggle(issue: Issue) {
     const newStatus = issue.status === 'read' ? 'unread' : 'read'
 
-    // Optimistic update
     setActionError(null)
-    setIssues((prev) =>
-      prev.map((i) => (i.id === issue.id ? { ...i, status: newStatus } : i))
-    )
-    setToggling((prev) => new Set(prev).add(issue.id))
-
-    try {
-      if (issue.status === 'read') {
-        await issuesApi.markUnread(issue.id)
-      } else {
-        await issuesApi.markRead(issue.id)
-      }
-    } catch {
-      // Revert on failure
-      setIssues((prev) =>
-        prev.map((i) => (i.id === issue.id ? { ...i, status: issue.status } : i))
-      )
-    } finally {
-      setToggling((prev) => {
-        const next = new Set(prev)
-        next.delete(issue.id)
-        return next
-      })
-    }
+    enqueueIssueMutation({
+      type: 'toggle',
+      issueId: issue.id,
+      nextStatus: newStatus,
+    })
   }
 
   async function handleAddIssues() {
@@ -188,30 +310,32 @@ export function IssueToggleList({ threadId }: {
     event.preventDefault()
 
     if (!draggedIssueId || draggedIssueId === targetIssueId) {
-      setDragOverIssueId(null)
-      return
-    }
-
-    const previousIssues = issues
-    const nextIssues = reorderIssuesForDrop(previousIssues, draggedIssueId, targetIssueId)
-    if (nextIssues === previousIssues) {
       setDraggedIssueId(null)
       setDragOverIssueId(null)
       return
     }
 
-    setIssues(nextIssues)
+    const nextIssues = reorderIssuesForDrop(issues, draggedIssueId, targetIssueId)
+    setDraggedIssueId(null)
+    setDragOverIssueId(null)
+
+    if (nextIssues === issues) {
+      return
+    }
+
+    const nextIssueIds = nextIssues.map((issue) => issue.id)
+    const currentIssueIds = issues.map((issue) => issue.id)
+    const orderDidChange = nextIssueIds.some((issueId, index) => issueId !== currentIssueIds[index])
+
+    if (!orderDidChange) {
+      return
+    }
+
     setActionError(null)
-
-    try {
-      await issuesApi.reorder(threadId, nextIssues.map((issue) => issue.id))
-    } catch (err: unknown) {
-      setIssues(previousIssues)
-      setActionError(getApiErrorDetail(err))
-    } finally {
-      setDraggedIssueId(null)
-      setDragOverIssueId(null)
-    }
+    enqueueIssueMutation({
+      type: 'reorder',
+      issueIds: nextIssueIds,
+    })
   }
 
   const handleDragEnd = () => {
@@ -224,23 +348,11 @@ export function IssueToggleList({ threadId }: {
       return
     }
 
-    const previousIssues = issues
-    setDeleting((prev) => new Set(prev).add(issue.id))
-    setIssues((prev) => prev.filter((currentIssue) => currentIssue.id !== issue.id))
     setActionError(null)
-
-    try {
-      await issuesApi.delete(issue.id)
-    } catch (err: unknown) {
-      setIssues(previousIssues)
-      setActionError(getApiErrorDetail(err))
-    } finally {
-      setDeleting((prev) => {
-        const next = new Set(prev)
-        next.delete(issue.id)
-        return next
-      })
-    }
+    enqueueIssueMutation({
+      type: 'delete',
+      issueId: issue.id,
+    })
   }
 
   if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>

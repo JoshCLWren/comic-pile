@@ -41,23 +41,21 @@ for entry in "${STEPS[@]}"; do
   echo "▶ Running: $name"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  codex exec \
+  if codex exec \
     --full-auto \
     -o "/tmp/issue-sweep-${name}.md" \
     "$prompt"
-
-  exit_code=$?
-
-  if [ $exit_code -ne 0 ]; then
+  then
+    echo "✅ $name completed"
+    echo ""
+  else
+    exit_code=$?
     echo "❌ $name FAILED (exit code $exit_code)"
     echo "   Check /tmp/issue-sweep-${name}.md for details"
     echo "   Fix the issue manually, then re-run this script"
     echo "   (completed steps will be skipped via git branch state)"
     exit 1
   fi
-
-  echo "✅ $name completed"
-  echo ""
 done
 
 echo ""

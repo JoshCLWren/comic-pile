@@ -6,10 +6,8 @@ import os
 import sys
 import time
 import traceback
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -155,10 +153,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     # Register rate limiter and handler for both normal and test-mode rate limiting.
     app.state.limiter = limiter
-    app.add_exception_handler(
-        RateLimitExceeded,
-        cast(Callable[[Request, Any], Awaitable[Response]], _rate_limit_exceeded_handler),
-    )
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     app_settings.validate_production_cors()
     cors_origins = app_settings.cors_origins_list

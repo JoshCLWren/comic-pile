@@ -1,5 +1,13 @@
 Audit: Dependency Management, Issue Ordering, and Admin UX
 
+Status update (March 8, 2026)
+
+This document started as a pre-fix audit. The insert/reorder/delete issue APIs, the
+`Thread.issues` ordering fix, the `(thread_id, issue_number)` uniqueness guard, and the
+`IssueToggleList` drag/delete workflow described below have since shipped. The remaining
+architectural concern is that dependency edges can still disagree with canonical
+`Issue.position` ordering inside a thread.
+
 Part 1: Findings (Ordered by Severity)
 
 🔴 CRITICAL: Two Competing Sources of Truth for In-Thread Reading Order
@@ -18,42 +26,19 @@ next_unread_issue_id still advanced by position order, ignoring dependency order
 
 Impact: The system can present issues in a visually wrong reading order while dependency blocking works on a completely different ordering. There is no validation, no warning, and no detection of this drift.
 
-🔴 CRITICAL: No API to Insert Issues at a Specific Position
+Resolved (post-fix): Insert, Move/Reorder, and Delete APIs Exist
 
-File: app/api/issue.py:252-264
+The issue-management APIs discussed as missing in the original audit are now implemented:
 
-next_new_position = max_position + 1
-for issue_number in issue_numbers:
-    if issue_number not in existing_issues:
-        issue = Issue(thread_id=thread_id, issue_number=issue_number,
-                      position=next_new_position, status="unread")
-        ...
-        next_new_position += 1
+- `POST /api/v1/threads/{thread_id}/issues` accepts `insert_after_issue_id` and shifts later
+  `Issue.position` values before inserting new issues.
+- `POST /api/v1/issues/{issue_id}:move` moves a single issue relative to another issue.
+- `POST /api/v1/threads/{thread_id}/issues:reorder` rewrites canonical in-thread order from
+  an explicit ordered list of issue IDs.
+- `DELETE /api/v1/issues/{issue_id}` deletes one issue, compacts later positions, and updates
+  issue-tracking metadata on the thread.
 
-Issue creation always appends. There is no insert_after parameter, no position parameter, no way to specify where an issue belongs. The extensive docstring (lines 155-203) even acknowledges this as a deliberate design choice, arguing that insertion "would require shifting all subsequent issues, which is error-prone."
-
-This forced the annuals incident: annuals went to the end, requiring manual SQL to reposition.
-
-🔴 CRITICAL: No API to Reorder Issues Within a Thread
-
-There is no reorder/move endpoint for issues anywhere in app/api/issue.py. The issue API has exactly 5 endpoints:
-
-GET /threads/{thread_id}/issues (list)
-POST /threads/{thread_id}/issues (create, append-only)
-GET /issues/{issue_id} (get one)
-POST /issues/{issue_id}:markRead
-POST /issues/{issue_id}:markUnread
-
-No PATCH /issues/{issue_id} for position updates. No POST /threads/{thread_id}/issues:reorder. No bulk reposition.
-
-🔴 CRITICAL: No API to Delete Individual Issues
-
-There is no DELETE /issues/{issue_id} endpoint. Issue deletion only happens in:
-
-Session restore (app/api/session.py:845,875) — bulk wipe of all issues in a thread
-Undo (app/api/undo.py:134) — same bulk wipe
-
-When duplicate annuals were created in production, there was no API to remove them. Direct SQL was the only option.
+The annuals workflow no longer needs direct SQL for insertion, reordering, or cleanup.
 
 🟠 HIGH: Thread.issues Relationship Orders by issue_number, Not position
 
@@ -75,34 +60,34 @@ next_unread_issue_id is always set to the lowest-position unread issue (app/api/
 
 If dependency order says "read Annual before #80" but position order says "#80 comes before Annual", then next_unread_issue_id will point to #80, and the user will be told to read #80 — even though the Annual is a prerequisite. The blocking system will prevent the thread from being rollable (if the Annual's dependency target is #80), but the UI will show #80 as "next" with no explanation of why the thread is blocked.
 
-🟠 HIGH: No Duplicate Detection for Issues
+Resolved (post-fix): Duplicate Detection for Issues
 
-The create endpoint deduplicates by issue_number (app/api/issue.py:254-255), but:
+The model and migrations now enforce `UniqueConstraint("thread_id", "issue_number")` via
+`uq_issue_thread_number`, and the API surfaces the conflict instead of allowing duplicate issue
+numbers to accumulate in a thread.
 
-There is no unique constraint on (thread_id, issue_number) in the database schema (app/models/issue.py:34-39 — only indexes, not constraints)
-If a race condition or script runs twice, duplicates can be created
-The annuals incident included 3 duplicate annuals that had to be manually cleaned up
-
-🟡 MEDIUM: Scripts Are Compensating for Missing Core Product Features
+🟡 MEDIUM: Scripts Were Compensating for Missing Core Product Features
 
 The scripts directory reveals a pattern of operational band-aids:
 
 Script
-What it compensates for
+Pre-fix gap / current replacement
 add_xmen_annuals.py
-Missing "insert issue at position" UI/API
+Pre-fix insert-position gap; replaced by `POST /api/v1/threads/{id}/issues` plus dependency APIs
 complete_annual_dependencies.py
-Missing "create dependency chain" batch UI
+Pre-fix batch dependency creation gap; replaced by `POST /api/v1/dependencies/`
 create_xmen_dependencies.py
 Missing cross-thread reading order UI
 check_xmen_dependencies.py
-Missing dependency audit/validation UI
+Pre-fix dependency audit gap; replaced in part by `GET /api/v1/threads/{thread_id}/issues:validateOrder`
 fix_thread_positions.py
-Missing position integrity enforcement
+Pre-fix `Thread.queue_position` repair workflow
 audit_thread_positions.py
-Missing admin health dashboard
+Pre-fix queue-audit workflow
 
-These scripts all hit the production API over HTTP with hardcoded thread IDs and issue numbers. They are brittle, non-repeatable, and the existence of 6 operational scripts for what should be core product features is a red flag.
+These scripts are now deprecated reference material. Several originally existed because core
+product features were missing; the issue-management APIs and UI now cover the main insertion,
+reorder, and delete flows directly.
 
 🟡 MEDIUM: Blocking Logic Only Checks next_unread_issue_id
 
@@ -116,15 +101,11 @@ But if issue #80 is read and issue #81 also has a dependency on something unread
 
 This works as designed but creates a subtle issue: if position order and dependency order disagree about what "next" means, the blocking check uses position order (via next_unread_issue_id), potentially checking the wrong issue for blocks.
 
-🟡 MEDIUM: No Frontend Workflow for Issue Reordering
+Resolved (post-fix): IssueToggleList Supports Reorder and Delete
 
-The IssueToggleList component (frontend/src/pages/QueuePage.tsx:74-201) only supports:
-
-Viewing issues (sorted by position from API)
-Toggling read/unread status
-Adding new issues (append-only)
-
-No drag-and-drop reorder, no "move after" button, no position editor. The IssueList.tsx component is equally read-only for ordering.
+`IssueToggleList` in `frontend/src/pages/QueuePage.tsx` now supports drag-and-drop reorder, read
+toggle, and inline delete actions. It calls the issue-management APIs directly and keeps the edit
+modal open while issue mutations complete.
 
 🟡 MEDIUM: No Dependency View on Individual Issues
 
@@ -161,13 +142,14 @@ Intra-thread dependencies (like #79 → Annual → #80 within the same thread) a
 
 Part 3: Concrete Recommendations
 
-Minimum Viable Fix (can ship in days)
+Shipped Fixes
 
-Add POST /issues/{issue_id}:move endpoint — accepts { "after_issue_id": int | null }. If null, move to position 1. Shifts subsequent issues' positions. This is the #1 missing feature.
-Add DELETE /issues/{issue_id} endpoint — deletes a single issue, shifts subsequent positions down, updates next_unread_issue_id and issues_remaining/total_issues.
-Add insert_after_issue_id parameter to POST /threads/{thread_id}/issues — optional; when provided, new issues are inserted after the specified issue instead of appending.
-Add unique constraint on (thread_id, issue_number) — prevents duplicate issues at the DB level.
-Fix Thread.issues relationship ordering — change order_by="Issue.issue_number" to order_by="Issue.position" at app/models/thread.py:111.
+- `POST /api/v1/issues/{issue_id}:move` for single-issue moves
+- `POST /api/v1/threads/{thread_id}/issues:reorder` for bulk reorder
+- `DELETE /api/v1/issues/{issue_id}` for individual deletion
+- `POST /api/v1/threads/{thread_id}/issues` with `insert_after_issue_id`
+- `uq_issue_thread_number` to block duplicate issue numbers
+- `Thread.issues` ordering by `Issue.position`
 
 Medium-Term Redesign
 
@@ -186,14 +168,17 @@ The (thread_id, issue_number) unique constraint needs a data cleanup migration f
 
 Part 4: Frontend/Admin Workflow Recommendations
 
-Missing UI Features (Priority Order)
+Shipped UI Features
 
-Issue reorder in IssueToggleList — add drag-and-drop or "move up/move down" buttons on each issue pill. This is the highest-impact UX improvement.
-"Insert after" in issue creation — when adding issues, let the user pick where they go (with a dropdown of existing issues to insert after, or an "insert at position" field).
-Delete individual issue — add a delete button/action on each issue in the list.
-Per-issue dependency indicator — show a small dependency icon on issues that have incoming/outgoing edges. Clicking opens detail.
-Order validation warning — when position order disagrees with cross-thread dependency order, show a banner: "⚠️ Issue ordering may not match reading order dependencies."
-Bulk operations — select multiple issues → mark read, delete, move.
+- Issue reorder in `IssueToggleList` via drag-and-drop
+- Delete individual issue from the edit modal
+
+Remaining UI Gaps
+
+- "Insert after" in issue creation so users can choose placement without relying on append-then-reorder
+- Per-issue dependency indicator for incoming/outgoing edges
+- Order validation warning when cross-thread dependency order disagrees with in-thread positions
+- Bulk operations such as multi-select mark read/delete/move
 
 Workflows That Should Never Require Direct SQL
 
@@ -209,52 +194,24 @@ View why a thread is blocked at the issue level
 
 Part 5: Testing Plan
 
-Missing Tests (Priority Order)
+Shipped Regression Coverage
 
-Test
-Why It's Missing
-Risk
-Insert issue at specific position
-API doesn't support it yet
-Entire annual workflow broken
-Reorder issue within thread
-API doesn't support it yet
-Forces SQL for normal maintenance
-Delete single issue
-API doesn't support it yet
-Can't clean up duplicates
-next_unread_issue_id validity after issue deletion
-No delete API exists
-Could point to deleted issue
-next_unread_issue_id validity after reorder
-No reorder API exists
-Could advance past blocked issues
-Position uniqueness within thread
-No DB constraint
-Data corruption
-Dependency consistency after issue move
-No move API exists
-Orphaned dependency edges
-Position-dependency order agreement
-No validation exists
-Silent wrong reading order
-Thread.issues relationship order vs API order
-Not tested
-ORM returns wrong order
-Duplicate issue creation prevention
-No unique constraint
-Data corruption
-Concurrent issue creation race condition
-Tested via locking but no duplicate guard
-Position collisions
+- Insert issue at specific position: covered by API tests for middle insertion, append-after-last,
+  invalid insert target, and next-unread updates.
+- Reorder issue within thread: covered by move/reorder API tests and frontend unit tests for drag
+  semantics.
+- Delete single issue: covered by API tests for middle/last/final deletion and dependency cleanup.
+- `next_unread_issue_id` validity after issue deletion/reorder: covered by API tests for delete,
+  move, reorder, and blocked-status refresh.
+- Position uniqueness within thread: covered by the unique constraint plus integrity/conflict tests.
+- Position/dependency order agreement: covered by `issues:validateOrder` tests.
+- `Thread.issues` relationship order vs API order: covered by relationship-order regression tests.
 
-Recommended Regression Tests (Add First)
+Remaining High-Value Coverage
 
-test_create_issues_appends_to_end — verify that creating issues always appends and doesn't corrupt existing positions. (May already partially exist in test_api_issues.py.)
-test_thread_issues_relationship_order — verify that thread.issues returns issues in the correct order (will fail today due to issue_number ordering).
-test_next_unread_issue_id_after_manual_position_change — simulate the annual scenario: create issues 1-100, then add "Annual" at position 101, manually update its position to 80, verify next_unread_issue_id still makes sense.
-test_intra_thread_dependency_does_not_affect_position_order — verify that creating a dependency between two issues in the same thread doesn't change their visible order.
-test_duplicate_issue_number_rejected — once the unique constraint is added, verify 409/400 on duplicate creation.
+- Cross-thread dependency UI surfacing at the per-issue level
+- End-to-end tests for insert-after from the frontend once that UI exists
+- More concurrency-specific tests for interleaved issue mutations in the edit modal
 
 ---
 

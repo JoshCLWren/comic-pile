@@ -5,6 +5,7 @@
 """Add annual issues to main X-Men threads and create reading order dependencies.
 
 Environment Variables:
+    COMIC_PILE_API_BASE: Optional API base URL (defaults to http://localhost:8000)
     COMIC_PILE_USERNAME: Your username
     COMIC_PILE_PASSWORD: Your password
 
@@ -17,7 +18,8 @@ Usage:
 import os
 import requests
 
-API_BASE = "https://app-production-72b9.up.railway.app"
+API_BASE = os.environ.get("COMIC_PILE_API_BASE", "http://localhost:8000").rstrip("/")
+TIMEOUT = 10
 
 # Annuals to add: {thread_id: [(annual_name, after_issue_number)]}
 ANNUALS_TO_ADD = {
@@ -43,7 +45,9 @@ ANNUALS_TO_ADD = {
 def login(username: str, password: str) -> str:
     """Authenticate and return bearer token."""
     response = requests.post(
-        f"{API_BASE}/api/auth/login", json={"username": username, "password": password}
+        f"{API_BASE}/api/auth/login",
+        json={"username": username, "password": password},
+        timeout=TIMEOUT,
     )
     response.raise_for_status()
     return response.json()["access_token"]
@@ -58,7 +62,12 @@ def get_issue_id(token: str, thread_id: int, issue_number: str) -> int | None:
         if page_token:
             params["page_token"] = page_token
 
-        response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, params=params)
+        response = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+            timeout=TIMEOUT,
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -79,6 +88,7 @@ def create_annual_issue(token: str, thread_id: int, annual_name: str) -> int | N
         f"{API_BASE}/api/v1/threads/{thread_id}/issues",
         headers={"Authorization": f"Bearer {token}"},
         json={"issue_range": annual_name},
+        timeout=TIMEOUT,
     )
 
     if response.status_code != 201:
@@ -107,6 +117,7 @@ def create_dependency(
             "target_type": "issue",
             "target_id": target_issue_id,
         },
+        timeout=TIMEOUT,
     )
 
     if response.status_code == 201:
@@ -144,7 +155,9 @@ def main():
     for thread_id, annuals in ANNUALS_TO_ADD.items():
         # Get thread name
         response = requests.get(
-            f"{API_BASE}/api/threads/", headers={"Authorization": f"Bearer {token}"}
+            f"{API_BASE}/api/threads/",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=TIMEOUT,
         )
         threads = response.json()
         thread_name = next(
@@ -193,14 +206,12 @@ def main():
                     print(f"     🔗 Creating dependency: {annual_name} → #{next_issue_num}")
                     if create_dependency(token, annual_id, next_issue_id):
                         total_dependencies += 1
-                        print("     ✅ Dependency created")
                         total_created += 1
+                        print("     ✅ Dependency created")
                 else:
                     print(f"     ⚠ Issue #{next_issue_num} not found, skipping")
             except ValueError:
                 print("     ⚠ Could not determine next issue (non-numeric issue number)")
-
-            total_created += 1
 
     # Summary
     print(f"\n{'=' * 70}")

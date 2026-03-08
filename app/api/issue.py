@@ -249,7 +249,19 @@ async def validate_issue_order(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> IssueOrderValidationResponse:
-    """Report in-thread dependency edges that disagree with canonical issue positions."""
+    """Report dependency edges that disagree with canonical issue positions.
+
+    Args:
+        thread_id: The thread ID whose in-thread ordering should be validated.
+        current_user: The authenticated user requesting the validation report.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        IssueOrderValidationResponse containing human-readable ordering warnings.
+
+    Raises:
+        HTTPException: If the thread does not exist or is not owned by the user.
+    """
     thread = await db.get(Thread, thread_id)
     if not thread or thread.user_id != current_user.id:
         raise HTTPException(
@@ -458,10 +470,11 @@ async def create_issues(
             thread.status = "active"
     else:
         # Adding issues to existing migrated thread - update counts incrementally
+        existing_next_unread_issue_id = thread.next_unread_issue_id
+        was_not_started = thread.reading_progress == "not_started"
         thread.total_issues += new_issues_count
         thread.issues_remaining += new_issues_count
-        thread.reading_progress = "in_progress"
-        existing_next_unread_issue_id = thread.next_unread_issue_id
+        thread.reading_progress = "not_started" if was_not_started else "in_progress"
         # If thread was completed (no next_unread), reactivate with first new issue
         if existing_next_unread_issue_id is None and new_issues:
             if thread.status == "completed":
@@ -473,6 +486,7 @@ async def create_issues(
                 )
                 thread.queue_position = 1
             thread.next_unread_issue_id = new_issues[0].id
+            thread.reading_progress = "in_progress"
             thread.status = "active"
         elif (
             new_issues
@@ -548,7 +562,20 @@ async def move_issue(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Move a single issue within its thread and recalculate the next unread issue."""
+    """Move a single issue within its thread.
+
+    Args:
+        issue_id: The issue ID to move.
+        request: Move request containing the issue that should come before it.
+        current_user: The authenticated user making the move request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        None. The response is HTTP 204 on success.
+
+    Raises:
+        HTTPException: If the issue or requested target issue is not found.
+    """
     thread_id = await _get_issue_thread_id(issue_id, current_user, db)
     thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
 
@@ -562,6 +589,8 @@ async def move_issue(
 
     if request.after_issue_id == issue_id:
         _recalculate_next_unread_issue_id(thread, thread_issues)
+        await db.flush()
+        await refresh_user_blocked_status(current_user.id, db)
         await db.commit()
         return
 
@@ -586,6 +615,7 @@ async def move_issue(
     _recalculate_next_unread_issue_id(thread, reordered_issues)
 
     await db.flush()
+    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
 
@@ -596,7 +626,20 @@ async def reorder_issues(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Rewrite all issue positions in a thread from an explicit ordered ID list."""
+    """Rewrite all issue positions in a thread from an explicit ordered ID list.
+
+    Args:
+        thread_id: The thread whose issue order should be rewritten.
+        request: Ordered issue IDs representing the desired canonical order.
+        current_user: The authenticated user making the reorder request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        None. The response is HTTP 204 on success.
+
+    Raises:
+        HTTPException: If the thread is not found or the issue IDs are invalid.
+    """
     thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
 
     existing_issue_ids = [issue.id for issue in thread_issues]
@@ -618,6 +661,7 @@ async def reorder_issues(
     _recalculate_next_unread_issue_id(thread, reordered_issues)
 
     await db.flush()
+    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
 
@@ -627,7 +671,19 @@ async def delete_issue(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete one issue, compact later positions, and update thread issue metadata."""
+    """Delete one issue, compact later positions, and update thread issue metadata.
+
+    Args:
+        issue_id: The issue ID to delete.
+        current_user: The authenticated user requesting the deletion.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        None. The response is HTTP 204 on success.
+
+    Raises:
+        HTTPException: If the issue does not exist or is not owned by the user.
+    """
     thread_id = await _get_issue_thread_id(issue_id, current_user, db)
     thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
 

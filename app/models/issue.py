@@ -35,7 +35,6 @@ class Issue(Base):
         UniqueConstraint("thread_id", "issue_number", name="uq_issue_thread_number"),
         Index("ix_issue_thread_id", "thread_id"),
         Index("ix_issue_thread_is_read", "thread_id", "status"),
-        Index("ix_issue_thread_number", "thread_id", "issue_number"),
         Index("ix_issue_thread_position", "thread_id", "position"),
     )
 

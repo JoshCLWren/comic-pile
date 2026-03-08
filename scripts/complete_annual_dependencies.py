@@ -11,6 +11,7 @@ complementing the existing:
 - previous_issue → annual
 
 Usage:
+    export COMIC_PILE_API_BASE=http://localhost:8000
     export COMIC_PILE_USERNAME=Josh
     export COMIC_PILE_PASSWORD=your_password
     python scripts/complete_annual_dependencies.py
@@ -19,7 +20,11 @@ Usage:
 import os
 import requests
 
-API_BASE = "https://app-production-72b9.up.railway.app"
+API_BASE = os.environ.get("COMIC_PILE_API_BASE", "").rstrip("/")
+REQUESTS_TIMEOUT = 10
+
+if not API_BASE:
+    raise RuntimeError("Set COMIC_PILE_API_BASE before running scripts/complete_annual_dependencies.py")
 
 # Annuals to link: {thread_id: [(annual_name, after_issue_number)]}
 ANNUALS = {
@@ -45,7 +50,9 @@ ANNUALS = {
 def login(username: str, password: str) -> str:
     """Authenticate and return bearer token."""
     response = requests.post(
-        f"{API_BASE}/api/auth/login", json={"username": username, "password": password}
+        f"{API_BASE}/api/auth/login",
+        json={"username": username, "password": password},
+        timeout=REQUESTS_TIMEOUT,
     )
     response.raise_for_status()
     return response.json()["access_token"]
@@ -60,7 +67,12 @@ def get_issue_id(token: str, thread_id: int, issue_number: str) -> int | None:
         if page_token:
             params["page_token"] = page_token
 
-        response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, params=params)
+        response = requests.get(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+            timeout=REQUESTS_TIMEOUT,
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -90,6 +102,7 @@ def create_dependency(
             "target_type": "issue",
             "target_id": target_issue_id,
         },
+        timeout=REQUESTS_TIMEOUT,
     )
 
     if response.status_code == 201:
@@ -124,7 +137,9 @@ def main():
     for thread_id, annuals in ANNUALS.items():
         # Get thread name
         response = requests.get(
-            f"{API_BASE}/api/threads/", headers={"Authorization": f"Bearer {token}"}
+            f"{API_BASE}/api/threads/",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=REQUESTS_TIMEOUT,
         )
         threads = response.json()
         thread_name = next(

@@ -165,6 +165,82 @@ describe('IssueToggleList', () => {
     expect(screen.getByText('Issue reorder failed')).toBeInTheDocument()
   })
 
+  it('inserts the dragged issue after the drop target regardless of drag direction', async () => {
+    const reorderRequest = createDeferred<void>()
+    mockedIssuesApi.reorder.mockReturnValueOnce(reorderRequest.promise)
+
+    await renderIssueToggleList()
+
+    fireEvent.dragStart(screen.getByTestId('issue-toggle-3'), {
+      dataTransfer: createDataTransfer(),
+    })
+    fireEvent.dragOver(screen.getByTestId('issue-pill-1'), {
+      dataTransfer: createDataTransfer(),
+    })
+    fireEvent.drop(screen.getByTestId('issue-pill-1'), {
+      dataTransfer: createDataTransfer(),
+    })
+
+    expect(getIssueOrder()).toEqual(['1', '3', '2'])
+    expect(mockedIssuesApi.reorder).toHaveBeenCalledWith(99, [1, 3, 2])
+
+    await act(async () => {
+      reorderRequest.resolve()
+      await reorderRequest.promise
+    })
+  })
+
+  it('keeps later optimistic mutations when an earlier queued mutation fails', async () => {
+    const confirmMock = vi.mocked(window.confirm)
+    confirmMock.mockReturnValue(true)
+
+    const reorderRequest = createDeferred<void>()
+    const deleteRequest = createDeferred<void>()
+    mockedIssuesApi.reorder.mockReturnValueOnce(reorderRequest.promise)
+    mockedIssuesApi.delete.mockReturnValueOnce(deleteRequest.promise)
+
+    await renderIssueToggleList()
+
+    fireEvent.dragStart(screen.getByTestId('issue-toggle-1'), {
+      dataTransfer: createDataTransfer(),
+    })
+    fireEvent.dragOver(screen.getByTestId('issue-pill-3'), {
+      dataTransfer: createDataTransfer(),
+    })
+    fireEvent.drop(screen.getByTestId('issue-pill-3'), {
+      dataTransfer: createDataTransfer(),
+    })
+
+    expect(getIssueOrder()).toEqual(['2', '3', '1'])
+
+    fireEvent.click(screen.getByTestId('issue-delete-2'))
+    expect(getIssueOrder()).toEqual(['3', '1'])
+
+    await act(async () => {
+      reorderRequest.reject(new Error('Issue reorder failed'))
+
+      try {
+        await reorderRequest.promise
+      } catch {
+        // The component surfaces the error inline; the rejected promise is expected here.
+      }
+    })
+
+    await waitFor(() => {
+      expect(getIssueOrder()).toEqual(['1', '3'])
+    })
+    expect(screen.getByText('Issue reorder failed')).toBeInTheDocument()
+
+    await act(async () => {
+      deleteRequest.resolve()
+      await deleteRequest.promise
+    })
+
+    await waitFor(() => {
+      expect(getIssueOrder()).toEqual(['1', '3'])
+    })
+  })
+
   it('deletes an issue after confirmation and updates the pills optimistically', async () => {
     const confirmMock = vi.mocked(window.confirm)
     confirmMock.mockReturnValue(true)

@@ -77,7 +77,7 @@ This is a **design documentation + code guardrail** step, not a rewrite. The sys
    - Return human-readable warnings for any disagreements
 
 2. **Add a validation endpoint** in `app/api/issue.py`:
-   ```
+   ```http
    GET /api/v1/threads/{thread_id}/issues:validateOrder
    ```
    Returns `{"warnings": [...]}` — empty list means no conflicts.
@@ -136,7 +136,7 @@ insert_after_issue_id: int | None = Field(
 **Add two new endpoints** in `app/api/issue.py`:
 
 ### 5a: Move single issue
-```
+```http
 POST /api/v1/issues/{issue_id}:move
 ```
 
@@ -159,7 +159,7 @@ class IssueMoveRequest(BaseModel):
 6. Use `SELECT FOR UPDATE` on all issue rows for the thread
 
 ### 5b: Bulk reorder
-```
+```http
 POST /api/v1/threads/{thread_id}/issues:reorder
 ```
 
@@ -196,7 +196,7 @@ class IssueReorderRequest(BaseModel):
 **Model:** sonnet 🧠 (cascade + position compaction + thread state transitions)
 
 **Add endpoint** in `app/api/issue.py`:
-```
+```http
 DELETE /api/v1/issues/{issue_id}
 ```
 
@@ -243,7 +243,7 @@ DELETE /api/v1/issues/{issue_id}
 
 **Also add a delete button** (small ✕) on each issue pill that calls `issuesApi.delete(issueId)` with a confirmation prompt.
 
-**Tests:** Add a vitest unit test in `frontend/src/test/` for the reorder state logic. Add a Playwright E2E test if feasible, otherwise test the delete confirmation flow.
+**Tests:** Add a vitest unit test in `frontend/src/unit/` for the reorder state logic. Add a Playwright E2E test if feasible, otherwise test the delete confirmation flow.
 
 **Verify:** `cd frontend && npm test && npm run build`
 

@@ -1,5 +1,9 @@
 """Rate limiting middleware using slowapi."""
 
+import asyncio
+import contextvars
+import functools
+import inspect
 import os
 from collections.abc import Callable
 
@@ -19,6 +23,10 @@ def _should_enable_rate_limiting() -> bool:
 
 
 if TEST_MODE:
+    _current_request: contextvars.ContextVar[Request | None] = contextvars.ContextVar(
+        "rate_limit_request",
+        default=None,
+    )
 
     def _test_rate_limit_key(request: Request) -> str:
         """Derive test-mode rate limit key from auth context, falling back to client address."""
@@ -42,15 +50,24 @@ if TEST_MODE:
             override_defaults: bool = True,
         ) -> Callable:
             """Return a decorator that exempts requests unless rate limiting is enabled."""
+            expects_request = False
+            if exempt_when is not None:
+                signature = inspect.signature(exempt_when)
+                expects_request = len(signature.parameters) == 1
 
             def _test_exempt_when() -> bool:
                 if not _should_enable_rate_limiting():
                     return True
                 if exempt_when is None:
                     return False
+                if expects_request:
+                    request = _current_request.get()
+                    if request is None:
+                        return False
+                    return exempt_when(request)
                 return exempt_when()
 
-            return super().limit(
+            limit_decorator = super().limit(
                 limit_value,
                 key_func=key_func,
                 per_method=per_method,
@@ -60,6 +77,49 @@ if TEST_MODE:
                 cost=cost,
                 override_defaults=override_defaults,
             )
+
+            def decorator(func: Callable) -> Callable:
+                limited_func = limit_decorator(func)
+                if not expects_request:
+                    return limited_func
+
+                request_parameter_index = next(
+                    (
+                        index
+                        for index, parameter in enumerate(inspect.signature(func).parameters.values())
+                        if parameter.name == "request"
+                    ),
+                    -1,
+                )
+
+                if asyncio.iscoroutinefunction(limited_func):
+                    @functools.wraps(limited_func)
+                    async def async_with_request(*args, **kwargs):
+                        request = kwargs.get("request")
+                        if request is None and request_parameter_index >= 0 and len(args) > request_parameter_index:
+                            request = args[request_parameter_index]
+                        token = _current_request.set(request if isinstance(request, Request) else None)
+                        try:
+                            return await limited_func(*args, **kwargs)
+                        finally:
+                            _current_request.reset(token)
+
+                    return async_with_request
+
+                @functools.wraps(limited_func)
+                def sync_with_request(*args, **kwargs):
+                    request = kwargs.get("request")
+                    if request is None and request_parameter_index >= 0 and len(args) > request_parameter_index:
+                        request = args[request_parameter_index]
+                    token = _current_request.set(request if isinstance(request, Request) else None)
+                    try:
+                        return limited_func(*args, **kwargs)
+                    finally:
+                        _current_request.reset(token)
+
+                return sync_with_request
+
+            return decorator
 
     limiter = TestLimiter(key_func=_test_rate_limit_key, default_limits=["1000000/second"])
 else:

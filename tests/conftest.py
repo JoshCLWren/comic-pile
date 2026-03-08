@@ -35,7 +35,7 @@ if not os.getenv("SECRET_KEY"):
 def enable_rate_limiting_for_tests(request: pytest.FixtureRequest) -> Iterator[None]:
     """Enable rate limiting only for the dedicated rate-limit test module."""
     original_value = os.environ.get("ENABLE_RATE_LIMITING_IN_TESTS")
-    if request.node.nodeid.startswith("tests/test_rate_limit.py"):
+    if request.node.nodeid.startswith("tests/test_rate_limit"):
         os.environ["ENABLE_RATE_LIMITING_IN_TESTS"] = "true"
     else:
         os.environ.pop("ENABLE_RATE_LIMITING_IN_TESTS", None)

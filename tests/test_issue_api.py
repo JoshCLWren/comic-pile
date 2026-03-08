@@ -4,9 +4,11 @@ import pytest
 from datetime import UTC, datetime
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Dependency, Event, Issue, Thread, User
+from comic_pile.dependencies import refresh_user_blocked_status
 from tests.conftest import get_or_create_user_async
 
 
@@ -206,6 +208,7 @@ async def test_list_issues_empty_thread(auth_client: AsyncClient, async_db: Asyn
         created_at=datetime.now(UTC),
     )
     async_db.add(thread)
+    await async_db.flush()
     await async_db.commit()
 
     response = await auth_client.get(f"/api/v1/threads/{thread.id}/issues")
@@ -320,6 +323,7 @@ async def test_list_issues_invalid_page_token(
         created_at=datetime.now(UTC),
     )
     async_db.add(thread)
+    await async_db.flush()
     await async_db.commit()
 
     response = await auth_client.get(f"/api/v1/threads/{thread.id}/issues?page_token=invalid")
@@ -398,6 +402,7 @@ async def test_create_issues_from_simple_range(
         created_at=datetime.now(UTC),
     )
     async_db.add(thread)
+    await async_db.flush()
     await async_db.commit()
     await async_db.refresh(thread)
 
@@ -435,6 +440,7 @@ async def test_create_issues_from_complex_range(
         created_at=datetime.now(UTC),
     )
     async_db.add(thread)
+    await async_db.flush()
     await async_db.commit()
 
     response = await auth_client.post(
@@ -568,10 +574,10 @@ async def test_create_issues_all_exist(auth_client: AsyncClient, async_db: Async
 
 
 @pytest.mark.asyncio
-async def test_create_issues_rejects_duplicate_issue_number_in_same_thread(
+async def test_create_issues_rejects_duplicate_issue_number_before_insert(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """POST /threads/{thread_id}/issues rejects a duplicate issue number in the same thread."""
+    """POST /threads/{thread_id}/issues returns 400 when all requested issues already exist."""
     user = await get_or_create_user_async(async_db)
 
     thread = Thread(
@@ -600,6 +606,70 @@ async def test_create_issues_rejects_duplicate_issue_number_in_same_thread(
         select(func.count()).select_from(Issue).where(Issue.thread_id == thread.id)
     )
     assert issue_count_result.scalar_one() == 1
+
+
+@pytest.mark.asyncio
+async def test_create_issues_returns_409_on_db_unique_conflict(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """POST /threads/{thread_id}/issues returns 409 when uq_issue_thread_number is hit."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Duplicate Conflict Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    thread_id = thread.id
+    await async_db.commit()
+
+    original_flush = async_db.flush
+    conflict_injected = False
+
+    async def flush_with_unique_conflict(*args, **kwargs) -> None:
+        nonlocal conflict_injected
+        pending_duplicate = next(
+            (
+                obj
+                for obj in async_db.new
+                if isinstance(obj, Issue)
+                and obj.thread_id == thread_id
+                and obj.issue_number == "7"
+            ),
+            None,
+        )
+        if pending_duplicate is not None and not conflict_injected:
+            conflict_injected = True
+            raise IntegrityError(
+                "INSERT INTO issues",
+                {},
+                Exception(
+                    'duplicate key value violates unique constraint "uq_issue_thread_number"'
+                ),
+            )
+        await original_flush(*args, **kwargs)
+
+    monkeypatch.setattr(async_db, "flush", flush_with_unique_conflict)
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread_id}/issues",
+        json={"issue_range": "7"},
+    )
+    assert response.status_code == 409
+    assert "already exists" in response.json()["detail"].lower()
+
+    issue_count_result = await async_db.execute(
+        select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
+    )
+    assert issue_count_result.scalar_one() == 0
 
 
 @pytest.mark.asyncio
@@ -660,6 +730,50 @@ async def test_create_issues_already_migrated(
     assert thread.total_issues == 30
     assert thread.issues_remaining == 15
     assert thread.next_unread_issue_id == issues[15].id
+
+
+@pytest.mark.asyncio
+async def test_create_issues_already_migrated_preserves_not_started_when_all_issues_unread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{thread_id}/issues keeps not_started for fully unread migrated threads."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Not Started Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issues = [
+        Issue(thread_id=thread.id, issue_number=str(i), position=i, status="unread")
+        for i in range(1, 4)
+    ]
+    async_db.add_all(issues)
+    await async_db.flush()
+
+    thread.next_unread_issue_id = issues[0].id
+    await async_db.commit()
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues",
+        json={"issue_range": "4-5"},
+    )
+    assert response.status_code == 201
+
+    await async_db.refresh(thread)
+    assert thread.total_issues == 5
+    assert thread.issues_remaining == 5
+    assert thread.next_unread_issue_id == issues[0].id
+    assert thread.reading_progress == "not_started"
 
 
 @pytest.mark.asyncio
@@ -1287,6 +1401,48 @@ async def test_move_issue_recalculates_next_unread_issue_id(
 
 
 @pytest.mark.asyncio
+async def test_move_issue_refreshes_blocked_status_from_new_next_unread_issue(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /issues/{issue_id}:move refreshes blocked flags after changing next unread."""
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Move Block Source Thread",
+        issue_specs=[("Alpha", "unread")],
+    )
+    target_thread, target_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Move Block Target Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "unread")],
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issues[0].id,
+            target_issue_id=target_issues[2].id,
+        )
+    )
+    await async_db.commit()
+
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+    await async_db.refresh(target_thread)
+    assert target_thread.is_blocked is False
+
+    response = await auth_client.post(
+        f"/api/v1/issues/{target_issues[2].id}:move",
+        json={"after_issue_id": None},
+    )
+    assert response.status_code == 204
+
+    await async_db.refresh(target_thread)
+    assert target_thread.next_unread_issue_id == target_issues[2].id
+    assert target_thread.is_blocked is True
+
+
+@pytest.mark.asyncio
 async def test_reorder_issues_updates_positions(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
@@ -1313,6 +1469,48 @@ async def test_reorder_issues_updates_positions(
 
     await async_db.refresh(thread)
     assert thread.next_unread_issue_id == issues[0].id
+
+
+@pytest.mark.asyncio
+async def test_reorder_issues_refreshes_blocked_status_from_new_next_unread_issue(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{thread_id}/issues:reorder refreshes blocked flags after reordering."""
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Reorder Block Source Thread",
+        issue_specs=[("Alpha", "unread")],
+    )
+    target_thread, target_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Reorder Block Target Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "unread")],
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issues[0].id,
+            target_issue_id=target_issues[1].id,
+        )
+    )
+    await async_db.commit()
+
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+    await async_db.refresh(target_thread)
+    assert target_thread.is_blocked is False
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{target_thread.id}/issues:reorder",
+        json={"issue_ids": [target_issues[1].id, target_issues[0].id, target_issues[2].id]},
+    )
+    assert response.status_code == 204
+
+    await async_db.refresh(target_thread)
+    assert target_thread.next_unread_issue_id == target_issues[1].id
+    assert target_thread.is_blocked is True
 
 
 @pytest.mark.asyncio

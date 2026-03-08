@@ -156,6 +156,7 @@ def upgrade() -> None:
     """)
 
     with op.batch_alter_table("issues", schema=None) as batch_op:
+        batch_op.drop_index("ix_issue_thread_number")
         batch_op.create_unique_constraint(
             "uq_issue_thread_number",
             ["thread_id", "issue_number"],
@@ -166,3 +167,4 @@ def downgrade() -> None:
     """Downgrade schema."""
     with op.batch_alter_table("issues", schema=None) as batch_op:
         batch_op.drop_constraint("uq_issue_thread_number", type_="unique")
+        batch_op.create_index("ix_issue_thread_number", ["thread_id", "issue_number"], unique=False)
