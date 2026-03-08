@@ -17,6 +17,7 @@ def _should_enable_rate_limiting() -> bool:
 
 
 if TEST_MODE:
+
     def _test_rate_limit_key(request: Request) -> str:
         """Derive test-mode rate limit key from auth context, falling back to client address."""
         auth_header = request.headers.get("authorization")
@@ -38,6 +39,15 @@ if TEST_MODE:
             """Return a decorator that conditionally applies rate limiting."""
 
             def decorator(func):
+                """Conditionally apply rate limiting to the function.
+
+                Args:
+                    func: The function to conditionally rate limit.
+
+                Returns:
+                    The rate-limited function if rate limiting is enabled,
+                    otherwise the original function.
+                """
                 if _should_enable_rate_limiting():
                     return _real_limiter.limit(limit_value)(func)
                 return func

@@ -107,6 +107,7 @@ async function createThreadsForUser(
           title: `Test Thread ${i + 1}`,
           format: 'issue',
           issues_remaining: 10,
+          total_issues: 10,
         },
         timeout: 10000,
       });

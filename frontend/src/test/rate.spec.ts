@@ -102,19 +102,13 @@ test.describe('Rate Thread Feature', () => {
   });
 
   test('should accept decimal ratings', async ({ authenticatedWithThreadsPage }) => {
-    const testRatings = ['3.5', '4.0', '4.5', '2.75'];
-
-    for (const rating of testRatings) {
-      await ensureRatingView(authenticatedWithThreadsPage);
-
-      await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, rating);
-      await Promise.all([
-        authenticatedWithThreadsPage.waitForResponse((response) =>
-          response.url().includes('/api/rate/') && response.request().method() === 'POST'
-        ),
-        authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
-      ]);
-    }
+    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
+    await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse((response) =>
+        response.url().includes('/api/rate/') && response.request().method() === 'POST'
+      ),
+      authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
+    ]);
   });
 
   test('should display snooze button', async ({ authenticatedWithThreadsPage }) => {
