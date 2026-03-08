@@ -96,7 +96,6 @@ async function createThreadsForUser(
     let success = false;
     let attempts = 0;
     const maxAttempts = 7;
-    let threadId: number | null = null;
 
     while (!success && attempts < maxAttempts) {
       const response = await request.post('/api/threads/', {
