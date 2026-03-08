@@ -590,6 +590,7 @@ test.describe('Roll Dice Feature', () => {
         title: 'Rollable Thread',
         format: 'Comics',
         issues_remaining: 10,
+        total_issues: 10,
       },
       })
       const unblockedThread = await unblockedResponse.json()
@@ -603,6 +604,7 @@ test.describe('Roll Dice Feature', () => {
         title: 'Blocked Thread - Never Rolled',
         format: 'Comics',
         issues_remaining: 3,
+        total_issues: 10,
       },
       })
       const blockedThread = await blockedResponse.json()
