@@ -90,21 +90,24 @@ class Thread(Base):
         "Dependency",
         foreign_keys="Dependency.source_thread_id",
         back_populates="source_thread",
-        cascade="all, delete-orphan",
-        lazy="raise",
+        cascade="all",
+        passive_deletes=True,
+        lazy="select",
     )
     dependencies_in: Mapped[list["Dependency"]] = relationship(
         "Dependency",
         foreign_keys="Dependency.target_thread_id",
         back_populates="target_thread",
-        cascade="all, delete-orphan",
-        lazy="raise",
+        cascade="all",
+        passive_deletes=True,
+        lazy="select",
     )
     issues: Mapped[list["Issue"]] = relationship(
         "Issue",
         back_populates="thread",
-        cascade="all, delete-orphan",
-        lazy="raise",
+        cascade="all",
+        passive_deletes=True,
+        lazy="select",
         order_by="Issue.issue_number",
         foreign_keys="[Issue.thread_id]",
     )
