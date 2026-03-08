@@ -71,7 +71,28 @@ function FormatSelect({ value, onChange, required }: {
 /**
  * Inline issue list for migrated threads in the edit modal.
  */
-function IssueToggleList({ threadId }: {
+function reorderIssuesForDrop(
+  issues: Issue[],
+  draggedIssueId: number,
+  targetIssueId: number
+): Issue[] {
+  const draggedIndex = issues.findIndex((issue) => issue.id === draggedIssueId)
+  const targetIndex = issues.findIndex((issue) => issue.id === targetIssueId)
+
+  if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
+    return issues
+  }
+
+  const nextIssues = [...issues]
+  const draggedIssue = nextIssues.splice(draggedIndex, 1)[0]
+  if (!draggedIssue) {
+    return issues
+  }
+  nextIssues.splice(targetIndex, 0, draggedIssue)
+  return nextIssues
+}
+
+export function IssueToggleList({ threadId }: {
   threadId: number
 }) {
   const [issues, setIssues] = useState<Issue[]>([])
@@ -79,7 +100,11 @@ function IssueToggleList({ threadId }: {
   const [addRange, setAddRange] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [toggling, setToggling] = useState<Set<number>>(new Set())
+  const [deleting, setDeleting] = useState<Set<number>>(new Set())
+  const [draggedIssueId, setDraggedIssueId] = useState<number | null>(null)
+  const [dragOverIssueId, setDragOverIssueId] = useState<number | null>(null)
 
   const loadIssues = useCallback(async () => {
     setIsLoading(true)
@@ -102,6 +127,7 @@ function IssueToggleList({ threadId }: {
     const newStatus = issue.status === 'read' ? 'unread' : 'read'
 
     // Optimistic update
+    setActionError(null)
     setIssues((prev) =>
       prev.map((i) => (i.id === issue.id ? { ...i, status: newStatus } : i))
     )
@@ -145,28 +171,142 @@ function IssueToggleList({ threadId }: {
     }
   }
 
+  const handleDragStart = (issueId: number) => (event: DragEvent<HTMLButtonElement>) => {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(issueId))
+    setDraggedIssueId(issueId)
+    setActionError(null)
+  }
+
+  const handleDragOver = (issueId: number) => (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverIssueId(issueId)
+  }
+
+  const handleDrop = (targetIssueId: number) => async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+
+    if (!draggedIssueId || draggedIssueId === targetIssueId) {
+      setDragOverIssueId(null)
+      return
+    }
+
+    const previousIssues = issues
+    const nextIssues = reorderIssuesForDrop(previousIssues, draggedIssueId, targetIssueId)
+    if (nextIssues === previousIssues) {
+      setDraggedIssueId(null)
+      setDragOverIssueId(null)
+      return
+    }
+
+    setIssues(nextIssues)
+    setActionError(null)
+
+    try {
+      await issuesApi.reorder(threadId, nextIssues.map((issue) => issue.id))
+    } catch (err: unknown) {
+      setIssues(previousIssues)
+      setActionError(getApiErrorDetail(err))
+    } finally {
+      setDraggedIssueId(null)
+      setDragOverIssueId(null)
+    }
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIssueId(null)
+    setDragOverIssueId(null)
+  }
+
+  async function handleDeleteIssue(issue: Issue) {
+    if (!window.confirm(`Delete issue #${issue.issue_number}?`)) {
+      return
+    }
+
+    const previousIssues = issues
+    setDeleting((prev) => new Set(prev).add(issue.id))
+    setIssues((prev) => prev.filter((currentIssue) => currentIssue.id !== issue.id))
+    setActionError(null)
+
+    try {
+      await issuesApi.delete(issue.id)
+    } catch (err: unknown) {
+      setIssues(previousIssues)
+      setActionError(getApiErrorDetail(err))
+    } finally {
+      setDeleting((prev) => {
+        const next = new Set(prev)
+        next.delete(issue.id)
+        return next
+      })
+    }
+  }
+
   if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
   return (
     <div className="space-y-2">
       <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
-        {issues.map((issue) => (
-          <button
-            key={issue.id}
-            type="button"
-            onClick={() => handleToggle(issue)}
-            disabled={toggling.has(issue.id)}
-            className={`px-2 py-0.5 rounded text-xs font-bold border transition-all ${
-              issue.status === 'read'
-                ? 'bg-amber-600/20 border-amber-500/30 text-amber-400'
-                : 'bg-white/5 border-white/10 text-stone-400'
-            } ${toggling.has(issue.id) ? 'opacity-50' : 'hover:opacity-80'}`}
-            title={`#${issue.issue_number}: ${issue.status}`}
-          >
-            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
-          </button>
-        ))}
+        {issues.map((issue) => {
+          const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
+          const isDragOver = dragOverIssueId === issue.id
+          const isDragged = draggedIssueId === issue.id
+
+          return (
+            <div
+              key={issue.id}
+              data-testid={`issue-pill-${issue.id}`}
+              data-issue-number={issue.issue_number}
+              className={[
+                'flex items-center rounded border transition-all',
+                issue.status === 'read'
+                  ? 'bg-amber-600/20 border-amber-500/30 text-amber-400'
+                  : 'bg-white/5 border-white/10 text-stone-400',
+                isDragOver ? 'border-amber-400/60 bg-amber-500/10' : '',
+                isDragged ? 'opacity-60' : '',
+                isBusy ? 'opacity-50' : '',
+              ].join(' ')}
+              onDragOver={handleDragOver(issue.id)}
+              onDrop={handleDrop(issue.id)}
+            >
+              <button
+                type="button"
+                draggable={!isBusy}
+                onDragStart={handleDragStart(issue.id)}
+                onDragEnd={handleDragEnd}
+                onClick={() => handleToggle(issue)}
+                disabled={isBusy}
+                className={[
+                  'px-2 py-0.5 text-xs font-bold transition-all',
+                  isBusy ? '' : 'hover:opacity-80 cursor-grab active:cursor-grabbing',
+                ].join(' ')}
+                title={`#${issue.issue_number}: ${issue.status}. Drag to reorder.`}
+                aria-label={`Toggle issue #${issue.issue_number}`}
+                data-testid={`issue-toggle-${issue.id}`}
+              >
+                #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleDeleteIssue(issue)
+                }}
+                disabled={deleting.has(issue.id)}
+                className={[
+                  'pr-2 text-[10px] font-black text-stone-500 transition-colors',
+                  'hover:text-red-300 disabled:opacity-50',
+                ].join(' ')}
+                aria-label={`Delete issue #${issue.issue_number}`}
+                data-testid={`issue-delete-${issue.id}`}
+                title={`Delete issue #${issue.issue_number}`}
+              >
+                x
+              </button>
+            </div>
+          )
+        })}
       </div>
       <div className="flex gap-2">
         <input
@@ -196,6 +336,9 @@ function IssueToggleList({ threadId }: {
       </div>
       {addError && (
         <p className="text-xs text-red-400">{addError}</p>
+      )}
+      {actionError && (
+        <p className="text-xs text-red-400">{actionError}</p>
       )}
     </div>
   )
