@@ -47,3 +47,9 @@ class IssueCreateRange(BaseModel):
     issue_range: str = Field(
         ..., min_length=1, description="Issue range like '1-25' or '1, 3, 5-7'"
     )
+
+
+class IssueOrderValidationResponse(BaseModel):
+    """Schema for reporting in-thread dependency ordering conflicts."""
+
+    warnings: list[str]

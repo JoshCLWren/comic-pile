@@ -25,6 +25,9 @@ class Dependency(Base):
     target_thread_id: Mapped[int | None] = mapped_column(
         ForeignKey("threads.id", ondelete="CASCADE"), nullable=True
     )
+    # Intra-thread issue dependencies are discouraged. Issue.position is the
+    # canonical reading order within a thread; issue dependencies are primarily
+    # for cross-thread blocking between next-unread issues.
     source_issue_id: Mapped[int | None] = mapped_column(
         ForeignKey("issues.id", ondelete="CASCADE"), nullable=True
     )

@@ -13,9 +13,17 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import Event, Issue, Thread
 from app.models.user import User
-from app.schemas import IssueCreateRange, IssueListResponse, IssueResponse
+from app.schemas import (
+    IssueCreateRange,
+    IssueListResponse,
+    IssueOrderValidationResponse,
+    IssueResponse,
+)
 from app.utils.issue_parser import parse_issue_ranges
-from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.dependencies import (
+    refresh_user_blocked_status,
+    validate_position_dependency_consistency,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +152,27 @@ async def list_issues(
         page_size=page_size,
         next_page_token=next_token,
     )
+
+
+@router.get(
+    "/threads/{thread_id}/issues:validateOrder",
+    response_model=IssueOrderValidationResponse,
+)
+async def validate_issue_order(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> IssueOrderValidationResponse:
+    """Report in-thread dependency edges that disagree with canonical issue positions."""
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    warnings = await validate_position_dependency_consistency(thread_id, current_user.id, db)
+    return IssueOrderValidationResponse(warnings=warnings)
 
 
 @router.post(
