@@ -626,6 +626,98 @@ async def test_get_session_details(auth_client: AsyncClient, sample_data: dict) 
 
 
 @pytest.mark.asyncio
+async def test_session_timestamp_consistency(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Test session timestamps are consistently formatted with timezone info.
+
+    Regression test for issue #245. Verifies that /details and /snapshots endpoints
+    return timestamps in the same ISO 8601 format with timezone information,
+    ensuring the frontend displays consistent timestamps.
+
+    Args:
+        auth_client: Authenticated test client.
+        async_db: SQLAlchemy session for database operations.
+        sample_data: Sample test data with sessions and events.
+    """
+    from datetime import UTC, datetime
+
+    from app.models import Snapshot
+
+    # Create a snapshot for session 1 to ensure we have snapshot data to test
+    session = sample_data["sessions"][0]
+    event = sample_data["events"][0]
+
+    snapshot = Snapshot(
+        session_id=session.id,
+        event_id=event.id,
+        thread_states={},
+        description="Test snapshot for timestamp consistency",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+    await async_db.refresh(snapshot)
+
+    details_response = await auth_client.get("/api/sessions/1/details")
+    assert details_response.status_code == 200
+    details_data = details_response.json()
+
+    snapshots_response = await auth_client.get("/api/sessions/1/snapshots")
+    assert snapshots_response.status_code == 200
+    snapshots_data = snapshots_response.json()
+
+    def assert_has_timezone(timestamp_str: str) -> None:
+        """Assert ISO 8601 timestamp has timezone info.
+
+        Args:
+            timestamp_str: ISO 8601 formatted timestamp string.
+
+        Raises:
+            AssertionError: If timestamp lacks timezone info.
+        """
+        assert timestamp_str is not None, "Timestamp should not be None"
+        assert "Z" in timestamp_str or "+" in timestamp_str, (
+            f"Timestamp {timestamp_str} should include timezone info (Z or +HH:MM)"
+        )
+
+    # Verify session details timestamps have timezone info
+    assert_has_timezone(details_data["started_at"])
+    if details_data.get("ended_at"):
+        assert_has_timezone(details_data["ended_at"])
+
+    # Verify all event timestamps have timezone info
+    for event in details_data["events"]:
+        assert_has_timezone(event["timestamp"])
+
+    # Verify all snapshot timestamps have timezone info
+    assert len(snapshots_data["snapshots"]) > 0, "Should have at least one snapshot"
+    for snapshot in snapshots_data["snapshots"]:
+        assert_has_timezone(snapshot["created_at"])
+
+    # Verify timestamps are in ISO 8601 format
+    import re
+
+    iso8601_pattern = re.compile(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$"
+    )
+
+    assert iso8601_pattern.match(details_data["started_at"]), (
+        f"started_at should be ISO 8601 format, got: {details_data['started_at']}"
+    )
+
+    for event in details_data["events"]:
+        assert iso8601_pattern.match(event["timestamp"]), (
+            f"Event timestamp should be ISO 8601 format, got: {event['timestamp']}"
+        )
+
+    for snapshot in snapshots_data["snapshots"]:
+        assert iso8601_pattern.match(snapshot["created_at"]), (
+            f"Snapshot created_at should be ISO 8601 format, got: {snapshot['created_at']}"
+        )
+
+
+@pytest.mark.asyncio
 async def test_get_thread_with_notes(
     auth_client: AsyncClient, async_db: AsyncSession, test_username: str
 ) -> None:

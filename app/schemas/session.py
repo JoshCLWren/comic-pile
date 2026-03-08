@@ -1,8 +1,24 @@
 """Session-related Pydantic schemas for request/response validation."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
+
+
+def _to_utc_iso(value: datetime) -> str:
+    """Convert datetime to ISO 8601 format with timezone.
+
+    Ensures naive datetimes are treated as UTC for consistent serialization.
+
+    Args:
+        value: The datetime value to serialize.
+
+    Returns:
+        ISO 8601 formatted string with timezone.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.isoformat()
 
 
 class SnoozedThreadInfo(BaseModel):
@@ -42,6 +58,22 @@ class SessionResponse(BaseModel):
     snoozed_threads: list[SnoozedThreadInfo] = []
     pending_thread_id: int | None = None
 
+    @field_serializer("started_at", "ended_at")
+    def serialize_datetime(self, value: datetime | None) -> str | None:
+        """Serialize datetime to ISO 8601 format with timezone.
+
+        Ensures naive datetimes are treated as UTC for consistent serialization.
+
+        Args:
+            value: The datetime value to serialize.
+
+        Returns:
+            ISO 8601 formatted string with timezone, or None if value is None.
+        """
+        if value is None:
+            return None
+        return _to_utc_iso(value)
+
 
 class EventDetail(BaseModel):
     """Schema for event detail in session details."""
@@ -58,6 +90,20 @@ class EventDetail(BaseModel):
     queue_move: str | None = None
     die_after: int | None = None
 
+    @field_serializer("timestamp")
+    def serialize_timestamp(self, value: datetime) -> str:
+        """Serialize event timestamp to ISO 8601 format with timezone.
+
+        Ensures naive datetimes are treated as UTC for consistent serialization.
+
+        Args:
+            value: The datetime value to serialize.
+
+        Returns:
+            ISO 8601 formatted string with timezone.
+        """
+        return _to_utc_iso(value)
+
 
 class SessionDetailsResponse(BaseModel):
     """Schema for session details with all events."""
@@ -70,3 +116,19 @@ class SessionDetailsResponse(BaseModel):
     narrative_summary: dict[str, list[str]]
     current_die: int
     events: list[EventDetail]
+
+    @field_serializer("started_at", "ended_at")
+    def serialize_datetime(self, value: datetime | None) -> str | None:
+        """Serialize datetime to ISO 8601 format with timezone.
+
+        Ensures naive datetimes are treated as UTC for consistent serialization.
+
+        Args:
+            value: The datetime value to serialize.
+
+        Returns:
+            ISO 8601 formatted string with timezone, or None if value is None.
+        """
+        if value is None:
+            return None
+        return _to_utc_iso(value)
