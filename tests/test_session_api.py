@@ -9,6 +9,18 @@ from app.models import Event, Issue, Thread
 from app.models import Session as SessionModel
 
 
+def _assert_issue_metadata(
+    active_thread: dict[str, object],
+    *,
+    issue_id: int | None,
+    issue_number: str | None,
+) -> None:
+    assert active_thread["issue_id"] == issue_id
+    assert active_thread["issue_number"] == issue_number
+    assert active_thread["next_issue_id"] == issue_id
+    assert active_thread["next_issue_number"] == issue_number
+
+
 @pytest.mark.asyncio
 async def test_session_with_legacy_thread_returns_nulls(
     auth_client: AsyncClient, async_db: AsyncSession
@@ -140,6 +152,231 @@ async def test_session_with_migrated_thread_returns_metadata(
     assert active_thread["issue_number"] == "8"
     assert active_thread["next_issue_id"] == next_issue.id
     assert active_thread["next_issue_number"] == "8"
+
+
+@pytest.mark.asyncio
+async def test_current_session_refetch_preserves_issue_metadata(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Current session keeps next-issue metadata when the session is refetched."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Hydrated Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=4,
+        reading_progress="in_progress",
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    for i in range(1, 5):
+        async_db.add(
+            Issue(
+                thread_id=thread.id,
+                issue_number=str(i),
+                status="read" if i < 3 else "unread",
+                position=i,
+            )
+        )
+    await async_db.commit()
+
+    issue_result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id, Issue.issue_number == "3")
+    )
+    next_issue = issue_result.scalar_one()
+    thread.next_unread_issue_id = next_issue.id
+    await async_db.commit()
+
+    async_db.add(
+        Event(
+            type="roll",
+            die=10,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+        )
+    )
+    await async_db.commit()
+
+    current_response = await auth_client.get("/api/sessions/current/")
+    assert current_response.status_code == 200
+
+    current_session = current_response.json()
+    assert current_session["id"] == session.id
+    assert current_session["active_thread"] is not None
+    current_active_thread = current_session["active_thread"]
+    _assert_issue_metadata(
+        current_active_thread,
+        issue_id=next_issue.id,
+        issue_number="3",
+    )
+
+    refetch_response = await auth_client.get(f"/api/sessions/{current_session['id']}")
+    assert refetch_response.status_code == 200
+
+    refetched_session = refetch_response.json()
+    assert refetched_session["active_thread"] is not None
+    refetched_active_thread = refetched_session["active_thread"]
+    _assert_issue_metadata(
+        refetched_active_thread,
+        issue_id=next_issue.id,
+        issue_number="3",
+    )
+
+
+@pytest.mark.asyncio
+async def test_current_session_legacy_thread_has_null_issue_metadata(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Current session returns null next-issue metadata for legacy threads."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Legacy Hydration Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=None,
+        next_unread_issue_id=None,
+        reading_progress=None,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    async_db.add(
+        Event(
+            type="roll",
+            die=10,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.get("/api/sessions/current/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["id"] == session.id
+    assert data["active_thread"] is not None
+    active_thread = data["active_thread"]
+    _assert_issue_metadata(active_thread, issue_id=None, issue_number=None)
+
+
+@pytest.mark.asyncio
+async def test_current_session_completed_thread_has_null_next_issue(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Current session returns null next-issue metadata for completed threads."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Completed Hydration Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="in_progress",
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    for i in range(1, 4):
+        async_db.add(
+            Issue(
+                thread_id=thread.id,
+                issue_number=str(i),
+                status="read" if i < 3 else "unread",
+                position=i,
+            )
+        )
+    await async_db.commit()
+
+    issue_result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id, Issue.issue_number == "3")
+    )
+    final_issue = issue_result.scalar_one()
+    thread.next_unread_issue_id = final_issue.id
+    await async_db.commit()
+
+    async_db.add(
+        Event(
+            type="roll",
+            die=10,
+            result=1,
+            selected_thread_id=thread.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=thread.id,
+        )
+    )
+
+    final_issue.status = "read"
+    thread.status = "completed"
+    thread.issues_remaining = 0
+    thread.reading_progress = "completed"
+    thread.next_unread_issue_id = None
+
+    async_db.add(
+        Event(
+            type="rate",
+            session_id=session.id,
+            thread_id=thread.id,
+            rating=4.0,
+            issues_read=1,
+            die=10,
+            die_after=8,
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.get("/api/sessions/current/")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["id"] == session.id
+    assert data["active_thread"] is not None
+    active_thread = data["active_thread"]
+    assert active_thread["reading_progress"] == "completed"
+    _assert_issue_metadata(active_thread, issue_id=None, issue_number=None)
 
 
 @pytest.mark.asyncio
