@@ -138,10 +138,10 @@ if should_run_python; then
     echo "Checking Python syntax by compiling..."
     if [ "$MODE" = "--staged" ] && [ -n "$STAGED_PYTHON_FILES" ]; then
         while IFS= read -r file; do
-            python -m py_compile "$file"
+            python3 -m py_compile "$file"
         done <<<"$STAGED_PYTHON_FILES"
     else
-        python -m compileall . -q
+        python3 -m compileall . -q
     fi
 
     echo ""
