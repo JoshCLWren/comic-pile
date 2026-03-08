@@ -66,7 +66,7 @@ class Event(Base):
     issues_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)
     die_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=True)
+    session_id: Mapped[int | None] = mapped_column(ForeignKey("sessions.id"), nullable=True)
     # Foreign key to threads table for events that act on a thread
     # Used by: "rate" events (thread that was read) and "rolled_but_skipped" events
     thread_id: Mapped[int | None] = mapped_column(ForeignKey("threads.id"), nullable=True)
@@ -82,8 +82,10 @@ class Event(Base):
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
     )
 
-    session: Mapped["Session"] = relationship("Session", back_populates="events", lazy="raise")
-    thread: Mapped["Thread"] = relationship("Thread", back_populates="events", lazy="raise")
+    session: Mapped["Session | None"] = relationship(
+        "Session", back_populates="events", lazy="raise"
+    )
+    thread: Mapped["Thread | None"] = relationship("Thread", back_populates="events", lazy="raise")
     issue: Mapped["Issue | None"] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
     snapshots: Mapped[list["Snapshot"]] = relationship(
         "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
