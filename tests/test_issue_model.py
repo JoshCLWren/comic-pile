@@ -1,7 +1,8 @@
 """Test Issue model functionality."""
 
-import pytest
 from datetime import UTC, datetime
+
+import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -248,3 +249,46 @@ async def test_multiple_issues_per_thread(async_db: AsyncSession):
     assert len(read_issues) == 3
     unread_issues = [i for i in thread_loaded.issues if i.status == "unread"]
     assert len(unread_issues) == 2
+
+
+@pytest.mark.asyncio
+async def test_thread_issues_relationship_orders_by_position(async_db: AsyncSession) -> None:
+    """Thread.issues should follow canonical position order, not issue_number sorting."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    user = User(username="test_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    thread = Thread(
+        title="Ordering Test Thread",
+        format="comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    async_db.add_all(
+        [
+            Issue(thread_id=thread.id, issue_number="2", position=1, status="unread"),
+            Issue(thread_id=thread.id, issue_number="Annual 1998", position=2, status="unread"),
+            Issue(thread_id=thread.id, issue_number="10", position=3, status="unread"),
+        ]
+    )
+    await async_db.flush()
+
+    result = await async_db.execute(
+        select(Thread).options(selectinload(Thread.issues)).where(Thread.id == thread.id)
+    )
+    thread_loaded = result.scalar_one()
+
+    assert [issue.issue_number for issue in thread_loaded.issues] == [
+        "2",
+        "Annual 1998",
+        "10",
+    ]
+    assert [issue.position for issue in thread_loaded.issues] == [1, 2, 3]
