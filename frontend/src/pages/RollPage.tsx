@@ -5,6 +5,7 @@ import LazyDice3D from '../components/LazyDice3D'
 import Modal from '../components/Modal'
 import Tooltip from '../components/Tooltip'
 import MigrationDialog from '../components/MigrationDialog'
+import SimpleMigrationDialog from '../components/SimpleMigrationDialog'
 import CollectionDialog from '../components/CollectionDialog'
 import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../components/diceLadder'
@@ -30,7 +31,7 @@ type RatingThread = Pick<
   Thread,
   'id' | 'title' | 'format' | 'issues_remaining' | 'queue_position' | 'total_issues' | 'reading_progress'
 > &
-  Pick<SessionThread, 'issue_id' | 'issue_number' | 'last_rolled_result'>
+  Pick<SessionThread, 'issue_id' | 'issue_number' | 'next_issue_id' | 'next_issue_number' | 'last_rolled_result'>
 
 type ApiErrorPayload = { detail?: string }
 type ApiLikeError = { response?: { status?: number; data?: ApiErrorPayload } }
@@ -66,6 +67,8 @@ function mapSessionThreadToRatingThread(thread: SessionThread): RatingThread {
     reading_progress: thread.reading_progress ?? null,
     issue_id: thread.issue_id ?? null,
     issue_number: thread.issue_number ?? null,
+    next_issue_id: thread.next_issue_id ?? null,
+    next_issue_number: thread.next_issue_number ?? null,
     last_rolled_result: thread.last_rolled_result ?? null,
   }
 }
@@ -89,6 +92,7 @@ export default function RollPage() {
   // Migration state
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
+  const [showSimpleMigration, setShowSimpleMigration] = useState(false)
 
   // Rating state
   const [isRatingView, setIsRatingView] = useState(false)
@@ -190,6 +194,8 @@ export default function RollPage() {
         queue_position: threadMetadata.queue_position,
         issue_id: threadMetadata.issue_id ?? null,
         issue_number: threadMetadata.issue_number ?? null,
+        next_issue_id: threadMetadata.next_issue_id ?? null,
+        next_issue_number: threadMetadata.next_issue_number ?? null,
         total_issues: threadMetadata.total_issues ?? null,
         reading_progress: threadMetadata.reading_progress ?? null,
         last_rolled_result:
@@ -233,6 +239,36 @@ export default function RollPage() {
     setShowMigrationDialog(false)
     setThreadToMigrate(null)
   }, [])
+
+  const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
+    const num = parseInt(issueNumber, 10)
+
+    if (isNaN(num) || num < 1) {
+      setErrorMessage('Invalid issue number')
+      return
+    }
+
+    setShowSimpleMigration(false)
+
+    rateMutation.mutate({
+      rating,
+      finish_session: false,
+      issue_number: num
+    }).then(() => {
+      suppressPendingAutoOpenRef.current = true
+      setIsRolling(false)
+      setIsRatingView(false)
+      setRolledResult(null)
+      setSelectedThreadId(null)
+      setActiveRatingThread(null)
+      setErrorMessage('')
+
+      Promise.allSettled([refetchSession(), refetchThreads()])
+    }).catch((error: unknown) => {
+      const detail = getApiErrorDetail(error)
+      setErrorMessage(detail || 'Failed to save rating')
+    })
+  }, [rating, rateMutation, refetchSession, refetchThreads])
 
   async function handleAction(action: string) {
     if (!selectedThread) return
@@ -356,6 +392,8 @@ export default function RollPage() {
         queue_position: pendingMetadata.queue_position,
         issue_id: pendingMetadata.issue_id ?? null,
         issue_number: pendingMetadata.issue_number ?? null,
+        next_issue_id: pendingMetadata.next_issue_id ?? null,
+        next_issue_number: pendingMetadata.next_issue_number ?? null,
         total_issues: pendingMetadata.total_issues ?? null,
         reading_progress: pendingMetadata.reading_progress ?? null,
         last_rolled_result: pendingMetadata.last_rolled_result ?? pendingResult,
@@ -457,10 +495,14 @@ export default function RollPage() {
       createExplosion();
     }
 
+    if (activeRatingThread && !activeRatingThread.total_issues) {
+      setShowSimpleMigration(true)
+      return
+    }
+
     try {
       await rateMutation.mutate({
         rating,
-        issues_read: 1,
         finish_session: finishSession
       });
 
@@ -474,11 +516,8 @@ export default function RollPage() {
 
       const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
       const [sessionRefreshResult, threadsRefreshResult] = refreshResults
-      if (sessionRefreshResult.status === 'rejected') {
-        console.error('Failed to refresh session after rating:', sessionRefreshResult.reason)
-      }
-      if (threadsRefreshResult.status === 'rejected') {
-        console.error('Failed to refresh threads after rating:', threadsRefreshResult.reason)
+      if (sessionRefreshResult.status === 'rejected' || threadsRefreshResult.status === 'rejected') {
+        setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
       }
     } catch (error: unknown) {
       const detail = getApiErrorDetail(error)
@@ -1125,6 +1164,14 @@ export default function RollPage() {
             onSkip={handleMigrationSkip}
             onClose={handleMigrationClose}
           />
+        )}
+
+        {showSimpleMigration && activeRatingThread && (
+            <SimpleMigrationDialog
+              threadTitle={activeRatingThread.title}
+              onComplete={handleSimpleMigrationComplete}
+              onClose={() => setShowSimpleMigration(false)}
+            />
         )}
 
         <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>

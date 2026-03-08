@@ -206,6 +206,35 @@ async def rate_thread(
 
     current_die = await get_current_die(current_session_id, db)
 
+    if not thread.uses_issue_tracking() and rate_data.issue_number is not None:
+        try:
+            issue_num = rate_data.issue_number
+
+            if issue_num < 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="issue_number must be at least 1",
+                )
+
+            total_issues = thread.issues_remaining + issue_num
+
+            if total_issues > 1000:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Total issues ({total_issues}) exceeds reasonable limit",
+                )
+
+            await thread.migrate_to_issues(issue_num - 1, total_issues, db)
+            await db.flush()
+        except HTTPException:
+            raise
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Migration failed. Please try again.",
+            ) from e
+
     rating_min, rating_max, rating_threshold = _get_rating_limits()
 
     if rate_data.rating < rating_min or rate_data.rating > rating_max:

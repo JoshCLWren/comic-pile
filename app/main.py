@@ -444,6 +444,15 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         """StaticFiles with explicit cache-control headers for hashed assets."""
 
         async def get_response(self, path: str, scope: Scope) -> StarletteResponse:
+            """Get static file response with cache-control headers.
+
+            Args:
+                path: The path to the static file.
+                scope: ASGI scope containing request information.
+
+            Returns:
+                A Starlette response with cache-control headers for hashed assets.
+            """
             response = await super().get_response(path, scope)
             # Add cache headers for hashed assets (they have content hashes in filename)
             if hasattr(response, "headers"):

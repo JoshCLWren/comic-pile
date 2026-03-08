@@ -195,6 +195,316 @@ test.describe('Roll Dice Feature', () => {
     expect(new URL(authenticatedWithThreadsPage.url()).pathname).toBe('/');
   });
 
+  test.describe('Issue Metadata Persistence and Simplified Migration', () => {
+    test('should show SimpleMigrationDialog and complete migration during rating', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
+      const threadTitle = `Legacy Thread ${Date.now()}`;
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: threadTitle,
+          format: 'Comics',
+          issues_remaining: 5,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      await authenticatedPage.click(SELECTORS.roll.mainDie);
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      await authenticatedPage.fill(SELECTORS.rate.ratingInput, '4');
+
+      await authenticatedPage.click(SELECTORS.rate.submitButton);
+
+      await expect(authenticatedPage.locator('.migration-dialog__overlay')).toBeVisible({ timeout: 5000 });
+      await expect(authenticatedPage.locator('#simple-migration-dialog-title')).toContainText('Track Issues');
+
+      await authenticatedPage.fill('#issue-number', '5');
+
+      await authenticatedPage.locator('.migration-dialog__btn--primary').filter({ hasText: 'Start Tracking' }).click();
+
+      await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0, { timeout: 15000 });
+
+      await expect(authenticatedPage.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 10000 });
+
+      const threadDataResponse = await request.get(`/api/threads/${thread.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!threadDataResponse.ok()) {
+        throw new Error(`Failed to fetch thread data: ${threadDataResponse.status()} ${threadDataResponse.statusText()}`);
+      }
+
+      const updatedThread = await threadDataResponse.json();
+      expect(updatedThread.total_issues).toBe(10);
+      expect(updatedThread.reading_progress).toBe('in_progress');
+      expect(updatedThread.next_unread_issue_number).toBe('5');
+    });
+
+    test('should persist issue metadata after session refetch', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
+      const threadTitle = `Migrated Thread ${Date.now()}`;
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: threadTitle,
+          format: 'Comics',
+          issues_remaining: 5,
+          total_issues: 10,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      const issuesResponse = await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: {
+          issue_range: '1-10',
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!issuesResponse.ok()) {
+        throw new Error(`Failed to create issues: ${issuesResponse.status()} ${issuesResponse.statusText()}`);
+      }
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
+      await threadElement.click();
+
+      const actionSheetTitle = authenticatedPage.locator('h2').filter({ hasText: threadTitle });
+      await expect(actionSheetTitle).toBeVisible();
+
+      await authenticatedPage.getByRole('button', { name: 'Read Now' }).click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const initialSessionResponse = await authenticatedPage.request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      expect(initialSessionResponse.ok()).toBeTruthy();
+
+      const initialSessionData = await initialSessionResponse.json();
+      expect(initialSessionData.active_thread).toBeDefined();
+      expect(initialSessionData.active_thread.issue_number).toBeDefined();
+      const initialIssueNumber = initialSessionData.active_thread.issue_number;
+
+      await authenticatedPage.evaluate(async (authToken) => {
+        const response = await fetch('/api/sessions/current/', {
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to refetch session: ${response.status}`);
+        }
+        return await response.json();
+      }, token);
+
+      const refetchedSessionResponse = await authenticatedPage.request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      expect(refetchedSessionResponse.ok()).toBeTruthy();
+
+      const refetchedSessionData = await refetchedSessionResponse.json();
+      expect(refetchedSessionData.active_thread).toBeDefined();
+      expect(refetchedSessionData.active_thread.issue_number).toBeDefined();
+      expect(refetchedSessionData.active_thread.issue_number).toBe(initialIssueNumber);
+    });
+
+    test('should persist issue metadata after page reload', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
+      const threadTitle = `Migrated Thread ${Date.now()}`;
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: threadTitle,
+          format: 'Comics',
+          issues_remaining: 5,
+          total_issues: 10,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      const issuesResponse = await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: {
+          issue_range: '1-10',
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!issuesResponse.ok()) {
+        throw new Error(`Failed to create issues: ${issuesResponse.status()} ${issuesResponse.statusText()}`);
+      }
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
+      await threadElement.click();
+
+      const actionSheetTitle = authenticatedPage.locator('h2').filter({ hasText: threadTitle });
+      await expect(actionSheetTitle).toBeVisible();
+
+      await authenticatedPage.getByRole('button', { name: 'Read Now' }).click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const initialSessionResponse = await authenticatedPage.request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      expect(initialSessionResponse.ok()).toBeTruthy();
+
+      const initialSessionData = await initialSessionResponse.json();
+      const initialIssueNumber = initialSessionData.active_thread.issue_number;
+
+      await authenticatedPage.reload();
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const reloadedSessionResponse = await authenticatedPage.request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      expect(reloadedSessionResponse.ok()).toBeTruthy();
+
+      const reloadedSessionData = await reloadedSessionResponse.json();
+      expect(reloadedSessionData.active_thread).toBeDefined();
+      expect(reloadedSessionData.active_thread.issue_number).toBeDefined();
+      expect(reloadedSessionData.active_thread.issue_number).toBe(initialIssueNumber);
+    });
+
+    test('should persist issue metadata after 409 conflict recovery', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
+      const threadTitle = `Migrated Thread ${Date.now()}`;
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: threadTitle,
+          format: 'Comics',
+          issues_remaining: 5,
+          total_issues: 10,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      const issuesResponse = await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: {
+          issue_range: '1-10',
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!issuesResponse.ok()) {
+        throw new Error(`Failed to create issues: ${issuesResponse.status()} ${issuesResponse.statusText()}`);
+      }
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      await authenticatedPage.click(SELECTORS.roll.mainDie);
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const initialSessionResponse = await authenticatedPage.request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      expect(initialSessionResponse.ok()).toBeTruthy();
+
+      const initialSessionData = await initialSessionResponse.json();
+      const initialIssueNumber = initialSessionData.active_thread.issue_number;
+
+      const secondRollResponse = await authenticatedPage.request.post('/api/roll/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      expect(secondRollResponse.status()).toBe(409);
+
+      const sessionResponse = await authenticatedPage.request.get('/api/sessions/current/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      expect(sessionResponse.ok()).toBeTruthy();
+
+      const sessionData = await sessionResponse.json();
+      expect(sessionData.active_thread).toBeDefined();
+      expect(sessionData.active_thread.issue_number).toBeDefined();
+      expect(sessionData.active_thread.issue_number).toBe(initialIssueNumber);
+    });
+  });
+
   test.describe('Blocked thread filtering', () => {
     test('blocked threads do not appear in roll pool', async ({ authenticatedPage }) => {
       const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
@@ -280,6 +590,7 @@ test.describe('Roll Dice Feature', () => {
         title: 'Rollable Thread',
         format: 'Comics',
         issues_remaining: 10,
+        total_issues: 10,
       },
       })
       const unblockedThread = await unblockedResponse.json()
@@ -293,6 +604,7 @@ test.describe('Roll Dice Feature', () => {
         title: 'Blocked Thread - Never Rolled',
         format: 'Comics',
         issues_remaining: 3,
+        total_issues: 10,
       },
       })
       const blockedThread = await blockedResponse.json()

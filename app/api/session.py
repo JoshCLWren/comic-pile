@@ -11,8 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, Snapshot, Thread, User
-from app.models import Session as SessionModel
+from app.models import Event, Issue, Session as SessionModel, Snapshot, Thread, User
 from app.schemas import (
     ActiveThreadInfo,
     EventDetail,
@@ -29,6 +28,29 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 clear_cache = None
 get_current_session_cached = None
+
+
+async def _fetch_thread_issue_metadata(
+    thread: Thread, db: AsyncSession
+) -> tuple[int | None, str | None]:
+    """Fetch issue metadata for a thread.
+
+    Args:
+        thread: The thread to fetch issue metadata for.
+        db: Database session.
+
+    Returns:
+        Tuple of (issue_id, issue_number) for the thread's next unread issue,
+        or (None, None) if the thread doesn't use issue tracking or has no next issue.
+    """
+    if not thread.uses_issue_tracking() or not thread.next_unread_issue_id:
+        return None, None
+
+    issue_result = await db.execute(select(Issue).where(Issue.id == thread.next_unread_issue_id))
+    next_issue = issue_result.scalar_one_or_none()
+    if next_issue:
+        return next_issue.id, next_issue.issue_number
+    return None, None
 
 
 async def get_session_with_thread_safe(
@@ -71,6 +93,7 @@ async def get_session_with_thread_safe(
         pending_thread = pending_result.scalar_one_or_none()
         if pending_thread:
             issues_remaining = await pending_thread.get_issues_remaining(db)
+            issue_id, issue_number = await _fetch_thread_issue_metadata(pending_thread, db)
             return session, ActiveThreadInfo(
                 id=pending_thread.id,
                 title=pending_thread.title,
@@ -78,6 +101,12 @@ async def get_session_with_thread_safe(
                 issues_remaining=issues_remaining,
                 queue_position=pending_thread.queue_position,
                 last_rolled_result=last_rolled_result,
+                total_issues=pending_thread.total_issues,
+                reading_progress=pending_thread.reading_progress,
+                issue_id=issue_id,
+                issue_number=issue_number,
+                next_issue_id=issue_id,
+                next_issue_number=issue_number,
             )
         return session, None
 
@@ -85,6 +114,7 @@ async def get_session_with_thread_safe(
         thread = await db.get(Thread, event.selected_thread_id)
         if thread and thread.user_id == session.user_id:
             issues_remaining = await thread.get_issues_remaining(db)
+            issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
             return session, ActiveThreadInfo(
                 id=thread.id,
                 title=thread.title,
@@ -92,6 +122,12 @@ async def get_session_with_thread_safe(
                 issues_remaining=issues_remaining,
                 queue_position=thread.queue_position,
                 last_rolled_result=last_rolled_result,
+                total_issues=thread.total_issues,
+                reading_progress=thread.reading_progress,
+                issue_id=issue_id,
+                issue_number=issue_number,
+                next_issue_id=issue_id,
+                next_issue_number=issue_number,
             )
 
     # When a thread is just completed by rating and no pending thread is set,
@@ -104,6 +140,7 @@ async def get_session_with_thread_safe(
             and rated_thread.status == "completed"
         ):
             issues_remaining = await rated_thread.get_issues_remaining(db)
+            issue_id, issue_number = await _fetch_thread_issue_metadata(rated_thread, db)
             return session, ActiveThreadInfo(
                 id=rated_thread.id,
                 title=rated_thread.title,
@@ -111,6 +148,12 @@ async def get_session_with_thread_safe(
                 issues_remaining=issues_remaining,
                 queue_position=rated_thread.queue_position,
                 last_rolled_result=last_rolled_result,
+                total_issues=rated_thread.total_issues,
+                reading_progress=rated_thread.reading_progress,
+                issue_id=issue_id,
+                issue_number=issue_number,
+                next_issue_id=issue_id,
+                next_issue_number=issue_number,
             )
 
     return session, None
@@ -228,6 +271,7 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
         return None
 
     issues_remaining = await thread.get_issues_remaining(db)
+    issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
     return ActiveThreadInfo(
         id=thread.id,
         title=thread.title,
@@ -235,6 +279,12 @@ async def get_active_thread(session_id: int, db: AsyncSession) -> ActiveThreadIn
         issues_remaining=issues_remaining,
         queue_position=thread.queue_position,
         last_rolled_result=event.result,
+        total_issues=thread.total_issues,
+        reading_progress=thread.reading_progress,
+        issue_id=issue_id,
+        issue_number=issue_number,
+        next_issue_id=issue_id,
+        next_issue_number=issue_number,
     )
 
 
@@ -452,6 +502,7 @@ async def list_sessions(
                 thread = threads_by_id.get(sid_events[0].selected_thread_id)
                 if thread:
                     issues_remaining = await thread.get_issues_remaining(db)
+                    issue_id, issue_number = await _fetch_thread_issue_metadata(thread, db)
                     active_threads_dict[sid] = ActiveThreadInfo(
                         id=thread.id,
                         title=thread.title,
@@ -459,6 +510,12 @@ async def list_sessions(
                         issues_remaining=issues_remaining,
                         queue_position=thread.queue_position,
                         last_rolled_result=sid_events[0].result,
+                        total_issues=thread.total_issues,
+                        reading_progress=thread.reading_progress,
+                        issue_id=issue_id,
+                        issue_number=issue_number,
+                        next_issue_id=issue_id,
+                        next_issue_number=issue_number,
                     )
                 else:
                     active_threads_dict[sid] = None

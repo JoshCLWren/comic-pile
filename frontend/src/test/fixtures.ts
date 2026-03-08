@@ -107,7 +107,7 @@ async function createThreadsForUser(
           title: `Test Thread ${i + 1}`,
           format: 'issue',
           issues_remaining: 10,
-          total_issues: 20,
+          total_issues: 10,
         },
         timeout: 10000,
       });
@@ -120,7 +120,7 @@ async function createThreadsForUser(
         const backoffMs = Math.min(3000 * Math.pow(1.5, attempts - 1) + jitter, 20000);
         await new Promise(resolve => setTimeout(resolve, backoffMs));
       } else {
-        throw new Error(`Failed to create thread ${i + 1}: ${response.status()} ${response.statusText()}`);
+        throw new Error(`Failed to create thread ${i + 1}: ${response.status()} ${response.statusText}`);
       }
     }
 
