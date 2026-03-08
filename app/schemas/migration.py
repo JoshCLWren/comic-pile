@@ -12,3 +12,9 @@ class MigrateToIssuesRequest(BaseModel):
     total_issues: int = Field(
         ..., ge=1, description="Total number of issues in the series (e.g., 25)"
     )
+
+
+class MigrateToIssuesSimpleRequest(BaseModel):
+    """Schema for simplified migration (infers total_issues from current state)."""
+
+    issue_number: int = Field(..., ge=1, description="The issue number user just read (e.g., 5)")

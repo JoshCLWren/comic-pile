@@ -103,6 +103,8 @@ export interface SessionThread {
   reading_progress?: string | null;
   issue_id?: number | null;
   issue_number?: string | null;
+  next_issue_id?: number | null;
+  next_issue_number?: string | null;
   last_rolled_result?: number | null;
 }
 

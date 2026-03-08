@@ -23,6 +23,7 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
+from app.schemas.migration import MigrateToIssuesSimpleRequest
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
@@ -502,12 +503,10 @@ async def reactivate_thread(
         from app.models import Issue
         from sqlalchemy import select
 
-        locked_issues = (
-            await db.execute(
-                select(Issue.issue_number, Issue.position)
-                .where(Issue.thread_id == thread.id)
-                .with_for_update()
-            )
+        locked_issues = await db.execute(
+            select(Issue.issue_number, Issue.position)
+            .where(Issue.thread_id == thread.id)
+            .with_for_update()
         )
         existing_issue_rows = locked_issues.all()
         existing_total = len(existing_issue_rows)
@@ -760,6 +759,69 @@ async def migrate_thread_to_issues(
         )
 
     await thread.migrate_to_issues(request.last_issue_read, request.total_issues, db)
+
+    response = await thread_to_response(thread, db)
+
+    await db.commit()
+    if clear_cache:
+        clear_cache()
+
+    return response
+
+
+@router.post("/{thread_id}:migrateToIssuesSimple", response_model=ThreadResponse)
+async def migrate_thread_to_issues_simple(
+    thread_id: int,
+    request: MigrateToIssuesSimpleRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadResponse:
+    """Simplified migration: infer total_issues from current state.
+
+    If user just read issue N, then issues 1-(N-1) were read previously,
+    and issue N is what they just rated (should be unread for the rating flow).
+
+    This endpoint infers total_issues from issues_remaining + issue_number,
+    marks issues 1 through (issue_number-1) as READ,
+    marks issue issue_number as UNREAD (so the rating can mark it read),
+    and sets next_unread_issue_id to point to issue_number.
+
+    Args:
+        thread_id: The thread ID to migrate
+        request: Migration data with issue_number being the issue just rated
+        current_user: The authenticated user
+        db: Database session
+
+    Returns:
+        ThreadResponse with updated thread
+
+    Raises:
+        HTTPException: 404 if thread not found, 400 if validation fails
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    if thread.total_issues is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {thread_id} already uses issue tracking",
+        )
+
+    issue_number = request.issue_number
+
+    if issue_number < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="issue_number must be at least 1",
+        )
+
+    total_issues = thread.issues_remaining + issue_number
+
+    await thread.migrate_to_issues(issue_number - 1, total_issues, db)
 
     response = await thread_to_response(thread, db)
 

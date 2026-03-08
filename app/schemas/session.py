@@ -37,6 +37,12 @@ class ActiveThreadInfo(BaseModel):
     issues_remaining: int
     queue_position: int
     last_rolled_result: int | None
+    total_issues: int | None = None
+    reading_progress: str | None = None
+    issue_id: int | None = None
+    issue_number: str | None = None
+    next_issue_id: int | None = None
+    next_issue_number: str | None = None
 
 
 class SessionResponse(BaseModel):

@@ -206,6 +206,11 @@ async def rate_thread(
 
     current_die = await get_current_die(current_session_id, db)
 
+    if not thread.uses_issue_tracking() and rate_data.issue_number is not None:
+        total_issues = thread.issues_remaining + rate_data.issue_number
+        await thread.migrate_to_issues(rate_data.issue_number - 1, total_issues, db)
+        await db.flush()
+
     rating_min, rating_max, rating_threshold = _get_rating_limits()
 
     if rate_data.rating < rating_min or rate_data.rating > rating_max:
