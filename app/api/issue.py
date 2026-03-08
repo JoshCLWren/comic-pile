@@ -339,28 +339,17 @@ async def create_issues(
             )
         insert_position = insert_after_issue.position
 
-    new_issues = []
-    next_new_position = insert_position + 1
+    new_issue_numbers = [
+        issue_number for issue_number in issue_numbers if issue_number not in existing_issues
+    ]
 
-    for issue_number in issue_numbers:
-        if issue_number not in existing_issues:
-            issue = Issue(
-                thread_id=thread_id,
-                issue_number=issue_number,
-                position=next_new_position,
-                status="unread",
-            )
-            db.add(issue)
-            new_issues.append(issue)
-            next_new_position += 1
-
-    if not new_issues:
+    if not new_issue_numbers:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="All issues in range already exist",
         )
 
-    new_issues_count = len(new_issues)
+    new_issues_count = len(new_issue_numbers)
 
     if request.insert_after_issue_id is not None:
         await db.execute(
@@ -368,6 +357,20 @@ async def create_issues(
             .where(Issue.thread_id == thread_id, Issue.position > insert_position)
             .values(position=Issue.position + new_issues_count)
         )
+
+    new_issues = []
+    next_new_position = insert_position + 1
+
+    for issue_number in new_issue_numbers:
+        issue = Issue(
+            thread_id=thread_id,
+            issue_number=issue_number,
+            position=next_new_position,
+            status="unread",
+        )
+        db.add(issue)
+        new_issues.append(issue)
+        next_new_position += 1
 
     position_values = [issue.position for issue in new_issues]
     if len(position_values) != len(set(position_values)):

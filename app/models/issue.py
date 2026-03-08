@@ -47,10 +47,12 @@ class Issue(Base):
         foreign_keys="Dependency.source_issue_id",
         back_populates="source_issue",
         lazy="raise",
+        passive_deletes=True,
     )
     dependencies_in: Mapped[list["Dependency"]] = relationship(
         "Dependency",
         foreign_keys="Dependency.target_issue_id",
         back_populates="target_issue",
         lazy="raise",
+        passive_deletes=True,
     )
