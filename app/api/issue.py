@@ -130,6 +130,30 @@ def _recalculate_next_unread_issue_id(thread: Thread, issues: list[Issue]) -> No
     thread.next_unread_issue_id = next_unread_issue.id if next_unread_issue else None
 
 
+def _recalculate_thread_issue_tracking_state(thread: Thread, issues: list[Issue]) -> None:
+    """Recalculate issue-tracking metadata from the current in-memory issue state."""
+    unread_issues = [issue for issue in issues if issue.status == "unread"]
+    unread_count = len(unread_issues)
+    total_issues = len(issues)
+
+    thread.total_issues = total_issues
+    thread.issues_remaining = unread_count
+    thread.next_unread_issue_id = unread_issues[0].id if unread_issues else None
+
+    if unread_count == 0:
+        thread.reading_progress = "completed"
+        thread.status = "completed"
+        return
+
+    if unread_count == total_issues:
+        thread.reading_progress = "not_started"
+    else:
+        thread.reading_progress = "in_progress"
+
+    if thread.status == "completed":
+        thread.status = "active"
+
+
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
 async def list_issues(
     thread_id: int,
@@ -591,6 +615,52 @@ async def reorder_issues(
     _recalculate_next_unread_issue_id(thread, reordered_issues)
 
     await db.flush()
+    await db.commit()
+
+
+@router.delete("/issues/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_issue(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete one issue, compact later positions, and update thread issue metadata."""
+    thread_id = await _get_issue_thread_id(issue_id, current_user, db)
+    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+
+    issue_map = {issue.id: issue for issue in thread_issues}
+    issue = issue_map.get(issue_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+
+    deleted_position = issue.position
+    deleted_issue_number = issue.issue_number
+    remaining_issues = [
+        existing_issue for existing_issue in thread_issues if existing_issue.id != issue_id
+    ]
+
+    await db.delete(issue)
+
+    for remaining_issue in remaining_issues:
+        if remaining_issue.position > deleted_position:
+            remaining_issue.position -= 1
+
+    _recalculate_thread_issue_tracking_state(thread, remaining_issues)
+
+    db.add(
+        Event(
+            type="issue_deleted",
+            timestamp=datetime.now(UTC),
+            thread_id=thread.id,
+            issue_number=deleted_issue_number,
+        )
+    )
+
+    await db.flush()
+    await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
 

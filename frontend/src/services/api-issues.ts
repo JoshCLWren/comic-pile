@@ -95,6 +95,14 @@ export const issuesApi = {
   },
 
   /**
+   * Delete a single issue from its thread
+   * @param issueId - The issue ID to delete
+   */
+  delete: async (issueId: number): Promise<void> => {
+    await api.delete<void>(`/v1/issues/${issueId}`)
+  },
+
+  /**
    * Migrate a thread to use issue tracking
    * Converts thread from simple format to issue-based tracking
    * @param threadId - The thread ID to migrate

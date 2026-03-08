@@ -1364,6 +1364,156 @@ async def test_reorder_issues_rejects_extra_issue_ids(
 
 
 @pytest.mark.asyncio
+async def test_delete_middle_issue_shifts_positions_and_logs_event(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """DELETE /issues/{issue_id} deletes a middle issue and compacts later positions."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Delete Middle Thread",
+        issue_specs=[("1", "unread"), ("2", "read"), ("3", "unread"), ("4", "unread")],
+    )
+
+    response = await auth_client.delete(f"/api/v1/issues/{issues[1].id}")
+    assert response.status_code == 204
+
+    remaining_issues = await _get_thread_issues(async_db, thread.id)
+    assert [issue.issue_number for issue in remaining_issues] == ["1", "3", "4"]
+    assert [issue.position for issue in remaining_issues] == [1, 2, 3]
+
+    await async_db.refresh(thread)
+    assert thread.total_issues == 3
+    assert thread.issues_remaining == 3
+    assert thread.next_unread_issue_id == issues[0].id
+    assert thread.reading_progress == "not_started"
+    assert thread.status == "active"
+
+    event_result = await async_db.execute(
+        select(Event).where(
+            Event.thread_id == thread.id,
+            Event.type == "issue_deleted",
+            Event.issue_number == "2",
+        )
+    )
+    event = event_result.scalar_one_or_none()
+    assert event is not None
+    assert event.type == "issue_deleted"
+
+
+@pytest.mark.asyncio
+async def test_delete_last_issue_leaves_prior_positions_unchanged(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """DELETE /issues/{issue_id} leaves earlier positions unchanged when deleting the end."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Delete Last Thread",
+        issue_specs=[("1", "read"), ("2", "unread"), ("3", "read")],
+    )
+
+    response = await auth_client.delete(f"/api/v1/issues/{issues[2].id}")
+    assert response.status_code == 204
+
+    remaining_issues = await _get_thread_issues(async_db, thread.id)
+    assert [issue.issue_number for issue in remaining_issues] == ["1", "2"]
+    assert [issue.position for issue in remaining_issues] == [1, 2]
+
+    await async_db.refresh(thread)
+    assert thread.total_issues == 2
+    assert thread.issues_remaining == 1
+    assert thread.next_unread_issue_id == issues[1].id
+    assert thread.reading_progress == "in_progress"
+
+
+@pytest.mark.asyncio
+async def test_delete_next_unread_issue_advances_pointer_and_deletes_dependencies(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """DELETE /issues/{issue_id} advances next_unread_issue_id and removes issue dependencies."""
+    user = await get_or_create_user_async(async_db)
+    _source_thread, source_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Delete Dependency Source Thread",
+        issue_specs=[("Alpha", "unread")],
+    )
+    target_thread, target_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Delete Next Unread Thread",
+        issue_specs=[("1", "read"), ("2", "unread"), ("3", "unread"), ("4", "read")],
+    )
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issues[0].id,
+            target_issue_id=target_issues[1].id,
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.delete(f"/api/v1/issues/{target_issues[1].id}")
+    assert response.status_code == 204
+
+    remaining_issues = await _get_thread_issues(async_db, target_thread.id)
+    assert [issue.issue_number for issue in remaining_issues] == ["1", "3", "4"]
+    assert [issue.position for issue in remaining_issues] == [1, 2, 3]
+
+    await async_db.refresh(target_thread)
+    assert target_thread.next_unread_issue_id == target_issues[2].id
+    assert target_thread.issues_remaining == 1
+    assert target_thread.reading_progress == "in_progress"
+
+    dependency_count_result = await async_db.execute(
+        select(func.count())
+        .select_from(Dependency)
+        .where(Dependency.target_issue_id == target_issues[1].id)
+    )
+    assert dependency_count_result.scalar_one() == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_all_issues_completes_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """DELETE /issues/{issue_id} can remove the final issues and complete the thread."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Delete All Issues Thread",
+        issue_specs=[("1", "unread"), ("2", "unread")],
+    )
+
+    first_response = await auth_client.delete(f"/api/v1/issues/{issues[0].id}")
+    assert first_response.status_code == 204
+
+    second_response = await auth_client.delete(f"/api/v1/issues/{issues[1].id}")
+    assert second_response.status_code == 204
+
+    remaining_issues = await _get_thread_issues(async_db, thread.id)
+    assert remaining_issues == []
+
+    await async_db.refresh(thread)
+    assert thread.total_issues == 0
+    assert thread.issues_remaining == 0
+    assert thread.next_unread_issue_id is None
+    assert thread.reading_progress == "completed"
+    assert thread.status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_delete_issue_not_found(auth_client: AsyncClient) -> None:
+    """DELETE /issues/{issue_id} returns 404 for non-existent issues."""
+    response = await auth_client.delete("/api/v1/issues/999")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_mark_issue_read_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """POST /issues/{issue_id}:markRead marks unread issue as read."""
     user = await get_or_create_user_async(async_db)
