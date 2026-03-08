@@ -65,14 +65,13 @@ RUN uv sync --all-extras
 # Stage 4: Playwright
 FROM python-deps AS playwright-env
 ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
-RUN playwright install chromium
 
 # Stage 5: Frontend dependencies
 FROM playwright-env AS frontend-deps
 COPY package.json package-lock.json ./
 COPY frontend/package.json frontend/package-lock.json frontend/
 RUN npm ci && \
-    (cd frontend && npm ci)
+    (cd frontend && npm ci && npx playwright install chromium)
 
 # Stage 6: Frontend build
 FROM frontend-deps AS frontend-build
