@@ -250,8 +250,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shardIndex: [1]
-        totalShards: [1]
+        shardIndex: [1, 2]
+        totalShards: [2]
     env:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
