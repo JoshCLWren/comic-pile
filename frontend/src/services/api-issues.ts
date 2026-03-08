@@ -26,10 +26,23 @@ export const issuesApi = {
    * Create issues from a range format (e.g., "1-25" or "1, 3, 5-7")
    * @param threadId - The thread ID to create issues for
    * @param issueRange - Issue range string to parse and create
+   * @param options - Optional insert positioning options
    * @returns List of created issues
    */
-  create: async (threadId: number, issueRange: string): Promise<IssueListResponse> => {
-    return api.post(`/v1/threads/${threadId}/issues`, { issue_range: issueRange })
+  create: async (
+    threadId: number,
+    issueRange: string,
+    options?: { insert_after_issue_id?: number | null }
+  ): Promise<IssueListResponse> => {
+    const payload: { issue_range: string; insert_after_issue_id?: number | null } = {
+      issue_range: issueRange,
+    }
+
+    if (options && 'insert_after_issue_id' in options) {
+      payload.insert_after_issue_id = options.insert_after_issue_id ?? null
+    }
+
+    return api.post(`/v1/threads/${threadId}/issues`, payload)
   },
 
   /**

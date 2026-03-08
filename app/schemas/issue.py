@@ -47,6 +47,11 @@ class IssueCreateRange(BaseModel):
     issue_range: str = Field(
         ..., min_length=1, description="Issue range like '1-25' or '1, 3, 5-7'"
     )
+    insert_after_issue_id: int | None = Field(
+        default=None,
+        ge=1,
+        description="Insert new issues after this issue ID. If null, append to end.",
+    )
 
 
 class IssueOrderValidationResponse(BaseModel):

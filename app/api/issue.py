@@ -186,60 +186,11 @@ async def create_issues(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> IssueListResponse:
-    """Create issues from range format (e.g., "1-25" or "1, 3, 5-7").
+    """Create issues from a range string and place them in thread order.
 
-    Supports both initial thread migration and adding issues to existing migrated threads.
-    Deduplicates existing issues - only creates issues that don't already exist.
-    Updates thread metadata (total_issues, issues_remaining, next_unread_issue_id).
-
-    Position Calculation Algorithm:
-    New issues are ALWAYS appended at the end of ALL existing issues to avoid collisions
-    and maintain data integrity. The algorithm:
-    1. Find max_position among all existing issues (not just referenced ones)
-    2. Start new issue positions at max_position + 1
-    3. Assign positions sequentially to new issues in request order
-
-    Examples:
-    - Existing: Issues 1-10 at positions 1-10
-      Request: "1-5, Annual 2"
-      Result: Annual 2 at position 11 (after ALL existing issues, including 6-10)
-
-    - Existing: Issues 1-10 at positions 1-10
-      Request: "11-15"
-      Result: Issues 11-15 at positions 11-15
-
-    - Existing: Empty
-      Request: "Annual 1, 1-3"
-      Result: Annual 1 at position 1, then 1-3 at positions 2-4
-
-    Rationale:
-    Inserting new issues between existing issues would require shifting all subsequent
-    issues, which is error-prone and computationally expensive. Appending at the end
-    is simple, deterministic, and prevents position collisions.
-
-    Data Integrity Strategy:
-    - Position duplicates within new_issues: Detected and logged as ERROR
-    - Position conflicts with existing issues: Detected and logged as ERROR
-    - All collisions return HTTP 500 to prevent data corruption
-    - Logs include thread_id, positions, and conflicts for production monitoring
-
-    Row-Level Locking Strategy:
-    Uses SELECT FOR UPDATE to prevent race conditions when multiple requests
-    add issues to the same thread concurrently:
-
-    1. Read thread row (without lock, just for permission check)
-    2. Lock all issue rows for this thread (prevents concurrent issue adds creating position conflicts)
-    3. Calculate new positions atomically (max_position read while holding locks)
-    4. Write new issues (position assignment is deterministic under lock)
-    5. Commit releases all locks
-
-    Lock strategy (minimal locking to prevent deadlocks):
-    - Thread row: NOT locked (read-only for permission check)
-    - Issue rows: Locked with SELECT FOR UPDATE (prevents concurrent modifications)
-    - Events table: No lock needed (inserts after commit or in same transaction)
-
-    This ensures concurrent requests to add issues are serialized at the database level,
-    preventing position collisions without application-level mutexes.
+    By default new issues are appended after the last existing issue. When
+    ``insert_after_issue_id`` is provided, existing issues later in the thread are
+    shifted upward so the new issues are inserted immediately after that issue.
 
     Args:
         thread_id: The thread ID to create issues for.
@@ -254,7 +205,9 @@ async def create_issues(
         HTTPException: If thread not found, all issues already exist,
                       position collision detected, or issue range is invalid.
     """
-    thread_result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
+    thread_result = await db.execute(
+        select(Thread).where(Thread.id == thread_id).with_for_update()
+    )
     thread = thread_result.scalar_one_or_none()
     if not thread or thread.user_id != current_user.id:
         raise HTTPException(
@@ -277,18 +230,31 @@ async def create_issues(
         )
 
     existing_issues_result = await db.execute(
-        select(Issue.issue_number, Issue.position)
+        select(Issue.id, Issue.issue_number, Issue.position)
         .where(Issue.thread_id == thread_id)
         .with_for_update()
+        .order_by(Issue.position)
     )
-    existing_issues = {row[0]: row[1] for row in existing_issues_result.fetchall()}
+    existing_issue_rows = existing_issues_result.all()
+    existing_issues = {row.issue_number: row.position for row in existing_issue_rows}
 
-    max_position = 0
-    if existing_issues:
-        max_position = max(existing_issues.values())
+    max_position = max((row.position for row in existing_issue_rows), default=0)
+    insert_position = max_position
+
+    if request.insert_after_issue_id is not None:
+        insert_after_issue = next(
+            (row for row in existing_issue_rows if row.id == request.insert_after_issue_id),
+            None,
+        )
+        if insert_after_issue is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue {request.insert_after_issue_id} not found",
+            )
+        insert_position = insert_after_issue.position
 
     new_issues = []
-    next_new_position = max_position + 1
+    next_new_position = insert_position + 1
 
     for issue_number in issue_numbers:
         if issue_number not in existing_issues:
@@ -308,6 +274,15 @@ async def create_issues(
             detail="All issues in range already exist",
         )
 
+    new_issues_count = len(new_issues)
+
+    if request.insert_after_issue_id is not None:
+        await db.execute(
+            update(Issue)
+            .where(Issue.thread_id == thread_id, Issue.position > insert_position)
+            .values(position=Issue.position + new_issues_count)
+        )
+
     position_values = [issue.position for issue in new_issues]
     if len(position_values) != len(set(position_values)):
         logger.error(
@@ -322,8 +297,10 @@ async def create_issues(
             detail="Internal error: Duplicate positions calculated",
         )
 
-    existing_position_values = list(existing_issues.values())
-    conflicting_positions = [p for p in position_values if p in existing_position_values]
+    reserved_positions = [
+        row.position for row in existing_issue_rows if row.position <= insert_position
+    ]
+    conflicting_positions = [p for p in position_values if p in reserved_positions]
     if conflicting_positions:
         logger.error(
             "Position collision with existing issues",
@@ -360,30 +337,44 @@ async def create_issues(
             detail="Internal error: Database constraint violation",
         ) from e
 
-    new_issues_count = len(new_issues)
-
     # Get existing issue count before new issues were added
     existing_count_result = await db.execute(
         select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
     )
     existing_issue_count = existing_count_result.scalar() or 0
 
+    first_unread_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id, Issue.status == "unread")
+        .order_by(Issue.position)
+        .limit(1)
+    )
+    first_unread_issue = first_unread_result.scalar_one_or_none()
+
     # Handle both initial migration and adding to existing migrated threads
     if thread.total_issues is None:
         # Initial thread migration - set up issue tracking from scratch
         thread.total_issues = existing_issue_count
-        thread.issues_remaining = existing_issue_count
-        thread.reading_progress = "not_started"
-        if new_issues:
-            thread.next_unread_issue_id = new_issues[0].id
+        thread.issues_remaining = await thread.get_issues_remaining(db)
+        if first_unread_issue is None:
+            thread.next_unread_issue_id = None
+            thread.reading_progress = "completed"
+            thread.status = "completed"
+        else:
+            thread.next_unread_issue_id = first_unread_issue.id
+            if thread.issues_remaining == thread.total_issues:
+                thread.reading_progress = "not_started"
+            else:
+                thread.reading_progress = "in_progress"
             thread.status = "active"
     else:
         # Adding issues to existing migrated thread - update counts incrementally
         thread.total_issues += new_issues_count
         thread.issues_remaining += new_issues_count
         thread.reading_progress = "in_progress"
+        existing_next_unread_issue_id = thread.next_unread_issue_id
         # If thread was completed (no next_unread), reactivate with first new issue
-        if thread.next_unread_issue_id is None and new_issues:
+        if existing_next_unread_issue_id is None and new_issues:
             if thread.status == "completed":
                 await db.execute(
                     update(Thread)
@@ -394,7 +385,14 @@ async def create_issues(
                 thread.queue_position = 1
             thread.next_unread_issue_id = new_issues[0].id
             thread.status = "active"
-        # Otherwise keep existing next_unread - no change needed
+        elif (
+            new_issues
+            and existing_next_unread_issue_id is not None
+            and await should_update_next_unread(
+                new_issues[0].id, existing_next_unread_issue_id, db
+            )
+        ):
+            thread.next_unread_issue_id = new_issues[0].id
 
     thread_id_val = thread.id
 
@@ -405,10 +403,10 @@ async def create_issues(
     )
     db.add(event)
 
+    issue_responses = [issue_to_response(issue) for issue in new_issues]
+
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
-
-    issue_responses = [issue_to_response(issue) for issue in new_issues]
 
     return IssueListResponse(
         issues=issue_responses,
