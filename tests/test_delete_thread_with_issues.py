@@ -72,3 +72,12 @@ async def test_delete_thread_with_issues_reproduces_lazy_raise_bug(
     issues_result = await async_db.execute(select(Issue).where(Issue.thread_id == thread_id))
     remaining_issues = issues_result.scalars().all()
     assert len(remaining_issues) == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_thread_not_found_returns_404(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Test DELETE /api/threads/{id} returns 404 for non-existent thread."""
+    response = await auth_client.delete("/api/threads/999999")
+    assert response.status_code == 404

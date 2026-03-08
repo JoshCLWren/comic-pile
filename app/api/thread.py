@@ -1,6 +1,7 @@
 """Thread CRUD API endpoints."""
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -27,6 +28,8 @@ from app.schemas.migration import MigrateToIssuesSimpleRequest
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
+
+logger = logging.getLogger(__name__)
 
 
 async def thread_to_response(
@@ -454,9 +457,10 @@ async def delete_thread(
         ) from exc
     except Exception as exc:
         await db.rollback()
+        logger.exception("Unexpected error deleting thread %s", thread_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting thread: {type(exc).__name__}: {exc}",
+            detail="Internal server error",
         ) from exc
     if clear_cache:
         clear_cache()

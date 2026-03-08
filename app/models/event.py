@@ -82,8 +82,10 @@ class Event(Base):
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
     )
 
-    session: Mapped["Session"] = relationship("Session", back_populates="events", lazy="raise")
-    thread: Mapped["Thread"] = relationship("Thread", back_populates="events", lazy="raise")
+    session: Mapped["Session | None"] = relationship(
+        "Session", back_populates="events", lazy="raise"
+    )
+    thread: Mapped["Thread | None"] = relationship("Thread", back_populates="events", lazy="raise")
     issue: Mapped["Issue | None"] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
     snapshots: Mapped[list["Snapshot"]] = relationship(
         "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
