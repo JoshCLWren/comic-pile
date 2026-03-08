@@ -1,7 +1,7 @@
 .PHONY: help init lint pytest sync venv githook install-githook
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
-.PHONY: dev test seed migrate worktrees status test-integration deploy-prod dev-all dev-frontend
+.PHONY: dev test seed migrate worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
 .PHONY: test-e2e-prod-smoke check-prod-assets
 
@@ -9,6 +9,10 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
+PROD_BASE_URL ?= https://app-production-72b9.up.railway.app
+RAILWAY_PROD_ENV ?= production
+RAILWAY_APP_SERVICE ?= app
+PROD_MIGRATE_CMD ?= /app/.venv/bin/alembic upgrade head
 
 # Port configuration - Port allocation rules:
 # - Main repo (task API source of truth): 8000
@@ -293,9 +297,21 @@ deploy-prod:  ## Deploy to Railway production
 	@echo "Checking deployment status..."
 	@railway status
 	@echo "Testing health endpoint..."
-	@curl -fsS https://app-production-72b9.up.railway.app/health >/dev/null
+	@curl -fsS $(PROD_BASE_URL)/health >/dev/null
 	@echo "Validating deployed frontend asset references..."
-	@bash scripts/check_frontend_assets.sh https://app-production-72b9.up.railway.app
+	@bash scripts/check_frontend_assets.sh $(PROD_BASE_URL)
+
+prod-migrate:  ## Run Alembic migrations in Railway production app service
+	@echo "Running production migrations on Railway ($(RAILWAY_APP_SERVICE)/$(RAILWAY_PROD_ENV))..."
+	@railway ssh --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) $(PROD_MIGRATE_CMD)
+	@echo "Verifying production migration revision..."
+	@railway ssh --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) /app/.venv/bin/alembic current
+
+deploy-prod-migrate: deploy-prod prod-migrate  ## Deploy to Railway production, then run Alembic migrations
+	@echo "Verifying health endpoint after production migration..."
+	@curl -fsS $(PROD_BASE_URL)/health >/dev/null
+	@echo "Validating deployed frontend asset references after migration..."
+	@bash scripts/check_frontend_assets.sh $(PROD_BASE_URL)
 
 check-prod-assets:  ## Validate deployed frontend assets (make check-prod-assets PROD_BASE_URL=https://...)
 	@if [ -z "$(PROD_BASE_URL)" ]; then \
