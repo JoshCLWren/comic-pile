@@ -86,7 +86,7 @@ This enables fast lookups like: "Find issue #362 in Uncanny X-Men thread"
 - Human-readable identifier shown in UI
 
 **Example:**
-```
+```text
 Thread: Uncanny X-Men
 Issues:
   position=1, issue_number="362"

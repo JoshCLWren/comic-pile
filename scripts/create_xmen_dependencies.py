@@ -12,6 +12,7 @@ Usage:
 """
 
 import os
+import sys
 import requests
 from typing import NamedTuple
 
@@ -68,7 +69,9 @@ class IssueInfo(NamedTuple):
 def login(username: str, password: str) -> str:
     """Authenticate and return bearer token."""
     response = requests.post(
-        f"{API_BASE}/api/auth/login", json={"username": username, "password": password}
+        f"{API_BASE}/api/auth/login",
+        json={"username": username, "password": password},
+        timeout=10,
     )
     response.raise_for_status()
     return response.json()["access_token"]
@@ -89,6 +92,7 @@ def create_dependency(
             "target_type": "issue",
             "target_id": target.issue_id,
         },
+        timeout=10,
     )
 
     if response.status_code == 201:
@@ -171,6 +175,8 @@ def main():
     print("   storyline order. The dice will respect these dependencies!")
     print("=" * 60)
 
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

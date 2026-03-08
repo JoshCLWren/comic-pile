@@ -44,7 +44,9 @@ STORYLINES = {
 def login(username: str, password: str) -> str:
     """Authenticate and return bearer token."""
     response = requests.post(
-        f"{API_BASE}/api/auth/login", json={"username": username, "password": password}
+        f"{API_BASE}/api/auth/login",
+        json={"username": username, "password": password},
+        timeout=10,
     )
     response.raise_for_status()
     return response.json()["access_token"]
@@ -67,7 +69,9 @@ def get_issue_id(token: str, thread_id: int, issue_number: str) -> int | None:
         if page_token:
             params["page_token"] = page_token
 
-        response = requests.get(url, headers={"Authorization": f"Bearer {token}"}, params=params)
+        response = requests.get(
+            url, headers={"Authorization": f"Bearer {token}"}, params=params, timeout=10
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -85,12 +89,12 @@ def get_issue_id(token: str, thread_id: int, issue_number: str) -> int | None:
 def check_dependency_exists(
     token: str,
     source_thread_id: int,
-    target_thread_id: int,
 ) -> dict:
-    """Check if any dependencies exist between two threads."""
+    """Check if any dependencies exist for a thread."""
     response = requests.get(
         f"{API_BASE}/api/v1/threads/{source_thread_id}/dependencies",
         headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
     )
     response.raise_for_status()
     data = response.json()
@@ -119,7 +123,7 @@ def main():
 
     # Get all threads
     response = requests.get(
-        f"{API_BASE}/api/threads/", headers={"Authorization": f"Bearer {token}"}
+        f"{API_BASE}/api/threads/", headers={"Authorization": f"Bearer {token}"}, timeout=10
     )
     response.raise_for_status()
     threads = response.json()
@@ -157,7 +161,7 @@ def main():
                 continue
 
             # Check if dependency exists
-            existing_deps = check_dependency_exists(token, source_thread_id, target_thread_id)
+            existing_deps = check_dependency_exists(token, source_thread_id)
 
             # Look for this specific dependency
             exists = False
