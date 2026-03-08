@@ -16,7 +16,9 @@ from app.models.user import User
 from app.schemas import (
     IssueCreateRange,
     IssueListResponse,
+    IssueMoveRequest,
     IssueOrderValidationResponse,
+    IssueReorderRequest,
     IssueResponse,
 )
 from app.utils.issue_parser import parse_issue_ranges
@@ -66,6 +68,66 @@ def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
         and "thread_id" in error_text
         and "issue_number" in error_text
     )
+
+
+async def _get_locked_thread_with_issues(
+    thread_id: int,
+    current_user: User,
+    db: AsyncSession,
+) -> tuple[Thread, list[Issue]]:
+    """Lock a thread and all of its issues, validating ownership."""
+    thread_result = await db.execute(
+        select(Thread).where(Thread.id == thread_id).with_for_update()
+    )
+    thread = thread_result.scalar_one_or_none()
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    issues_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position, Issue.id)
+        .with_for_update()
+    )
+    return thread, list(issues_result.scalars().all())
+
+
+async def _get_issue_thread_id(
+    issue_id: int,
+    current_user: User,
+    db: AsyncSession,
+) -> int:
+    """Resolve an issue's thread ID with ownership validation before taking thread locks."""
+    issue_thread_result = await db.execute(
+        select(Issue.thread_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Issue.id == issue_id, Thread.user_id == current_user.id)
+    )
+    thread_id = issue_thread_result.scalar_one_or_none()
+    if thread_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+    return thread_id
+
+
+def _assign_issue_positions(issues: list[Issue]) -> None:
+    """Rewrite positions so the given issue order becomes canonical."""
+    for position, issue in enumerate(issues, start=1):
+        issue.position = position
+
+
+def _recalculate_next_unread_issue_id(thread: Thread, issues: list[Issue]) -> None:
+    """Update a thread's next unread pointer from the current in-memory issue order."""
+    next_unread_issue = next(
+        (issue for issue in issues if issue.status == "unread"),
+        None,
+    )
+    thread.next_unread_issue_id = next_unread_issue.id if next_unread_issue else None
 
 
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
@@ -450,6 +512,86 @@ async def get_issue(
         )
 
     return issue_to_response(issue)
+
+
+@router.post("/issues/{issue_id}:move", status_code=status.HTTP_204_NO_CONTENT)
+async def move_issue(
+    issue_id: int,
+    request: IssueMoveRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Move a single issue within its thread and recalculate the next unread issue."""
+    thread_id = await _get_issue_thread_id(issue_id, current_user, db)
+    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+
+    issue_map = {issue.id: issue for issue in thread_issues}
+    issue = issue_map.get(issue_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+
+    if request.after_issue_id == issue_id:
+        _recalculate_next_unread_issue_id(thread, thread_issues)
+        await db.commit()
+        return
+
+    reordered_issues = [existing_issue for existing_issue in thread_issues if existing_issue.id != issue_id]
+
+    if request.after_issue_id is None:
+        insert_index = 0
+    else:
+        after_issue = issue_map.get(request.after_issue_id)
+        if after_issue is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue {request.after_issue_id} not found",
+            )
+        insert_index = next(
+            index for index, existing_issue in enumerate(reordered_issues)
+            if existing_issue.id == after_issue.id
+        ) + 1
+
+    reordered_issues.insert(insert_index, issue)
+    _assign_issue_positions(reordered_issues)
+    _recalculate_next_unread_issue_id(thread, reordered_issues)
+
+    await db.flush()
+    await db.commit()
+
+
+@router.post("/threads/{thread_id}/issues:reorder", status_code=status.HTTP_204_NO_CONTENT)
+async def reorder_issues(
+    thread_id: int,
+    request: IssueReorderRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Rewrite all issue positions in a thread from an explicit ordered ID list."""
+    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+
+    existing_issue_ids = [issue.id for issue in thread_issues]
+    requested_issue_ids = request.issue_ids
+    if (
+        len(requested_issue_ids) != len(existing_issue_ids)
+        or len(set(requested_issue_ids)) != len(requested_issue_ids)
+        or set(requested_issue_ids) != set(existing_issue_ids)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="issue_ids must contain every issue in the thread exactly once",
+        )
+
+    issue_map = {issue.id: issue for issue in thread_issues}
+    reordered_issues = [issue_map[issue_id] for issue_id in requested_issue_ids]
+
+    _assign_issue_positions(reordered_issues)
+    _recalculate_next_unread_issue_id(thread, reordered_issues)
+
+    await db.flush()
+    await db.commit()
 
 
 @router.post("/issues/{issue_id}:markRead", status_code=status.HTTP_204_NO_CONTENT)

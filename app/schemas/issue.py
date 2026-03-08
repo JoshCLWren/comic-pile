@@ -54,6 +54,26 @@ class IssueCreateRange(BaseModel):
     )
 
 
+class IssueMoveRequest(BaseModel):
+    """Schema for moving an issue to a new position."""
+
+    after_issue_id: int | None = Field(
+        ...,
+        ge=1,
+        description="Move after this issue. null = move to position 1 (top).",
+    )
+
+
+class IssueReorderRequest(BaseModel):
+    """Schema for bulk reordering issues within a thread."""
+
+    issue_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        description="Ordered list of issue IDs representing the desired order.",
+    )
+
+
 class IssueOrderValidationResponse(BaseModel):
     """Schema for reporting in-thread dependency ordering conflicts."""
 

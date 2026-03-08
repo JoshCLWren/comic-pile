@@ -10,6 +10,61 @@ from app.models import Dependency, Event, Issue, Thread, User
 from tests.conftest import get_or_create_user_async
 
 
+async def _create_issue_tracking_thread(
+    async_db: AsyncSession,
+    user: User,
+    *,
+    title: str,
+    issue_specs: list[tuple[str, str]],
+) -> tuple[Thread, list[Issue]]:
+    """Create a thread with ordered issues for issue API tests."""
+    unread_count = sum(1 for _, issue_status in issue_specs if issue_status == "unread")
+    thread = Thread(
+        title=title,
+        format="Comic",
+        issues_remaining=unread_count,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=len(issue_specs),
+        reading_progress="not_started" if unread_count == len(issue_specs) else "in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issues: list[Issue] = []
+    for position, (issue_number, issue_status) in enumerate(issue_specs, start=1):
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=issue_number,
+            position=position,
+            status=issue_status,
+            read_at=datetime.now(UTC) if issue_status == "read" else None,
+        )
+        issues.append(issue)
+
+    async_db.add_all(issues)
+    await async_db.flush()
+
+    first_unread = next((issue for issue in issues if issue.status == "unread"), None)
+    thread.next_unread_issue_id = first_unread.id if first_unread else None
+    if first_unread is None:
+        thread.reading_progress = "completed"
+        thread.status = "completed"
+
+    await async_db.commit()
+    return thread, issues
+
+
+async def _get_thread_issues(async_db: AsyncSession, thread_id: int) -> list[Issue]:
+    """Return issues for a thread ordered by position."""
+    result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position)
+    )
+    return list(result.scalars().all())
+
+
 @pytest.mark.asyncio
 async def test_list_issues_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """GET /threads/{thread_id}/issues returns all issues for a thread."""
@@ -1081,6 +1136,231 @@ async def test_get_issue_other_user_issue(auth_client: AsyncClient, async_db: As
     response = await auth_client.get(f"/api/v1/issues/{issue.id}")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_move_issue_to_top_reorders_positions(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /issues/{issue_id}:move can move an issue to the top of its thread."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Move To Top Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "unread"), ("4", "unread")],
+    )
+
+    response = await auth_client.post(
+        f"/api/v1/issues/{issues[3].id}:move",
+        json={"after_issue_id": None},
+    )
+    assert response.status_code == 204
+
+    reordered_issues = await _get_thread_issues(async_db, thread.id)
+    assert [issue.issue_number for issue in reordered_issues] == ["4", "1", "2", "3"]
+    assert [issue.position for issue in reordered_issues] == [1, 2, 3, 4]
+
+    await async_db.refresh(thread)
+    assert thread.next_unread_issue_id == issues[3].id
+
+
+@pytest.mark.asyncio
+async def test_move_issue_to_middle_reorders_positions(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /issues/{issue_id}:move can move an issue into the middle of a thread."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Move To Middle Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "unread"), ("4", "unread")],
+    )
+
+    response = await auth_client.post(
+        f"/api/v1/issues/{issues[0].id}:move",
+        json={"after_issue_id": issues[2].id},
+    )
+    assert response.status_code == 204
+
+    reordered_issues = await _get_thread_issues(async_db, thread.id)
+    assert [issue.issue_number for issue in reordered_issues] == ["2", "3", "1", "4"]
+    assert [issue.position for issue in reordered_issues] == [1, 2, 3, 4]
+
+
+@pytest.mark.asyncio
+async def test_move_issue_to_end_reorders_positions(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /issues/{issue_id}:move can move an issue to the end of a thread."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Move To End Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "unread"), ("4", "unread")],
+    )
+
+    response = await auth_client.post(
+        f"/api/v1/issues/{issues[0].id}:move",
+        json={"after_issue_id": issues[3].id},
+    )
+    assert response.status_code == 204
+
+    reordered_issues = await _get_thread_issues(async_db, thread.id)
+    assert [issue.issue_number for issue in reordered_issues] == ["2", "3", "4", "1"]
+    assert [issue.position for issue in reordered_issues] == [1, 2, 3, 4]
+
+    await async_db.refresh(thread)
+    assert thread.next_unread_issue_id == issues[1].id
+
+
+@pytest.mark.asyncio
+async def test_move_issue_not_found(auth_client: AsyncClient) -> None:
+    """POST /issues/{issue_id}:move returns 404 for non-existent issue."""
+    response = await auth_client.post("/api/v1/issues/999:move", json={"after_issue_id": None})
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_move_issue_after_issue_must_be_in_same_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /issues/{issue_id}:move rejects after_issue_id values from another thread."""
+    user = await get_or_create_user_async(async_db)
+    target_thread, target_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Target Move Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "unread")],
+    )
+    other_thread, other_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Other Move Thread",
+        issue_specs=[("A", "unread")],
+    )
+
+    response = await auth_client.post(
+        f"/api/v1/issues/{target_issues[0].id}:move",
+        json={"after_issue_id": other_issues[0].id},
+    )
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+    target_thread_issues = await _get_thread_issues(async_db, target_thread.id)
+    assert [issue.issue_number for issue in target_thread_issues] == ["1", "2", "3"]
+    assert [issue.position for issue in target_thread_issues] == [1, 2, 3]
+
+    other_thread_issues = await _get_thread_issues(async_db, other_thread.id)
+    assert [issue.issue_number for issue in other_thread_issues] == ["A"]
+    assert [issue.position for issue in other_thread_issues] == [1]
+
+
+@pytest.mark.asyncio
+async def test_move_issue_recalculates_next_unread_issue_id(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /issues/{issue_id}:move updates next_unread_issue_id from position order."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Move Next Unread Thread",
+        issue_specs=[("1", "read"), ("2", "read"), ("3", "unread"), ("4", "unread")],
+    )
+
+    response = await auth_client.post(
+        f"/api/v1/issues/{issues[3].id}:move",
+        json={"after_issue_id": None},
+    )
+    assert response.status_code == 204
+
+    reordered_issues = await _get_thread_issues(async_db, thread.id)
+    assert [issue.issue_number for issue in reordered_issues] == ["4", "1", "2", "3"]
+    assert [issue.position for issue in reordered_issues] == [1, 2, 3, 4]
+
+    await async_db.refresh(thread)
+    assert thread.next_unread_issue_id == issues[3].id
+
+
+@pytest.mark.asyncio
+async def test_reorder_issues_updates_positions(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{thread_id}/issues:reorder rewrites issue positions from the request order."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Bulk Reorder Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "read"), ("4", "unread")],
+    )
+
+    requested_order = [issues[2].id, issues[0].id, issues[3].id, issues[1].id]
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues:reorder",
+        json={"issue_ids": requested_order},
+    )
+    assert response.status_code == 204
+
+    reordered_issues = await _get_thread_issues(async_db, thread.id)
+    assert [issue.id for issue in reordered_issues] == requested_order
+    assert [issue.issue_number for issue in reordered_issues] == ["3", "1", "4", "2"]
+    assert [issue.position for issue in reordered_issues] == [1, 2, 3, 4]
+
+    await async_db.refresh(thread)
+    assert thread.next_unread_issue_id == issues[0].id
+
+
+@pytest.mark.asyncio
+async def test_reorder_issues_rejects_missing_issue_ids(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{thread_id}/issues:reorder returns 400 when request omits thread issues."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Missing IDs Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "unread")],
+    )
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues:reorder",
+        json={"issue_ids": [issues[0].id, issues[2].id]},
+    )
+    assert response.status_code == 400
+    assert "exactly once" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reorder_issues_rejects_extra_issue_ids(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{thread_id}/issues:reorder returns 400 when request has extra IDs."""
+    user = await get_or_create_user_async(async_db)
+    thread, issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Extra IDs Thread",
+        issue_specs=[("1", "unread"), ("2", "unread"), ("3", "unread")],
+    )
+    _, other_issues = await _create_issue_tracking_thread(
+        async_db,
+        user,
+        title="Other Extra IDs Thread",
+        issue_specs=[("A", "unread")],
+    )
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues:reorder",
+        json={"issue_ids": [issues[0].id, issues[1].id, issues[2].id, other_issues[0].id]},
+    )
+    assert response.status_code == 400
+    assert "exactly once" in response.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

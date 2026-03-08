@@ -73,6 +73,28 @@ export const issuesApi = {
   },
 
   /**
+   * Move an issue to a new position within its thread
+   * @param issueId - The issue ID to move
+   * @param afterIssueId - Move after this issue ID, or null to move to the top
+   */
+  move: async (issueId: number, afterIssueId: number | null): Promise<void> => {
+    await api.post<void, { after_issue_id: number | null }>(`/v1/issues/${issueId}:move`, {
+      after_issue_id: afterIssueId,
+    })
+  },
+
+  /**
+   * Rewrite the full issue order for a thread
+   * @param threadId - The thread whose issues should be reordered
+   * @param issueIds - Full ordered list of issue IDs
+   */
+  reorder: async (threadId: number, issueIds: number[]): Promise<void> => {
+    await api.post<void, { issue_ids: number[] }>(`/v1/threads/${threadId}/issues:reorder`, {
+      issue_ids: issueIds,
+    })
+  },
+
+  /**
    * Migrate a thread to use issue tracking
    * Converts thread from simple format to issue-based tracking
    * @param threadId - The thread ID to migrate
