@@ -1,12 +1,14 @@
 """Rate limiting middleware using slowapi."""
 
 import os
+from collections.abc import Callable
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.requests import Request
 
 TEST_MODE = os.getenv("TEST_ENVIRONMENT") == "true"
+RateLimitValue = str | Callable[..., str]
 
 
 def _should_enable_rate_limiting() -> bool:
@@ -25,35 +27,40 @@ if TEST_MODE:
             return auth_header
         return get_remote_address(request)
 
-    # In test mode, create a limiter but override the limit method to do nothing
-    _real_limiter = Limiter(key_func=_test_rate_limit_key, default_limits=["1000000/second"])
+    class TestLimiter(Limiter):
+        """Limiter that can dynamically exempt requests while tests are running."""
 
-    class NoOpLimiter:
-        """No-op limiter for test mode that bypasses rate limiting."""
+        def limit(
+            self,
+            limit_value: RateLimitValue,
+            key_func: Callable[..., str] | None = None,
+            per_method: bool = False,
+            methods: list[str] | None = None,
+            error_message: RateLimitValue | None = None,
+            exempt_when: Callable[..., bool] | None = None,
+            cost: int | Callable[..., int] = 1,
+            override_defaults: bool = True,
+        ) -> Callable:
+            """Return a decorator that exempts requests unless rate limiting is enabled."""
 
-        def __getattr__(self, name):
-            """Proxy all other attributes to real limiter."""
-            return getattr(_real_limiter, name)
+            def _test_exempt_when() -> bool:
+                if not _should_enable_rate_limiting():
+                    return True
+                if exempt_when is None:
+                    return False
+                return exempt_when()
 
-        def limit(self, limit_value: str):
-            """Return a decorator that conditionally applies rate limiting."""
+            return super().limit(
+                limit_value,
+                key_func=key_func,
+                per_method=per_method,
+                methods=methods,
+                error_message=error_message,
+                exempt_when=_test_exempt_when,
+                cost=cost,
+                override_defaults=override_defaults,
+            )
 
-            def decorator(func):
-                """Conditionally apply rate limiting to the function.
-
-                Args:
-                    func: The function to conditionally rate limit.
-
-                Returns:
-                    The rate-limited function if rate limiting is enabled,
-                    otherwise the original function.
-                """
-                if _should_enable_rate_limiting():
-                    return _real_limiter.limit(limit_value)(func)
-                return func
-
-            return decorator
-
-    limiter = NoOpLimiter()
+    limiter = TestLimiter(key_func=_test_rate_limit_key, default_limits=["1000000/second"])
 else:
     limiter = Limiter(key_func=get_remote_address)

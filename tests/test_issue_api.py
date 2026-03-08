@@ -3,7 +3,7 @@
 import pytest
 from datetime import UTC, datetime
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread, User
@@ -456,6 +456,41 @@ async def test_create_issues_all_exist(auth_client: AsyncClient, async_db: Async
     )
     assert response.status_code == 400
     assert "already exist" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_create_issues_rejects_duplicate_issue_number_in_same_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """POST /threads/{thread_id}/issues rejects a duplicate issue number in the same thread."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Duplicate Guard Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    async_db.add(Issue(thread_id=thread.id, issue_number="7", position=1, status="unread"))
+    await async_db.commit()
+
+    response = await auth_client.post(
+        f"/api/v1/threads/{thread.id}/issues",
+        json={"issue_range": "7"},
+    )
+    assert response.status_code == 400
+    assert "already exist" in response.json()["detail"].lower()
+
+    issue_count_result = await async_db.execute(
+        select(func.count()).select_from(Issue).where(Issue.thread_id == thread.id)
+    )
+    assert issue_count_result.scalar_one() == 1
 
 
 @pytest.mark.asyncio

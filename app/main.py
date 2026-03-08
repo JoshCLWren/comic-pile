@@ -153,13 +153,12 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         version="0.1.0",
     )
 
-    # Register rate limiter (will be no-op in test environments)
+    # Register rate limiter and handler for both normal and test-mode rate limiting.
     app.state.limiter = limiter
-    if os.getenv("TEST_ENVIRONMENT") != "true":
-        app.add_exception_handler(
-            RateLimitExceeded,
-            cast(Callable[[Request, Any], Awaitable[Response]], _rate_limit_exceeded_handler),
-        )
+    app.add_exception_handler(
+        RateLimitExceeded,
+        cast(Callable[[Request, Any], Awaitable[Response]], _rate_limit_exceeded_handler),
+    )
 
     app_settings.validate_production_cors()
     cors_origins = app_settings.cors_origins_list

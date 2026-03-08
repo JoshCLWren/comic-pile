@@ -50,6 +50,16 @@ def issue_to_response(issue: Issue) -> IssueResponse:
     )
 
 
+def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
+    """Return whether the integrity error came from issue thread/number uniqueness."""
+    error_text = str(exc).lower()
+    return "uq_issue_thread_number" in error_text or (
+        "duplicate key value violates unique constraint" in error_text
+        and "thread_id" in error_text
+        and "issue_number" in error_text
+    )
+
+
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
 async def list_issues(
     thread_id: int,
@@ -302,6 +312,12 @@ async def create_issues(
     try:
         await db.flush()
     except IntegrityError as e:
+        await db.rollback()
+        if _is_issue_thread_number_conflict(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Issue number already exists in this thread",
+            ) from e
         logger.error(
             "Database integrity error during issue creation",
             extra={
