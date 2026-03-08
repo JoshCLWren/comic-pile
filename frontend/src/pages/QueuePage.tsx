@@ -101,6 +101,11 @@ type IssueMutation =
   | { id: number; type: 'reorder'; issueIds: number[] }
   | { id: number; type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
 
+type QueuedIssueMutation =
+  | { type: 'delete'; issueId: number }
+  | { type: 'reorder'; issueIds: number[] }
+  | { type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
+
 function normalizeIssueOrder(issues: Issue[], issueIds: number[]): number[] {
   const existingIssueIds = new Set(issues.map((issue) => issue.id))
   const normalizedIssueIds: number[] = []
@@ -235,7 +240,7 @@ export function IssueToggleList({ threadId }: {
     }
   }, [runIssueMutation, syncOptimisticIssues])
 
-  const enqueueIssueMutation = useCallback((mutation: Omit<IssueMutation, 'id'>) => {
+  const enqueueIssueMutation = useCallback((mutation: QueuedIssueMutation) => {
     const queuedMutation = {
       ...mutation,
       id: nextMutationIdRef.current++,
