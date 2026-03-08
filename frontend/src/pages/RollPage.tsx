@@ -242,11 +242,16 @@ export default function RollPage() {
 
   const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
     const num = parseInt(issueNumber, 10)
+
+    if (isNaN(num) || num < 1) {
+      setErrorMessage('Invalid issue number')
+      return
+    }
+
     setShowSimpleMigration(false)
-    
+
     rateMutation.mutate({
       rating,
-      issues_read: 1,
       finish_session: false,
       issue_number: num
     }).then(() => {
@@ -498,7 +503,6 @@ export default function RollPage() {
     try {
       await rateMutation.mutate({
         rating,
-        issues_read: 1,
         finish_session: finishSession
       });
 
@@ -512,11 +516,8 @@ export default function RollPage() {
 
       const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
       const [sessionRefreshResult, threadsRefreshResult] = refreshResults
-      if (sessionRefreshResult.status === 'rejected') {
-        console.error('Failed to refresh session after rating:', sessionRefreshResult.reason)
-      }
-      if (threadsRefreshResult.status === 'rejected') {
-        console.error('Failed to refresh threads after rating:', threadsRefreshResult.reason)
+      if (sessionRefreshResult.status === 'rejected' || threadsRefreshResult.status === 'rejected') {
+        setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
       }
     } catch (error: unknown) {
       const detail = getApiErrorDetail(error)

@@ -710,3 +710,193 @@ async def test_legacy_thread_returns_nulls_for_issue_fields(
     assert active_thread["issue_number"] is None
     assert active_thread["next_issue_id"] is None
     assert active_thread["next_issue_number"] is None
+
+
+@pytest.mark.asyncio
+async def test_migration_with_issue_number_1_starts_fresh(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Migration with issue_number=1 marks issue 1 as read and sets issue 2 as next.
+
+    When user rates with issue_number=1:
+    - Migration creates issues 1-6 (1 just read + 5 remaining)
+    - Issue 1 gets marked as read (the rating action marks it read)
+    - Issue 2 becomes the next unread
+    - total_issues = 1 + issues_remaining
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Fresh Start Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=None,
+        next_unread_issue_id=None,
+        reading_progress=None,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 1})
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_issues"] == 6
+    assert data["next_unread_issue_number"] == "2"
+
+    issue_result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id, Issue.issue_number == "1")
+    )
+    issue_1 = issue_result.scalar_one_or_none()
+    assert issue_1 is not None
+    assert issue_1.status == "read"
+
+
+@pytest.mark.asyncio
+async def test_migration_with_zero_issues_remaining(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Migrating completed legacy thread (issues_remaining=0).
+
+    If a legacy thread has 0 issues remaining (all "read" in old system),
+    and user provides issue_number=10, then:
+    - total_issues should be 10 (not 0 + 10 = 10, which is correct but needs explicit test)
+    - Migration should mark issues 1-9 as read, 10 as unread
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Completed Legacy Thread",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="completed",
+        user_id=user.id,
+        total_issues=None,
+        next_unread_issue_id=None,
+        reading_progress=None,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 10})
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_issues"] == 10
+
+
+@pytest.mark.asyncio
+async def test_migration_already_migrated_thread_skips_migration(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Attempting to rate already-migrated thread with issue_number should either skip migration or return 400.
+
+    - Preferred: Skip migration since thread already uses issue tracking.
+    - Acceptable: Return 400 error.
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Already Migrated Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=10,
+        next_unread_issue_id=None,
+        reading_progress="in_progress",
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    for i in range(1, 11):
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number=str(i),
+            position=i,
+            status="unread",
+        )
+        async_db.add(issue)
+    await async_db.commit()
+
+    issue_result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id, Issue.issue_number == "1")
+    )
+    next_issue = issue_result.scalar_one()
+    thread.next_unread_issue_id = next_issue.id
+    await async_db.commit()
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        selection_method="random",
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 3})
+
+    assert response.status_code in [200, 400]
+
+    if response.status_code == 200:
+        data = response.json()
+        assert data["total_issues"] == 10

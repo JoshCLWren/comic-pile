@@ -1,8 +1,13 @@
-"""Session-related Pydantic schemas for request/response validation."""
+"""Session API schemas and response models.
+
+WARNING: ActiveThreadInfo.issue_id and ActiveThreadInfo.issue_number are deprecated.
+Always use next_issue_id and next_issue_number instead. The old fields are kept for
+backward compatibility but will be removed in a future version.
+"""
 
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, Field, field_serializer
 
 
 def _to_utc_iso(value: datetime) -> str:
@@ -39,10 +44,19 @@ class ActiveThreadInfo(BaseModel):
     last_rolled_result: int | None
     total_issues: int | None = None
     reading_progress: str | None = None
-    issue_id: int | None = None
-    issue_number: str | None = None
-    next_issue_id: int | None = None
-    next_issue_number: str | None = None
+
+    issue_id: int | None = Field(
+        default=None,
+        description="DEPRECATED: Always equals next_issue_id. Use next_issue_id instead.",
+    )
+    issue_number: str | None = Field(
+        default=None,
+        description="DEPRECATED: Always equals next_issue_number. Use next_issue_number instead.",
+    )
+    next_issue_id: int | None = Field(default=None, description="The next unread issue ID to read")
+    next_issue_number: str | None = Field(
+        default=None, description="The next unread issue number (e.g., '5', 'Annual 1')"
+    )
 
 
 class SessionResponse(BaseModel):
