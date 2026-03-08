@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED: This script is superseded by the issue management API.
+# See: POST /api/v1/threads/{id}/issues with insert_after_issue_id and
+# POST /api/v1/dependencies/. Retained for reference only. Do not use for new operations.
 """Add annual issues to main X-Men threads and create reading order dependencies.
 
 Environment Variables:

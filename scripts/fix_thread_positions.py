@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED: This script is superseded by the issue management API.
+# See: POST /api/v1/issues/{id}:move and
+# POST /api/v1/threads/{id}/issues:reorder. Retained for reference only. Do not use for new operations.
 """Fix thread position duplicates by reorganizing positions sequentially.
 
 This script addresses the duplicate position issues found by the audit script.

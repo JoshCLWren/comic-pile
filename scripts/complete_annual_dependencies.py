@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED: This script is superseded by the dependency API.
+# See: POST /api/v1/dependencies/.
+# Retained for reference only. Do not use for new operations.
 """Complete annual dependency chains by linking annuals to next issues.
 
 This script creates the second half of the dependency chains:

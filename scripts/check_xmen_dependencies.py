@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED: This script is superseded by the dependency API.
+# See: GET /api/v1/threads/{id}/dependencies.
+# Retained for reference only. Do not use for new operations.
 """Check existing dependencies and identify what's missing for X-Men storylines."""
 
 import os

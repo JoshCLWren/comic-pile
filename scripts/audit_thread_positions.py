@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED: This script is superseded by the issue management API.
+# See: GET /api/v1/threads/{id}/issues:validateOrder.
+# Retained for reference only. Do not use for new operations.
 """Audit script for thread positions and queue consistency.
 
 This script checks for:
