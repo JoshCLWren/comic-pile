@@ -481,7 +481,9 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Verify issues list in modal refreshed and shows the new annual issue
     // Increased timeout to 10s to account for: network latency, API response time, state update, re-render
-    const annualInModal = editModal.getByRole('button', { name: '#Annual 3' });
+    const annualInModal = editModal.getByRole('button', {
+      name: /^Toggle issue #Annual 3$/,
+    });
     await expect(annualInModal).toBeVisible({ timeout: 10000 });
 
     // Step 6: Verify annual was added by checking the API
