@@ -66,7 +66,7 @@ class Event(Base):
     issues_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
     queue_move: Mapped[str | None] = mapped_column(String(20), nullable=True)
     die_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=True)
+    session_id: Mapped[int | None] = mapped_column(ForeignKey("sessions.id"), nullable=True)
     # Foreign key to threads table for events that act on a thread
     # Used by: "rate" events (thread that was read) and "rolled_but_skipped" events
     thread_id: Mapped[int | None] = mapped_column(ForeignKey("threads.id"), nullable=True)
