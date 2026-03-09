@@ -362,7 +362,7 @@ export function IssueToggleList({ threadId }: {
     loadIssues()
   }, [loadIssues])
 
-  async function handleToggle(issue: Issue) {
+  function handleToggle(issue: Issue) {
     const newStatus = issue.status === 'read' ? 'unread' : 'read'
 
     setActionError(null)
@@ -404,7 +404,7 @@ export function IssueToggleList({ threadId }: {
     setDragOverIssueId(issueId)
   }
 
-  const handleDrop = (targetIssueId: number) => async (event: DragEvent<HTMLDivElement>) => {
+  const handleDrop = (targetIssueId: number) => (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
 
     if (!draggedIssueId || draggedIssueId === targetIssueId) {
@@ -429,7 +429,7 @@ export function IssueToggleList({ threadId }: {
     setDragOverIssueId(null)
   }
 
-  async function handleDeleteIssue(issue: Issue) {
+  function handleDeleteIssue(issue: Issue) {
     if (!window.confirm(`Delete issue #${issue.issue_number}?`)) {
       return
     }

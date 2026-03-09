@@ -298,6 +298,7 @@ jobs:
 
       - name: Restore frontend toolchain from CI image
         run: |
+          mkdir -p static
           rm -rf frontend/node_modules static/react
           ln -s /opt/ci-assets/frontend/node_modules frontend/node_modules
           ln -s /opt/ci-assets/static/react static/react

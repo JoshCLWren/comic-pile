@@ -8,7 +8,7 @@ import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import inspect, select, text
+from sqlalchemy import UniqueConstraint, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -70,7 +70,7 @@ def _looks_like_test_database(database_url: str) -> bool:
     return db_name.endswith("_test") or db_name.endswith("-test")
 
 
-def _missing_model_columns(conn: Connection) -> bool:
+def _has_schema_drift(conn: Connection) -> bool:
     inspector = inspect(conn)
 
     required_table_names = {
@@ -88,9 +88,29 @@ def _missing_model_columns(conn: Connection) -> bool:
         if not inspector.has_table(table_name):
             return True
 
-        existing = {str(col["name"]) for col in inspector.get_columns(table_name)}
-        expected = {col.name for col in Base.metadata.tables[table_name].columns}
-        if not expected.issubset(existing):
+        table = Base.metadata.tables[table_name]
+
+        existing_columns = {str(col["name"]) for col in inspector.get_columns(table_name)}
+        expected_columns = {col.name for col in table.columns}
+        if not expected_columns.issubset(existing_columns):
+            return True
+
+        existing_indexes = {str(index["name"]) for index in inspector.get_indexes(table_name)}
+        expected_indexes = {index.name for index in table.indexes if index.name is not None}
+        if not expected_indexes.issubset(existing_indexes):
+            return True
+
+        existing_unique_constraints = {
+            str(constraint["name"])
+            for constraint in inspector.get_unique_constraints(table_name)
+            if constraint.get("name") is not None
+        }
+        expected_unique_constraints = {
+            constraint.name
+            for constraint in table.constraints
+            if isinstance(constraint, UniqueConstraint) and constraint.name is not None
+        }
+        if not expected_unique_constraints.issubset(existing_unique_constraints):
             return True
 
     return False
@@ -122,7 +142,7 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
     async with engine.begin() as conn:
 
         def _check_and_drop(sync_conn: Connection) -> None:
-            if _missing_model_columns(sync_conn):
+            if _has_schema_drift(sync_conn):
                 if not _looks_like_test_database(database_url):
                     raise RuntimeError(
                         "Refusing to reset schema on non-test database. "
