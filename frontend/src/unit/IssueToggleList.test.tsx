@@ -47,12 +47,15 @@ const BASE_ISSUES: Issue[] = [
   },
 ]
 
-function buildListResponse(issues: Issue[] = BASE_ISSUES): IssueListResponse {
+function buildListResponse(
+  issues: Issue[] = BASE_ISSUES,
+  nextPageToken: string | null = null
+): IssueListResponse {
   return {
     issues,
     total_count: issues.length,
     page_size: 100,
-    next_page_token: null,
+    next_page_token: nextPageToken,
   }
 }
 
@@ -106,6 +109,21 @@ beforeEach(() => {
 })
 
 describe('IssueToggleList', () => {
+  it('loads all issue pages before rendering the full list', async () => {
+    mockedIssuesApi.list
+      .mockResolvedValueOnce(buildListResponse(BASE_ISSUES.slice(0, 2), 'page-2'))
+      .mockResolvedValueOnce(buildListResponse(BASE_ISSUES.slice(2)))
+
+    await renderIssueToggleList()
+
+    expect(mockedIssuesApi.list).toHaveBeenNthCalledWith(1, 99, { page_size: 100 })
+    expect(mockedIssuesApi.list).toHaveBeenNthCalledWith(2, 99, {
+      page_size: 100,
+      page_token: 'page-2',
+    })
+    expect(getIssueOrder()).toEqual(['1', '2', '3'])
+  })
+
   it('optimistically reorders issues and persists the new order', async () => {
     const reorderRequest = createDeferred<void>()
     mockedIssuesApi.reorder.mockReturnValueOnce(reorderRequest.promise)
@@ -193,11 +211,25 @@ describe('IssueToggleList', () => {
   it('keeps later optimistic mutations when an earlier queued mutation fails', async () => {
     const confirmMock = vi.mocked(window.confirm)
     confirmMock.mockReturnValue(true)
+    const canonicalIssuesAfterFailure: Issue[] = [
+      ...BASE_ISSUES,
+      {
+        id: 4,
+        thread_id: 99,
+        issue_number: '4',
+        status: 'unread',
+        read_at: null,
+        created_at: '2026-03-08T00:00:00Z',
+      },
+    ]
 
     const reorderRequest = createDeferred<void>()
     const deleteRequest = createDeferred<void>()
     mockedIssuesApi.reorder.mockReturnValueOnce(reorderRequest.promise)
     mockedIssuesApi.delete.mockReturnValueOnce(deleteRequest.promise)
+    mockedIssuesApi.list
+      .mockResolvedValueOnce(buildListResponse())
+      .mockResolvedValueOnce(buildListResponse(canonicalIssuesAfterFailure))
 
     await renderIssueToggleList()
 
@@ -227,9 +259,10 @@ describe('IssueToggleList', () => {
     })
 
     await waitFor(() => {
-      expect(getIssueOrder()).toEqual(['1', '3'])
+      expect(getIssueOrder()).toEqual(['1', '3', '4'])
     })
     expect(screen.getByText('Issue reorder failed')).toBeInTheDocument()
+    expect(mockedIssuesApi.list).toHaveBeenCalledTimes(2)
 
     await act(async () => {
       deleteRequest.resolve()
@@ -237,7 +270,29 @@ describe('IssueToggleList', () => {
     })
 
     await waitFor(() => {
-      expect(getIssueOrder()).toEqual(['1', '3'])
+      expect(getIssueOrder()).toEqual(['1', '3', '4'])
+    })
+  })
+
+  it('reorders issues with move controls for keyboard and touch users', async () => {
+    const reorderRequest = createDeferred<void>()
+    mockedIssuesApi.reorder.mockReturnValueOnce(reorderRequest.promise)
+
+    await renderIssueToggleList()
+
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+
+    expect(getIssueOrder()).toEqual(['2', '1', '3'])
+    expect(mockedIssuesApi.reorder).toHaveBeenCalledWith(99, [2, 1, 3])
+    expect(screen.getByText('Moved issue #1 down.')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('issue-move-down-1')).toHaveFocus()
+    })
+
+    await act(async () => {
+      reorderRequest.resolve()
+      await reorderRequest.promise
     })
   })
 

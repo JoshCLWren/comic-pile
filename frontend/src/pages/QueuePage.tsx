@@ -96,6 +96,30 @@ function reorderIssuesForDrop(
   return nextIssues
 }
 
+function moveIssueByStep(
+  issues: Issue[],
+  issueId: number,
+  direction: 'up' | 'down'
+): Issue[] {
+  const issueIndex = issues.findIndex((issue) => issue.id === issueId)
+  if (issueIndex === -1) {
+    return issues
+  }
+
+  const targetIndex = direction === 'up' ? issueIndex - 1 : issueIndex + 1
+  if (targetIndex < 0 || targetIndex >= issues.length) {
+    return issues
+  }
+
+  const nextIssues = [...issues]
+  const movedIssue = nextIssues.splice(issueIndex, 1)[0]
+  if (!movedIssue) {
+    return issues
+  }
+  nextIssues.splice(targetIndex, 0, movedIssue)
+  return nextIssues
+}
+
 type IssueMutation =
   | { id: number; type: 'delete'; issueId: number }
   | { id: number; type: 'reorder'; issueIds: number[] }
@@ -177,6 +201,7 @@ export function IssueToggleList({ threadId }: {
   const [isAdding, setIsAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [reorderAnnouncement, setReorderAnnouncement] = useState('')
   const [toggling, setToggling] = useState<Set<number>>(new Set())
   const [deleting, setDeleting] = useState<Set<number>>(new Set())
   const [draggedIssueId, setDraggedIssueId] = useState<number | null>(null)
@@ -190,6 +215,42 @@ export function IssueToggleList({ threadId }: {
     setIssues(applyIssueMutations(baseIssues, pendingMutations))
     setToggling(getPendingIssueIds(pendingMutations, 'toggle'))
     setDeleting(getPendingIssueIds(pendingMutations, 'delete'))
+  }, [])
+
+  const fetchAllIssues = useCallback(async (): Promise<Issue[]> => {
+    const allIssues: Issue[] = []
+    const seenPageTokens = new Set<string>()
+    let nextPageToken: string | null = null
+
+    while (true) {
+      const data = await issuesApi.list(threadId, {
+        page_size: 100,
+        ...(nextPageToken ? { page_token: nextPageToken } : {}),
+      })
+      allIssues.push(...(data.issues || []))
+
+      if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+        return allIssues
+      }
+
+      seenPageTokens.add(data.next_page_token)
+      nextPageToken = data.next_page_token
+    }
+  }, [threadId])
+
+  const focusMoveControl = useCallback((issueId: number, direction: 'up' | 'down') => {
+    const focusTarget = () => {
+      document
+        .querySelector<HTMLButtonElement>(`[data-move-control="${direction}-${issueId}"]`)
+        ?.focus()
+    }
+
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(focusTarget)
+      return
+    }
+
+    setTimeout(focusTarget, 0)
   }, [])
 
   const runIssueMutation = useCallback(async (mutation: IssueMutation) => {
@@ -227,6 +288,11 @@ export function IssueToggleList({ threadId }: {
           await runIssueMutation(currentMutation)
           baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
         } catch (err: unknown) {
+          try {
+            baseIssuesRef.current = await fetchAllIssues()
+          } catch (refreshErr) {
+            console.error('[IssueToggleList] Error refetching issues after mutation failure:', refreshErr)
+          }
           setActionError(getApiErrorDetail(err))
         } finally {
           pendingMutationsRef.current = pendingMutationsRef.current.filter(
@@ -238,7 +304,7 @@ export function IssueToggleList({ threadId }: {
     } finally {
       isProcessingMutationsRef.current = false
     }
-  }, [runIssueMutation, syncOptimisticIssues])
+  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues])
 
   const enqueueIssueMutation = useCallback((mutation: QueuedIssueMutation) => {
     const queuedMutation = {
@@ -251,19 +317,46 @@ export function IssueToggleList({ threadId }: {
     void processIssueMutations()
   }, [processIssueMutations, syncOptimisticIssues])
 
+  const enqueueIssueReorder = useCallback((
+    nextIssues: Issue[],
+    options?: {
+      announcement?: string
+      focusTarget?: { issueId: number; direction: 'up' | 'down' }
+    }
+  ) => {
+    const nextIssueIds = nextIssues.map((issue) => issue.id)
+    const currentIssueIds = issues.map((issue) => issue.id)
+    const orderDidChange = nextIssueIds.some((issueId, index) => issueId !== currentIssueIds[index])
+
+    if (!orderDidChange) {
+      return false
+    }
+
+    setActionError(null)
+    if (options?.announcement) {
+      setReorderAnnouncement(options.announcement)
+    }
+    enqueueIssueMutation({
+      type: 'reorder',
+      issueIds: nextIssueIds,
+    })
+    if (options?.focusTarget) {
+      focusMoveControl(options.focusTarget.issueId, options.focusTarget.direction)
+    }
+    return true
+  }, [enqueueIssueMutation, focusMoveControl, issues])
+
   const loadIssues = useCallback(async () => {
     setIsLoading(true)
     try {
-      // Load all issues (use large page size)
-      const data = await issuesApi.list(threadId, { page_size: 100 })
-      baseIssuesRef.current = data.issues || []
+      baseIssuesRef.current = await fetchAllIssues()
       syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
     } catch {
       // Non-critical
     } finally {
       setIsLoading(false)
     }
-  }, [syncOptimisticIssues, threadId])
+  }, [fetchAllIssues, syncOptimisticIssues])
 
   useEffect(() => {
     loadIssues()
@@ -328,19 +421,7 @@ export function IssueToggleList({ threadId }: {
       return
     }
 
-    const nextIssueIds = nextIssues.map((issue) => issue.id)
-    const currentIssueIds = issues.map((issue) => issue.id)
-    const orderDidChange = nextIssueIds.some((issueId, index) => issueId !== currentIssueIds[index])
-
-    if (!orderDidChange) {
-      return
-    }
-
-    setActionError(null)
-    enqueueIssueMutation({
-      type: 'reorder',
-      issueIds: nextIssueIds,
-    })
+    enqueueIssueReorder(nextIssues)
   }
 
   const handleDragEnd = () => {
@@ -360,16 +441,31 @@ export function IssueToggleList({ threadId }: {
     })
   }
 
+  function handleMoveIssue(issue: Issue, direction: 'up' | 'down') {
+    const nextIssues = moveIssueByStep(issues, issue.id, direction)
+    const didReorder = enqueueIssueReorder(nextIssues, {
+      announcement: `Moved issue #${issue.issue_number} ${direction}.`,
+      focusTarget: { issueId: issue.id, direction },
+    })
+
+    if (!didReorder) {
+      focusMoveControl(issue.id, direction)
+    }
+  }
+
   if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
   return (
     <div className="space-y-2">
       <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+      <p className="sr-only" aria-live="polite">{reorderAnnouncement}</p>
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
-        {issues.map((issue) => {
+        {issues.map((issue, index) => {
           const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
           const isDragOver = dragOverIssueId === issue.id
           const isDragged = draggedIssueId === issue.id
+          const canMoveUp = index > 0
+          const canMoveDown = index < issues.length - 1
 
           return (
             <div
@@ -405,6 +501,38 @@ export function IssueToggleList({ threadId }: {
               >
                 #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
               </button>
+              <div className="flex border-l border-white/10">
+                <button
+                  type="button"
+                  onClick={() => handleMoveIssue(issue, 'up')}
+                  disabled={isBusy || !canMoveUp}
+                  className={[
+                    'h-7 w-7 text-[11px] font-black text-stone-500 transition-colors',
+                    'hover:text-amber-300 disabled:opacity-40',
+                  ].join(' ')}
+                  aria-label={`Move issue #${issue.issue_number} up`}
+                  data-testid={`issue-move-up-${issue.id}`}
+                  data-move-control={`up-${issue.id}`}
+                  title={`Move issue #${issue.issue_number} up`}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMoveIssue(issue, 'down')}
+                  disabled={isBusy || !canMoveDown}
+                  className={[
+                    'h-7 w-7 text-[11px] font-black text-stone-500 transition-colors',
+                    'hover:text-amber-300 disabled:opacity-40',
+                  ].join(' ')}
+                  aria-label={`Move issue #${issue.issue_number} down`}
+                  data-testid={`issue-move-down-${issue.id}`}
+                  data-move-control={`down-${issue.id}`}
+                  title={`Move issue #${issue.issue_number} down`}
+                >
+                  ↓
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => {

@@ -9,11 +9,11 @@ from app.models import Issue, Thread, User
 
 
 @pytest.mark.asyncio
-async def test_issues_position_index_is_used(async_db: AsyncSession):
+async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
     """Verify the (thread_id, position) index exists and is usable for ordered lookups."""
     user = User(username="test_user", created_at=datetime.now(UTC))
-    async_db.add(user)
-    await async_db.flush()
+    async_db_committed.add(user)
+    await async_db_committed.flush()
 
     thread = Thread(
         title="Test Thread",
@@ -23,8 +23,8 @@ async def test_issues_position_index_is_used(async_db: AsyncSession):
         status="active",
         user_id=user.id,
     )
-    async_db.add(thread)
-    await async_db.flush()
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
 
     # Create 50 issues with different positions
     for i in range(50):
@@ -34,11 +34,11 @@ async def test_issues_position_index_is_used(async_db: AsyncSession):
             position=i + 1,
             status="unread" if i < 25 else "read",
         )
-        async_db.add(issue)
-    await async_db.commit()
+        async_db_committed.add(issue)
+    await async_db_committed.commit()
 
-    await async_db.execute(text("ANALYZE issues"))
-    await async_db.execute(text("SET LOCAL enable_seqscan = off"))
+    await async_db_committed.execute(text("ANALYZE issues"))
+    await async_db_committed.execute(text("SET LOCAL enable_seqscan = off"))
 
     # Get EXPLAIN plan for the query pattern used by list_issues
     explain_query = text("""
@@ -49,7 +49,7 @@ async def test_issues_position_index_is_used(async_db: AsyncSession):
         LIMIT 50
     """)
 
-    result = await async_db.execute(explain_query, {"thread_id": thread.id})
+    result = await async_db_committed.execute(explain_query, {"thread_id": thread.id})
     plan = result.scalar()
     assert plan is not None, "EXPLAIN query should return a plan"
 
@@ -83,18 +83,18 @@ async def test_issues_position_index_is_used(async_db: AsyncSession):
         AND indexname = 'ix_issue_thread_position'
     """)
 
-    index_result = await async_db.execute(index_check)
+    index_result = await async_db_committed.execute(index_check)
     index_exists = index_result.scalar()
 
     assert index_exists is not None, "Index ix_issue_thread_position does not exist in database"
 
 
 @pytest.mark.asyncio
-async def test_issues_position_index_improves_pagination(async_db: AsyncSession):
+async def test_issues_position_index_improves_pagination(async_db_committed: AsyncSession):
     """Verify the pagination query can use the composite position index."""
     user = User(username="test_user", created_at=datetime.now(UTC))
-    async_db.add(user)
-    await async_db.flush()
+    async_db_committed.add(user)
+    await async_db_committed.flush()
 
     thread = Thread(
         title="Test Thread",
@@ -104,8 +104,8 @@ async def test_issues_position_index_improves_pagination(async_db: AsyncSession)
         status="active",
         user_id=user.id,
     )
-    async_db.add(thread)
-    await async_db.flush()
+    async_db_committed.add(thread)
+    await async_db_committed.flush()
 
     # Create 100 issues
     for i in range(100):
@@ -115,11 +115,11 @@ async def test_issues_position_index_improves_pagination(async_db: AsyncSession)
             position=i + 1,
             status="unread",
         )
-        async_db.add(issue)
-    await async_db.commit()
+        async_db_committed.add(issue)
+    await async_db_committed.commit()
 
-    await async_db.execute(text("ANALYZE issues"))
-    await async_db.execute(text("SET LOCAL enable_seqscan = off"))
+    await async_db_committed.execute(text("ANALYZE issues"))
+    await async_db_committed.execute(text("SET LOCAL enable_seqscan = off"))
 
     # Test pagination query pattern (like page_token usage)
     cursor_position = 50
@@ -132,7 +132,7 @@ async def test_issues_position_index_improves_pagination(async_db: AsyncSession)
         LIMIT 50
     """)
 
-    result = await async_db.execute(
+    result = await async_db_committed.execute(
         query, {"thread_id": thread.id, "cursor_position": cursor_position, "cursor_id": 0}
     )
     plan = result.scalar()
