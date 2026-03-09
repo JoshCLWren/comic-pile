@@ -9,6 +9,8 @@
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
+PYTHON ?= .venv/bin/python
+PYTEST ?= $(PYTHON) -m pytest
 PROD_BASE_URL ?= https://app-production-72b9.up.railway.app
 RAILWAY_PROD_ENV ?= production
 RAILWAY_APP_SERVICE ?= app
@@ -48,10 +50,10 @@ githook: install-githook  ## Run lint checks manually (installs pre-commit hook 
 	bash scripts/lint.sh
 
 test:  ## Run tests with coverage (pytest --cov=comic_pile --cov-report=term-missing)
-	pytest --cov=comic_pile --cov-report=term-missing
+	$(PYTEST) --cov=comic_pile --cov-report=term-missing
 
 pytest:  ## Run tests (pytest)
-	pytest
+	$(PYTEST)
 
 sync:  ## Install dependencies via uv
 	uv sync --all-extras
@@ -182,16 +184,16 @@ test-integration:  ## Run Playwright integration tests
 	@echo "Note: Browser tests require a running test database and web server."
 	@echo "For browser tests, use: make test-e2e-browser"
 	@echo ""
-	@pytest tests_e2e/test_api_workflows.py --no-cov -v
+	@$(PYTEST) tests_e2e/test_api_workflows.py --no-cov -v
 
 test-e2e-browser:  ## Run Playwright browser tests (requires test database and web server)
 	@echo "Running Playwright browser tests..."
 	@echo "Note: Ensure test database is running: docker start comic-pile-test-001-db"
-	@bash -c 'set -a; source .env; set +a; pytest tests_e2e/test_browser_ui.py -m integration -v'
+	@bash -c 'set -a; source .env; set +a; $(PYTEST) tests_e2e/test_browser_ui.py -m integration -v'
 
 test-e2e-api:  ## Run e2e API tests (no browser/server needed)
 	@echo "Running e2e API tests..."
-	@pytest tests_e2e/test_api_workflows.py --no-cov -v
+	@$(PYTEST) tests_e2e/test_api_workflows.py --no-cov -v
 
 test-e2e-prod-smoke:  ## Run Playwright prod smoke test (set PROD_BASE_URL=https://...)
 	@if [ -z "$(PROD_BASE_URL)" ]; then \

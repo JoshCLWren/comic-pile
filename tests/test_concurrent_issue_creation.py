@@ -13,7 +13,7 @@ from tests.conftest import get_or_create_user_async, get_test_database_url
 
 @pytest.mark.asyncio
 async def test_concurrent_issue_adds_no_position_collisions(
-    async_db: AsyncSession,
+    async_db_committed: AsyncSession,
 ) -> None:
     """Test that concurrent requests to add issues don't create duplicate positions.
 
@@ -41,7 +41,7 @@ async def test_concurrent_issue_adds_no_position_collisions(
     from app.auth import get_current_user
     from collections.abc import AsyncGenerator
 
-    user = await get_or_create_user_async(async_db)
+    user = await get_or_create_user_async(async_db_committed)
 
     thread = Thread(
         title="Concurrent Test Thread",
@@ -52,9 +52,9 @@ async def test_concurrent_issue_adds_no_position_collisions(
         user_id=user.id,
         created_at=datetime.now(UTC),
     )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
+    async_db_committed.add(thread)
+    await async_db_committed.commit()
+    await async_db_committed.refresh(thread)
     thread_id = thread.id
 
     database_url = get_test_database_url()
@@ -106,14 +106,14 @@ async def test_concurrent_issue_adds_no_position_collisions(
     assert total_created == 100, f"Expected 100 issues, got {total_created}"
 
     # Verify database has exactly 100 issues
-    count_result = await async_db.execute(
+    count_result = await async_db_committed.execute(
         select(func.count()).select_from(Issue).where(Issue.thread_id == thread.id)
     )
     total_count = count_result.scalar()
     assert total_count == 100, f"Database has {total_count} issues, expected 100"
 
     # Verify all positions are unique
-    positions_result = await async_db.execute(
+    positions_result = await async_db_committed.execute(
         select(Issue.position).where(Issue.thread_id == thread.id).order_by(Issue.position)
     )
     positions = [row[0] for row in positions_result.fetchall()]
@@ -125,7 +125,7 @@ async def test_concurrent_issue_adds_no_position_collisions(
     assert positions == list(range(1, 101)), f"Positions not sequential: {positions}"
 
     # Verify all issue_numbers are unique
-    issue_numbers_result = await async_db.execute(
+    issue_numbers_result = await async_db_committed.execute(
         select(Issue.issue_number).where(Issue.thread_id == thread.id).order_by(Issue.position)
     )
     issue_numbers = [row[0] for row in issue_numbers_result.fetchall()]
@@ -135,7 +135,7 @@ async def test_concurrent_issue_adds_no_position_collisions(
     )
 
     # Verify thread metadata was updated correctly
-    await async_db.refresh(thread)
+    await async_db_committed.refresh(thread)
     assert thread.total_issues == 100, f"Thread total_issues is {thread.total_issues}, expected 100"
     assert thread.issues_remaining == 100, (
         f"Thread issues_remaining is {thread.issues_remaining}, expected 100"
@@ -143,7 +143,9 @@ async def test_concurrent_issue_adds_no_position_collisions(
 
 
 @pytest.mark.asyncio
-async def test_concurrent_issue_adds_same_thread_different_overlaps(async_db: AsyncSession) -> None:
+async def test_concurrent_issue_adds_same_thread_different_overlaps(
+    async_db_committed: AsyncSession,
+) -> None:
     """Test concurrent adds with overlapping ranges don't cause issues.
 
     This tests that the locking works correctly even when requests add issues
@@ -154,7 +156,7 @@ async def test_concurrent_issue_adds_same_thread_different_overlaps(async_db: As
     from app.auth import get_current_user
     from collections.abc import AsyncGenerator
 
-    user = await get_or_create_user_async(async_db)
+    user = await get_or_create_user_async(async_db_committed)
 
     thread = Thread(
         title="Overlap Test Thread",
@@ -165,9 +167,9 @@ async def test_concurrent_issue_adds_same_thread_different_overlaps(async_db: As
         user_id=user.id,
         created_at=datetime.now(UTC),
     )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
+    async_db_committed.add(thread)
+    await async_db_committed.commit()
+    await async_db_committed.refresh(thread)
     thread_id = thread.id
 
     database_url = get_test_database_url()
@@ -241,14 +243,14 @@ async def test_concurrent_issue_adds_same_thread_different_overlaps(async_db: As
     assert len(created_issues) == 50, f"Expected 50 unique issues, got {len(created_issues)}"
 
     # Verify database has exactly 50 issues
-    count_result = await async_db.execute(
+    count_result = await async_db_committed.execute(
         select(func.count()).select_from(Issue).where(Issue.thread_id == thread.id)
     )
     total_count = count_result.scalar()
     assert total_count == 50, f"Database has {total_count} issues, expected 50"
 
     # Verify all positions are unique
-    positions_result = await async_db.execute(
+    positions_result = await async_db_committed.execute(
         select(Issue.position).where(Issue.thread_id == thread.id)
     )
     positions = [row[0] for row in positions_result.fetchall()]

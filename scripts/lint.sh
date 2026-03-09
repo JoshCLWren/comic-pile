@@ -130,6 +130,14 @@ should_run_html() {
 }
 
 ANY_CHECKED=0
+PYTHON_SOURCE_PATHS=(
+    alembic
+    app
+    comic_pile
+    scripts
+    tests
+    tests_e2e
+)
 
 if should_run_python; then
     ANY_CHECKED=1
@@ -141,7 +149,7 @@ if should_run_python; then
             python3 -m py_compile "$file"
         done <<<"$STAGED_PYTHON_FILES"
     else
-        python3 -m compileall . -q
+        python3 -m compileall "${PYTHON_SOURCE_PATHS[@]}" -q
     fi
 
     echo ""

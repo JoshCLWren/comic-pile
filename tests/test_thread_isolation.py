@@ -5,17 +5,17 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 from httpx import AsyncClient
+from app.auth import hash_password
 from app.models import Thread, User
+
+PASSWORD_HASH = hash_password("password")
 
 
 @pytest_asyncio.fixture(scope="function")
 async def user_a(async_db: AsyncSession) -> User:
     """Create user A for testing."""
-    from app.auth import hash_password
-
-    user = User(username="test_user_a", password_hash=hash_password("password"), created_at=None)
+    user = User(username="test_user_a", password_hash=PASSWORD_HASH, created_at=None)
     async_db.add(user)
     await async_db.commit()
     await async_db.refresh(user)
@@ -25,9 +25,7 @@ async def user_a(async_db: AsyncSession) -> User:
 @pytest_asyncio.fixture(scope="function")
 async def user_b(async_db: AsyncSession) -> User:
     """Create user B for testing."""
-    from app.auth import hash_password
-
-    user = User(username="test_user_b", password_hash=hash_password("password"), created_at=None)
+    user = User(username="test_user_b", password_hash=PASSWORD_HASH, created_at=None)
     async_db.add(user)
     await async_db.commit()
     await async_db.refresh(user)

@@ -17,6 +17,9 @@ from app.schemas.issue import (
     IssueCreate,
     IssueCreateRange,
     IssueListResponse,
+    IssueMoveRequest,
+    IssueOrderValidationResponse,
+    IssueReorderRequest,
     IssueResponse,
     IssueUpdate,
 )
@@ -57,9 +60,12 @@ __all__ = [
     # Issue
     "IssueCreate",
     "IssueCreateRange",
+    "IssueMoveRequest",
+    "IssueReorderRequest",
     "IssueUpdate",
     "IssueResponse",
     "IssueListResponse",
+    "IssueOrderValidationResponse",
     # Migration
     "MigrateToIssuesRequest",
     # Roll

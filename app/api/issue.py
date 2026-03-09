@@ -13,9 +13,19 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import Event, Issue, Thread
 from app.models.user import User
-from app.schemas import IssueCreateRange, IssueListResponse, IssueResponse
+from app.schemas import (
+    IssueCreateRange,
+    IssueListResponse,
+    IssueMoveRequest,
+    IssueOrderValidationResponse,
+    IssueReorderRequest,
+    IssueResponse,
+)
 from app.utils.issue_parser import parse_issue_ranges
-from comic_pile.dependencies import refresh_user_blocked_status
+from comic_pile.dependencies import (
+    refresh_user_blocked_status,
+    validate_position_dependency_consistency,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +58,100 @@ def issue_to_response(issue: Issue) -> IssueResponse:
         read_at=read_at,
         created_at=created_at,
     )
+
+
+def _is_issue_thread_number_conflict(exc: IntegrityError) -> bool:
+    """Return whether the integrity error came from issue thread/number uniqueness."""
+    error_text = str(exc).lower()
+    return "uq_issue_thread_number" in error_text or (
+        "duplicate key value violates unique constraint" in error_text
+        and "thread_id" in error_text
+        and "issue_number" in error_text
+    )
+
+
+async def _get_locked_thread_with_issues(
+    thread_id: int,
+    current_user: User,
+    db: AsyncSession,
+) -> tuple[Thread, list[Issue]]:
+    """Lock a thread and all of its issues, validating ownership."""
+    thread_result = await db.execute(
+        select(Thread).where(Thread.id == thread_id).with_for_update()
+    )
+    thread = thread_result.scalar_one_or_none()
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    issues_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id)
+        .order_by(Issue.position, Issue.id)
+        .with_for_update()
+    )
+    return thread, list(issues_result.scalars().all())
+
+
+async def _get_issue_thread_id(
+    issue_id: int,
+    current_user: User,
+    db: AsyncSession,
+) -> int:
+    """Resolve an issue's thread ID with ownership validation before taking thread locks."""
+    issue_thread_result = await db.execute(
+        select(Issue.thread_id)
+        .join(Thread, Thread.id == Issue.thread_id)
+        .where(Issue.id == issue_id, Thread.user_id == current_user.id)
+    )
+    thread_id = issue_thread_result.scalar_one_or_none()
+    if thread_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+    return thread_id
+
+
+def _assign_issue_positions(issues: list[Issue]) -> None:
+    """Rewrite positions so the given issue order becomes canonical."""
+    for position, issue in enumerate(issues, start=1):
+        issue.position = position
+
+
+def _recalculate_next_unread_issue_id(thread: Thread, issues: list[Issue]) -> None:
+    """Update a thread's next unread pointer from the current in-memory issue order."""
+    next_unread_issue = next(
+        (issue for issue in issues if issue.status == "unread"),
+        None,
+    )
+    thread.next_unread_issue_id = next_unread_issue.id if next_unread_issue else None
+
+
+def _recalculate_thread_issue_tracking_state(thread: Thread, issues: list[Issue]) -> None:
+    """Recalculate issue-tracking metadata from the current in-memory issue state."""
+    unread_issues = [issue for issue in issues if issue.status == "unread"]
+    unread_count = len(unread_issues)
+    total_issues = len(issues)
+
+    thread.total_issues = total_issues
+    thread.issues_remaining = unread_count
+    thread.next_unread_issue_id = unread_issues[0].id if unread_issues else None
+
+    if unread_count == 0:
+        thread.reading_progress = "completed"
+        thread.status = "completed"
+        return
+
+    if unread_count == total_issues:
+        thread.reading_progress = "not_started"
+    else:
+        thread.reading_progress = "in_progress"
+
+    if thread.status == "completed":
+        thread.status = "active"
 
 
 @router.get("/threads/{thread_id}/issues", response_model=IssueListResponse)
@@ -136,6 +240,39 @@ async def list_issues(
     )
 
 
+@router.get(
+    "/threads/{thread_id}/issues:validateOrder",
+    response_model=IssueOrderValidationResponse,
+)
+async def validate_issue_order(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> IssueOrderValidationResponse:
+    """Report dependency edges that disagree with canonical issue positions.
+
+    Args:
+        thread_id: The thread ID whose in-thread ordering should be validated.
+        current_user: The authenticated user requesting the validation report.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        IssueOrderValidationResponse containing human-readable ordering warnings.
+
+    Raises:
+        HTTPException: If the thread does not exist or is not owned by the user.
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    warnings = await validate_position_dependency_consistency(thread_id, current_user.id, db)
+    return IssueOrderValidationResponse(warnings=warnings)
+
+
 @router.post(
     "/threads/{thread_id}/issues",
     response_model=IssueListResponse,
@@ -147,60 +284,11 @@ async def create_issues(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> IssueListResponse:
-    """Create issues from range format (e.g., "1-25" or "1, 3, 5-7").
+    """Create issues from a range string and place them in thread order.
 
-    Supports both initial thread migration and adding issues to existing migrated threads.
-    Deduplicates existing issues - only creates issues that don't already exist.
-    Updates thread metadata (total_issues, issues_remaining, next_unread_issue_id).
-
-    Position Calculation Algorithm:
-    New issues are ALWAYS appended at the end of ALL existing issues to avoid collisions
-    and maintain data integrity. The algorithm:
-    1. Find max_position among all existing issues (not just referenced ones)
-    2. Start new issue positions at max_position + 1
-    3. Assign positions sequentially to new issues in request order
-
-    Examples:
-    - Existing: Issues 1-10 at positions 1-10
-      Request: "1-5, Annual 2"
-      Result: Annual 2 at position 11 (after ALL existing issues, including 6-10)
-
-    - Existing: Issues 1-10 at positions 1-10
-      Request: "11-15"
-      Result: Issues 11-15 at positions 11-15
-
-    - Existing: Empty
-      Request: "Annual 1, 1-3"
-      Result: Annual 1 at position 1, then 1-3 at positions 2-4
-
-    Rationale:
-    Inserting new issues between existing issues would require shifting all subsequent
-    issues, which is error-prone and computationally expensive. Appending at the end
-    is simple, deterministic, and prevents position collisions.
-
-    Data Integrity Strategy:
-    - Position duplicates within new_issues: Detected and logged as ERROR
-    - Position conflicts with existing issues: Detected and logged as ERROR
-    - All collisions return HTTP 500 to prevent data corruption
-    - Logs include thread_id, positions, and conflicts for production monitoring
-
-    Row-Level Locking Strategy:
-    Uses SELECT FOR UPDATE to prevent race conditions when multiple requests
-    add issues to the same thread concurrently:
-
-    1. Read thread row (without lock, just for permission check)
-    2. Lock all issue rows for this thread (prevents concurrent issue adds creating position conflicts)
-    3. Calculate new positions atomically (max_position read while holding locks)
-    4. Write new issues (position assignment is deterministic under lock)
-    5. Commit releases all locks
-
-    Lock strategy (minimal locking to prevent deadlocks):
-    - Thread row: NOT locked (read-only for permission check)
-    - Issue rows: Locked with SELECT FOR UPDATE (prevents concurrent modifications)
-    - Events table: No lock needed (inserts after commit or in same transaction)
-
-    This ensures concurrent requests to add issues are serialized at the database level,
-    preventing position collisions without application-level mutexes.
+    By default new issues are appended after the last existing issue. When
+    ``insert_after_issue_id`` is provided, existing issues later in the thread are
+    shifted upward so the new issues are inserted immediately after that issue.
 
     Args:
         thread_id: The thread ID to create issues for.
@@ -215,7 +303,9 @@ async def create_issues(
         HTTPException: If thread not found, all issues already exist,
                       position collision detected, or issue range is invalid.
     """
-    thread_result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
+    thread_result = await db.execute(
+        select(Thread).where(Thread.id == thread_id).with_for_update()
+    )
     thread = thread_result.scalar_one_or_none()
     if not thread or thread.user_id != current_user.id:
         raise HTTPException(
@@ -238,36 +328,61 @@ async def create_issues(
         )
 
     existing_issues_result = await db.execute(
-        select(Issue.issue_number, Issue.position)
+        select(Issue.id, Issue.issue_number, Issue.position)
         .where(Issue.thread_id == thread_id)
         .with_for_update()
+        .order_by(Issue.position)
     )
-    existing_issues = {row[0]: row[1] for row in existing_issues_result.fetchall()}
+    existing_issue_rows = existing_issues_result.all()
+    existing_issues = {row.issue_number: row.position for row in existing_issue_rows}
 
-    max_position = 0
-    if existing_issues:
-        max_position = max(existing_issues.values())
+    max_position = max((row.position for row in existing_issue_rows), default=0)
+    insert_position = max_position
 
-    new_issues = []
-    next_new_position = max_position + 1
-
-    for issue_number in issue_numbers:
-        if issue_number not in existing_issues:
-            issue = Issue(
-                thread_id=thread_id,
-                issue_number=issue_number,
-                position=next_new_position,
-                status="unread",
+    if request.insert_after_issue_id is not None:
+        insert_after_issue = next(
+            (row for row in existing_issue_rows if row.id == request.insert_after_issue_id),
+            None,
+        )
+        if insert_after_issue is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue {request.insert_after_issue_id} not found",
             )
-            db.add(issue)
-            new_issues.append(issue)
-            next_new_position += 1
+        insert_position = insert_after_issue.position
 
-    if not new_issues:
+    new_issue_numbers = [
+        issue_number for issue_number in issue_numbers if issue_number not in existing_issues
+    ]
+
+    if not new_issue_numbers:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="All issues in range already exist",
         )
+
+    new_issues_count = len(new_issue_numbers)
+
+    if request.insert_after_issue_id is not None:
+        await db.execute(
+            update(Issue)
+            .where(Issue.thread_id == thread_id, Issue.position > insert_position)
+            .values(position=Issue.position + new_issues_count)
+        )
+
+    new_issues = []
+    next_new_position = insert_position + 1
+
+    for issue_number in new_issue_numbers:
+        issue = Issue(
+            thread_id=thread_id,
+            issue_number=issue_number,
+            position=next_new_position,
+            status="unread",
+        )
+        db.add(issue)
+        new_issues.append(issue)
+        next_new_position += 1
 
     position_values = [issue.position for issue in new_issues]
     if len(position_values) != len(set(position_values)):
@@ -283,8 +398,10 @@ async def create_issues(
             detail="Internal error: Duplicate positions calculated",
         )
 
-    existing_position_values = list(existing_issues.values())
-    conflicting_positions = [p for p in position_values if p in existing_position_values]
+    reserved_positions = [
+        row.position for row in existing_issue_rows if row.position <= insert_position
+    ]
+    conflicting_positions = [p for p in position_values if p in reserved_positions]
     if conflicting_positions:
         logger.error(
             "Position collision with existing issues",
@@ -302,6 +419,12 @@ async def create_issues(
     try:
         await db.flush()
     except IntegrityError as e:
+        await db.rollback()
+        if _is_issue_thread_number_conflict(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Issue number already exists in this thread",
+            ) from e
         logger.error(
             "Database integrity error during issue creation",
             extra={
@@ -315,30 +438,45 @@ async def create_issues(
             detail="Internal error: Database constraint violation",
         ) from e
 
-    new_issues_count = len(new_issues)
-
     # Get existing issue count before new issues were added
     existing_count_result = await db.execute(
         select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
     )
     existing_issue_count = existing_count_result.scalar() or 0
 
+    first_unread_result = await db.execute(
+        select(Issue)
+        .where(Issue.thread_id == thread_id, Issue.status == "unread")
+        .order_by(Issue.position)
+        .limit(1)
+    )
+    first_unread_issue = first_unread_result.scalar_one_or_none()
+
     # Handle both initial migration and adding to existing migrated threads
     if thread.total_issues is None:
         # Initial thread migration - set up issue tracking from scratch
         thread.total_issues = existing_issue_count
-        thread.issues_remaining = existing_issue_count
-        thread.reading_progress = "not_started"
-        if new_issues:
-            thread.next_unread_issue_id = new_issues[0].id
+        thread.issues_remaining = await thread.get_issues_remaining(db)
+        if first_unread_issue is None:
+            thread.next_unread_issue_id = None
+            thread.reading_progress = "completed"
+            thread.status = "completed"
+        else:
+            thread.next_unread_issue_id = first_unread_issue.id
+            if thread.issues_remaining == thread.total_issues:
+                thread.reading_progress = "not_started"
+            else:
+                thread.reading_progress = "in_progress"
             thread.status = "active"
     else:
         # Adding issues to existing migrated thread - update counts incrementally
+        existing_next_unread_issue_id = thread.next_unread_issue_id
+        was_not_started = thread.reading_progress == "not_started"
         thread.total_issues += new_issues_count
         thread.issues_remaining += new_issues_count
-        thread.reading_progress = "in_progress"
+        thread.reading_progress = "not_started" if was_not_started else "in_progress"
         # If thread was completed (no next_unread), reactivate with first new issue
-        if thread.next_unread_issue_id is None and new_issues:
+        if existing_next_unread_issue_id is None and new_issues:
             if thread.status == "completed":
                 await db.execute(
                     update(Thread)
@@ -348,8 +486,16 @@ async def create_issues(
                 )
                 thread.queue_position = 1
             thread.next_unread_issue_id = new_issues[0].id
+            thread.reading_progress = "in_progress"
             thread.status = "active"
-        # Otherwise keep existing next_unread - no change needed
+        elif (
+            new_issues
+            and existing_next_unread_issue_id is not None
+            and await should_update_next_unread(
+                new_issues[0].id, existing_next_unread_issue_id, db
+            )
+        ):
+            thread.next_unread_issue_id = new_issues[0].id
 
     thread_id_val = thread.id
 
@@ -360,10 +506,10 @@ async def create_issues(
     )
     db.add(event)
 
+    issue_responses = [issue_to_response(issue) for issue in new_issues]
+
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
-
-    issue_responses = [issue_to_response(issue) for issue in new_issues]
 
     return IssueListResponse(
         issues=issue_responses,
@@ -407,6 +553,174 @@ async def get_issue(
         )
 
     return issue_to_response(issue)
+
+
+@router.post("/issues/{issue_id}:move", status_code=status.HTTP_204_NO_CONTENT)
+async def move_issue(
+    issue_id: int,
+    request: IssueMoveRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Move a single issue within its thread.
+
+    Args:
+        issue_id: The issue ID to move.
+        request: Move request containing the issue that should come before it.
+        current_user: The authenticated user making the move request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        None. The response is HTTP 204 on success.
+
+    Raises:
+        HTTPException: If the issue or requested target issue is not found.
+    """
+    thread_id = await _get_issue_thread_id(issue_id, current_user, db)
+    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+
+    issue_map = {issue.id: issue for issue in thread_issues}
+    issue = issue_map.get(issue_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+
+    if request.after_issue_id == issue_id:
+        _recalculate_next_unread_issue_id(thread, thread_issues)
+        await db.flush()
+        await refresh_user_blocked_status(current_user.id, db)
+        await db.commit()
+        return
+
+    reordered_issues = [existing_issue for existing_issue in thread_issues if existing_issue.id != issue_id]
+
+    if request.after_issue_id is None:
+        insert_index = 0
+    else:
+        after_issue = issue_map.get(request.after_issue_id)
+        if after_issue is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Issue {request.after_issue_id} not found",
+            )
+        insert_index = next(
+            index for index, existing_issue in enumerate(reordered_issues)
+            if existing_issue.id == after_issue.id
+        ) + 1
+
+    reordered_issues.insert(insert_index, issue)
+    _assign_issue_positions(reordered_issues)
+    _recalculate_next_unread_issue_id(thread, reordered_issues)
+
+    await db.flush()
+    await refresh_user_blocked_status(current_user.id, db)
+    await db.commit()
+
+
+@router.post("/threads/{thread_id}/issues:reorder", status_code=status.HTTP_204_NO_CONTENT)
+async def reorder_issues(
+    thread_id: int,
+    request: IssueReorderRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Rewrite all issue positions in a thread from an explicit ordered ID list.
+
+    Args:
+        thread_id: The thread whose issue order should be rewritten.
+        request: Ordered issue IDs representing the desired canonical order.
+        current_user: The authenticated user making the reorder request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        None. The response is HTTP 204 on success.
+
+    Raises:
+        HTTPException: If the thread is not found or the issue IDs are invalid.
+    """
+    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+
+    existing_issue_ids = [issue.id for issue in thread_issues]
+    requested_issue_ids = request.issue_ids
+    if (
+        len(requested_issue_ids) != len(existing_issue_ids)
+        or len(set(requested_issue_ids)) != len(requested_issue_ids)
+        or set(requested_issue_ids) != set(existing_issue_ids)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="issue_ids must contain every issue in the thread exactly once",
+        )
+
+    issue_map = {issue.id: issue for issue in thread_issues}
+    reordered_issues = [issue_map[issue_id] for issue_id in requested_issue_ids]
+
+    _assign_issue_positions(reordered_issues)
+    _recalculate_next_unread_issue_id(thread, reordered_issues)
+
+    await db.flush()
+    await refresh_user_blocked_status(current_user.id, db)
+    await db.commit()
+
+
+@router.delete("/issues/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_issue(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete one issue, compact later positions, and update thread issue metadata.
+
+    Args:
+        issue_id: The issue ID to delete.
+        current_user: The authenticated user requesting the deletion.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        None. The response is HTTP 204 on success.
+
+    Raises:
+        HTTPException: If the issue does not exist or is not owned by the user.
+    """
+    thread_id = await _get_issue_thread_id(issue_id, current_user, db)
+    thread, thread_issues = await _get_locked_thread_with_issues(thread_id, current_user, db)
+
+    issue_map = {issue.id: issue for issue in thread_issues}
+    issue = issue_map.get(issue_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+
+    deleted_position = issue.position
+    deleted_issue_number = issue.issue_number
+    remaining_issues = [
+        existing_issue for existing_issue in thread_issues if existing_issue.id != issue_id
+    ]
+
+    await db.delete(issue)
+
+    for remaining_issue in remaining_issues:
+        if remaining_issue.position > deleted_position:
+            remaining_issue.position -= 1
+
+    _recalculate_thread_issue_tracking_state(thread, remaining_issues)
+
+    db.add(
+        Event(
+            type="issue_deleted",
+            timestamp=datetime.now(UTC),
+            thread_id=thread.id,
+            issue_number=deleted_issue_number,
+        )
+    )
+
+    await db.flush()
+    await refresh_user_blocked_status(current_user.id, db)
+    await db.commit()
 
 
 @router.post("/issues/{issue_id}:markRead", status_code=status.HTTP_204_NO_CONTENT)

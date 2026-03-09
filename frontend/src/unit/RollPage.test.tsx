@@ -622,10 +622,10 @@ describe('Rating View', () => {
     // 2. Submit rating (Save & Continue)
     await user.click(screen.getByText('Save & Continue'))
 
-    // 3. Verify mutate was called with finish_session: false
+    // 3. Verify the UI never auto-finishes the session for the last issue.
     await waitFor(() => {
       expect(mockRate).toHaveBeenCalledWith(expect.objectContaining({
-        issues_read: 1,
+        rating: 4,
         finish_session: false
       }))
     })

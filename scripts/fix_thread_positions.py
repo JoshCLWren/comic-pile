@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED: This script is superseded by the thread queue management APIs.
+# See: PUT /api/threads/{thread_id}/position/, /front/, and /back/ for Thread.queue_position
+# management. Retained for reference only. Do not use for new operations.
 """Fix thread position duplicates by reorganizing positions sequentially.
 
 This script addresses the duplicate position issues found by the audit script.

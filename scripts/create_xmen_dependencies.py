@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED: This script is superseded by the dependency API.
+# See: POST /api/v1/dependencies/.
+# Retained for reference only. Do not use for new operations.
 """Create comic reading order dependencies for X-Men storylines.
 
 Environment Variables:

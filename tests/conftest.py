@@ -8,9 +8,10 @@ import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import inspect, select, text
+from sqlalchemy import UniqueConstraint, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession as SQLAlchemyAsyncSession,
 )
 from sqlalchemy.ext.asyncio import (
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.engine import Connection, make_url
+from sqlalchemy.pool import NullPool
 
 from app.database import Base, get_db
 from app.main import app
@@ -31,18 +33,26 @@ if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def enable_rate_limiting_for_tests() -> Iterator[None]:
-    """Enable rate limiting for rate limit tests."""
+TRUNCATE_TEST_DATA_SQL = text(
+    "TRUNCATE TABLE sessions, events, threads, issues, snapshots, dependencies, "
+    "revoked_tokens, users RESTART IDENTITY CASCADE;"
+)
+_SHARED_TEST_ENGINE: AsyncEngine | None = None
+
+
+@pytest.fixture(autouse=True)
+def enable_rate_limiting_for_tests(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Enable rate limiting only for the dedicated rate-limit test module."""
     original_value = os.environ.get("ENABLE_RATE_LIMITING_IN_TESTS")
+    if request.node.nodeid.startswith("tests/test_rate_limit"):
+        os.environ["ENABLE_RATE_LIMITING_IN_TESTS"] = "true"
+    else:
+        os.environ.pop("ENABLE_RATE_LIMITING_IN_TESTS", None)
     yield
     if original_value is None:
         os.environ.pop("ENABLE_RATE_LIMITING_IN_TESTS", None)
     else:
         os.environ["ENABLE_RATE_LIMITING_IN_TESTS"] = original_value
-
-
-_SCHEMA_PREPARED: set[str] = set()
 
 
 def _looks_like_test_database(database_url: str) -> bool:
@@ -60,7 +70,7 @@ def _looks_like_test_database(database_url: str) -> bool:
     return db_name.endswith("_test") or db_name.endswith("-test")
 
 
-def _missing_model_columns(conn: Connection) -> bool:
+def _has_schema_drift(conn: Connection) -> bool:
     inspector = inspect(conn)
 
     required_table_names = {
@@ -78,59 +88,91 @@ def _missing_model_columns(conn: Connection) -> bool:
         if not inspector.has_table(table_name):
             return True
 
-        existing = {str(col["name"]) for col in inspector.get_columns(table_name)}
-        expected = {col.name for col in Base.metadata.tables[table_name].columns}
-        if not expected.issubset(existing):
+        table = Base.metadata.tables[table_name]
+
+        existing_columns = {str(col["name"]) for col in inspector.get_columns(table_name)}
+        expected_columns = {col.name for col in table.columns}
+        if not expected_columns.issubset(existing_columns):
+            return True
+
+        existing_indexes = {str(index["name"]) for index in inspector.get_indexes(table_name)}
+        expected_indexes = {index.name for index in table.indexes if index.name is not None}
+        if not expected_indexes.issubset(existing_indexes):
+            return True
+
+        existing_unique_constraints = {
+            str(constraint["name"])
+            for constraint in inspector.get_unique_constraints(table_name)
+            if constraint.get("name") is not None
+        }
+        expected_unique_constraints = {
+            constraint.name
+            for constraint in table.constraints
+            if isinstance(constraint, UniqueConstraint) and constraint.name is not None
+        }
+        if not expected_unique_constraints.issubset(existing_unique_constraints):
             return True
 
     return False
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def ensure_test_schema() -> None:
-    """Ensure test DB schema matches current SQLAlchemy models.
+def _default_test_username() -> str:
+    return f"test_user_{os.getpid()}"
 
-    Tests use Base.metadata.create_all(), which does not alter existing tables. When a
-    persistent Postgres test DB lags behind the models (e.g., missing users.email),
-    we rebuild the schema once per run.
 
-    This is only allowed for databases whose name contains 'test'.
-    """
+async def _sync_id_sequence(db: SQLAlchemyAsyncSession, table_name: str) -> None:
+    """Advance a table's id sequence to the current max id after explicit inserts."""
+    await db.execute(
+        text(
+            "SELECT setval("
+            f"pg_get_serial_sequence('{table_name}', 'id'), "
+            f"COALESCE((SELECT MAX(id) FROM {table_name}), 1), true)"
+        )
+    )
+
+
+@pytest_asyncio.fixture(scope="session")
+async def db_engine() -> AsyncIterator[AsyncEngine]:
+    """Create and prepare the shared async engine for backend tests."""
+    global _SHARED_TEST_ENGINE
+
     database_url = get_test_database_url()
-    if database_url in _SCHEMA_PREPARED:
-        return
-
-    engine = create_async_engine(database_url, echo=False)
+    engine = create_async_engine(database_url, echo=False, poolclass=NullPool)
 
     async with engine.begin() as conn:
 
-        def _check_and_drop(conn: Connection) -> None:
-            if _missing_model_columns(conn):
+        def _check_and_drop(sync_conn: Connection) -> None:
+            if _has_schema_drift(sync_conn):
                 if not _looks_like_test_database(database_url):
                     raise RuntimeError(
                         "Refusing to reset schema on non-test database. "
                         f"Database '{make_url(database_url).database}' must include 'test'."
                     )
-                conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-                conn.exec_driver_sql("CREATE SCHEMA public")
-            Base.metadata.create_all(bind=conn)
+                sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+                sync_conn.exec_driver_sql("CREATE SCHEMA public")
+            Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
+        await conn.execute(TRUNCATE_TEST_DATA_SQL)
 
-    await engine.dispose()
-    _SCHEMA_PREPARED.add(database_url)
+    _SHARED_TEST_ENGINE = engine
+    try:
+        yield engine
+    finally:
+        _SHARED_TEST_ENGINE = None
+        await engine.dispose()
 
 
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
+    username = _default_test_username()
     result = await db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
     if not user:
-        username = f"test_user_{os.getpid()}"
         result = await db.execute(select(User).where(User.username == username))
         user = result.scalar_one_or_none()
         if not user:
-            user = User(username=username, created_at=datetime.now(UTC))
+            user = User(id=1, username=username, created_at=datetime.now(UTC))
             db.add(user)
             try:
                 await db.commit()
@@ -140,17 +182,24 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
                 user = result.scalar_one()
             else:
                 await db.refresh(user)
+                await _sync_id_sequence(db, "users")
     return user
 
 
 async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | None = None) -> User:
     """Get or create user with given username (async)."""
     if username is None:
-        username = f"test_user_{os.getpid()}"
+        username = _default_test_username()
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
     if not user:
-        user = User(username=username, created_at=datetime.now(UTC))
+        user_kwargs: dict[str, object] = {
+            "username": username,
+            "created_at": datetime.now(UTC),
+        }
+        if username == _default_test_username():
+            user_kwargs["id"] = 1
+        user = User(**user_kwargs)
         db.add(user)
         try:
             await db.commit()
@@ -160,6 +209,8 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
             user = result.scalar_one()
         else:
             await db.refresh(user)
+            if username == _default_test_username():
+                await _sync_id_sequence(db, "users")
     return user
 
 
@@ -172,7 +223,7 @@ async def default_user(async_db: SQLAlchemyAsyncSession) -> User:
 @pytest.fixture(scope="session")
 def test_username() -> str:
     """Get process-specific test username for direct database queries."""
-    return f"test_user_{os.getpid()}"
+    return _default_test_username()
 
 
 def get_test_database_url() -> str:
@@ -204,32 +255,40 @@ def set_skip_worktree_check() -> Iterator[None]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def async_db() -> AsyncIterator[SQLAlchemyAsyncSession]:
-    """Create async test database with transaction rollback (PostgreSQL)."""
-    database_url = get_test_database_url()
+async def async_db(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSession]:
+    """Create an async test session isolated by per-test transaction rollback."""
+    async with db_engine.connect() as connection:
+        transaction = await connection.begin()
+        session = SQLAlchemyAsyncSession(
+            bind=connection,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        try:
+            yield session
+        finally:
+            await session.close()
+            if transaction.is_active:
+                await transaction.rollback()
 
-    engine = create_async_engine(database_url, echo=False)
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    async_session_maker = async_sessionmaker(
-        bind=engine,
+@pytest_asyncio.fixture(scope="function")
+async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSession]:
+    """Create an async test session that uses real commits across connections."""
+    session_maker = async_sessionmaker(
+        bind=db_engine,
         expire_on_commit=False,
         class_=SQLAlchemyAsyncSession,
     )
 
-    async with async_session_maker() as session:
-        await session.execute(
-            text(
-                "TRUNCATE TABLE sessions, events, threads, snapshots, revoked_tokens, users "
-                "RESTART IDENTITY CASCADE;"
-            )
-        )
+    async with session_maker() as session:
+        await session.execute(TRUNCATE_TEST_DATA_SQL)
         await session.commit()
         yield session
 
-    await engine.dispose()
+    async with session_maker() as cleanup_session:
+        await cleanup_session.execute(TRUNCATE_TEST_DATA_SQL)
+        await cleanup_session.commit()
 
 
 async def _create_async_db_override(
@@ -243,7 +302,11 @@ async def _create_async_db_override(
             return
 
         database_url = get_test_database_url()
-        engine = create_async_engine(database_url, echo=False, pool_size=1, max_overflow=0)
+        engine = _SHARED_TEST_ENGINE
+        created_engine = False
+        if engine is None:
+            engine = create_async_engine(database_url, echo=False, pool_size=1, max_overflow=0)
+            created_engine = True
         connection = await engine.connect()
         async_session_maker = async_sessionmaker(
             bind=connection,
@@ -253,7 +316,8 @@ async def _create_async_db_override(
         async with async_session_maker() as session:
             yield session
         await connection.close()
-        await engine.dispose()
+        if created_engine:
+            await engine.dispose()
 
     return override_get_db
 
@@ -263,10 +327,8 @@ async def sample_data(
     async_db: SQLAlchemyAsyncSession,
 ) -> dict[str, Thread | SessionModel | Event | User | list]:
     """Create sample threads, sessions for async testing."""
-    import os
-
     now = datetime.now(UTC)
-    username = f"test_user_{os.getpid()}"
+    username = _default_test_username()
     user = await async_db.execute(select(User).where(User.username == username))
     user = user.scalar_one_or_none()
     if not user:
@@ -274,9 +336,11 @@ async def sample_data(
         async_db.add(user)
         await async_db.commit()
         await async_db.refresh(user)
+        await _sync_id_sequence(async_db, "users")
 
     threads = [
         Thread(
+            id=1,
             title="Superman",
             format="Comic",
             issues_remaining=10,
@@ -286,6 +350,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=2,
             title="Batman",
             format="Comic",
             issues_remaining=5,
@@ -297,6 +362,7 @@ async def sample_data(
             reading_progress="in_progress",
         ),
         Thread(
+            id=3,
             title="Wonder Woman",
             format="Comic",
             issues_remaining=0,
@@ -306,6 +372,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=4,
             title="Flash",
             format="Comic",
             issues_remaining=15,
@@ -315,6 +382,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=5,
             title="Aquaman",
             format="Comic",
             issues_remaining=8,
@@ -337,6 +405,7 @@ async def sample_data(
     batman_issues = []
     for i in range(1, 11):
         issue = Issue(
+            id=i,
             thread_id=threads[1].id,
             issue_number=str(i),
             position=i,
@@ -354,11 +423,13 @@ async def sample_data(
 
     sessions = [
         SessionModel(
+            id=1,
             start_die=6,
             user_id=user.id,
             started_at=now,
         ),
         SessionModel(
+            id=2,
             start_die=8,
             user_id=user.id,
             started_at=now,
@@ -374,6 +445,7 @@ async def sample_data(
 
     events = [
         Event(
+            id=1,
             type="roll",
             die=6,
             result=4,
@@ -384,6 +456,7 @@ async def sample_data(
             timestamp=now,
         ),
         Event(
+            id=2,
             type="rate",
             rating=4.5,
             issues_read=1,
@@ -401,6 +474,11 @@ async def sample_data(
 
     for event in events:
         await async_db.refresh(event)
+
+    await _sync_id_sequence(async_db, "threads")
+    await _sync_id_sequence(async_db, "issues")
+    await _sync_id_sequence(async_db, "sessions")
+    await _sync_id_sequence(async_db, "events")
 
     return {"threads": threads, "sessions": sessions, "events": events, "user": user}
 
@@ -428,10 +506,11 @@ async def auth_client(
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
-            user = User(username=test_username, created_at=datetime.now(UTC))
+            user = User(id=1, username=test_username, created_at=datetime.now(UTC))
             async_db.add(user)
             await async_db.flush()
             await async_db.refresh(user)
+            await _sync_id_sequence(async_db, "users")
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})

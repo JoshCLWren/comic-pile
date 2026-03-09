@@ -47,3 +47,34 @@ class IssueCreateRange(BaseModel):
     issue_range: str = Field(
         ..., min_length=1, description="Issue range like '1-25' or '1, 3, 5-7'"
     )
+    insert_after_issue_id: int | None = Field(
+        default=None,
+        ge=1,
+        description="Insert new issues after this issue ID. If null, append to end.",
+    )
+
+
+class IssueMoveRequest(BaseModel):
+    """Schema for moving an issue to a new position."""
+
+    after_issue_id: int | None = Field(
+        ...,
+        ge=1,
+        description="Move after this issue. null = move to position 1 (top).",
+    )
+
+
+class IssueReorderRequest(BaseModel):
+    """Schema for bulk reordering issues within a thread."""
+
+    issue_ids: list[int] = Field(
+        ...,
+        min_length=1,
+        description="Ordered list of issue IDs representing the desired order.",
+    )
+
+
+class IssueOrderValidationResponse(BaseModel):
+    """Schema for reporting in-thread dependency ordering conflicts."""
+
+    warnings: list[str]

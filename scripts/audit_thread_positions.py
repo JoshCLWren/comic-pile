@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# DEPRECATED: This script is superseded by the thread queue management APIs.
+# See: GET /api/threads/ plus PUT /api/threads/{thread_id}/position/, /front/, and /back/
+# for managed Thread.queue_position inspection and repair. Retained for reference only.
 """Audit script for thread positions and queue consistency.
 
 This script checks for:

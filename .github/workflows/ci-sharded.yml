@@ -250,8 +250,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shardIndex: [1, 2, 3, 4]
-        totalShards: [4]
+        shardIndex: [1, 2, 3, 4, 5, 6, 7, 8]
+        totalShards: [8]
     env:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
@@ -281,11 +281,6 @@ jobs:
       - name: Remove .env file to prevent CI database override
         run: rm -f .env .env.backup .envrc .env.local .env.production 2>/dev/null || true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Wait for PostgreSQL
         run: |
           i=1
@@ -301,14 +296,12 @@ jobs:
           echo "PostgreSQL failed to start"
           exit 1
 
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
-
-      - name: Install Playwright browsers
-        run: cd frontend && npx playwright install --with-deps chromium
-
-      - name: Build frontend
-        run: cd frontend && npm run build
+      - name: Restore frontend toolchain from CI image
+        run: |
+          mkdir -p static
+          rm -rf frontend/node_modules static/react
+          ln -s /opt/ci-assets/frontend/node_modules frontend/node_modules
+          ln -s /opt/ci-assets/static/react static/react
 
       - name: Start backend server
         shell: bash

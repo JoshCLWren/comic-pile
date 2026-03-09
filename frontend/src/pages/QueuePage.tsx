@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent, MouseEvent, KeyboardEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../components/Modal'
@@ -71,7 +71,128 @@ function FormatSelect({ value, onChange, required }: {
 /**
  * Inline issue list for migrated threads in the edit modal.
  */
-function IssueToggleList({ threadId }: {
+function reorderIssuesForDrop(
+  issues: Issue[],
+  draggedIssueId: number,
+  targetIssueId: number
+): Issue[] {
+  const draggedIndex = issues.findIndex((issue) => issue.id === draggedIssueId)
+  const targetIndex = issues.findIndex((issue) => issue.id === targetIssueId)
+
+  if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
+    return issues
+  }
+
+  const nextIssues = [...issues]
+  const draggedIssue = nextIssues.splice(draggedIndex, 1)[0]
+  if (!draggedIssue) {
+    return issues
+  }
+  const targetIndexAfterRemoval = nextIssues.findIndex((issue) => issue.id === targetIssueId)
+  if (targetIndexAfterRemoval === -1) {
+    return issues
+  }
+  nextIssues.splice(targetIndexAfterRemoval + 1, 0, draggedIssue)
+  return nextIssues
+}
+
+function moveIssueByStep(
+  issues: Issue[],
+  issueId: number,
+  direction: 'up' | 'down'
+): Issue[] {
+  const issueIndex = issues.findIndex((issue) => issue.id === issueId)
+  if (issueIndex === -1) {
+    return issues
+  }
+
+  const targetIndex = direction === 'up' ? issueIndex - 1 : issueIndex + 1
+  if (targetIndex < 0 || targetIndex >= issues.length) {
+    return issues
+  }
+
+  const nextIssues = [...issues]
+  const movedIssue = nextIssues.splice(issueIndex, 1)[0]
+  if (!movedIssue) {
+    return issues
+  }
+  nextIssues.splice(targetIndex, 0, movedIssue)
+  return nextIssues
+}
+
+type IssueMutation =
+  | { id: number; type: 'delete'; issueId: number }
+  | { id: number; type: 'reorder'; issueIds: number[] }
+  | { id: number; type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
+
+type QueuedIssueMutation =
+  | { type: 'delete'; issueId: number }
+  | { type: 'reorder'; issueIds: number[] }
+  | { type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
+
+function normalizeIssueOrder(issues: Issue[], issueIds: number[]): number[] {
+  const existingIssueIds = new Set(issues.map((issue) => issue.id))
+  const normalizedIssueIds: number[] = []
+  const seenIssueIds = new Set<number>()
+
+  for (const issueId of issueIds) {
+    if (!existingIssueIds.has(issueId) || seenIssueIds.has(issueId)) {
+      continue
+    }
+    normalizedIssueIds.push(issueId)
+    seenIssueIds.add(issueId)
+  }
+
+  for (const issue of issues) {
+    if (!seenIssueIds.has(issue.id)) {
+      normalizedIssueIds.push(issue.id)
+    }
+  }
+
+  return normalizedIssueIds
+}
+
+function applyIssueMutation(issues: Issue[], mutation: IssueMutation): Issue[] {
+  switch (mutation.type) {
+    case 'toggle':
+      return issues.map((issue) => (
+        issue.id === mutation.issueId
+          ? {
+              ...issue,
+              status: mutation.nextStatus,
+              read_at: mutation.nextStatus === 'read' ? new Date().toISOString() : null,
+            }
+          : issue
+      ))
+    case 'delete':
+      return issues.filter((issue) => issue.id !== mutation.issueId)
+    case 'reorder': {
+      const normalizedIssueIds = normalizeIssueOrder(issues, mutation.issueIds)
+      const issueMap = new Map(issues.map((issue) => [issue.id, issue]))
+      return normalizedIssueIds
+        .map((issueId) => issueMap.get(issueId))
+        .filter((issue): issue is Issue => issue !== undefined)
+    }
+  }
+}
+
+function applyIssueMutations(issues: Issue[], mutations: IssueMutation[]): Issue[] {
+  return mutations.reduce((currentIssues, mutation) => applyIssueMutation(currentIssues, mutation), issues)
+}
+
+function getPendingIssueIds(mutations: IssueMutation[], type: 'delete' | 'toggle'): Set<number> {
+  const pendingIssueIds = new Set<number>()
+
+  for (const mutation of mutations) {
+    if (mutation.type === type) {
+      pendingIssueIds.add(mutation.issueId)
+    }
+  }
+
+  return pendingIssueIds
+}
+
+export function IssueToggleList({ threadId }: {
   threadId: number
 }) {
   const [issues, setIssues] = useState<Issue[]>([])
@@ -79,52 +200,177 @@ function IssueToggleList({ threadId }: {
   const [addRange, setAddRange] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [reorderAnnouncement, setReorderAnnouncement] = useState('')
   const [toggling, setToggling] = useState<Set<number>>(new Set())
+  const [deleting, setDeleting] = useState<Set<number>>(new Set())
+  const [draggedIssueId, setDraggedIssueId] = useState<number | null>(null)
+  const [dragOverIssueId, setDragOverIssueId] = useState<number | null>(null)
+  const baseIssuesRef = useRef<Issue[]>([])
+  const pendingMutationsRef = useRef<IssueMutation[]>([])
+  const isProcessingMutationsRef = useRef(false)
+  const nextMutationIdRef = useRef(1)
+
+  const syncOptimisticIssues = useCallback((baseIssues: Issue[], pendingMutations: IssueMutation[]) => {
+    setIssues(applyIssueMutations(baseIssues, pendingMutations))
+    setToggling(getPendingIssueIds(pendingMutations, 'toggle'))
+    setDeleting(getPendingIssueIds(pendingMutations, 'delete'))
+  }, [])
+
+  const fetchAllIssues = useCallback(async (): Promise<Issue[]> => {
+    const allIssues: Issue[] = []
+    const seenPageTokens = new Set<string>()
+    let nextPageToken: string | null = null
+
+    while (true) {
+      const data = await issuesApi.list(threadId, {
+        page_size: 100,
+        ...(nextPageToken ? { page_token: nextPageToken } : {}),
+      })
+      allIssues.push(...(data.issues || []))
+
+      if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+        return allIssues
+      }
+
+      seenPageTokens.add(data.next_page_token)
+      nextPageToken = data.next_page_token
+    }
+  }, [threadId])
+
+  const focusMoveControl = useCallback((issueId: number, direction: 'up' | 'down') => {
+    const focusTarget = () => {
+      document
+        .querySelector<HTMLButtonElement>(`[data-move-control="${direction}-${issueId}"]`)
+        ?.focus()
+    }
+
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(focusTarget)
+      return
+    }
+
+    setTimeout(focusTarget, 0)
+  }, [])
+
+  const runIssueMutation = useCallback(async (mutation: IssueMutation) => {
+    switch (mutation.type) {
+      case 'toggle':
+        if (mutation.nextStatus === 'read') {
+          await issuesApi.markRead(mutation.issueId)
+        } else {
+          await issuesApi.markUnread(mutation.issueId)
+        }
+        return
+      case 'delete':
+        await issuesApi.delete(mutation.issueId)
+        return
+      case 'reorder':
+        await issuesApi.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
+    }
+  }, [threadId])
+
+  const processIssueMutations = useCallback(async () => {
+    if (isProcessingMutationsRef.current) {
+      return
+    }
+
+    isProcessingMutationsRef.current = true
+
+    try {
+      while (pendingMutationsRef.current.length > 0) {
+        const currentMutation = pendingMutationsRef.current[0]
+        if (!currentMutation) {
+          break
+        }
+
+        try {
+          await runIssueMutation(currentMutation)
+          baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
+        } catch (err: unknown) {
+          try {
+            baseIssuesRef.current = await fetchAllIssues()
+          } catch (refreshErr) {
+            console.error('[IssueToggleList] Error refetching issues after mutation failure:', refreshErr)
+          }
+          setActionError(getApiErrorDetail(err))
+        } finally {
+          pendingMutationsRef.current = pendingMutationsRef.current.filter(
+            (mutation) => mutation.id !== currentMutation.id
+          )
+          syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
+        }
+      }
+    } finally {
+      isProcessingMutationsRef.current = false
+    }
+  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues])
+
+  const enqueueIssueMutation = useCallback((mutation: QueuedIssueMutation) => {
+    const queuedMutation = {
+      ...mutation,
+      id: nextMutationIdRef.current++,
+    } as IssueMutation
+
+    pendingMutationsRef.current = [...pendingMutationsRef.current, queuedMutation]
+    syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
+    void processIssueMutations()
+  }, [processIssueMutations, syncOptimisticIssues])
+
+  const enqueueIssueReorder = useCallback((
+    nextIssues: Issue[],
+    options?: {
+      announcement?: string
+      focusTarget?: { issueId: number; direction: 'up' | 'down' }
+    }
+  ) => {
+    const nextIssueIds = nextIssues.map((issue) => issue.id)
+    const currentIssueIds = issues.map((issue) => issue.id)
+    const orderDidChange = nextIssueIds.some((issueId, index) => issueId !== currentIssueIds[index])
+
+    if (!orderDidChange) {
+      return false
+    }
+
+    setActionError(null)
+    if (options?.announcement) {
+      setReorderAnnouncement(options.announcement)
+    }
+    enqueueIssueMutation({
+      type: 'reorder',
+      issueIds: nextIssueIds,
+    })
+    if (options?.focusTarget) {
+      focusMoveControl(options.focusTarget.issueId, options.focusTarget.direction)
+    }
+    return true
+  }, [enqueueIssueMutation, focusMoveControl, issues])
 
   const loadIssues = useCallback(async () => {
     setIsLoading(true)
     try {
-      // Load all issues (use large page size)
-      const data = await issuesApi.list(threadId, { page_size: 100 })
-      setIssues(data.issues || [])
+      baseIssuesRef.current = await fetchAllIssues()
+      syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
     } catch {
       // Non-critical
     } finally {
       setIsLoading(false)
     }
-  }, [threadId])
+  }, [fetchAllIssues, syncOptimisticIssues])
 
   useEffect(() => {
     loadIssues()
   }, [loadIssues])
 
-  async function handleToggle(issue: Issue) {
+  function handleToggle(issue: Issue) {
     const newStatus = issue.status === 'read' ? 'unread' : 'read'
 
-    // Optimistic update
-    setIssues((prev) =>
-      prev.map((i) => (i.id === issue.id ? { ...i, status: newStatus } : i))
-    )
-    setToggling((prev) => new Set(prev).add(issue.id))
-
-    try {
-      if (issue.status === 'read') {
-        await issuesApi.markUnread(issue.id)
-      } else {
-        await issuesApi.markRead(issue.id)
-      }
-    } catch {
-      // Revert on failure
-      setIssues((prev) =>
-        prev.map((i) => (i.id === issue.id ? { ...i, status: issue.status } : i))
-      )
-    } finally {
-      setToggling((prev) => {
-        const next = new Set(prev)
-        next.delete(issue.id)
-        return next
-      })
-    }
+    setActionError(null)
+    enqueueIssueMutation({
+      type: 'toggle',
+      issueId: issue.id,
+      nextStatus: newStatus,
+    })
   }
 
   async function handleAddIssues() {
@@ -145,28 +391,167 @@ function IssueToggleList({ threadId }: {
     }
   }
 
+  const handleDragStart = (issueId: number) => (event: DragEvent<HTMLButtonElement>) => {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(issueId))
+    setDraggedIssueId(issueId)
+    setActionError(null)
+  }
+
+  const handleDragOver = (issueId: number) => (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverIssueId(issueId)
+  }
+
+  const handleDrop = (targetIssueId: number) => (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+
+    if (!draggedIssueId || draggedIssueId === targetIssueId) {
+      setDraggedIssueId(null)
+      setDragOverIssueId(null)
+      return
+    }
+
+    const nextIssues = reorderIssuesForDrop(issues, draggedIssueId, targetIssueId)
+    setDraggedIssueId(null)
+    setDragOverIssueId(null)
+
+    if (nextIssues === issues) {
+      return
+    }
+
+    enqueueIssueReorder(nextIssues)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIssueId(null)
+    setDragOverIssueId(null)
+  }
+
+  function handleDeleteIssue(issue: Issue) {
+    if (!window.confirm(`Delete issue #${issue.issue_number}?`)) {
+      return
+    }
+
+    setActionError(null)
+    enqueueIssueMutation({
+      type: 'delete',
+      issueId: issue.id,
+    })
+  }
+
+  function handleMoveIssue(issue: Issue, direction: 'up' | 'down') {
+    const nextIssues = moveIssueByStep(issues, issue.id, direction)
+    const didReorder = enqueueIssueReorder(nextIssues, {
+      announcement: `Moved issue #${issue.issue_number} ${direction}.`,
+      focusTarget: { issueId: issue.id, direction },
+    })
+
+    if (!didReorder) {
+      focusMoveControl(issue.id, direction)
+    }
+  }
+
   if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
   return (
     <div className="space-y-2">
       <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+      <p className="sr-only" aria-live="polite">{reorderAnnouncement}</p>
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
-        {issues.map((issue) => (
-          <button
-            key={issue.id}
-            type="button"
-            onClick={() => handleToggle(issue)}
-            disabled={toggling.has(issue.id)}
-            className={`px-2 py-0.5 rounded text-xs font-bold border transition-all ${
-              issue.status === 'read'
-                ? 'bg-amber-600/20 border-amber-500/30 text-amber-400'
-                : 'bg-white/5 border-white/10 text-stone-400'
-            } ${toggling.has(issue.id) ? 'opacity-50' : 'hover:opacity-80'}`}
-            title={`#${issue.issue_number}: ${issue.status}`}
-          >
-            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
-          </button>
-        ))}
+        {issues.map((issue, index) => {
+          const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
+          const isDragOver = dragOverIssueId === issue.id
+          const isDragged = draggedIssueId === issue.id
+          const canMoveUp = index > 0
+          const canMoveDown = index < issues.length - 1
+
+          return (
+            <div
+              key={issue.id}
+              data-testid={`issue-pill-${issue.id}`}
+              data-issue-number={issue.issue_number}
+              className={[
+                'flex items-center rounded border transition-all',
+                issue.status === 'read'
+                  ? 'bg-amber-600/20 border-amber-500/30 text-amber-400'
+                  : 'bg-white/5 border-white/10 text-stone-400',
+                isDragOver ? 'border-amber-400/60 bg-amber-500/10' : '',
+                isDragged ? 'opacity-60' : '',
+                isBusy ? 'opacity-50' : '',
+              ].join(' ')}
+              onDragOver={handleDragOver(issue.id)}
+              onDrop={handleDrop(issue.id)}
+            >
+              <button
+                type="button"
+                draggable={!isBusy}
+                onDragStart={handleDragStart(issue.id)}
+                onDragEnd={handleDragEnd}
+                onClick={() => handleToggle(issue)}
+                disabled={isBusy}
+                className={[
+                  'px-2 py-0.5 text-xs font-bold transition-all',
+                  isBusy ? '' : 'hover:opacity-80 cursor-grab active:cursor-grabbing',
+                ].join(' ')}
+                title={`#${issue.issue_number}: ${issue.status}. Drag to reorder.`}
+                aria-label={`Toggle issue #${issue.issue_number}`}
+                data-testid={`issue-toggle-${issue.id}`}
+              >
+                #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
+              </button>
+              <div className="flex border-l border-white/10">
+                <button
+                  type="button"
+                  onClick={() => handleMoveIssue(issue, 'up')}
+                  disabled={isBusy || !canMoveUp}
+                  className={[
+                    'h-7 w-7 text-[11px] font-black text-stone-500 transition-colors',
+                    'hover:text-amber-300 disabled:opacity-40',
+                  ].join(' ')}
+                  aria-label={`Move issue #${issue.issue_number} up`}
+                  data-testid={`issue-move-up-${issue.id}`}
+                  data-move-control={`up-${issue.id}`}
+                  title={`Move issue #${issue.issue_number} up`}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMoveIssue(issue, 'down')}
+                  disabled={isBusy || !canMoveDown}
+                  className={[
+                    'h-7 w-7 text-[11px] font-black text-stone-500 transition-colors',
+                    'hover:text-amber-300 disabled:opacity-40',
+                  ].join(' ')}
+                  aria-label={`Move issue #${issue.issue_number} down`}
+                  data-testid={`issue-move-down-${issue.id}`}
+                  data-move-control={`down-${issue.id}`}
+                  title={`Move issue #${issue.issue_number} down`}
+                >
+                  ↓
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void handleDeleteIssue(issue)
+                }}
+                disabled={deleting.has(issue.id)}
+                className={[
+                  'pr-2 text-[10px] font-black text-stone-500 transition-colors',
+                  'hover:text-red-300 disabled:opacity-50',
+                ].join(' ')}
+                aria-label={`Delete issue #${issue.issue_number}`}
+                data-testid={`issue-delete-${issue.id}`}
+                title={`Delete issue #${issue.issue_number}`}
+              >
+                x
+              </button>
+            </div>
+          )
+        })}
       </div>
       <div className="flex gap-2">
         <input
@@ -196,6 +581,9 @@ function IssueToggleList({ threadId }: {
       </div>
       {addError && (
         <p className="text-xs text-red-400">{addError}</p>
+      )}
+      {actionError && (
+        <p className="text-xs text-red-400">{actionError}</p>
       )}
     </div>
   )

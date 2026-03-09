@@ -88,6 +88,51 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
     return thread_reasons + issue_reasons
 
 
+async def validate_position_dependency_consistency(
+    thread_id: int,
+    user_id: int,
+    db: AsyncSession,
+) -> list[str]:
+    """Return warnings where in-thread dependency order conflicts with issue positions."""
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+    thread = Thread.__table__.alias("thread")
+
+    result = await db.execute(
+        select(
+            thread.c.title,
+            source_issue.c.issue_number,
+            source_issue.c.position,
+            target_issue.c.issue_number,
+            target_issue.c.position,
+        )
+        .select_from(Dependency)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
+        .join(thread, source_issue.c.thread_id == thread.c.id)
+        .where(thread.c.id == thread_id)
+        .where(thread.c.user_id == user_id)
+        .where(target_issue.c.thread_id == thread.c.id)
+        .where(source_issue.c.position >= target_issue.c.position)
+        .order_by(source_issue.c.position, target_issue.c.position, Dependency.id)
+    )
+
+    return [
+        (
+            f'In thread "{thread_title}", issue #{source_issue_number} '
+            f"(position {source_position}) blocks issue #{target_issue_number} "
+            f"(position {target_position}). Position is canonical for in-thread order."
+        )
+        for (
+            thread_title,
+            source_issue_number,
+            source_position,
+            target_issue_number,
+            target_position,
+        ) in result.all()
+    ]
+
+
 async def detect_circular_dependency(
     source_id: int,
     target_id: int,

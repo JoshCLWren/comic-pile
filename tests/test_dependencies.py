@@ -11,6 +11,7 @@ from comic_pile.dependencies import (
     get_blocking_explanations,
     refresh_user_blocked_status,
     update_thread_blocked_status,
+    validate_position_dependency_consistency,
 )
 from comic_pile.queue import get_roll_pool
 
@@ -240,3 +241,55 @@ async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
 
     blocked_after = await get_blocked_thread_ids(user.id, async_db)
     assert target_thread.id not in blocked_after
+
+
+@pytest.mark.asyncio
+async def test_validate_position_dependency_consistency_warns_on_conflict(async_db):
+    """In-thread issue dependencies should warn when they reverse position order."""
+    user = User(username="position_validation_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    thread = Thread(
+        title="Validation Thread",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="not_started",
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issue_one = Issue(
+        thread_id=thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    issue_two = Issue(
+        thread_id=thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
+    async_db.add_all([issue_one, issue_two])
+    await async_db.flush()
+
+    async_db.add(
+        Dependency(
+            source_issue_id=issue_two.id,
+            target_issue_id=issue_one.id,
+        )
+    )
+    await async_db.commit()
+
+    warnings = await validate_position_dependency_consistency(thread.id, user.id, async_db)
+
+    assert len(warnings) == 1
+    assert 'thread "Validation Thread"' in warnings[0]
+    assert "issue #2" in warnings[0]
+    assert "issue #1" in warnings[0]
+    assert "Position is canonical" in warnings[0]

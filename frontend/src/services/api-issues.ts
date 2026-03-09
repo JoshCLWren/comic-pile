@@ -26,10 +26,23 @@ export const issuesApi = {
    * Create issues from a range format (e.g., "1-25" or "1, 3, 5-7")
    * @param threadId - The thread ID to create issues for
    * @param issueRange - Issue range string to parse and create
+   * @param options - Optional insert positioning options
    * @returns List of created issues
    */
-  create: async (threadId: number, issueRange: string): Promise<IssueListResponse> => {
-    return api.post(`/v1/threads/${threadId}/issues`, { issue_range: issueRange })
+  create: async (
+    threadId: number,
+    issueRange: string,
+    options?: { insert_after_issue_id?: number | null }
+  ): Promise<IssueListResponse> => {
+    const payload: { issue_range: string; insert_after_issue_id?: number | null } = {
+      issue_range: issueRange,
+    }
+
+    if (options && 'insert_after_issue_id' in options) {
+      payload.insert_after_issue_id = options.insert_after_issue_id ?? null
+    }
+
+    return api.post(`/v1/threads/${threadId}/issues`, payload)
   },
 
   /**
@@ -57,6 +70,36 @@ export const issuesApi = {
    */
   markUnread: async (issueId: number): Promise<void> => {
     await api.post(`/v1/issues/${issueId}:markUnread`)
+  },
+
+  /**
+   * Move an issue to a new position within its thread
+   * @param issueId - The issue ID to move
+   * @param afterIssueId - Move after this issue ID, or null to move to the top
+   */
+  move: async (issueId: number, afterIssueId: number | null): Promise<void> => {
+    await api.post<void, { after_issue_id: number | null }>(`/v1/issues/${issueId}:move`, {
+      after_issue_id: afterIssueId,
+    })
+  },
+
+  /**
+   * Rewrite the full issue order for a thread
+   * @param threadId - The thread whose issues should be reordered
+   * @param issueIds - Full ordered list of issue IDs
+   */
+  reorder: async (threadId: number, issueIds: number[]): Promise<void> => {
+    await api.post<void, { issue_ids: number[] }>(`/v1/threads/${threadId}/issues:reorder`, {
+      issue_ids: issueIds,
+    })
+  },
+
+  /**
+   * Delete a single issue from its thread
+   * @param issueId - The issue ID to delete
+   */
+  delete: async (issueId: number): Promise<void> => {
+    await api.delete<void>(`/v1/issues/${issueId}`)
   },
 
   /**

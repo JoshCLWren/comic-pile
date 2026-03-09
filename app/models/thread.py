@@ -108,7 +108,7 @@ class Thread(Base):
         cascade="all",
         passive_deletes=True,
         lazy="select",
-        order_by="Issue.issue_number",
+        order_by="Issue.position",
         foreign_keys="[Issue.thread_id]",
     )
     next_unread_issue: Mapped["Issue | None"] = relationship(
