@@ -137,7 +137,7 @@ def create_dependency(token: str, source_issue_id: int, target_issue_id: int) ->
         return False
 
 
-def main():
+def main() -> int:
     """Main entry point."""
     print("🎯 Creating Warren Ellis Wildstorm Reading Order")
     print("=" * 70)
@@ -200,8 +200,10 @@ def main():
             # Migrate to issue tracking
             try:
                 migrate_thread(token, thread_id, len(spec.issues_to_mark_read), spec.total_issues)
-            except Exception as e:
-                if "already uses issue tracking" not in str(e):
+            except requests.HTTPError as e:
+                if e.response is not None and "already uses issue tracking" in e.response.text:
+                    pass
+                else:
                     print(f"  ⚠️  Migration issue for {title}: {e}")
 
     print("\n📖 Fetching issue IDs...")

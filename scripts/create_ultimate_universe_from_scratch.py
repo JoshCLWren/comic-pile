@@ -166,7 +166,7 @@ def create_dependency(token: str, source_issue_id: int, target_issue_id: int) ->
         return False
 
 
-def main():
+def main() -> int:
     """Main entry point."""
     print("🎯 Creating Ultimate Universe Reading Order")
     print("=" * 70)
@@ -329,30 +329,25 @@ def main():
         ("The Ultimates", "16"),
         ("Ultimate Spider-Man", "21"),
         ("Ultimate Hawkeye", "1"),
-        ("Ultimate X-Men", "23"),
         ("Ultimate Wolverine", "10"),
         ("Ultimate Black Panther", "21"),
         ("Ultimate Spider-Man", "22"),
         ("Ultimate Spider-Man: Incursion", "5"),
         ("The Ultimates", "17"),
-        ("Ultimate X-Men", "24"),
         ("Ultimate Black Panther", "22"),
         ("Ultimate Wolverine", "11"),
         ("The Ultimates", "18"),
-        ("Ultimate X-Men", "25"),
         ("Ultimate Universe: Two Years In", "1"),
         ("Ultimate Black Panther", "23"),
         ("Ultimate Wolverine", "12"),
         ("Ultimate Spider-Man", "23"),
         ("Ultimate Endgame", "1"),
         ("The Ultimates", "19"),
-        ("Ultimate X-Men", "25"),
         ("Ultimate Wolverine", "13"),
         ("The Ultimates", "20"),
         ("Ultimate Black Panther", "24"),
         ("Ultimate Endgame", "2"),
         ("Ultimate Wolverine", "14"),
-        ("Ultimate X-Men", "24"),
         ("Ultimate Spider-Man", "24"),
         ("The Ultimates", "21"),
         ("The Ultimates", "22"),
