@@ -31,7 +31,7 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
 
     issue_result = await db.execute(
         select(target_thread.c.id)
-        .join(target_issue, target_thread.c.next_unread_issue_id == target_issue.c.id)
+        .join(target_issue, target_thread.c.id == target_issue.c.thread_id)
         .join(Dependency, Dependency.target_issue_id == target_issue.c.id)
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source, source_issue.c.thread_id == source.c.id)
@@ -72,7 +72,7 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
             source_issue.c.issue_number,
         )
         .select_from(target_thread)
-        .join(target_issue, target_thread.c.next_unread_issue_id == target_issue.c.id)
+        .join(target_issue, target_thread.c.id == target_issue.c.thread_id)
         .join(Dependency, Dependency.target_issue_id == target_issue.c.id)
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source_thread, source_issue.c.thread_id == source_thread.c.id)

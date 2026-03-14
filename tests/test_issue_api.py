@@ -640,9 +640,7 @@ async def test_create_issues_returns_409_on_db_unique_conflict(
             (
                 obj
                 for obj in async_db.new
-                if isinstance(obj, Issue)
-                and obj.thread_id == thread_id
-                and obj.issue_number == "7"
+                if isinstance(obj, Issue) and obj.thread_id == thread_id and obj.issue_number == "7"
             ),
             None,
         )
@@ -1429,7 +1427,7 @@ async def test_move_issue_refreshes_blocked_status_from_new_next_unread_issue(
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
     await async_db.refresh(target_thread)
-    assert target_thread.is_blocked is False
+    assert target_thread.is_blocked is True
 
     response = await auth_client.post(
         f"/api/v1/issues/{target_issues[2].id}:move",
@@ -1500,7 +1498,7 @@ async def test_reorder_issues_refreshes_blocked_status_from_new_next_unread_issu
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
     await async_db.refresh(target_thread)
-    assert target_thread.is_blocked is False
+    assert target_thread.is_blocked is True
 
     response = await auth_client.post(
         f"/api/v1/threads/{target_thread.id}/issues:reorder",

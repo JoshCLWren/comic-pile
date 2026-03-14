@@ -362,3 +362,187 @@ async def test_duplicate_dependency_returns_400(auth_client, async_db, test_user
     )
     assert create_resp2.status_code == 400
     assert "already exists" in create_resp2.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_issue_dependency_blocks_when_target_not_next_unread(
+    auth_client, async_db, test_username
+):
+    """Issue dependency should block thread even when target is not next_unread_issue (issue #270)."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    source_thread = Thread(
+        title="Stormwatch Vol. 2",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    target_thread = Thread(
+        title="Planetary",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue = Issue(
+        thread_id=source_thread.id,
+        issue_number="11",
+        position=1,
+        status="unread",
+    )
+    target_issue_1 = Issue(
+        thread_id=target_thread.id,
+        issue_number="8",
+        position=1,
+        status="unread",
+    )
+    target_issue_2 = Issue(
+        thread_id=target_thread.id,
+        issue_number="9",
+        position=2,
+        status="unread",
+    )
+    target_issue_3 = Issue(
+        thread_id=target_thread.id,
+        issue_number="10",
+        position=3,
+        status="unread",
+    )
+    async_db.add_all([source_issue, target_issue_1, target_issue_2, target_issue_3])
+    await async_db.flush()
+
+    target_thread.next_unread_issue_id = target_issue_1.id
+    await async_db.commit()
+    await async_db.refresh(target_thread)
+
+    create_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue_3.id,
+        },
+    )
+    assert create_resp.status_code == 201
+
+    blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
+    assert blocked_resp.status_code == 200
+    assert target_thread.id in blocked_resp.json(), (
+        "Thread should be blocked when issue #3 has dependency, even though next_unread is issue #1"
+    )
+
+    info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
+    assert info_resp.status_code == 200
+    assert info_resp.json()["is_blocked"] is True, (
+        "Thread is_blocked should be True when ANY issue has unsatisfied dependency"
+    )
+
+
+@pytest.mark.asyncio
+async def test_issue_dependency_blocking_multiple_issues_same_thread(
+    auth_client, async_db, test_username
+):
+    """Multiple dependencies on different issues in same thread should all block."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    source_thread = Thread(
+        title="Prequel Series",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    target_thread = Thread(
+        title="Main Series",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=5,
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue_1 = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    source_issue_2 = Issue(
+        thread_id=source_thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
+    target_issue_1 = Issue(
+        thread_id=target_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue_3 = Issue(
+        thread_id=target_thread.id,
+        issue_number="3",
+        position=3,
+        status="unread",
+    )
+    target_issue_5 = Issue(
+        thread_id=target_thread.id,
+        issue_number="5",
+        position=5,
+        status="unread",
+    )
+    async_db.add_all(
+        [source_issue_1, source_issue_2, target_issue_1, target_issue_3, target_issue_5]
+    )
+    await async_db.flush()
+
+    target_thread.next_unread_issue_id = target_issue_1.id
+    await async_db.commit()
+
+    dep1_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue_1.id,
+            "target_type": "issue",
+            "target_id": target_issue_3.id,
+        },
+    )
+    assert dep1_resp.status_code == 201
+
+    dep2_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue_2.id,
+            "target_type": "issue",
+            "target_id": target_issue_5.id,
+        },
+    )
+    assert dep2_resp.status_code == 201
+
+    blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
+    assert blocked_resp.status_code == 200
+    assert target_thread.id in blocked_resp.json(), (
+        "Thread should be blocked with multiple dependencies on different issues"
+    )
+
+    info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
+    assert info_resp.status_code == 200
+    assert info_resp.json()["is_blocked"] is True
