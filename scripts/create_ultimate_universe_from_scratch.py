@@ -19,151 +19,16 @@ Usage:
 
 import os
 import sys
-from typing import NamedTuple
 
-import requests
-
-API_BASE = os.environ.get(
-    "COMIC_PILE_API_BASE", "https://app-production-72b9.up.railway.app"
-).rstrip("/")
-REQUESTS_TIMEOUT = 30
-
-
-class ThreadSpec(NamedTuple):
-    """Specification for creating a thread."""
-
-    title: str
-    total_issues: int
-    last_issue_read: int = 0
-
-
-def login(username: str, password: str) -> str:
-    """Authenticate and return bearer token."""
-    response = requests.post(
-        f"{API_BASE}/api/auth/login",
-        json={"username": username, "password": password},
-        timeout=REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-    return response.json()["access_token"]
-
-
-def create_thread(token: str, title: str, issues_count: int) -> int:
-    """Create a thread and return its ID.
-
-    Args:
-        token: Auth token
-        title: Thread title
-        issues_count: Number of issues (for old system)
-
-    Returns:
-        Thread ID
-    """
-    response = requests.post(
-        f"{API_BASE}/api/threads/",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "title": title,
-            "format": "Comics",
-            "issues_remaining": issues_count,
-        },
-        timeout=REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-    return response.json()["id"]
-
-
-def migrate_thread(token: str, thread_id: int, last_issue_read: int, total_issues: int) -> None:
-    """Migrate a thread to issue tracking.
-
-    Args:
-        token: Auth token
-        thread_id: Thread ID
-        last_issue_read: Number of issues already read
-        total_issues: Total issues in the series
-    """
-    response = requests.post(
-        f"{API_BASE}/api/threads/{thread_id}:migrateToIssues",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"last_issue_read": last_issue_read, "total_issues": total_issues},
-        timeout=REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-
-
-def get_thread_issues(token: str, thread_id: int) -> dict[str, int]:
-    """Get issue_number -> issue_id mapping for a thread.
-
-    Args:
-        token: Auth token
-        thread_id: Thread ID
-
-    Returns:
-        Dictionary mapping issue numbers to issue IDs
-    """
-    page_token = ""
-    issues = {}
-
-    while True:
-        url = f"{API_BASE}/api/v1/threads/{thread_id}/issues"
-        params = {}
-        if page_token:
-            params["page_token"] = page_token
-
-        response = requests.get(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            params=params,
-            timeout=REQUESTS_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        for issue in data.get("issues", []):
-            issues[issue["issue_number"]] = issue["id"]
-
-        page_token = data.get("next_page_token")
-        if not page_token:
-            break
-
-    return issues
-
-
-def create_dependency(token: str, source_issue_id: int, target_issue_id: int) -> bool:
-    """Create an issue-level dependency.
-
-    Args:
-        token: Auth token
-        source_issue_id: Source issue ID
-        target_issue_id: Target issue ID
-
-    Returns:
-        True if created, False if already exists
-    """
-    response = requests.post(
-        f"{API_BASE}/api/v1/dependencies/",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "source_type": "issue",
-            "source_id": source_issue_id,
-            "target_type": "issue",
-            "target_id": target_issue_id,
-        },
-        timeout=REQUESTS_TIMEOUT,
-    )
-
-    if response.status_code == 201:
-        return True
-    elif response.status_code == 400:
-        error = response.json()
-        detail = error.get("detail", "")
-        if "already exists" in detail.lower() or "circular" in detail.lower():
-            return False
-        print(f"  ❌ Bad Request: {error}")
-        return False
-    else:
-        print(f"  ❌ Server error {response.status_code}: {response.text}")
-        return False
+from comic_pile_api import (
+    ThreadSpecWithLastRead,
+    create_dependency,
+    create_thread,
+    get_all_threads,
+    get_thread_issues,
+    login,
+    migrate_thread,
+)
 
 
 def main() -> int:
@@ -182,36 +47,46 @@ def main() -> int:
     token = login(username, password)
     print("✅ Authenticated")
 
-    # Thread specifications: title -> (total_issues, last_read)
     thread_specs = {
-        "Ultimate Spider-Man": ThreadSpec("Ultimate Spider-Man", 24, 0),
-        "Ultimate Black Panther": ThreadSpec("Ultimate Black Panther", 24, 0),
-        "Ultimate X-Men": ThreadSpec("Ultimate X-Men", 25, 6),  # #1-6 already read
-        "The Ultimates": ThreadSpec("The Ultimates", 24, 0),
-        "Ultimate Wolverine": ThreadSpec("Ultimate Wolverine", 16, 0),
-        "Ultimate Spider-Man: Incursion": ThreadSpec("Ultimate Spider-Man: Incursion", 5, 0),
-        "Ultimate Hawkeye": ThreadSpec("Ultimate Hawkeye", 1, 0),
-        "Ultimate Endgame": ThreadSpec("Ultimate Endgame", 5, 0),
-        "Miles Morales: Spider-Man": ThreadSpec("Miles Morales: Spider-Man", 1, 0),
-        "Ultimate Impact: Reborn": ThreadSpec("Ultimate Impact: Reborn", 1, 0),
-        "Free Comic Book Day 2024: Ultimate Universe / Spider-Man": ThreadSpec(
+        "Ultimate Spider-Man": ThreadSpecWithLastRead("Ultimate Spider-Man", 24, 0),
+        "Ultimate Black Panther": ThreadSpecWithLastRead("Ultimate Black Panther", 24, 0),
+        "Ultimate X-Men": ThreadSpecWithLastRead("Ultimate X-Men", 25, 6),
+        "The Ultimates": ThreadSpecWithLastRead("The Ultimates", 24, 0),
+        "Ultimate Wolverine": ThreadSpecWithLastRead("Ultimate Wolverine", 16, 0),
+        "Ultimate Spider-Man: Incursion": ThreadSpecWithLastRead(
+            "Ultimate Spider-Man: Incursion", 5, 0
+        ),
+        "Ultimate Hawkeye": ThreadSpecWithLastRead("Ultimate Hawkeye", 1, 0),
+        "Ultimate Endgame": ThreadSpecWithLastRead("Ultimate Endgame", 5, 0),
+        "Miles Morales: Spider-Man": ThreadSpecWithLastRead("Miles Morales: Spider-Man", 1, 0),
+        "Ultimate Impact: Reborn": ThreadSpecWithLastRead("Ultimate Impact: Reborn", 1, 0),
+        "Free Comic Book Day 2024: Ultimate Universe / Spider-Man": ThreadSpecWithLastRead(
             "Free Comic Book Day 2024: Ultimate Universe / Spider-Man", 1, 0
         ),
-        "Free Comic Book Day 2025: Amazing Spider-Man / Ultimate Universe": ThreadSpec(
+        "Free Comic Book Day 2025: Amazing Spider-Man / Ultimate Universe": ThreadSpecWithLastRead(
             "Free Comic Book Day 2025: Amazing Spider-Man / Ultimate Universe", 1, 0
         ),
-        "Ultimate Universe: One Year In": ThreadSpec("Ultimate Universe: One Year In", 1, 0),
-        "Ultimate Universe: Two Years In": ThreadSpec("Ultimate Universe: Two Years In", 1, 0),
-        "Ultimate Universe: Finale": ThreadSpec("Ultimate Universe: Finale", 1, 0),
+        "Ultimate Universe: One Year In": ThreadSpecWithLastRead(
+            "Ultimate Universe: One Year In", 1, 0
+        ),
+        "Ultimate Universe: Two Years In": ThreadSpecWithLastRead(
+            "Ultimate Universe: Two Years In", 1, 0
+        ),
+        "Ultimate Universe: Finale": ThreadSpecWithLastRead("Ultimate Universe: Finale", 1, 0),
     }
 
     print(f"\n📚 Creating {len(thread_specs)} threads...")
     print("=" * 70)
 
+    existing_threads = get_all_threads(token)
     thread_ids = {}
     for title, spec in thread_specs.items():
-        print(f"  Creating: {title} ({spec.total_issues} issues)")
-        thread_id = create_thread(token, title, spec.total_issues)
+        if title in existing_threads:
+            thread_id = existing_threads[title]["id"]
+            print(f"  ✅ Using existing: {title}")
+        else:
+            print(f"  Creating: {title} ({spec.total_issues} issues)")
+            thread_id = create_thread(token, title, spec.total_issues)
         thread_ids[title] = thread_id
 
     print("\n🔄 Migrating to issue tracking...")
@@ -232,9 +107,6 @@ def main() -> int:
         thread_issue_ids[title] = issues
         print(f"  {title}: {len(issues)} issues")
 
-    # Reading order (skip Ultimate Invasion #1-4 - already completed)
-    # Skip Ultimate Universe #1 - already read and deleted
-    # Skip Ultimate X-Men #1-6 - already read
     reading_order = [
         ("Ultimate Spider-Man", "1"),
         ("Ultimate Black Panther", "1"),

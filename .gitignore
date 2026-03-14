@@ -178,3 +178,6 @@ scripts/clone_prod_users.sh
 !frontend/devtools-tests/dice-playground.spec.ts-snapshots/*.png
 !screenshots/*.png
 !dogfood-output/screenshots/*.png
+
+# Dogfood/test output
+dogfood-output/

@@ -19,178 +19,19 @@ Usage:
 
 import os
 import sys
-from typing import NamedTuple
 
 import requests
 
-API_BASE = "https://app-production-72b9.up.railway.app"
-REQUESTS_TIMEOUT = 30
-
-
-class ThreadSpec(NamedTuple):
-    """Specification for creating/updating a thread."""
-
-    title: str
-    total_issues: int
-    issues_to_mark_read: list[int]
-
-
-def login(username: str, password: str) -> str:
-    """Authenticate and return bearer token."""
-    response = requests.post(
-        f"{API_BASE}/api/auth/login",
-        json={"username": username, "password": password},
-        timeout=REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-    return response.json()["access_token"]
-
-
-def get_all_threads(token: str) -> dict[str, dict]:
-    """Get all threads and return title -> thread mapping."""
-    response = requests.get(
-        f"{API_BASE}/api/threads/",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-    return {thread["title"]: thread for thread in response.json()}
-
-
-def create_thread(token: str, title: str, issues_count: int) -> int:
-    """Create a thread and return its ID."""
-    response = requests.post(
-        f"{API_BASE}/api/threads/",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"title": title, "format": "Comics", "issues_remaining": issues_count},
-        timeout=REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-    return response.json()["id"]
-
-
-def migrate_thread(token: str, thread_id: int, last_issue_read: int, total_issues: int) -> None:
-    """Migrate a thread to issue tracking."""
-    response = requests.post(
-        f"{API_BASE}/api/threads/{thread_id}:migrateToIssues",
-        headers={"Authorization": f"Bearer {token}"},
-        json={"last_issue_read": last_issue_read, "total_issues": total_issues},
-        timeout=REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-
-
-def mark_issue_read(token: str, thread_id: int, issue_number: str) -> bool:
-    """Mark an issue as read. Returns True if successful, False otherwise."""
-    # Get all issues to find the issue ID
-    page_token = ""
-    issue_id = None
-
-    while True:
-        url = f"{API_BASE}/api/v1/threads/{thread_id}/issues"
-        params = {}
-        if page_token:
-            params["page_token"] = page_token
-
-        response = requests.get(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            params=params,
-            timeout=REQUESTS_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        for issue in data.get("issues", []):
-            if issue["issue_number"] == issue_number:
-                issue_id = issue["id"]
-                # Check if already read
-                if issue.get("status") == "read":
-                    return False
-                break
-
-        if issue_id:
-            break
-
-        page_token = data.get("next_page_token")
-        if not page_token:
-            break
-
-    if not issue_id:
-        print(f"  ⚠️  Could not find issue #{issue_number}")
-        return False
-
-    # Mark as read
-    try:
-        response = requests.post(
-            f"{API_BASE}/api/v1/issues/{issue_id}:markRead",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=REQUESTS_TIMEOUT,
-        )
-        response.raise_for_status()
-        return True
-    except requests.HTTPError as e:
-        if e.response is not None and e.response.status_code == 409:
-            return False
-        raise
-
-
-def get_thread_issues(token: str, thread_id: int) -> dict[str, int]:
-    """Get issue_number -> issue_id mapping."""
-    page_token = ""
-    issues = {}
-
-    while True:
-        url = f"{API_BASE}/api/v1/threads/{thread_id}/issues"
-        params = {}
-        if page_token:
-            params["page_token"] = page_token
-
-        response = requests.get(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            params=params,
-            timeout=REQUESTS_TIMEOUT,
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        for issue in data.get("issues", []):
-            issues[issue["issue_number"]] = issue["id"]
-
-        page_token = data.get("next_page_token")
-        if not page_token:
-            break
-
-    return issues
-
-
-def create_dependency(token: str, source_issue_id: int, target_issue_id: int) -> bool:
-    """Create an issue-level dependency."""
-    response = requests.post(
-        f"{API_BASE}/api/v1/dependencies/",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "source_type": "issue",
-            "source_id": source_issue_id,
-            "target_type": "issue",
-            "target_id": target_issue_id,
-        },
-        timeout=REQUESTS_TIMEOUT,
-    )
-
-    if response.status_code == 201:
-        return True
-    elif response.status_code == 400:
-        error = response.json()
-        detail = error.get("detail", "")
-        if "already exists" in detail.lower() or "circular" in detail.lower():
-            return False
-        print(f"  ❌ Bad Request: {error}")
-        return False
-    else:
-        print(f"  ❌ Server error {response.status_code}: {response.text}")
-        return False
+from comic_pile_api import (
+    ThreadSpec,
+    create_dependency,
+    create_thread,
+    get_all_threads,
+    get_thread_issues,
+    login,
+    migrate_thread,
+    mark_issue_read,
+)
 
 
 def main() -> int:
@@ -212,9 +53,7 @@ def main() -> int:
     print("\n📚 Checking existing threads...")
     existing_threads = get_all_threads(token)
 
-    # Thread specifications: title -> (total_issues, issues_already_read)
     thread_specs = {
-        # Earth-0 chain
         "Dark Nights: Death Metal": ThreadSpec("Dark Nights: Death Metal", 7, []),
         "Superman": ThreadSpec("Superman", 35, []),
         "The Flash": ThreadSpec("The Flash", 30, []),
@@ -227,7 +66,6 @@ def main() -> int:
         ),
         "Summer of Superman Special": ThreadSpec("Summer of Superman Special", 1, []),
         "DC K.O.": ThreadSpec("DC K.O.", 5, []),
-        # Absolute titles
         "Absolute Batman": ThreadSpec("Absolute Batman", 20, []),
         "Absolute Wonder Woman": ThreadSpec("Absolute Wonder Woman", 20, [1, 2]),
         "Absolute Superman": ThreadSpec("Absolute Superman", 18, []),
@@ -236,12 +74,11 @@ def main() -> int:
         "Absolute Green Lantern": ThreadSpec("Absolute Green Lantern", 14, []),
         "Absolute Green Arrow": ThreadSpec("Absolute Green Arrow", 1, []),
         "Absolute Catwoman": ThreadSpec("Absolute Catwoman", 1, []),
-        # Specials
         "Absolute Specials": ThreadSpec(
             "Absolute Specials",
             4,
             [],
-        ),  # Will contain: Evil #1, Batman 2025 Annual #1, Ark M Special #1, Wonder Woman 2026 Annual #1
+        ),
         "Free Comic Book Day 2025: DC All In Special Edition": ThreadSpec(
             "Free Comic Book Day 2025: DC All In Special Edition", 1, []
         ),
@@ -261,12 +98,10 @@ def main() -> int:
 
         thread_ids[title] = thread_id
 
-        # Check if already migrated
         thread_info = existing_threads.get(title, {})
         if thread_info.get("total_issues") is not None:
             print(f"  ✅ Already migrated: {title}")
         else:
-            # Migrate to issue tracking
             try:
                 migrate_thread(token, thread_id, len(spec.issues_to_mark_read), spec.total_issues)
             except requests.HTTPError as e:
@@ -298,7 +133,6 @@ def main() -> int:
     print("\n🔗 Creating dependencies...")
     print("=" * 70)
 
-    # Earth-0 chain (STRICT ORDER)
     earth_0_chain = [
         ("Dark Nights: Death Metal", "7"),
         ("Superman", "23"),
@@ -316,7 +150,6 @@ def main() -> int:
         ("DC K.O.", "1"),
     ]
 
-    # K.O. tie-ins (parallel after K.O. #1)
     ko_tie_ins = [
         ("Superman", "31"),
         ("Superman", "32"),
@@ -328,7 +161,6 @@ def main() -> int:
         ("The Flash", "30"),
     ]
 
-    # K.O. chain continuation
     ko_continuation = [
         ("DC K.O.", "3"),
         ("DC K.O.", "4"),
@@ -337,7 +169,6 @@ def main() -> int:
 
     created_count = 0
 
-    # Create Earth-0 chain dependencies
     for i in range(len(earth_0_chain) - 1):
         source_title, source_issue = earth_0_chain[i]
         target_title, target_issue = earth_0_chain[i + 1]
@@ -349,7 +180,6 @@ def main() -> int:
             created_count += 1
             print(f"  ✅ {source_title} #{source_issue} → {target_title} #{target_issue}")
 
-    # All K.O. tie-ins depend on K.O. #1
     ko_1_id = thread_issue_ids["DC K.O."]["1"]
     for title, issue in ko_tie_ins:
         issue_id = thread_issue_ids[title][issue]
@@ -357,7 +187,6 @@ def main() -> int:
             created_count += 1
             print(f"  ✅ DC K.O. #1 → {title} #{issue}")
 
-    # All K.O. tie-ins must be read before K.O. #3
     ko_3_id = thread_issue_ids["DC K.O."]["3"]
     for title, issue in ko_tie_ins:
         issue_id = thread_issue_ids[title][issue]
@@ -365,7 +194,6 @@ def main() -> int:
             created_count += 1
             print(f"  ✅ {title} #{issue} → DC K.O. #3")
 
-    # Create K.O. continuation dependencies
     for i in range(len(ko_continuation) - 1):
         source_title, source_issue = ko_continuation[i]
         target_title, target_issue = ko_continuation[i + 1]
