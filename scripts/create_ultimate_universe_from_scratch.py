@@ -24,6 +24,7 @@ from comic_pile_api import (
     ThreadSpecWithLastRead,
     create_dependency,
     create_thread,
+    get_all_threads,
     get_thread_issues,
     login,
     migrate_thread,
@@ -77,10 +78,15 @@ def main() -> int:
     print(f"\n📚 Creating {len(thread_specs)} threads...")
     print("=" * 70)
 
+    existing_threads = get_all_threads(token)
     thread_ids = {}
     for title, spec in thread_specs.items():
-        print(f"  Creating: {title} ({spec.total_issues} issues)")
-        thread_id = create_thread(token, title, spec.total_issues)
+        if title in existing_threads:
+            thread_id = existing_threads[title]["id"]
+            print(f"  ✅ Using existing: {title}")
+        else:
+            print(f"  Creating: {title} ({spec.total_issues} issues)")
+            thread_id = create_thread(token, title, spec.total_issues)
         thread_ids[title] = thread_id
 
     print("\n🔄 Migrating to issue tracking...")

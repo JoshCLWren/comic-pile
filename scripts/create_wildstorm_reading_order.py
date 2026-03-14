@@ -83,7 +83,7 @@ def main() -> int:
             print(f"  ✅ Using existing: {title}")
         else:
             print(f"  Creating: {title}")
-            thread_id = create_thread(token, title, spec.total_issues, format="digital")
+            thread_id = create_thread(token, title, spec.total_issues)
 
         thread_ids[title] = thread_id
 
