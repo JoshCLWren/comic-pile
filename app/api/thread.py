@@ -125,6 +125,7 @@ async def list_stale_threads(
         select(Thread)
         .where(Thread.user_id == current_user.id)
         .where(Thread.status == "active")
+        .where(Thread.is_blocked.is_(False))
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )

@@ -250,6 +250,7 @@ async def get_stale_threads(user_id: int, db: AsyncSession, days: int = 7) -> li
         select(Thread)
         .where(Thread.user_id == user_id)
         .where(Thread.status == "active")
+        .where(Thread.is_blocked.is_(False))
         .where((Thread.last_activity_at < cutoff_date) | (Thread.last_activity_at.is_(None)))
         .order_by(Thread.last_activity_at.asc().nullsfirst())
     )

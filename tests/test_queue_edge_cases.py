@@ -241,7 +241,19 @@ async def test_get_stale_threads(async_db: AsyncSession, default_user: User) -> 
         created_at=now,
     )
 
-    async_db.add_all([stale_thread, recent_thread, no_activity_thread])
+    blocked_stale_thread = Thread(
+        title="Blocked Stale Thread",
+        format="Comic",
+        issues_remaining=4,
+        queue_position=4,
+        status="active",
+        user_id=default_user.id,
+        last_activity_at=stale_date,
+        is_blocked=True,
+        created_at=now,
+    )
+
+    async_db.add_all([stale_thread, recent_thread, no_activity_thread, blocked_stale_thread])
     await async_db.commit()
 
     stale_threads = await get_stale_threads(default_user.id, async_db, days=7)
@@ -251,6 +263,7 @@ async def test_get_stale_threads(async_db: AsyncSession, default_user: User) -> 
     assert stale_thread.id in stale_thread_ids
     assert no_activity_thread.id in stale_thread_ids
     assert recent_thread.id not in stale_thread_ids
+    assert blocked_stale_thread.id not in stale_thread_ids
 
 
 @pytest.mark.asyncio
