@@ -127,6 +127,20 @@ pytest --cov=comic_pile --cov-report=term-missing
 
 **Coverage requirement**: Minimum 96% (configured in pyproject.toml)
 
+## Dependencies
+
+This project uses standard Python packages and does not depend on custom consolidated packages.
+
+```
+comic-pile
+├── FastAPI (web framework)
+├── SQLAlchemy (ORM)
+├── Alembic (migrations)
+├── PostgreSQL (database via asyncpg)
+├── PyJWT (authentication)
+└── React + Vite + Tailwind CSS (frontend)
+```
+
 ## Code Quality
 
 ### Linting
