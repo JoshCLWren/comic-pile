@@ -418,8 +418,9 @@ export default function RollPage() {
     selectedThreadId,
   ])
   useEffect(() => {
-    if (staleThreads && staleThreads.length > 0) {
-      const thread = staleThreads[0]
+    const actionable = staleThreads?.filter(t => !t.is_blocked) ?? []
+    if (actionable.length > 0) {
+      const thread = actionable[0]
       const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
       const diffMs = Date.now() - lastActivity.getTime()
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))

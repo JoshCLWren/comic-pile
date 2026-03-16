@@ -1,7 +1,7 @@
 """Tests for Thread API endpoints."""
 
 import pytest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -446,3 +446,63 @@ async def test_migration_enables_issue_tracking(
     result = await async_db.execute(select(Issue).where(Issue.thread_id == thread.id))
     issues = result.scalars().all()
     assert len(issues) == 25
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_excludes_blocked_threads(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Blocked stale threads should not appear in the stale endpoint."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    blocked_thread = Thread(
+        title="Blocked Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        is_blocked=True,
+        created_at=now,
+    )
+    async_db.add(blocked_thread)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/threads/stale?days=30")
+    assert response.status_code == 200
+    data = response.json()
+    thread_ids = {t["id"] for t in data}
+    assert blocked_thread.id not in thread_ids
+
+
+@pytest.mark.asyncio
+async def test_stale_endpoint_includes_unblocked_stale_threads(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Unblocked stale threads should appear in the stale endpoint."""
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+    stale_date = now - timedelta(days=60)
+
+    unblocked_thread = Thread(
+        title="Unblocked Stale Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        last_activity_at=stale_date,
+        is_blocked=False,
+        created_at=now,
+    )
+    async_db.add(unblocked_thread)
+    await async_db.commit()
+
+    response = await auth_client.get("/api/threads/stale?days=30")
+    assert response.status_code == 200
+    data = response.json()
+    thread_ids = {t["id"] for t in data}
+    assert unblocked_thread.id in thread_ids
