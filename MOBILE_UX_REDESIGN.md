@@ -40,7 +40,7 @@ Show *what* is blocking directly on each thread card, not just a 🔒.
 
 ---
 
-### Phase 3: Mobile Dependency Visualizer (Issue #1) 🟡 PARTIAL
+### Phase 3: Mobile Dependency Visualizer (Issue #1) ✅ COMPLETE
 
 The flowchart is `hidden md:block` — make it work on mobile with a vertical timeline layout.
 
@@ -58,20 +58,20 @@ The flowchart is `hidden md:block` — make it work on mobile with a vertical ti
 
 #### [MODIFY] [DependencyBuilder.tsx](file:///mnt/extra/josh/code/comic-pile/frontend/src/components/DependencyBuilder.tsx)
 
-- ❌ Move the "View Flowchart" toggle to the top of the modal (not buried at bottom)
-- ❌ Make the close (×) button sticky at the top when scrolling
-- ❌ Group the flat dependency list by thread name instead of one flat dump
+- ✅ Move the "View Flowchart" toggle to the top of the modal (not buried at bottom)
+- ✅ Make the close (×) button sticky at the top when scrolling
+- ✅ Group the flat dependency list by thread name instead of one flat dump
 
 ---
 
-### Phase 4: Roll Page Context (Issue #5) ❌ NOT STARTED
+### Phase 4: Roll Page Context (Issue #5) ✅ COMPLETE
 
 Explain why threads are missing from the roll pool.
 
 #### [MODIFY] [RollPage.tsx](file:///mnt/extra/josh/code/comic-pile/frontend/src/pages/RollPage.tsx)
 
-- ❌ Add a small info line below the pool like "14 threads hidden (blocked by dependencies)"
-- ❌ Tapping it shows a collapsible list of blocked threads with their blocker
+- ✅ Add a small info line below the pool like "14 threads hidden (blocked by dependencies)"
+- ✅ Tapping it shows a collapsible list of blocked threads with their blocker
 
 ---
 

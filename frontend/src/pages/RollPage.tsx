@@ -83,6 +83,7 @@ export default function RollPage() {
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
+  const [blockedExpanded, setBlockedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
@@ -332,6 +333,11 @@ export default function RollPage() {
   }
   const activeThreads = useMemo(
     () => threads?.filter((thread) => thread.status === 'active' && !thread.is_blocked) ?? [],
+    [threads],
+  )
+
+  const blockedThreads = useMemo(
+    () => threads?.filter((thread) => thread.status === 'active' && thread.is_blocked) ?? [],
     [threads],
   )
 
@@ -1036,15 +1042,17 @@ export default function RollPage() {
 
               <div className="space-y-2" data-roll-pool>
                 {pool.length === 0 ? (
-                  <div className="text-center py-10 space-y-3">
-                    <div className="text-3xl">📚</div>
-                    <p className="text-xs text-stone-500 font-black uppercase tracking-widest">Queue Empty</p>
-                    <p className="text-[10px] text-stone-600">Add comics to your queue to start rolling</p>
+                  <div className="text-center py-10 space-y-4">
+                    <div className="text-4xl">📚</div>
+                    <div>
+                      <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">Your Queue Is Empty</p>
+                      <p className="text-xs text-stone-500 mt-1">Add comics to start rolling.</p>
+                    </div>
                     <button
                       onClick={() => navigate('/queue')}
-                      className="mt-2 px-4 py-2 bg-amber-600/10 hover:bg-amber-600/20 border border-amber-600/20 rounded-lg text-[10px] font-bold uppercase tracking-widest text-amber-500 transition-colors"
+                      className="mt-4 px-6 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
                     >
-                      Add Thread
+                      Go to Queue
                     </button>
                   </div>
                 ) : (
@@ -1062,21 +1070,58 @@ export default function RollPage() {
                         }}
                         role="button"
                         tabIndex={0}
-                        className={`flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected' : ''
+                        className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
                           }`}
                       >
-                        <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors">
-                          #{index + 1}
+                        <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
+                          {index + 1}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="font-black text-stone-300 truncate text-sm">{thread.title}</p>
-                          <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">{thread.format}</p>
+                          <p className="font-bold text-stone-300 truncate text-sm">{thread.title}</p>
+                          <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
                         </div>
                       </div>
                     )
                   })
                 )}
               </div>
+
+              {blockedThreads.length > 0 && !isRatingView && (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setBlockedExpanded(!blockedExpanded)}
+                    className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+                  >
+                    <span
+                      className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
+                    >
+                      ▶
+                    </span>
+                    <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+                      {blockedThreads.length} thread{blockedThreads.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
+                    </span>
+                  </button>
+                  {blockedExpanded && (
+                    <div className="mt-2 space-y-1">
+                      {blockedThreads.map((thread) => (
+                        <div
+                          key={thread.id}
+                          className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                        >
+                          <span className="text-sm">🔒</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-stone-400 truncate">{thread.title}</p>
+                            {thread.blocking_reasons.length > 0 && (
+                              <p className="text-[10px] text-stone-500 truncate">{thread.blocking_reasons[0]}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {staleThread && !isRatingView && (
                 <div
