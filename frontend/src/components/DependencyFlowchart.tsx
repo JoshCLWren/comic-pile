@@ -7,6 +7,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { layoutGraph, NODE_WIDTH, NODE_HEIGHT, ISSUE_NODE_WIDTH, ISSUE_NODE_HEIGHT } from '../utils/graphLayout'
+import DependencyTimeline from './DependencyTimeline'
 import type { Thread, FlowchartDependency, FlowchartNode } from '../types'
 import './DependencyFlowchart.css'
 
@@ -306,18 +307,25 @@ export default function DependencyFlowchart({
           </p>
         </div>
       )}
-      <svg
-        ref={svgRef}
-        className="dependency-flowchart"
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        style={{ height: Math.min(svgHeight + 40, 500) }}
-        onWheel={handleWheel}
-        onMouseDown={handleSvgMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        data-testid="flowchart-svg"
-      >
+      
+      {/* Mobile-friendly Timeline View */}
+      <div className="md:hidden block w-full mt-2">
+         <DependencyTimeline threads={threads} dependencies={dependencies} blockedIds={blockedIds} />
+      </div>
+
+      <div className="hidden md:block relative w-full h-full">
+        <svg
+          ref={svgRef}
+          className="dependency-flowchart"
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          style={{ height: Math.min(svgHeight + 40, 500) }}
+          onWheel={handleWheel}
+          onMouseDown={handleSvgMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          data-testid="flowchart-svg"
+        >
         <defs>
           <marker
             id="arrowhead"
@@ -483,6 +491,7 @@ export default function DependencyFlowchart({
           </button>
         </div>
       )}
+      </div>
     </div>
   )
 }

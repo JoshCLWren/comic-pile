@@ -595,7 +595,7 @@ const DEFAULT_CREATE_STATE = {
   issuesRemaining: 1,
   notes: '',
   issues: '',
-  trackingMode: 'simple' as 'simple' | 'tracked',
+  trackingMode: 'tracked' as 'simple' | 'tracked',
   lastIssueRead: 0,
 }
 
@@ -685,7 +685,7 @@ export default function QueuePage() {
 
   useEffect(() => {
     const calculatePreview = async () => {
-      const issueInput = createForm.trackingMode === 'tracked' ? createForm.issues : ''
+      const issueInput = createForm.issues
       if (issueInput) {
         try {
           const { parseIssueRange } = await import('../utils/issueParser')
@@ -703,7 +703,7 @@ export default function QueuePage() {
     }
 
     calculatePreview()
-  }, [createForm.issues, createForm.trackingMode])
+  }, [createForm.issues])
 
   const activeThreads = threads
     ?.filter((thread) => thread.status === 'active')
@@ -776,8 +776,7 @@ export default function QueuePage() {
     event.preventDefault()
 
     try {
-      const isTracked = createForm.trackingMode === 'tracked'
-      const hasIssueRange = isTracked && createForm.issues && createForm.issues.trim()
+      const hasIssueRange = createForm.issues && createForm.issues.trim()
 
       let issuesRemaining = Number(createForm.issuesRemaining)
       if (hasIssueRange) {
@@ -849,7 +848,7 @@ export default function QueuePage() {
       issuesRemaining: thread.issues_remaining,
       notes: thread.notes || '',
       issues: '',
-      trackingMode: 'simple',
+      trackingMode: 'tracked',
       lastIssueRead: 0,
     })
     setIsEditOpen(true)
@@ -1002,11 +1001,21 @@ export default function QueuePage() {
         <button
           type="button"
           onClick={openCreateModal}
-          className="h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+          className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
         >
           Add Thread
         </button>
       </header>
+      
+      {/* Mobile FAB for Add Thread */}
+      <button
+        type="button"
+        onClick={openCreateModal}
+        className="md:hidden fixed bottom-24 right-4 h-14 w-14 rounded-full bg-amber-600 text-white font-black text-3xl shadow-[0_4px_20px_rgba(212,137,14,0.4)] z-50 flex items-center justify-center hover:bg-amber-500 transition-colors"
+        aria-label="Add Thread"
+      >
+        +
+      </button>
 
       {activeThreads.length === 0 ? (
         <div className="text-center text-stone-500">No active threads in queue</div>
@@ -1075,7 +1084,7 @@ export default function QueuePage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 hidden md:flex">
                       <Tooltip content="Edit thread details.">
                         <button
                           type="button"
@@ -1117,23 +1126,46 @@ export default function QueuePage() {
                         </button>
                       </Tooltip>
                     </div>
-                  </div>
-                  <p className="text-sm text-stone-400">{thread.format}</p>
-                  {thread.collection_id && (
-                    <div className="mt-1">
-                      <CollectionBadge collectionId={thread.collection_id} />
+                    {/* Mobile 3-dot menu indicator */}
+                    <div className="md:hidden text-stone-500 flex items-center justify-center w-8 h-8 text-xl">
+                      ⋮
                     </div>
-                  )}
-                  {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
-                  {thread.issues_remaining !== null && (
-                    <p className="text-xs text-stone-500">
-                      {isMigrated && thread.next_unread_issue_number
-                        ? `Currently on #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
-                        : `${thread.issues_remaining} issues remaining`
-                      }
-                    </p>
-                  )}
-                  <div className="flex gap-2 pt-2">
+                  </div>
+                  <div className="pl-[2.75rem]">
+                    <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
+                    {thread.collection_id && (
+                      <div className="mt-1.5 flex">
+                        <CollectionBadge collectionId={thread.collection_id} />
+                      </div>
+                    )}
+                    {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
+                    {thread.issues_remaining !== null && (
+                      <p className="text-sm text-stone-300 mt-2 font-medium">
+                        {isMigrated && thread.next_unread_issue_number
+                          ? `On #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
+                          : `${thread.issues_remaining} issues remaining`
+                        }
+                      </p>
+                    )}
+                    {isBlocked && blockingReasons.length > 0 && (
+                      <button
+                        type="button"
+                        className="mt-2 w-full text-left text-xs text-red-300/80 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 hover:bg-red-500/15 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDependencyThread(thread)
+                          setIsDependencyBuilderOpen(true)
+                        }}
+                        aria-label={`View dependencies for ${thread.title}`}
+                      >
+                        <span className="font-bold">🔒 {blockingReasons[0]}</span>
+                        {blockingReasons.length > 1 && (
+                          <span className="text-red-400/60 ml-1">+{blockingReasons.length - 1} more</span>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <div className="gap-2 pt-2 hidden md:flex">
                     <Tooltip content="Move this thread to the front of the queue.">
                       <button
                         onClick={(e) => {
@@ -1236,95 +1268,45 @@ export default function QueuePage() {
             />
           </div>
 
-          {/* Tracking mode toggle */}
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issue Tracking</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setCreateForm({ ...createForm, trackingMode: 'simple' })}
-                className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
-                  createForm.trackingMode === 'simple'
-                    ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
-                    : 'bg-white/5 border-white/10 text-stone-400'
-                }`}
-              >
-                Simple counter
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreateForm({ ...createForm, trackingMode: 'tracked' })}
-                className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
-                  createForm.trackingMode === 'tracked'
-                    ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
-                    : 'bg-white/5 border-white/10 text-stone-400'
-                }`}
-              >
-                Track individual issues
-              </button>
-            </div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
+            <input
+              type="text"
+              value={createForm.issues}
+              onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+              placeholder="0-25 or 0, ½, Annual 1, 5-7"
+              required
+            />
+            {issuePreview !== null && (
+              <p className="text-xs text-stone-400">
+                Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
+              </p>
+            )}
+            {issueParseError && (
+              <p className="text-xs text-red-400">{issueParseError}</p>
+            )}
           </div>
-
-          {createForm.trackingMode === 'simple' ? (
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
-              <input
-                type="number"
-                min="0"
-                value={createForm.issuesRemaining}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  setCreateForm({
-                    ...createForm,
-                    issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
-                  })
-                }
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-                required
-              />
-            </div>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
-                <input
-                  type="text"
-                  value={createForm.issues}
-                  onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-                  placeholder="0-25 or 0, ½, Annual 1, 5-7"
-                  required
-                />
-                {issuePreview !== null && (
-                  <p className="text-xs text-stone-400">
-                    Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
-                  </p>
-                )}
-                {issueParseError && (
-                  <p className="text-xs text-red-400">{issueParseError}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={createForm.lastIssueRead}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setCreateForm({
-                      ...createForm,
-                      lastIssueRead: Number.parseInt(event.target.value, 10) || 0,
-                    })
-                  }
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-                />
-                {createForm.lastIssueRead > 0 && issuePreview !== null && (
-                  <p className="text-xs text-stone-400">
-                    Issues #1–{createForm.lastIssueRead} will be marked as read
-                  </p>
-                )}
-              </div>
-            </>
-          )}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
+            <input
+              type="number"
+              min="0"
+              value={createForm.lastIssueRead}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                setCreateForm({
+                  ...createForm,
+                  lastIssueRead: Number.parseInt(event.target.value, 10) || 0,
+                })
+              }
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+            />
+            {createForm.lastIssueRead > 0 && issuePreview !== null && (
+              <p className="text-xs text-stone-400">
+                Issues #1–{createForm.lastIssueRead} will be marked as read
+              </p>
+            )}
+          </div>
 
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
