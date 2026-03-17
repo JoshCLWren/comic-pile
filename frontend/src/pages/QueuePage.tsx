@@ -793,11 +793,12 @@ export default function QueuePage() {
 
       if (hasIssueRange && result?.id) {
         try {
-          // Check if the range is a simple contiguous integer sequence (e.g., "1-25" or "0-18")
-          const isSimpleRange = /^(\d+)-(\d+)$/.test(createForm.issues.trim())
+          // Check if the range is a simple contiguous integer sequence starting from 1 (e.g., "1-25")
+          const rangeMatch = createForm.issues.trim().match(/^(\d+)-(\d+)$/)
+          const isSimpleRange = !!rangeMatch && Number(rangeMatch[1]) === 1
           
           if (isSimpleRange) {
-            // Use migrateThread for simple ranges (creates sequential issues 1..N)
+            // Use migrateThread for simple ranges starting from 1 (creates sequential issues 1..N)
             const lastRead = Number(createForm.lastIssueRead) || 0
             const totalIssues = issuesRemaining
             await issuesApi.migrateThread(result.id, lastRead, totalIssues)
@@ -1308,18 +1309,27 @@ export default function QueuePage() {
             <input
               type="number"
               min="0"
+              max={issuePreview ?? undefined}
               value={createForm.lastIssueRead}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const value = Number.parseInt(event.target.value, 10) || 0
+                const maxValue = issuePreview ?? 0
+                const clampedValue = Math.min(value, maxValue)
                 setCreateForm({
                   ...createForm,
-                  lastIssueRead: Number.parseInt(event.target.value, 10) || 0,
+                  lastIssueRead: clampedValue,
                 })
-              }
+              }}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
             />
             {createForm.lastIssueRead > 0 && issuePreview !== null && (
               <p className="text-xs text-stone-400">
-                Issues #1–{createForm.lastIssueRead} will be marked as read
+                Issues #1–{Math.min(createForm.lastIssueRead, issuePreview)} of {issuePreview} will be marked as read
+              </p>
+            )}
+            {createForm.lastIssueRead > 0 && issuePreview !== null && createForm.lastIssueRead > issuePreview && (
+              <p className="text-xs text-amber-400">
+                Last issue read cannot exceed total issues ({issuePreview})
               </p>
             )}
           </div>

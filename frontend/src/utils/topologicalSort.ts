@@ -17,12 +17,28 @@ export function getTopologicalPath(
   // We only care about thread-level relationships for the high-level timeline, 
   // or we can aggregate issue-level ones.
   dependencies.forEach(dep => {
-    // skip purely issue-issue edges that are represented via negative IDs
-    if (dep.source_id < 0 || dep.target_id < 0) return;
+    // Map issue-level dependencies to thread-level
+    let sourceId = dep.source_id
+    let targetId = dep.target_id
     
-    if (adj.has(dep.source_id) && adj.has(dep.target_id)) {
-      adj.get(dep.source_id)!.push(dep.target_id)
-      inDegree.set(dep.target_id, (inDegree.get(dep.target_id) || 0) + 1)
+    // If either ID is negative (issue node), map it to its owning thread
+    if (sourceId < 0) {
+      const sourceThread = threads.find(t => t.id === Math.abs(sourceId))
+      if (sourceThread) sourceId = sourceThread.id
+      else return // Skip if we can't find the owning thread
+    }
+    if (targetId < 0) {
+      const targetThread = threads.find(t => t.id === Math.abs(targetId))
+      if (targetThread) targetId = targetThread.id
+      else return // Skip if we can't find the owning thread
+    }
+    
+    // Skip if both map to the same thread (self-loop)
+    if (sourceId === targetId) return
+    
+    if (adj.has(sourceId) && adj.has(targetId)) {
+      adj.get(sourceId)!.push(targetId)
+      inDegree.set(targetId, (inDegree.get(targetId) || 0) + 1)
     }
   })
 

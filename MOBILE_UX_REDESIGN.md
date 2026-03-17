@@ -17,7 +17,7 @@ The browser audit (3 sessions, 15 threads, 124 dependencies) revealed that depen
 
 Default `trackingMode` to `'tracked'`, remove the toggle, and always show the tracked-issues form fields.
 
-#### [MODIFY] [QueuePage.tsx](file:///mnt/extra/josh/code/comic-pile/frontend/src/pages/QueuePage.tsx)
+#### [MODIFY] `frontend/src/pages/QueuePage.tsx`
 
 - ✅ Line 598: Change default `trackingMode: 'simple'` → `'tracked'`
 - ✅ Line 852: Change reset default `trackingMode: 'simple'` → `'tracked'`
@@ -30,12 +30,12 @@ Default `trackingMode` to `'tracked'`, remove the toggle, and always show the tr
 
 Show *what* is blocking directly on each thread card, not just a 🔒.
 
-#### [MODIFY] [QueuePage.tsx](file:///mnt/extra/josh/code/comic-pile/frontend/src/pages/QueuePage.tsx)
+#### [MODIFY] `frontend/src/pages/QueuePage.tsx`
 
 - ✅ Expand the existing 🔒 indicator area on thread cards to include a one-line summary like "Blocked by: Ultimate X-Men #7" (the next unread prerequisite)
 - ✅ Fetch blocking info from the existing `/api/v1/dependencies/blocking/{thread_id}` endpoint
-- ✅ Show the count of remaining blockers, e.g. "🔒 3 issues to read first"
-- ✅ Tapping the blocking info opens the dependency builder directly (skip action sheet)
+- ✅ Show a count of remaining blockers, e.g., "🔒 3 issues to read first"
+- ✅ Tapping the blocking info opens the dependency builder directly (skip the action sheet)
 
 ---
 
@@ -43,21 +43,21 @@ Show *what* is blocking directly on each thread card, not just a 🔒.
 
 The flowchart is `hidden md:block` — make it work on mobile with a vertical timeline layout.
 
-#### [MODIFY] [DependencyTimeline.tsx](file:///mnt/extra/josh/code/comic-pile/frontend/src/components/DependencyTimeline.tsx)
+#### [MODIFY] `frontend/src/components/DependencyTimeline.tsx`
 
 - ✅ Redesign from a read-only list into an interactive vertical timeline
 - ✅ Show reading order sequence with ✅ (read), 🔵 (next to read), ⬜ (upcoming) status indicators
-- ✅ Make it the default view on mobile (below [md](file:///mnt/extra/josh/code/comic-pile/scripts/README_thread_management.md) breakpoint)
+- ✅ Make it the default view on mobile (below `md` breakpoint)
 - ✅ Add thread/issue labels like "Ultimate Spider-Man #3 → Ultimate X-Men #8"
 
-#### [MODIFY] [DependencyFlowchart.tsx](file:///mnt/extra/josh/code/comic-pile/frontend/src/components/DependencyFlowchart.tsx)
+#### [MODIFY] `frontend/src/components/DependencyFlowchart.tsx`
 
 - ✅ Remove `hidden md:block` — conditionally render Timeline on mobile, Flowchart on desktop
 - ✅ Pass proper data to DependencyTimeline including read/unread status
 
-#### [MODIFY] [DependencyBuilder.tsx](file:///mnt/extra/josh/code/comic-pile/frontend/src/components/DependencyBuilder.tsx)
+#### [MODIFY] `frontend/src/components/DependencyBuilder.tsx`
 
-- ✅ Move the "View Flowchart" toggle to the top of the modal (not buried at bottom)
+- ✅ Move the "View Flowchart" toggle to the top of the modal (not buried at the bottom)
 - ✅ Make the close (×) button sticky at the top when scrolling
 - ✅ Group the flat dependency list by thread name instead of one flat dump
 
@@ -67,7 +67,7 @@ The flowchart is `hidden md:block` — make it work on mobile with a vertical ti
 
 Explain why threads are missing from the roll pool.
 
-#### [MODIFY] [RollPage.tsx](file:///mnt/extra/josh/code/comic-pile/frontend/src/pages/RollPage.tsx)
+#### [MODIFY] `frontend/src/pages/RollPage.tsx`
 
 - ✅ Add a small info line below the pool like "14 threads hidden (blocked by dependencies)"
 - ✅ Tapping it shows a collapsible list of blocked threads with their blocker
