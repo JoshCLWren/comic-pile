@@ -793,10 +793,26 @@ export default function QueuePage() {
 
       if (hasIssueRange && result?.id) {
         try {
-          // Use migrateThread to create issues AND mark 1..lastIssueRead as read in one call
-          const lastRead = Number(createForm.lastIssueRead) || 0
-          const totalIssues = issuesRemaining
-          await issuesApi.migrateThread(result.id, lastRead, totalIssues)
+          // Check if the range is a simple contiguous integer sequence (e.g., "1-25" or "0-18")
+          const isSimpleRange = /^(\d+)-(\d+)$/.test(createForm.issues.trim())
+          
+          if (isSimpleRange) {
+            // Use migrateThread for simple ranges (creates sequential issues 1..N)
+            const lastRead = Number(createForm.lastIssueRead) || 0
+            const totalIssues = issuesRemaining
+            await issuesApi.migrateThread(result.id, lastRead, totalIssues)
+          } else {
+            // Use issuesApi.create for complex ranges (preserves non-contiguous/non-integer identifiers)
+            const issueListResponse = await issuesApi.create(result.id, createForm.issues.trim())
+            
+            // Mark issues as read if lastIssueRead is specified
+            const lastRead = Number(createForm.lastIssueRead) || 0
+            if (lastRead > 0 && issueListResponse.issues.length > 0) {
+              // Mark the first N issues as read
+              const issuesToMark = issueListResponse.issues.slice(0, lastRead)
+              await Promise.all(issuesToMark.map(issue => issuesApi.markRead(issue.id)))
+            }
+          }
         } catch (issueError: unknown) {
           console.error('Thread created but failed to create issues:', issueError)
           alert(`Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`)

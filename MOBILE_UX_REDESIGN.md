@@ -6,7 +6,6 @@ The browser audit (3 sessions, 15 threads, 124 dependencies) revealed that depen
 
 > [!IMPORTANT]
 > This plan is scoped to fix the **top issues found in the audit**. It does NOT add new backend features (like a ReadingOrder entity). All changes are frontend-only except removing Simple Counter logic. This keeps the scope tight and shippable.
-
 > [!WARNING]
 > Removing Simple Counter means all new threads will use individual issue tracking. Existing simple-counter threads will still work but can't be created anymore.
 

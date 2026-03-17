@@ -61,5 +61,7 @@ export function getTopologicalPath(
     }
   })
 
-  return sorted.map(id => threads.find(t => t.id === id)!).filter(Boolean)
+  return sorted
+    .map(id => threads.find(t => t.id === id))
+    .filter((t): t is Thread => t !== undefined)
 }

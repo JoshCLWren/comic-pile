@@ -22,7 +22,7 @@ import {
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
-import { threadsApi } from '../services/api'
+import { threadsApi, dependenciesApi } from '../services/api'
 import type { RollResponse, SessionThread, Thread } from '../types'
 
 const RATING_THRESHOLD = 4.0
@@ -89,6 +89,9 @@ export default function RollPage() {
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
   const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
+
+  // Blocking reasons state
+  const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
 
   // Migration state
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
@@ -340,6 +343,30 @@ export default function RollPage() {
     () => threads?.filter((thread) => thread.status === 'active' && thread.is_blocked) ?? [],
     [threads],
   )
+
+  useEffect(() => {
+    const fetchBlockingReasons = async () => {
+      if (!blockedThreads.length) {
+        setBlockingReasonMap({})
+        return
+      }
+
+      const details: Array<[number, string[]]> = await Promise.all(
+        blockedThreads.map(async (thread) => {
+          try {
+            const info = await dependenciesApi.getBlockingInfo(thread.id)
+            return [thread.id, info.blocking_reasons || []]
+          } catch {
+            return [thread.id, []]
+          }
+        })
+      )
+
+      setBlockingReasonMap(Object.fromEntries(details))
+    }
+
+    fetchBlockingReasons()
+  }, [blockedThreads])
 
   useEffect(() => {
     if (session?.current_die) {
@@ -1041,7 +1068,7 @@ export default function RollPage() {
               </div>
 
               <div className="space-y-2" data-roll-pool>
-                {pool.length === 0 ? (
+                {pool.length === 0 && blockedThreads.length === 0 ? (
                   <div className="text-center py-10 space-y-4">
                     <div className="text-4xl">📚</div>
                     <div>
@@ -1054,6 +1081,14 @@ export default function RollPage() {
                     >
                       Go to Queue
                     </button>
+                  </div>
+                ) : pool.length === 0 && blockedThreads.length > 0 ? (
+                  <div className="text-center py-10 space-y-4">
+                    <div className="text-4xl">🔒</div>
+                    <div>
+                      <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All Threads Blocked</p>
+                      <p className="text-xs text-stone-500 mt-1">Resolve dependencies to roll.</p>
+                    </div>
                   </div>
                 ) : (
                   pool.map((thread, index) => {
@@ -1112,8 +1147,8 @@ export default function RollPage() {
                           <span className="text-sm">🔒</span>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-stone-400 truncate">{thread.title}</p>
-                            {thread.blocking_reasons.length > 0 && (
-                              <p className="text-[10px] text-stone-500 truncate">{thread.blocking_reasons[0]}</p>
+                            {blockingReasonMap[thread.id]?.length > 0 && (
+                              <p className="text-[10px] text-stone-500 truncate">{blockingReasonMap[thread.id][0]}</p>
                             )}
                           </div>
                         </div>
