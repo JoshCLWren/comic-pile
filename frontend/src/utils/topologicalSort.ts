@@ -5,6 +5,9 @@ export function getTopologicalPath(
   dependencies: FlowchartDependency[],
   _startThreadId?: number
 ): Thread[] {
+  // Precompute thread lookup for O(1) access
+  const threadById = new Map<number, Thread>(threads.map((t) => [t.id, t]))
+  
   // Build adjacency list with Set for deduplication
   const adj = new Map<number, Set<number>>()
   const inDegree = new Map<number, number>()
@@ -23,12 +26,12 @@ export function getTopologicalPath(
     
     // If either ID is negative (issue node), map it to its owning thread
     if (sourceId < 0) {
-      const sourceThread = threads.find(t => t.id === Math.abs(sourceId))
+      const sourceThread = threadById.get(Math.abs(sourceId))
       if (sourceThread) sourceId = sourceThread.id
       else return // Skip if we can't find the owning thread
     }
     if (targetId < 0) {
-      const targetThread = threads.find(t => t.id === Math.abs(targetId))
+      const targetThread = threadById.get(Math.abs(targetId))
       if (targetThread) targetId = targetThread.id
       else return // Skip if we can't find the owning thread
     }
@@ -86,6 +89,6 @@ export function getTopologicalPath(
   })
 
   return sorted
-    .map(id => threads.find(t => t.id === id))
+    .map(id => threadById.get(id))
     .filter((t): t is Thread => t !== undefined)
 }
