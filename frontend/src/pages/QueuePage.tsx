@@ -684,25 +684,33 @@ export default function QueuePage() {
   }, [threads])
 
   useEffect(() => {
+    let cancelled = false
     const calculatePreview = async () => {
       const issueInput = createForm.issues
       if (issueInput) {
         try {
           const { parseIssueRange } = await import('../utils/issueParser')
           const total = parseIssueRange(issueInput)
+          if (cancelled) return
           setIssuePreview(total)
           setIssueParseError(null)
         } catch (err) {
+          if (cancelled) return
           setIssuePreview(null)
           setIssueParseError(err instanceof Error ? err.message : 'Invalid issue range')
         }
       } else {
+        if (cancelled) return
         setIssuePreview(null)
         setIssueParseError(null)
       }
     }
 
     calculatePreview()
+
+    return () => {
+      cancelled = true
+    }
   }, [createForm.issues])
 
   const activeThreads = threads
@@ -799,15 +807,16 @@ export default function QueuePage() {
           
           if (isSimpleRange) {
             // Use migrateThread for simple ranges starting from 1 (creates sequential issues 1..N)
-            const lastRead = Number(createForm.lastIssueRead) || 0
-            const totalIssues = issuesRemaining
-            await issuesApi.migrateThread(result.id, lastRead, totalIssues)
+            const requestedLastRead = Number(createForm.lastIssueRead) || 0
+            const lastRead = Math.max(0, Math.min(requestedLastRead, issuesRemaining))
+            await issuesApi.migrateThread(result.id, lastRead, issuesRemaining)
           } else {
             // Use issuesApi.create for complex ranges (preserves non-contiguous/non-integer identifiers)
             const issueListResponse = await issuesApi.create(result.id, createForm.issues.trim())
             
             // Mark issues as read if lastIssueRead is specified
-            const lastRead = Number(createForm.lastIssueRead) || 0
+            const requestedLastRead = Number(createForm.lastIssueRead) || 0
+            const lastRead = Math.max(0, Math.min(requestedLastRead, issueListResponse.issues.length))
             if (lastRead > 0 && issueListResponse.issues.length > 0) {
               // Mark the first N issues as read
               const issuesToMark = issueListResponse.issues.slice(0, lastRead)
