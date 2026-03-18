@@ -222,8 +222,8 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
 
     source_issue = Issue(
         thread_id=source_thread.id,
-        issue_number="1",
-        position=1,
+        issue_number="2",
+        position=2,
         status="unread",
     )
     target_issue = Issue(
@@ -414,16 +414,18 @@ async def test_issue_dependency_blocks_when_target_not_next_unread(
         "Thread should NOT be blocked when dependency is on future issue, not next unread"
     )
 
-    # Now read issue 1, making next unread issue 2
+    # Read issues 1 and 2 so that issue 3 (which has the dep) becomes next unread
     from datetime import datetime, UTC
 
     target_issue_1.status = "read"
     target_issue_1.read_at = datetime.now(UTC)
-    target_thread.next_unread_issue_id = target_issue_2.id
+    target_issue_2.status = "read"
+    target_issue_2.read_at = datetime.now(UTC)
+    target_thread.next_unread_issue_id = target_issue_3.id
     await async_db.commit()
     await async_db.refresh(target_thread)
 
-    # Now it SHOULD be blocked since next unread issue 2 has unread prerequisite
+    # Now it SHOULD be blocked since next unread issue 3 has unread prerequisite
     blocked_after = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_after.status_code == 200
     assert target_thread.id in blocked_after.json(), (

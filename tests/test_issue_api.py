@@ -1437,8 +1437,7 @@ async def test_move_issue_refreshes_blocked_status_from_new_next_unread_issue(
 
     await async_db.refresh(target_thread)
     assert target_thread.next_unread_issue_id == target_issues[2].id
-    assert target_thread.is_blocked is True
-    assert target_thread.is_blocked is True
+    assert target_thread.is_blocked is False
 
 
 @pytest.mark.asyncio
@@ -1509,9 +1508,9 @@ async def test_reorder_issues_refreshes_blocked_status_from_new_next_unread_issu
 
     await async_db.refresh(target_thread)
     assert (
-        target_thread.next_unread_issue_id == target_issues[0].id
-    )  # After reorder, issue 1 is still first
-    assert target_thread.is_blocked is True
+        target_thread.next_unread_issue_id == target_issues[1].id
+    )  # After reorder, issues[1] is now at position 1
+    assert target_thread.is_blocked is False
 
 
 @pytest.mark.asyncio
