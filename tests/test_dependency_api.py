@@ -1,5 +1,7 @@
 """Dependency API tests."""
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import select
 
@@ -415,8 +417,6 @@ async def test_issue_dependency_blocks_when_target_not_next_unread(
     )
 
     # Read issues 1 and 2 so that issue 3 (which has the dep) becomes next unread
-    from datetime import datetime, UTC
-
     target_issue_1.status = "read"
     target_issue_1.read_at = datetime.now(UTC)
     target_issue_2.status = "read"
@@ -534,8 +534,6 @@ async def test_issue_dependency_blocking_multiple_issues_same_thread(
     )
 
     # Now read issue 1, making next unread issue 2
-    from datetime import datetime, UTC
-
     target_issue_1.status = "read"
     target_issue_1.read_at = datetime.now(UTC)
     target_thread.next_unread_issue_id = target_issue_3.id
