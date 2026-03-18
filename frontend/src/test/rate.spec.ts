@@ -288,13 +288,7 @@ test.describe('Rate Thread Feature', () => {
     await authenticatedWithThreadsPage.route('**/api/rate/**', route => route.abort('failed'));
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-
-    await Promise.all([
-      authenticatedWithThreadsPage.waitForResponse(resp =>
-        resp.url().includes('/api/rate/') && resp.request().method() === 'POST'
-      ).catch(() => 'network-error-expected'),
-      authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
-    ]);
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
     await expect(authenticatedWithThreadsPage.getByText('Network error. Please check your connection.')).toBeVisible({ timeout: 10000 });
   });
