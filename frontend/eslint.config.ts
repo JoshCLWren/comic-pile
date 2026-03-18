@@ -44,12 +44,6 @@ export default [
     },
   },
   {
-    files: ['src/pages/QueuePage.tsx', 'src/pages/RollPage.tsx'],
-    rules: {
-      'max-lines': 'off',
-    },
-  },
-  {
     files: ['src/test/**/*.{ts,tsx}'],
     rules: {
       'react-hooks/rules-of-hooks': 'off',

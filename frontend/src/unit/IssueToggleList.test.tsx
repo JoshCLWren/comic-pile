@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { IssueToggleList } from '../pages/QueuePage'
+import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, IssueListResponse } from '../types'
 
