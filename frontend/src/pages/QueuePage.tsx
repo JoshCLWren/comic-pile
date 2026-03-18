@@ -1101,7 +1101,7 @@ export default function QueuePage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 hidden md:flex">
+                    <div className="hidden md:flex items-center gap-2">
                       <Tooltip content="Edit thread details.">
                         <button
                           type="button"
@@ -1313,8 +1313,7 @@ export default function QueuePage() {
               value={createForm.lastIssueRead}
               onChange={(event: ChangeEvent<HTMLInputElement>) => {
                 const value = Number.parseInt(event.target.value, 10) || 0
-                const maxValue = issuePreview ?? 0
-                const clampedValue = Math.min(value, maxValue)
+                const clampedValue = issuePreview !== null ? Math.min(value, issuePreview) : value
                 setCreateForm({
                   ...createForm,
                   lastIssueRead: clampedValue,
@@ -1324,7 +1323,7 @@ export default function QueuePage() {
             />
             {createForm.lastIssueRead > 0 && issuePreview !== null && (
               <p className="text-xs text-stone-400">
-                Issues #1–{Math.min(createForm.lastIssueRead, issuePreview)} of {issuePreview} will be marked as read
+                First {Math.min(createForm.lastIssueRead, issuePreview)} issues (in creation order) of {issuePreview} will be marked as read
               </p>
             )}
             {createForm.lastIssueRead > 0 && issuePreview !== null && createForm.lastIssueRead > issuePreview && (

@@ -5,12 +5,12 @@ export function getTopologicalPath(
   dependencies: FlowchartDependency[],
   _startThreadId?: number
 ): Thread[] {
-  // Build adjacency list
-  const adj = new Map<number, number[]>()
+  // Build adjacency list with Set for deduplication
+  const adj = new Map<number, Set<number>>()
   const inDegree = new Map<number, number>()
   
   threads.forEach(t => {
-    adj.set(t.id, [])
+    adj.set(t.id, new Set())
     inDegree.set(t.id, 0)
   })
 
@@ -37,8 +37,11 @@ export function getTopologicalPath(
     if (sourceId === targetId) return
     
     if (adj.has(sourceId) && adj.has(targetId)) {
-      adj.get(sourceId)!.push(targetId)
-      inDegree.set(targetId, (inDegree.get(targetId) || 0) + 1)
+      const neighbors = adj.get(sourceId)!
+      if (!neighbors.has(targetId)) {
+        neighbors.add(targetId)
+        inDegree.set(targetId, (inDegree.get(targetId) || 0) + 1)
+      }
     }
   })
 
@@ -54,26 +57,31 @@ export function getTopologicalPath(
   })
 
   const sorted: number[] = []
+  const sortedSet = new Set<number>()
   
   while (queue.length > 0) {
     // For a better reading order, we could sort the queue by thread title or queue_position
     const current = queue.shift()!
     sorted.push(current)
+    sortedSet.add(current)
 
-    const neighbors = adj.get(current) || []
-    for (const neighbor of neighbors) {
-      const deg = inDegree.get(neighbor)! - 1
-      inDegree.set(neighbor, deg)
-      if (deg === 0) {
-        queue.push(neighbor)
+    const neighbors = adj.get(current)
+    if (neighbors) {
+      for (const neighbor of neighbors) {
+        const deg = inDegree.get(neighbor)! - 1
+        inDegree.set(neighbor, deg)
+        if (deg === 0) {
+          queue.push(neighbor)
+        }
       }
     }
   }
 
   // Handle cycles (nodes left in graph with inDegree > 0)
   threads.forEach(t => {
-    if ((inDegree.get(t.id) || 0) > 0 && !sorted.includes(t.id)) {
+    if ((inDegree.get(t.id) || 0) > 0 && !sortedSet.has(t.id)) {
       sorted.push(t.id)
+      sortedSet.add(t.id)
     }
   })
 
