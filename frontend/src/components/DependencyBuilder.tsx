@@ -11,6 +11,18 @@ function getDefaultDependencyMode(thread: Thread | null): 'thread' | 'issue' {
   return thread?.next_unread_issue_id ? 'issue' : 'thread'
 }
 
+function groupByThread(deps: Dependency[], labelKey: 'source_label' | 'target_label'): Map<string, Dependency[]> {
+  const groups = new Map<string, Dependency[]>()
+  for (const dep of deps) {
+    const label = dep[labelKey] ?? 'Unknown'
+    const threadName = dep.is_issue_level ? label.replace(/ #\d+$/, '') : label
+    const existing = groups.get(threadName) ?? []
+    existing.push(dep)
+    groups.set(threadName, existing)
+  }
+  return groups
+}
+
 interface DependencyBuilderProps {
   thread: Thread | null
   isOpen: boolean
@@ -80,15 +92,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       const relatedIds = new Set([thread.id])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
 
-      console.log('[loadFlowchartData] Fetched', allDeps.length, 'deps for thread', thread.id)
-      console.log('[loadFlowchartData] Deps:', allDeps.map((d: any) => ({
-        id: d.id,
-        source_thread_id: d.source_thread_id,
-        target_thread_id: d.target_thread_id,
-        source_issue_id: d.source_issue_id,
-        target_issue_id: d.target_issue_id,
-        is_issue_level: d.is_issue_level,
-      })))
+      
 
       // Thread-level deps map directly to FlowchartDependency
       const threadDeps: FlowchartDependency[] = allDeps
@@ -113,7 +117,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       const issueNodeMap = new Map<number, FlowchartNode>()
       const issueEdges: FlowchartDependency[] = []
 
-      console.log('[loadFlowchartData] Issue-only deps:', issueOnlyDeps.length)
+      
 
       for (const d of issueOnlyDeps) {
         if (!d.source_issue_id || !d.target_issue_id) continue
@@ -149,6 +153,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
           source_id: srcNodeId,
           target_id: tgtNodeId,
           is_issue_level: true,
+          source_parent_thread_id: d.source_issue_thread_id,
+          target_parent_thread_id: d.target_issue_thread_id,
           created_at: d.created_at,
         })
 
@@ -157,15 +163,14 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         relatedIds.add(d.target_issue_thread_id)
       }
 
-      console.log('[loadFlowchartData] Created', issueNodeMap.size, 'issue nodes and', issueEdges.length, 'issue edges')
-      console.log('[loadFlowchartData] Related thread IDs:', Array.from(relatedIds))
+      
 
       const allEdges = [...threadDeps, ...issueEdges]
 
       const allThreads = await threadsApi.list()
       const relatedThreads = allThreads.filter((t) => relatedIds.has(t.id))
 
-      console.log('[loadFlowchartData] Found', relatedThreads.length, 'related threads')
+      
 
       setFlowchartThreads(relatedThreads)
       setFlowchartDependencies(allEdges)
@@ -409,6 +414,29 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   return (
     <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
       <div className="space-y-4">
+        {/* Flowchart toggle */}
+        {hasDependencies && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleToggleFlowchart}
+              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest"
+              data-testid="toggle-flowchart"
+            >
+              {showFlowchart ? '▲ Hide Flowchart' : '▼ View Flowchart'}
+            </button>
+
+            {showFlowchart && (
+              <DependencyFlowchart
+                threads={flowchartThreads}
+                dependencies={flowchartDependencies}
+                blockedIds={blockedIds}
+                issueNodes={flowchartIssueNodes}
+              />
+            )}
+          </div>
+        )}
+
         <div className="space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
             Dependency type
@@ -604,14 +632,19 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
           ) : dependencies.blocked_by.length === 0 ? (
             <p className="text-xs text-stone-500">No prerequisites yet.</p>
           ) : (
-            dependencies.blocked_by.map((dep) => (
-              <DependencyRow
-                key={dep.id}
-                dependencyId={dep.id}
-                title={dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Thread #${dep.source_thread_id}`)}
-                subtitle={dep.source_issue_id ? 'Issue-level block' : 'Thread-level block'}
-                onDelete={handleDeleteDependency}
-              />
+            Array.from(groupByThread(dependencies.blocked_by, 'source_label')).map(([threadName, deps]) => (
+              <div key={threadName} className="space-y-1">
+                <p className="text-xs font-bold text-stone-400 truncate">{threadName}</p>
+                {deps.map((dep) => (
+                  <DependencyRow
+                    key={dep.id}
+                    dependencyId={dep.id}
+                    title={dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Thread #${dep.source_thread_id}`)}
+                    subtitle={dep.source_issue_id ? 'Issue-level block' : 'Thread-level block'}
+                    onDelete={handleDeleteDependency}
+                  />
+                ))}
+              </div>
             ))
           )}
         </div>
@@ -623,40 +656,22 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
           ) : dependencies.blocking.length === 0 ? (
             <p className="text-xs text-stone-500">No dependent threads yet.</p>
           ) : (
-            dependencies.blocking.map((dep) => (
-              <DependencyRow
-                key={dep.id}
-                dependencyId={dep.id}
-                title={dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Thread #${dep.target_thread_id}`)}
-                subtitle={dep.target_issue_id ? 'Issue-level block' : 'Thread-level block'}
-                onDelete={handleDeleteDependency}
-              />
+            Array.from(groupByThread(dependencies.blocking, 'target_label')).map(([threadName, deps]) => (
+              <div key={threadName} className="space-y-1">
+                <p className="text-xs font-bold text-stone-400 truncate">{threadName}</p>
+                {deps.map((dep) => (
+                  <DependencyRow
+                    key={dep.id}
+                    dependencyId={dep.id}
+                    title={dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Thread #${dep.target_thread_id}`)}
+                    subtitle={dep.target_issue_id ? 'Issue-level block' : 'Thread-level block'}
+                    onDelete={handleDeleteDependency}
+                  />
+                ))}
+              </div>
             ))
           )}
         </div>
-
-        {/* Flowchart toggle */}
-        {hasDependencies && (
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={handleToggleFlowchart}
-              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest"
-              data-testid="toggle-flowchart"
-            >
-              {showFlowchart ? '▲ Hide Flowchart' : '▼ View Flowchart'}
-            </button>
-
-            {showFlowchart && (
-              <DependencyFlowchart
-                threads={flowchartThreads}
-                dependencies={flowchartDependencies}
-                blockedIds={blockedIds}
-                issueNodes={flowchartIssueNodes}
-              />
-            )}
-          </div>
-        )}
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs">

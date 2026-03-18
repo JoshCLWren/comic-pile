@@ -32,6 +32,7 @@ export default [
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'no-unused-vars': 'off',
+      'max-lines': ['error', { max: 1000, skipBlankLines: true, skipComments: true }],
       '@typescript-eslint/no-unused-vars': [
         'error',
         {

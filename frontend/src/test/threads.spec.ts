@@ -12,6 +12,7 @@ test.describe('Thread Management', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Saga');
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
+    await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
         response.url().includes('/api/threads/') &&
@@ -44,6 +45,7 @@ test.describe('Thread Management', () => {
       
       await authenticatedPage.fill('label:has-text("Title") + input', thread.title);
       await authenticatedPage.selectOption('label:has-text("Format") + select', thread.format);
+      await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
       await authenticatedPage.click('button[type="submit"]');
       
       await authenticatedPage.waitForLoadState("networkidle");

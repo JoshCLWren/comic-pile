@@ -288,8 +288,16 @@ test.describe('Rate Thread Feature', () => {
     await authenticatedWithThreadsPage.route('**/api/rate/**', route => route.abort('failed'));
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
+
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
 
-    await expect(authenticatedWithThreadsPage.getByText('Failed to save rating')).toBeVisible({ timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForFunction(() => {
+      const errorMsg = document.getElementById('error-message');
+      return errorMsg !== null && errorMsg.textContent !== null && errorMsg.textContent.length > 0;
+    }, { timeout: 10000 });
+
+    const errorElement = await authenticatedWithThreadsPage.locator('#error-message');
+    await expect(errorElement).toBeVisible();
+    await expect(errorElement).toContainText('Network error');
   });
 });

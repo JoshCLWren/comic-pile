@@ -84,7 +84,7 @@ test.describe('Roll Dice Feature', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
-    const emptyQueueMessage = authenticatedPage.locator('text=Queue Empty');
+    const emptyQueueMessage = authenticatedPage.locator('text=Your Queue Is Empty');
     await expect(emptyQueueMessage).toBeVisible();
   });
 

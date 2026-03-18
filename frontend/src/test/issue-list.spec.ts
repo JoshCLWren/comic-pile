@@ -62,10 +62,6 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
     
-    // Switch to "Track individual issues" mode
-    await authenticatedPage.click('button:has-text("Track individual issues")');
-    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
-    
     // Fill in issue range
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-25');
     
@@ -82,10 +78,6 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-
-    // Switch to "Track individual issues" mode
-    await authenticatedPage.click('button:has-text("Track individual issues")');
-    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
 
     // Fill in mixed issue range
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1, 3, 5-7');
@@ -129,10 +121,6 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Invalid Range Comic');
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-    
-    // Switch to \"Track individual issues\" mode
-    await authenticatedPage.click('button:has-text(\"Track individual issues\")');
-    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
 
     // Fill in reversed range (invalid)
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '10-1');
@@ -159,10 +147,6 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-
-    // Switch to "Track individual issues" mode
-    await authenticatedPage.click('button:has-text("Track individual issues")');
-    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
 
     // Fill in single issue
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1');
@@ -234,10 +218,6 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-
-    // Switch to "Track individual issues" mode
-    await authenticatedPage.click('button:has-text("Track individual issues")');
-    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
 
     // Fill in range with duplicates
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-5, 3-7');
@@ -686,10 +666,6 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
 
-    // Switch to "Track individual issues" mode
-    await authenticatedPage.click('button:has-text("Track individual issues")');
-    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
-
     // Fill in large range
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-150');
     
@@ -746,10 +722,6 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.fill('label:has-text("Title") + input', 'Invalid Range');
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
 
-    // Switch to "Track individual issues" mode
-    await authenticatedPage.click('button:has-text("Track individual issues")');
-    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
-
     // Test various invalid ranges
     const invalidRanges = [
       '10-1', // Reversed range
@@ -786,10 +758,6 @@ test.describe('Issue Range Edge Cases', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
-
-    // Switch to "Track individual issues" mode
-    await authenticatedPage.click('button:has-text("Track individual issues")');
-    await authenticatedPage.waitForSelector(SELECTORS.threadCreate.issuesInput, { state: 'visible', timeout: 5000 });
 
     // Fill range with various whitespace
     await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1 - 5 , 7 , 10 - 12');

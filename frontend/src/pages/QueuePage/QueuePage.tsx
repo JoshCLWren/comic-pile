@@ -1,605 +1,25 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import type { ChangeEvent, DragEvent, FormEvent, MouseEvent, KeyboardEvent } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import Modal from '../components/Modal'
-import PositionSlider from '../components/PositionSlider'
-import Tooltip from '../components/Tooltip'
-import LoadingSpinner from '../components/LoadingSpinner'
-import DependencyBuilder from '../components/DependencyBuilder'
-import MigrationDialog from '../components/MigrationDialog'
-import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
-import {
-  useCreateThread,
-  useDeleteThread,
-  useReactivateThread,
-  useThreads,
-  useUpdateThread,
-} from '../hooks/useThread'
-import { useSession } from '../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { dependenciesApi, threadsApi } from '../services/api'
-import { issuesApi } from '../services/api-issues'
-import { useCollections } from '../contexts/CollectionContext'
-import type { Issue, Thread } from '../types'
-import { getApiErrorDetail } from '../utils/apiError'
-
-const FORMAT_OPTIONS = ['Comics', 'Manga', 'Trade Paperback', 'Graphic Novel', 'Other'] as const
-
-/**
- * Badge component displaying collection name for a thread.
- */
-function CollectionBadge({ collectionId }: { collectionId: number }) {
-  const { collections } = useCollections()
-  const collection = collections.find(c => c.id === collectionId)
-
-  if (!collection) return null
-
-  return (
-    <span data-testid="collection-badge" className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
-      {collection.name}
-    </span>
-  )
-}
-
-/**
- * Dropdown select for format field. If the current value doesn't match
- * any preset, it's added as an extra option so it isn't lost.
- */
-function FormatSelect({ value, onChange, required }: {
-  value: string
-  onChange: (value: string) => void
-  required?: boolean
-}) {
-  const hasCustom = value && !FORMAT_OPTIONS.includes(value as typeof FORMAT_OPTIONS[number])
-
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-      required={required}
-    >
-      <option value="">Select format...</option>
-      {hasCustom && <option value={value}>{value}</option>}
-      {FORMAT_OPTIONS.map((fmt) => (
-        <option key={fmt} value={fmt}>{fmt}</option>
-      ))}
-    </select>
-  )
-}
-
-/**
- * Inline issue list for migrated threads in the edit modal.
- */
-function reorderIssuesForDrop(
-  issues: Issue[],
-  draggedIssueId: number,
-  targetIssueId: number
-): Issue[] {
-  const draggedIndex = issues.findIndex((issue) => issue.id === draggedIssueId)
-  const targetIndex = issues.findIndex((issue) => issue.id === targetIssueId)
-
-  if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) {
-    return issues
-  }
-
-  const nextIssues = [...issues]
-  const draggedIssue = nextIssues.splice(draggedIndex, 1)[0]
-  if (!draggedIssue) {
-    return issues
-  }
-  const targetIndexAfterRemoval = nextIssues.findIndex((issue) => issue.id === targetIssueId)
-  if (targetIndexAfterRemoval === -1) {
-    return issues
-  }
-  nextIssues.splice(targetIndexAfterRemoval + 1, 0, draggedIssue)
-  return nextIssues
-}
-
-function moveIssueByStep(
-  issues: Issue[],
-  issueId: number,
-  direction: 'up' | 'down'
-): Issue[] {
-  const issueIndex = issues.findIndex((issue) => issue.id === issueId)
-  if (issueIndex === -1) {
-    return issues
-  }
-
-  const targetIndex = direction === 'up' ? issueIndex - 1 : issueIndex + 1
-  if (targetIndex < 0 || targetIndex >= issues.length) {
-    return issues
-  }
-
-  const nextIssues = [...issues]
-  const movedIssue = nextIssues.splice(issueIndex, 1)[0]
-  if (!movedIssue) {
-    return issues
-  }
-  nextIssues.splice(targetIndex, 0, movedIssue)
-  return nextIssues
-}
-
-type IssueMutation =
-  | { id: number; type: 'delete'; issueId: number }
-  | { id: number; type: 'reorder'; issueIds: number[] }
-  | { id: number; type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
-
-type QueuedIssueMutation =
-  | { type: 'delete'; issueId: number }
-  | { type: 'reorder'; issueIds: number[] }
-  | { type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
-
-function normalizeIssueOrder(issues: Issue[], issueIds: number[]): number[] {
-  const existingIssueIds = new Set(issues.map((issue) => issue.id))
-  const normalizedIssueIds: number[] = []
-  const seenIssueIds = new Set<number>()
-
-  for (const issueId of issueIds) {
-    if (!existingIssueIds.has(issueId) || seenIssueIds.has(issueId)) {
-      continue
-    }
-    normalizedIssueIds.push(issueId)
-    seenIssueIds.add(issueId)
-  }
-
-  for (const issue of issues) {
-    if (!seenIssueIds.has(issue.id)) {
-      normalizedIssueIds.push(issue.id)
-    }
-  }
-
-  return normalizedIssueIds
-}
-
-function applyIssueMutation(issues: Issue[], mutation: IssueMutation): Issue[] {
-  switch (mutation.type) {
-    case 'toggle':
-      return issues.map((issue) => (
-        issue.id === mutation.issueId
-          ? {
-              ...issue,
-              status: mutation.nextStatus,
-              read_at: mutation.nextStatus === 'read' ? new Date().toISOString() : null,
-            }
-          : issue
-      ))
-    case 'delete':
-      return issues.filter((issue) => issue.id !== mutation.issueId)
-    case 'reorder': {
-      const normalizedIssueIds = normalizeIssueOrder(issues, mutation.issueIds)
-      const issueMap = new Map(issues.map((issue) => [issue.id, issue]))
-      return normalizedIssueIds
-        .map((issueId) => issueMap.get(issueId))
-        .filter((issue): issue is Issue => issue !== undefined)
-    }
-  }
-}
-
-function applyIssueMutations(issues: Issue[], mutations: IssueMutation[]): Issue[] {
-  return mutations.reduce((currentIssues, mutation) => applyIssueMutation(currentIssues, mutation), issues)
-}
-
-function getPendingIssueIds(mutations: IssueMutation[], type: 'delete' | 'toggle'): Set<number> {
-  const pendingIssueIds = new Set<number>()
-
-  for (const mutation of mutations) {
-    if (mutation.type === type) {
-      pendingIssueIds.add(mutation.issueId)
-    }
-  }
-
-  return pendingIssueIds
-}
-
-export function IssueToggleList({ threadId }: {
-  threadId: number
-}) {
-  const [issues, setIssues] = useState<Issue[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [addRange, setAddRange] = useState('')
-  const [isAdding, setIsAdding] = useState(false)
-  const [addError, setAddError] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
-  const [reorderAnnouncement, setReorderAnnouncement] = useState('')
-  const [toggling, setToggling] = useState<Set<number>>(new Set())
-  const [deleting, setDeleting] = useState<Set<number>>(new Set())
-  const [draggedIssueId, setDraggedIssueId] = useState<number | null>(null)
-  const [dragOverIssueId, setDragOverIssueId] = useState<number | null>(null)
-  const baseIssuesRef = useRef<Issue[]>([])
-  const pendingMutationsRef = useRef<IssueMutation[]>([])
-  const isProcessingMutationsRef = useRef(false)
-  const nextMutationIdRef = useRef(1)
-
-  const syncOptimisticIssues = useCallback((baseIssues: Issue[], pendingMutations: IssueMutation[]) => {
-    setIssues(applyIssueMutations(baseIssues, pendingMutations))
-    setToggling(getPendingIssueIds(pendingMutations, 'toggle'))
-    setDeleting(getPendingIssueIds(pendingMutations, 'delete'))
-  }, [])
-
-  const fetchAllIssues = useCallback(async (): Promise<Issue[]> => {
-    const allIssues: Issue[] = []
-    const seenPageTokens = new Set<string>()
-    let nextPageToken: string | null = null
-
-    while (true) {
-      const data = await issuesApi.list(threadId, {
-        page_size: 100,
-        ...(nextPageToken ? { page_token: nextPageToken } : {}),
-      })
-      allIssues.push(...(data.issues || []))
-
-      if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
-        return allIssues
-      }
-
-      seenPageTokens.add(data.next_page_token)
-      nextPageToken = data.next_page_token
-    }
-  }, [threadId])
-
-  const focusMoveControl = useCallback((issueId: number, direction: 'up' | 'down') => {
-    const focusTarget = () => {
-      document
-        .querySelector<HTMLButtonElement>(`[data-move-control="${direction}-${issueId}"]`)
-        ?.focus()
-    }
-
-    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-      window.requestAnimationFrame(focusTarget)
-      return
-    }
-
-    setTimeout(focusTarget, 0)
-  }, [])
-
-  const runIssueMutation = useCallback(async (mutation: IssueMutation) => {
-    switch (mutation.type) {
-      case 'toggle':
-        if (mutation.nextStatus === 'read') {
-          await issuesApi.markRead(mutation.issueId)
-        } else {
-          await issuesApi.markUnread(mutation.issueId)
-        }
-        return
-      case 'delete':
-        await issuesApi.delete(mutation.issueId)
-        return
-      case 'reorder':
-        await issuesApi.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
-    }
-  }, [threadId])
-
-  const processIssueMutations = useCallback(async () => {
-    if (isProcessingMutationsRef.current) {
-      return
-    }
-
-    isProcessingMutationsRef.current = true
-
-    try {
-      while (pendingMutationsRef.current.length > 0) {
-        const currentMutation = pendingMutationsRef.current[0]
-        if (!currentMutation) {
-          break
-        }
-
-        try {
-          await runIssueMutation(currentMutation)
-          baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
-        } catch (err: unknown) {
-          try {
-            baseIssuesRef.current = await fetchAllIssues()
-          } catch (refreshErr) {
-            console.error('[IssueToggleList] Error refetching issues after mutation failure:', refreshErr)
-          }
-          setActionError(getApiErrorDetail(err))
-        } finally {
-          pendingMutationsRef.current = pendingMutationsRef.current.filter(
-            (mutation) => mutation.id !== currentMutation.id
-          )
-          syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
-        }
-      }
-    } finally {
-      isProcessingMutationsRef.current = false
-    }
-  }, [fetchAllIssues, runIssueMutation, syncOptimisticIssues])
-
-  const enqueueIssueMutation = useCallback((mutation: QueuedIssueMutation) => {
-    const queuedMutation = {
-      ...mutation,
-      id: nextMutationIdRef.current++,
-    } as IssueMutation
-
-    pendingMutationsRef.current = [...pendingMutationsRef.current, queuedMutation]
-    syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
-    void processIssueMutations()
-  }, [processIssueMutations, syncOptimisticIssues])
-
-  const enqueueIssueReorder = useCallback((
-    nextIssues: Issue[],
-    options?: {
-      announcement?: string
-      focusTarget?: { issueId: number; direction: 'up' | 'down' }
-    }
-  ) => {
-    const nextIssueIds = nextIssues.map((issue) => issue.id)
-    const currentIssueIds = issues.map((issue) => issue.id)
-    const orderDidChange = nextIssueIds.some((issueId, index) => issueId !== currentIssueIds[index])
-
-    if (!orderDidChange) {
-      return false
-    }
-
-    setActionError(null)
-    if (options?.announcement) {
-      setReorderAnnouncement(options.announcement)
-    }
-    enqueueIssueMutation({
-      type: 'reorder',
-      issueIds: nextIssueIds,
-    })
-    if (options?.focusTarget) {
-      focusMoveControl(options.focusTarget.issueId, options.focusTarget.direction)
-    }
-    return true
-  }, [enqueueIssueMutation, focusMoveControl, issues])
-
-  const loadIssues = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      baseIssuesRef.current = await fetchAllIssues()
-      syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
-    } catch {
-      // Non-critical
-    } finally {
-      setIsLoading(false)
-    }
-  }, [fetchAllIssues, syncOptimisticIssues])
-
-  useEffect(() => {
-    loadIssues()
-  }, [loadIssues])
-
-  function handleToggle(issue: Issue) {
-    const newStatus = issue.status === 'read' ? 'unread' : 'read'
-
-    setActionError(null)
-    enqueueIssueMutation({
-      type: 'toggle',
-      issueId: issue.id,
-      nextStatus: newStatus,
-    })
-  }
-
-  async function handleAddIssues() {
-    if (!addRange.trim()) {
-      return
-    }
-    setIsAdding(true)
-    setAddError(null)
-    try {
-      await issuesApi.create(threadId, addRange.trim())
-      setAddRange('')
-      await loadIssues()
-    } catch (err: unknown) {
-      console.error('[IssueToggleList] Error adding issues:', err)
-      setAddError(getApiErrorDetail(err))
-    } finally {
-      setIsAdding(false)
-    }
-  }
-
-  const handleDragStart = (issueId: number) => (event: DragEvent<HTMLButtonElement>) => {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', String(issueId))
-    setDraggedIssueId(issueId)
-    setActionError(null)
-  }
-
-  const handleDragOver = (issueId: number) => (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    setDragOverIssueId(issueId)
-  }
-
-  const handleDrop = (targetIssueId: number) => (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-
-    if (!draggedIssueId || draggedIssueId === targetIssueId) {
-      setDraggedIssueId(null)
-      setDragOverIssueId(null)
-      return
-    }
-
-    const nextIssues = reorderIssuesForDrop(issues, draggedIssueId, targetIssueId)
-    setDraggedIssueId(null)
-    setDragOverIssueId(null)
-
-    if (nextIssues === issues) {
-      return
-    }
-
-    enqueueIssueReorder(nextIssues)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedIssueId(null)
-    setDragOverIssueId(null)
-  }
-
-  function handleDeleteIssue(issue: Issue) {
-    if (!window.confirm(`Delete issue #${issue.issue_number}?`)) {
-      return
-    }
-
-    setActionError(null)
-    enqueueIssueMutation({
-      type: 'delete',
-      issueId: issue.id,
-    })
-  }
-
-  function handleMoveIssue(issue: Issue, direction: 'up' | 'down') {
-    const nextIssues = moveIssueByStep(issues, issue.id, direction)
-    const didReorder = enqueueIssueReorder(nextIssues, {
-      announcement: `Moved issue #${issue.issue_number} ${direction}.`,
-      focusTarget: { issueId: issue.id, direction },
-    })
-
-    if (!didReorder) {
-      focusMoveControl(issue.id, direction)
-    }
-  }
-
-  if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
-
-  return (
-    <div className="space-y-2">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
-      <p className="sr-only" aria-live="polite">{reorderAnnouncement}</p>
-      <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
-        {issues.map((issue, index) => {
-          const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
-          const isDragOver = dragOverIssueId === issue.id
-          const isDragged = draggedIssueId === issue.id
-          const canMoveUp = index > 0
-          const canMoveDown = index < issues.length - 1
-
-          return (
-            <div
-              key={issue.id}
-              data-testid={`issue-pill-${issue.id}`}
-              data-issue-number={issue.issue_number}
-              className={[
-                'flex items-center rounded border transition-all',
-                issue.status === 'read'
-                  ? 'bg-amber-600/20 border-amber-500/30 text-amber-400'
-                  : 'bg-white/5 border-white/10 text-stone-400',
-                isDragOver ? 'border-amber-400/60 bg-amber-500/10' : '',
-                isDragged ? 'opacity-60' : '',
-                isBusy ? 'opacity-50' : '',
-              ].join(' ')}
-              onDragOver={handleDragOver(issue.id)}
-              onDrop={handleDrop(issue.id)}
-            >
-              <button
-                type="button"
-                draggable={!isBusy}
-                onDragStart={handleDragStart(issue.id)}
-                onDragEnd={handleDragEnd}
-                onClick={() => handleToggle(issue)}
-                disabled={isBusy}
-                className={[
-                  'px-2 py-0.5 text-xs font-bold transition-all',
-                  isBusy ? '' : 'hover:opacity-80 cursor-grab active:cursor-grabbing',
-                ].join(' ')}
-                title={`#${issue.issue_number}: ${issue.status}. Drag to reorder.`}
-                aria-label={`Toggle issue #${issue.issue_number}`}
-                data-testid={`issue-toggle-${issue.id}`}
-              >
-                #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
-              </button>
-              <div className="flex border-l border-white/10">
-                <button
-                  type="button"
-                  onClick={() => handleMoveIssue(issue, 'up')}
-                  disabled={isBusy || !canMoveUp}
-                  className={[
-                    'h-7 w-7 text-[11px] font-black text-stone-500 transition-colors',
-                    'hover:text-amber-300 disabled:opacity-40',
-                  ].join(' ')}
-                  aria-label={`Move issue #${issue.issue_number} up`}
-                  data-testid={`issue-move-up-${issue.id}`}
-                  data-move-control={`up-${issue.id}`}
-                  title={`Move issue #${issue.issue_number} up`}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMoveIssue(issue, 'down')}
-                  disabled={isBusy || !canMoveDown}
-                  className={[
-                    'h-7 w-7 text-[11px] font-black text-stone-500 transition-colors',
-                    'hover:text-amber-300 disabled:opacity-40',
-                  ].join(' ')}
-                  aria-label={`Move issue #${issue.issue_number} down`}
-                  data-testid={`issue-move-down-${issue.id}`}
-                  data-move-control={`down-${issue.id}`}
-                  title={`Move issue #${issue.issue_number} down`}
-                >
-                  ↓
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  void handleDeleteIssue(issue)
-                }}
-                disabled={deleting.has(issue.id)}
-                className={[
-                  'pr-2 text-[10px] font-black text-stone-500 transition-colors',
-                  'hover:text-red-300 disabled:opacity-50',
-                ].join(' ')}
-                aria-label={`Delete issue #${issue.issue_number}`}
-                data-testid={`issue-delete-${issue.id}`}
-                title={`Delete issue #${issue.issue_number}`}
-              >
-                x
-              </button>
-            </div>
-          )
-        })}
-      </div>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={addRange}
-          onChange={(e) => setAddRange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              e.stopPropagation()
-              void handleAddIssues()
-            }
-          }}
-          placeholder="Add issues: 19-24 or 0, Annual 1"
-          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-stone-300"
-          data-testid="issue-add-input"
-        />
-        <button
-          type="button"
-          onClick={() => handleAddIssues()}
-          disabled={isAdding || !addRange.trim()}
-          className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
-          data-testid="issue-add-button"
-        >
-          {isAdding ? '…' : 'Add'}
-        </button>
-      </div>
-      {addError && (
-        <p className="text-xs text-red-400">{addError}</p>
-      )}
-      {actionError && (
-        <p className="text-xs text-red-400">{actionError}</p>
-      )}
-    </div>
-  )
-}
-
-const DEFAULT_CREATE_STATE = {
-  title: '',
-  format: 'Comics',
-  issuesRemaining: 1,
-  notes: '',
-  issues: '',
-  trackingMode: 'simple' as 'simple' | 'tracked',
-  lastIssueRead: 0,
-}
-
-type QueueFormState = typeof DEFAULT_CREATE_STATE
+import Modal from '../../components/Modal'
+import PositionSlider from '../../components/PositionSlider'
+import Tooltip from '../../components/Tooltip'
+import LoadingSpinner from '../../components/LoadingSpinner'
+import DependencyBuilder from '../../components/DependencyBuilder'
+import MigrationDialog from '../../components/MigrationDialog'
+import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../../hooks/useQueue'
+import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
+import { useSession } from '../../hooks/useSession'
+import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
+import { dependenciesApi, threadsApi } from '../../services/api'
+import { issuesApi } from '../../services/api-issues'
+import { useCollections } from '../../contexts/CollectionContext'
+import type { Thread } from '../../types'
+import { getApiErrorDetail } from '../../utils/apiError'
+import { CollectionBadge } from './CollectionBadge'
+import { FormatSelect } from './FormatSelect'
+import { IssueToggleList } from './IssueToggleList'
+import { DEFAULT_CREATE_STATE, type QueueFormState } from './types'
 
 export default function QueuePage() {
   const navigate = useNavigate()
@@ -662,14 +82,14 @@ export default function QueuePage() {
 
       const details: Array<[number, string[]]> = await Promise.all(
         blockedIds.map(async (threadId) => {
-            try {
-              const info = await dependenciesApi.getBlockingInfo(threadId)
-              return [threadId, info.blocking_reasons || []]
-            } catch {
-              return [threadId, []]
-            }
-          })
-        )
+          try {
+            const info = await dependenciesApi.getBlockingInfo(threadId)
+            return [threadId, info.blocking_reasons || []]
+          } catch {
+            return [threadId, []]
+          }
+        })
+      )
 
       setBlockingReasonMap(Object.fromEntries(details))
     } catch {
@@ -684,26 +104,33 @@ export default function QueuePage() {
   }, [threads])
 
   useEffect(() => {
+    let cancelled = false
     const calculatePreview = async () => {
-      const issueInput = createForm.trackingMode === 'tracked' ? createForm.issues : ''
+      const issueInput = createForm.issues
       if (issueInput) {
         try {
-          const { parseIssueRange } = await import('../utils/issueParser')
+          const { parseIssueRange } = await import('../../utils/issueParser')
           const total = parseIssueRange(issueInput)
+          if (cancelled) return
           setIssuePreview(total)
           setIssueParseError(null)
         } catch (err) {
+          if (cancelled) return
           setIssuePreview(null)
           setIssueParseError(err instanceof Error ? err.message : 'Invalid issue range')
         }
       } else {
+        if (cancelled) return
         setIssuePreview(null)
         setIssueParseError(null)
       }
     }
-
     calculatePreview()
-  }, [createForm.issues, createForm.trackingMode])
+
+    return () => {
+      cancelled = true
+    }
+  }, [createForm.issues])
 
   const activeThreads = threads
     ?.filter((thread) => thread.status === 'active')
@@ -758,8 +185,8 @@ export default function QueuePage() {
           refetch()
           setReorderError(null)
         })
-        .catch((error: { response?: { data?: { detail?: string } } }) => {
-          setReorderError(error.response?.data?.detail || 'Failed to reorder thread. Please try again.')
+        .catch((error: unknown) => {
+          setReorderError(getApiErrorDetail(error) || 'Failed to reorder thread. Please try again.')
         })
     }
 
@@ -776,12 +203,11 @@ export default function QueuePage() {
     event.preventDefault()
 
     try {
-      const isTracked = createForm.trackingMode === 'tracked'
-      const hasIssueRange = isTracked && createForm.issues && createForm.issues.trim()
+      const hasIssueRange = createForm.issues && createForm.issues.trim()
 
       let issuesRemaining = Number(createForm.issuesRemaining)
       if (hasIssueRange) {
-        const { parseIssueRange } = await import('../utils/issueParser')
+        const { parseIssueRange } = await import('../../utils/issueParser')
         issuesRemaining = parseIssueRange(createForm.issues)
       }
 
@@ -794,10 +220,28 @@ export default function QueuePage() {
 
       if (hasIssueRange && result?.id) {
         try {
-          // Use migrateThread to create issues AND mark 1..lastIssueRead as read in one call
-          const lastRead = Number(createForm.lastIssueRead) || 0
-          const totalIssues = issuesRemaining
-          await issuesApi.migrateThread(result.id, lastRead, totalIssues)
+          // Check if the range is a simple contiguous integer sequence starting from 1 (e.g., "1-25")
+          const rangeMatch = createForm.issues.trim().match(/^(\d+)-(\d+)$/)
+          const isSimpleRange = !!rangeMatch && Number(rangeMatch[1]) === 1
+          
+          if (isSimpleRange) {
+            // Use migrateThread for simple ranges starting from 1 (creates sequential issues 1..N)
+            const requestedLastRead = Number(createForm.lastIssueRead) || 0
+            const lastRead = Math.max(0, Math.min(requestedLastRead, issuesRemaining))
+            await issuesApi.migrateThread(result.id, lastRead, issuesRemaining)
+          } else {
+            // Use issuesApi.create for complex ranges (preserves non-contiguous/non-integer identifiers)
+            const issueListResponse = await issuesApi.create(result.id, createForm.issues.trim())
+            
+            // Mark issues as read if lastIssueRead is specified
+            const requestedLastRead = Number(createForm.lastIssueRead) || 0
+            const lastRead = Math.max(0, Math.min(requestedLastRead, issueListResponse.issues.length))
+            if (lastRead > 0 && issueListResponse.issues.length > 0) {
+              // Mark the first N issues as read
+              const issuesToMark = issueListResponse.issues.slice(0, lastRead)
+              await Promise.all(issuesToMark.map(issue => issuesApi.markRead(issue.id)))
+            }
+          }
         } catch (issueError: unknown) {
           console.error('Thread created but failed to create issues:', issueError)
           alert(`Thread created successfully, but failed to create individual issues: ${getApiErrorDetail(issueError)}`)
@@ -849,7 +293,6 @@ export default function QueuePage() {
       issuesRemaining: thread.issues_remaining,
       notes: thread.notes || '',
       issues: '',
-      trackingMode: 'simple',
       lastIssueRead: 0,
     })
     setIsEditOpen(true)
@@ -1002,11 +445,21 @@ export default function QueuePage() {
         <button
           type="button"
           onClick={openCreateModal}
-          className="h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+          className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
         >
           Add Thread
         </button>
       </header>
+      
+      {/* Mobile FAB for Add Thread */}
+      <button
+        type="button"
+        onClick={openCreateModal}
+        className="md:hidden fixed bottom-24 right-4 h-14 w-14 rounded-full bg-amber-600 text-white font-black text-3xl shadow-[0_4px_20px_rgba(212,137,14,0.4)] z-50 flex items-center justify-center hover:bg-amber-500 transition-colors"
+        aria-label="Add Thread"
+      >
+        +
+      </button>
 
       {activeThreads.length === 0 ? (
         <div className="text-center text-stone-500">No active threads in queue</div>
@@ -1075,7 +528,7 @@ export default function QueuePage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="hidden md:flex items-center gap-2">
                       <Tooltip content="Edit thread details.">
                         <button
                           type="button"
@@ -1117,23 +570,46 @@ export default function QueuePage() {
                         </button>
                       </Tooltip>
                     </div>
-                  </div>
-                  <p className="text-sm text-stone-400">{thread.format}</p>
-                  {thread.collection_id && (
-                    <div className="mt-1">
-                      <CollectionBadge collectionId={thread.collection_id} />
+                    {/* Mobile 3-dot menu indicator */}
+                    <div className="md:hidden text-stone-500 flex items-center justify-center w-8 h-8 text-xl">
+                      ⋮
                     </div>
-                  )}
-                  {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
-                  {thread.issues_remaining !== null && (
-                    <p className="text-xs text-stone-500">
-                      {isMigrated && thread.next_unread_issue_number
-                        ? `Currently on #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
-                        : `${thread.issues_remaining} issues remaining`
-                      }
-                    </p>
-                  )}
-                  <div className="flex gap-2 pt-2">
+                  </div>
+                  <div className="pl-[2.75rem]">
+                    <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
+                    {thread.collection_id && (
+                      <div className="mt-1.5 flex">
+                        <CollectionBadge collectionId={thread.collection_id} />
+                      </div>
+                    )}
+                    {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
+                    {thread.issues_remaining !== null && (
+                      <p className="text-sm text-stone-300 mt-2 font-medium">
+                        {isMigrated && thread.next_unread_issue_number
+                          ? `On #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
+                          : `${thread.issues_remaining} issues remaining`
+                        }
+                      </p>
+                    )}
+                    {isBlocked && blockingReasons.length > 0 && (
+                      <button
+                        type="button"
+                        className="mt-2 w-full text-left text-xs text-red-300/80 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 hover:bg-red-500/15 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setDependencyThread(thread)
+                          setIsDependencyBuilderOpen(true)
+                        }}
+                        aria-label={`View dependencies for ${thread.title}`}
+                      >
+                        <span className="font-bold">🔒 {blockingReasons[0]}</span>
+                        {blockingReasons.length > 1 && (
+                          <span className="text-red-400/60 ml-1">+{blockingReasons.length - 1} more</span>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <div className="gap-2 pt-2 hidden md:flex">
                     <Tooltip content="Move this thread to the front of the queue.">
                       <button
                         onClick={(e) => {
@@ -1236,95 +712,53 @@ export default function QueuePage() {
             />
           </div>
 
-          {/* Tracking mode toggle */}
           <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issue Tracking</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setCreateForm({ ...createForm, trackingMode: 'simple' })}
-                className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
-                  createForm.trackingMode === 'simple'
-                    ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
-                    : 'bg-white/5 border-white/10 text-stone-400'
-                }`}
-              >
-                Simple counter
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreateForm({ ...createForm, trackingMode: 'tracked' })}
-                className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
-                  createForm.trackingMode === 'tracked'
-                    ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
-                    : 'bg-white/5 border-white/10 text-stone-400'
-                }`}
-              >
-                Track individual issues
-              </button>
-            </div>
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
+            <input
+              type="text"
+              value={createForm.issues}
+              onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+              placeholder="0-25 or 0, ½, Annual 1, 5-7"
+              required
+            />
+            {issuePreview !== null && (
+              <p className="text-xs text-stone-400">
+                Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
+              </p>
+            )}
+            {issueParseError && (
+              <p className="text-xs text-red-400">{issueParseError}</p>
+            )}
           </div>
-
-          {createForm.trackingMode === 'simple' ? (
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
-              <input
-                type="number"
-                min="0"
-                value={createForm.issuesRemaining}
-                onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                  setCreateForm({
-                    ...createForm,
-                    issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
-                  })
-                }
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-                required
-              />
-            </div>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
-                <input
-                  type="text"
-                  value={createForm.issues}
-                  onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-                  placeholder="0-25 or 0, ½, Annual 1, 5-7"
-                  required
-                />
-                {issuePreview !== null && (
-                  <p className="text-xs text-stone-400">
-                    Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
-                  </p>
-                )}
-                {issueParseError && (
-                  <p className="text-xs text-red-400">{issueParseError}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={createForm.lastIssueRead}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setCreateForm({
-                      ...createForm,
-                      lastIssueRead: Number.parseInt(event.target.value, 10) || 0,
-                    })
-                  }
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-                />
-                {createForm.lastIssueRead > 0 && issuePreview !== null && (
-                  <p className="text-xs text-stone-400">
-                    Issues #1–{createForm.lastIssueRead} will be marked as read
-                  </p>
-                )}
-              </div>
-            </>
-          )}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
+            <input
+              type="number"
+              min="0"
+              max={issuePreview ?? undefined}
+              value={createForm.lastIssueRead}
+              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                const value = Number.parseInt(event.target.value, 10) || 0
+                const clampedValue = issuePreview !== null ? Math.min(value, issuePreview) : value
+                setCreateForm({
+                  ...createForm,
+                  lastIssueRead: clampedValue,
+                })
+              }}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+            />
+            {createForm.lastIssueRead > 0 && issuePreview !== null && (
+              <p className="text-xs text-stone-400">
+                First {Math.min(createForm.lastIssueRead, issuePreview)} issues (in creation order) of {issuePreview} will be marked as read
+              </p>
+            )}
+            {createForm.lastIssueRead > 0 && issuePreview !== null && createForm.lastIssueRead > issuePreview && (
+              <p className="text-xs text-amber-400">
+                Last issue read cannot exceed total issues ({issuePreview})
+              </p>
+            )}
+          </div>
 
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>

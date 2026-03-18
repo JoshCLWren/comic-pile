@@ -346,6 +346,10 @@ export interface FlowchartDependency {
   target_id: number;
   /** True when this edge was synthesized from issue-level dependencies */
   is_issue_level?: boolean;
+  /** Parent thread ID for issue-level source (set when source_id is negative) */
+  source_parent_thread_id?: number;
+  /** Parent thread ID for issue-level target (set when target_id is negative) */
+  target_parent_thread_id?: number;
   created_at: string;
 }
 
