@@ -16,7 +16,6 @@ export type QueueFormState = {
   issuesRemaining: number
   notes: string
   issues: string
-  trackingMode: 'simple' | 'tracked'
   lastIssueRead: number
 }
 
@@ -26,7 +25,6 @@ export const DEFAULT_CREATE_STATE: QueueFormState = {
   issuesRemaining: 1,
   notes: '',
   issues: '',
-  trackingMode: 'tracked',
   lastIssueRead: 0,
 }
 

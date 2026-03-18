@@ -57,9 +57,9 @@ export default function DependencyTimeline({ threads, dependencies, blockedIds }
         }[status]
 
         const statusIcon = {
-          done: '✅',
-          next: '🔵',
-          upcoming: isBlocked ? '🔒' : '⬜',
+          done: '[Done]',
+          next: '[Next]',
+          upcoming: isBlocked ? '[Blocked]' : '[Pending]',
         }[status]
 
         const progressText = thread.total_issues !== null && thread.total_issues > 0

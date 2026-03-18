@@ -310,7 +310,7 @@ export default function DependencyFlowchart({
       
       {/* Mobile-friendly Timeline View */}
       <div className="md:hidden block w-full mt-2">
-         <DependencyTimeline threads={threads} dependencies={dependencies} blockedIds={blockedIds} />
+        <DependencyTimeline threads={threads} dependencies={dependencies} blockedIds={blockedIds} />
       </div>
 
       <div className="hidden md:block relative w-full h-full">

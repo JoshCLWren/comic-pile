@@ -185,8 +185,8 @@ export default function QueuePage() {
           refetch()
           setReorderError(null)
         })
-        .catch((error: { response?: { data?: { detail?: string } } }) => {
-          setReorderError(error.response?.data?.detail || 'Failed to reorder thread. Please try again.')
+        .catch((error: unknown) => {
+          setReorderError(getApiErrorDetail(error) || 'Failed to reorder thread. Please try again.')
         })
     }
 
@@ -293,7 +293,6 @@ export default function QueuePage() {
       issuesRemaining: thread.issues_remaining,
       notes: thread.notes || '',
       issues: '',
-      trackingMode: 'tracked',
       lastIssueRead: 0,
     })
     setIsEditOpen(true)

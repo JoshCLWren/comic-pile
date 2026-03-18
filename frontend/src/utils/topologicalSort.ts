@@ -3,12 +3,9 @@ import type { Thread, FlowchartDependency } from '../types'
 export function getTopologicalPath(
   threads: Thread[],
   dependencies: FlowchartDependency[],
-  _startThreadId?: number
 ): Thread[] {
-  // Precompute thread lookup for O(1) access
   const threadById = new Map<number, Thread>(threads.map((t) => [t.id, t]))
   
-  // Build adjacency list with Set for deduplication
   const adj = new Map<number, Set<number>>()
   const inDegree = new Map<number, number>()
   
@@ -17,26 +14,26 @@ export function getTopologicalPath(
     inDegree.set(t.id, 0)
   })
 
-  // We only care about thread-level relationships for the high-level timeline, 
-  // or we can aggregate issue-level ones.
   dependencies.forEach(dep => {
-    // Map issue-level dependencies to thread-level
     let sourceId = dep.source_id
     let targetId = dep.target_id
     
-    // If either ID is negative (issue node), map it to its owning thread
+    // If either ID is negative (issue node), use parent thread ID from the dependency
     if (sourceId < 0) {
-      const sourceThread = threadById.get(Math.abs(sourceId))
-      if (sourceThread) sourceId = sourceThread.id
-      else return // Skip if we can't find the owning thread
+      if (dep.source_parent_thread_id != null) {
+        sourceId = dep.source_parent_thread_id
+      } else {
+        return
+      }
     }
     if (targetId < 0) {
-      const targetThread = threadById.get(Math.abs(targetId))
-      if (targetThread) targetId = targetThread.id
-      else return // Skip if we can't find the owning thread
+      if (dep.target_parent_thread_id != null) {
+        targetId = dep.target_parent_thread_id
+      } else {
+        return
+      }
     }
     
-    // Skip if both map to the same thread (self-loop)
     if (sourceId === targetId) return
     
     if (adj.has(sourceId) && adj.has(targetId)) {
@@ -51,8 +48,6 @@ export function getTopologicalPath(
   // Standard topological sort (Kahn's algorithm)
   const queue: number[] = []
   
-  // If a startThreadId is provided, we might want to just find the path from there, 
-  // but for a general view, we start with all 0 in-degree nodes.
   threads.forEach(t => {
     if (inDegree.get(t.id) === 0) {
       queue.push(t.id)

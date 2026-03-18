@@ -404,7 +404,7 @@ export default function RollPage() {
 
   const dieSize = currentDie || 6
   const filteredThreads = activeThreads.filter(t => !isRatingView || t.id !== (selectedThreadId ? Number(selectedThreadId) : null))
-  const pool = filteredThreads.slice(0, dieSize) || []
+  const pool = filteredThreads.slice(0, dieSize)
   const hasValidRolledResult = Number.isInteger(rolledResult) && rolledResult !== null && rolledResult >= 1 && rolledResult <= currentDie
   const ratingThreadVisualPosition = activeRatingThread
     ? activeThreads.findIndex(t => t.id === activeRatingThread.id) + 1 || activeRatingThread.queue_position : null
@@ -504,7 +504,7 @@ export default function RollPage() {
   }
 
   if (isSessionError || !session) {
-    const errorDetail = getApiErrorDetail(sessionError) || sessionError?.message || 'Failed to load session'
+    const errorDetail = getApiErrorDetail(sessionError)
     const status = getApiErrorStatus(sessionError)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -651,7 +651,6 @@ export default function RollPage() {
               onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
               onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
               unsnoozeIsPending={unsnoozeMutation.isPending}
-              navigate={navigate}
             />
           </div>
         </div>

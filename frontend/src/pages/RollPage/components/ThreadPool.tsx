@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import type { Thread } from '../../../types'
 import type { RatingThread } from '../types'
 
@@ -24,7 +25,6 @@ interface ThreadPoolProps {
   onToggleSnoozed: () => void
   onToggleBlocked: () => void
   unsnoozeIsPending: boolean
-  navigate: (path: string) => void
 }
 
 export function ThreadPool({
@@ -50,8 +50,8 @@ export function ThreadPool({
   onToggleSnoozed,
   onToggleBlocked,
   unsnoozeIsPending,
-  navigate,
 }: ThreadPoolProps) {
+  const navigate = useNavigate()
   return (
     <div className={`px-4 pb-4 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-8'}`}>
       {!isRolling && rolledResult === null && !isRatingView && (
