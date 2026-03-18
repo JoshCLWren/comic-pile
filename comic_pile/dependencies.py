@@ -31,13 +31,17 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
 
     issue_result = await db.execute(
         select(target_thread.c.id)
-        .join(target_issue, target_thread.c.id == target_issue.c.thread_id)
+        .join(
+            target_issue,
+            target_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
         .join(Dependency, Dependency.target_issue_id == target_issue.c.id)
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source, source_issue.c.thread_id == source.c.id)
         .where(target_thread.c.user_id == user_id)
         .where(source.c.user_id == user_id)
         .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
     )
     blocked_by_issues = {row[0] for row in issue_result.all()}
     return blocked_by_threads | blocked_by_issues
@@ -72,7 +76,10 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
             source_issue.c.issue_number,
         )
         .select_from(target_thread)
-        .join(target_issue, target_thread.c.id == target_issue.c.thread_id)
+        .join(
+            target_issue,
+            target_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
         .join(Dependency, Dependency.target_issue_id == target_issue.c.id)
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
@@ -80,6 +87,7 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .where(target_thread.c.user_id == user_id)
         .where(source_thread.c.user_id == user_id)
         .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
     )
     issue_reasons = [
         f"Blocked by issue #{issue_number} in {thread_title} (thread #{thread_id_val})"

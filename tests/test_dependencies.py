@@ -23,8 +23,22 @@ async def test_get_blocked_thread_ids_and_explanations(async_db):
     async_db.add(user)
     await async_db.flush()
 
-    a = Thread(title="A", format="Comic", issues_remaining=1, queue_position=1, status="active", user_id=user.id)
-    b = Thread(title="B", format="Comic", issues_remaining=1, queue_position=2, status="active", user_id=user.id)
+    a = Thread(
+        title="A",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    b = Thread(
+        title="B",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
     async_db.add_all([a, b])
     await async_db.flush()
 
@@ -46,16 +60,39 @@ async def test_circular_dependency_detected(async_db):
     async_db.add(user)
     await async_db.flush()
 
-    a = Thread(title="A", format="Comic", issues_remaining=1, queue_position=1, status="active", user_id=user.id)
-    b = Thread(title="B", format="Comic", issues_remaining=1, queue_position=2, status="active", user_id=user.id)
-    c = Thread(title="C", format="Comic", issues_remaining=1, queue_position=3, status="active", user_id=user.id)
+    a = Thread(
+        title="A",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    b = Thread(
+        title="B",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    c = Thread(
+        title="C",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+    )
     async_db.add_all([a, b, c])
     await async_db.flush()
 
-    async_db.add_all([
-        Dependency(source_thread_id=a.id, target_thread_id=b.id),
-        Dependency(source_thread_id=b.id, target_thread_id=c.id),
-    ])
+    async_db.add_all(
+        [
+            Dependency(source_thread_id=a.id, target_thread_id=b.id),
+            Dependency(source_thread_id=b.id, target_thread_id=c.id),
+        ]
+    )
     await async_db.commit()
 
     assert await detect_circular_dependency(c.id, a.id, "thread", async_db) is True
@@ -69,9 +106,30 @@ async def test_roll_pool_excludes_blocked_threads(async_db):
     async_db.add(user)
     await async_db.flush()
 
-    a = Thread(title="A", format="Comic", issues_remaining=1, queue_position=1, status="active", user_id=user.id)
-    b = Thread(title="B", format="Comic", issues_remaining=1, queue_position=2, status="active", user_id=user.id)
-    c = Thread(title="C", format="Comic", issues_remaining=1, queue_position=3, status="active", user_id=user.id)
+    a = Thread(
+        title="A",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    b = Thread(
+        title="B",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    c = Thread(
+        title="C",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+    )
     async_db.add_all([a, b, c])
     await async_db.flush()
 
@@ -107,19 +165,49 @@ async def test_circular_dependency_handles_revisited_nodes(async_db):
     async_db.add(user)
     await async_db.flush()
 
-    t1 = Thread(title="T1", format="Comic", issues_remaining=1, queue_position=1, status="active", user_id=user.id)
-    t2 = Thread(title="T2", format="Comic", issues_remaining=1, queue_position=2, status="active", user_id=user.id)
-    t3 = Thread(title="T3", format="Comic", issues_remaining=1, queue_position=3, status="active", user_id=user.id)
-    t4 = Thread(title="T4", format="Comic", issues_remaining=1, queue_position=4, status="active", user_id=user.id)
+    t1 = Thread(
+        title="T1",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    t2 = Thread(
+        title="T2",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    t3 = Thread(
+        title="T3",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+    )
+    t4 = Thread(
+        title="T4",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=4,
+        status="active",
+        user_id=user.id,
+    )
     async_db.add_all([t1, t2, t3, t4])
     await async_db.flush()
 
-    async_db.add_all([
-        Dependency(source_thread_id=t1.id, target_thread_id=t2.id),
-        Dependency(source_thread_id=t1.id, target_thread_id=t3.id),
-        Dependency(source_thread_id=t2.id, target_thread_id=t4.id),
-        Dependency(source_thread_id=t3.id, target_thread_id=t4.id),
-    ])
+    async_db.add_all(
+        [
+            Dependency(source_thread_id=t1.id, target_thread_id=t2.id),
+            Dependency(source_thread_id=t1.id, target_thread_id=t3.id),
+            Dependency(source_thread_id=t2.id, target_thread_id=t4.id),
+            Dependency(source_thread_id=t3.id, target_thread_id=t4.id),
+        ]
+    )
     await async_db.commit()
 
     assert await detect_circular_dependency(999999, t1.id, "thread", async_db) is False
@@ -241,6 +329,90 @@ async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
 
     blocked_after = await get_blocked_thread_ids(user.id, async_db)
     assert target_thread.id not in blocked_after
+
+
+@pytest.mark.asyncio
+async def test_future_issue_dependency_does_not_block_current_reads(async_db):
+    """Thread should not be blocked by dependencies on future unread issues."""
+    user = User(username="future_dep_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    source_thread = Thread(
+        title="Source",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="not_started",
+    )
+    target_thread = Thread(
+        title="Target",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+        reading_progress="not_started",
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue_1 = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    source_issue_2 = Issue(
+        thread_id=source_thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
+    target_issue_1 = Issue(
+        thread_id=target_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue_2 = Issue(
+        thread_id=target_thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
+    async_db.add_all([source_issue_1, source_issue_2, target_issue_1, target_issue_2])
+    await async_db.flush()
+
+    source_thread.next_unread_issue_id = source_issue_1.id
+    target_thread.next_unread_issue_id = target_issue_1.id
+
+    # Add dependency from source issue 1 to target issue 2 (future issue)
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue_1.id,
+            target_issue_id=target_issue_2.id,
+        )
+    )
+    await async_db.commit()
+
+    # Target thread should NOT be blocked since the dependency is on issue 2, not the next unread issue 1
+    blocked = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id not in blocked
+
+    # Now mark issue 1 as read, next unread becomes issue 2
+    target_issue_1.status = "read"
+    target_issue_1.read_at = datetime.now(UTC)
+    target_thread.next_unread_issue_id = target_issue_2.id
+    await async_db.commit()
+
+    # Now target thread SHOULD be blocked since next unread issue 2 has unread prerequisite
+    blocked_after = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id in blocked_after
 
 
 @pytest.mark.asyncio
