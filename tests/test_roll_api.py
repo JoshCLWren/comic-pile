@@ -408,3 +408,13 @@ async def test_roll_respects_collection_filter(
             raise AssertionError(
                 f"Roll {i + 1} selected {data['title']} (DC) when collection_id was set to Marvel (id={marvel_collection.id})"
             )
+
+        await auth_client.post("/api/roll/dismiss-pending")
+        assert response.status_code == 200
+
+        data = response.json()
+
+        if data["thread_id"] in dc_thread_ids:
+            raise AssertionError(
+                f"Roll {i + 1} selected {data['title']} (DC) when collection_id was set to Marvel (id={marvel_collection.id})"
+            )

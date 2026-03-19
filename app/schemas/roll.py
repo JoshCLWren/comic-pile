@@ -1,6 +1,15 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class RollRequest(BaseModel):
+    """Schema for roll request."""
+
+    collection_id: int | None = Field(
+        default=None,
+        description="Optional collection ID to filter the roll pool by",
+    )
 
 
 class RollResponse(BaseModel):

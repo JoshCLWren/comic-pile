@@ -4,7 +4,7 @@ import logging
 import random
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,7 @@ from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
-from app.schemas import OverrideRequest, RollResponse
+from app.schemas import OverrideRequest, RollRequest, RollResponse
 from comic_pile.queue import get_roll_pool
 from comic_pile.session import get_current_die, get_or_create
 
@@ -31,10 +31,12 @@ async def roll_dice(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    roll_request: RollRequest = Body(default_factory=RollRequest),
 ) -> RollResponse:
     """Roll dice to select a thread.
 
     Args:
+        roll_request: The roll request with optional collection_id filter.
         request: FastAPI request object for rate limiting.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
@@ -72,7 +74,7 @@ async def roll_dice(
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
-    threads = await get_roll_pool(user_id, db, snoozed_ids)
+    threads = await get_roll_pool(user_id, db, snoozed_ids, roll_request.collection_id)
     if not threads:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
