@@ -131,7 +131,7 @@ class SessionSettings(BaseSettings):
     def validate_session_gap_hours(cls, v: int) -> int:
         """Ensure session gap hours is within valid range."""
         if not 1 <= v <= 168:
-            return 6
+            raise ValueError(f"SESSION_GAP_HOURS must be between 1 and 168 hours (1 week), got {v}")
         return v
 
     @field_validator("start_die")
@@ -139,7 +139,7 @@ class SessionSettings(BaseSettings):
     def validate_start_die(cls, v: int) -> int:
         """Ensure start die is within valid range."""
         if not 4 <= v <= 20:
-            return 6
+            raise ValueError(f"START_DIE must be between 4 and 20, got {v}")
         return v
 
 
@@ -169,7 +169,7 @@ class RatingSettings(BaseSettings):
     def validate_rating_min(cls, v: float) -> float:
         """Ensure rating min is within valid range."""
         if not 0.0 <= v <= 5.0:
-            return 0.5
+            raise ValueError(f"RATING_MIN must be between 0.0 and 5.0, got {v}")
         return v
 
     @field_validator("rating_max")
@@ -177,7 +177,7 @@ class RatingSettings(BaseSettings):
     def validate_rating_max(cls, v: float) -> float:
         """Ensure rating max is within valid range."""
         if not 0.5 <= v <= 5.0:
-            return 5.0
+            raise ValueError(f"RATING_MAX must be between 0.5 and 5.0, got {v}")
         return v
 
     @field_validator("rating_threshold")
@@ -185,7 +185,7 @@ class RatingSettings(BaseSettings):
     def validate_rating_threshold(cls, v: float) -> float:
         """Ensure rating threshold is within valid range."""
         if not 0.5 <= v <= 5.0:
-            return 4.0
+            raise ValueError(f"RATING_THRESHOLD must be between 0.5 and 5.0, got {v}")
         return v
 
 
