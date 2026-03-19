@@ -1179,18 +1179,14 @@ async def test_get_or_create_returns_existing_within_time_window(
 
 @pytest.mark.asyncio
 async def test_move_to_position_handles_zero(async_db: AsyncSession, sample_data: dict) -> None:
-    """Test that move_to_position handles new_position=0 correctly.
-
-    This covers line 70 where new_position is set to 1 when it's < 1.
-    """
+    """Test that move_to_position raises ValueError for new_position=0."""
     from comic_pile.queue import move_to_position
+    import pytest
 
     thread = sample_data["threads"][0]
 
-    await move_to_position(thread.id, thread.user_id, 0, async_db)
-
-    await async_db.refresh(thread)
-    assert thread.queue_position == 1
+    with pytest.raises(ValueError, match="Position must be at least 1"):
+        await move_to_position(thread.id, thread.user_id, 0, async_db)
 
 
 @pytest.mark.asyncio

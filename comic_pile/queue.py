@@ -117,10 +117,6 @@ async def move_to_position(
     old_position = target_thread.queue_position
     logger.info(f"Current thread position: {old_position}")
 
-    if new_position < 1:
-        logger.warning(f"new_position {new_position} < 1, setting to 1")
-        new_position = 1
-
     # Get all active threads sorted by current position
     result = await db.execute(
         select(Thread)
@@ -134,14 +130,6 @@ async def move_to_position(
     thread_count = len(all_threads)
     logger.info(f"Active thread count: {thread_count}")
 
-    if new_position > thread_count:
-        logger.warning(
-            f"new_position {new_position} > thread_count {thread_count}, capping to thread_count"
-        )
-        new_position = thread_count
-
-    logger.info(f"Final target position: {new_position} (original: {old_position})")
-
     # Find the current sequential position of our target thread
     current_sequential_pos = next(
         (i + 1 for i, thread in enumerate(all_threads) if thread.id == thread_id), 0
@@ -150,6 +138,17 @@ async def move_to_position(
     if current_sequential_pos == 0:
         logger.error(f"Target thread {thread_id} not found in active threads list")
         return
+
+    # Validate position range only if thread is in active list
+    if new_position < 1:
+        raise ValueError(f"Position must be at least 1, got {new_position}")
+
+    if new_position > thread_count:
+        raise ValueError(
+            f"Position {new_position} is out of range. Maximum position is {thread_count}."
+        )
+
+    logger.info(f"Final target position: {new_position} (original: {old_position})")
 
     if current_sequential_pos == new_position:
         logger.info(
