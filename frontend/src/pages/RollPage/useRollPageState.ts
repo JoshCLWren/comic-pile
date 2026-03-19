@@ -9,6 +9,7 @@ export interface RollPageState {
   currentDie: number
   diceState: string
   staleThread: (Thread & { days: number }) | null
+  staleThreadCount: number
   isOverrideOpen: boolean
   overrideThreadId: string
   snoozedExpanded: boolean
@@ -38,6 +39,7 @@ export interface RollPageStateSetters {
   setCurrentDie: (value: number) => void
   setDiceState: (value: string) => void
   setStaleThread: (value: (Thread & { days: number }) | null) => void
+  setStaleThreadCount: (value: number) => void
   setIsOverrideOpen: (value: boolean) => void
   setOverrideThreadId: (value: string) => void
   setSnoozedExpanded: (value: boolean) => void
@@ -64,6 +66,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [currentDie, setCurrentDie] = useState(6)
   const [diceState, setDiceState] = useState('idle')
   const [staleThread, setStaleThread] = useState<(Thread & { days: number }) | null>(null)
+  const [staleThreadCount, setStaleThreadCount] = useState(0)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
@@ -99,6 +102,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setDiceState,
     staleThread,
     setStaleThread,
+    staleThreadCount,
+    setStaleThreadCount,
     isOverrideOpen,
     setIsOverrideOpen,
     overrideThreadId,

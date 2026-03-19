@@ -11,6 +11,7 @@ interface ThreadPoolProps {
   rolledResult: number | null
   selectedThreadId: number | null
   staleThread: (Thread & { days: number }) | null
+  staleThreadCount: number
   snoozedThreads: Array<{ id: number; title: string; format: string }>
   snoozedExpanded: boolean
   blockedExpanded: boolean
@@ -36,6 +37,7 @@ export function ThreadPool({
   rolledResult,
   selectedThreadId,
   staleThread,
+  staleThreadCount,
   snoozedThreads,
   snoozedExpanded,
   blockedExpanded,
@@ -201,7 +203,7 @@ export function ThreadPool({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold text-amber-200/70 uppercase tracking-wider leading-relaxed">
-                You haven't touched <span className="text-amber-400 font-black">{staleThread.title}</span> in{' '}
+                {staleThreadCount} stale thread{staleThreadCount !== 1 ? 's' : ''}: <span className="text-amber-400 font-black">{staleThread.title}</span> neglected for{' '}
                 <span className="text-amber-400 font-black">{staleThread.days}</span> days
               </p>
               <p className="text-[9px] text-amber-300/70 text-center mt-1">
