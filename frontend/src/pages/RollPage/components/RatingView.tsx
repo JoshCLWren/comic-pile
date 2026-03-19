@@ -12,6 +12,7 @@ interface RatingViewProps {
   predictedDie: number
   hasValidRolledResult: boolean
   ratingThreadVisualPosition: number | null
+  poolSize: number
   errorMessage: string
   rateIsPending: boolean
   snoozeIsPending: boolean
@@ -30,6 +31,7 @@ export function RatingView({
   predictedDie,
   hasValidRolledResult,
   ratingThreadVisualPosition,
+  poolSize,
   errorMessage,
   rateIsPending,
   snoozeIsPending,
@@ -109,9 +111,19 @@ export function RatingView({
             />
           </div>
           {hasValidRolledResult && (
-            <p className="mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 text-center">
-              Rolled {rolledResult} on d{currentDie}
-            </p>
+            <div className="mt-6 text-center space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">
+                Rolled {rolledResult} on d{currentDie}
+              </p>
+              {currentDie > poolSize && (
+                <p 
+                  className="text-[9px] font-bold uppercase tracking-wider text-amber-500/80"
+                  data-pool-size-info
+                >
+                  pool size: {poolSize}
+                </p>
+              )}
+            </div>
           )}
         </div>
 
