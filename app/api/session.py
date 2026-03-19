@@ -132,29 +132,33 @@ async def get_session_with_thread_safe(
 
     # When a thread is just completed by rating and no pending thread is set,
     # keep that completed thread visible to the UI for follow-up actions.
-    if latest_event and latest_event.type == "rate" and latest_event.thread_id:
-        rated_thread = await db.get(Thread, latest_event.thread_id)
-        if (
-            rated_thread
-            and rated_thread.user_id == session.user_id
-            and rated_thread.status == "completed"
-        ):
-            issues_remaining = await rated_thread.get_issues_remaining(db)
-            issue_id, issue_number = await _fetch_thread_issue_metadata(rated_thread, db)
-            return session, ActiveThreadInfo(
-                id=rated_thread.id,
-                title=rated_thread.title,
-                format=rated_thread.format,
-                issues_remaining=issues_remaining,
-                queue_position=rated_thread.queue_position,
-                last_rolled_result=last_rolled_result,
-                total_issues=rated_thread.total_issues,
-                reading_progress=rated_thread.reading_progress,
-                issue_id=issue_id,
-                issue_number=issue_number,
-                next_issue_id=issue_id,
-                next_issue_number=issue_number,
-            )
+    # NOTE: This behavior was removed as part of issue #297 to fix UX issue
+    # where completed threads remained in the active slot without clear signal
+    # that the thread was done. Now completed threads are removed from the
+    # active slot and the user must roll for a new thread.
+    # if latest_event and latest_event.type == "rate" and latest_event.thread_id:
+    #     rated_thread = await db.get(Thread, latest_event.thread_id)
+    #     if (
+    #         rated_thread
+    #         and rated_thread.user_id == session.user_id
+    #         and rated_thread.status == "completed"
+    #     ):
+    #         issues_remaining = await rated_thread.get_issues_remaining(db)
+    #         issue_id, issue_number = await _fetch_thread_issue_metadata(rated_thread, db)
+    #         return session, ActiveThreadInfo(
+    #             id=rated_thread.id,
+    #             title=rated_thread.title,
+    #             format=rated_thread.format,
+    #             issues_remaining=issues_remaining,
+    #             queue_position=rated_thread.queue_position,
+    #             last_rolled_result=last_rolled_result,
+    #             total_issues=rated_thread.total_issues,
+    #             reading_progress=rated_thread.reading_progress,
+    #             issue_id=issue_id,
+    #             issue_number=issue_number,
+    #             next_issue_id=issue_id,
+    #             next_issue_number=issue_number,
+    #         )
 
     return session, None
 
