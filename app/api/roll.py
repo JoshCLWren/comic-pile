@@ -229,6 +229,12 @@ async def override_roll(
     snoozed_count = len(snoozed_ids)
     offset = snoozed_count
 
+    if override_thread_id in snoozed_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Thread {override_thread_id} is snoozed. Please unsnooze it first before overriding.",
+        )
+
     event = Event(
         type="roll",
         session_id=current_session_id,
@@ -241,12 +247,6 @@ async def override_roll(
 
     current_session.pending_thread_id = override_thread_id
     current_session.pending_thread_updated_at = datetime.now(UTC)
-
-    if override_thread_id in snoozed_ids:
-        snoozed_ids.remove(override_thread_id)
-        current_session.snoozed_thread_ids = snoozed_ids
-        offset = len(snoozed_ids)
-        snoozed_count = len(snoozed_ids)
 
     await db.commit()
     if clear_cache:
