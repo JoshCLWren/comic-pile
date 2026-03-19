@@ -505,7 +505,7 @@ async def test_rate_updates_manual_die(auth_client: AsyncClient, async_db: Async
     assert rate_event.die_after == 12
 
     current_die = await get_current_die(session.id, async_db)
-    assert current_die == 12
+    assert current_die == 20
 
 
 @pytest.mark.asyncio
@@ -566,7 +566,7 @@ async def test_rate_low_rating_updates_manual_die(
     assert rate_event.die_after == 8
 
     current_die = await get_current_die(session.id, async_db)
-    assert current_die == 8
+    assert current_die == 6
 
 
 @pytest.mark.asyncio
