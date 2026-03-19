@@ -8,31 +8,68 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
-  const fetchData = useCallback(async () => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      const params: ThreadQueryParams = {}
-      if (searchTerm?.trim()) {
-        params.search = searchTerm.trim()
+  useEffect(() => {
+    let cancelled = false
+
+    const fetchData = async () => {
+      setIsPending(true)
+      setIsError(false)
+      try {
+        const params: ThreadQueryParams = {}
+        if (searchTerm?.trim()) {
+          params.search = searchTerm.trim()
+        }
+        if (collectionId !== null) {
+          params.collection_id = collectionId
+        }
+        const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined)
+
+        if (!cancelled) {
+          setData(result)
+        }
+      } catch {
+        if (!cancelled) {
+          setIsError(true)
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPending(false)
+        }
       }
-      if (collectionId !== null) {
-        params.collection_id = collectionId
-      }
-      const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined)
-      setData(result)
-    } catch {
-      setIsError(true)
-    } finally {
-      setIsPending(false)
+    }
+
+    fetchData()
+
+    return () => {
+      cancelled = true
     }
   }, [searchTerm, collectionId])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  const refetch = useCallback(() => {
+    const fetchData = async () => {
+      setIsPending(true)
+      setIsError(false)
+      try {
+        const params: ThreadQueryParams = {}
+        if (searchTerm?.trim()) {
+          params.search = searchTerm.trim()
+        }
+        if (collectionId !== null) {
+          params.collection_id = collectionId
+        }
+        const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined)
+        setData(result)
+      } catch {
+        setIsError(true)
+      } finally {
+        setIsPending(false)
+      }
+    }
 
-  return { data, isPending, isError, refetch: fetchData }
+    fetchData()
+  }, [searchTerm, collectionId])
+
+  return { data, isPending, isError, refetch }
 }
 
 export function useThread(id: number | null | undefined) {
