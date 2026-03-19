@@ -764,5 +764,46 @@ test.describe('Roll Dice Feature', () => {
       expect(sessionAfterData.current_die).toBe(MANUAL_DIE);
     });
 
+    test('issue #280: manual die selection should persist after snoozing', async ({ authenticatedWithThreadsPage, request }) => {
+      const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      await authenticatedWithThreadsPage.goto('/');
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+
+      const MANUAL_DIE = 10;
+
+      const dieButton = authenticatedWithThreadsPage.locator(`button:has-text("d${MANUAL_DIE}")`).first();
+      await dieButton.click();
+
+      const sessionBeforeRoll = await request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const sessionBeforeRollData = await sessionBeforeRoll.json();
+      expect(sessionBeforeRollData.manual_die).toBe(MANUAL_DIE);
+      expect(sessionBeforeRollData.current_die).toBe(MANUAL_DIE);
+
+      await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+      await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const sessionAfterRoll = await request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const sessionAfterRollData = await sessionAfterRoll.json();
+
+      const snoozeButton = authenticatedWithThreadsPage.locator('button:has-text("Snooze")').first();
+      await snoozeButton.click();
+
+      await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+      const sessionAfterSnooze = await request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const sessionAfterSnoozeData = await sessionAfterSnooze.json();
+
+      expect(sessionAfterSnoozeData.manual_die).toBe(MANUAL_DIE);
+      expect(sessionAfterSnoozeData.current_die).toBe(MANUAL_DIE);
+    });
   });
 });
