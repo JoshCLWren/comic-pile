@@ -13,7 +13,7 @@ test.describe('Issue #298 - Button Label on Last Issue', () => {
       title: 'Last Issue Test Thread',
       format: 'issue',
       issues_remaining: 1,
-      total_issues: 5,
+      total_issues: 1,
     });
 
     // Set the thread as pending
