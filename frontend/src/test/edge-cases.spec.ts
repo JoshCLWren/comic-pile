@@ -69,21 +69,23 @@ test.describe('Edge Cases & Error Handling', () => {
   });
 
   test('should handle browser back button', async ({ authenticatedPage }) => {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:9000';
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState("networkidle");
     await authenticatedPage.goBack();
 
-    await expect(authenticatedPage).toHaveURL('http://localhost:9000/');
+    await expect(authenticatedPage).toHaveURL(`${baseUrl}/`);
   });
 
   test('should handle browser forward button', async ({ authenticatedPage }) => {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:9000';
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState("networkidle");
     await authenticatedPage.goBack();
     await authenticatedPage.waitForLoadState("networkidle");
     await authenticatedPage.goForward();
 
-    await expect(authenticatedPage).toHaveURL('http://localhost:9000/queue');
+    await expect(authenticatedPage).toHaveURL(`${baseUrl}/queue`);
   });
 
   test('should handle page refresh during form submission', async ({ authenticatedPage }) => {

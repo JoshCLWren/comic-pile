@@ -168,7 +168,7 @@ export const test = base.extend<TestFixtures>({
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     await use(page);
 
@@ -190,9 +190,7 @@ export const test = base.extend<TestFixtures>({
 
   authenticatedPage: async ({ page, request }, use) => {
     // Clear any existing auth state first for clean test isolation
-    // Navigate to login page first (public route, won't redirect)
-    await page.goto('/login');
-    await page.evaluate(() => localStorage.clear());
+    await page.addInitScript(() => localStorage.clear());
 
     const counter = ++fixtureUserCounter;
     const timestamp = Date.now();
@@ -211,7 +209,8 @@ export const test = base.extend<TestFixtures>({
     }, accessToken);
 
     // Navigate to home page
-    await page.goto('/');
+    // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     // Wait for auth state to stabilize:
     // 1. Wait for "Checking authentication..." to disappear
@@ -266,7 +265,8 @@ export const test = base.extend<TestFixtures>({
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, accessToken);
 
-    await page.goto('/');
+    // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     await use(page);
 

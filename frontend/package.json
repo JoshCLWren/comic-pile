@@ -22,6 +22,8 @@
     "test:e2e:quick": "playwright test",
     "test:e2e:parallel": "npm run build && playwright test",
     "test:e2e:prod-smoke": "playwright test --config=playwright.prod.config.ts",
+    "test:e2e:prod-all": "playwright test --config=playwright.prod-all.config.ts",
+    "test:e2e:prod-all:headed": "playwright test --config=playwright.prod-all.config.ts --headed",
     "test:dice-playground": "playwright test --config=playwright.dice.config.ts",
     "test:dice-playground:update": "playwright test --config=playwright.dice.config.ts --update-snapshots"
   },

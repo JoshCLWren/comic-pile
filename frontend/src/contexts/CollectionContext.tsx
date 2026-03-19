@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode, useRef } from 'react'
 import { collectionsApi } from '../services/api'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 
@@ -37,7 +37,10 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   const [error, setError] = useState<CollectionError | null>(null)
   const retryCountRef = useRef(0)
 
-  const sortedCollections = collections.sort((a, b) => a.position - b.position)
+  const sortedCollections = useMemo(() =>
+    [...collections].sort((a, b) => a.position - b.position),
+    [collections]
+  )
 
   const fetchCollections = useCallback(async () => {
     setIsLoading(true)
@@ -84,6 +87,7 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   }, [])
 
   const setActiveCollectionId = useCallback((id: number | null) => {
+    console.log('[CollectionContext] setActiveCollectionId called:', id)
     setActiveCollectionIdState(id)
     if (id !== null) {
       localStorage.setItem(STORAGE_KEY, id.toString())

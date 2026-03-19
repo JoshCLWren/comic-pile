@@ -160,10 +160,14 @@ async def list_threads(
     Returns:
         List of ThreadResponse objects ordered by queue_position.
     """
+    print(
+        f"[DEBUG] list_threads called: search={search}, collection_id={collection_id}, user={current_user.id}"
+    )
     normalized_search = search.strip() if search is not None else None
     query = select(Thread).where(Thread.user_id == current_user.id)
 
     if collection_id is not None:
+        print(f"[DEBUG] Applying collection filter: {collection_id}")
         query = query.where(Thread.collection_id == collection_id)
 
     if normalized_search:
@@ -171,14 +175,20 @@ async def list_threads(
         query = query.order_by(Thread.queue_position)
         result = await db.execute(query)
         threads = list(result.scalars().all())
+        print(f"[DEBUG] Search path: returning {len(threads)} threads")
         return await _threads_to_responses(threads, db)
     elif get_threads_cached and collection_id is None:
+        print("[DEBUG] Cache path: using cached threads")
         threads = await get_threads_cached(db, current_user.id)
+        return await _threads_to_responses(threads, db)
     else:
         query = query.order_by(Thread.queue_position)
         result = await db.execute(query)
         threads = list(result.scalars().all())
-    return await _threads_to_responses(threads, db)
+        print(f"[DEBUG] Default path: returning {len(threads)} threads")
+        for thread in threads:
+            print(f"[DEBUG]   - {thread.title} (collection_id={thread.collection_id})")
+        return await _threads_to_responses(threads, db)
 
 
 @router.get("/completed", response_class=HTMLResponse)

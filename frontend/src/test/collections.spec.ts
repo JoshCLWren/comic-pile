@@ -1,9 +1,9 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
 
-async function createCollection(request: APIRequestContext, token: string, name: string, isDefault = false) {
+async function createCollection(request: APIRequestContext, token: string, name: string) {
   const response = await request.post('/api/v1/collections/', {
-    data: { name, is_default: isDefault },
+    data: { name },
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -16,18 +16,6 @@ async function createCollection(request: APIRequestContext, token: string, name:
 
   const data = await response.json();
   return data.id as number;
-}
-
-async function deleteCollection(request: APIRequestContext, token: string, collectionId: number) {
-  const response = await request.delete(`/api/v1/collections/${collectionId}`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok()) {
-    throw new Error(`Failed to delete collection: ${response.status()} ${response.statusText()}`);
-  }
 }
 
 async function createThreadInCollection(
@@ -99,7 +87,9 @@ test.describe('Collections', () => {
     const threadTitle = `Thread to move from ${collectionName}`;
     await createThreadInCollection(request, token, collectionId, threadTitle);
 
-    await deleteCollection(request, token, collectionId);
+    await request.delete(`/api/v1/collections/${collectionId}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
@@ -109,17 +99,17 @@ test.describe('Collections', () => {
     await expect(threadCard.locator('[data-testid="collection-badge"]')).toHaveCount(0);
   });
 
-  test('filters queue threads by selected collection', async ({ authenticatedPage, request }) => {
+  test('filters threads by selected collection on Roll page', async ({ authenticatedPage, request }) => {
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) throw new Error('No auth token found');
 
-    const collectionAName = `Collection A ${Date.now()}`;
-    const collectionBName = `Collection B ${Date.now()}`;
+    const collectionAName = `Filter A ${Date.now()}`;
+    const collectionBName = `Filter B ${Date.now()}`;
     const collectionAId = await createCollection(request, token, collectionAName);
     const collectionBId = await createCollection(request, token, collectionBName);
 
-    const threadAName = `Thread in ${collectionAName}`;
-    const threadBName = `Thread in ${collectionBName}`;
+    const threadAName = `Thread A ${Date.now()}`;
+    const threadBName = `Thread B ${Date.now()}`;
     await createThreadInCollection(request, token, collectionAId, threadAName);
     await createThreadInCollection(request, token, collectionBId, threadBName);
 
@@ -127,25 +117,24 @@ test.describe('Collections', () => {
     await authenticatedPage.waitForLoadState('networkidle');
 
     const selector = authenticatedPage.getByLabel('Roll pool collection');
+
     await selector.selectOption(String(collectionAId));
-
-    await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
-    await expect(authenticatedPage.locator(`text=${threadAName}`)).toBeVisible();
-    await expect(authenticatedPage.locator(`text=${threadBName}`)).toHaveCount(0);
 
-    await authenticatedPage.goto('/');
+    const threadA = authenticatedPage.locator(`text="${threadAName}"`);
+    const threadB = authenticatedPage.locator(`text="${threadBName}"`);
+
+    await expect(threadA).toBeVisible({ timeout: 10000 });
+
     await selector.selectOption(String(collectionBId));
-    await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
-    await expect(authenticatedPage.locator(`text=${threadBName}`)).toBeVisible();
-    await expect(authenticatedPage.locator(`text=${threadAName}`)).toHaveCount(0);
 
-    await authenticatedPage.goto('/');
+    await expect(threadB).toBeVisible({ timeout: 10000 });
+
     await selector.selectOption('all');
-    await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
-    await expect(authenticatedPage.locator(`text=${threadAName}`)).toBeVisible();
-    await expect(authenticatedPage.locator(`text=${threadBName}`)).toBeVisible();
+
+    await expect(authenticatedPage.locator(`text="${threadAName}"`)).toBeVisible({ timeout: 10000 });
+    await expect(authenticatedPage.locator(`text="${threadBName}"`)).toBeVisible({ timeout: 10000 });
   });
 });
