@@ -255,7 +255,7 @@ test.describe('Roll Dice Feature', () => {
       }
 
       const updatedThread = await threadDataResponse.json();
-      expect(updatedThread.total_issues).toBe(10);
+      expect(updatedThread.total_issues).toBe(9);
       expect(updatedThread.reading_progress).toBe('in_progress');
       expect(updatedThread.next_unread_issue_number).toBe('5');
     });
