@@ -13,7 +13,7 @@ export function useSession() {
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const { showToast } = useToast()
-  const hasNotifiedRef = useRef(false)
+  const lastNotifiedSessionIdRef = useRef<number | null>(null)
 
   const fetchSession = useCallback(async () => {
     setIsPending(true)
@@ -26,10 +26,11 @@ export function useSession() {
       const storedSessionId = localStorage.getItem(STORAGE_KEY)
       const previousSessionId = storedSessionId ? parseInt(storedSessionId, 10) : null
       
-      if (previousSessionId !== null && currentSessionId !== previousSessionId) {
+      if (previousSessionId !== null && 
+          currentSessionId !== previousSessionId && 
+          currentSessionId !== lastNotifiedSessionIdRef.current) {
         showToast('Session expired. A new session has started.', 'info')
-      } else if (previousSessionId !== null && currentSessionId === previousSessionId) {
-        hasNotifiedRef.current = false
+        lastNotifiedSessionIdRef.current = currentSessionId
       }
       
       localStorage.setItem(STORAGE_KEY, currentSessionId.toString())
