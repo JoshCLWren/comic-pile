@@ -109,7 +109,7 @@ test.describe('Collections', () => {
     await expect(threadCard.locator('[data-testid="collection-badge"]')).toHaveCount(0);
   });
 
-  test.skip('filters queue threads by selected collection - TODO: fix race condition in test', async ({ authenticatedPage, request }) => {
+  test('filters queue threads by selected collection', async ({ authenticatedPage, request }) => {
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) throw new Error('No auth token found');
 
@@ -128,11 +128,12 @@ test.describe('Collections', () => {
 
     const selector = authenticatedPage.getByLabel('Roll pool collection');
     await selector.selectOption(String(collectionAId));
-    await authenticatedPage.waitForTimeout(2000); // Wait for collection state to propagate
+
+    // Wait for the collection state to update before navigating
+    await expect(selector).toHaveValue(String(collectionAId));
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('domcontentloaded');
-    await authenticatedPage.waitForTimeout(2000); // Wait for threads to load with filter
 
     // Wait for thread A to be visible before checking thread B is hidden
     // This ensures the collection filter has been applied
@@ -141,11 +142,9 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/');
     await selector.selectOption(String(collectionBId));
-    await authenticatedPage.waitForTimeout(2000); // Wait for collection state to propagate
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('domcontentloaded');
-    await authenticatedPage.waitForTimeout(2000); // Wait for threads to load with filter
 
     // Wait for thread B to be visible before checking thread A is hidden
     await expect(authenticatedPage.locator(`text=${threadBName}`)).toBeVisible();
