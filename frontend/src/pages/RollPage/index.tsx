@@ -603,6 +603,7 @@ export default function RollPage() {
                 predictedDie={predictedDie}
                 hasValidRolledResult={hasValidRolledResult}
                 ratingThreadVisualPosition={ratingThreadVisualPosition}
+                poolSize={pool.length}
                 errorMessage={errorMessage}
                 rateIsPending={rateMutation.isPending}
                 snoozeIsPending={snoozeMutation.isPending}
