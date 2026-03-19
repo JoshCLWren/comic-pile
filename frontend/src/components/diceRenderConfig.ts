@@ -33,7 +33,7 @@ export const DEFAULT_DICE_RENDER_CONFIG = {
       textOffsetX: -0.07,
       textOffsetY: 0.09,
       triangleUvRadius: 0.49,
-      d10UvPadding: 0.06,
+      d10UvPadding: 0.08,
     },
     12: {
       textOffsetY: 0.03,
