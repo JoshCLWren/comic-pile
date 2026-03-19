@@ -12,7 +12,7 @@ from comic_pile.queue import move_to_back, move_to_front, move_to_position
 async def test_move_to_position_clamps_to_max(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
-    """Moving to position > max_position clamps to max."""
+    """Moving to position > max_position returns HTTP 400 with error message."""
     thread_id = sample_data["threads"][0].id
 
     response = await auth_client.get("/api/threads/")
@@ -23,11 +23,35 @@ async def test_move_to_position_clamps_to_max(
     response = await auth_client.put(
         f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
     )
-    assert response.status_code == 200
+    # Should return HTTP 400, not 200 (no silent clamping)
+    assert response.status_code == 400
+    # Should have an error message about position being out of range
+    assert "detail" in response.json()
+    detail = response.json()["detail"]
+    assert "out of range" in detail.lower() or "maximum position" in detail.lower()
 
-    thread = await async_db.get(Thread, thread_id)
-    assert thread is not None
-    assert thread.queue_position == max_position
+
+@pytest.mark.asyncio
+async def test_move_to_position_returns_400_for_position_beyond_queue(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Moving to position > max_position returns HTTP 400 with error message."""
+    thread_id = sample_data["threads"][0].id
+
+    response = await auth_client.get("/api/threads/")
+    threads = response.json()
+    active_threads = [t for t in threads if t["status"] == "active"]
+    max_position = len(active_threads)
+
+    # Attempt to move to position beyond the queue length
+    response = await auth_client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
+    )
+    # Should return HTTP 400, not 200
+    assert response.status_code == 400
+    # Should have an error message
+    assert "detail" in response.json()
+    assert "position" in str(response.json()["detail"]).lower()
 
 
 @pytest.mark.asyncio
@@ -172,18 +196,13 @@ async def test_move_to_position_thread_not_in_active_list(
 
 @pytest.mark.asyncio
 async def test_move_to_position_clamps_negative_position(
-    async_db: AsyncSession, default_user: User, sample_data: dict, caplog: pytest.LogCaptureFixture
+    async_db: AsyncSession, default_user: User, sample_data: dict
 ) -> None:
-    """move_to_position with new_position < 1 clamps to 1."""
+    """move_to_position with new_position < 1 raises ValueError."""
     thread_id = sample_data["threads"][0].id
 
-    with caplog.at_level("WARNING"):
+    with pytest.raises(ValueError, match="Position must be at least 1"):
         await move_to_position(thread_id, default_user.id, 0, async_db)
-
-    thread = await async_db.get(Thread, thread_id)
-    assert thread is not None
-    assert thread.queue_position == 1
-    assert any("new_position 0 < 1, setting to 1" in record.message for record in caplog.records)
 
 
 @pytest.mark.asyncio

@@ -250,19 +250,25 @@ async def unsnooze_thread(
     snoozed_ids = (
         list(current_session.snoozed_thread_ids) if current_session.snoozed_thread_ids else []
     )
-    if thread_id in snoozed_ids:
-        snoozed_ids.remove(thread_id)
-        current_session.snoozed_thread_ids = snoozed_ids
 
-        # Record unsnooze event
-        event = Event(
-            type="unsnooze",
-            session_id=current_session.id,
-            thread_id=thread_id,
+    if thread_id not in snoozed_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} is not snoozed",
         )
-        db.add(event)
 
-        await db.commit()
+    snoozed_ids.remove(thread_id)
+    current_session.snoozed_thread_ids = snoozed_ids
+
+    # Record unsnooze event
+    event = Event(
+        type="unsnooze",
+        session_id=current_session.id,
+        thread_id=thread_id,
+    )
+    db.add(event)
+
+    await db.commit()
 
     if clear_cache:
         clear_cache()

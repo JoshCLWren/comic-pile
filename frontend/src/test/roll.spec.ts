@@ -717,4 +717,43 @@ test.describe('Roll Dice Feature', () => {
       expect(rollPoolText).not.toContain('Queue Blocked Thread')
     })
   });
+
+  test.describe('Manual Die Selection', () => {
+    test('issue #281: manual die selection should persist after rating', async ({ authenticatedWithThreadsPage, request }) => {
+      const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      await authenticatedWithThreadsPage.goto('/');
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+
+      const MANUAL_DIE = 8;
+
+      const dieButton = authenticatedWithThreadsPage.locator(`button:has-text("d${MANUAL_DIE}")`).first();
+      await dieButton.click();
+
+      const sessionBefore = await request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const sessionBeforeData = await sessionBefore.json();
+      expect(sessionBeforeData.manual_die).toBe(MANUAL_DIE);
+      expect(sessionBeforeData.current_die).toBe(MANUAL_DIE);
+
+      await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+      await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      await authenticatedWithThreadsPage.fill(SELECTORS.rate.ratingInput, '5');
+      await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+
+      await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+
+      const sessionAfter = await request.get('/api/sessions/current/', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const sessionAfterData = await sessionAfter.json();
+
+      expect(sessionAfterData.manual_die).toBe(MANUAL_DIE);
+      expect(sessionAfterData.current_die).toBe(MANUAL_DIE);
+    });
+  });
 });

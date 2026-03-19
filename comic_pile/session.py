@@ -186,6 +186,9 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     session_result = await db.execute(select(Session).where(Session.id == session_id))
     session = session_result.scalar_one_or_none()
 
+    if session and session.manual_die:
+        return session.manual_die
+
     result = await db.execute(
         select(Event)
         .where(Event.session_id == session_id)
@@ -198,8 +201,5 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     if last_rate_event:
         die_after = last_rate_event.die_after
         return die_after if die_after is not None else start_die
-
-    if session and session.manual_die:
-        return session.manual_die
 
     return session.start_die if session else start_die

@@ -78,6 +78,14 @@ async def move_thread_position(
         await move_to_position(thread_id, current_user.id, position_request.new_position, db)
         await db.refresh(thread)
         logger.info(f"Thread {thread_id} refreshed, new position: {thread.queue_position}")
+    except ValueError as e:
+        logger.error(
+            f"Invalid position {position_request.new_position} for thread {thread_id}: {e}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
     except Exception as e:
         logger.error(
             f"Error moving thread {thread_id} to position {position_request.new_position}: {e}"
