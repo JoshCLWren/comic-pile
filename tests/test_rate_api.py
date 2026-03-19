@@ -955,3 +955,45 @@ async def test_finish_session_ends_session_regardless_of_thread_completion(
 
     await async_db.refresh(session)
     assert session.ended_at is not None
+
+
+@pytest.mark.asyncio
+async def test_rate_thread_with_zero_issues_remaining_returns_error(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Rating a thread with 0 issues remaining should return 400 error."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Completed Thread",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0})
+    assert response.status_code == 400
+    assert "no issues remaining" in response.json()["detail"].lower()
