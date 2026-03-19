@@ -373,10 +373,8 @@ async def test_current_session_completed_thread_has_null_next_issue(
 
     data = response.json()
     assert data["id"] == session.id
-    assert data["active_thread"] is not None
-    active_thread = data["active_thread"]
-    assert active_thread["reading_progress"] == "completed"
-    _assert_issue_metadata(active_thread, issue_id=None, issue_number=None)
+    # After issue #297 fix, completed threads are removed from active slot
+    assert data["active_thread"] is None
 
 
 @pytest.mark.asyncio
@@ -563,16 +561,8 @@ async def test_completed_thread_session_metadata(
     assert response.status_code == 200
 
     data = response.json()
-    assert data["active_thread"] is not None
-    active_thread = data["active_thread"]
-    assert active_thread["id"] == thread.id
-    assert active_thread["issues_remaining"] == 0
-    assert active_thread["total_issues"] == 10
-    assert active_thread["reading_progress"] == "completed"
-    assert active_thread["issue_id"] is None
-    assert active_thread["issue_number"] is None
-    assert active_thread["next_issue_id"] is None
-    assert active_thread["next_issue_number"] is None
+    # After issue #297 fix, completed threads are removed from active slot
+    assert data["active_thread"] is None
 
 
 @pytest.mark.asyncio
@@ -881,15 +871,8 @@ async def test_completed_migrated_thread_has_no_next_issue(
     assert response.status_code == 200
 
     data = response.json()
-    assert data["active_thread"] is not None
-    active_thread = data["active_thread"]
-    assert active_thread["id"] == thread.id
-    assert active_thread["total_issues"] == 10
-    assert active_thread["reading_progress"] == "completed"
-    assert active_thread["issue_id"] is None
-    assert active_thread["issue_number"] is None
-    assert active_thread["next_issue_id"] is None
-    assert active_thread["next_issue_number"] is None
+    # After issue #297 fix, completed threads are removed from active slot
+    assert data["active_thread"] is None
 
 
 @pytest.mark.asyncio

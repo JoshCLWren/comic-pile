@@ -12,6 +12,7 @@ interface RatingViewProps {
   predictedDie: number
   hasValidRolledResult: boolean
   ratingThreadVisualPosition: number | null
+  poolSize: number
   errorMessage: string
   rateIsPending: boolean
   snoozeIsPending: boolean
@@ -30,6 +31,7 @@ export function RatingView({
   predictedDie,
   hasValidRolledResult,
   ratingThreadVisualPosition,
+  poolSize,
   errorMessage,
   rateIsPending,
   snoozeIsPending,
@@ -109,9 +111,19 @@ export function RatingView({
             />
           </div>
           {hasValidRolledResult && (
-            <p className="mt-6 text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 text-center">
-              Rolled {rolledResult} on d{currentDie}
-            </p>
+            <div className="mt-6 text-center space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">
+                Rolled {rolledResult} on d{currentDie}
+              </p>
+              {currentDie > poolSize && (
+                <p 
+                  className="text-[9px] font-bold uppercase tracking-wider text-amber-500/80"
+                  data-pool-size-info
+                >
+                  pool size: {poolSize}
+                </p>
+              )}
+            </div>
           )}
         </div>
 
@@ -149,6 +161,14 @@ export function RatingView({
           </p>
         </div>
 
+        {activeRatingThread?.issues_remaining === 1 && (
+          <div className="p-3 rounded-xl bg-amber-600/10 border border-amber-600/20 text-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-500">
+              🎉 This is the last issue!
+            </p>
+          </div>
+        )}
+
         <div className="space-y-3">
           <button
             type="button"
@@ -156,7 +176,7 @@ export function RatingView({
             disabled={rateIsPending}
             className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
           >
-            {rateIsPending ? 'Saving...' : 'Save & Continue'}
+            {rateIsPending ? 'Saving...' : (activeRatingThread?.issues_remaining === 1 ? 'Save & Complete' : 'Save & Continue')}
           </button>
           <button
             type="button"
