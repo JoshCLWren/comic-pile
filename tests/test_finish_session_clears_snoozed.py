@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_finish_session_clears_snoozed_threads(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+async def test_finish_session_clears_snoozed_threads(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
     """Finishing a session clears snoozed_thread_ids from the session."""
     from tests.conftest import get_or_create_user_async
 
@@ -61,7 +63,9 @@ async def test_finish_session_clears_snoozed_threads(auth_client: AsyncClient, a
     assert snooze_response.status_code == 200
     snooze_data = snooze_response.json()
     assert thread1.id in snooze_data["snoozed_thread_ids"]
-    assert snooze_data["manual_die"] == 8
+    # current_die reflects the stepped-up die, manual_die remains None
+    assert snooze_data["current_die"] == 8
+    assert snooze_data["manual_die"] is None
 
     # Roll thread2
     event2 = Event(

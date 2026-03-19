@@ -26,11 +26,15 @@ from app.main import app
 from app.models import Event, Issue, Thread, User
 from app.models import Session as SessionModel
 
-
 load_dotenv()
 
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
+
+# Set TEST_ENVIRONMENT for rate limiter to detect test mode
+# Set this after imports but before test execution
+if not os.getenv("TEST_ENVIRONMENT"):
+    os.environ["TEST_ENVIRONMENT"] = "true"
 
 
 TRUNCATE_TEST_DATA_SQL = text(
@@ -38,6 +42,18 @@ TRUNCATE_TEST_DATA_SQL = text(
     "revoked_tokens, users RESTART IDENTITY CASCADE;"
 )
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
+
+
+@pytest.fixture(autouse=True, scope="session")
+def set_test_environment() -> Iterator[None]:
+    """Set TEST_ENVIRONMENT for all tests to disable rate limiting."""
+    original_value = os.environ.get("TEST_ENVIRONMENT")
+    os.environ["TEST_ENVIRONMENT"] = "true"
+    yield
+    if original_value is None:
+        os.environ.pop("TEST_ENVIRONMENT", None)
+    else:
+        os.environ["TEST_ENVIRONMENT"] = original_value
 
 
 @pytest.fixture(autouse=True)

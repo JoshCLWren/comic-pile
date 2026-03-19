@@ -305,8 +305,6 @@ async def rate_thread(
     else:
         new_die = step_up(current_die)
 
-    current_session.manual_die = new_die
-
     event = Event(
         type="rate",
         session_id=current_session_id,

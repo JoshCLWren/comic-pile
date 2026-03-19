@@ -64,13 +64,13 @@ async def test_both_buttons_available_when_thread_complete(
         session.ended_at is None
     )  # Session should still be active (decoupled from thread completion)
 
-    # Get current session to verify active_thread is still available
-    # even though the thread is completed, the session is still active
+    # Get current session to verify session is still active even though thread completed
+    # NOTE: As of issue #297, completed threads no longer show as active_thread
+    # The user must roll again to get a new thread
     response = await auth_client.get("/api/sessions/current/")
     assert response.status_code == 200
     data = response.json()
-    assert data["active_thread"]["id"] == thread.id
-    assert data["active_thread"]["issues_remaining"] == 0
+    assert data["active_thread"] is None  # Completed thread removed from active slot
     assert data["ended_at"] is None  # Session should still be active
 
 

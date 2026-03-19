@@ -1045,10 +1045,9 @@ async def test_migration_with_zero_issues_remaining(
 
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 10})
 
-    assert response.status_code == 200
-    data = response.json()
-
-    assert data["total_issues"] == 10
+    # Cannot migrate a completed thread with no issues remaining
+    assert response.status_code == 400
+    assert "no issues remaining" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
