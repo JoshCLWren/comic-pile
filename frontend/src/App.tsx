@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import Navigation from './components/Navigation'
 import api, { clearAccessToken, setAccessToken } from './services/api'
 import type { AuthUser } from './types'
+import { ToastProvider } from './contexts/ToastContext'
 import './index.css'
 
 declare global {
@@ -258,9 +259,11 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   )
 }

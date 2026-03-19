@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import axios from 'axios'
 import { sessionApi } from '../services/api'
 import type { SessionCurrent, SessionDetails, SessionSnapshotsResponse, SessionSummary } from '../types'
+import { useToast } from '../contexts/ToastContext'
 
 const EMPTY_PARAMS = Object.freeze({})
+const STORAGE_KEY = 'comic_pile_last_session_id'
 
 export function useSession() {
   const [data, setData] = useState<SessionCurrent | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const { showToast } = useToast()
+  const hasNotifiedRef = useRef(false)
 
   const fetchSession = useCallback(async () => {
     setIsPending(true)
@@ -17,6 +21,17 @@ export function useSession() {
     setError(null)
     try {
       const result = await sessionApi.getCurrent()
+      
+      const currentSessionId = result.id
+      const storedSessionId = localStorage.getItem(STORAGE_KEY)
+      const previousSessionId = storedSessionId ? parseInt(storedSessionId, 10) : null
+      
+      if (!hasNotifiedRef.current && previousSessionId !== null && currentSessionId !== previousSessionId) {
+        showToast('Session expired. A new session has started.', 'info')
+        hasNotifiedRef.current = true
+      }
+      
+      localStorage.setItem(STORAGE_KEY, currentSessionId.toString())
       setData(result)
       return result
     } catch (err: unknown) {
@@ -25,7 +40,7 @@ export function useSession() {
     } finally {
       setIsPending(false)
     }
-  }, [])
+  }, [showToast])
 
   useEffect(() => {
     fetchSession()
