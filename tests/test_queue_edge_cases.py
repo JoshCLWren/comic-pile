@@ -31,6 +31,29 @@ async def test_move_to_position_clamps_to_max(
 
 
 @pytest.mark.asyncio
+async def test_move_to_position_returns_400_for_position_beyond_queue(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """Moving to position > max_position returns HTTP 400 with error message."""
+    thread_id = sample_data["threads"][0].id
+
+    response = await auth_client.get("/api/threads/")
+    threads = response.json()
+    active_threads = [t for t in threads if t["status"] == "active"]
+    max_position = len(active_threads)
+
+    # Attempt to move to position beyond the queue length
+    response = await auth_client.put(
+        f"/api/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
+    )
+    # Should return HTTP 400, not 200
+    assert response.status_code == 400
+    # Should have an error message
+    assert "detail" in response.json()
+    assert "position" in str(response.json()["detail"]).lower()
+
+
+@pytest.mark.asyncio
 async def test_move_to_position_when_no_threads(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
