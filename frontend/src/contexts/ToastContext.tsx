@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 
 type ToastType = 'info' | 'success' | 'warning' | 'error'
 
@@ -20,20 +20,31 @@ const TOAST_DURATION = 5000
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
+  const timeoutIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = Math.random().toString(36).substring(7)
+    const id = `${Date.now()}-${Math.random().toString(36).substring(7)}`
     const newToast: Toast = { id, message, type }
 
     setToasts((prev) => [...prev, newToast])
 
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
+      timeoutIdsRef.current.delete(timeoutId)
     }, TOAST_DURATION)
+    
+    timeoutIdsRef.current.add(timeoutId)
   }, [])
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      timeoutIdsRef.current.forEach((timeoutId) => clearTimeout(timeoutId))
+      timeoutIdsRef.current.clear()
+    }
   }, [])
 
   return (
