@@ -410,12 +410,12 @@ async def test_simplified_migration_endpoint(
 
     data = response.json()
     assert data["id"] == thread.id
-    assert data["total_issues"] == 10
+    assert data["total_issues"] == 9
     assert data["reading_progress"] == "in_progress"
     assert data["next_unread_issue_number"] == "5"
 
     await async_db.refresh(thread)
-    assert thread.total_issues == 10
+    assert thread.total_issues == 9
     assert thread.reading_progress == "in_progress"
     assert thread.next_unread_issue_id is not None
 
@@ -423,12 +423,12 @@ async def test_simplified_migration_endpoint(
         select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
     )
     issues = issues_result.scalars().all()
-    assert len(issues) == 10
+    assert len(issues) == 9
 
     read_issues = [i for i in issues if i.status == "read"]
     unread_issues = [i for i in issues if i.status == "unread"]
     assert len(read_issues) == 4
-    assert len(unread_issues) == 6
+    assert len(unread_issues) == 5
     assert unread_issues[0].issue_number == "5"
 
 
@@ -478,19 +478,19 @@ async def test_rate_with_issue_number_triggers_migration(
 
     data = response.json()
     assert data["id"] == thread.id
-    assert data["total_issues"] == 11
+    assert data["total_issues"] == 10
     assert data["reading_progress"] == "in_progress"
-    assert data["issues_remaining"] == 5
+    assert data["issues_remaining"] == 4
 
     await async_db.refresh(thread)
-    assert thread.total_issues == 11
+    assert thread.total_issues == 10
     assert thread.reading_progress == "in_progress"
 
     issues_result = await async_db.execute(
         select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
     )
     issues = issues_result.scalars().all()
-    assert len(issues) == 11
+    assert len(issues) == 10
 
     read_issues = [i for i in issues if i.status == "read"]
     assert len(read_issues) == 6
@@ -752,7 +752,7 @@ async def test_migration_during_rating_marks_issues_correctly(
     assert response.status_code == 200
 
     data = response.json()
-    assert data["total_issues"] == 13
+    assert data["total_issues"] == 12
     assert data["reading_progress"] == "in_progress"
 
     await async_db.refresh(thread)
@@ -762,13 +762,13 @@ async def test_migration_during_rating_marks_issues_correctly(
     )
     issues = issues_result.scalars().all()
 
-    assert len(issues) == 13
+    assert len(issues) == 12
 
     read_issues = [i for i in issues if i.status == "read"]
     unread_issues = [i for i in issues if i.status == "unread"]
 
     assert len(read_issues) == 8
-    assert len(unread_issues) == 5
+    assert len(unread_issues) == 4
 
     assert read_issues[0].issue_number == "1"
     assert read_issues[-1].issue_number == "8"
@@ -805,7 +805,7 @@ async def test_migration_with_issue_number_1_starts_from_beginning(
     assert response.status_code == 200
 
     data = response.json()
-    assert data["total_issues"] == 11
+    assert data["total_issues"] == 10
     assert data["reading_progress"] == "in_progress"
     assert data["next_unread_issue_number"] == "1"
 
@@ -816,13 +816,13 @@ async def test_migration_with_issue_number_1_starts_from_beginning(
     )
     issues = issues_result.scalars().all()
 
-    assert len(issues) == 11
+    assert len(issues) == 10
 
     read_issues = [i for i in issues if i.status == "read"]
     unread_issues = [i for i in issues if i.status == "unread"]
 
     assert len(read_issues) == 0
-    assert len(unread_issues) == 11
+    assert len(unread_issues) == 10
     assert unread_issues[0].issue_number == "1"
 
 
@@ -1002,7 +1002,7 @@ async def test_migration_with_issue_number_1_starts_fresh(
     assert response.status_code == 200
     data = response.json()
 
-    assert data["total_issues"] == 6
+    assert data["total_issues"] == 5
     assert data["next_unread_issue_number"] == "2"
 
     issue_result = await async_db.execute(
@@ -1137,3 +1137,70 @@ async def test_migration_already_migrated_thread_skips_migration(
     if response.status_code == 200:
         data = response.json()
         assert data["total_issues"] == 10
+
+
+@pytest.mark.asyncio
+async def test_simple_migration_creates_correct_issues(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """MigrateToIssuesSimple must not create a phantom extra issue.
+
+    Regression test for the off-by-one bug in thread.py:833:
+        total_issues = thread.issues_remaining + issue_number
+    should be:
+        total_issues = thread.issues_remaining + issue_number - 1
+
+    Scenario: thread has 5 issues remaining, user just read issue #1.
+    Correct total = 5 + 1 - 1 = 5, so migration creates 5 unread issues.
+    Buggy code produces 6, leaving a phantom issue that blocks completion.
+    """
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Simple Migration Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=None,
+        next_unread_issue_id=None,
+        reading_progress=None,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    response = await auth_client.post(
+        f"/api/threads/{thread.id}:migrateToIssuesSimple", json={"issue_number": 1}
+    )
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["total_issues"] == 5, (
+        "total_issues should be issues_remaining + issue_number - 1 = 5, "
+        f"got {data['total_issues']} (off-by-one bug produces 6)"
+    )
+    assert data["reading_progress"] == "in_progress"
+    assert data["next_unread_issue_number"] == "1"
+
+    await async_db.refresh(thread)
+
+    issues_result = await async_db.execute(
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+    )
+    issues = issues_result.scalars().all()
+
+    assert len(issues) == 5, (
+        f"Expected 5 issues, got {len(issues)} — phantom issue created by off-by-one bug"
+    )
+
+    unread_issues = [i for i in issues if i.status == "unread"]
+    read_issues = [i for i in issues if i.status == "read"]
+
+    assert len(unread_issues) == 5
+    assert len(read_issues) == 0
+    assert unread_issues[0].issue_number == "1"
+    assert unread_issues[-1].issue_number == "5"
