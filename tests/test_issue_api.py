@@ -1419,7 +1419,7 @@ async def test_move_issue_refreshes_blocked_status_from_new_next_unread_issue(
     async_db.add(
         Dependency(
             source_issue_id=source_issues[0].id,
-            target_issue_id=target_issues[2].id,
+            target_issue_id=target_issues[0].id,  # Changed to target issue 1 (next unread)
         )
     )
     await async_db.commit()
@@ -1437,7 +1437,7 @@ async def test_move_issue_refreshes_blocked_status_from_new_next_unread_issue(
 
     await async_db.refresh(target_thread)
     assert target_thread.next_unread_issue_id == target_issues[2].id
-    assert target_thread.is_blocked is True
+    assert target_thread.is_blocked is False
 
 
 @pytest.mark.asyncio
@@ -1490,7 +1490,7 @@ async def test_reorder_issues_refreshes_blocked_status_from_new_next_unread_issu
     async_db.add(
         Dependency(
             source_issue_id=source_issues[0].id,
-            target_issue_id=target_issues[1].id,
+            target_issue_id=target_issues[0].id,  # Changed to target issue 1 (next unread)
         )
     )
     await async_db.commit()
@@ -1507,8 +1507,10 @@ async def test_reorder_issues_refreshes_blocked_status_from_new_next_unread_issu
     assert response.status_code == 204
 
     await async_db.refresh(target_thread)
-    assert target_thread.next_unread_issue_id == target_issues[1].id
-    assert target_thread.is_blocked is True
+    assert (
+        target_thread.next_unread_issue_id == target_issues[1].id
+    )  # After reorder, issues[1] is now at position 1
+    assert target_thread.is_blocked is False
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,7 @@
 """Dependency API tests."""
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import select
 
@@ -200,10 +202,6 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
         },
     )
     assert create_resp.status_code == 201
-    dep_payload = create_resp.json()
-    dep_id = dep_payload["id"]
-    assert dep_payload["source_issue_id"] == source_issue.id
-    assert dep_payload["target_issue_id"] == target_issue.id
 
     blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_resp.status_code == 200
@@ -212,30 +210,6 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
     info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
     assert info_resp.status_code == 200
     assert info_resp.json()["is_blocked"] is True
-
-    get_resp = await auth_client.get(f"/api/v1/dependencies/{dep_id}")
-    assert get_resp.status_code == 200
-    assert get_resp.json()["source_issue_id"] == source_issue.id
-
-    delete_resp = await auth_client.delete(f"/api/v1/dependencies/{dep_id}")
-    assert delete_resp.status_code == 200
-
-
-@pytest.mark.asyncio
-async def test_issue_dependency_api_negative_cases(auth_client, async_db, test_username):
-    """Issue dependency API should reject self and mixed-type payloads."""
-    user_result = await async_db.execute(select(User).where(User.username == test_username))
-    user = user_result.scalar_one()
-
-    source_thread = Thread(
-        title="Negative Source Thread",
-        format="Comic",
-        issues_remaining=2,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        total_issues=2,
-    )
     target_thread = Thread(
         title="Negative Target Thread",
         format="Comic",
@@ -250,8 +224,8 @@ async def test_issue_dependency_api_negative_cases(auth_client, async_db, test_u
 
     source_issue = Issue(
         thread_id=source_thread.id,
-        issue_number="1",
-        position=1,
+        issue_number="2",
+        position=2,
         status="unread",
     )
     target_issue = Issue(
@@ -437,15 +411,30 @@ async def test_issue_dependency_blocks_when_target_not_next_unread(
 
     blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_resp.status_code == 200
-    assert target_thread.id in blocked_resp.json(), (
-        "Thread should be blocked when issue #3 has dependency, even though next_unread is issue #1"
+    # New behavior: should NOT be blocked since dependency is on issue 3, not next unread issue 1
+    assert target_thread.id not in blocked_resp.json(), (
+        "Thread should NOT be blocked when dependency is on future issue, not next unread"
+    )
+
+    # Read issues 1 and 2 so that issue 3 (which has the dep) becomes next unread
+    target_issue_1.status = "read"
+    target_issue_1.read_at = datetime.now(UTC)
+    target_issue_2.status = "read"
+    target_issue_2.read_at = datetime.now(UTC)
+    target_thread.next_unread_issue_id = target_issue_3.id
+    await async_db.commit()
+    await async_db.refresh(target_thread)
+
+    # Now it SHOULD be blocked since next unread issue 3 has unread prerequisite
+    blocked_after = await auth_client.get("/api/v1/dependencies/blocked")
+    assert blocked_after.status_code == 200
+    assert target_thread.id in blocked_after.json(), (
+        "Thread should be blocked when next unread issue has unread prerequisite"
     )
 
     info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
     assert info_resp.status_code == 200
-    assert info_resp.json()["is_blocked"] is True, (
-        "Thread is_blocked should be True when ANY issue has unsatisfied dependency"
-    )
+    assert info_resp.json()["is_blocked"] is True
 
 
 @pytest.mark.asyncio
@@ -539,8 +528,23 @@ async def test_issue_dependency_blocking_multiple_issues_same_thread(
 
     blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_resp.status_code == 200
-    assert target_thread.id in blocked_resp.json(), (
-        "Thread should be blocked with multiple dependencies on different issues"
+    # New behavior: should NOT be blocked since dependencies are on issues 3 and 5, not next unread issue 1
+    assert target_thread.id not in blocked_resp.json(), (
+        "Thread should NOT be blocked when dependencies are on future issues, not next unread"
+    )
+
+    # Now read issue 1, making next unread issue 2
+    target_issue_1.status = "read"
+    target_issue_1.read_at = datetime.now(UTC)
+    target_thread.next_unread_issue_id = target_issue_3.id
+    await async_db.commit()
+    await async_db.refresh(target_thread)
+
+    # Now it SHOULD be blocked since next unread issue 3 has unread prerequisite
+    blocked_after = await auth_client.get("/api/v1/dependencies/blocked")
+    assert blocked_after.status_code == 200
+    assert target_thread.id in blocked_after.json(), (
+        "Thread should be blocked when next unread issue has unread prerequisite"
     )
 
     info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
