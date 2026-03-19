@@ -33,12 +33,12 @@ DECLARE
     v_event_count INT;
     v_issue_count INT;
 BEGIN
-    SELECT COUNT(*) INTO v_user_count FROM users WHERE username LIKE 'prod_smoke%';
-    SELECT COUNT(*) INTO v_thread_count FROM threads WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%');
-    SELECT COUNT(*) INTO v_session_count FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%');
-    SELECT COUNT(*) INTO v_snapshot_count FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
-    SELECT COUNT(*) INTO v_event_count FROM events WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
-    SELECT COUNT(*) INTO v_issue_count FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
+    SELECT COUNT(*) INTO v_user_count FROM users WHERE is_admin = false;
+    SELECT COUNT(*) INTO v_thread_count FROM threads WHERE user_id IN (SELECT id FROM users WHERE is_admin = false);
+    SELECT COUNT(*) INTO v_session_count FROM sessions WHERE user_id IN (SELECT id FROM users WHERE is_admin = false);
+    SELECT COUNT(*) INTO v_snapshot_count FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE is_admin = false));
+    SELECT COUNT(*) INTO v_event_count FROM events WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE is_admin = false));
+    SELECT COUNT(*) INTO v_issue_count FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE is_admin = false));
 
     RAISE NOTICE 'Users to delete: %', v_user_count;
     RAISE NOTICE 'Threads to delete: %', v_thread_count;
@@ -54,7 +54,7 @@ END $$;
 
 SELECT id, username, email, created_at
 FROM users
-WHERE username LIKE 'prod_smoke%'
+WHERE is_admin = false
 ORDER BY created_at DESC
 LIMIT 10;
 
@@ -84,7 +84,7 @@ BEGIN
     DELETE FROM snapshots
     WHERE session_id IN (
         SELECT id FROM sessions WHERE user_id IN (
-            SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+            SELECT id FROM users WHERE is_admin = false
         )
     );
     GET DIAGNOSTICS v_snapshot_count = ROW_COUNT;
@@ -100,7 +100,7 @@ BEGIN
     DELETE FROM events
     WHERE session_id IN (
         SELECT id FROM sessions WHERE user_id IN (
-            SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+            SELECT id FROM users WHERE is_admin = false
         )
     );
     GET DIAGNOSTICS v_event_count = ROW_COUNT;
@@ -115,12 +115,26 @@ DECLARE
 BEGIN
     DELETE FROM sessions
     WHERE user_id IN (
-        SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+        SELECT id FROM users WHERE is_admin = false
     );
     GET DIAGNOSTICS v_session_count = ROW_COUNT;
     RAISE NOTICE 'Deleted % sessions', v_session_count;
 END $$;
-
+-- Delete events tied to threads (not just sessions)
+\echo 'Deleting thread-linked events...'
+DO $$
+DECLARE
+    v_event_count INT;
+BEGIN
+    DELETE FROM events
+    WHERE thread_id IN (
+        SELECT id FROM threads WHERE user_id IN (
+            SELECT id FROM users WHERE is_admin = false
+        )
+    );
+    GET DIAGNOSTICS v_event_count = ROW_COUNT;
+    RAISE NOTICE 'Deleted % thread-linked events', v_event_count;
+END $$;
 -- Delete threads (issues will cascade due to foreign key)
 \echo 'Deleting threads...'
 DO $$
@@ -129,7 +143,7 @@ DECLARE
 BEGIN
     DELETE FROM threads
     WHERE user_id IN (
-        SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+        SELECT id FROM users WHERE is_admin = false
     );
     GET DIAGNOSTICS v_thread_count = ROW_COUNT;
     RAISE NOTICE 'Deleted % threads', v_thread_count;
@@ -142,7 +156,7 @@ DECLARE
     v_user_count INT;
 BEGIN
     DELETE FROM users
-    WHERE username LIKE 'prod_smoke%';
+    WHERE is_admin = false;
     GET DIAGNOSTICS v_user_count = ROW_COUNT;
     RAISE NOTICE 'Deleted % users', v_user_count;
 END $$;
@@ -164,11 +178,11 @@ DECLARE
     v_remaining_snapshots INT;
     v_remaining_events INT;
 BEGIN
-    SELECT COUNT(*) INTO v_remaining_users FROM users WHERE username LIKE 'prod_smoke%';
-    SELECT COUNT(*) INTO v_remaining_threads FROM threads WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%');
-    SELECT COUNT(*) INTO v_remaining_sessions FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%');
-    SELECT COUNT(*) INTO v_remaining_snapshots FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
-    SELECT COUNT(*) INTO v_remaining_events FROM events WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
+    SELECT COUNT(*) INTO v_remaining_users FROM users WHERE is_admin = false;
+    SELECT COUNT(*) INTO v_remaining_threads FROM threads WHERE user_id IN (SELECT id FROM users WHERE is_admin = false);
+    SELECT COUNT(*) INTO v_remaining_sessions FROM sessions WHERE user_id IN (SELECT id FROM users WHERE is_admin = false);
+    SELECT COUNT(*) INTO v_remaining_snapshots FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE is_admin = false));
+    SELECT COUNT(*) INTO v_remaining_events FROM events WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE is_admin = false));
 
     IF v_remaining_users = 0 AND v_remaining_threads = 0 AND v_remaining_sessions = 0 AND v_remaining_snapshots = 0 AND v_remaining_events = 0 THEN
         RAISE NOTICE '✅ SUCCESS: All prod_smoke test data cleaned up successfully!';
