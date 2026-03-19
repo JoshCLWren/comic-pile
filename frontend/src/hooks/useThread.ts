@@ -22,7 +22,6 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
         if (collectionId !== null) {
           params.collection_id = collectionId
         }
-        console.log('[useThreads] Fetching threads with params:', params)
         const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined)
 
         if (!cancelled) {
