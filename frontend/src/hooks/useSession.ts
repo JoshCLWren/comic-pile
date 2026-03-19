@@ -26,9 +26,10 @@ export function useSession() {
       const storedSessionId = localStorage.getItem(STORAGE_KEY)
       const previousSessionId = storedSessionId ? parseInt(storedSessionId, 10) : null
       
-      if (!hasNotifiedRef.current && previousSessionId !== null && currentSessionId !== previousSessionId) {
+      if (previousSessionId !== null && currentSessionId !== previousSessionId) {
         showToast('Session expired. A new session has started.', 'info')
-        hasNotifiedRef.current = true
+      } else if (previousSessionId !== null && currentSessionId === previousSessionId) {
+        hasNotifiedRef.current = false
       }
       
       localStorage.setItem(STORAGE_KEY, currentSessionId.toString())
