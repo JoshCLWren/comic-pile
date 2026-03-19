@@ -207,7 +207,7 @@ async def test_unsnooze_multiple_snoozed_threads(
         assert response.status_code == 200
 
     # Verify all three are snoozed
-    check_response = await auth_client.get("/api/session/current")
+    check_response = await auth_client.get("/api/sessions/current/")
     check_data = check_response.json()
     assert len(check_data["snoozed_thread_ids"]) == 3
 
