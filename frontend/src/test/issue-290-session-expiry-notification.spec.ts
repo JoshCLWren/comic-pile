@@ -7,10 +7,7 @@ test.describe('Session Expiry Notification (Issue #290)', () => {
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const mainDieExists = await authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie).count();
-    if (mainDieExists === 0) {
-      test.skip(true, 'No main die found - no threads available');
-      return;
-    }
+    test.skip(mainDieExists === 0, 'No main die found - no threads available');
 
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
 
@@ -35,9 +32,7 @@ test.describe('Session Expiry Notification (Issue #290)', () => {
       },
     });
 
-    if (expireResponse.status() !== 404 && expireResponse.status() !== 405) {
-      expect(expireResponse.ok()).toBeTruthy();
-    }
+    expect(expireResponse.ok()).toBeTruthy();
 
     await authenticatedWithThreadsPage.reload();
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
