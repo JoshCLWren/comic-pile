@@ -830,7 +830,7 @@ async def migrate_thread_to_issues_simple(
             detail="issue_number must be at least 1",
         )
 
-    total_issues = thread.issues_remaining + issue_number
+    total_issues = issue_number + max(thread.issues_remaining - 1, 0)
 
     await thread.migrate_to_issues(issue_number - 1, total_issues, db)
 

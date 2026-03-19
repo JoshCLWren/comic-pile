@@ -216,7 +216,7 @@ async def rate_thread(
                     detail="issue_number must be at least 1",
                 )
 
-            total_issues = thread.issues_remaining + issue_num
+            total_issues = issue_num + max(thread.issues_remaining - 1, 0)
 
             if total_issues > 1000:
                 raise HTTPException(

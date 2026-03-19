@@ -410,12 +410,12 @@ async def test_simplified_migration_endpoint(
 
     data = response.json()
     assert data["id"] == thread.id
-    assert data["total_issues"] == 10
+    assert data["total_issues"] == 9
     assert data["reading_progress"] == "in_progress"
     assert data["next_unread_issue_number"] == "5"
 
     await async_db.refresh(thread)
-    assert thread.total_issues == 10
+    assert thread.total_issues == 9
     assert thread.reading_progress == "in_progress"
     assert thread.next_unread_issue_id is not None
 
@@ -423,12 +423,12 @@ async def test_simplified_migration_endpoint(
         select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
     )
     issues = issues_result.scalars().all()
-    assert len(issues) == 10
+    assert len(issues) == 9
 
     read_issues = [i for i in issues if i.status == "read"]
     unread_issues = [i for i in issues if i.status == "unread"]
     assert len(read_issues) == 4
-    assert len(unread_issues) == 6
+    assert len(unread_issues) == 5
     assert unread_issues[0].issue_number == "5"
 
 
