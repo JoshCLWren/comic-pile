@@ -61,13 +61,7 @@ async def test_snooze_does_not_create_roll_event(
     roll_events_before_snooze = result.scalars().all()
     assert len(roll_events_before_snooze) == 1, "Should have exactly 1 roll event after rolling"
 
-    # Simulate what the frontend does when snoozing from action sheet:
-    # First calls setPending (creates a manual roll event), then calls snooze
-    # This is the bug - it creates a phantom roll event!
-    set_pending_response = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
-    assert set_pending_response.status_code == 200
-
-    # Now snooze the thread
+    # Now snooze the thread (without calling setPending first - that was the bug!)
     snooze_response = await auth_client.post("/api/snooze/")
     assert snooze_response.status_code == 200
 

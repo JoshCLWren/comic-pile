@@ -393,7 +393,6 @@ export default function QueuePage() {
           if (isSnoozed) {
             await unsnoozeMutation.mutate(selectedThread.id)
           } else {
-            await threadsApi.setPending(selectedThread.id)
             await snoozeMutation.mutate()
           }
           await refetchSession()
