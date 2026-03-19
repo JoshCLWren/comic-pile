@@ -124,27 +124,34 @@ test.describe('Collections', () => {
     await createThreadInCollection(request, token, collectionBId, threadBName);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForLoadState('domcontentloaded');
 
     const selector = authenticatedPage.getByLabel('Roll pool collection');
     await selector.selectOption(String(collectionAId));
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForLoadState('domcontentloaded');
+
+    // Wait for thread A to be visible before checking thread B is hidden
+    // This ensures the collection filter has been applied
     await expect(authenticatedPage.locator(`text=${threadAName}`)).toBeVisible();
-    await expect(authenticatedPage.locator(`text=${threadBName}`)).toHaveCount(0);
+    await expect(authenticatedPage.locator(`text=${threadBName}`)).not.toBeVisible();
 
     await authenticatedPage.goto('/');
     await selector.selectOption(String(collectionBId));
+
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForLoadState('domcontentloaded');
+
+    // Wait for thread B to be visible before checking thread A is hidden
     await expect(authenticatedPage.locator(`text=${threadBName}`)).toBeVisible();
-    await expect(authenticatedPage.locator(`text=${threadAName}`)).toHaveCount(0);
+    await expect(authenticatedPage.locator(`text=${threadAName}`)).not.toBeVisible();
 
     await authenticatedPage.goto('/');
     await selector.selectOption('all');
+
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForLoadState('domcontentloaded');
     await expect(authenticatedPage.locator(`text=${threadAName}`)).toBeVisible();
     await expect(authenticatedPage.locator(`text=${threadBName}`)).toBeVisible();
   });

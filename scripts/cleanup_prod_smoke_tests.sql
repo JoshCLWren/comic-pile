@@ -1,0 +1,160 @@
+-- =============================================================================
+-- Production Smoke Test Cleanup Script
+-- =============================================================================
+--
+-- Purpose: Safely remove all test data created by production smoke tests
+-- Usage:   psql $DATABASE_URL -f scripts/cleanup_prod_smoke_tests.sql
+--
+-- Safety features:
+--   - Preview mode shows what will be deleted
+--   - Runs in a transaction (can rollback)
+--   - Counts affected rows before deletion
+--   - Deletes in dependency order
+--
+-- =============================================================================
+
+\echo '=============================================================================='
+\echo 'PRODUCTION SMOKE TEST CLEANUP'
+\echo '=============================================================================='
+\echo ''
+
+-- =============================================================================
+-- STEP 1: PREVIEW - Show what will be deleted
+-- =============================================================================
+\echo '>>> STEP 1: Preview - Counting records that will be deleted...'
+\echo ''
+
+DO $$
+DECLARE
+    v_user_count INT;
+    v_thread_count INT;
+    v_session_count INT;
+    v_snapshot_count INT;
+    v_event_count INT;
+    v_issue_count INT;
+BEGIN
+    SELECT COUNT(*) INTO v_user_count FROM users WHERE username LIKE 'prod_smoke%';
+    SELECT COUNT(*) INTO v_thread_count FROM threads WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%');
+    SELECT COUNT(*) INTO v_session_count FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%');
+    SELECT COUNT(*) INTO v_snapshot_count FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
+    SELECT COUNT(*) INTO v_event_count FROM events WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
+    SELECT COUNT(*) INTO v_issue_count FROM issues WHERE thread_id IN (SELECT id FROM threads WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
+
+    RAISE NOTICE 'Users to delete: %', v_user_count;
+    RAISE NOTICE 'Threads to delete: %', v_thread_count;
+    RAISE NOTICE 'Sessions to delete: %', v_session_count;
+    RAISE NOTICE 'Snapshots to delete: %', v_snapshot_count;
+    RAISE NOTICE 'Events to delete: %', v_event_count;
+    RAISE NOTICE 'Issues to delete (cascade): %', v_issue_count;
+END $$;
+
+\echo ''
+\echo '>>> Sample users (first 10):'
+\echo ''
+
+SELECT id, username, email, created_at
+FROM users
+WHERE username LIKE 'prod_smoke%'
+ORDER BY created_at DESC
+LIMIT 10;
+
+\echo ''
+\echo '=============================================================================='
+\echo 'PRESS Ctrl+C TO ABORT, OR WAIT 5 SECONDS TO CONTINUE...'
+\echo '=============================================================================='
+\echo ''
+
+-- pg_sleep for safety pause
+SELECT pg_sleep(5);
+
+-- =============================================================================
+-- STEP 2: DELETE TEST DATA
+-- =============================================================================
+\echo '>>> STEP 2: Deleting test data...'
+\echo ''
+
+BEGIN;
+
+-- Delete snapshots first (before deleting their sessions)
+\echo 'Deleting snapshots...'
+DELETE FROM snapshots
+WHERE session_id IN (
+    SELECT id FROM sessions WHERE user_id IN (
+        SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+    )
+);
+GET DIAGNOSTICS v_snapshot_count = ROW_COUNT;
+RAISE NOTICE 'Deleted % snapshots', v_snapshot_count;
+
+-- Delete events (before deleting their sessions)
+\echo 'Deleting events...'
+DELETE FROM events
+WHERE session_id IN (
+    SELECT id FROM sessions WHERE user_id IN (
+        SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+    )
+);
+GET DIAGNOSTICS v_event_count = ROW_COUNT;
+RAISE NOTICE 'Deleted % events', v_event_count;
+
+-- Delete sessions
+\echo 'Deleting sessions...'
+DELETE FROM sessions
+WHERE user_id IN (
+    SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+);
+GET DIAGNOSTICS v_session_count = ROW_COUNT;
+RAISE NOTICE 'Deleted % sessions', v_session_count;
+
+-- Delete threads (issues will cascade due to foreign key)
+\echo 'Deleting threads...'
+DELETE FROM threads
+WHERE user_id IN (
+    SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+);
+GET DIAGNOSTICS v_thread_count = ROW_COUNT;
+RAISE NOTICE 'Deleted % threads', v_thread_count;
+
+-- Delete users (revoked_tokens will cascade, collections will cascade)
+\echo 'Deleting users...'
+DELETE FROM users
+WHERE username LIKE 'prod_smoke%';
+GET DIAGNOSTICS v_user_count = ROW_COUNT;
+RAISE NOTICE 'Deleted % users', v_user_count;
+
+COMMIT;
+
+-- =============================================================================
+-- STEP 3: VERIFY DELETION
+-- =============================================================================
+\echo ''
+\echo '>>> STEP 3: Verification - Checking for remaining records...'
+\echo ''
+
+DO $$
+DECLARE
+    v_remaining_users INT;
+    v_remaining_threads INT;
+    v_remaining_sessions INT;
+    v_remaining_snapshots INT;
+    v_remaining_events INT;
+BEGIN
+    SELECT COUNT(*) INTO v_remaining_users FROM users WHERE username LIKE 'prod_smoke%';
+    SELECT COUNT(*) INTO v_remaining_threads FROM threads WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%');
+    SELECT COUNT(*) INTO v_remaining_sessions FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%');
+    SELECT COUNT(*) INTO v_remaining_snapshots FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
+    SELECT COUNT(*) INTO v_remaining_events FROM events WHERE session_id IN (SELECT id FROM sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'prod_smoke%'));
+
+    IF v_remaining_users = 0 AND v_remaining_threads = 0 AND v_remaining_sessions = 0 AND v_remaining_snapshots = 0 AND v_remaining_events = 0 THEN
+        RAISE NOTICE '✅ SUCCESS: All prod_smoke test data cleaned up successfully!';
+    ELSE
+        RAISE NOTICE '⚠ WARNING: Some records remain - Users: %, Threads: %, Sessions: %, Snapshots: %, Events: %',
+            v_remaining_users, v_remaining_threads, v_remaining_sessions, v_remaining_snapshots, v_remaining_events;
+    END IF;
+END $$;
+
+\echo ''
+\echo '=============================================================================='
+\echo 'CLEANUP COMPLETE'
+\echo '=============================================================================='
+\echo ''

@@ -174,11 +174,12 @@ async def list_threads(
         return await _threads_to_responses(threads, db)
     elif get_threads_cached and collection_id is None:
         threads = await get_threads_cached(db, current_user.id)
+        return await _threads_to_responses(threads, db)
     else:
         query = query.order_by(Thread.queue_position)
         result = await db.execute(query)
         threads = list(result.scalars().all())
-    return await _threads_to_responses(threads, db)
+        return await _threads_to_responses(threads, db)
 
 
 @router.get("/completed", response_class=HTMLResponse)

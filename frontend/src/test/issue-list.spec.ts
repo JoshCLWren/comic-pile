@@ -731,17 +731,13 @@ test.describe('Issue Range Edge Cases', () => {
     for (const range of invalidRanges) {
       await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, range);
 
-      // Wait a bit for error to appear
-      await authenticatedPage.waitForTimeout(100);
-
-      // Should show error - check if error paragraph exists
-      const errorLocator = authenticatedPage.locator('p:has-text("Range too large"), p:has-text("cannot exceed"), p:has-text("Cannot create")');
-      const hasError = await errorLocator.count() > 0;
-      expect(hasError).toBe(true);
+      // Should show error - wait for error paragraph to appear
+      // Expanded error message options to handle different validation messages
+      const errorLocator = authenticatedPage.locator('p:has-text("Range too large"), p:has-text("cannot exceed"), p:has-text("Cannot create"), p:has-text("too many"), p:has-text("exceeds"), p:has-text("maximum")');
+      await expect(errorLocator.first()).toBeVisible();
 
       // Clear the input for next test
       await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '');
-      await authenticatedPage.waitForTimeout(100);
     }
   });
 

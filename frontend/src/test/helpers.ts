@@ -30,7 +30,7 @@ export function generateTestUser(): TestUser {
 }
 
 export async function registerUser(page: Page, user: TestUser): Promise<void> {
-  await page.goto('/register');
+  await page.goto('/register', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle');
   await page.fill('input[name="username"]', user.username);
   await page.fill('input[name="email"]', user.email);
@@ -188,7 +188,8 @@ export async function setupAuthenticatedPage(
   await registerUser(page, testUser);
   await loginUser(page, testUser);
 
-  await page.goto('/');
+  // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle');
 
   return testUser;

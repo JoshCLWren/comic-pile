@@ -1,49 +1,84 @@
 import { test, expect } from './fixtures';
-import { SELECTORS, setRangeInput } from './helpers';
+import { SELECTORS, setRangeInput, createThread } from './helpers';
 
 test.describe('Session Timestamp Consistency (Issue #245)', () => {
-  test('should display consistently formatted timestamps on Session Details page', async ({ authenticatedWithThreadsPage }) => {
+  test('should display consistently formatted timestamps on Session Details page', async ({ authenticatedPage }) => {
     // First, create a session with some activity
-    await authenticatedWithThreadsPage.goto('/');
+    await authenticatedPage.goto('/');
 
-    const mainDieExists = await authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie).count();
+    const mainDieExists = await authenticatedPage.locator(SELECTORS.roll.mainDie).count();
+    
+    // If no threads exist, create one
     if (mainDieExists === 0) {
-      test.skip(true, 'No main die found - no threads available');
-      return;
+      await createThread(authenticatedPage, {
+        title: 'Timestamp Test Thread',
+        format: 'issue',
+        issues_remaining: 5,
+      });
+      
+      // Reload to see the new thread
+      await authenticatedPage.reload();
+      await authenticatedPage.waitForLoadState('networkidle');
     }
 
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
+    await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
     // Roll the die to create an event
-    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
+    await authenticatedPage.click(SELECTORS.roll.mainDie);
+    await authenticatedPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
 
     // Rate to create another event
-    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await setRangeInput(authenticatedPage, SELECTORS.rate.ratingInput, '4.0');
+    await authenticatedPage.click(SELECTORS.rate.submitButton);
+    await authenticatedPage.waitForLoadState('networkidle');
 
     // Navigate to history to get a session ID
-    await authenticatedWithThreadsPage.goto('/history');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await authenticatedPage.goto('/history');
+    await authenticatedPage.waitForLoadState('networkidle');
 
     // Find the first session link and navigate to it
-    const sessionLink = authenticatedWithThreadsPage.locator('a[href^="/session/"]').first();
+    const sessionLink = authenticatedPage.locator('a[href^="/session/"]').first();
     const sessionCount = await sessionLink.count();
 
+    // If no sessions exist (shouldn't happen after roll/rate), create activity first
     if (sessionCount === 0) {
-      test.skip(true, 'No sessions found to test');
-      return;
+      await authenticatedPage.goto('/');
+      
+      // Ensure we have a thread
+      const hasDie = await authenticatedPage.locator(SELECTORS.roll.mainDie).count();
+      if (hasDie === 0) {
+        await createThread(authenticatedPage, {
+          title: 'Timestamp Test Thread 2',
+          format: 'issue',
+          issues_remaining: 5,
+        });
+        await authenticatedPage.reload();
+        await authenticatedPage.waitForLoadState('networkidle');
+      }
+      
+      // Wait for die to be visible before clicking
+      await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+      
+      // Create activity
+      await authenticatedPage.click(SELECTORS.roll.mainDie);
+      await authenticatedPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
+      await setRangeInput(authenticatedPage, SELECTORS.rate.ratingInput, '3.0');
+      await authenticatedPage.click(SELECTORS.rate.submitButton);
+      await authenticatedPage.waitForLoadState('networkidle');
+      
+      // Now go back to history
+      await authenticatedPage.goto('/history');
+      await authenticatedPage.waitForLoadState('networkidle');
     }
 
     await sessionLink.click();
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForLoadState('networkidle');
 
     // Wait for Session Details page to load
-    await expect(authenticatedWithThreadsPage.locator('h1:has-text("Session Details")')).toBeVisible();
+    await expect(authenticatedPage.locator('h1:has-text("Session Details")')).toBeVisible();
 
     // Collect all timestamp text from the page
-    const timestampSelector = authenticatedWithThreadsPage.locator(
+    const timestampSelector = authenticatedPage.locator(
       'p:has-text("AM"), p:has-text("PM"), p:has-text("—")'
     );
 
@@ -71,10 +106,10 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
 
     // Extract and compare session start/end times with event and snapshot timestamps
     // to ensure they're using the same timezone semantics
-    const startedAtText = await authenticatedWithThreadsPage
+    const startedAtText = await authenticatedPage
       .locator('p:has-text("Started") + p')
       .textContent();
-    const endedAtText = await authenticatedWithThreadsPage
+    const endedAtText = await authenticatedPage
       .locator('p:has-text("Ended") + p')
       .textContent();
 
@@ -87,7 +122,7 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
     }
 
     // Check snapshot timestamps if any exist
-    const snapshotTimestamps = authenticatedWithThreadsPage.locator(
+    const snapshotTimestamps = authenticatedPage.locator(
       '.glass-card p:has-text("Created")'
     );
     const snapshotCount = await snapshotTimestamps.count();
@@ -100,7 +135,7 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
     }
 
     // Check event timeline timestamps if any exist
-    const eventTimestamps = authenticatedWithThreadsPage.locator(
+    const eventTimestamps = authenticatedPage.locator(
       '.glass-card span:has-text("AM"), .glass-card span:has-text("PM")'
     );
     const eventCount = await eventTimestamps.count();

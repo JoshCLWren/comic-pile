@@ -86,13 +86,14 @@ test.describe('Analytics Dashboard', () => {
   });
 
   test('should be accessible via navigation', async ({ authenticatedPage }) => {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:9000';
     await authenticatedPage.goto('/');
 
     const analyticsLink = authenticatedPage.locator(SELECTORS.navigation.analyticsLink);
     await expect(analyticsLink.first()).toBeVisible({ timeout: 5000 });
 
     await analyticsLink.first().click();
-    await expect(authenticatedPage).toHaveURL('http://localhost:9000/analytics');
+    await expect(authenticatedPage).toHaveURL(`${baseUrl}/analytics`);
   });
 
   test('should handle empty data gracefully', async ({ authenticatedPage }) => {
