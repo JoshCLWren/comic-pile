@@ -264,6 +264,8 @@ async def rate_thread(
                 rated_issue_number = issue.issue_number
                 issues_read = 1
 
+                await db.flush()
+
                 next_result = await db.execute(
                     select(Issue)
                     .where(Issue.thread_id == thread.id)
