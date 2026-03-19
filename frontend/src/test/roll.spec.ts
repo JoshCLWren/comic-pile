@@ -798,4 +798,91 @@ test.describe('Roll Dice Feature', () => {
       expect(sessionAfterSnoozeData.current_die).toBe(MANUAL_DIE);
     });
   });
+
+  test.describe('Issue #279: Die exceeds pool size feedback', () => {
+    test('should show clear feedback when rolled die exceeds eligible pool size', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+      
+      const SMALL_POOL_SIZE = 3;
+      const LARGE_DIE = 20;
+
+      for (let i = 1; i <= SMALL_POOL_SIZE; i++) {
+        const response = await request.post('/api/threads/', {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          data: {
+            title: `Pool Thread ${i}`,
+            format: 'Comics',
+            issues_remaining: 5,
+          },
+        });
+        if (!response.ok()) {
+          throw new Error(`Failed to create thread ${i}: ${response.status()}`);
+        }
+      }
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      const dieButton = authenticatedPage.locator(`button:has-text("d${LARGE_DIE}")`).first();
+      await dieButton.click();
+
+      await authenticatedPage.click(SELECTORS.roll.mainDie);
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const poolSizeFeedback = authenticatedPage.getByText(/pool.*size.*3/i).or(
+        authenticatedPage.getByText(/only.*3.*thread/i)
+      ).or(
+        authenticatedPage.locator('[data-pool-size-info]')
+      );
+
+      await expect(poolSizeFeedback).toBeVisible({ timeout: 5000 });
+    });
+
+    test('should display pool size limitation when die is larger than available threads', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+      
+      const poolSize = 2;
+      const dieSize = 12;
+
+      for (let i = 1; i <= poolSize; i++) {
+        const response = await request.post('/api/threads/', {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          data: {
+            title: `Test Thread ${Date.now()}-${i}`,
+            format: 'Comics',
+            issues_remaining: 3,
+          },
+        });
+        if (!response.ok()) {
+          throw new Error(`Failed to create thread ${i}: ${response.status()}`);
+        }
+      }
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      const dieButton = authenticatedPage.locator(`button:has-text("d${dieSize}")`).first();
+      await dieButton.click();
+
+      await authenticatedPage.click(SELECTORS.roll.mainDie);
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const hasPoolInfo = await authenticatedPage.evaluate(() => {
+        const elements = document.querySelectorAll('*');
+        return Array.from(elements).some(el => {
+          const text = el.textContent || '';
+          return text.toLowerCase().includes('pool') && 
+                 (text.toLowerCase().includes('size') || text.toLowerCase().includes('thread'));
+        });
+      });
+
+      expect(hasPoolInfo).toBe(true);
+    });
+  });
 });
