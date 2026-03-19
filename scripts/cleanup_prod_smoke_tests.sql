@@ -77,50 +77,75 @@ BEGIN;
 
 -- Delete snapshots first (before deleting their sessions)
 \echo 'Deleting snapshots...'
-DELETE FROM snapshots
-WHERE session_id IN (
-    SELECT id FROM sessions WHERE user_id IN (
-        SELECT id FROM users WHERE username LIKE 'prod_smoke%'
-    )
-);
-GET DIAGNOSTICS v_snapshot_count = ROW_COUNT;
-RAISE NOTICE 'Deleted % snapshots', v_snapshot_count;
+DO $$
+DECLARE
+    v_snapshot_count INT;
+BEGIN
+    DELETE FROM snapshots
+    WHERE session_id IN (
+        SELECT id FROM sessions WHERE user_id IN (
+            SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+        )
+    );
+    GET DIAGNOSTICS v_snapshot_count = ROW_COUNT;
+    RAISE NOTICE 'Deleted % snapshots', v_snapshot_count;
+END $$;
 
 -- Delete events (before deleting their sessions)
 \echo 'Deleting events...'
-DELETE FROM events
-WHERE session_id IN (
-    SELECT id FROM sessions WHERE user_id IN (
-        SELECT id FROM users WHERE username LIKE 'prod_smoke%'
-    )
-);
-GET DIAGNOSTICS v_event_count = ROW_COUNT;
-RAISE NOTICE 'Deleted % events', v_event_count;
+DO $$
+DECLARE
+    v_event_count INT;
+BEGIN
+    DELETE FROM events
+    WHERE session_id IN (
+        SELECT id FROM sessions WHERE user_id IN (
+            SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+        )
+    );
+    GET DIAGNOSTICS v_event_count = ROW_COUNT;
+    RAISE NOTICE 'Deleted % events', v_event_count;
+END $$;
 
 -- Delete sessions
 \echo 'Deleting sessions...'
-DELETE FROM sessions
-WHERE user_id IN (
-    SELECT id FROM users WHERE username LIKE 'prod_smoke%'
-);
-GET DIAGNOSTICS v_session_count = ROW_COUNT;
-RAISE NOTICE 'Deleted % sessions', v_session_count;
+DO $$
+DECLARE
+    v_session_count INT;
+BEGIN
+    DELETE FROM sessions
+    WHERE user_id IN (
+        SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+    );
+    GET DIAGNOSTICS v_session_count = ROW_COUNT;
+    RAISE NOTICE 'Deleted % sessions', v_session_count;
+END $$;
 
 -- Delete threads (issues will cascade due to foreign key)
 \echo 'Deleting threads...'
-DELETE FROM threads
-WHERE user_id IN (
-    SELECT id FROM users WHERE username LIKE 'prod_smoke%'
-);
-GET DIAGNOSTICS v_thread_count = ROW_COUNT;
-RAISE NOTICE 'Deleted % threads', v_thread_count;
+DO $$
+DECLARE
+    v_thread_count INT;
+BEGIN
+    DELETE FROM threads
+    WHERE user_id IN (
+        SELECT id FROM users WHERE username LIKE 'prod_smoke%'
+    );
+    GET DIAGNOSTICS v_thread_count = ROW_COUNT;
+    RAISE NOTICE 'Deleted % threads', v_thread_count;
+END $$;
 
 -- Delete users (revoked_tokens will cascade, collections will cascade)
 \echo 'Deleting users...'
-DELETE FROM users
-WHERE username LIKE 'prod_smoke%';
-GET DIAGNOSTICS v_user_count = ROW_COUNT;
-RAISE NOTICE 'Deleted % users', v_user_count;
+DO $$
+DECLARE
+    v_user_count INT;
+BEGIN
+    DELETE FROM users
+    WHERE username LIKE 'prod_smoke%';
+    GET DIAGNOSTICS v_user_count = ROW_COUNT;
+    RAISE NOTICE 'Deleted % users', v_user_count;
+END $$;
 
 COMMIT;
 

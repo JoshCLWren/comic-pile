@@ -165,7 +165,7 @@ node_modules/
 static/react/
 test-results/
 frontend/test-results/
-playwright-report/
+playwright-report*/
 
 # Production database dumps
 prod_dump*.sql

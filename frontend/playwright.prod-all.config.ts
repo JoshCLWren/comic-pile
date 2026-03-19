@@ -16,8 +16,8 @@ export default defineConfig({
     '**/thread-repositioning-fix.spec.ts', // Requires TEST_USERNAME and TEST_PASSWORD env vars
   ],
   fullyParallel: false,
-  retries: 10,
-  workers: process.env.WORKERS ? parseInt(process.env.WORKERS) : 10,
+  retries: 5,
+  workers: process.env.WORKERS ? parseInt(process.env.WORKERS, 10) : 10,
   timeout: 45 * 1000,
   reporter: [['list'], ['html', { open: 'never', outputFolder: '../playwright-report-prod-all' }]],
   use: {
