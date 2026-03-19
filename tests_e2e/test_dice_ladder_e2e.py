@@ -151,7 +151,8 @@ async def test_dice_ladder_snooze_goes_up(
     assert snooze_response.status_code == 200
     snooze_data = snooze_response.json()
 
-    assert snooze_data["manual_die"] == 8
+    assert snooze_data["current_die"] == 8
+    assert snooze_data["manual_die"] is None
 
     result = await async_db.execute(
         select(Event)

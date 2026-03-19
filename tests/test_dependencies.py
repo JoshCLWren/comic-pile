@@ -159,6 +159,12 @@ async def test_circular_dependency_detects_self_reference(async_db):
 
 
 @pytest.mark.asyncio
+async def test_circular_dependency_invalid_dependency_type(async_db):
+    """Invalid dependency type should return False (not circular)."""
+    assert await detect_circular_dependency(1, 2, "invalid_type", async_db) is False
+
+
+@pytest.mark.asyncio
 async def test_circular_dependency_handles_revisited_nodes(async_db):
     """Graph traversal should safely handle revisiting the same node."""
     user = User(username="revisit_user", created_at=datetime.now(UTC))

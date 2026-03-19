@@ -813,3 +813,118 @@ async def test_move_to_position_forward_movement(
     assert thread_b.queue_position == 3
     assert thread_c.queue_position == 4
     assert thread_e.queue_position == 5
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_already_at_target_position(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """move_to_position when thread is already at target position returns early without changes."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_position
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread C",
+            format="Comic",
+            issues_remaining=8,
+            queue_position=3,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    for thread in threads:
+        await async_db.refresh(thread)
+
+    thread_b = threads[1]
+    thread_b_id = thread_b.id
+    original_position = thread_b.queue_position
+
+    assert original_position == 2
+
+    await move_to_position(thread_b_id, default_user.id, 2, async_db)
+
+    await async_db.refresh(thread_b)
+    assert thread_b.queue_position == 2
+
+    thread_a = await async_db.get(Thread, threads[0].id)
+    thread_c = await async_db.get(Thread, threads[2].id)
+    assert thread_a is not None
+    assert thread_c is not None
+    assert thread_a.queue_position == 1
+    assert thread_c.queue_position == 3
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_beyond_maximum_position(
+    async_db: AsyncSession, default_user: User
+) -> None:
+    """move_to_position with position > maximum raises ValueError."""
+    from datetime import UTC, datetime
+    from comic_pile.queue import move_to_position
+
+    now = datetime.now(UTC)
+    threads = [
+        Thread(
+            title="Thread A",
+            format="Comic",
+            issues_remaining=10,
+            queue_position=1,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread B",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=2,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+        Thread(
+            title="Thread C",
+            format="Comic",
+            issues_remaining=8,
+            queue_position=3,
+            status="active",
+            user_id=default_user.id,
+            created_at=now,
+        ),
+    ]
+
+    async_db.add_all(threads)
+    await async_db.commit()
+
+    for thread in threads:
+        await async_db.refresh(thread)
+
+    thread_a = threads[0]
+
+    with pytest.raises(ValueError, match="out of range"):
+        await move_to_position(thread_a.id, default_user.id, 10, async_db)

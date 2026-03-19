@@ -129,6 +129,9 @@ test.describe('Collections', () => {
     const selector = authenticatedPage.getByLabel('Roll pool collection');
     await selector.selectOption(String(collectionAId));
 
+    // Wait for the collection state to update before navigating
+    await expect(selector).toHaveValue(String(collectionAId));
+
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('domcontentloaded');
 
