@@ -7,6 +7,12 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
+
+# Set TEST_ENVIRONMENT before importing app modules
+# This must be done before app.main is imported to disable rate limiting
+if not os.getenv("TEST_ENVIRONMENT"):
+    os.environ["TEST_ENVIRONMENT"] = "true"
+
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import UniqueConstraint, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -30,11 +36,6 @@ load_dotenv()
 
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
-
-# Set TEST_ENVIRONMENT for rate limiter to detect test mode
-# Set this after imports but before test execution
-if not os.getenv("TEST_ENVIRONMENT"):
-    os.environ["TEST_ENVIRONMENT"] = "true"
 
 
 TRUNCATE_TEST_DATA_SQL = text(
