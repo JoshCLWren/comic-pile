@@ -53,7 +53,8 @@ test.describe('Issue #286: Snooze feedback at d20', () => {
 
     // Verify feedback message is shown about being at max pool size
     // The feedback should indicate that snoozing at d20 has no effect
-    const feedbackMessage = page.locator('text=/max|pool|size|already at d20/i');
+    const header = page.locator('header');
+    const feedbackMessage = header.getByText(/pool at max size.*snoozing won't increase/i);
     await expect(feedbackMessage).toBeVisible();
   });
 });
