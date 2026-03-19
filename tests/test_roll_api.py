@@ -80,7 +80,9 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
 
 
 @pytest.mark.asyncio
-async def test_roll_blocked_when_pending_exists(auth_client: AsyncClient, sample_data: dict) -> None:
+async def test_roll_blocked_when_pending_exists(
+    auth_client: AsyncClient, sample_data: dict
+) -> None:
     """POST /roll/ returns 409 when a pending thread exists."""
     _ = sample_data
 
@@ -186,7 +188,9 @@ async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: 
 
 
 @pytest.mark.asyncio
-async def test_set_manual_die(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
+async def test_set_manual_die(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
     """POST /roll/set-die sets manual_die on session."""
     _ = sample_data
     _ = async_db
@@ -201,7 +205,9 @@ async def test_set_manual_die(auth_client: AsyncClient, sample_data: dict, async
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
+async def test_clear_manual_die(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
     """POST /roll/clear-manual-die clears manual_die and returns to auto mode."""
     _ = sample_data
     from app.models import Session as SessionModel
@@ -224,7 +230,9 @@ async def test_clear_manual_die(auth_client: AsyncClient, sample_data: dict, asy
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die_with_no_manual_set(auth_client: AsyncClient, sample_data: dict) -> None:
+async def test_clear_manual_die_with_no_manual_set(
+    auth_client: AsyncClient, sample_data: dict
+) -> None:
     """POST /roll/clear-manual-die works even when manual_die is not set."""
     _ = sample_data
     response = await auth_client.post("/api/roll/clear-manual-die")
@@ -233,7 +241,9 @@ async def test_clear_manual_die_with_no_manual_set(auth_client: AsyncClient, sam
 
 
 @pytest.mark.asyncio
-async def test_clear_manual_die_returns_correct_current_die_regression(auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession) -> None:
+async def test_clear_manual_die_returns_correct_current_die_regression(
+    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
+) -> None:
     """Regression test for bug where clearing manual die returned wrong die value.
 
     When manual mode is disengaged by clicking auto, the endpoint should return
@@ -258,3 +268,59 @@ async def test_clear_manual_die_returns_correct_current_die_regression(auth_clie
 
     assert session_data["manual_die"] is None
     assert response.text == f"d{session_data['current_die']}"
+
+
+@pytest.mark.asyncio
+async def test_override_roll_blocked_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Override roll returns 422 for blocked threads."""
+    from app.models import Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    blocked_thread = Thread(
+        title="Blocked Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        is_blocked=True,
+        user_id=user.id,
+    )
+    async_db.add(blocked_thread)
+    await async_db.commit()
+    await async_db.refresh(blocked_thread)
+
+    response = await auth_client.post("/api/roll/override", json={"thread_id": blocked_thread.id})
+    assert response.status_code == 422
+    assert "blocked" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_override_roll_completed_thread(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Override roll returns 422 for completed threads."""
+    from app.models import Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    completed_thread = Thread(
+        title="Completed Thread",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="completed",
+        is_blocked=False,
+        user_id=user.id,
+    )
+    async_db.add(completed_thread)
+    await async_db.commit()
+    await async_db.refresh(completed_thread)
+
+    response = await auth_client.post("/api/roll/override", json={"thread_id": completed_thread.id})
+    assert response.status_code == 422
+    assert "completed" in response.json()["detail"].lower()

@@ -195,6 +195,18 @@ async def override_roll(
             detail=f"Thread {request.thread_id} not found",
         )
 
+    if override_thread.is_blocked:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Thread {request.thread_id} is blocked and cannot be selected",
+        )
+
+    if override_thread.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Thread {request.thread_id} is {override_thread.status} and cannot be selected",
+        )
+
     current_session = await get_or_create(db, user_id=current_user.id)
     current_session_id = current_session.id
     current_die = await get_current_die(current_session_id, db)
