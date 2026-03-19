@@ -11,7 +11,9 @@ from app.models import Thread
 logger = logging.getLogger(__name__)
 
 
-async def move_to_front(thread_id: int, user_id: int, db: AsyncSession, commit: bool = True) -> None:
+async def move_to_front(
+    thread_id: int, user_id: int, db: AsyncSession, commit: bool = True
+) -> None:
     """Move thread to front of queue.
 
     Args:
@@ -219,9 +221,22 @@ async def move_to_position(
 
 
 async def get_roll_pool(
-    user_id: int, db: AsyncSession, snoozed_ids: list[int] | None = None
+    user_id: int,
+    db: AsyncSession,
+    snoozed_ids: list[int] | None = None,
+    collection_id: int | None = None,
 ) -> list[Thread]:
-    """Get all active threads ordered by position."""
+    """Get all active threads ordered by position.
+
+    Args:
+        user_id: The user ID to filter threads by.
+        db: The database session.
+        snoozed_ids: Optional list of thread IDs to exclude from the pool.
+        collection_id: Optional collection ID to filter threads by.
+
+    Returns:
+        List of active threads ordered by queue position.
+    """
     query = (
         select(Thread)
         .where(Thread.user_id == user_id)
@@ -231,6 +246,9 @@ async def get_roll_pool(
 
     if snoozed_ids:
         query = query.where(Thread.id.not_in(snoozed_ids))
+
+    if collection_id is not None:
+        query = query.where(Thread.collection_id == collection_id)
 
     query = query.where(Thread.is_blocked.is_(False))
     query = query.order_by(Thread.queue_position)

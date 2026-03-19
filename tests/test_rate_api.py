@@ -654,20 +654,27 @@ def test_rating_settings_returns_custom_values(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_rating_settings_validates_range(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test rating settings validate and clamp to valid range."""
-    from app.config import clear_settings_cache, get_rating_settings
+    """Test rating settings validate and raise ValueError for out-of-range values."""
+    from app.config import RatingSettings, clear_settings_cache
 
-    # Values outside range get clamped by validators
+    # Values outside range raise ValueError
     monkeypatch.setenv("RATING_MIN", "10.0")
+    clear_settings_cache()
+    with pytest.raises(ValueError) as exc_info:
+        RatingSettings()
+    assert "RATING_MIN" in str(exc_info.value)
+
     monkeypatch.setenv("RATING_MAX", "15.0")
+    clear_settings_cache()
+    with pytest.raises(ValueError) as exc_info:
+        RatingSettings()
+    assert "RATING_MAX" in str(exc_info.value)
+
     monkeypatch.setenv("RATING_THRESHOLD", "-1.0")
     clear_settings_cache()
-
-    settings = get_rating_settings()
-    # Validators clamp out-of-range values to defaults
-    assert settings.rating_min == 0.5
-    assert settings.rating_max == 5.0
-    assert settings.rating_threshold == 4.0
+    with pytest.raises(ValueError) as exc_info:
+        RatingSettings()
+    assert "RATING_THRESHOLD" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -955,3 +962,45 @@ async def test_finish_session_ends_session_regardless_of_thread_completion(
 
     await async_db.refresh(session)
     assert session.ended_at is not None
+
+
+@pytest.mark.asyncio
+async def test_rate_thread_with_zero_issues_remaining_returns_error(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Rating a thread with 0 issues remaining should return 400 error."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+
+    session = SessionModel(start_die=10, user_id=user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    thread = Thread(
+        title="Completed Thread",
+        format="Comic",
+        issues_remaining=0,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
+
+    event = Event(
+        type="roll",
+        die=10,
+        result=1,
+        selected_thread_id=thread.id,
+        session_id=session.id,
+        thread_id=thread.id,
+    )
+    async_db.add(event)
+    await async_db.commit()
+
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0})
+    assert response.status_code == 400
+    assert "no issues remaining" in response.json()["detail"].lower()
