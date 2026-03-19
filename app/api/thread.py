@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
+
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
@@ -722,7 +724,50 @@ async def move_thread_to_collection(
     await db.commit()
     if clear_cache:
         clear_cache()
+
     return response
+
+
+@router.put("/{thread_id}/test-backdate", response_model=ThreadResponse)
+async def backdate_thread_for_testing(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    days_ago: int = Query(..., ge=1, le=3650, description="Number of days to backdate the thread"),
+) -> ThreadResponse:
+    """Test-only endpoint to backdate a thread's last_activity_at for E2E testing.
+
+    This endpoint is only available when TEST_ENVIRONMENT is set.
+
+    Args:
+        thread_id: The thread ID to backdate.
+        days_ago: Number of days to set last_activity_back (1-3650).
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        ThreadResponse with updated thread details.
+
+    Raises:
+        HTTPException: If not in test environment, thread not found, or thread doesn't belong to user.
+    """
+    if not os.getenv("TEST_ENVIRONMENT"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is only available in test environment",
+        )
+
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    thread.last_activity_at = datetime.now(UTC) - timedelta(days=days_ago)
+    await db.commit()
+
+    return await thread_to_response(thread, db)
 
 
 @router.post("/{thread_id}:migrateToIssues", response_model=ThreadResponse)
