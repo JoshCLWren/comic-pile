@@ -15,7 +15,7 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Overriding to a snoozed thread should remove it from snoozed_thread_ids."""
+    """Overriding to a snoozed thread should be rejected to prevent data loss."""
     from tests.conftest import get_or_create_user_async
 
     monkeypatch.setattr("random.randint", lambda _a, _b: 0)
@@ -54,15 +54,19 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
     assert rolled_thread_id in snooze_data["snoozed_thread_ids"]
 
     # Now override to snoozed thread1
+    # This should fail because we should not be able to override to a snoozed thread
     override_response = await auth_client.post("/api/roll/override", json={"thread_id": thread1.id})
-    assert override_response.status_code == 200
 
-    # Get current session from API to verify snoozed list was updated
+    # The override should be rejected with an error
+    assert override_response.status_code == 400
+    assert "snoozed" in override_response.json()["detail"].lower()
+
+    # Get current session from API to verify thread remains in snoozed list
     session_response = await auth_client.get("/api/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
 
-    # Verify thread1 is no longer in snoozed list
-    assert thread1.id not in session_data["snoozed_thread_ids"], (
-        f"Thread {thread1.id} should be removed from snoozed list, got {session_data['snoozed_thread_ids']}"
+    # Verify thread1 is still in snoozed list (data was NOT lost)
+    assert thread1.id in session_data["snoozed_thread_ids"], (
+        f"Thread {thread1.id} should remain in snoozed list, got {session_data['snoozed_thread_ids']}"
     )

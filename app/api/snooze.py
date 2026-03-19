@@ -181,7 +181,6 @@ async def snooze_thread(
     # Step die UP (wider pool)
     current_die = await get_current_die(current_session_id, db)
     new_die = step_up(current_die)
-    current_session.manual_die = new_die
 
     # Record snooze event
     event = Event(
