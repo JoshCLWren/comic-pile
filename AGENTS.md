@@ -473,3 +473,8 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - Branch from `main`: `git checkout -b phase/X-description`
 - Commit messages: imperative, component-scoped (e.g., "Add thread creation API endpoint")
 - Run `make lint` and `make pytest` before committing
+- **Update `docs/changelog.md`** when deploying changes to production:
+  - Add new dated entry for each deployment
+  - Group user-visible changes by feature area
+  - Describe what changed (not how)
+  - Include both new features and bug fixes

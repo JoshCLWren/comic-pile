@@ -147,3 +147,10 @@ make migrate  # or: alembic upgrade head
 - PR summary should describe user impact and testing performed
 - Attach screenshots when UI is affected
 - Ensure all tests pass and coverage is maintained
+- **Update the changelog** (`docs/changelog.md`) with every release:
+  - Add a new dated entry when deploying to production
+  - Group changes by feature area (Backend, Frontend, Bug Fixes, etc.)
+  - Include user-visible changes, not implementation details
+  - For bug fixes, briefly describe the issue that was resolved
+  - For new features, describe what users can now do
+  - Keep entries concise but informative for end users
