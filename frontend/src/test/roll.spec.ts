@@ -840,13 +840,13 @@ test.describe('Roll Dice Feature', () => {
       await authenticatedPage.click(SELECTORS.roll.mainDie);
       await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
-      const poolSizeFeedback = authenticatedPage.getByText(/pool.*size.*3/i).or(
-        authenticatedPage.getByText(/only.*3.*thread/i)
-      ).or(
-        authenticatedPage.locator('[data-pool-size-info]')
-      );
-
-      await expect(poolSizeFeedback).toBeVisible({ timeout: 5000 });
+      const poolSizeIndicator = authenticatedPage.locator('[data-pool-size-info]');
+      
+      await expect(poolSizeIndicator).toBeVisible({ timeout: 5000 });
+      
+      const poolSizeText = await poolSizeIndicator.textContent();
+      expect(poolSizeText).toBeTruthy();
+      expect(poolSizeText?.toLowerCase()).toContain('pool size');
     });
 
     test('should display pool size limitation when die is larger than available threads', async ({ authenticatedPage, request }) => {
