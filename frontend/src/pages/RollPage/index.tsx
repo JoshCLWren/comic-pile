@@ -43,6 +43,7 @@ export default function RollPage() {
     currentDie, setCurrentDie,
     diceState, setDiceState,
     staleThread, setStaleThread,
+    staleThreadCount, setStaleThreadCount,
     isOverrideOpen, setIsOverrideOpen,
     overrideThreadId, setOverrideThreadId,
     snoozedExpanded, setSnoozedExpanded,
@@ -336,9 +337,15 @@ export default function RollPage() {
       const thread = actionable[0]
       const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
       const diffDays = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
-      setStaleThread(diffDays >= 7 ? { ...thread, days: diffDays } : null)
+      setStaleThread(diffDays >= 8 ? { ...thread, days: diffDays } : null)
+      setStaleThreadCount(actionable.filter(t => {
+        const activity = t.last_activity_at ? new Date(t.last_activity_at) : new Date(t.created_at)
+        const days = Math.floor((Date.now() - activity.getTime()) / (1000 * 60 * 60 * 24))
+        return days >= 8
+      }).length)
     } else {
       setStaleThread(null)
+      setStaleThreadCount(0)
     }
   }, [staleThreads])
 
@@ -637,6 +644,7 @@ export default function RollPage() {
               rolledResult={rolledResult}
               selectedThreadId={selectedThreadId}
               staleThread={staleThread}
+              staleThreadCount={staleThreadCount}
               snoozedThreads={session?.snoozed_threads || []}
               snoozedExpanded={snoozedExpanded}
               blockedExpanded={blockedExpanded}
