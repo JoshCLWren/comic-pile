@@ -61,8 +61,9 @@ async def test_snooze_success(
     data = response.json()
     # Thread added to snoozed_thread_ids
     assert thread.id in data["snoozed_thread_ids"]
-    # Die stepped UP (d6 → d8)
-    assert data["manual_die"] == 8
+    # Die stepped UP (d6 → d8) - reflected in current_die, not manual_die
+    assert data["current_die"] == 8
+    assert data["manual_die"] is None
     # snoozed_threads includes thread info
     snoozed_titles = [t["title"] for t in data["snoozed_threads"]]
     assert "Test Thread" in snoozed_titles

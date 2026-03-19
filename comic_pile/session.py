@@ -181,7 +181,7 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
 
 
 async def get_current_die(session_id: int, db: AsyncSession) -> int:
-    """Get current die size based on manual selection or last rating event."""
+    """Get current die size based on manual selection or last rating/snooze event."""
     start_die = _start_die()
     session_result = await db.execute(select(Session).where(Session.id == session_id))
     session = session_result.scalar_one_or_none()
@@ -192,14 +192,14 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     result = await db.execute(
         select(Event)
         .where(Event.session_id == session_id)
-        .where(Event.type == "rate")
+        .where(Event.type.in_(("rate", "snooze")))
         .where(Event.die_after.is_not(None))
         .order_by(Event.timestamp.desc())
     )
-    last_rate_event = result.scalars().first()
+    last_die_event = result.scalars().first()
 
-    if last_rate_event:
-        die_after = last_rate_event.die_after
+    if last_die_event:
+        die_after = last_die_event.die_after
         return die_after if die_after is not None else start_die
 
     return session.start_die if session else start_die
