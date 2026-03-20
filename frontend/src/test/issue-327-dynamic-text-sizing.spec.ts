@@ -12,7 +12,7 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
       const response = await authenticatedPage.request.post('/api/threads/', {
         data: {
           title,
-          format: 'Comic',
+          format: 'Comics',
           issues_remaining: 5,
         },
       });
@@ -42,7 +42,7 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     const response = await authenticatedPage.request.post('/api/threads/', {
       data: {
         title: 'Black Panther: A Nation Under Our Feet Vol. 1',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 5,
       },
     });
@@ -75,7 +75,7 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     const response = await authenticatedPage.request.post('/api/threads/', {
       data: {
         title: 'Batman',
-        format: 'Comic',
+        format: 'Comics',
         issues_remaining: 1,
       },
     });
