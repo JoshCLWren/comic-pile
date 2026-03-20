@@ -729,6 +729,9 @@ test.describe('Roll Dice Feature', () => {
   test.describe('Manual Die Selection', () => {
     test('issue #281: manual die selection should persist after rating', async ({ authenticatedWithThreadsPage, request }) => {
       const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+      if (!token) {
+        throw new Error('No auth token found');
+      }
 
       await authenticatedWithThreadsPage.goto('/');
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
@@ -766,6 +769,9 @@ test.describe('Roll Dice Feature', () => {
 
     test('issue #280: manual die selection should persist after snoozing', async ({ authenticatedWithThreadsPage, request }) => {
       const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+      if (!token) {
+        throw new Error('No auth token found');
+      }
 
       await authenticatedWithThreadsPage.goto('/');
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
@@ -810,7 +816,10 @@ test.describe('Roll Dice Feature', () => {
   test.describe('Issue #279: Die exceeds pool size feedback', () => {
     test('should show clear feedback when rolled die exceeds eligible pool size', async ({ authenticatedPage, request }) => {
       const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
-      
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
       const SMALL_POOL_SIZE = 3;
       const LARGE_DIE = 20;
 
@@ -851,7 +860,10 @@ test.describe('Roll Dice Feature', () => {
 
     test('should display pool size limitation when die is larger than available threads', async ({ authenticatedPage, request }) => {
       const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
-      
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
       const poolSize = 2;
       const dieSize = 12;
 
@@ -881,16 +893,9 @@ test.describe('Roll Dice Feature', () => {
       await authenticatedPage.click(SELECTORS.roll.mainDie);
       await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
-      const hasPoolInfo = await authenticatedPage.evaluate(() => {
-        const elements = document.querySelectorAll('*');
-        return Array.from(elements).some(el => {
-          const text = el.textContent || '';
-          return text.toLowerCase().includes('pool') && 
-                 (text.toLowerCase().includes('size') || text.toLowerCase().includes('thread'));
-        });
-      });
-
-      expect(hasPoolInfo).toBe(true);
+      const poolSizeIndicator = authenticatedPage.locator('[data-pool-size-info]');
+      await expect(poolSizeIndicator).toBeVisible({ timeout: 5000 });
+      await expect(poolSizeIndicator).toContainText(`pool size: ${poolSize}`);
     });
   });
 });
