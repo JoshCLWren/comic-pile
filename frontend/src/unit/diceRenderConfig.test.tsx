@@ -47,7 +47,7 @@ it('uses committed per-side defaults', () => {
   const d6 = getDiceRenderConfigForSides(6)
 
   expect(d10.uvInset).toBe(0.1)
-  expect(d10.d10UvPadding).toBe(0.06)
+  expect(d10.d10UvPadding).toBe(0.08)
   expect(d6.fontScale).toBe(0.58)
   expect(d6.textOffsetY).toBe(0.04)
 })

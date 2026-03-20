@@ -1,4 +1,4 @@
-export const D10_FACE_NUMBERS = [1, 9, 2, 8, 3, 7, 4, 6, 5, 10]
+export const D10_FACE_NUMBERS = [1, 10, 2, 9, 3, 8, 4, 7, 5, 6]
 
 function computeApexHeight(upperA, lowerA, upperB) {
   const cb = [lowerA[0] - upperA[0], lowerA[1] - upperA[1], lowerA[2] - upperA[2]]
