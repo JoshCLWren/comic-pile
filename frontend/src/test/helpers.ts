@@ -31,7 +31,7 @@ export function generateTestUser(): TestUser {
 
 export async function registerUser(page: Page, user: TestUser): Promise<void> {
   await page.goto('/register', { waitUntil: 'domcontentloaded' });
-  await page.waitForLoadState('networkidle');
+  await page.waitForSelector('input[name="username"]', { state: 'visible', timeout: 10000 });
   await page.fill('input[name="username"]', user.username);
   await page.fill('input[name="email"]', user.email);
   await page.fill('input[name="password"]', user.password);
@@ -190,7 +190,7 @@ export async function setupAuthenticatedPage(
 
   // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.waitForLoadState('networkidle');
+  await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 }).catch(() => {});
 
   return testUser;
 }
