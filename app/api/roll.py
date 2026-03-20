@@ -189,6 +189,7 @@ async def override_roll(
         select(Thread)
         .where(Thread.id == request.thread_id)
         .where(Thread.user_id == current_user.id)
+        .with_for_update()
     )
     override_thread = result.scalar_one_or_none()
     if not override_thread:
