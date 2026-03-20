@@ -29,6 +29,8 @@ async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch: Pytest's monkeypatch fixture for modifying env vars.
     """
     import comic_pile.session as session_mod
+    from pydantic import ValidationError
+
     from app.config import SessionSettings
 
     # Clear cached settings to pick up new env vars
@@ -38,10 +40,10 @@ async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     clear_settings_cache()
     assert session_mod._session_gap_hours() == 12
 
-    # 0 is outside valid range, should raise ValueError
+    # 0 is outside valid range, should raise ValidationError
     monkeypatch.setenv("SESSION_GAP_HOURS", "0")
     clear_settings_cache()
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         SessionSettings()
     assert "SESSION_GAP_HOURS" in str(exc_info.value)
     # Clean up invalid value so subsequent tests work
@@ -52,10 +54,10 @@ async def test_session_env_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     clear_settings_cache()
     assert session_mod._start_die() == 20
 
-    # 3 is outside valid range, should raise ValueError
+    # 3 is outside valid range, should raise ValidationError
     monkeypatch.setenv("START_DIE", "3")
     clear_settings_cache()
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         SessionSettings()
     assert "START_DIE" in str(exc_info.value)
 
