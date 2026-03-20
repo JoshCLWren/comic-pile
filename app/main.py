@@ -36,6 +36,7 @@ from app.api import (
     roll,
     session,
     snooze,
+    test,
     thread,
     undo,
 )
@@ -398,6 +399,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
+    if app_settings.environment != "production":
+        app.include_router(test.router, prefix="/api", tags=["test"])
 
     def _assert_production_frontend_assets() -> None:
         """Ensure required frontend artifacts exist in production.

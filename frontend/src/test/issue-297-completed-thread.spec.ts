@@ -1,6 +1,11 @@
 import { test, expect } from './fixtures';
 import { createThread, setupAuthenticatedPage, getAuthToken } from './helpers';
 
+interface Issue {
+  id: number;
+  status: string;
+}
+
 test.describe('Issue 297: Completed Thread Active Slot', () => {
   test('should remove completed thread from active slot after rating last issue', async ({ page }) => {
     await setupAuthenticatedPage(page);
@@ -59,7 +64,7 @@ test.describe('Issue 297: Completed Thread Active Slot', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const issuesBeforeRate = await issuesBeforeRateResponse.json();
-    console.log('Issues before rate:', JSON.stringify(issuesBeforeRate.issues.filter((i: any) => i.status === 'unread'), null, 2));
+    console.log('Issues before rate:', JSON.stringify(issuesBeforeRate.issues.filter((i: Issue) => i.status === 'unread'), null, 2));
 
     const rateResponse = await page.request.post('/api/rate/', {
       headers: { Authorization: `Bearer ${token}` },
@@ -76,7 +81,7 @@ test.describe('Issue 297: Completed Thread Active Slot', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     const issuesAfterRate = await issuesAfterRateResponse.json();
-    console.log('Issues after rate:', JSON.stringify(issuesAfterRate.issues.filter((i: any) => i.status === 'unread'), null, 2));
+    console.log('Issues after rate:', JSON.stringify(issuesAfterRate.issues.filter((i: Issue) => i.status === 'unread'), null, 2));
 
     const threadAfterRateResponse = await page.request.get(`/api/threads/${thread.id}`, {
       headers: { Authorization: `Bearer ${token}` },

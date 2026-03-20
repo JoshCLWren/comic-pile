@@ -109,7 +109,9 @@ export interface SessionThread {
 }
 
 export interface SessionCurrent {
+  id: number;
   current_die: number;
+  user_id?: number;
   start_die?: number;
   manual_die?: number | null;
   pending_thread_id?: number | null;
