@@ -45,16 +45,16 @@ export function RatingView({
     <div className="p-4 space-y-8 relative z-10">
       <div id="thread-info" role="status" aria-live="polite">
         <div className="space-y-3 text-center">
-          {activeRatingThread?.issue_number ? (
+          {(activeRatingThread?.next_issue_number || activeRatingThread?.issue_number) ? (
             <>
               <h2 className="text-2xl font-black text-stone-200">{activeRatingThread?.title || 'Loading...'}</h2>
               <div className="flex items-center justify-center gap-3 flex-wrap">
                 <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg text-sm font-black uppercase tracking-[0.2em] border border-amber-500/20">
-                  #{activeRatingThread.issue_number}
+                  #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}
                 </span>
                 {activeRatingThread.total_issues && (
                   <span className="text-stone-400 text-xs font-bold">
-                    (#{activeRatingThread.issue_number} of {activeRatingThread.total_issues})
+                    (#{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number} of {activeRatingThread.total_issues})
                   </span>
                 )}
                 <span className="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-amber-600/20">
