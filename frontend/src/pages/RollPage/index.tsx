@@ -156,7 +156,7 @@ export default function RollPage() {
       })
     }
 
-    setRating(4.0)
+    setRating(3.0)
     setErrorMessage('')
     const die = currentDie || 6
     const idx = DICE_LADDER.indexOf(die)
@@ -322,7 +322,7 @@ export default function RollPage() {
       })
     }
     if (shouldInitializeRatingView) {
-      setRating(4.0)
+      setRating(3.0)
       setErrorMessage('')
       const die = currentDie || 6
       const idx = DICE_LADDER.indexOf(die)
