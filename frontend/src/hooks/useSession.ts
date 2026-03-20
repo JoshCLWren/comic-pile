@@ -5,7 +5,7 @@ import type { SessionCurrent, SessionDetails, SessionSnapshotsResponse, SessionS
 import { useToast } from '../contexts/ToastContext'
 
 const EMPTY_PARAMS = Object.freeze({})
-const STORAGE_KEY = 'comic_pile_last_session_id'
+const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id'
 
 export function useSession() {
   const [data, setData] = useState<SessionCurrent | null>(null)
@@ -21,19 +21,21 @@ export function useSession() {
     setError(null)
     try {
       const result = await sessionApi.getCurrent()
-      
+
       const currentSessionId = result.id
-      const storedSessionId = localStorage.getItem(STORAGE_KEY)
+      const currentUserId = result.user_id ?? 'anonymous'
+      const storageKey = `${STORAGE_KEY_PREFIX}_${currentUserId}`
+      const storedSessionId = localStorage.getItem(storageKey)
       const previousSessionId = storedSessionId ? parseInt(storedSessionId, 10) : null
-      
-      if (previousSessionId !== null && 
-          currentSessionId !== previousSessionId && 
+
+      if (previousSessionId !== null &&
+          currentSessionId !== previousSessionId &&
           currentSessionId !== lastNotifiedSessionIdRef.current) {
         showToast('Session expired. A new session has started.', 'info')
         lastNotifiedSessionIdRef.current = currentSessionId
       }
-      
-      localStorage.setItem(STORAGE_KEY, currentSessionId.toString())
+
+      localStorage.setItem(storageKey, currentSessionId.toString())
       setData(result)
       return result
     } catch (err: unknown) {
