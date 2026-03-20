@@ -1,5 +1,6 @@
 """Test API endpoints for E2E testing."""
 
+import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -8,7 +9,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
-from app.config import get_app_settings
 from app.database import get_db
 from app.models import Session as SessionModel
 from app.models import User
@@ -36,9 +36,7 @@ async def expire_current_session(
     Raises:
         HTTPException: If not in test environment or no active session found.
     """
-    app_settings = get_app_settings()
-
-    if app_settings.environment != "test":
+    if os.getenv("TEST_ENVIRONMENT") != "true":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This endpoint is only available in test environment",
