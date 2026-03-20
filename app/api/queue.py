@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +28,7 @@ clear_cache = None
 class PositionRequest(BaseModel):
     """Schema for position update request."""
 
-    new_position: int = Field(..., ge=1)
+    new_position: int
 
 
 @router.put("/threads/{thread_id}/position/", response_model=ThreadResponse)
