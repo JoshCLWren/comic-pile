@@ -92,6 +92,11 @@ async function createThreadsForUser(
   accessToken: string,
   threadCount: number,
 ): Promise<void> {
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+  };
+
   for (let i = 0; i < threadCount; i++) {
     let success = false;
     let attempts = 0;
@@ -99,10 +104,7 @@ async function createThreadsForUser(
 
     while (!success && attempts < maxAttempts) {
       const response = await request.post('/api/threads/', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         data: {
           title: `Test Thread ${i + 1}`,
           format: 'issue',
@@ -120,7 +122,7 @@ async function createThreadsForUser(
         const backoffMs = Math.min(3000 * Math.pow(1.5, attempts - 1) + jitter, 20000);
         await new Promise(resolve => setTimeout(resolve, backoffMs));
       } else {
-        throw new Error(`Failed to create thread ${i + 1}: ${response.status()} ${response.statusText}`);
+        throw new Error(`Failed to create thread ${i + 1}: ${response.status()} ${response.statusText()}`);
       }
     }
 
@@ -130,20 +132,56 @@ async function createThreadsForUser(
   }
 
   let attempts = 0;
+  let threadIds: number[] = [];
   while (attempts < 10) {
     const threadsResponse = await request.get('/api/threads/', {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
+      headers
     });
     if (threadsResponse.ok()) {
       const threads = await threadsResponse.json();
       if (threads.length >= threadCount) {
-        return;
+        threadIds = threads.slice(0, threadCount).map((t: { id: number }) => t.id);
+        break;
       }
     }
     await new Promise(resolve => setTimeout(resolve, 500));
     attempts++;
   }
-  throw new Error('Threads not visible after creation');
+
+  if (threadIds.length === 0) {
+    throw new Error('Threads not visible after creation');
+  }
+
+  for (const threadId of threadIds) {
+    let success = false;
+    let issueAttempts = 0;
+    const maxIssueAttempts = 7;
+
+    while (!success && issueAttempts < maxIssueAttempts) {
+      const issueResponse = await request.post(`/api/v1/threads/${threadId}/issues`, {
+        headers,
+        data: {
+          issue_range: '1-10',
+        },
+        timeout: 10000,
+      });
+
+      if (issueResponse.ok()) {
+        success = true;
+      } else if (issueResponse.status() === 429) {
+        issueAttempts++;
+        const jitter = Math.random() * 1000;
+        const backoffMs = Math.min(3000 * Math.pow(1.5, issueAttempts - 1) + jitter, 20000);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      } else {
+        throw new Error(`Failed to create issues for thread ${threadId}: ${issueResponse.status()} ${issueResponse.statusText()}`);
+      }
+    }
+
+    if (!success) {
+      throw new Error(`Failed to create issues for thread ${threadId} after ${maxIssueAttempts} attempts`);
+    }
+  }
 }
 
 export const test = base.extend<TestFixtures>({
