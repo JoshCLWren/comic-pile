@@ -170,14 +170,24 @@ export function RatingView({
         )}
 
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => onSubmitRating(false)}
-            disabled={rateIsPending}
-            className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
-          >
-            {rateIsPending ? 'Saving...' : (activeRatingThread?.issues_remaining === 1 ? 'Save & Complete' : 'Save & Continue')}
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => onSubmitRating(false)}
+              disabled={rateIsPending}
+              className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
+            >
+              {rateIsPending ? 'Saving...' : (activeRatingThread?.issues_remaining === 1 ? 'Save & Complete' : 'Save & Continue')}
+            </button>
+            <button
+              type="button"
+              onClick={() => onSubmitRating(true)}
+              disabled={rateIsPending}
+              className="w-full py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
+            >
+              Finish Session
+            </button>
+          </div>
           <button
             type="button"
             onClick={onSnooze}
