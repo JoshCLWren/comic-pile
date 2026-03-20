@@ -655,24 +655,26 @@ def test_rating_settings_returns_custom_values(monkeypatch: pytest.MonkeyPatch) 
 
 def test_rating_settings_validates_range(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test rating settings validate and raise ValueError for out-of-range values."""
+    from pydantic import ValidationError
+
     from app.config import RatingSettings, clear_settings_cache
 
-    # Values outside range raise ValueError
+    # Values outside range raise ValidationError
     monkeypatch.setenv("RATING_MIN", "10.0")
     clear_settings_cache()
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         RatingSettings()
     assert "RATING_MIN" in str(exc_info.value)
 
     monkeypatch.setenv("RATING_MAX", "15.0")
     clear_settings_cache()
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         RatingSettings()
     assert "RATING_MAX" in str(exc_info.value)
 
     monkeypatch.setenv("RATING_THRESHOLD", "-1.0")
     clear_settings_cache()
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(ValidationError) as exc_info:
         RatingSettings()
     assert "RATING_THRESHOLD" in str(exc_info.value)
 
