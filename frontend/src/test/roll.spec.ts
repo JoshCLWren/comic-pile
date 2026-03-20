@@ -603,6 +603,15 @@ test.describe('Roll Dice Feature', () => {
       })
       const unblockedThread = await unblockedResponse.json()
 
+      // Create issues for the unblocked thread
+      await authenticatedPage.request.post(`/api/v1/threads/${unblockedThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-10' },
+      })
+
       const blockedResponse = await authenticatedPage.request.post('/api/threads/', {
         headers: {
           'Content-Type': 'application/json',
@@ -616,6 +625,15 @@ test.describe('Roll Dice Feature', () => {
       },
       })
       const blockedThread = await blockedResponse.json()
+
+      // Create issues for the blocked thread
+      await authenticatedPage.request.post(`/api/v1/threads/${blockedThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-10' },
+      })
 
       // Block the second thread
       await authenticatedPage.request.post('/api/v1/dependencies/', {

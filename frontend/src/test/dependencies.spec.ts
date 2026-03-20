@@ -88,10 +88,10 @@ test.describe('Dependencies', () => {
         .locator('[aria-label="Blocked thread"]')
     ).toBeVisible()
 
+    // Click on the thread title to open action sheet (avoid clicking View dependencies button)
     await authenticatedPage
-      .locator('#queue-container .glass-card')
+      .locator('#queue-container .glass-card h3')
       .filter({ hasText: 'B Main Story' })
-      .first()
       .click()
 
     // Wait for action sheet modal to open

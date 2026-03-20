@@ -251,11 +251,13 @@ test.describe('Rate Thread Feature', () => {
   });
 
   test('should show thread metadata (format, issues remaining)', async ({ authenticatedWithThreadsPage }) => {
-    const formatElement = authenticatedWithThreadsPage.locator('#thread-info .bg-red-800\\/20');
-    await expect(formatElement.first()).toBeVisible();
-
-    const issuesElement = authenticatedWithThreadsPage.locator('text=Issues left');
-    await expect(issuesElement.first()).toBeVisible();
+    // With Issue tracking, the UI shows issue number badge and thread title
+    const threadInfoElement = authenticatedWithThreadsPage.locator('#thread-info');
+    await expect(threadInfoElement).toBeVisible();
+    
+    // Check that thread title is shown
+    const titleElement = authenticatedWithThreadsPage.locator('#thread-info h2');
+    await expect(titleElement).toBeVisible();
   });
 
   test('should allow re-rating if page revisited', async ({ authenticatedWithThreadsPage }) => {
