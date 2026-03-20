@@ -204,7 +204,8 @@ async def rate_thread(
             )
     thread_id = thread.id
 
-    if thread.issues_remaining <= 0:
+    issues_remaining = await thread.get_issues_remaining(db)
+    if issues_remaining <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Thread {thread_id} has no issues remaining",
