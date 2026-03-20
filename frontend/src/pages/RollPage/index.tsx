@@ -257,7 +257,8 @@ export default function RollPage() {
     }
   }
 
-  const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked) ?? [], [threads])
+  const snoozedIds = useMemo(() => new Set(session?.snoozed_threads?.map((t) => t.id) ?? []), [session?.snoozed_threads])
+  const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked && !snoozedIds.has(t.id)) ?? [], [threads, snoozedIds])
   const blockedThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && t.is_blocked) ?? [], [threads])
 
   useEffect(() => {
