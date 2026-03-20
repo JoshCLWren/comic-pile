@@ -14,7 +14,6 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
           title,
           format: 'Comic',
           issues_remaining: 5,
-          total_issues: 5,
         },
       });
 
@@ -45,7 +44,6 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
         title: 'Black Panther: A Nation Under Our Feet Vol. 1',
         format: 'Comic',
         issues_remaining: 5,
-        total_issues: 5,
       },
     });
 
@@ -79,7 +77,6 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
         title: 'Batman',
         format: 'Comic',
         issues_remaining: 1,
-        total_issues: 1,
       },
     });
 
