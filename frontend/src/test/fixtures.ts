@@ -226,9 +226,6 @@ export const test = base.extend<TestFixtures>({
     // 3. Wait for the roll page to be ready
     await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 });
 
-    // 4. Wait for network to be idle to ensure all API calls completed
-    await page.waitForLoadState('networkidle');
-
     await use(page);
 
     // Cleanup: clear localStorage and attempt logout
