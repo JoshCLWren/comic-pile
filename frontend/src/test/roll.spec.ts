@@ -738,6 +738,7 @@ test.describe('Roll Dice Feature', () => {
 
       const dieButton = authenticatedWithThreadsPage.locator(`button:has-text("d${MANUAL_DIE}")`).first();
       await dieButton.click();
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
       const sessionBefore = await request.get('/api/sessions/current/', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -775,6 +776,7 @@ test.describe('Roll Dice Feature', () => {
 
       const dieButton = authenticatedWithThreadsPage.locator(`button:has-text("d${MANUAL_DIE}")`).first();
       await dieButton.click();
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
       const sessionBeforeRoll = await request.get('/api/sessions/current/', {
         headers: { 'Authorization': `Bearer ${token}` },
