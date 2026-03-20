@@ -324,6 +324,7 @@ async def delete_dependency(
         )
 
     await db.delete(dependency)
+    await db.flush()
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     return {"message": "Dependency deleted"}
