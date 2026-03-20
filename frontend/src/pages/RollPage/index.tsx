@@ -537,6 +537,11 @@ export default function RollPage() {
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
+          {session?.snoozed_threads?.length > 0 && currentDie === 20 && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d20) - snoozing won't increase it further</span>
+            </div>
+          )}
           {session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
             <div className="flex items-center gap-2 mt-1">
               <span className="modifier-badge text-[10px] font-black text-amber-500">+{session.snoozed_threads.length}</span>
