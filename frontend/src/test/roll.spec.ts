@@ -744,6 +744,171 @@ test.describe('Roll Dice Feature', () => {
     })
   });
 
+  test.describe('Snoozed thread filtering', () => {
+    test('issue #321: snoozed threads do not appear in roll pool', async ({ authenticatedPage }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      // Create three threads
+      const thread1Response = await authenticatedPage.request.post('/api/threads/', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: {
+          title: 'Active Thread A',
+          format: 'Comics',
+          issues_remaining: 5,
+          total_issues: 5,
+        },
+      })
+      await authenticatedPage.request.post(`/api/v1/threads/${(await thread1Response.json()).id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      const thread2Response = await authenticatedPage.request.post('/api/threads/', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: {
+          title: 'Snoozed Thread B',
+          format: 'Comics',
+          issues_remaining: 5,
+          total_issues: 5,
+        },
+      })
+      const thread2 = await thread2Response.json()
+      await authenticatedPage.request.post(`/api/v1/threads/${thread2.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      const thread3Response = await authenticatedPage.request.post('/api/threads/', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: {
+          title: 'Active Thread C',
+          format: 'Comics',
+          issues_remaining: 5,
+          total_issues: 5,
+        },
+      })
+      await authenticatedPage.request.post(`/api/v1/threads/${(await thread3Response.json()).id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      // Go to roll page
+      await authenticatedPage.goto('/')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      // Click on snoozed thread to open action sheet
+      const snoozedThreadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Snoozed Thread B' })
+      await snoozedThreadElement.click()
+
+      // Click "Read Now" to set thread as pending
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")')
+      await readButton.click()
+
+      // Wait for rating view to appear
+      await authenticatedPage.waitForSelector(SELECTORS.rate.ratingInput, { state: 'visible', timeout: 5000 })
+
+      // Snooze the thread via the rating view
+      const snoozeButton = authenticatedPage.locator('button:has-text("Snooze")')
+      await snoozeButton.click()
+
+      // Wait for snooze to complete and return to roll page
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      // Check that snoozed thread is NOT in the roll pool
+      const rollPoolText = await authenticatedPage.evaluate(() => {
+        const poolElement = document.querySelector('[data-roll-pool]')
+        return poolElement ? poolElement.textContent : ''
+      })
+
+      expect(rollPoolText).not.toContain('Snoozed Thread B')
+      expect(rollPoolText).toContain('Active Thread A')
+    })
+
+    test('snoozed thread appears in SNOOZED section only', async ({ authenticatedPage }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      // Create a thread to snooze
+      const threadResponse = await authenticatedPage.request.post('/api/threads/', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: {
+          title: 'Snoozed Test Thread',
+          format: 'Comics',
+          issues_remaining: 5,
+          total_issues: 5,
+        },
+      })
+      const thread = await threadResponse.json()
+      await authenticatedPage.request.post(`/api/v1/threads/${thread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      // Go to roll page
+      await authenticatedPage.goto('/')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      // Click on thread to open action sheet
+      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Snoozed Test Thread' })
+      await threadElement.click()
+
+      // Click "Read Now" to set thread as pending
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")')
+      await readButton.click()
+
+      // Wait for rating view to appear
+      await authenticatedPage.waitForSelector(SELECTORS.rate.ratingInput, { state: 'visible', timeout: 5000 })
+
+      // Snooze the thread via the rating view
+      const snoozeButton = authenticatedPage.locator('button:has-text("Snooze")')
+      await snoozeButton.click()
+
+      // Wait for snooze to complete and return to roll page
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      // Expand the snoozed section - look for button containing "Snoozed ("
+      const snoozedToggleButton = authenticatedPage.locator('button').filter({ hasText: /Snoozed \(/ })
+      await snoozedToggleButton.click()
+
+      // Wait for snoozed threads to appear
+      await authenticatedPage.waitForTimeout(500)
+
+      // Check that snoozed thread appears in SNOOZED section
+      await expect(authenticatedPage.locator('text=Snoozed Test Thread')).toBeVisible()
+
+      // Check that thread does NOT appear in roll pool
+      const rollPoolText = await authenticatedPage.evaluate(() => {
+        const poolElement = document.querySelector('[data-roll-pool]')
+        return poolElement ? poolElement.textContent : ''
+      })
+
+      expect(rollPoolText).not.toContain('Snoozed Test Thread')
+    })
+  });
+
   test.describe('Manual Die Selection', () => {
     test('issue #281: manual die selection should persist after rating', async ({ authenticatedWithThreadsPage, request }) => {
       const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
