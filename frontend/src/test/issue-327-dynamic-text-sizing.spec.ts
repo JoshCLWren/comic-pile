@@ -17,12 +17,16 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
         },
       });
 
-      expect(response.ok()).toBeTruthy();
+      if (!response.ok()) {
+        const errorText = await response.text();
+        throw new Error(`Failed to create thread "${title}": ${response.status()} ${response.statusText()} - ${errorText}`);
+      }
 
       const threadData = await response.json();
-      await authenticatedPage.request.post(`/api/v1/threads/${threadData.id}/issues`, {
+      const issuesResponse = await authenticatedPage.request.post(`/api/v1/threads/${threadData.id}/issues`, {
         data: { issue_range: '1-5' },
       });
+      expect(issuesResponse.ok()).toBeTruthy();
     }
 
     await authenticatedPage.goto('/queue');
@@ -47,12 +51,16 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
       },
     });
 
-    expect(response.ok()).toBeTruthy();
+    if (!response.ok()) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create thread: ${response.status()} ${response.statusText()} - ${errorText}`);
+    }
 
     const threadData = await response.json();
-    await authenticatedPage.request.post(`/api/v1/threads/${threadData.id}/issues`, {
+    const issuesResponse = await authenticatedPage.request.post(`/api/v1/threads/${threadData.id}/issues`, {
       data: { issue_range: '1-5' },
     });
+    expect(issuesResponse.ok()).toBeTruthy();
 
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
@@ -80,7 +88,10 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
       },
     });
 
-    expect(response.ok()).toBeTruthy();
+    if (!response.ok()) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create thread: ${response.status()} ${response.statusText()} - ${errorText}`);
+    }
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
