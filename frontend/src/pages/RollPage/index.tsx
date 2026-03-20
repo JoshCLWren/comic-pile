@@ -46,6 +46,7 @@ export default function RollPage() {
     staleThreadCount, setStaleThreadCount,
     isOverrideOpen, setIsOverrideOpen,
     overrideThreadId, setOverrideThreadId,
+    overrideErrorMessage, setOverrideErrorMessage,
     snoozedExpanded, setSnoozedExpanded,
     blockedExpanded, setBlockedExpanded,
     isDieModalOpen, setIsDieModalOpen,
@@ -501,8 +502,11 @@ export default function RollPage() {
     overrideMutation.mutate({ thread_id: Number(overrideThreadId) }).then((response) => {
       setIsOverrideOpen(false)
       setOverrideThreadId('')
+      setOverrideErrorMessage('')
       enterRatingView(response.thread_id, response.result, response)
-    }).catch(() => {})
+    }).catch((error: unknown) => {
+      setOverrideErrorMessage(getApiErrorDetail(error) || 'Failed to override roll')
+    })
   }
 
   if (isSessionLoading && !isSessionError) {
@@ -680,7 +684,7 @@ export default function RollPage() {
           <SimpleMigrationDialog threadTitle={activeRatingThread.title} onComplete={handleSimpleMigrationComplete} onClose={() => setShowSimpleMigration(false)} />
         )}
 
-        <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => setIsOverrideOpen(false)}>
+        <Modal isOpen={isOverrideOpen} title="Override Roll" onClose={() => { setIsOverrideOpen(false); setOverrideErrorMessage('') }}>
           <form className="space-y-4" onSubmit={handleOverrideSubmit}>
             <p className="text-xs text-stone-400">Pick a thread to force next roll result.</p>
             <div className="space-y-2">
@@ -698,6 +702,9 @@ export default function RollPage() {
                 )}
               </select>
             </div>
+            {overrideErrorMessage && (
+              <p className="text-xs text-red-400">{overrideErrorMessage}</p>
+            )}
             <button type="submit" disabled={overrideMutation.isPending || !overrideThreadId}
               className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-60">
               {overrideMutation.isPending ? 'Overriding...' : 'Override Roll'}
