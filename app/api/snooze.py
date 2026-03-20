@@ -251,10 +251,7 @@ async def unsnooze_thread(
     )
 
     if thread_id not in snoozed_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} is not snoozed",
-        )
+        return await build_session_response(current_session, db)
 
     snoozed_ids.remove(thread_id)
     current_session.snoozed_thread_ids = snoozed_ids

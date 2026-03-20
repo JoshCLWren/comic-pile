@@ -82,11 +82,11 @@ async def test_unsnooze_success(
 
 
 @pytest.mark.asyncio
-async def test_unsnooze_non_snoozed_thread_returns_404(
+async def test_unsnooze_non_snoozed_thread_is_idempotent(
     auth_client: AsyncClient,
     async_db: AsyncSession,
 ) -> None:
-    """POST /snooze/{thread_id}/unsnooze returns 404 when thread is not snoozed.
+    """POST /snooze/{thread_id}/unsnooze returns 200 when thread is not snoozed.
 
     This is a regression test for issue #285.
 
@@ -119,9 +119,10 @@ async def test_unsnooze_non_snoozed_thread_returns_404(
     # Attempt to unsnooze a thread that was never snoozed
     response = await auth_client.post(f"/api/snooze/{thread.id}/unsnooze")
 
-    # Should return 404 (not found), not 200 (silent no-op)
-    assert response.status_code == 404
-    assert "not snoozed" in response.json()["detail"].lower()
+    # Should return 200 (idempotent), not 404
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == session.id
 
 
 @pytest.mark.asyncio
