@@ -1,6 +1,40 @@
 # Changelog
 
+## 2026-03-20
+
+**CI & Infrastructure**
+- E2E tests: disabled rate limiting in CI shards by adding TEST_ENVIRONMENT=true
+- E2E tests: replaced flaky `networkidle` waits with deterministic element selectors
+
+**Rating Flow**
+- Rating slider now defaults to neutral (2.5) value instead of minimum
+- Save & Complete button shown for last issue in thread
+
+**Notifications**
+- Session expiry now shows toast notification when session times out
+- New Finish Session button for manual session cleanup
+
+**Validation & Error Handling**
+- Snooze at d20 max pool size now shows feedback message
+- Manual die selection persists when rolling into snoozed threads
+- Improved feedback when rolled die exceeds pool size
+- Collection filter now available on roll API and get_roll_pool endpoint
+- Validation prevents rating threads with 0 issues remaining
+- Config validation errors now raise ValueError instead of silent fallback
+
+**D10 Geometry**
+- Centered d10 face numbers for better readability
+- Prevented adjacent consecutive numbers on d10 faces
+
+**Stale Thread Management**
+- Stale thread count now displayed as indicator badge
+- Test endpoint enabled for stale thread validation
+
 ## 2026-03-19
+
+**Validation & Error Handling**
+- Unsnooze endpoint now returns HTTP 404 for non-snoozed threads instead of silent no-op
+- Move-to-position endpoint now returns HTTP 400 for out-of-range positions instead of silent clamping
 
 **Roll Flow & Session Management**
 - Manual die selection now persists across rating/snooze operations
