@@ -410,6 +410,11 @@ export default function RollPage() {
     }
   }
 
+  async function handleRefreshThread() {
+    await refetchSession()
+    await refetchThreads()
+  }
+
   const dieSize = currentDie || 6
   const filteredThreads = activeThreads.filter(t => !isRatingView || t.id !== (selectedThreadId ? Number(selectedThreadId) : null))
   const pool = filteredThreads.slice(0, dieSize)
@@ -627,6 +632,7 @@ export default function RollPage() {
                 onUpdateRating={updateRatingUI}
                 onSubmitRating={handleSubmitRating}
                 onSnooze={handleSnooze}
+                onRefreshThread={handleRefreshThread}
                 onCancel={async () => {
                   try {
                     await dismissPendingMutation.mutate()

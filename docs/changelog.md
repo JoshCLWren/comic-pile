@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-21
+
+**Issue Number Correction**
+- Added edit icon next to issue number in rating view
+- Quick correction dialog allows adjusting current issue without leaving the rating page
+- +/- buttons for easy issue number adjustment
+- Validates issue number is within valid range (1 to total issues)
+- Updates thread's issue tracking state automatically
+
 ## 2026-03-20
 
 **CI & Infrastructure**
