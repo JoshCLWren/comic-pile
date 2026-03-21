@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-21
+
+**Queue Page Enhancements**
+- Added sort options to Queue page for better thread organization
+- Sort by queue order (default), title (A-Z or Z-A), recently added, or format
+- Sort preference persists across page reloads
+- Queue positions remain unchanged when sorting display order
+
 ## 2026-03-20
 
 **CI & Infrastructure**

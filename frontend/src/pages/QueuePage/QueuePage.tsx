@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
@@ -59,6 +59,17 @@ export default function QueuePage() {
   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
+  const [sortOption, setSortOption] = useState<'queue' | 'title-asc' | 'title-desc' | 'created-desc' | 'format'>(() => {
+    const saved = localStorage.getItem('queue-sort-option')
+    return (saved === 'queue' || saved === 'title-asc' || saved === 'title-desc' || saved === 'created-desc' || saved === 'format')
+      ? saved
+      : 'queue'
+  })
+
+  const handleSortChange = (newSort: typeof sortOption) => {
+    setSortOption(newSort)
+    localStorage.setItem('queue-sort-option', newSort)
+  }
 
   useEffect(() => {
     if (location.state?.editThreadId && threads) {
@@ -132,9 +143,28 @@ export default function QueuePage() {
     }
   }, [createForm.issues])
 
-  const activeThreads = threads
-    ?.filter((thread) => thread.status === 'active')
-    .sort((a, b) => a.queue_position - b.queue_position) ?? []
+  const activeThreads = useMemo(() => {
+    const filtered = threads?.filter((thread) => thread.status === 'active') ?? []
+    return filtered.sort((a, b) => {
+      switch (sortOption) {
+        case 'title-asc':
+          return a.title.localeCompare(b.title)
+        case 'title-desc':
+          return b.title.localeCompare(a.title)
+        case 'created-desc':
+          const aTime = new Date(a.created_at).getTime()
+          const bTime = new Date(b.created_at).getTime()
+          return bTime - aTime
+        case 'format':
+          const formatCompare = a.format.localeCompare(b.format)
+          if (formatCompare !== 0) return formatCompare
+          return a.title.localeCompare(b.title)
+        case 'queue':
+        default:
+          return a.queue_position - b.queue_position
+      }
+    })
+  }, [threads, sortOption])
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
 
   const handleDelete = (threadId: number) => {
@@ -441,13 +471,30 @@ export default function QueuePage() {
           <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
         </div>
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-        >
-          Add Thread
-        </button>
+        <div className="flex gap-3 items-center">
+          <div className="relative">
+            <select
+              value={sortOption}
+              onChange={(e) => handleSortChange(e.target.value as typeof sortOption)}
+              className="h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 transition-all appearance-none cursor-pointer pr-10"
+              aria-label="Sort threads"
+            >
+              <option value="queue">Queue Order</option>
+              <option value="title-asc">Title (A-Z)</option>
+              <option value="title-desc">Title (Z-A)</option>
+              <option value="created-desc">Recently Added</option>
+              <option value="format">Format</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-stone-400 text-xs">▼</div>
+          </div>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+          >
+            Add Thread
+          </button>
+        </div>
       </header>
       
       {/* Mobile FAB for Add Thread */}
@@ -476,7 +523,7 @@ export default function QueuePage() {
             aria-label="Thread queue"
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
           >
-            {activeThreads.map((thread, index) => {
+            {activeThreads.map((thread) => {
               const isDragOver = dragOverThreadId === thread.id
               const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
               const blockingReasons = blockingReasonMap[thread.id] || []
@@ -503,7 +550,7 @@ export default function QueuePage() {
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <span className="text-2xl font-black text-amber-600/30">
-                        #{index + 1}
+                        #{thread.queue_position}
                       </span>
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Tooltip content="Drag to reorder within the queue.">
