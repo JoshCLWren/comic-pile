@@ -1,13 +1,24 @@
 import { useCollections } from '../contexts/CollectionContext'
 
+/**
+ * Props for the CollectionToolbar component.
+ */
 interface CollectionToolbarProps {
+  /** Whether to show the "New Collection" label on the button */
   showNewLabel?: boolean
+  /** Additional CSS classes to apply to the toolbar */
   className?: string
+  /** Callback function when the "New Collection" button is clicked */
   onNewCollection?: () => void
 }
 
+/**
+ * CollectionToolbar component.
+ * Displays a dropdown for selecting collections and a button to create new collections.
+ * Shows loading state while fetching collections and error state if fetching fails.
+ */
 export default function CollectionToolbar({ showNewLabel = true, className = '', onNewCollection }: CollectionToolbarProps) {
-  const { collections, activeCollectionId, setActiveCollectionId, isLoading } = useCollections()
+  const { collections, activeCollectionId, setActiveCollectionId, isLoading, error } = useCollections()
 
   const handleCollectionChange = (collectionId: number | null) => {
     setActiveCollectionId(collectionId)
@@ -17,6 +28,16 @@ export default function CollectionToolbar({ showNewLabel = true, className = '',
     return (
       <div className={`collection-toolbar ${className}`}>
         <div className="text-[10px] text-stone-500 uppercase tracking-wider">Loading collections...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className={`collection-toolbar ${className}`}>
+        <div className="text-[10px] text-red-400 uppercase tracking-wider" role="alert">
+          Error: {error.message}
+        </div>
       </div>
     )
   }
@@ -42,7 +63,7 @@ export default function CollectionToolbar({ showNewLabel = true, className = '',
           <button
             type="button"
             onClick={onNewCollection}
-            className="shrink-0 px-3 py-1.5 glass-button text-[10px] font-black uppercase tracking-wider whitespace-nowrap"
+            className="shrink-0 px-3 py-1.5 glass-button text-[10px] font-black uppercase tracking-wider whitespace-nowrap min-h-[44px]"
             aria-label="Create new collection"
           >
             + New Collection
