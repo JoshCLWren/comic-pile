@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-21
+
+**Collections**
+- Success toast notification now appears after creating a collection
+- Toast includes collection name and auto-dismisses after 5 seconds
+- No success message shown on validation or network errors
+
 ## 2026-03-20
 
 **CI & Infrastructure**
