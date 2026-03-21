@@ -851,3 +851,133 @@ test.describe('API Integration', () => {
     expect(response.status()).toBe(404);
   });
 });
+
+test.describe('Issue Pagination (Issue #254)', () => {
+  test('should load first page of issues with pagination metadata', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Pagination Test ${timestamp}`;
+    await createThread(authenticatedPage, {
+      title: uniqueTitle,
+      format: 'Comics',
+      issues_remaining: 60,
+      total_issues: 60,
+    });
+
+    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+    const threads = await threadsResponse.json();
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
+
+    expect(thread).toBeDefined();
+    expect(thread.total_issues).toBe(60);
+
+    // Fetch first page with explicit page_size
+    const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues?page_size=50`);
+    const issuesData = await issuesResponse.json();
+
+    expect(issuesData.issues).toBeDefined();
+    expect(issuesData.total_count).toBe(60);
+    expect(issuesData.page_size).toBe(50);
+    expect(issuesData.issues.length).toBe(50);
+    expect(issuesData.next_page_token).not.toBeNull();
+  });
+
+  test('should load next page of issues with page token', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Pagination Next Page ${timestamp}`;
+    await createThread(authenticatedPage, {
+      title: uniqueTitle,
+      format: 'Comics',
+      issues_remaining: 60,
+      total_issues: 60,
+    });
+
+    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+    const threads = await threadsResponse.json();
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
+
+    // Fetch first page
+    const firstPageResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues?page_size=50`);
+    const firstPage = await firstPageResponse.json();
+
+    expect(firstPage.total_count).toBe(60);
+    expect(firstPage.issues.length).toBe(50);
+    expect(firstPage.next_page_token).not.toBeNull();
+
+    const firstPageIssueIds = new Set(firstPage.issues.map((i: any) => i.id));
+
+    // Fetch second page with page token
+    const secondPageResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues?page_size=50&page_token=${firstPage.next_page_token}`);
+    const secondPage = await secondPageResponse.json();
+
+    expect(secondPage.total_count).toBe(60);
+    expect(secondPage.issues.length).toBe(10);
+    expect(secondPage.next_page_token).toBeNull();
+
+    // Verify second page issues are different from first page
+    secondPage.issues.forEach((issue: any) => {
+      expect(firstPageIssueIds.has(issue.id)).toBe(false);
+    });
+  });
+
+  test('should handle pagination with status filter', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Pagination Filter ${timestamp}`;
+    await createThread(authenticatedPage, {
+      title: uniqueTitle,
+      format: 'Comics',
+      issues_remaining: 60,
+      total_issues: 60,
+    });
+
+    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+    const threads = await threadsResponse.json();
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
+
+    // Mark first 30 issues as read
+    const issuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues?page_size=100`);
+    const issuesData = await issuesResponse.json();
+
+    for (let i = 0; i < 30; i++) {
+      await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/v1/issues/${issuesData.issues[i].id}:markRead`);
+    }
+
+    // Fetch read issues with pagination
+    const readIssuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues?status=read&page_size=50`);
+    const readIssues = await readIssuesResponse.json();
+
+    expect(readIssues.issues.length).toBe(30);
+    expect(readIssues.total_count).toBe(30);
+    expect(readIssues.next_page_token).toBeNull();
+
+    // Fetch unread issues with pagination
+    const unreadIssuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues?status=unread&page_size=50`);
+    const unreadIssues = await unreadIssuesResponse.json();
+
+    expect(unreadIssues.issues.length).toBe(30);
+    expect(unreadIssues.total_count).toBe(30);
+    expect(unreadIssues.next_page_token).toBeNull();
+  });
+
+  test('should show total_count instead of loaded issues count for progress', async ({ authenticatedPage }) => {
+    const timestamp = Date.now();
+    const uniqueTitle = `Progress Total Count ${timestamp}`;
+    await createThread(authenticatedPage, {
+      title: uniqueTitle,
+      format: 'Comics',
+      issues_remaining: 60,
+      total_issues: 60,
+    });
+
+    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+    const threads = await threadsResponse.json();
+    const thread = threads.find((t: any) => t.title === uniqueTitle);
+
+    // Fetch first page (50 issues)
+    const firstPageResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${thread.id}/issues?page_size=50`);
+    const firstPage = await firstPageResponse.json();
+
+    // Verify total_count reflects the full thread count (60), not just loaded (50)
+    expect(firstPage.total_count).toBe(60);
+    expect(firstPage.issues.length).toBe(50);
+  });
+});
