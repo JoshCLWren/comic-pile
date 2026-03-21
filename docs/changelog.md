@@ -4,7 +4,7 @@
 
 **Thread Editing**
 - Issue list in edit modal now collapses by default for threads with more than 5 issues
-- Shows only issues around your current reading position (last 2-3 read + next 2-3 unread)
+- Shows only issues around your current reading position (3 previous + next 3 unread)
 - "Show all" button expands to display full issue list
 - Improves usability for threads with many issues (e.g., 100+ issue series)
 - Mobile-friendly: reduces scrolling on small screens

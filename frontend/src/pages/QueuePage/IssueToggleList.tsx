@@ -299,6 +299,29 @@ export function IssueToggleList({ threadId }: {
 
     if (!didReorder) {
       focusMoveControl(issue.id, direction)
+      return
+    }
+
+    if (!isExpanded) {
+      const nextUnreadId = nextIssues.find((i) => i.status === 'unread')?.id ?? null
+      let wouldBeVisible = false
+
+      if (nextUnreadId) {
+        const nextUnreadIndex = nextIssues.findIndex((i) => i.id === nextUnreadId)
+        const movedIssueIndex = nextIssues.findIndex((i) => i.id === issue.id)
+        const readBeforeCount = 3
+        const unreadAfterCount = 3
+        const startIndex = Math.max(0, nextUnreadIndex - readBeforeCount)
+        const endIndex = Math.min(nextIssues.length, nextUnreadIndex + unreadAfterCount + 1)
+        wouldBeVisible = movedIssueIndex >= startIndex && movedIssueIndex < endIndex
+      } else {
+        const movedIssueIndex = nextIssues.findIndex((i) => i.id === issue.id)
+        wouldBeVisible = movedIssueIndex >= nextIssues.length - 3
+      }
+
+      if (!wouldBeVisible) {
+        setIsExpanded(true)
+      }
     }
   }
 
