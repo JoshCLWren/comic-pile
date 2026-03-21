@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react'
+import { useEffect, useMemo, useCallback, useState } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import LazyDice3D from '../../components/LazyDice3D'
 import Modal from '../../components/Modal'
@@ -23,7 +23,7 @@ import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
-import type { Thread, RollResponse, SessionThread } from '../../types'
+import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -67,6 +67,8 @@ export default function RollPage() {
     rollTimeoutRef,
   } = state
 
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   const {
     collections = [],
@@ -84,6 +86,16 @@ export default function RollPage() {
       if (status === 401) navigate('/login')
     }
   }, [isSessionError, sessionError, navigate])
+
+  useEffect(() => {
+    const handleTestEditCollection = ((e: CustomEvent<Collection>) => {
+      setEditingCollection(e.detail)
+      setIsCollectionDialogOpen(true)
+    }) as EventListener
+
+    window.addEventListener('test-edit-collection', handleTestEditCollection)
+    return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
+  }, [])
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -663,7 +675,7 @@ export default function RollPage() {
               isCollectionsLoading={isCollectionsLoading}
               onThreadClick={handleThreadClick}
               onCollectionChange={handleCollectionChange}
-              onNewCollection={() => setIsCollectionDialogOpen(true)}
+              onNewCollection={() => { setEditingCollection(null); setIsCollectionDialogOpen(true) }}
               onUnsnooze={handleUnsnooze}
               onReadStale={handleReadStale}
               onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
@@ -675,7 +687,7 @@ export default function RollPage() {
 
         <div id="explosion-layer" className="explosion-wrap"></div>
 
-        {isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
+        {isCollectionDialogOpen && <CollectionDialog collection={editingCollection} onClose={() => { setIsCollectionDialogOpen(false); setEditingCollection(null) }} />}
 
         {showMigrationDialog && threadToMigrate && (
           <MigrationDialog thread={threadToMigrate} onComplete={handleMigrationComplete} onSkip={handleMigrationSkip} onClose={handleMigrationClose} />
