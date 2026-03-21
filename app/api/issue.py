@@ -76,9 +76,7 @@ async def _get_locked_thread_with_issues(
     db: AsyncSession,
 ) -> tuple[Thread, list[Issue]]:
     """Lock a thread and all of its issues, validating ownership."""
-    thread_result = await db.execute(
-        select(Thread).where(Thread.id == thread_id).with_for_update()
-    )
+    thread_result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
     thread = thread_result.scalar_one_or_none()
     if not thread or thread.user_id != current_user.id:
         raise HTTPException(
@@ -222,9 +220,10 @@ async def list_issues(
 
     issue_responses = [issue_to_response(issue) for issue in issues_to_return]
 
-    total_count_result = await db.execute(
-        select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
-    )
+    count_query = select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
+    if status_filter:
+        count_query = count_query.where(Issue.status == status_filter)
+    total_count_result = await db.execute(count_query)
     total_count = total_count_result.scalar() or 0
 
     next_token = None
@@ -303,9 +302,7 @@ async def create_issues(
         HTTPException: If thread not found, all issues already exist,
                       position collision detected, or issue range is invalid.
     """
-    thread_result = await db.execute(
-        select(Thread).where(Thread.id == thread_id).with_for_update()
-    )
+    thread_result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
     thread = thread_result.scalar_one_or_none()
     if not thread or thread.user_id != current_user.id:
         raise HTTPException(
@@ -491,9 +488,7 @@ async def create_issues(
         elif (
             new_issues
             and existing_next_unread_issue_id is not None
-            and await should_update_next_unread(
-                new_issues[0].id, existing_next_unread_issue_id, db
-            )
+            and await should_update_next_unread(new_issues[0].id, existing_next_unread_issue_id, db)
         ):
             thread.next_unread_issue_id = new_issues[0].id
 
@@ -594,7 +589,9 @@ async def move_issue(
         await db.commit()
         return
 
-    reordered_issues = [existing_issue for existing_issue in thread_issues if existing_issue.id != issue_id]
+    reordered_issues = [
+        existing_issue for existing_issue in thread_issues if existing_issue.id != issue_id
+    ]
 
     if request.after_issue_id is None:
         insert_index = 0
@@ -605,10 +602,14 @@ async def move_issue(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Issue {request.after_issue_id} not found",
             )
-        insert_index = next(
-            index for index, existing_issue in enumerate(reordered_issues)
-            if existing_issue.id == after_issue.id
-        ) + 1
+        insert_index = (
+            next(
+                index
+                for index, existing_issue in enumerate(reordered_issues)
+                if existing_issue.id == after_issue.id
+            )
+            + 1
+        )
 
     reordered_issues.insert(insert_index, issue)
     _assign_issue_positions(reordered_issues)
