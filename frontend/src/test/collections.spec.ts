@@ -55,7 +55,7 @@ test.describe('Collections', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const selector = authenticatedPage.getByLabel('Roll pool collection');
+    const selector = authenticatedPage.getByLabel('Filter by collection');
     await expect(selector).toBeVisible();
     await selector.selectOption(String(collectionId));
     await expect(selector).toHaveValue(String(collectionId));
@@ -116,7 +116,7 @@ test.describe('Collections', () => {
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    const selector = authenticatedPage.getByLabel('Roll pool collection');
+    const selector = authenticatedPage.getByLabel('Filter by collection');
 
     await selector.selectOption(String(collectionAId));
     await authenticatedPage.waitForLoadState('networkidle');

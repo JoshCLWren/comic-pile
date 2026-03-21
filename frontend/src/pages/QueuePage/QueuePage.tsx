@@ -7,6 +7,8 @@ import Tooltip from '../../components/Tooltip'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
+import CollectionDialog from '../../components/CollectionDialog'
+import CollectionToolbar from '../../components/CollectionToolbar'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../../hooks/useQueue'
 import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
 import { useSession } from '../../hooks/useSession'
@@ -40,6 +42,7 @@ export default function QueuePage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isReactivateOpen, setIsReactivateOpen] = useState(false)
+  const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editingThread, setEditingThread] = useState<Thread | null>(null)
@@ -436,20 +439,23 @@ export default function QueuePage() {
 
   return (
     <div className="space-y-10 pb-10">
-      <header className="flex justify-between items-start px-2 gap-4">
-        <div>
-          <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
-          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
+      <header className="space-y-4 px-2">
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
+            <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
+          </div>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+          >
+            Add Thread
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-        >
-          Add Thread
-        </button>
+        <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
       </header>
-      
+
       {/* Mobile FAB for Add Thread */}
       <button
         type="button"
@@ -984,6 +990,8 @@ export default function QueuePage() {
           await refreshBlockedState()
         }}
       />
+
+      {isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
 
       {showMigrationDialog && threadToMigrate && (
         <MigrationDialog

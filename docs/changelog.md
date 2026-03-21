@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-21
+
+**Collection Management UI Redesign**
+- Consolidated collection management into coherent toolbar on Roll and Queue pages
+- Collection selector moved from ThreadPool to page header for better discoverability
+- "+ New Collection" button now consistently available in header toolbar
+- Unified collection filtering across Roll and Queue pages
+- Improved mobile responsiveness with toolbar design
+
 ## 2026-03-20
 
 **CI & Infrastructure**
