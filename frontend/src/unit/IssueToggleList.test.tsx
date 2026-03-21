@@ -479,5 +479,29 @@ describe('IssueToggleList', () => {
       const visibleIssues = getIssueOrder()
       expect(visibleIssues).toEqual(['8', '9', '10'])
     })
+
+    it('shows exactly 3 before + next unread + 3 after for large issue lists', async () => {
+      const twentyIssues: Issue[] = Array.from({ length: 20 }, (_, i) => ({
+        id: i + 1,
+        thread_id: 99,
+        issue_number: String(i + 1),
+        status: i < 10 ? 'read' : 'unread',
+        read_at: i < 10 ? '2026-03-08T00:00:00Z' : null,
+        created_at: '2026-03-08T00:00:00Z',
+      }))
+      mockedIssuesApi.list.mockResolvedValue(buildListResponse(twentyIssues))
+
+      render(<IssueToggleList threadId={99} />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: 'Show all 20' })).toBeInTheDocument()
+
+      const visibleIssues = getIssueOrder()
+      expect(visibleIssues.length).toBe(7)
+      expect(visibleIssues).toEqual(['8', '9', '10', '11', '12', '13', '14'])
+    })
   })
 })
