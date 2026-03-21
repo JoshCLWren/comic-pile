@@ -74,6 +74,13 @@
 - Validates issue number is within valid range (1 to total issues)
 - Updates thread's issue tracking state automatically
 
+**Thread Editing**
+- Issue list in edit modal now collapses by default for threads with more than 5 issues
+- Shows only issues around your current reading position (last 2-3 read + next 2-3 unread)
+- "Show all" button expands to display full issue list
+- Improves usability for threads with many issues (e.g., 100+ issue series)
+- Mobile-friendly: reduces scrolling on small screens
+
 ## 2026-03-20
 
 **CI & Infrastructure**
