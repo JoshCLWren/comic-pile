@@ -1,7 +1,10 @@
 import { test, expect } from './fixtures';
+import { SELECTORS } from './helpers';
 
 test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
-  test('queue page thread titles wrap to 2 lines for long titles', async ({ authenticatedPage }) => {
+  test('queue page thread titles wrap to 2 lines for long titles', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const headers = { 'Authorization': `Bearer ${token}` };
     const threadTitles = [
       'Black Panther: A Nation Under Our Feet Vol. 1',
       'Black Panther: 2016 Marvel Legacy',
@@ -9,7 +12,8 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     ];
 
     for (const title of threadTitles) {
-      const response = await authenticatedPage.request.post('/api/threads/', {
+      const response = await request.post('/api/threads/', {
+        headers,
         data: {
           title,
           format: 'Comics',
@@ -23,7 +27,8 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
       }
 
       const threadData = await response.json();
-      const issuesResponse = await authenticatedPage.request.post(`/api/v1/threads/${threadData.id}/issues`, {
+      const issuesResponse = await request.post(`/api/v1/threads/${threadData.id}/issues`, {
+        headers,
         data: { issue_range: '1-5' },
       });
       expect(issuesResponse.ok()).toBeTruthy();
@@ -42,8 +47,11 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     expect(className).toContain('line-clamp-2');
   });
 
-  test('rating view title wraps to 2 lines after rolling', async ({ authenticatedPage }) => {
-    const response = await authenticatedPage.request.post('/api/threads/', {
+  test('rating view title wraps to 2 lines after rolling', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const response = await request.post('/api/threads/', {
+      headers,
       data: {
         title: 'Black Panther: A Nation Under Our Feet Vol. 1',
         format: 'Comics',
@@ -57,17 +65,15 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     }
 
     const threadData = await response.json();
-    const issuesResponse = await authenticatedPage.request.post(`/api/v1/threads/${threadData.id}/issues`, {
+    const issuesResponse = await request.post(`/api/v1/threads/${threadData.id}/issues`, {
+      headers,
       data: { issue_range: '1-5' },
     });
     expect(issuesResponse.ok()).toBeTruthy();
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    const rollButton = authenticatedPage.getByTestId('roll-button');
-    await expect(rollButton).toBeVisible();
-    await rollButton.click();
+    await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+    await authenticatedPage.click(SELECTORS.roll.mainDie);
 
     await authenticatedPage.waitForTimeout(2000);
 
@@ -79,8 +85,11 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     expect(className).toContain('line-clamp-2');
   });
 
-  test('short titles display normally with line-clamp', async ({ authenticatedPage }) => {
-    const response = await authenticatedPage.request.post('/api/threads/', {
+  test('short titles display normally with line-clamp', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const response = await request.post('/api/threads/', {
+      headers,
       data: {
         title: 'Batman',
         format: 'Comics',
