@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { test, expect } from './fixtures';
 import { SELECTORS } from './helpers';
 
@@ -1262,13 +1263,41 @@ test.describe('Roll Dice Feature', () => {
       const issuesData = await issuesResponse.json();
       const issues = issuesData.issues;
 
-      for (const issue of issues) {
+      for (const issue of issues.slice(0, -1)) {
         await request.post(`/api/v1/issues/${issue.id}:markRead`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
         });
       }
+
+      await request.post(`/api/threads/${thread.id}/set-pending`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const lastIssue = issues[issues.length - 1];
+      await request.post(`/api/v1/issues/${lastIssue.id}:markRead`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      await authenticatedPage.reload();
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const progressText = authenticatedPage.locator('#thread-info');
+      await expect(progressText).toContainText('100% complete', { timeout: 10000 });
+      await expect(progressText).toContainText('0 issues left');
 
       const threadAfterResponse = await request.get(`/api/threads/${thread.id}`, {
         headers: {

@@ -42,7 +42,7 @@ export function RatingView({
     <div className="p-4 space-y-8 relative z-10">
       <div id="thread-info" role="status" aria-live="polite">
         <div className="space-y-3 text-center">
-          {(activeRatingThread?.next_issue_number || activeRatingThread?.issue_number) ? (
+          {(activeRatingThread?.next_issue_number || activeRatingThread?.issue_number || activeRatingThread?.total_issues) ? (
             <>
               <h2 className="text-2xl font-black text-stone-200 truncate max-w-[280px] sm:max-w-none mx-auto">
                 {activeRatingThread?.title || 'Loading...'} #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}
