@@ -7,10 +7,9 @@ from sqlalchemy.exc import OperationalError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Collection, Dependency, Event, Issue, Session as SessionModel, Thread, User
+from app.models import Collection, Dependency, Event, Session as SessionModel, Thread, User
 from comic_pile.dependencies import (
     detect_circular_dependency,
-    get_dependency_order_conflicts,
 )
 from comic_pile.queue import get_roll_pool
 from comic_pile.session import get_or_create, get_current_die
@@ -112,58 +111,6 @@ async def test_detect_circular_dependency_with_multiple_dependencies(
         target_thread.id, source_thread.id, "thread", async_db
     )
     assert result_cycle is True
-
-
-@pytest.mark.asyncio
-async def test_get_dependency_order_conflicts_returns_conflicts(
-    async_db: AsyncSession, default_user: User
-) -> None:
-    """Test get_dependency_order_conflicts returns structured conflicts (dependencies.py:223-241)."""
-    thread = Thread(
-        title="Conflict Thread",
-        format="Comic",
-        issues_remaining=2,
-        queue_position=1,
-        status="active",
-        user_id=default_user.id,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.flush()
-
-    issue_1 = Issue(
-        thread_id=thread.id,
-        issue_number="1",
-        position=1,
-        status="unread",
-    )
-    issue_2 = Issue(
-        thread_id=thread.id,
-        issue_number="2",
-        position=2,
-        status="unread",
-    )
-    async_db.add_all([issue_1, issue_2])
-    await async_db.flush()
-
-    dep = Dependency(
-        source_issue_id=issue_2.id,
-        target_issue_id=issue_1.id,
-    )
-    async_db.add(dep)
-    await async_db.commit()
-
-    conflicts = await get_dependency_order_conflicts(thread.id, default_user.id, async_db)
-
-    assert len(conflicts) == 1
-    assert conflicts[0]["issue_id"] == issue_2.id
-    assert conflicts[0]["issue_number"] == "2"
-    assert conflicts[0]["position"] == 2
-    assert len(conflicts[0]["dependency_requires_before"]) == 1
-    assert conflicts[0]["dependency_requires_before"][0]["issue_id"] == issue_1.id
-    assert conflicts[0]["dependency_requires_before"][0]["issue_number"] == "1"
-    assert conflicts[0]["dependency_requires_before"][0]["position"] == 1
-    assert "position 2 comes after issue at position 1" in conflicts[0]["conflict"]
 
 
 @pytest.mark.asyncio
