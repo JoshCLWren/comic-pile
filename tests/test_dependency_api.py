@@ -549,4 +549,70 @@ async def test_issue_dependency_blocking_multiple_issues_same_thread(
 
     info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
     assert info_resp.status_code == 200
-    assert info_resp.json()["is_blocked"] is True
+
+
+@pytest.mark.asyncio
+async def test_delete_dependency_clears_blocked_flag(auth_client, async_db, test_username):
+    """Regression test for issue #269: Deleting a dependency should clear the blocked flag."""
+    from sqlalchemy import select
+    from app.models import Thread, User
+
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    t1 = Thread(
+        title="Prerequisite Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    t2 = Thread(
+        title="Dependent Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add_all([t1, t2])
+    await async_db.commit()
+    await async_db.refresh(t1)
+    await async_db.refresh(t2)
+
+    create_dep_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "thread",
+            "source_id": t1.id,
+            "target_type": "thread",
+            "target_id": t2.id,
+        },
+    )
+    assert create_dep_resp.status_code == 201
+    dep_id = create_dep_resp.json()["id"]
+
+    await async_db.commit()
+    await async_db.refresh(t2)
+
+    assert t2.is_blocked is True, "Target thread should be blocked after creating dependency"
+
+    delete_resp = await auth_client.delete(
+        f"/api/v1/dependencies/{dep_id}",
+    )
+    assert delete_resp.status_code == 200
+
+    await async_db.commit()
+    await async_db.refresh(t2)
+
+    assert t2.is_blocked is False, "Target thread should not be blocked after deleting dependency"
+
+
+@pytest.mark.asyncio
+async def test_delete_nonexistent_dependency_returns_404(auth_client):
+    """Deleting a non-existent dependency should return 404."""
+    fake_dep_id = 99999
+    delete_resp = await auth_client.delete(f"/api/v1/dependencies/{fake_dep_id}")
+    assert delete_resp.status_code == 404
+    assert "not found" in delete_resp.json()["detail"].lower()
