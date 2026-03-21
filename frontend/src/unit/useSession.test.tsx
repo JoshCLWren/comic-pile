@@ -8,6 +8,7 @@ import {
   useSessions,
 } from '../hooks/useSession'
 import { sessionApi } from '../services/api'
+import { ToastProvider } from '../contexts/ToastContext'
 
 vi.mock('../services/api', () => ({
   sessionApi: {
@@ -21,6 +22,12 @@ vi.mock('../services/api', () => ({
 
 const mockedSessionApi = vi.mocked(sessionApi)
 
+function renderWithProvider(ui) {
+  return renderHook(ui, {
+    wrapper: ({ children }) => <ToastProvider>{children}</ToastProvider>,
+  })
+}
+
 beforeEach(() => {
   mockedSessionApi.getCurrent.mockResolvedValue({ id: 1 } as never)
   mockedSessionApi.list.mockResolvedValue([{ id: 2 }] as never)
@@ -30,22 +37,22 @@ beforeEach(() => {
 })
 
 it('loads current session', async () => {
-  const { result } = renderHook(() => useSession())
+  const { result } = renderWithProvider(() => useSession())
 
   await waitFor(() => expect(result.current.data).toEqual({ id: 1 }))
   expect(mockedSessionApi.getCurrent).toHaveBeenCalled()
 })
 
 it('loads session list', async () => {
-  const { result } = renderHook(() => useSessions({ status: 'done' }))
+  const { result } = renderWithProvider(() => useSessions({ status: 'done' }))
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
   expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done' })
 })
 
 it('loads session details and snapshots', async () => {
-  const { result: detailsResult } = renderHook(() => useSessionDetails(3))
-  const { result: snapshotsResult } = renderHook(() => useSessionSnapshots(3))
+  const { result: detailsResult } = renderWithProvider(() => useSessionDetails(3))
+  const { result: snapshotsResult } = renderWithProvider(() => useSessionSnapshots(3))
 
   await waitFor(() => expect(detailsResult.current.data).toEqual({ session_id: 3 }))
   await waitFor(() => expect(snapshotsResult.current.data).toEqual({ snapshots: [] }))
@@ -54,7 +61,7 @@ it('loads session details and snapshots', async () => {
 })
 
 it('restores session start', async () => {
-  const { result } = renderHook(() => useRestoreSessionStart())
+  const { result } = renderWithProvider(() => useRestoreSessionStart())
 
   await act(async () => {
     await result.current.mutate(11)
