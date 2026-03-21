@@ -33,10 +33,38 @@ export function IssueToggleList({ threadId }: {
   const [dragOverIssueId, setDragOverIssueId] = useState<number | null>(null)
   const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
   const [selectedDepsIssue, setSelectedDepsIssue] = useState<Issue | null>(null)
+  const [isExpanded, setIsExpanded] = useState(false)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
+
+  const getNextUnreadIssueId = useCallback(() => {
+    return issues.find((issue) => issue.status === 'unread')?.id ?? null
+  }, [issues])
+
+  const getVisibleIssues = useCallback(() => {
+    if (isExpanded || issues.length <= 5) {
+      return issues
+    }
+
+    const nextUnreadId = getNextUnreadIssueId()
+    if (!nextUnreadId) {
+      return issues.slice(-3)
+    }
+
+    const nextUnreadIndex = issues.findIndex((issue) => issue.id === nextUnreadId)
+    if (nextUnreadIndex === -1) {
+      return issues.slice(-3)
+    }
+
+    const readBeforeCount = 3
+    const unreadAfterCount = 3
+    const startIndex = Math.max(0, nextUnreadIndex - readBeforeCount)
+    const endIndex = Math.min(issues.length, nextUnreadIndex + unreadAfterCount + 1)
+
+    return issues.slice(startIndex, endIndex)
+  }, [issues, isExpanded, getNextUnreadIssueId])
 
   const syncOptimisticIssues = useCallback((baseIssues: Issue[], pendingMutations: IssueMutation[]) => {
     setIssues(applyIssueMutations(baseIssues, pendingMutations))
@@ -300,18 +328,38 @@ export function IssueToggleList({ threadId }: {
 
 if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
+  const visibleIssues = getVisibleIssues()
+  const hasHiddenIssues = issues.length > 5 && !isExpanded
+
   return (
     <div className="space-y-2">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+      <div className="flex justify-between items-center">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+        {issues.length > 5 && (
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            {isExpanded ? 'Show fewer' : `Show all ${issues.length}`}
+          </button>
+        )}
+      </div>
       <p className="sr-only" aria-live="polite">{reorderAnnouncement}</p>
+      {hasHiddenIssues && (
+        <p className="text-xs text-stone-500 italic">
+          Showing {visibleIssues.length} of {issues.length} issues around your current position
+        </p>
+      )}
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
-        {issues.map((issue, index) => {
-          const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
-          const isDragOver = dragOverIssueId === issue.id
-          const isDragged = draggedIssueId === issue.id
-          const canMoveUp = index > 0
-          const canMoveDown = index < issues.length - 1
-const hasDeps = dependencies[issue.id] !== undefined
+        {visibleIssues.map((issue) => {
+    const fullIndex = issues.findIndex((i) => i.id === issue.id)
+    const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
+    const isDragOver = dragOverIssueId === issue.id
+    const isDragged = draggedIssueId === issue.id
+    const canMoveUp = fullIndex > 0
+    const canMoveDown = fullIndex < issues.length - 1
+    const hasDeps = dependencies[issue.id] !== undefined
     const tooltipContent = getDependencyTooltip(dependencies[issue.id])
 
           return (
