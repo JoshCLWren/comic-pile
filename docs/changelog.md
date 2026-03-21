@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-21
+
+**Issue Dependencies**
+- New API endpoint: GET /api/v1/issues/{issue_id}/dependencies returns issue-level dependency edges
+- Dependency indicators (🔗) now shown on issues with incoming/outgoing dependencies
+- Tooltip displays linked issues and threads on hover
+- Authorization enforced: only shows dependencies for owned threads
+
+**UI Polish**
+- Issue list in queue edit modal now shows dependency status
+- Mobile-friendly tooltips for dependency information
+
 ## 2026-03-20
 
 **CI & Infrastructure**

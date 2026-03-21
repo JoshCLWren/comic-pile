@@ -463,6 +463,135 @@ Returns rendered HTML template with full event log including rolls and ratings.
 
 ---
 
+## Dependencies
+
+Manage hard-blocking dependencies between threads and issues.
+
+### GET /api/v1/dependencies/blocked
+
+List all thread IDs currently blocked by dependencies.
+
+**Response**: `200 OK`
+
+```json
+[2, 5, 8]
+```
+
+### GET /api/v1/threads/{thread_id}/dependencies
+
+Get all dependencies for a thread (both incoming and outgoing).
+
+**Response**: `200 OK`
+
+```json
+{
+  "blocking": [
+    {
+      "id": 1,
+      "source_thread_id": 1,
+      "target_thread_id": 2,
+      "source_issue_id": null,
+      "target_issue_id": null,
+      "is_issue_level": false,
+      "created_at": "2026-03-21T10:00:00",
+      "source_label": "Batman Vol. 1",
+      "target_label": "Batman Vol. 2"
+    }
+  ],
+  "blocked_by": []
+}
+```
+
+### GET /api/v1/issues/{issue_id}/dependencies
+
+Get all incoming and outgoing dependency edges for a specific issue.
+
+**Response**: `200 OK`
+
+```json
+{
+  "issue_id": 101,
+  "incoming": [
+    {
+      "dependency_id": 5,
+      "source_issue_id": 88,
+      "source_issue_number": "79",
+      "source_thread_id": 3,
+      "source_thread_title": "X-Men"
+    }
+  ],
+  "outgoing": [
+    {
+      "dependency_id": 7,
+      "source_issue_id": 115,
+      "source_issue_number": "10",
+      "source_thread_id": 4,
+      "source_thread_title": "New Mutants"
+    }
+  ]
+}
+```
+
+**Response**: `404 Not Found`
+
+```json
+{
+  "detail": "Issue 99999 not found"
+}
+```
+
+### POST /api/v1/dependencies/
+
+Create a new dependency between two threads or two issues.
+
+**Request Body**:
+
+```json
+{
+  "source_type": "thread",
+  "source_id": 1,
+  "target_type": "thread",
+  "target_id": 2
+}
+```
+
+For issue-level dependencies:
+
+```json
+{
+  "source_type": "issue",
+  "source_id": 101,
+  "target_type": "issue",
+  "target_id": 205
+}
+```
+
+**Response**: `201 Created`
+
+Returns the created dependency with enriched labels.
+
+### DELETE /api/v1/dependencies/{dependency_id}
+
+Delete a dependency.
+
+**Response**: `200 OK`
+
+```json
+{
+  "message": "Dependency deleted"
+}
+```
+
+**Response**: `404 Not Found`
+
+```json
+{
+  "detail": "Dependency 999 not found"
+}
+```
+
+---
+
 ## Admin
 
 Data import/export operations.

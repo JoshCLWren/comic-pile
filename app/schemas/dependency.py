@@ -43,3 +43,21 @@ class ThreadDependenciesResponse(BaseModel):
 
     blocking: list[DependencyResponse]
     blocked_by: list[DependencyResponse]
+
+
+class IssueDependencyEdge(BaseModel):
+    """Schema for a single issue dependency edge."""
+
+    dependency_id: int
+    source_issue_id: int
+    source_issue_number: str
+    source_thread_id: int
+    source_thread_title: str
+
+
+class IssueDependenciesResponse(BaseModel):
+    """Schema for issue-level dependency listing."""
+
+    issue_id: int
+    incoming: list[IssueDependencyEdge]
+    outgoing: list[IssueDependencyEdge]
