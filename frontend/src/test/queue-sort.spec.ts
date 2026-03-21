@@ -22,7 +22,7 @@ test.describe('Queue Sorting', () => {
     await authenticatedPage.waitForSelector('#queue-container', { timeout: 5000 });
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'title-asc');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
 
     const threadElements = authenticatedPage.locator('#queue-container h3');
     const count = await threadElements.count();
@@ -54,7 +54,7 @@ test.describe('Queue Sorting', () => {
     await authenticatedPage.waitForSelector('#queue-container', { timeout: 5000 });
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'title-desc');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
 
     const threadElements = authenticatedPage.locator('#queue-container h3');
     const count = await threadElements.count();
@@ -78,7 +78,7 @@ test.describe('Queue Sorting', () => {
       issues_remaining: 5,
     });
 
-    await authenticatedPage.waitForTimeout(1100);
+    await authenticatedPage.waitForLoadState('networkidle');
 
     await createThread(authenticatedPage, {
       title: 'Second Thread',
@@ -90,7 +90,7 @@ test.describe('Queue Sorting', () => {
     await authenticatedPage.waitForSelector('#queue-container', { timeout: 5000 });
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'created-desc');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
 
     const threadElements = authenticatedPage.locator('#queue-container h3');
     const firstTitle = await threadElements.nth(0).textContent();
@@ -123,7 +123,7 @@ test.describe('Queue Sorting', () => {
     await authenticatedPage.waitForSelector('#queue-container', { timeout: 5000 });
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'format');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
 
     const formatElements = authenticatedPage.locator('#queue-container .glass-card p.text-xs.uppercase');
     const count = await formatElements.count();
@@ -183,7 +183,7 @@ test.describe('Queue Sorting', () => {
 
     const getQueuePositions = async () => {
       await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'queue');
-      await authenticatedPage.waitForTimeout(500);
+      await authenticatedPage.waitForLoadState('networkidle');
       const threadElements = authenticatedPage.locator('#queue-container h3');
       const titles: string[] = [];
       const count = await threadElements.count();
@@ -198,7 +198,7 @@ test.describe('Queue Sorting', () => {
     expect(originalOrder[0]).toContain('Alpha');
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'title-desc');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
 
     const sortedOrder = await getQueuePositions();
     expect(sortedOrder).toEqual(originalOrder);
@@ -221,17 +221,17 @@ test.describe('Queue Sorting', () => {
     await authenticatedPage.waitForSelector('#queue-container', { timeout: 5000 });
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'title-asc');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
     let firstTitle = await authenticatedPage.locator('#queue-container h3').first().textContent();
     expect(firstTitle).toContain('Amazing');
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'title-desc');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
     firstTitle = await authenticatedPage.locator('#queue-container h3').first().textContent();
     expect(firstTitle).toContain('Batman');
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'queue');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
     firstTitle = await authenticatedPage.locator('#queue-container h3').first().textContent();
     expect(firstTitle).toContain('Amazing');
   });
@@ -262,7 +262,7 @@ test.describe('Queue Sorting', () => {
     await authenticatedPage.waitForSelector('#queue-container', { timeout: 5000 });
 
     await authenticatedPage.selectOption('select[aria-label="Sort threads"]', 'title-desc');
-    await authenticatedPage.waitForTimeout(500);
+    await authenticatedPage.waitForLoadState('networkidle');
 
     let firstTitle = await authenticatedPage.locator('#queue-container h3').first().textContent();
     expect(firstTitle).toContain('X-Men');

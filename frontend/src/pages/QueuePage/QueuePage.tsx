@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
@@ -143,16 +143,18 @@ export default function QueuePage() {
     }
   }, [createForm.issues])
 
-  const activeThreads = threads
-    ?.filter((thread) => thread.status === 'active')
-    .sort((a, b) => {
+  const activeThreads = useMemo(() => {
+    const filtered = threads?.filter((thread) => thread.status === 'active') ?? []
+    return filtered.sort((a, b) => {
       switch (sortOption) {
         case 'title-asc':
           return a.title.localeCompare(b.title)
         case 'title-desc':
           return b.title.localeCompare(a.title)
         case 'created-desc':
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          const aTime = new Date(a.created_at).getTime()
+          const bTime = new Date(b.created_at).getTime()
+          return bTime - aTime
         case 'format':
           const formatCompare = a.format.localeCompare(b.format)
           if (formatCompare !== 0) return formatCompare
@@ -161,7 +163,8 @@ export default function QueuePage() {
         default:
           return a.queue_position - b.queue_position
       }
-    }) ?? []
+    })
+  }, [threads, sortOption])
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
 
   const handleDelete = (threadId: number) => {
@@ -520,7 +523,7 @@ export default function QueuePage() {
             aria-label="Thread queue"
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
           >
-            {activeThreads.map((thread, index) => {
+            {activeThreads.map((thread) => {
               const isDragOver = dragOverThreadId === thread.id
               const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
               const blockingReasons = blockingReasonMap[thread.id] || []
@@ -547,7 +550,7 @@ export default function QueuePage() {
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <span className="text-2xl font-black text-amber-600/30">
-                        #{index + 1}
+                        #{thread.queue_position}
                       </span>
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Tooltip content="Drag to reorder within the queue.">
