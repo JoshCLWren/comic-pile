@@ -59,6 +59,17 @@ export default function QueuePage() {
   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
+  const [sortOption, setSortOption] = useState<'queue' | 'title-asc' | 'title-desc' | 'created-desc' | 'format'>(() => {
+    const saved = localStorage.getItem('queue-sort-option')
+    return (saved === 'queue' || saved === 'title-asc' || saved === 'title-desc' || saved === 'created-desc' || saved === 'format')
+      ? saved
+      : 'queue'
+  })
+
+  const handleSortChange = (newSort: typeof sortOption) => {
+    setSortOption(newSort)
+    localStorage.setItem('queue-sort-option', newSort)
+  }
 
   useEffect(() => {
     if (location.state?.editThreadId && threads) {
@@ -134,7 +145,23 @@ export default function QueuePage() {
 
   const activeThreads = threads
     ?.filter((thread) => thread.status === 'active')
-    .sort((a, b) => a.queue_position - b.queue_position) ?? []
+    .sort((a, b) => {
+      switch (sortOption) {
+        case 'title-asc':
+          return a.title.localeCompare(b.title)
+        case 'title-desc':
+          return b.title.localeCompare(a.title)
+        case 'created-desc':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        case 'format':
+          const formatCompare = a.format.localeCompare(b.format)
+          if (formatCompare !== 0) return formatCompare
+          return a.title.localeCompare(b.title)
+        case 'queue':
+        default:
+          return a.queue_position - b.queue_position
+      }
+    }) ?? []
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
 
   const handleDelete = (threadId: number) => {
@@ -441,13 +468,30 @@ export default function QueuePage() {
           <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
         </div>
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-        >
-          Add Thread
-        </button>
+        <div className="flex gap-3 items-center">
+          <div className="relative">
+            <select
+              value={sortOption}
+              onChange={(e) => handleSortChange(e.target.value as typeof sortOption)}
+              className="h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 transition-all appearance-none cursor-pointer pr-10"
+              aria-label="Sort threads"
+            >
+              <option value="queue">Queue Order</option>
+              <option value="title-asc">Title (A-Z)</option>
+              <option value="title-desc">Title (Z-A)</option>
+              <option value="created-desc">Recently Added</option>
+              <option value="format">Format</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-stone-400 text-xs">▼</div>
+          </div>
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+          >
+            Add Thread
+          </button>
+        </div>
       </header>
       
       {/* Mobile FAB for Add Thread */}
