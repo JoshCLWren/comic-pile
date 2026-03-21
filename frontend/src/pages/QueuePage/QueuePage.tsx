@@ -56,6 +56,11 @@ export default function QueuePage() {
   const [reorderError, setReorderError] = useState<string | null>(null)
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+
+  const openActionSheet = (thread: Thread) => {
+    setSelectedThread(thread)
+    setIsActionSheetOpen(true)
+  }
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
   const [blockedThreadIds, setBlockedThreadIds] = useState<number[]>([])
@@ -360,8 +365,7 @@ export default function QueuePage() {
   }
 
   function handleThreadClick(thread: Thread) {
-    setSelectedThread(thread)
-    setIsActionSheetOpen(true)
+    navigate(`/thread/${thread.id}`)
   }
 
   async function handleAction(action: string) {
@@ -408,7 +412,7 @@ export default function QueuePage() {
           setIsDependencyBuilderOpen(true)
           break
         case 'edit':
-          openEditModal(selectedThread)
+          navigate(`/thread/${selectedThread.id}`)
           break
       }
     } catch (error: unknown) {
@@ -577,13 +581,25 @@ export default function QueuePage() {
                           &times;
                         </button>
                       </Tooltip>
-                      <PositionMenu
-                        thread={thread}
-                        onMoveToFront={handleMoveToFront}
-                        onReposition={openRepositionModal}
-                        onMoveToBack={handleMoveToBack}
-                      />
-                    </div>
+        <PositionMenu
+          thread={thread}
+          onMoveToFront={handleMoveToFront}
+          onReposition={openRepositionModal}
+          onMoveToBack={handleMoveToBack}
+        />
+      </div>
+      {/* Mobile 3-dot menu indicator */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          openActionSheet(thread)
+        }}
+        className="md:hidden text-stone-500 flex items-center justify-center w-8 h-8 text-xl"
+        aria-label="Open actions"
+      >
+        ⋮
+      </button>
                   </div>
                   <div className="pl-[2.75rem]">
                     <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
