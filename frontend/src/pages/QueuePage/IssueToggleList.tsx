@@ -27,10 +27,44 @@ export function IssueToggleList({ threadId }: {
   const [deleting, setDeleting] = useState<Set<number>>(new Set())
   const [draggedIssueId, setDraggedIssueId] = useState<number | null>(null)
   const [dragOverIssueId, setDragOverIssueId] = useState<number | null>(null)
+  const [isExpanded, setIsExpanded] = useState(false)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
+
+  const getNextUnreadIssueId = useCallback(() => {
+    return issues.find((issue) => issue.status === 'unread')?.id ?? null
+  }, [issues])
+
+  const getVisibilityWindow = useCallback((issueList: Issue[], nextUnreadId: number | null) => {
+    if (!nextUnreadId) {
+      return { startIndex: issueList.length - 3, endIndex: issueList.length }
+    }
+
+    const nextUnreadIndex = issueList.findIndex((issue) => issue.id === nextUnreadId)
+    if (nextUnreadIndex === -1) {
+      return { startIndex: issueList.length - 3, endIndex: issueList.length }
+    }
+
+    const readBeforeCount = 3
+    const unreadAfterCount = 3
+    const startIndex = Math.max(0, nextUnreadIndex - readBeforeCount)
+    const endIndex = Math.min(issueList.length, nextUnreadIndex + unreadAfterCount + 1)
+
+    return { startIndex, endIndex }
+  }, [])
+
+  const getVisibleIssues = useCallback(() => {
+    if (isExpanded || issues.length <= 5) {
+      return issues
+    }
+
+    const nextUnreadId = getNextUnreadIssueId()
+    const { startIndex, endIndex } = getVisibilityWindow(issues, nextUnreadId)
+
+    return issues.slice(startIndex, endIndex)
+  }, [issues, isExpanded, getNextUnreadIssueId, getVisibilityWindow])
 
   const syncOptimisticIssues = useCallback((baseIssues: Issue[], pendingMutations: IssueMutation[]) => {
     setIssues(applyIssueMutations(baseIssues, pendingMutations))
@@ -271,22 +305,54 @@ export function IssueToggleList({ threadId }: {
 
     if (!didReorder) {
       focusMoveControl(issue.id, direction)
+      return
+    }
+
+    if (!isExpanded) {
+      const nextUnreadId = nextIssues.find((i) => i.status === 'unread')?.id ?? null
+      const { startIndex, endIndex } = getVisibilityWindow(nextIssues, nextUnreadId)
+      const movedIssueIndex = nextIssues.findIndex((i) => i.id === issue.id)
+      const wouldBeVisible = movedIssueIndex >= startIndex && movedIssueIndex < endIndex
+
+      if (!wouldBeVisible) {
+        setIsExpanded(true)
+      }
     }
   }
 
   if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
+  const visibleIssues = getVisibleIssues()
+  const hasHiddenIssues = issues.length > 5 && !isExpanded
+
   return (
     <div className="space-y-2">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+      <div className="flex justify-between items-center">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
+        {issues.length > 5 && (
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            {isExpanded ? 'Show fewer' : `Show all ${issues.length}`}
+          </button>
+        )}
+      </div>
       <p className="sr-only" aria-live="polite">{reorderAnnouncement}</p>
+      {hasHiddenIssues && (
+        <p className="text-xs text-stone-500 italic">
+          Showing {visibleIssues.length} of {issues.length} issues around your current position
+        </p>
+      )}
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
-        {issues.map((issue, index) => {
+        {visibleIssues.map((issue) => {
+          const fullIndex = issues.findIndex((i) => i.id === issue.id)
           const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
           const isDragOver = dragOverIssueId === issue.id
           const isDragged = draggedIssueId === issue.id
-          const canMoveUp = index > 0
-          const canMoveDown = index < issues.length - 1
+          const canMoveUp = fullIndex > 0
+          const canMoveDown = fullIndex < issues.length - 1
 
           return (
             <div
