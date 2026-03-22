@@ -43,28 +43,34 @@ export function IssueToggleList({ threadId }: {
     return issues.find((issue) => issue.status === 'unread')?.id ?? null
   }, [issues])
 
+  const getVisibilityWindow = useCallback((issueList: Issue[], nextUnreadId: number | null) => {
+    if (!nextUnreadId) {
+      return { startIndex: issueList.length - 3, endIndex: issueList.length }
+    }
+
+    const nextUnreadIndex = issueList.findIndex((issue) => issue.id === nextUnreadId)
+    if (nextUnreadIndex === -1) {
+      return { startIndex: issueList.length - 3, endIndex: issueList.length }
+    }
+
+    const readBeforeCount = 3
+    const unreadAfterCount = 3
+    const startIndex = Math.max(0, nextUnreadIndex - readBeforeCount)
+    const endIndex = Math.min(issueList.length, nextUnreadIndex + unreadAfterCount + 1)
+
+    return { startIndex, endIndex }
+  }, [])
+
   const getVisibleIssues = useCallback(() => {
     if (isExpanded || issues.length <= 5) {
       return issues
     }
 
     const nextUnreadId = getNextUnreadIssueId()
-    if (!nextUnreadId) {
-      return issues.slice(-3)
-    }
-
-    const nextUnreadIndex = issues.findIndex((issue) => issue.id === nextUnreadId)
-    if (nextUnreadIndex === -1) {
-      return issues.slice(-3)
-    }
-
-    const readBeforeCount = 3
-    const unreadAfterCount = 3
-    const startIndex = Math.max(0, nextUnreadIndex - readBeforeCount)
-    const endIndex = Math.min(issues.length, nextUnreadIndex + unreadAfterCount + 1)
+    const { startIndex, endIndex } = getVisibilityWindow(issues, nextUnreadId)
 
     return issues.slice(startIndex, endIndex)
-  }, [issues, isExpanded, getNextUnreadIssueId])
+  }, [issues, isExpanded, getNextUnreadIssueId, getVisibilityWindow])
 
   const syncOptimisticIssues = useCallback((baseIssues: Issue[], pendingMutations: IssueMutation[]) => {
     setIssues(applyIssueMutations(baseIssues, pendingMutations))
@@ -328,20 +334,9 @@ export function IssueToggleList({ threadId }: {
 
     if (!isExpanded) {
       const nextUnreadId = nextIssues.find((i) => i.status === 'unread')?.id ?? null
-      let wouldBeVisible = false
-
-      if (nextUnreadId) {
-        const nextUnreadIndex = nextIssues.findIndex((i) => i.id === nextUnreadId)
-        const movedIssueIndex = nextIssues.findIndex((i) => i.id === issue.id)
-        const readBeforeCount = 3
-        const unreadAfterCount = 3
-        const startIndex = Math.max(0, nextUnreadIndex - readBeforeCount)
-        const endIndex = Math.min(nextIssues.length, nextUnreadIndex + unreadAfterCount + 1)
-        wouldBeVisible = movedIssueIndex >= startIndex && movedIssueIndex < endIndex
-      } else {
-        const movedIssueIndex = nextIssues.findIndex((i) => i.id === issue.id)
-        wouldBeVisible = movedIssueIndex >= nextIssues.length - 3
-      }
+      const { startIndex, endIndex } = getVisibilityWindow(nextIssues, nextUnreadId)
+      const movedIssueIndex = nextIssues.findIndex((i) => i.id === issue.id)
+      const wouldBeVisible = movedIssueIndex >= startIndex && movedIssueIndex < endIndex
 
       if (!wouldBeVisible) {
         setIsExpanded(true)

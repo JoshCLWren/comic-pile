@@ -186,10 +186,11 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Click to toggle
     await firstVisibleIssue.click();
-    await authenticatedPage.waitForLoadState('networkidle');
 
-    // Verify the issue status changed
-    const newText = await firstVisibleIssue.textContent();
-    expect(newText).not.toBe(initialText);
+    // Verify the issue status changed (optimistic UI update)
+    await expect(async () => {
+      const newText = await firstVisibleIssue.textContent();
+      expect(newText).not.toBe(initialText);
+    }).toPass();
   });
 });
