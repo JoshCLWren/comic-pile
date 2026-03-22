@@ -301,6 +301,7 @@ export default function RollPage() {
     const pendingFromSession = session?.active_thread && session.active_thread.id === pendingId
       ? { id: session.active_thread.id, title: session.active_thread.title, format: session.active_thread.format,
           issues_remaining: session.active_thread.issues_remaining, queue_position: session.active_thread.queue_position,
+          total_issues: session.active_thread.total_issues ?? null, reading_progress: session.active_thread.reading_progress ?? null,
           last_rolled_result: session.last_rolled_result ?? session.active_thread.last_rolled_result ?? null }
       : null
 
@@ -414,8 +415,6 @@ export default function RollPage() {
   const filteredThreads = activeThreads.filter(t => !isRatingView || t.id !== (selectedThreadId ? Number(selectedThreadId) : null))
   const pool = filteredThreads.slice(0, dieSize)
   const hasValidRolledResult = Number.isInteger(rolledResult) && rolledResult !== null && rolledResult >= 1 && rolledResult <= currentDie
-  const ratingThreadVisualPosition = activeRatingThread
-    ? activeThreads.findIndex(t => t.id === activeRatingThread.id) + 1 || activeRatingThread.queue_position : null
 
   async function handleSetDie(die: number) {
     setCurrentDie(die)
@@ -618,7 +617,6 @@ export default function RollPage() {
                 rating={rating}
                 predictedDie={predictedDie}
                 hasValidRolledResult={hasValidRolledResult}
-                ratingThreadVisualPosition={ratingThreadVisualPosition}
                 poolSize={pool.length}
                 errorMessage={errorMessage}
                 rateIsPending={rateMutation.isPending}

@@ -1,4 +1,3 @@
-import type { KeyboardEvent } from 'react'
 import LazyDice3D from '../../../components/LazyDice3D'
 import Tooltip from '../../../components/Tooltip'
 import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
@@ -11,7 +10,6 @@ interface RatingViewProps {
   rating: number
   predictedDie: number
   hasValidRolledResult: boolean
-  ratingThreadVisualPosition: number | null
   poolSize: number
   errorMessage: string
   rateIsPending: boolean
@@ -30,7 +28,6 @@ export function RatingView({
   rating,
   predictedDie,
   hasValidRolledResult,
-  ratingThreadVisualPosition,
   poolSize,
   errorMessage,
   rateIsPending,
@@ -45,34 +42,41 @@ export function RatingView({
     <div className="p-4 space-y-8 relative z-10">
       <div id="thread-info" role="status" aria-live="polite">
         <div className="space-y-3 text-center">
-           {(activeRatingThread?.next_issue_number || activeRatingThread?.issue_number) ? (
+          {(activeRatingThread?.next_issue_number || activeRatingThread?.issue_number || activeRatingThread?.total_issues) ? (
             <>
-              <h2 className="text-2xl font-black text-stone-200 line-clamp-2">{activeRatingThread?.title || 'Loading...'}</h2>
-              <div className="flex items-center justify-center gap-3 flex-wrap">
-                <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg text-sm font-black uppercase tracking-[0.2em] border border-amber-500/20">
-                  #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}
-                </span>
-                {activeRatingThread.total_issues && (
+              <h2 className="text-2xl font-black text-stone-200 truncate max-w-[280px] sm:max-w-none mx-auto">
+                {activeRatingThread?.title || 'Loading...'} #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}
+              </h2>
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                {activeRatingThread.total_issues ? (
                   <span className="text-stone-400 text-xs font-bold">
-                    (#{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number} of {activeRatingThread.total_issues})
+                    {getProgressPercentage(activeRatingThread)}% complete · {activeRatingThread.issues_remaining} issues left
+                  </span>
+                ) : (
+                  <span className="text-stone-400 text-xs font-bold">
+                    {activeRatingThread.issues_remaining} issues left
                   </span>
                 )}
-                <span className="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-amber-600/20">
-                  Queue #{ratingThreadVisualPosition ?? '-'}
-                </span>
+                {hasValidRolledResult && (
+                  <span className="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-amber-600/20">
+                    You rolled a {rolledResult}!
+                  </span>
+                )}
               </div>
             </>
-           ) : (
+          ) : (
             <>
-              <h2 className="text-2xl font-black text-stone-200 line-clamp-2">{activeRatingThread?.title || 'Loading...'}</h2>
+              <h2 className="text-2xl font-black text-stone-200">{activeRatingThread?.title || 'Loading...'}</h2>
               <div className="flex items-center justify-center gap-3">
-                <span className="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-amber-600/20">
-                  Queue #{ratingThreadVisualPosition ?? '-'}
-                </span>
+                {hasValidRolledResult && (
+                  <span className="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-amber-600/20">
+                    You rolled a {rolledResult}!
+                  </span>
+                )}
                 <span className="bg-red-800/20 text-red-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-red-800/20">
                   {activeRatingThread?.format || '...'}
                 </span>
-                <span className="text-stone-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} Issues left</span>
+                <span className="text-stone-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} issues left</span>
               </div>
             </>
           )}
@@ -98,8 +102,7 @@ export function RatingView({
         <div id="rating-preview-dice" className="dice-perspective">
           <div
             id="die-preview-wrapper"
-            className="dice-state-rate-flow relative flex items-center justify-center"
-            style={{ width: '120px', height: '120px', margin: '0 auto' }}
+            className="dice-state-rate-flow relative flex items-center justify-center w-[120px] h-[120px] mx-auto"
           >
             <LazyDice3D
               sides={currentDie}
