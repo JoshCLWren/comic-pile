@@ -117,7 +117,7 @@ export default function RollPage() {
         next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
         last_rolled_result: response.result ?? response.last_rolled_result,
       }
-      if (!response.total_issues) {
+      if (response.total_issues === null) {
         setThreadToMigrate(threadMetadata as RatingThread)
         setShowMigrationDialog(true)
       } else {
@@ -184,13 +184,8 @@ export default function RollPage() {
   }, [])
 
   const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
-    const num = parseInt(issueNumber, 10)
-    if (isNaN(num) || num < 1) {
-      setErrorMessage('Invalid issue number')
-      return
-    }
     setShowSimpleMigration(false)
-    rateMutation.mutate({ rating, finish_session: false, issue_number: num }).then(() => {
+    rateMutation.mutate({ rating, finish_session: false, issue_number: issueNumber }).then(() => {
       suppressPendingAutoOpenRef.current = true
       setIsRolling(false)
       setIsRatingView(false)
@@ -221,7 +216,7 @@ export default function RollPage() {
             next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
             last_rolled_result: response.result ?? response.last_rolled_result,
           }
-          if (!response.total_issues) {
+          if (response.total_issues === null) {
             setThreadToMigrate(threadMetadata as RatingThread)
             setShowMigrationDialog(true)
           } else {
@@ -373,7 +368,13 @@ export default function RollPage() {
 
   async function handleSubmitRating(finishSession = false) {
     if (rating >= RATING_THRESHOLD) createExplosion()
-    if (activeRatingThread && !activeRatingThread.total_issues) {
+
+    const freshTotalIssues =
+      session?.active_thread?.id === activeRatingThread?.id
+        ? session?.active_thread?.total_issues ?? activeRatingThread?.total_issues
+        : activeRatingThread?.total_issues
+
+    if (activeRatingThread && freshTotalIssues === null) {
       setShowSimpleMigration(true)
       return
     }

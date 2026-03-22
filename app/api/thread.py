@@ -879,15 +879,75 @@ async def migrate_thread_to_issues_simple(
 
     issue_number = request.issue_number
 
-    if issue_number < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="issue_number must be at least 1",
-        )
+    from sqlalchemy import select
+    from app.models import Issue
 
-    total_issues = issue_number + max(thread.issues_remaining - 1, 0)
+    result = await db.execute(
+        select(Issue).where(Issue.thread_id == thread_id).where(Issue.issue_number == issue_number)
+    )
+    current_issue = result.scalar_one_or_none()
 
-    await thread.migrate_to_issues(issue_number - 1, total_issues, db)
+    if not current_issue:
+        try:
+            issue_num_int = int(issue_number)
+            total_issues = issue_num_int + max(thread.issues_remaining - 1, 0)
+
+            for i in range(1, total_issues + 1):
+                if i < issue_num_int:
+                    issue_status = "read"
+                    read_at = datetime.now(UTC)
+                else:
+                    issue_status = "unread"
+                    read_at = None
+
+                issue = Issue(
+                    thread_id=thread.id,
+                    issue_number=str(i),
+                    status=issue_status,
+                    read_at=read_at,
+                    position=i,
+                )
+                db.add(issue)
+
+            await db.flush()
+
+            result = await db.execute(
+                select(Issue)
+                .where(Issue.thread_id == thread_id)
+                .where(Issue.issue_number == issue_number)
+            )
+            current_issue = result.scalar_one_or_none()
+
+            if not current_issue:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to create issue '{issue_number}'. Please add it via Edit Thread first.",
+                )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Non-numeric issue '{issue_number}' not found in thread. Please add it via Edit Thread first.",
+            ) from None
+
+    result = await db.execute(
+        select(Issue).where(Issue.thread_id == thread_id).order_by(Issue.position)
+    )
+    all_issues = result.scalars().all()
+
+    for issue in all_issues:
+        if issue.position < current_issue.position:
+            if issue.status != "read":
+                issue.status = "read"
+                issue.read_at = datetime.now(UTC)
+        elif issue.position == current_issue.position:
+            issue.status = "unread"
+            issue.read_at = None
+
+    thread.total_issues = len(all_issues)
+    thread.next_unread_issue_id = current_issue.id
+    thread.reading_progress = "in_progress"
+
+    await db.flush()
 
     response = await thread_to_response(thread, db)
 
