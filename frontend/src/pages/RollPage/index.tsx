@@ -69,13 +69,8 @@ export default function RollPage() {
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
-  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-  const {
-    collections = [],
-    activeCollectionId = null,
-    setActiveCollectionId,
-    isLoading: isCollectionsLoading = false,
-  } = useCollections()
+const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
@@ -506,9 +501,7 @@ export default function RollPage() {
     }
   }
 
-  function handleCollectionChange(collectionId: number | null) {
-    setActiveCollectionId(collectionId)
-  }
+
 
   function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -658,31 +651,26 @@ export default function RollPage() {
               />
             )}
 
-            <ThreadPool
-              pool={pool}
-              blockedThreads={blockedThreads}
-              blockingReasonMap={blockingReasonMap}
-              isRatingView={isRatingView}
-              isRolling={isRolling}
-              rolledResult={rolledResult}
-              selectedThreadId={selectedThreadId}
-              staleThread={staleThread}
-              staleThreadCount={staleThreadCount}
-              snoozedThreads={session?.snoozed_threads || []}
-              snoozedExpanded={snoozedExpanded}
-              blockedExpanded={blockedExpanded}
-              activeCollectionId={activeCollectionId}
-              collections={collections}
-              isCollectionsLoading={isCollectionsLoading}
-              onThreadClick={handleThreadClick}
-              onCollectionChange={handleCollectionChange}
-              onNewCollection={() => { setEditingCollection(null); setIsCollectionDialogOpen(true) }}
-              onUnsnooze={handleUnsnooze}
-              onReadStale={handleReadStale}
-              onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
-              onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
-              unsnoozeIsPending={unsnoozeMutation.isPending}
-            />
+  <ThreadPool
+    pool={pool}
+    blockedThreads={blockedThreads}
+    blockingReasonMap={blockingReasonMap}
+    isRatingView={isRatingView}
+    isRolling={isRolling}
+    rolledResult={rolledResult}
+    selectedThreadId={selectedThreadId}
+    staleThread={staleThread}
+    staleThreadCount={staleThreadCount}
+    snoozedThreads={session?.snoozed_threads || []}
+    snoozedExpanded={snoozedExpanded}
+    blockedExpanded={blockedExpanded}
+    onThreadClick={handleThreadClick}
+    onUnsnooze={handleUnsnooze}
+    onReadStale={handleReadStale}
+    onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
+    onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+    unsnoozeIsPending={unsnoozeMutation.isPending}
+  />
           </div>
         </div>
 

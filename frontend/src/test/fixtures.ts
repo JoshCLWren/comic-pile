@@ -262,7 +262,7 @@ export const test = base.extend<TestFixtures>({
     });
 
     // 3. Wait for the roll page to be ready
-    await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 });
+    await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 10000 });
 
     await use(page);
 
