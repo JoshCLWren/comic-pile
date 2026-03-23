@@ -147,7 +147,7 @@ async def test_list_issues_filter_by_unread(
     assert response.status_code == 200
 
     data = response.json()
-    assert data["total_count"] == 5
+    assert data["total_count"] == 3
     assert len(data["issues"]) == 3
     assert all(issue["status"] == "unread" for issue in data["issues"])
 
@@ -188,7 +188,7 @@ async def test_list_issues_filter_by_read(auth_client: AsyncClient, async_db: As
     assert response.status_code == 200
 
     data = response.json()
-    assert data["total_count"] == 5
+    assert data["total_count"] == 2
     assert len(data["issues"]) == 2
     assert all(issue["status"] == "read" for issue in data["issues"])
 

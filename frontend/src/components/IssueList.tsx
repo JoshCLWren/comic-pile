@@ -12,24 +12,46 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   const [issues, setIssues] = useState<Issue[]>([])
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
   const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
+  const [totalCount, setTotalCount] = useState<number>(0)
 
-  const loadIssues = useCallback(async () => {
-    setIsLoading(true)
+  const loadIssues = useCallback(async (append: boolean = false) => {
+    if (append) {
+      setIsLoadingMore(true)
+    } else {
+      setIsLoading(true)
+    }
     try {
       const response = await issuesApi.list(thread.id, {
-        status: filter === 'all' ? undefined : filter
+        status: filter === 'all' ? undefined : filter,
+        page_size: 50,
+        page_token: append ? nextPageToken ?? undefined : undefined,
       })
-      setIssues(response.issues)
+      
+      if (append) {
+        setIssues((prevIssues) => [...prevIssues, ...response.issues])
+      } else {
+        setIssues(response.issues)
+        setTotalCount(response.total_count)
+      }
+      setNextPageToken(response.next_page_token)
     } catch (error) {
       console.error('Failed to load issues:', error)
     } finally {
       setIsLoading(false)
+      setIsLoadingMore(false)
     }
-  }, [thread.id, filter])
+  }, [thread.id, filter, nextPageToken])
 
   useEffect(() => {
-    loadIssues()
+    loadIssues(false)
   }, [loadIssues])
+
+  const handleFilterChange = (newFilter: 'all' | 'unread' | 'read') => {
+    setFilter(newFilter)
+    setNextPageToken(null)
+  }
 
   const toggleIssueStatus = async (issue: Issue) => {
     try {
@@ -66,7 +88,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
 
   const nextUnreadId = thread.next_unread_issue_id
   const readCount = issues.filter((i) => i.status === 'read').length
-  const progressPercent = Math.round((readCount / issues.length) * 100)
+  const progressPercent = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0
 
   return (
     <div className="issue-list">
@@ -74,7 +96,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         <h3>Issues</h3>
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value as 'all' | 'unread' | 'read')}
+          onChange={(e) => handleFilterChange(e.target.value as 'all' | 'unread' | 'read')}
         >
           <option value="all">All</option>
           <option value="unread">Unread</option>
@@ -99,12 +121,25 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         ))}
       </div>
 
+      {nextPageToken && (
+        <div className="issue-list-load-more">
+          <button
+            type="button"
+            onClick={() => loadIssues(true)}
+            disabled={isLoadingMore}
+            className="load-more-button"
+          >
+            {isLoadingMore ? 'Loading...' : `Load more (${issues.length} of ${totalCount})`}
+          </button>
+        </div>
+      )}
+
       <div className="issue-list-footer">
         <div className="progress-bar">
           <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
         </div>
         <div className="progress-text">
-          Read {readCount} of {issues.length} ({progressPercent}%)
+          Read {readCount} of {totalCount} ({progressPercent}%)
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react'
+import { useEffect, useMemo, useCallback, useState } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import LazyDice3D from '../../components/LazyDice3D'
 import Modal from '../../components/Modal'
@@ -6,7 +6,6 @@ import Tooltip from '../../components/Tooltip'
 import MigrationDialog from '../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../components/SimpleMigrationDialog'
 import CollectionDialog from '../../components/CollectionDialog'
-import CollectionToolbar from '../../components/CollectionToolbar'
 import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
@@ -24,7 +23,7 @@ import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
-import type { Thread, RollResponse, SessionThread } from '../../types'
+import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -68,8 +67,15 @@ export default function RollPage() {
     rollTimeoutRef,
   } = state
 
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-  const { activeCollectionId = null } = useCollections()
+  const {
+    collections = [],
+    activeCollectionId = null,
+    setActiveCollectionId,
+    isLoading: isCollectionsLoading = false,
+  } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
@@ -80,6 +86,16 @@ export default function RollPage() {
       if (status === 401) navigate('/login')
     }
   }, [isSessionError, sessionError, navigate])
+
+  useEffect(() => {
+    const handleTestEditCollection = ((e: CustomEvent<Collection>) => {
+      setEditingCollection(e.detail)
+      setIsCollectionDialogOpen(true)
+    }) as EventListener
+
+    window.addEventListener('test-edit-collection', handleTestEditCollection)
+    return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
+  }, [])
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -113,7 +129,7 @@ export default function RollPage() {
         next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
         last_rolled_result: response.result ?? response.last_rolled_result,
       }
-      if (!response.total_issues) {
+      if (response.total_issues === null) {
         setThreadToMigrate(threadMetadata as RatingThread)
         setShowMigrationDialog(true)
       } else {
@@ -180,13 +196,8 @@ export default function RollPage() {
   }, [])
 
   const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
-    const num = parseInt(issueNumber, 10)
-    if (isNaN(num) || num < 1) {
-      setErrorMessage('Invalid issue number')
-      return
-    }
     setShowSimpleMigration(false)
-    rateMutation.mutate({ rating, finish_session: false, issue_number: num }).then(() => {
+    rateMutation.mutate({ rating, finish_session: false, issue_number: issueNumber }).then(() => {
       suppressPendingAutoOpenRef.current = true
       setIsRolling(false)
       setIsRatingView(false)
@@ -217,7 +228,7 @@ export default function RollPage() {
             next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
             last_rolled_result: response.result ?? response.last_rolled_result,
           }
-          if (!response.total_issues) {
+          if (response.total_issues === null) {
             setThreadToMigrate(threadMetadata as RatingThread)
             setShowMigrationDialog(true)
           } else {
@@ -369,7 +380,13 @@ export default function RollPage() {
 
   async function handleSubmitRating(finishSession = false) {
     if (rating >= RATING_THRESHOLD) createExplosion()
-    if (activeRatingThread && !activeRatingThread.total_issues) {
+
+    const freshTotalIssues =
+      session?.active_thread?.id === activeRatingThread?.id
+        ? session?.active_thread?.total_issues ?? activeRatingThread?.total_issues
+        : activeRatingThread?.total_issues
+
+    if (activeRatingThread && freshTotalIssues === null) {
       setShowSimpleMigration(true)
       return
     }
@@ -489,6 +506,10 @@ export default function RollPage() {
     }
   }
 
+  function handleCollectionChange(collectionId: number | null) {
+    setActiveCollectionId(collectionId)
+  }
+
   function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!overrideThreadId) return
@@ -531,65 +552,62 @@ export default function RollPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="flex flex-col gap-3 px-3 py-3 shrink-0 z-10">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
-            {session?.snoozed_threads?.length > 0 && currentDie === 20 && (
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d20) - snoozing won't increase it further</span>
-              </div>
-            )}
-            {session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
-              <div className="flex items-center gap-2 mt-1">
-                <span className="modifier-badge text-[10px] font-black text-amber-500">+{session.snoozed_threads.length}</span>
-                <span className="text-[9px] text-stone-500 uppercase tracking-wider">snoozed offset active</span>
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <div id="die-selector">
-              <div className="hidden md:flex gap-2">
-                {DICE_LADDER.map((die) => (
-                  <button key={die} onClick={() => handleSetDie(die)} disabled={setDieMutation.isPending}
-                    className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie ? 'bg-amber-600/20 border-amber-600 text-amber-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
-                    d{die}
-                  </button>
-                ))}
-                <button onClick={handleClearManualDie} disabled={clearManualDieMutation.isPending}
-                  className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                  title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}>
-                  Auto
-                </button>
-              </div>
-              <div className="md:hidden">
-                <button onClick={() => setIsDieModalOpen(true)} disabled={setDieMutation.isPending}
-                  className="px-3 py-1 text-[10px] font-black rounded-lg border bg-amber-600/20 border-amber-600 text-amber-500 transition-colors">
-                  d{currentDie}
-                </button>
-              </div>
+      <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
+        <div>
+          <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
+          {session?.snoozed_threads?.length > 0 && currentDie === 20 && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d20) - snoozing won't increase it further</span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
-              <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
-                <div className="w-full h-full">
-                  <LazyDice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
-                </div>
-              </div>
-              <div className="text-right">
-                <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. Promotes automatically based on ratings (5→up, 1-2→down)">
-                  <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder</span>
-                </Tooltip>
-                <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>
-              </div>
+          )}
+          {session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className="modifier-badge text-[10px] font-black text-amber-500">+{session.snoozed_threads.length}</span>
+              <span className="text-[9px] text-stone-500 uppercase tracking-wider">snoozed offset active</span>
             </div>
-            <Tooltip content="Manually select a thread to override the next roll result.">
-              <button type="button" onClick={() => setIsOverrideOpen(true)} className="px-3 py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
-                Override
-              </button>
-            </Tooltip>
-          </div>
+          )}
         </div>
-        <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
+        <div className="flex items-center gap-2">
+          <div id="die-selector">
+            <div className="hidden md:flex gap-2">
+              {DICE_LADDER.map((die) => (
+                <button key={die} onClick={() => handleSetDie(die)} disabled={setDieMutation.isPending}
+                  className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie ? 'bg-amber-600/20 border-amber-600 text-amber-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                  d{die}
+                </button>
+              ))}
+              <button onClick={handleClearManualDie} disabled={clearManualDieMutation.isPending}
+                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}>
+                Auto
+              </button>
+            </div>
+            <div className="md:hidden">
+              <button onClick={() => setIsDieModalOpen(true)} disabled={setDieMutation.isPending}
+                className="px-3 py-1 text-[10px] font-black rounded-lg border bg-amber-600/20 border-amber-600 text-amber-500 transition-colors">
+                d{currentDie}
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
+            <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
+              <div className="w-full h-full">
+                <LazyDice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
+              </div>
+            </div>
+            <div className="text-right">
+              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. Promotes automatically based on ratings (5→up, 1-2→down)">
+                <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder</span>
+              </Tooltip>
+              <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>
+            </div>
+          </div>
+          <Tooltip content="Manually select a thread to override the next roll result.">
+            <button type="button" onClick={() => setIsOverrideOpen(true)} className="px-3 py-2 bg-white/5 border border-white/10 text-stone-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
+              Override
+            </button>
+          </Tooltip>
+        </div>
       </header>
 
       <div className="flex-1 flex flex-col min-h-0">
@@ -653,7 +671,12 @@ export default function RollPage() {
               snoozedThreads={session?.snoozed_threads || []}
               snoozedExpanded={snoozedExpanded}
               blockedExpanded={blockedExpanded}
+              activeCollectionId={activeCollectionId}
+              collections={collections}
+              isCollectionsLoading={isCollectionsLoading}
               onThreadClick={handleThreadClick}
+              onCollectionChange={handleCollectionChange}
+              onNewCollection={() => { setEditingCollection(null); setIsCollectionDialogOpen(true) }}
               onUnsnooze={handleUnsnooze}
               onReadStale={handleReadStale}
               onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
@@ -665,7 +688,7 @@ export default function RollPage() {
 
         <div id="explosion-layer" className="explosion-wrap"></div>
 
-        {isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
+        {isCollectionDialogOpen && <CollectionDialog collection={editingCollection} onClose={() => { setIsCollectionDialogOpen(false); setEditingCollection(null) }} />}
 
         {showMigrationDialog && threadToMigrate && (
           <MigrationDialog thread={threadToMigrate} onComplete={handleMigrationComplete} onSkip={handleMigrationSkip} onClose={handleMigrationClose} />

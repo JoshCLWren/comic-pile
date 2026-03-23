@@ -39,17 +39,6 @@ export default function SimpleMigrationDialog({
       return false
     }
 
-    const num = parseInt(issueNumber, 10)
-    if (isNaN(num)) {
-      setError('Please enter a valid number')
-      return false
-    }
-
-    if (num < 1) {
-      setError('Issue number must be at least 1')
-      return false
-    }
-
     return true
   }
 
@@ -100,8 +89,7 @@ export default function SimpleMigrationDialog({
             <input
               ref={inputRef}
               id="issue-number"
-              type="number"
-              min="1"
+              type="text"
               value={issueNumber}
               onChange={(e) => setIssueNumber(e.target.value)}
               placeholder="e.g., 42"

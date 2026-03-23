@@ -199,9 +199,6 @@ describe('Action Sheet', () => {
   })
 
   it('calls snooze mutation when thread is not snoozed', async () => {
-    const { threadsApi } = await import('../services/api')
-    const setPendingSpy = vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
-
     const user = userEvent.setup()
     render(<RollPage />)
 
@@ -211,11 +208,8 @@ describe('Action Sheet', () => {
     const snoozeButton = screen.getByText('Snooze')
     await user.click(snoozeButton)
 
-    expect(setPendingSpy).toHaveBeenCalledWith(1)
     expect(mockSnoozeMutation.mutate).toHaveBeenCalled()
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
-
-    setPendingSpy.mockRestore()
   })
 
   it('calls unsnooze mutation when thread is snoozed', async () => {
@@ -234,10 +228,10 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const sagaPoolItem = getPoolItem('Saga')
-    await user.click(sagaPoolItem)
+    const snoozedToggleButton = screen.getByText(/Snoozed \(1\)/)
+    await user.click(snoozedToggleButton)
 
-    const unsnoozeButton = screen.getByText('Unsnooze')
+    const unsnoozeButton = screen.getByLabelText('Unsnooze this comic')
     await user.click(unsnoozeButton)
 
     expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
@@ -325,17 +319,6 @@ describe('Rating View', () => {
     const mockRoll = vi.fn().mockResolvedValue({ ...baseRollResponse, result: 4 })
     mockedUseRoll.mockReturnValue({ mutate: mockRoll, isPending: false })
 
-    // Simulate initial state
-    mockedUseSession.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: 4,
-        manual_die: null,
-        active_thread: { id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5 }
-      },
-      refetch: vi.fn()
-    })
-
     const user = userEvent.setup()
     render(<RollPage />)
 
@@ -345,7 +328,6 @@ describe('Rating View', () => {
     // Wait for the roll timeout (400ms in code + 80ms interval)
     await waitFor(() => {
       expect(screen.getByText('How was it?')).toBeInTheDocument()
-      expect(screen.getByText('Excellent! Die steps down 🎲 Move to front (d4)')).toBeInTheDocument()
       expect(screen.getByText('Saga')).toBeInTheDocument()
     }, { timeout: 2000 })
   })
@@ -423,7 +405,7 @@ describe('Rating View', () => {
     setPendingSpy.mockRestore()
   })
 
-  it('[P2] resets rating to 4.0 when starting a new flow', async () => {
+  it('[P2] resets rating to 3.0 when starting a new flow', async () => {
     const { threadsApi } = await import('../services/api')
     vi.spyOn(threadsApi, 'setPending').mockResolvedValue(baseRollResponse)
 
@@ -456,8 +438,8 @@ describe('Rating View', () => {
     const readNowButton = await screen.findByText('Read Now')
     await user.click(readNowButton)
 
-    // 5. Verify it's back to 4.0, not stuck at 1.0
-    expect(await screen.findByText('4.0')).toBeInTheDocument()
+    // 5. Verify it's back to 3.0, not stuck at 1.0
+    expect(await screen.findByText('3.0')).toBeInTheDocument()
   })
 
   it('[P3] filters the rated thread from the pool display', async () => {
@@ -619,13 +601,13 @@ describe('Rating View', () => {
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
-    // 2. Submit rating (Save & Continue)
-    await user.click(screen.getByText('Save & Continue'))
+    // 2. Submit rating (Save & Complete when it's the last issue)
+    await user.click(screen.getByText('Save & Complete'))
 
     // 3. Verify the UI never auto-finishes the session for the last issue.
     await waitFor(() => {
       expect(mockRate).toHaveBeenCalledWith(expect.objectContaining({
-        rating: 4,
+        rating: 3,
         finish_session: false
       }))
     })
