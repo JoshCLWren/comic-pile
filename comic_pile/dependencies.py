@@ -179,6 +179,68 @@ async def detect_circular_dependency(
     return False
 
 
+async def get_dependency_order_conflicts(
+    thread_id: int,
+    user_id: int,
+    db: AsyncSession,
+) -> list[dict]:
+    """Return structured conflicts where dependency order disagrees with issue position order.
+
+    Args:
+        thread_id: Thread to check for conflicts.
+        user_id: Authenticated user ID for ownership validation.
+        db: Database session.
+
+    Returns:
+        List of conflict dictionaries with issue details and dependency requirements.
+    """
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+    thread = Thread.__table__.alias("thread")
+
+    result = await db.execute(
+        select(
+            thread.c.id,
+            thread.c.title,
+            source_issue.c.id.label("source_issue_id"),
+            source_issue.c.issue_number.label("source_issue_number"),
+            source_issue.c.position.label("source_position"),
+            target_issue.c.id.label("target_issue_id"),
+            target_issue.c.issue_number.label("target_issue_number"),
+            target_issue.c.position.label("target_position"),
+        )
+        .select_from(Dependency)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
+        .join(thread, source_issue.c.thread_id == thread.c.id)
+        .where(thread.c.id == thread_id)
+        .where(thread.c.user_id == user_id)
+        .where(target_issue.c.thread_id == thread.c.id)
+        .where(source_issue.c.position >= target_issue.c.position)
+        .order_by(source_issue.c.position, target_issue.c.position, Dependency.id)
+    )
+
+    conflicts: list[dict] = []
+    for row in result.all():
+        conflicts.append(
+            {
+                "issue_id": row.source_issue_id,
+                "issue_number": row.source_issue_number,
+                "position": row.source_position,
+                "dependency_requires_before": [
+                    {
+                        "issue_id": row.target_issue_id,
+                        "issue_number": row.target_issue_number,
+                        "position": row.target_position,
+                    }
+                ],
+                "conflict": f"position {row.source_position} comes after issue at position {row.target_position}, but dependency says it must come before",
+            }
+        )
+
+    return conflicts
+
+
 async def update_thread_blocked_status(thread_id: int, user_id: int, db: AsyncSession) -> None:
     """Recalculate one thread's denormalized blocked flag."""
     blocked_ids = await get_blocked_thread_ids(user_id, db)
