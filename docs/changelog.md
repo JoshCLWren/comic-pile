@@ -2,6 +2,11 @@
 
 ## 2026-03-21
 
+**Collections**
+- Success toast notification now appears after creating a collection
+- Toast includes collection name and auto-dismisses after 5 seconds
+- No success message shown on validation or network errors
+
 **Developer Tools**
 - Added `GET /api/v1/threads/{thread_id}/dependency-order-check` endpoint to detect conflicts between dependency-implied reading order and issue position order
 - Returns structured conflict data with issue IDs, positions, and dependency requirements for debugging
