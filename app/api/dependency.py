@@ -14,13 +14,17 @@ from app.models.user import User
 from app.schemas.dependency import (
     BlockingExplanation,
     DependencyCreate,
+    DependencyOrderConflict,
+    DependencyOrderRequirement,
     DependencyResponse,
     ThreadDependenciesResponse,
+    ThreadDependencyOrderCheckResponse,
 )
 from comic_pile.dependencies import (
     detect_circular_dependency,
     get_blocked_thread_ids,
     get_blocking_explanations,
+    get_dependency_order_conflicts,
     refresh_user_blocked_status,
 )
 
@@ -328,6 +332,45 @@ async def delete_dependency(
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     return {"message": "Dependency deleted"}
+
+
+@router.get(
+    "/threads/{thread_id}/dependency-order-check",
+    response_model=ThreadDependencyOrderCheckResponse,
+)
+async def check_thread_dependency_order(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadDependencyOrderCheckResponse:
+    """Check for conflicts between dependency order and issue position order.
+
+    Returns a list of conflicts where dependencies imply issue X should come
+    before issue Y, but the current position order disagrees.
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    raw_conflicts = await get_dependency_order_conflicts(thread_id, current_user.id, db)
+
+    conflicts: list[DependencyOrderConflict] = []
+    for conflict in raw_conflicts:
+        conflict_obj = DependencyOrderConflict(
+            issue_id=conflict["issue_id"],
+            issue_number=conflict["issue_number"],
+            position=conflict["position"],
+            dependency_requires_before=[
+                DependencyOrderRequirement(**req) for req in conflict["dependency_requires_before"]
+            ],
+            conflict=conflict["conflict"],
+        )
+        conflicts.append(conflict_obj)
+
+    return ThreadDependencyOrderCheckResponse(thread_id=thread_id, conflicts=conflicts)
 
 
 async def _is_dependency_owned_by_user(

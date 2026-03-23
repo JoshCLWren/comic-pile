@@ -227,8 +227,8 @@ export const rollApi = {
 }
 
 export const rateApi = {
-  rate: (data: { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: number }) =>
-    api.post<void, { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: number }>('/rate/', data),
+  rate: (data: { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }) =>
+    api.post<void, { thread_id: number; rating: number; issues_read?: number; finish_session?: boolean; issue_number?: string }>('/rate/', data),
 }
 
 export const sessionApi = {

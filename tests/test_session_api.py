@@ -402,7 +402,7 @@ async def test_simplified_migration_endpoint(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssuesSimple", json={"issue_number": 5}
+        f"/api/threads/{thread.id}:migrateToIssuesSimple", json={"issue_number": "5"}
     )
     assert response.status_code == 200
 
@@ -471,7 +471,7 @@ async def test_rate_with_issue_number_triggers_migration(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 6})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": "6"})
     assert response.status_code == 200
 
     data = response.json()
@@ -738,7 +738,7 @@ async def test_migration_during_rating_marks_issues_correctly(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 8})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": "8"})
     assert response.status_code == 200
 
     data = response.json()
@@ -790,7 +790,7 @@ async def test_migration_with_issue_number_1_starts_from_beginning(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssuesSimple", json={"issue_number": 1}
+        f"/api/threads/{thread.id}:migrateToIssuesSimple", json={"issue_number": "1"}
     )
     assert response.status_code == 200
 
@@ -980,7 +980,7 @@ async def test_migration_with_issue_number_1_starts_fresh(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 1})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": "1"})
 
     assert response.status_code == 200
     data = response.json()
@@ -1043,7 +1043,7 @@ async def test_migration_with_zero_issues_remaining(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 10})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": "10"})
 
     # Cannot migrate a completed thread with no issues remaining
     assert response.status_code == 400
@@ -1112,7 +1112,7 @@ async def test_migration_already_migrated_thread_skips_migration(
     async_db.add(event)
     await async_db.commit()
 
-    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": 3})
+    response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issue_number": "3"})
 
     assert response.status_code in [200, 400]
 
@@ -1156,7 +1156,7 @@ async def test_simple_migration_creates_correct_issues(
     await async_db.refresh(thread)
 
     response = await auth_client.post(
-        f"/api/threads/{thread.id}:migrateToIssuesSimple", json={"issue_number": 1}
+        f"/api/threads/{thread.id}:migrateToIssuesSimple", json={"issue_number": "1"}
     )
     assert response.status_code == 200
 
