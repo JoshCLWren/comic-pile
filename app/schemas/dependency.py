@@ -43,3 +43,28 @@ class ThreadDependenciesResponse(BaseModel):
 
     blocking: list[DependencyResponse]
     blocked_by: list[DependencyResponse]
+
+
+class DependencyOrderRequirement(BaseModel):
+    """Schema for a single dependency order requirement."""
+
+    issue_id: int
+    issue_number: str
+    position: int
+
+
+class DependencyOrderConflict(BaseModel):
+    """Schema for a position/dependency order conflict."""
+
+    issue_id: int
+    issue_number: str
+    position: int
+    dependency_requires_before: list[DependencyOrderRequirement]
+    conflict: str
+
+
+class ThreadDependencyOrderCheckResponse(BaseModel):
+    """Schema for thread dependency order validation."""
+
+    thread_id: int
+    conflicts: list[DependencyOrderConflict]

@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { SessionProvider } from './contexts/SessionContext'
 import { CollectionProvider } from './contexts/CollectionContext'
+import { ToastProvider } from './contexts/ToastContext'
 import './index.css'
 import App from './App'
 
@@ -15,7 +16,9 @@ createRoot(rootElement).render(
   <StrictMode>
     <SessionProvider>
       <CollectionProvider>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </CollectionProvider>
     </SessionProvider>
   </StrictMode>,

@@ -2,6 +2,22 @@
 
 ## 2026-03-21
 
+**Collection Management UI Redesign**
+- Consolidated collection management into coherent toolbar on Roll and Queue pages
+- Collection selector moved from ThreadPool to page header for better discoverability
+- "+ New Collection" button now consistently available in header toolbar
+- Unified collection filtering across Roll and Queue pages
+- Improved mobile responsiveness with toolbar design
+
+**Collections**
+- Success toast notification now appears after creating a collection
+- Toast includes collection name and auto-dismisses after 5 seconds
+- No success message shown on validation or network errors
+
+**Developer Tools**
+- Added `GET /api/v1/threads/{thread_id}/dependency-order-check` endpoint to detect conflicts between dependency-implied reading order and issue position order
+- Returns structured conflict data with issue IDs, positions, and dependency requirements for debugging
+
 **Issue Number Correction**
 - Added edit icon next to issue number in rating view
 - Quick correction dialog allows adjusting current issue without leaving the rating page

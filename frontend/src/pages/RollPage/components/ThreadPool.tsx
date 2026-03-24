@@ -15,12 +15,7 @@ interface ThreadPoolProps {
   snoozedThreads: Array<{ id: number; title: string; format: string }>
   snoozedExpanded: boolean
   blockedExpanded: boolean
-  activeCollectionId: number | null
-  collections: Array<{ id: number; name: string }>
-  isCollectionsLoading: boolean
   onThreadClick: (thread: Thread) => void
-  onCollectionChange: (collectionId: number | null) => void
-  onNewCollection: () => void
   onUnsnooze: (threadId: number) => void
   onReadStale: () => void
   onToggleSnoozed: () => void
@@ -41,12 +36,7 @@ export function ThreadPool({
   snoozedThreads,
   snoozedExpanded,
   blockedExpanded,
-  activeCollectionId,
-  collections,
-  isCollectionsLoading,
   onThreadClick,
-  onCollectionChange,
-  onNewCollection,
   onUnsnooze,
   onReadStale,
   onToggleSnoozed,
@@ -67,29 +57,8 @@ export function ThreadPool({
 
       <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-amber-600 shadow-[0_0_15px_var(--accent-red)]"></div>
-        <div className="flex-1 flex items-center gap-2">
-          <select
-            value={activeCollectionId ?? 'all'}
-            onChange={(e) => onCollectionChange(e.target.value === 'all' ? null : Number(e.target.value))}
-            className="min-w-0 w-full max-w-[240px] bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-600/40"
-            aria-label="Roll pool collection"
-            disabled={isCollectionsLoading}
-          >
-            <option value="all">Roll Pool: All Collections</option>
-            {collections.map((collection) => (
-              <option key={collection.id} value={collection.id}>
-                Roll Pool: {collection.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={onNewCollection}
-            className="shrink-0 px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[10px] font-black uppercase tracking-wider text-stone-300 hover:bg-white/10 transition-colors"
-            aria-label="Add collection"
-          >
-            + New
-          </button>
+        <div className="flex-1">
+          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">Roll Pool</p>
         </div>
       </div>
 
