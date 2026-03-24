@@ -300,6 +300,34 @@ export interface ThreadDependenciesResponse {
 }
 
 /**
+ * Represents a single dependency edge for an issue
+ */
+export interface IssueDependencyEdge {
+  /** Unique identifier for the dependency */
+  dependency_id: number;
+  /** ID of the source issue */
+  source_issue_id: number;
+  /** Issue number of the source issue */
+  source_issue_number: string;
+  /** ID of the thread containing the source issue */
+  source_thread_id: number;
+  /** Title of the thread containing the source issue */
+  source_thread_title: string;
+}
+
+/**
+ * Response from the issue dependencies endpoint
+ */
+export interface IssueDependenciesResponse {
+  /** ID of the issue */
+  issue_id: number;
+  /** Dependencies where this issue is the target (incoming edges) */
+  incoming: IssueDependencyEdge[];
+  /** Dependencies where this issue is the source (outgoing edges) */
+  outgoing: IssueDependencyEdge[];
+}
+
+/**
  * A positioned node for the dependency flowchart
  */
 export interface FlowchartNode {

@@ -17,6 +17,8 @@ from app.schemas.dependency import (
     DependencyOrderConflict,
     DependencyOrderRequirement,
     DependencyResponse,
+    IssueDependenciesResponse,
+    IssueDependencyEdge,
     ThreadDependenciesResponse,
     ThreadDependencyOrderCheckResponse,
 )
@@ -162,6 +164,102 @@ async def list_thread_dependencies(
     return ThreadDependenciesResponse(
         blocking=enriched[:blocking_count],
         blocked_by=enriched[blocking_count:],
+    )
+
+
+@router.get("/issues/{issue_id}/dependencies", response_model=IssueDependenciesResponse)
+async def list_issue_dependencies(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> IssueDependenciesResponse:
+    """List all incoming and outgoing dependency edges for a specific issue."""
+    issue = await db.get(Issue, issue_id)
+    if not issue:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+
+    thread = await db.get(Thread, issue.thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Issue {issue_id} not found",
+        )
+
+    incoming_result = await db.execute(
+        select(Dependency).where(Dependency.target_issue_id == issue_id)
+    )
+    incoming_deps = incoming_result.scalars().all()
+
+    outgoing_result = await db.execute(
+        select(Dependency).where(Dependency.source_issue_id == issue_id)
+    )
+    outgoing_deps = outgoing_result.scalars().all()
+
+    all_deps = list(incoming_deps) + list(outgoing_deps)
+
+    issue_ids: set[int] = set()
+    thread_ids: set[int] = {issue.thread_id}
+    for dep in all_deps:
+        if dep.source_issue_id is not None:
+            issue_ids.add(dep.source_issue_id)
+        if dep.target_issue_id is not None:
+            issue_ids.add(dep.target_issue_id)
+
+    issue_map: dict[int, Issue] = {}
+    if issue_ids:
+        result = await db.execute(select(Issue).where(Issue.id.in_(issue_ids)))
+        for issue_obj in result.scalars():
+            issue_map[issue_obj.id] = issue_obj
+            thread_ids.add(issue_obj.thread_id)
+
+    thread_map: dict[int, Thread] = {}
+    if thread_ids:
+        result = await db.execute(select(Thread).where(Thread.id.in_(thread_ids)))
+        for thread_obj in result.scalars():
+            thread_map[thread_obj.id] = thread_obj
+
+    incoming_edges: list[IssueDependencyEdge] = []
+    outgoing_edges: list[IssueDependencyEdge] = []
+
+    for dep in incoming_deps:
+        if dep.source_issue_id is not None:
+            source_issue = issue_map.get(dep.source_issue_id)
+            if source_issue:
+                source_thread = thread_map.get(source_issue.thread_id)
+                if source_thread and source_thread.user_id == current_user.id:
+                    incoming_edges.append(
+                        IssueDependencyEdge(
+                            dependency_id=dep.id,
+                            source_issue_id=source_issue.id,
+                            source_issue_number=source_issue.issue_number,
+                            source_thread_id=source_thread.id,
+                            source_thread_title=source_thread.title,
+                        )
+                    )
+
+    for dep in outgoing_deps:
+        if dep.target_issue_id is not None:
+            target_issue = issue_map.get(dep.target_issue_id)
+            if target_issue:
+                target_thread = thread_map.get(target_issue.thread_id)
+                if target_thread and target_thread.user_id == current_user.id:
+                    outgoing_edges.append(
+                        IssueDependencyEdge(
+                            dependency_id=dep.id,
+                            source_issue_id=target_issue.id,
+                            source_issue_number=target_issue.issue_number,
+                            source_thread_id=target_thread.id,
+                            source_thread_title=target_thread.title,
+                        )
+                    )
+
+    return IssueDependenciesResponse(
+        issue_id=issue_id,
+        incoming=incoming_edges,
+        outgoing=outgoing_edges,
     )
 
 

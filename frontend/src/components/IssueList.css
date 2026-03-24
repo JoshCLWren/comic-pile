@@ -55,6 +55,18 @@
   font-weight: 500;
 }
 
+.dependency-indicator {
+  font-size: 0.875rem;
+  cursor: help;
+  margin-left: 0.25rem;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.dependency-indicator:hover {
+  opacity: 1;
+}
+
 .next-badge {
   margin-left: auto;
   background-color: #d4890e;

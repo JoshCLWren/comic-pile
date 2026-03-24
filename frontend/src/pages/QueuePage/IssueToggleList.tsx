@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { DragEvent } from 'react'
-import type { Issue } from '../../types'
+import type { Issue, IssueDependenciesResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
+import { dependenciesApi } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiError'
+import Tooltip from '../../components/Tooltip'
+import Modal from '../../components/Modal'
+import { getDependencyTooltip } from '../../utils/dependencyHelpers'
 import {
   reorderIssuesForDrop,
   moveIssueByStep,
@@ -27,6 +31,8 @@ export function IssueToggleList({ threadId }: {
   const [deleting, setDeleting] = useState<Set<number>>(new Set())
   const [draggedIssueId, setDraggedIssueId] = useState<number | null>(null)
   const [dragOverIssueId, setDragOverIssueId] = useState<number | null>(null)
+  const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
+  const [selectedDepsIssue, setSelectedDepsIssue] = useState<Issue | null>(null)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -58,6 +64,23 @@ export function IssueToggleList({ threadId }: {
       nextPageToken = data.next_page_token
     }
   }, [threadId])
+
+  const fetchDependencies = useCallback(async (issueList: Issue[]) => {
+    const depsMap: Record<number, IssueDependenciesResponse> = {}
+    await Promise.all(
+      issueList.map(async (issue) => {
+        try {
+          const deps = await dependenciesApi.getIssueDependencies(issue.id)
+          if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
+            depsMap[issue.id] = deps
+          }
+        } catch (error) {
+          console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
+        }
+      })
+    )
+    setDependencies(depsMap)
+  }, [])
 
   const focusMoveControl = useCallback((issueId: number, direction: 'up' | 'down') => {
     const focusTarget = () => {
@@ -172,12 +195,13 @@ export function IssueToggleList({ threadId }: {
     try {
       baseIssuesRef.current = await fetchAllIssues()
       syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
+      await fetchDependencies(baseIssuesRef.current)
     } catch {
       // Non-critical
     } finally {
       setIsLoading(false)
     }
-  }, [fetchAllIssues, syncOptimisticIssues])
+  }, [fetchAllIssues, fetchDependencies, syncOptimisticIssues])
 
   useEffect(() => {
     loadIssues()
@@ -274,7 +298,7 @@ export function IssueToggleList({ threadId }: {
     }
   }
 
-  if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
+if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
   return (
     <div className="space-y-2">
@@ -287,6 +311,8 @@ export function IssueToggleList({ threadId }: {
           const isDragged = draggedIssueId === issue.id
           const canMoveUp = index > 0
           const canMoveDown = index < issues.length - 1
+const hasDeps = dependencies[issue.id] !== undefined
+    const tooltipContent = getDependencyTooltip(dependencies[issue.id])
 
           return (
             <div
@@ -322,6 +348,24 @@ export function IssueToggleList({ threadId }: {
               >
                 #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
               </button>
+              {hasDeps && tooltipContent && (
+                <>
+                  <Tooltip content={tooltipContent}>
+                    <button
+                      type="button"
+                      className="dependency-indicator min-h-[44px] min-w-[44px] px-1 text-[10px] opacity-70 hover:opacity-100 cursor-help"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedDepsIssue(issue)
+                      }}
+                      title="Has dependencies (click for details)"
+                      aria-label={`View dependencies for issue #${issue.issue_number}`}
+                    >
+                      🔗
+                    </button>
+                  </Tooltip>
+                </>
+              )}
               <div className="flex border-l border-white/10">
                 <button
                   type="button"
@@ -405,6 +449,49 @@ export function IssueToggleList({ threadId }: {
       )}
       {actionError && (
         <p className="text-xs text-red-400">{actionError}</p>
+      )}
+      {selectedDepsIssue && (
+        <Modal
+          isOpen={selectedDepsIssue !== null}
+          title={`Dependencies for Issue #${selectedDepsIssue.issue_number}`}
+          onClose={() => setSelectedDepsIssue(null)}
+          data-testid="dependency-modal"
+        >
+          <div className="space-y-4">
+            {dependencies[selectedDepsIssue.id]?.incoming &&
+              dependencies[selectedDepsIssue.id].incoming.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-stone-300 mb-2">Blocked by</h3>
+                  <ul className="space-y-1">
+                    {dependencies[selectedDepsIssue.id].incoming.map((edge) => (
+                      <li key={edge.dependency_id} className="text-xs text-stone-400">
+                        ← {edge.source_thread_title} #{edge.source_issue_number}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            {dependencies[selectedDepsIssue.id]?.outgoing &&
+              dependencies[selectedDepsIssue.id].outgoing.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-stone-300 mb-2">Blocking</h3>
+                  <ul className="space-y-1">
+                    {dependencies[selectedDepsIssue.id].outgoing.map((edge) => (
+                      <li key={edge.dependency_id} className="text-xs text-stone-400">
+                        → {edge.source_thread_title} #{edge.source_issue_number}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            {(!dependencies[selectedDepsIssue.id]?.incoming ||
+              dependencies[selectedDepsIssue.id].incoming.length === 0) &&
+              (!dependencies[selectedDepsIssue.id]?.outgoing ||
+                dependencies[selectedDepsIssue.id].outgoing.length === 0) && (
+                <p className="text-xs text-stone-500">No dependencies found</p>
+              )}
+          </div>
+        </Modal>
       )}
     </div>
   )

@@ -14,6 +14,7 @@ import type {
   CollectionUpdate,
   Dependency,
   DependencyCreatePayload,
+  IssueDependenciesResponse,
   ReactivateThreadPayload,
   RollResponse,
   SessionCurrent,
@@ -257,6 +258,8 @@ export const dependenciesApi = {
   listBlockedThreadIds: () => api.get<number[]>('/v1/dependencies/blocked'),
   listThreadDependencies: (threadId: number) =>
     api.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
+  getIssueDependencies: (issueId: number) =>
+    api.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
   getBlockingInfo: (threadId: number) =>
     api.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
   createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
