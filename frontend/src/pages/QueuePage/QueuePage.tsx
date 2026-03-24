@@ -696,63 +696,67 @@ export default function QueuePage() {
         )}
       </section>
 
-      {/* Create Thread Modal */}
-      <Modal isOpen={isCreateOpen} title="Create Thread" onClose={() => setIsCreateOpen(false)}>
-        <form className="space-y-4" onSubmit={handleCreateSubmit}>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
-            <input
-              value={createForm.title}
-              onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
-            <FormatSelect
-              value={createForm.format}
-              onChange={(value) => setCreateForm({ ...createForm, format: value })}
-              required
-            />
-          </div>
+  {/* Create Thread Modal */}
+  <Modal isOpen={isCreateOpen} title="Create Thread" onClose={() => setIsCreateOpen(false)}>
+  <form className="space-y-4" onSubmit={handleCreateSubmit}>
+  <div className="space-y-2">
+  <label htmlFor="create-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
+  <input
+  id="create-thread-title"
+  value={createForm.title}
+  onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
+  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  required
+  />
+  </div>
+  <div className="space-y-2">
+  <label htmlFor="create-thread-format" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
+  <FormatSelect
+  id="create-thread-format"
+  value={createForm.format}
+  onChange={(value) => setCreateForm({ ...createForm, format: value })}
+  required
+  />
+  </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
-            <input
-              type="text"
-              value={createForm.issues}
-              onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-              placeholder="0-25 or 0, ½, Annual 1, 5-7"
-              required
-            />
-            {issuePreview !== null && (
-              <p className="text-xs text-stone-400">
-                Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
-              </p>
-            )}
-            {issueParseError && (
-              <p className="text-xs text-red-400">{issueParseError}</p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
-            <input
-              type="number"
-              min="0"
-              max={issuePreview ?? undefined}
-              value={createForm.lastIssueRead}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                const value = Number.parseInt(event.target.value, 10) || 0
-                const clampedValue = issuePreview !== null ? Math.min(value, issuePreview) : value
-                setCreateForm({
-                  ...createForm,
-                  lastIssueRead: clampedValue,
-                })
-              }}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-            />
+  <div className="space-y-2">
+  <label htmlFor="create-thread-issues" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</label>
+  <input
+  id="create-thread-issues"
+  type="text"
+  value={createForm.issues}
+  onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
+  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  placeholder="0-25 or 0, ½, Annual 1, 5-7"
+  required
+  />
+  {issuePreview !== null && (
+  <p className="text-xs text-stone-400">
+  Will create {issuePreview} issue{issuePreview !== 1 ? 's' : ''}
+  </p>
+  )}
+  {issueParseError && (
+  <p className="text-xs text-red-400">{issueParseError}</p>
+  )}
+  </div>
+  <div className="space-y-2">
+  <label htmlFor="create-thread-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read (optional)</label>
+  <input
+  id="create-thread-last-read"
+  type="number"
+  min="0"
+  max={issuePreview ?? undefined}
+  value={createForm.lastIssueRead}
+  onChange={(event: ChangeEvent<HTMLInputElement>) => {
+  const value = Number.parseInt(event.target.value, 10) || 0
+  const clampedValue = issuePreview !== null ? Math.min(value, issuePreview) : value
+  setCreateForm({
+  ...createForm,
+  lastIssueRead: clampedValue,
+  })
+  }}
+  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  />
             {createForm.lastIssueRead > 0 && issuePreview !== null && (
               <p className="text-xs text-stone-400">
                 First {Math.min(createForm.lastIssueRead, issuePreview)} issues (in creation order) of {issuePreview} will be marked as read
@@ -765,14 +769,15 @@ export default function QueuePage() {
             )}
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
-            <textarea
-              value={createForm.notes}
-              onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
-            ></textarea>
-          </div>
+  <div className="space-y-2">
+  <label htmlFor="create-thread-notes" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
+  <textarea
+  id="create-thread-notes"
+  value={createForm.notes}
+  onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
+  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
+  ></textarea>
+  </div>
           <button
             type="submit"
             disabled={createMutation.isPending}
@@ -783,56 +788,60 @@ export default function QueuePage() {
         </form>
       </Modal>
 
-      {/* Edit Thread Modal */}
-      <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => { setIsEditOpen(false); refetch() }} overlayClassName="edit-modal__overlay">
-        <div className="space-y-4">
-          <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
-              <input
-                value={editForm.title}
-                onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-                required
-              />
-            </div>
+  {/* Edit Thread Modal */}
+  <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => { setIsEditOpen(false); refetch() }} overlayClassName="edit-modal__overlay">
+  <div className="space-y-4">
+  <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
+  <div className="space-y-2">
+  <label htmlFor="edit-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
+  <input
+  id="edit-thread-title"
+  value={editForm.title}
+  onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
+  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  required
+  />
+  </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
-              <FormatSelect
-                value={editForm.format}
-                onChange={(value) => setEditForm({ ...editForm, format: value })}
-                required
-              />
-            </div>
+  <div className="space-y-2">
+  <label htmlFor="edit-thread-format" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Format</label>
+  <FormatSelect
+  id="edit-thread-format"
+  value={editForm.format}
+  onChange={(value) => setEditForm({ ...editForm, format: value })}
+  required
+  />
+  </div>
 
-            {/* Issues remaining for unmigrated threads */}
-            {editingThread?.total_issues === null && (
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editForm.issuesRemaining}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                    setEditForm({
-                      ...editForm,
-                      issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
-                    })
-                  }
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
-                />
-              </div>
-            )}
+  {/* Issues remaining for unmigrated threads */}
+  {editingThread?.total_issues === null && (
+  <div className="space-y-2">
+  <label htmlFor="edit-thread-issues-remaining" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues Remaining</label>
+  <input
+  id="edit-thread-issues-remaining"
+  type="number"
+  min="0"
+  value={editForm.issuesRemaining}
+  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+  setEditForm({
+  ...editForm,
+  issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
+  })
+  }
+  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  />
+  </div>
+  )}
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
-              <textarea
-                value={editForm.notes}
-                onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
-              ></textarea>
-            </div>
+  <div className="space-y-2">
+  <label htmlFor="edit-thread-notes" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Notes</label>
+  <textarea
+  id="edit-thread-notes"
+  value={editForm.notes}
+  onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
+  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
+  ></textarea>
+  </div>
 
             {editingThread?.total_issues === null && (
               <div className="space-y-2 pt-2 border-t border-white/10">

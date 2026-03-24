@@ -903,3 +903,21 @@ curl -O http://localhost:8000/admin/export/csv/
 - **Dice Ladder**: The dice ladder follows the pattern: d4 → d6 → d8 → d10 → d12 → d20
 - **Caching**: Thread and session data is cached for performance (30s and 10s TTL respectively)
 - **CORS**: All origins are allowed for local network access during development
+
+### Dependency Blocking Behavior
+
+**Thread-Level Dependencies:**
+- When thread A depends on thread B, thread A is blocked until all issues in thread B are read
+- Blocked threads are excluded from roll pool and stale thread suggestions
+- Blocking is recalculated whenever dependencies change or issues are marked as read
+
+**Issue-Level Dependencies:**
+- Specific issues can depend on other specific issues
+- A thread is blocked if its `next_unread_issue` has an unread prerequisite
+- Dependency indicators (🔗) appear on issues with incoming/outgoing dependencies
+- Only visible for threads owned by the current user (authorization enforced)
+
+**Unblocking:**
+- Removing a dependency immediately recalculates blocked status
+- Marking a prerequisite issue as read unblocks dependent issues
+- Blocked threads show visual indicators in queue and roll views
