@@ -1,6 +1,8 @@
 import type { KeyboardEvent } from 'react'
+import { useState } from 'react'
 import LazyDice3D from '../../../components/LazyDice3D'
 import Tooltip from '../../../components/Tooltip'
+import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
 
@@ -21,6 +23,7 @@ interface RatingViewProps {
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
   onCancel: () => void
+  onRefreshThread: () => void
 }
 
 export function RatingView({
@@ -40,7 +43,10 @@ export function RatingView({
   onSubmitRating,
   onSnooze,
   onCancel,
+  onRefreshThread,
 }: RatingViewProps) {
+  const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
+
   return (
     <div className="p-4 space-y-8 relative z-10">
       <div id="thread-info" role="status" aria-live="polite">
@@ -52,6 +58,18 @@ export function RatingView({
                 <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg text-sm font-black uppercase tracking-[0.2em] border border-amber-500/20">
                   #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}
                 </span>
+<button
+              type="button"
+              onClick={() => setIsCorrectionDialogOpen(true)}
+              disabled={!activeRatingThread?.id}
+              className="w-11 h-11 min-w-[44px] flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-stone-400 hover:text-stone-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed focus:ring-2 focus:ring-amber-500"
+              aria-label="Correct issue number"
+              title="Correct issue number"
+            >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                  </svg>
+                </button>
                 {activeRatingThread.total_issues && (
                   <span className="text-stone-400 text-xs font-bold">
                     (#{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number} of {activeRatingThread.total_issues})
@@ -214,6 +232,21 @@ export function RatingView({
           </div>
         )}
       </div>
+
+      {activeRatingThread && (
+        <IssueCorrectionDialog
+          isOpen={isCorrectionDialogOpen}
+          threadId={activeRatingThread.id}
+          currentIssueNumber={activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}
+          totalIssues={activeRatingThread.total_issues}
+          threadTitle={activeRatingThread.title}
+          onClose={() => setIsCorrectionDialogOpen(false)}
+          onSuccess={() => {
+            setIsCorrectionDialogOpen(false)
+            onRefreshThread()
+          }}
+        />
+      )}
     </div>
   )
 }
