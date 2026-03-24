@@ -10,11 +10,12 @@ This document describes the React-based frontend architecture for Comic Pile, a 
 - **Framework**: React 19.x - UI library with hooks and concurrent features
 - **Routing**: React Router DOM 7.x - Client-side routing
 - **HTTP Client**: Axios - Promise-based HTTP client with interceptors
-- **State Management**: 
+- **State Management**:
   - Custom hooks (useState/useEffect) - Server state with memory leak protection
-  - React Context - Client-side global state (dice selection, session state)
+  - React Context - Client-side global state (dice selection, session state, toast notifications)
 - **Styling**: Tailwind CSS 4.x - Utility-first CSS framework with PostCSS integration
-- **Type Safety**: TypeScript support via Vite's JSDoc mode
+- **Type Safety**: TypeScript with strict mode
+- **3D Graphics**: Three.js for dice rendering (lazy-loaded)
 
 ## Project Structure
 
@@ -373,13 +374,72 @@ Three.js is lazy-loaded on demand via `LazyDice3D`:
 
 _Measured via `cd frontend && npm run build` Vite output, March 2026. Re-run after significant dependency changes to keep these numbers accurate._
 
+## Mobile Usage Guide
+
+### Touch Targets
+All interactive elements maintain minimum 44px touch targets:
+- Buttons: `min-h-[48px]` for primary actions
+- Navigation items: Full-height flex containers with padding
+- Form inputs: Adequate padding for easy tapping
+
+### Responsive Breakpoints
+- Mobile-first design (base styles for mobile)
+- Tablet optimizations: `md:` prefix (768px+)
+- Desktop layouts: `lg:` prefix (1024px+)
+
+### Touch Gestures
+- Swipe gestures avoided to prevent conflicts with browser navigation
+- Pull-to-refresh not implemented (use manual refresh)
+- Long-press actions avoided for better accessibility
+
+## Accessibility
+
+### Keyboard Navigation
+- All interactive elements are keyboard accessible
+- Tab order follows visual layout
+- Escape key closes modals and dialogs
+- Enter/Space activate buttons
+
+### ARIA Attributes
+- Navigation: `aria-label` on all nav items
+- Modals: `role="dialog"`, `aria-modal="true"`, `aria-labelledby`
+- Forms: `htmlFor` associations between labels and inputs
+- Loading states: `aria-busy` and `aria-live` regions
+
+### Focus Management
+- Focus traps in modal dialogs
+- Focus returns to trigger element on modal close
+- Visible focus indicators on all interactive elements
+- Skip links for keyboard navigation (planned)
+
+### Screen Reader Support
+- Semantic HTML elements used throughout
+- Icons have `aria-hidden="true"` with text labels
+- Dynamic content updates announced via `aria-live` regions
+- Form validation errors use `role="alert"`
+
+### Color Contrast
+- Text meets WCAG AA contrast requirements (4.5:1 minimum)
+- Dice face numbers use high-contrast colors
+- Error states use color + icon + text (not color alone)
+
+### Viewport Management
+- Meta viewport prevents accidental zoom on input focus
+- Overscroll behavior controlled to prevent rubber-banding
+- Fixed navigation bars use `position: fixed` with proper z-index
+
+### Performance
+- Three.js dice component lazy-loaded to avoid blocking initial render
+- Images use modern formats with lazy loading
+- Minimal JavaScript bundle size (~180KB initial, ~489KB for 3D dice on demand)
+
 ## Development Workflow
 
 ### Linting
 
 ```bash
-npm run lint  # ESLint for JSX/JavaScript
-make lint     # Run Python + JavaScript linting
+npm run lint # ESLint for JSX/JavaScript
+make lint # Run Python + JavaScript linting
 ```
 
 ### Type Checking

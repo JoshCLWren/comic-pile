@@ -82,15 +82,15 @@ const { activeCollectionId = null } = useCollections()
     }
   }, [isSessionError, sessionError, navigate])
 
-  useEffect(() => {
-    const handleTestEditCollection = ((e: CustomEvent<Collection>) => {
-      setEditingCollection(e.detail)
-      setIsCollectionDialogOpen(true)
-    }) as EventListener
+useEffect(() => {
+  const handleTestEditCollection = ((e: CustomEvent<Collection>) => {
+    setEditingCollection(e.detail)
+    setIsCollectionDialogOpen(true)
+  }) as EventListener
 
-    window.addEventListener('test-edit-collection', handleTestEditCollection)
-    return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
-  }, [])
+  window.addEventListener('test-edit-collection', handleTestEditCollection)
+  return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
+}, [setIsCollectionDialogOpen])
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -172,39 +172,39 @@ const { activeCollectionId = null } = useCollections()
     setIsRatingView(true)
   }, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
 
-  const handleMigrationComplete = useCallback((migratedThread: Thread) => {
-    refetchThreads()
-    refetchSession()
-    setShowMigrationDialog(false)
-    setThreadToMigrate(null)
-    enterRatingView(migratedThread.id, null, migratedThread)
-  }, [refetchThreads, refetchSession, enterRatingView])
+const handleMigrationComplete = useCallback((migratedThread: Thread) => {
+  refetchThreads()
+  refetchSession()
+  setShowMigrationDialog(false)
+  setThreadToMigrate(null)
+  enterRatingView(migratedThread.id, null, migratedThread)
+}, [refetchThreads, refetchSession, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
 
-  const handleMigrationSkip = useCallback(() => {
-    setShowMigrationDialog(false)
-    if (threadToMigrate) enterRatingView(threadToMigrate.id, null, threadToMigrate)
-  }, [threadToMigrate, enterRatingView])
+const handleMigrationSkip = useCallback(() => {
+  setShowMigrationDialog(false)
+  if (threadToMigrate) enterRatingView(threadToMigrate.id, null, threadToMigrate)
+}, [threadToMigrate, enterRatingView, setShowMigrationDialog])
 
-  const handleMigrationClose = useCallback(() => {
-    setShowMigrationDialog(false)
-    setThreadToMigrate(null)
-  }, [])
+const handleMigrationClose = useCallback(() => {
+  setShowMigrationDialog(false)
+  setThreadToMigrate(null)
+}, [setShowMigrationDialog, setThreadToMigrate])
 
-  const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
-    setShowSimpleMigration(false)
-    rateMutation.mutate({ rating, finish_session: false, issue_number: issueNumber }).then(() => {
-      suppressPendingAutoOpenRef.current = true
-      setIsRolling(false)
-      setIsRatingView(false)
-      setRolledResult(null)
-      setSelectedThreadId(null)
-      setActiveRatingThread(null)
-      setErrorMessage('')
-      Promise.allSettled([refetchSession(), refetchThreads()])
-    }).catch((error: unknown) => {
-      setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
-    })
-  }, [rating, rateMutation, refetchSession, refetchThreads])
+const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
+  setShowSimpleMigration(false)
+  rateMutation.mutate({ rating, finish_session: false, issue_number: issueNumber }).then(() => {
+    suppressPendingAutoOpenRef.current = true
+    setIsRolling(false)
+    setIsRatingView(false)
+    setRolledResult(null)
+    setSelectedThreadId(null)
+    setActiveRatingThread(null)
+    setErrorMessage('')
+    Promise.allSettled([refetchSession(), refetchThreads()])
+  }).catch((error: unknown) => {
+    setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
+  })
+}, [rating, rateMutation, refetchSession, refetchThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
     if (!selectedThread) return
@@ -263,31 +263,31 @@ const { activeCollectionId = null } = useCollections()
   const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked && !snoozedIds.has(t.id)) ?? [], [threads, snoozedIds])
   const blockedThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && t.is_blocked) ?? [], [threads])
 
-  useEffect(() => {
-    const fetchBlockingReasons = async () => {
-      if (!blockedThreads.length) {
-        setBlockingReasonMap({})
-        return
-      }
-      const details: Array<[number, string[]]> = await Promise.all(
-        blockedThreads.map(async (thread) => {
-          try {
-            const info = await dependenciesApi.getBlockingInfo(thread.id)
-            return [thread.id, info.blocking_reasons || []]
-          } catch { return [thread.id, []] }
-        })
-      )
-      setBlockingReasonMap(Object.fromEntries(details))
+useEffect(() => {
+  const fetchBlockingReasons = async () => {
+    if (!blockedThreads.length) {
+      setBlockingReasonMap({})
+      return
     }
-    fetchBlockingReasons()
-  }, [blockedThreads])
+    const details: Array<[number, string[]]> = await Promise.all(
+      blockedThreads.map(async (thread) => {
+        try {
+          const info = await dependenciesApi.getBlockingInfo(thread.id)
+          return [thread.id, info.blocking_reasons || []]
+        } catch { return [thread.id, []] }
+      })
+    )
+    setBlockingReasonMap(Object.fromEntries(details))
+  }
+  fetchBlockingReasons()
+}, [blockedThreads, setBlockingReasonMap])
 
-  useEffect(() => {
-    if (session?.current_die) setCurrentDie(session.current_die)
-    if (session?.last_rolled_result !== undefined && session?.last_rolled_result !== null) {
-      setRolledResult(session.last_rolled_result)
-    }
-  }, [session?.current_die, session?.last_rolled_result])
+useEffect(() => {
+  if (session?.current_die) setCurrentDie(session.current_die)
+  if (session?.last_rolled_result !== undefined && session?.last_rolled_result !== null) {
+    setRolledResult(session.last_rolled_result)
+  }
+}, [session?.current_die, session?.last_rolled_result, setCurrentDie, setRolledResult])
 
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
@@ -333,32 +333,32 @@ const { activeCollectionId = null } = useCollections()
       setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
       setIsRatingView(true)
     }
-  }, [session?.pending_thread_id, session?.active_thread, session?.last_rolled_result, activeThreads, activeRatingThread, currentDie, isRatingView, selectedThreadId])
+  }, [session?.pending_thread_id, session?.active_thread, session?.last_rolled_result, activeThreads, activeRatingThread, currentDie, isRatingView, selectedThreadId, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
 
-  useEffect(() => {
-    const actionable = staleThreads?.filter(t => !t.is_blocked) ?? []
-    if (actionable.length > 0) {
-      const thread = actionable[0]
-      const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
-      const diffDays = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
-      setStaleThread(diffDays >= 8 ? { ...thread, days: diffDays } : null)
-      setStaleThreadCount(actionable.filter(t => {
-        const activity = t.last_activity_at ? new Date(t.last_activity_at) : new Date(t.created_at)
-        const days = Math.floor((Date.now() - activity.getTime()) / (1000 * 60 * 60 * 24))
-        return days >= 8
-      }).length)
-    } else {
-      setStaleThread(null)
-      setStaleThreadCount(0)
-    }
-  }, [staleThreads])
+useEffect(() => {
+  const actionable = staleThreads?.filter(t => !t.is_blocked) ?? []
+  if (actionable.length > 0) {
+    const thread = actionable[0]
+    const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
+    const diffDays = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
+    setStaleThread(diffDays >= 8 ? { ...thread, days: diffDays } : null)
+    setStaleThreadCount(actionable.filter(t => {
+      const activity = t.last_activity_at ? new Date(t.last_activity_at) : new Date(t.created_at)
+      const days = Math.floor((Date.now() - activity.getTime()) / (1000 * 60 * 60 * 24))
+      return days >= 8
+    }).length)
+  } else {
+    setStaleThread(null)
+    setStaleThreadCount(0)
+  }
+}, [staleThreads, setStaleThread, setStaleThreadCount])
 
-  useEffect(() => {
-    return () => {
-      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current)
-      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current)
-    }
-  }, [])
+useEffect(() => {
+  return () => {
+    if (rollIntervalRef.current) clearInterval(rollIntervalRef.current)
+    if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current)
+  }
+}, [rollIntervalRef, rollTimeoutRef])
 
   function updateRatingUI(val: string) {
     const num = parseFloat(val)

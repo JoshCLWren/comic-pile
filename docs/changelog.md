@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-03-24
+
+**Accessibility Improvements (#220)**
+- Added `aria-label="Roll pool collection"` to ThreadPool container for screen reader support
+- Added `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` to Modal component
+- Implemented focus trap in Modal component to keep focus within dialog
+- Added focus return to trigger element on Modal close
+- Fixed ESLint warnings for React hook dependencies in RollPage
+
+**Documentation Updates (#220)**
+- README.md: Added prominent async-only PostgreSQL warning and guidance
+- docs/API.md: Documented dependency blocking behavior and issue-level endpoints
+- docs/REACT_ARCHITECTURE.md: Added mobile usage guide and accessibility section
+- Updated technology stack descriptions with current patterns
+
+**Form Accessibility**
+- Create Thread modal: All inputs now have associated labels with proper IDs
+- Edit Thread modal: Improved label associations for title, format, issues, notes
+- FormatSelect component: Added optional `id` prop for label association
+- Rating slider: Already had proper aria-label, maintained consistency
+
 ## 2026-03-21
 
 **Collection Management UI Redesign**

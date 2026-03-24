@@ -21,13 +21,21 @@ Skipped tests create technical debt and hide broken functionality. If a test is 
 ## Tech Stack
 
 - **Backend**: FastAPI (Python 3.13)
-- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Database**: PostgreSQL with SQLAlchemy ORM (**async-only** via asyncpg)
 - **Migrations**: Alembic
 - **Frontend**: React + Vite + Tailwind CSS
 - **Styling**: Tailwind CSS
 - **Testing**: pytest with httpx.AsyncClient for API tests
 - **Auth**: JWT authentication with refresh token rotation
 - **Code Quality**: ruff linting, ty type checking, 96% coverage requirement
+
+> **⚠️ IMPORTANT: Async PostgreSQL Only**
+> 
+> This project uses **asyncpg (async PostgreSQL) ONLY**. Never use synchronous psycopg2.
+> - ✅ USE: `asyncpg`, `create_async_engine()`, `AsyncSession`
+> - ❌ NEVER USE: `psycopg2`, `psycopg`, `create_engine()` (sync), `Session` (sync)
+> 
+> Mixing sync/async database code will break the application. See [AGENTS.md](AGENTS.md) for details.
 
 ## Quick Start
 

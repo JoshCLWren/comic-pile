@@ -62,7 +62,7 @@ export function ThreadPool({
         </div>
       </div>
 
-      <div className="space-y-2" data-roll-pool>
+      <div className="space-y-2" data-roll-pool aria-label="Roll pool collection">
         {pool.length === 0 && blockedThreads.length === 0 ? (
           <div className="text-center py-10 space-y-4">
             <div className="text-4xl">📚</div>

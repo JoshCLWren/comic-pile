@@ -458,11 +458,10 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Read Now'))
 
     // In rating view, Saga should be HIDDEN from the pool at the bottom
-    const poolHeader = screen.getByLabelText('Roll pool collection').parentElement.parentElement
-    const poolList = poolHeader.nextElementSibling
-    expect(within(poolList as HTMLElement).queryByText('Saga')).not.toBeInTheDocument()
+    const poolList = screen.getByLabelText('Roll pool collection')
+    expect(within(poolList).queryByText('Saga')).not.toBeInTheDocument()
     // Other threads (X-Men) should still be there
-    expect(within(poolList as HTMLElement).getByText('X-Men')).toBeInTheDocument()
+    expect(within(poolList).getByText('X-Men')).toBeInTheDocument()
   })
 
   it('[P4] refetches threads after successful rating', async () => {
