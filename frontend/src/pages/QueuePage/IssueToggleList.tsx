@@ -6,6 +6,7 @@ import { dependenciesApi } from '../../services/api'
 import { getApiErrorDetail } from '../../utils/apiError'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
+import { getDependencyTooltip } from '../../utils/dependencyHelpers'
 import {
   reorderIssuesForDrop,
   moveIssueByStep,
@@ -297,30 +298,7 @@ export function IssueToggleList({ threadId }: {
     }
   }
 
-  const getDependencyTooltip = (issueId: number): string | null => {
-    const deps = dependencies[issueId]
-    if (!deps) return null
-
-    const parts: string[] = []
-
-    if (deps.incoming.length > 0) {
-      parts.push('Blocked by:')
-      deps.incoming.forEach((edge) => {
-        parts.push(`  ← ${edge.source_thread_title} #${edge.source_issue_number}`)
-      })
-    }
-
-    if (deps.outgoing.length > 0) {
-      parts.push('Blocking:')
-      deps.outgoing.forEach((edge) => {
-        parts.push(`  → ${edge.source_thread_title} #${edge.source_issue_number}`)
-      })
-    }
-
-    return parts.join('\n')
-  }
-
-  if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
+if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p>
 
   return (
     <div className="space-y-2">
@@ -333,8 +311,8 @@ export function IssueToggleList({ threadId }: {
           const isDragged = draggedIssueId === issue.id
           const canMoveUp = index > 0
           const canMoveDown = index < issues.length - 1
-          const hasDeps = dependencies[issue.id] !== undefined
-          const tooltipContent = getDependencyTooltip(issue.id)
+const hasDeps = dependencies[issue.id] !== undefined
+    const tooltipContent = getDependencyTooltip(dependencies[issue.id])
 
           return (
             <div

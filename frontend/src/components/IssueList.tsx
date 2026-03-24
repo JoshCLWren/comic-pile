@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { issuesApi } from '../services/api-issues'
 import { dependenciesApi } from '../services/api'
 import type { Issue, IssueDependenciesResponse, Thread } from '../types'
 import Tooltip from './Tooltip'
+import { getDependencyTooltip } from '../utils/dependencyHelpers'
 import './IssueList.css'
 
 interface IssueListProps {
@@ -18,6 +19,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState<number>(0)
   const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const loadIssues = useCallback(async (append: boolean = false) => {
     if (append) {
@@ -38,29 +40,37 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       setNextPageToken(response.next_page_token)
 
       const depsMap: Record<number, IssueDependenciesResponse> = { ...dependencies }
-      await Promise.all(
-        response.issues.map(async (issue) => {
-          try {
-            const deps = await dependenciesApi.getIssueDependencies(issue.id)
-            if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
-              depsMap[issue.id] = deps
+      try {
+        await Promise.all(
+          response.issues.map(async (issue) => {
+            try {
+              const deps = await dependenciesApi.getIssueDependencies(issue.id)
+              if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
+                depsMap[issue.id] = deps
+              }
+            } catch (error) {
+              console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
             }
-          } catch (error) {
-            console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
-          }
-        })
-      )
-      setDependencies(depsMap)
+          })
+        )
+        setDependencies(depsMap)
+      } catch (error) {
+        console.error('Failed to load dependencies:', error)
+      }
     } catch (error) {
       console.error('Failed to load issues:', error)
     } finally {
       setIsLoading(false)
       setIsLoadingMore(false)
     }
-  }, [thread.id, filter, nextPageToken])
+  }, [thread.id, filter, nextPageToken, dependencies])
 
   useEffect(() => {
+    abortControllerRef.current = new AbortController()
     loadIssues(false)
+    return () => {
+      abortControllerRef.current?.abort()
+    }
   }, [loadIssues])
 
   const handleFilterChange = (newFilter: 'all' | 'unread' | 'read') => {
@@ -93,29 +103,6 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
     return '🟢'
   }
 
-  const getDependencyTooltip = (issueId: number): string | null => {
-    const deps = dependencies[issueId]
-    if (!deps) return null
-
-    const parts: string[] = []
-
-    if (deps.incoming.length > 0) {
-      parts.push('Blocked by:')
-      deps.incoming.forEach((edge) => {
-        parts.push(`  ← ${edge.source_thread_title} #${edge.source_issue_number}`)
-      })
-    }
-
-    if (deps.outgoing.length > 0) {
-      parts.push('Blocking:')
-      deps.outgoing.forEach((edge) => {
-        parts.push(`  → ${edge.source_thread_title} #${edge.source_issue_number}`)
-      })
-    }
-
-    return parts.join('\n')
-  }
-
   if (isLoading) {
     return <div className="issue-list loading">Loading issues...</div>
   }
@@ -145,7 +132,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       <div className="issues">
         {issues.map((issue) => {
           const hasDeps = dependencies[issue.id] !== undefined
-          const tooltipContent = getDependencyTooltip(issue.id)
+          const tooltipContent = getDependencyTooltip(dependencies[issue.id])
 
           return (
             <div

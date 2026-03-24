@@ -16,6 +16,7 @@ from app.schemas.dependency import (
     DependencyCreate,
     DependencyResponse,
     IssueDependenciesResponse,
+    IssueDependencyEdge,
     ThreadDependenciesResponse,
 )
 from comic_pile.dependencies import (
@@ -182,8 +183,6 @@ async def list_issue_dependencies(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Issue {issue_id} not found",
         )
-
-    from app.schemas.dependency import IssueDependencyEdge
 
     incoming_result = await db.execute(
         select(Dependency).where(Dependency.target_issue_id == issue_id)
