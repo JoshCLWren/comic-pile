@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { issuesApi } from '../services/api-issues'
 import type { Issue } from '../types'
 
@@ -26,8 +26,11 @@ export default function IssueCorrectionDialog({
   const [isLoadingIssues, setIsLoadingIssues] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [allIssues, setAllIssues] = useState<Issue[]>([])
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const keyHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const keyHoldDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const fetchIssues = useCallback(async () => {
+  const fetchIssues = useCallback(async (retryAttempt = 0) => {
     setIsLoadingIssues(true)
     setError(null)
     try {
@@ -35,25 +38,35 @@ export default function IssueCorrectionDialog({
       const seenPageTokens = new Set<string>()
       let nextPageToken: string | null = null
 
-      while (true) {
-        const data = await issuesApi.list(threadId, {
-          page_size: 100,
-          ...(nextPageToken ? { page_token: nextPageToken } : {}),
-        })
-        allIssues.push(...(data.issues || []))
+while (true) {
+      const data = await issuesApi.list(threadId, {
+        page_size: 100,
+        ...(nextPageToken ? { page_token: nextPageToken } : {}),
+      })
 
-        if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
-          break
-        }
-
-        seenPageTokens.add(data.next_page_token)
-        nextPageToken = data.next_page_token
+      if (!data.issues || data.issues.length === 0) {
+        break
       }
 
-      setAllIssues(allIssues)
+      allIssues.push(...(data.issues || []))
+
+      if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+        break
+      }
+
+      seenPageTokens.add(data.next_page_token)
+      nextPageToken = data.next_page_token
+    }
+
+    setAllIssues(allIssues)
+    setHasLoadedOnce(true)
     } catch (err) {
       console.error('Failed to load issues:', err)
-      setError('Failed to load issues. Please try again.')
+      if (retryAttempt < 2) {
+        await fetchIssues(retryAttempt + 1)
+      } else {
+        setError('Failed to load issues after multiple attempts. Please try again.')
+      }
     } finally {
       setIsLoadingIssues(false)
     }
@@ -66,18 +79,18 @@ export default function IssueCorrectionDialog({
     }
   }, [isOpen, currentIssueNumber, fetchIssues])
 
-  useEffect(() => {
-    const handleEscape = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose()
-      }
+  const handleEscape = useCallback((e: globalThis.KeyboardEvent) => {
+    if (e.key === 'Escape' && isOpen) {
+      onClose()
     }
-
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
   }, [isOpen, onClose])
 
-  async function handleSubmit() {
+  useEffect(() => {
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [handleEscape])
+
+  const handleSubmit = useCallback(async () => {
     const targetNumber = selectedIssueNumber.trim()
     if (!targetNumber) {
       setError('Please enter an issue number')
@@ -90,7 +103,9 @@ export default function IssueCorrectionDialog({
       return
     }
 
-    const currentNum = parseInt(currentIssueNumber || '0', 10)
+    const currentNum = currentIssueNumber !== null && currentIssueNumber !== undefined
+      ? parseInt(currentIssueNumber, 10)
+      : 0
 
     if (targetNum < 1) {
       setError('Issue number must be at least 1')
@@ -122,9 +137,7 @@ export default function IssueCorrectionDialog({
           }
         )
 
-        for (const issue of issuesToMarkRead) {
-          await issuesApi.markRead(issue.id)
-        }
+        await Promise.all(issuesToMarkRead.map(issue => issuesApi.markRead(issue.id)))
 
         if (targetIssue.status === 'read') {
           await issuesApi.markUnread(targetIssue.id)
@@ -143,32 +156,84 @@ export default function IssueCorrectionDialog({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [selectedIssueNumber, currentIssueNumber, totalIssues, allIssues, onSuccess, onClose])
 
-  const adjustIssue = (delta: number) => {
-    const currentValue = selectedIssueNumber || '0'
-    
-    if (!/^\d+$/.test(currentValue)) {
+const adjustIssue = useCallback((delta: number) => {
+    const currentValue = selectedIssueNumber
+
+    if (!currentValue || !/^\d+$/.test(currentValue)) {
       setError('Please enter a valid number first')
       return
     }
-    
+
     const current = parseInt(currentValue, 10)
-    
+
     if (isNaN(current)) {
       setError('Invalid issue number')
       return
     }
-    
+
     const newNum = current + delta
     const min = 1
-    const max = totalIssues || 999
+    const max = totalIssues !== null && totalIssues !== undefined ? totalIssues : 999
 
     if (newNum >= min && newNum <= max) {
       setSelectedIssueNumber(newNum.toString())
       setError(null)
     }
-  }
+  }, [selectedIssueNumber, totalIssues])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleSubmit()
+    }
+  }, [handleSubmit])
+
+  const handleKeyHold = useCallback((delta: number, isStart: boolean) => {
+    if (isStart) {
+      adjustIssue(delta)
+      keyHoldDelayRef.current = setTimeout(() => {
+        keyHoldTimerRef.current = setInterval(() => {
+          adjustIssue(delta)
+        }, 50)
+      }, 300)
+    } else {
+      if (keyHoldTimerRef.current) {
+        clearInterval(keyHoldTimerRef.current)
+        keyHoldTimerRef.current = null
+      }
+      if (keyHoldDelayRef.current) {
+        clearTimeout(keyHoldDelayRef.current)
+        keyHoldDelayRef.current = null
+      }
+    }
+  }, [adjustIssue])
+
+  const handleButtonKeyDown = useCallback((e: React.KeyboardEvent, delta: number) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleKeyHold(delta, true)
+    }
+  }, [handleKeyHold])
+
+  const handleButtonKeyUp = useCallback((e: React.KeyboardEvent, delta: number) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleKeyHold(delta, false)
+    }
+  }, [handleKeyHold])
+
+  useEffect(() => {
+    return () => {
+      if (keyHoldTimerRef.current) {
+        clearInterval(keyHoldTimerRef.current)
+      }
+      if (keyHoldDelayRef.current) {
+        clearTimeout(keyHoldDelayRef.current)
+      }
+    }
+  }, [])
 
   if (!isOpen) return null
 
@@ -214,28 +279,35 @@ export default function IssueCorrectionDialog({
               </label>
 
             <div className="flex items-center justify-center gap-4">
-              <button
-                type="button"
-                onClick={() => adjustIssue(-1)}
-                disabled={isLoading}
-                className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95"
-                aria-label="Decrease issue number"
-              >
-                −
-              </button>
+<button
+          type="button"
+          onMouseDown={() => handleKeyHold(-1, true)}
+          onMouseUp={() => handleKeyHold(-1, false)}
+          onMouseLeave={() => handleKeyHold(-1, false)}
+          onTouchStart={() => handleKeyHold(-1, true)}
+          onTouchEnd={() => handleKeyHold(-1, false)}
+          onKeyDown={(e) => handleButtonKeyDown(e, -1)}
+          onKeyUp={(e) => handleButtonKeyUp(e, -1)}
+          disabled={isLoading}
+          className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-amber-500"
+          aria-label="Decrease issue number"
+        >
+          −
+        </button>
 
               <div className="flex-1 text-center">
-                <input
-                  id="issue-number"
-                  type="number"
-                  min="1"
-                  max={totalIssues || undefined}
-                  value={selectedIssueNumber}
-                  onChange={(e) => setSelectedIssueNumber(e.target.value)}
-                  disabled={isLoading}
-                  className="w-full text-center text-3xl font-black bg-white/5 border border-white/10 rounded-lg py-3 px-4 text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  aria-describedby="issue-range"
-                />
+<input
+              id="issue-number"
+              type="number"
+              min="1"
+              max={totalIssues || undefined}
+              value={selectedIssueNumber}
+              onChange={(e) => setSelectedIssueNumber(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isLoading}
+              className="w-full text-center text-3xl font-black bg-white/5 border border-white/10 rounded-lg py-3 px-4 text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              aria-describedby="issue-range"
+            />
                 {totalIssues && (
                   <p id="issue-range" className="text-xs text-stone-500 mt-1">
                     of {totalIssues}
@@ -243,24 +315,39 @@ export default function IssueCorrectionDialog({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => adjustIssue(1)}
-                disabled={isLoading}
-                className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95"
-                aria-label="Increase issue number"
-              >
-                +
-              </button>
+<button
+            type="button"
+            onMouseDown={() => handleKeyHold(1, true)}
+            onMouseUp={() => handleKeyHold(1, false)}
+            onMouseLeave={() => handleKeyHold(1, false)}
+            onTouchStart={() => handleKeyHold(1, true)}
+            onTouchEnd={() => handleKeyHold(1, false)}
+            onKeyDown={(e) => handleButtonKeyDown(e, 1)}
+            onKeyUp={(e) => handleButtonKeyUp(e, 1)}
+            disabled={isLoading}
+            className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-amber-500"
+            aria-label="Increase issue number"
+          >
+            +
+          </button>
             </div>
           </div>
           )}
 
-          {error && (
-            <div className="p-3 bg-red-800/20 border border-red-800/50 rounded-lg">
-              <p className="text-sm text-red-400 text-center">{error}</p>
-            </div>
-          )}
+{error && (
+          <div className="p-3 bg-red-800/20 border border-red-800/50 rounded-lg">
+            <p className="text-sm text-red-400 text-center mb-2">{error}</p>
+            {!isLoadingIssues && !hasLoadedOnce && (
+              <button
+                type="button"
+                onClick={() => fetchIssues()}
+                className="w-full py-2 bg-red-800/40 hover:bg-red-800/60 border border-red-800/60 rounded text-xs font-bold uppercase tracking-wider transition-all"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
 
           <div className="flex gap-3">
             <button
