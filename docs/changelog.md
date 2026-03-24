@@ -18,6 +18,17 @@
 - Added `GET /api/v1/threads/{thread_id}/dependency-order-check` endpoint to detect conflicts between dependency-implied reading order and issue position order
 - Returns structured conflict data with issue IDs, positions, and dependency requirements for debugging
 
+**Issue Dependencies**
+- New API endpoint: GET /api/v1/issues/{issue_id}/dependencies returns issue-level dependency edges
+- Dependency indicators (🔗) now shown on issues with incoming/outgoing dependencies
+- Tooltip displays linked issues and threads on hover
+- Authorization enforced: only shows dependencies for owned threads
+
+**UI Polish**
+- Issue list in queue edit modal now shows dependency status
+- Mobile-friendly tooltips for dependency information
+>>>>>>> origin/main
+
 ## 2026-03-20
 
 **CI & Infrastructure**
