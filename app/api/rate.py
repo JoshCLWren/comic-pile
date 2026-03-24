@@ -214,33 +214,72 @@ async def rate_thread(
     current_die = await get_current_die(current_session_id, db)
 
     if not thread.uses_issue_tracking() and rate_data.issue_number is not None:
-        try:
-            issue_num = rate_data.issue_number
+        issue_number = rate_data.issue_number
 
-            if issue_num < 1:
+        result = await db.execute(
+            select(Issue)
+            .where(Issue.thread_id == thread.id)
+            .where(Issue.issue_number == issue_number)
+        )
+        current_issue = result.scalar_one_or_none()
+
+        if not current_issue:
+            try:
+                issue_num_int = int(issue_number)
+                total_issues = issue_num_int + max(thread.issues_remaining - 1, 0)
+                if total_issues > 1000:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Total issues ({total_issues}) exceeds reasonable limit",
+                    )
+                for i in range(1, total_issues + 1):
+                    db.add(
+                        Issue(
+                            thread_id=thread.id,
+                            issue_number=str(i),
+                            status="read" if i < issue_num_int else "unread",
+                            read_at=datetime.now(UTC) if i < issue_num_int else None,
+                            position=i,
+                        )
+                    )
+                await db.flush()
+                result = await db.execute(
+                    select(Issue)
+                    .where(Issue.thread_id == thread.id)
+                    .where(Issue.issue_number == issue_number)
+                )
+                current_issue = result.scalar_one_or_none()
+                if not current_issue:
+                    raise HTTPException(
+                        status_code=400, detail=f"Failed to create issue '{issue_number}'."
+                    )
+            except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="issue_number must be at least 1",
-                )
+                    detail=f"Non-numeric issue '{issue_number}' not found in thread. Add it via Edit Thread first.",
+                ) from None
+            except HTTPException:
+                raise
+            except Exception as e:
+                await db.rollback()
+                raise HTTPException(status_code=500, detail="Migration failed.") from e
 
-            total_issues = issue_num + max(thread.issues_remaining - 1, 0)
-
-            if total_issues > 1000:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Total issues ({total_issues}) exceeds reasonable limit",
-                )
-
-            await thread.migrate_to_issues(issue_num - 1, total_issues, db)
-            await db.flush()
-        except HTTPException:
-            raise
-        except Exception as e:
-            await db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Migration failed. Please try again.",
-            ) from e
+        all_issues_result = await db.execute(
+            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+        )
+        all_issues = all_issues_result.scalars().all()
+        for issue in all_issues:
+            if issue.position < current_issue.position:
+                if issue.status != "read":
+                    issue.status = "read"
+                    issue.read_at = datetime.now(UTC)
+            elif issue.position == current_issue.position:
+                issue.status = "unread"
+                issue.read_at = None
+        thread.total_issues = len(all_issues)
+        thread.next_unread_issue_id = current_issue.id
+        thread.reading_progress = "in_progress"
+        await db.flush()
 
     rating_min, rating_max, rating_threshold = _get_rating_limits()
 

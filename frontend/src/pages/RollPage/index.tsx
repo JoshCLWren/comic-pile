@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react'
+import { useEffect, useMemo, useCallback, useState } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import LazyDice3D from '../../components/LazyDice3D'
 import Modal from '../../components/Modal'
@@ -23,7 +23,7 @@ import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
-import type { Thread, RollResponse, SessionThread } from '../../types'
+import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -67,13 +67,10 @@ export default function RollPage() {
     rollTimeoutRef,
   } = state
 
-  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-  const {
-    collections = [],
-    activeCollectionId = null,
-    setActiveCollectionId,
-    isLoading: isCollectionsLoading = false,
-  } = useCollections()
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+
+const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
@@ -84,6 +81,16 @@ export default function RollPage() {
       if (status === 401) navigate('/login')
     }
   }, [isSessionError, sessionError, navigate])
+
+  useEffect(() => {
+    const handleTestEditCollection = ((e: CustomEvent<Collection>) => {
+      setEditingCollection(e.detail)
+      setIsCollectionDialogOpen(true)
+    }) as EventListener
+
+    window.addEventListener('test-edit-collection', handleTestEditCollection)
+    return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
+  }, [])
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -117,7 +124,7 @@ export default function RollPage() {
         next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
         last_rolled_result: response.result ?? response.last_rolled_result,
       }
-      if (!response.total_issues) {
+      if (response.total_issues === null) {
         setThreadToMigrate(threadMetadata as RatingThread)
         setShowMigrationDialog(true)
       } else {
@@ -184,13 +191,8 @@ export default function RollPage() {
   }, [])
 
   const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
-    const num = parseInt(issueNumber, 10)
-    if (isNaN(num) || num < 1) {
-      setErrorMessage('Invalid issue number')
-      return
-    }
     setShowSimpleMigration(false)
-    rateMutation.mutate({ rating, finish_session: false, issue_number: num }).then(() => {
+    rateMutation.mutate({ rating, finish_session: false, issue_number: issueNumber }).then(() => {
       suppressPendingAutoOpenRef.current = true
       setIsRolling(false)
       setIsRatingView(false)
@@ -221,7 +223,7 @@ export default function RollPage() {
             next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
             last_rolled_result: response.result ?? response.last_rolled_result,
           }
-          if (!response.total_issues) {
+          if (response.total_issues === null) {
             setThreadToMigrate(threadMetadata as RatingThread)
             setShowMigrationDialog(true)
           } else {
@@ -373,7 +375,13 @@ export default function RollPage() {
 
   async function handleSubmitRating(finishSession = false) {
     if (rating >= RATING_THRESHOLD) createExplosion()
-    if (activeRatingThread && !activeRatingThread.total_issues) {
+
+    const freshTotalIssues =
+      session?.active_thread?.id === activeRatingThread?.id
+        ? session?.active_thread?.total_issues ?? activeRatingThread?.total_issues
+        : activeRatingThread?.total_issues
+
+    if (activeRatingThread && freshTotalIssues === null) {
       setShowSimpleMigration(true)
       return
     }
@@ -493,9 +501,7 @@ export default function RollPage() {
     }
   }
 
-  function handleCollectionChange(collectionId: number | null) {
-    setActiveCollectionId(collectionId)
-  }
+
 
   function handleOverrideSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -645,37 +651,32 @@ export default function RollPage() {
               />
             )}
 
-            <ThreadPool
-              pool={pool}
-              blockedThreads={blockedThreads}
-              blockingReasonMap={blockingReasonMap}
-              isRatingView={isRatingView}
-              isRolling={isRolling}
-              rolledResult={rolledResult}
-              selectedThreadId={selectedThreadId}
-              staleThread={staleThread}
-              staleThreadCount={staleThreadCount}
-              snoozedThreads={session?.snoozed_threads || []}
-              snoozedExpanded={snoozedExpanded}
-              blockedExpanded={blockedExpanded}
-              activeCollectionId={activeCollectionId}
-              collections={collections}
-              isCollectionsLoading={isCollectionsLoading}
-              onThreadClick={handleThreadClick}
-              onCollectionChange={handleCollectionChange}
-              onNewCollection={() => setIsCollectionDialogOpen(true)}
-              onUnsnooze={handleUnsnooze}
-              onReadStale={handleReadStale}
-              onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
-              onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
-              unsnoozeIsPending={unsnoozeMutation.isPending}
-            />
+  <ThreadPool
+    pool={pool}
+    blockedThreads={blockedThreads}
+    blockingReasonMap={blockingReasonMap}
+    isRatingView={isRatingView}
+    isRolling={isRolling}
+    rolledResult={rolledResult}
+    selectedThreadId={selectedThreadId}
+    staleThread={staleThread}
+    staleThreadCount={staleThreadCount}
+    snoozedThreads={session?.snoozed_threads || []}
+    snoozedExpanded={snoozedExpanded}
+    blockedExpanded={blockedExpanded}
+    onThreadClick={handleThreadClick}
+    onUnsnooze={handleUnsnooze}
+    onReadStale={handleReadStale}
+    onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
+    onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+    unsnoozeIsPending={unsnoozeMutation.isPending}
+  />
           </div>
         </div>
 
         <div id="explosion-layer" className="explosion-wrap"></div>
 
-        {isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
+        {isCollectionDialogOpen && <CollectionDialog collection={editingCollection} onClose={() => { setIsCollectionDialogOpen(false); setEditingCollection(null) }} />}
 
         {showMigrationDialog && threadToMigrate && (
           <MigrationDialog thread={threadToMigrate} onComplete={handleMigrationComplete} onSkip={handleMigrationSkip} onClose={handleMigrationClose} />

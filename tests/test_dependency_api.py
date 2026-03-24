@@ -619,13 +619,13 @@ async def test_delete_nonexistent_dependency_returns_404(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_list_issue_dependencies_empty(auth_client, async_db, test_username):
-    """Getting dependencies for an issue with no dependencies should return empty lists."""
+async def test_dependency_order_check_no_conflicts(auth_client, async_db, test_username):
+    """Order check should return empty conflicts when position and dependency order agree."""
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
 
     thread = Thread(
-        title="Test Thread",
+        title="Well-Ordered Thread",
         format="Comic",
         issues_remaining=3,
         queue_position=1,
@@ -636,32 +636,138 @@ async def test_list_issue_dependencies_empty(auth_client, async_db, test_usernam
     async_db.add(thread)
     await async_db.flush()
 
-    issue = Issue(
+    issue_1 = Issue(
         thread_id=thread.id,
         issue_number="1",
         position=1,
         status="unread",
     )
-    async_db.add(issue)
+    issue_2 = Issue(
+        thread_id=thread.id,
+        issue_number="2",
+        position=2,
+        status="unread",
+    )
+    issue_3 = Issue(
+        thread_id=thread.id,
+        issue_number="3",
+        position=3,
+        status="unread",
+    )
+    async_db.add_all([issue_1, issue_2, issue_3])
     await async_db.commit()
-    await async_db.refresh(issue)
+    await async_db.refresh(thread)
 
-    resp = await auth_client.get(f"/api/v1/issues/{issue.id}/dependencies")
+    resp = await auth_client.get(f"/api/v1/threads/{thread.id}/dependency-order-check")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["issue_id"] == issue.id
-    assert data["incoming"] == []
-    assert data["outgoing"] == []
+    assert data["thread_id"] == thread.id
+    assert data["conflicts"] == []
 
 
 @pytest.mark.asyncio
-async def test_list_issue_dependencies_with_edges(auth_client, async_db, test_username):
-    """Getting dependencies for an issue should return both incoming and outgoing edges."""
+async def test_dependency_order_check_with_conflicts(auth_client, async_db, test_username):
+    """Order check should detect conflicts where dependency order disagrees with position."""
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
 
-    source_thread = Thread(
-        title="Source Thread",
+    thread = Thread(
+        title="Conflicted Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issue_79 = Issue(
+        thread_id=thread.id,
+        issue_number="79",
+        position=79,
+        status="unread",
+    )
+    issue_131 = Issue(
+        thread_id=thread.id,
+        issue_number="131",
+        position=131,
+        status="unread",
+    )
+    async_db.add_all([issue_79, issue_131])
+    await async_db.commit()
+    await async_db.refresh(issue_79)
+    await async_db.refresh(issue_131)
+
+    from app.models import Dependency
+
+    dep = Dependency(
+        source_issue_id=issue_131.id,
+        target_issue_id=issue_79.id,
+    )
+    async_db.add(dep)
+    await async_db.commit()
+
+    resp = await auth_client.get(f"/api/v1/threads/{thread.id}/dependency-order-check")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["thread_id"] == thread.id
+    assert len(data["conflicts"]) == 1
+
+    conflict = data["conflicts"][0]
+    assert conflict["issue_id"] == issue_131.id
+    assert conflict["issue_number"] == "131"
+    assert conflict["position"] == 131
+    assert len(conflict["dependency_requires_before"]) == 1
+    assert conflict["dependency_requires_before"][0]["issue_id"] == issue_79.id
+    assert conflict["dependency_requires_before"][0]["issue_number"] == "79"
+    assert conflict["dependency_requires_before"][0]["position"] == 79
+    assert "position 131 comes after issue at position 79" in conflict["conflict"]
+
+
+@pytest.mark.asyncio
+async def test_dependency_order_check_unauthorized_thread(auth_client, async_db, test_username):
+    """Order check should return 404 for other users' threads."""
+    other_user = User(username="other", email="other@example.com", password_hash="hash")
+    async_db.add(other_user)
+    await async_db.commit()
+
+    other_thread = Thread(
+        title="Other User Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=other_user.id,
+    )
+    async_db.add(other_thread)
+    await async_db.commit()
+    await async_db.refresh(other_thread)
+
+    resp = await auth_client.get(f"/api/v1/threads/{other_thread.id}/dependency-order-check")
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_dependency_order_check_nonexistent_thread(auth_client):
+    """Order check should return 404 for non-existent thread."""
+    resp = await auth_client.get("/api/v1/threads/99999/dependency-order-check")
+    assert resp.status_code == 404
+    assert "not found" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_dependency_order_check_cross_thread_dependencies(
+    auth_client, async_db, test_username
+):
+    """Order check should only check in-thread dependencies, not cross-thread."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    thread1 = Thread(
+        title="Thread 1",
         format="Comic",
         issues_remaining=2,
         queue_position=1,
@@ -669,8 +775,8 @@ async def test_list_issue_dependencies_with_edges(auth_client, async_db, test_us
         user_id=user.id,
         total_issues=2,
     )
-    target_thread = Thread(
-        title="Target Thread",
+    thread2 = Thread(
+        title="Thread 2",
         format="Comic",
         issues_remaining=2,
         queue_position=2,
@@ -678,116 +784,37 @@ async def test_list_issue_dependencies_with_edges(auth_client, async_db, test_us
         user_id=user.id,
         total_issues=2,
     )
-    async_db.add_all([source_thread, target_thread])
+    async_db.add_all([thread1, thread2])
     await async_db.flush()
 
-    source_issue = Issue(
-        thread_id=source_thread.id,
+    thread1_issue = Issue(
+        thread_id=thread1.id,
         issue_number="1",
         position=1,
         status="unread",
     )
-    middle_issue = Issue(
-        thread_id=target_thread.id,
-        issue_number="5",
+    thread2_issue = Issue(
+        thread_id=thread2.id,
+        issue_number="1",
         position=1,
         status="unread",
     )
-    target_issue = Issue(
-        thread_id=target_thread.id,
-        issue_number="10",
-        position=2,
-        status="unread",
-    )
-    async_db.add_all([source_issue, middle_issue, target_issue])
-    await async_db.flush()
-
-    source_thread.next_unread_issue_id = source_issue.id
-    target_thread.next_unread_issue_id = middle_issue.id
+    async_db.add_all([thread1_issue, thread2_issue])
     await async_db.commit()
-    await async_db.refresh(middle_issue)
+    await async_db.refresh(thread1_issue)
+    await async_db.refresh(thread2_issue)
 
-    create_resp1 = await auth_client.post(
-        "/api/v1/dependencies/",
-        json={
-            "source_type": "issue",
-            "source_id": source_issue.id,
-            "target_type": "issue",
-            "target_id": middle_issue.id,
-        },
+    from app.models import Dependency
+
+    dep = Dependency(
+        source_issue_id=thread1_issue.id,
+        target_issue_id=thread2_issue.id,
     )
-    assert create_resp1.status_code == 201
+    async_db.add(dep)
+    await async_db.commit()
 
-    create_resp2 = await auth_client.post(
-        "/api/v1/dependencies/",
-        json={
-            "source_type": "issue",
-            "source_id": middle_issue.id,
-            "target_type": "issue",
-            "target_id": target_issue.id,
-        },
-    )
-    assert create_resp2.status_code == 201
-
-    resp = await auth_client.get(f"/api/v1/issues/{middle_issue.id}/dependencies")
+    resp = await auth_client.get(f"/api/v1/threads/{thread1.id}/dependency-order-check")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["issue_id"] == middle_issue.id
-
-    assert len(data["incoming"]) == 1
-    incoming = data["incoming"][0]
-    assert incoming["dependency_id"] == create_resp1.json()["id"]
-    assert incoming["source_issue_id"] == source_issue.id
-    assert incoming["source_issue_number"] == "1"
-    assert incoming["source_thread_id"] == source_thread.id
-    assert incoming["source_thread_title"] == "Source Thread"
-
-    assert len(data["outgoing"]) == 1
-    outgoing = data["outgoing"][0]
-    assert outgoing["dependency_id"] == create_resp2.json()["id"]
-    assert outgoing["source_issue_id"] == target_issue.id
-    assert outgoing["source_issue_number"] == "10"
-    assert outgoing["source_thread_id"] == target_thread.id
-    assert outgoing["source_thread_title"] == "Target Thread"
-
-
-@pytest.mark.asyncio
-async def test_list_issue_dependencies_unauthorized(auth_client, async_db):
-    """Getting dependencies for another user's issue should return 404."""
-    other_user = User(username="otheruser", email="other@example.com", password_hash="hash")
-    async_db.add(other_user)
-    await async_db.flush()
-
-    other_thread = Thread(
-        title="Other Thread",
-        format="Comic",
-        issues_remaining=1,
-        queue_position=1,
-        status="active",
-        user_id=other_user.id,
-        total_issues=1,
-    )
-    async_db.add(other_thread)
-    await async_db.flush()
-
-    other_issue = Issue(
-        thread_id=other_thread.id,
-        issue_number="1",
-        position=1,
-        status="unread",
-    )
-    async_db.add(other_issue)
-    await async_db.commit()
-    await async_db.refresh(other_issue)
-
-    resp = await auth_client.get(f"/api/v1/issues/{other_issue.id}/dependencies")
-    assert resp.status_code == 404
-    assert "not found" in resp.json()["detail"].lower()
-
-
-@pytest.mark.asyncio
-async def test_list_issue_dependencies_nonexistent(auth_client):
-    """Getting dependencies for a non-existent issue should return 404."""
-    resp = await auth_client.get("/api/v1/issues/99999/dependencies")
-    assert resp.status_code == 404
-    assert "not found" in resp.json()["detail"].lower()
+    assert data["thread_id"] == thread1.id
+    assert data["conflicts"] == []
