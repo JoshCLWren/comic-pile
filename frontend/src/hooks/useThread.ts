@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import axios from 'axios'
+import { useCache } from '../contexts/CacheContext'
 import { threadsApi } from '../services/api'
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadQueryParams, ThreadUpdatePayload } from '../types'
 
@@ -8,8 +9,29 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
 
+  const { getCache, setCache } = useCache()
+
+  const cacheKey = useMemo(() => {
+    return `threads-${searchTerm}-${collectionId}`
+  }, [searchTerm, collectionId])
+
   useEffect(() => {
     let cancelled = false
+
+    // Check cache first: if we have cached data that hasn't expired and matches current params, use it
+    const cached = getCache(cacheKey)
+    if (cached) {
+      const { data, timestamp } = cached
+      const now = Date.now()
+      // Consider cache valid for 30 seconds
+      if (now - timestamp < 30000) {
+        if (!cancelled) {
+          setData(data)
+          setIsPending(false)
+        }
+        return
+      }
+    }
 
     const fetchData = async () => {
       setIsPending(true)
@@ -22,11 +44,27 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
         if (collectionId !== null) {
           params.collection_id = collectionId
         }
-        console.log('[useThreads] Fetching threads with params:', params)
-        const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined)
+        // Fetch all pages transparently
+        let allThreads: Thread[] = []
+        let nextPageToken: string | undefined = undefined
+        let pageCount = 0
+        const maxPages = 100 // Safety limit
+
+        do {
+          const response = await threadsApi.list(
+            Object.keys(params).length > 0 ? params : undefined,
+            nextPageToken
+          )
+          pageCount++
+          allThreads = [...allThreads, ...response.threads]
+          nextPageToken = response.next_page_token
+        } while (nextPageToken && pageCount < maxPages)
+
+        // Cache the result
+        setCache(cacheKey, allThreads, Date.now())
 
         if (!cancelled) {
-          setData(result)
+          setData(allThreads)
         }
       } catch {
         if (!cancelled) {
@@ -44,31 +82,61 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
     return () => {
       cancelled = true
     }
-  }, [searchTerm, collectionId])
+  }, [searchTerm, collectionId, cacheKey, getCache, setCache])
 
-  const refetch = useCallback(() => {
-    const fetchData = async () => {
-      setIsPending(true)
-      setIsError(false)
-      try {
-        const params: ThreadQueryParams = {}
-        if (searchTerm?.trim()) {
-          params.search = searchTerm.trim()
+  const refetch = useCallback(async () => {
+    let cancelled = false
+    setIsPending(true)
+    setIsError(false)
+    try {
+      const cached = getCache(cacheKey)
+      if (cached) {
+        const { data, timestamp } = cached
+        const now = Date.now()
+        if (now - timestamp < 30000) {
+          if (!cancelled) {
+            setData(data)
+            setIsPending(false)
+          }
+          return
         }
-        if (collectionId !== null) {
-          params.collection_id = collectionId
-        }
-        const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined)
-        setData(result)
-      } catch {
+      }
+
+      const params: ThreadQueryParams = {}
+      if (searchTerm?.trim()) {
+        params.search = searchTerm.trim()
+      }
+      if (collectionId !== null) {
+        params.collection_id = collectionId
+      }
+      let allThreads: Thread[] = []
+      let nextPageToken: string | undefined = undefined
+      let pageCount = 0
+      do {
+        const response = await threadsApi.list(
+          Object.keys(params).length > 0 ? params : undefined,
+          nextPageToken
+        )
+        pageCount++
+        allThreads = [...allThreads, ...response.threads]
+        nextPageToken = response.next_page_token
+      } while (nextPageToken && pageCount < 100)
+
+      setCache(cacheKey, allThreads, Date.now())
+
+      if (!cancelled) {
+        setData(allThreads)
+      }
+    } catch {
+      if (!cancelled) {
         setIsError(true)
-      } finally {
+      }
+    } finally {
+      if (!cancelled) {
         setIsPending(false)
       }
     }
-
-    fetchData()
-  }, [searchTerm, collectionId])
+  }, [searchTerm, collectionId, cacheKey, getCache, setCache])
 
   return { data, isPending, isError, refetch }
 }

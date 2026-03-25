@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { CacheProvider } from '../contexts/CacheContext'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   useCreateThread,
@@ -36,7 +37,7 @@ beforeEach(() => {
 })
 
 it('loads threads data', async () => {
-  const { result } = renderHook(() => useThreads())
+  const { result } = renderHook(() => useThreads(), { wrapper: CacheProvider })
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
   expect(mockedThreadsApi.list).toHaveBeenCalled()

@@ -9,6 +9,7 @@ import {
 } from '../hooks/useSession'
 import { sessionApi } from '../services/api'
 import { ToastProvider } from '../contexts/ToastContext'
+import { CacheProvider } from '../contexts/CacheContext'
 
 vi.mock('../services/api', () => ({
   sessionApi: {
@@ -24,7 +25,11 @@ const mockedSessionApi = vi.mocked(sessionApi)
 
 function renderWithProvider(ui) {
   return renderHook(ui, {
-    wrapper: ({ children }) => <ToastProvider>{children}</ToastProvider>,
+    wrapper: ({ children }) => (
+      <CacheProvider>
+        <ToastProvider>{children}</ToastProvider>
+      </CacheProvider>
+    ),
   })
 }
 
