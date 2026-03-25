@@ -618,9 +618,9 @@ useEffect(() => {
               </div>
             </div>
             <div className="text-right">
-              <Tooltip content="Ladder mode: die size adjusts automatically based on your ratings. High ratings (4+) step the die down for a focused pool; low ratings step it up for more variety.">
-                <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder <span className="inline-block w-3 h-3 text-center leading-3 rounded-full bg-stone-600 text-stone-300 text-[7px] ml-0.5 align-middle">?</span></span>
-              </Tooltip>
+               <Tooltip content="Ladder mode: Die size adjusts automatically based on your ratings. High ratings (4+) step the die down for a focused pool; low ratings step it up for more variety.">
+                 <span className="block text-[8px] font-black text-stone-500 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">Ladder <span className="inline-block w-3 h-3 text-center leading-3 rounded-full bg-stone-600 text-stone-300 text-[7px] ml-0.5 align-middle">?</span></span>
+               </Tooltip>
               <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>
             </div>
           </div>
