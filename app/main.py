@@ -8,6 +8,7 @@ import time
 import traceback
 from datetime import UTC, datetime
 from pathlib import Path
+from http import HTTPStatus
 
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -23,6 +24,8 @@ from sqlalchemy import exc as sqlalchemy_exc
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.schemas.error import ErrorResponse, GoogleError
 
 from app.api import (
     admin,
@@ -45,6 +48,15 @@ from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
 
 logger = logging.getLogger(__name__)
+
+
+def _status_code_to_string(status_code: int) -> str:
+    """Convert HTTP status code to canonical string (e.g., 404 -> 'NOT_FOUND')."""
+    try:
+        return HTTPStatus(status_code).name
+    except ValueError:
+        return "UNKNOWN"
+
 
 # Log database URL at startup (with password redacted)
 _db_settings = get_database_settings()
@@ -278,9 +290,16 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             extra=error_data,
             exc_info=True,
         )
+        error_content = ErrorResponse(
+            error=GoogleError(
+                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                message="Internal server error",
+                status=_status_code_to_string(status.HTTP_500_INTERNAL_SERVER_ERROR),
+            )
+        ).dict()
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error"},
+            content=error_content,
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -322,14 +341,20 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             )
         elif exc.status_code >= 400:
             error_data["level"] = "WARNING"
-            logger.warning(
-                f"HTTP Exception: {exc.status_code} - {exc.detail}",
-                extra=error_data,
+        logger.warning(
+            f"HTTP Exception: {exc.status_code} - {exc.detail}",
+            extra=error_data,
+        )
+        error_content = ErrorResponse(
+            error=GoogleError(
+                code=exc.status_code,
+                message=str(exc.detail),
+                status=_status_code_to_string(exc.status_code),
             )
-
+        ).dict()
         return JSONResponse(
             status_code=exc.status_code,
-            content={"detail": exc.detail},
+            content=error_content,
         )
 
     @app.exception_handler(RequestValidationError)
@@ -377,13 +402,17 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             f"Validation Error: {errors}",
             extra=error_data,
         )
+        error_content = ErrorResponse(
+            error=GoogleError(
+                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                message="Validation failed",
+                status=_status_code_to_string(status.HTTP_422_UNPROCESSABLE_ENTITY),
+                details=errors,
+            )
+        ).dict()
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "detail": "Validation failed",
-                "errors": errors,
-                "body": exc.body,
-            },
+            content=error_content,
         )
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
@@ -435,7 +464,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         Returns:
             JSON response with 404 status code.
         """
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not Found"})
+        error_content = ErrorResponse(
+            error=GoogleError(
+                code=status.HTTP_404_NOT_FOUND,
+                message="Not Found",
+                status=_status_code_to_string(status.HTTP_404_NOT_FOUND),
+            )
+        ).dict()
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_content)
 
     class CacheControlledStaticFiles(StarletteStaticFiles):
         """StaticFiles with explicit cache-control headers for hashed assets."""
