@@ -14,7 +14,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     database_url: str = Field(
         ...,
@@ -45,7 +45,7 @@ class DatabaseSettings(BaseSettings):
 class AuthSettings(BaseSettings):
     """Authentication and security settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     secret_key: str = Field(
         ...,
@@ -71,7 +71,7 @@ class AuthSettings(BaseSettings):
 class AppSettings(BaseSettings):
     """General application settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     environment: Literal["development", "production", "test"] = Field(
         default="development",
@@ -113,7 +113,7 @@ class AppSettings(BaseSettings):
 class SessionSettings(BaseSettings):
     """Reading session configuration settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     session_gap_hours: int = Field(
         default=6,
@@ -146,7 +146,7 @@ class SessionSettings(BaseSettings):
 class RatingSettings(BaseSettings):
     """Rating system configuration settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     rating_min: float = Field(
         default=0.5,
@@ -192,7 +192,7 @@ class RatingSettings(BaseSettings):
 class Settings(BaseSettings):
     """Main settings class that aggregates all configuration groups."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     # Nested settings groups
     @property

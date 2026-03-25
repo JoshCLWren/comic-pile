@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-25
+
+**Roll Page Header Indicators (#366)**
+- Added labels and tooltips to roll page header indicators (+1, snoozed, offset, active)
+- Each indicator now has a visible text label or accessible tooltip with explanatory copy
+- Interactive indicators have clear visual affordances (cursor-help, dashed borders)
+- Tooltips explain what each value means and whether/how it can be changed
+- Screen readers can read each indicator's label and value via aria-label attributes
+- No layout changes to the roll page — tooltips fit within existing header space
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**

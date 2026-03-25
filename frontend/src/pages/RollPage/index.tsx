@@ -558,22 +558,22 @@ useEffect(() => {
               <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d20) - snoozing won't increase it further</span>
             </div>
           )}
-          {session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
-            <div className="flex items-center gap-2 mt-1">
-              <Tooltip content="Offset: Your roll pool is increased by the number of snoozed threads. Tap to view snoozed threads.">
-                <span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session.snoozed_threads.length}</span>
-              </Tooltip>
-              <Tooltip content="Snoozed threads: Threads temporarily excluded from rolling. Tap to view.">
-                <span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">snoozed</span>
-              </Tooltip>
-              <Tooltip content="Offset active: The pool size is automatically increased by the number of snoozed threads to compensate.">
-                <span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">offset</span>
-              </Tooltip>
-              <Tooltip content="Ladder mode: Automatic die size adjustment based on your ratings is active.">
-                <span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">active</span>
-              </Tooltip>
-            </div>
-          )}
+{session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
+  <div className="flex items-center gap-2 mt-1">
+    <Tooltip content="Offset: your roll result is shifted by +{session.snoozed_threads.length}. Tap to adjust.">
+      <span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600" aria-label="Offset, plus {session.snoozed_threads.length}, tap to adjust">+{session.snoozed_threads.length}</span>
+    </Tooltip>
+    <Tooltip content="{session.snoozed_threads.length} thread{s.session.snoozed_threads.length !== 1 ? 's' : ''} is snoozed and excluded from rolling. Tap to view.">
+      <span className="text-[9px] font-medium text-stone-600 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600" aria-label="Snoozed, {session.snoozed_threads.length} thread{s.session.snoozed_threads.length !== 1 ? 's' : ''}, tap to view">snoozed</span>
+    </Tooltip>
+    <Tooltip content="Offset is currently active: your roll pool is increased by {session.snoozed_threads.length} snoozed thread{s.session.snoozed_threads.length !== 1 ? 's' : ''}.">
+      <span className="text-[9px] text-stone-400 uppercase tracking-wider" aria-label="Offset active">offset</span>
+    </Tooltip>
+    <Tooltip content="Ladder mode is active. The die size adjusts automatically based on your eligible pool.">
+      <span className="text-[9px] text-stone-400 uppercase tracking-wider" aria-label="Ladder mode active">active</span>
+    </Tooltip>
+  </div>
+)}
         </div>
         <div className="flex items-center gap-2">
           <div id="die-selector">
