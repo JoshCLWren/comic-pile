@@ -293,13 +293,16 @@ useEffect(() => {
 }, [session?.current_die, session?.last_rolled_result, setCurrentDie, setRolledResult])
 
 useEffect(() => {
-  if (!session?.manual_die && currentDie && prevCurrentDieRef.current !== null && prevCurrentDieRef.current !== currentDie) {
-    const prevDie = prevCurrentDieRef.current
-    const direction = currentDie < prevDie ? 'stepped down to' : 'stepped up to'
-    showToast(`Ladder ${direction} d${currentDie} — ${activeThreads.length} eligible in pool`, 'info')
-  }
-  prevCurrentDieRef.current = currentDie
-}, [session?.manual_die, currentDie, activeThreads.length, showToast])
+    if (!session?.manual_die && currentDie && prevCurrentDieRef.current !== null && prevCurrentDieRef.current !== currentDie) {
+      const prevDie = prevCurrentDieRef.current
+      if (currentDie < prevDie) {
+        showToast(`Pool shrank to ${currentDie} — using d${currentDie}`, 'info')
+      } else {
+        showToast(`Pool grew to ${currentDie} — using d${currentDie}`, 'info')
+      }
+    }
+    prevCurrentDieRef.current = currentDie
+  }, [session?.manual_die, currentDie, activeThreads.length, showToast])
 
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
@@ -581,17 +584,17 @@ useEffect(() => {
           <div id="die-selector" className={session.manual_die ? '' : 'opacity-50'}>
             <div className="hidden md:flex gap-2">
               {DICE_LADDER.map((die) => (
-                <Tooltip key={die} content={session.manual_die ? `Switch to d${die}` : 'Exit Ladder mode to manually select die'}>
+                <Tooltip key={die} content={session.manual_die ? `Switch to d${die}` : 'Switch to manual mode to override Ladder'}>
                   <button onClick={() => handleSetDie(die)} disabled={setDieMutation.isPending}
                     className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie ? 'bg-amber-600/20 border-amber-600 text-amber-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
                     d{die}
                   </button>
                 </Tooltip>
               ))}
-              <Tooltip content="Exit automatic mode and manually set die size. Ladder will not change die after ratings.">
+              <Tooltip content={session.manual_die ? 'Return to Ladder mode — die size adjusts automatically after each rating' : 'Ladder mode is active — die adjusts based on your ratings'}>
                 <button onClick={handleClearManualDie} disabled={clearManualDieMutation.isPending}
                   className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                  title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}>
+                  title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Ladder mode is active'}>
                   Auto
                 </button>
               </Tooltip>
@@ -603,8 +606,10 @@ useEffect(() => {
               </button>
             </div>
           </div>
-          {session.manual_die && (
+          {session.manual_die ? (
             <span className="text-[8px] font-black text-amber-500/70 uppercase tracking-wider">Manual</span>
+          ) : (
+            <span className="text-[8px] font-black text-stone-500/70 uppercase tracking-wider">Auto</span>
           )}
           <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
             <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
@@ -613,8 +618,8 @@ useEffect(() => {
               </div>
             </div>
             <div className="text-right">
-              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. After rating 5+, die steps DOWN (smaller pool). After rating 1-2, die steps UP (larger pool).">
-                <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder</span>
+              <Tooltip content="Ladder mode: die size adjusts automatically based on your ratings. High ratings (4+) step the die down for a focused pool; low ratings step it up for more variety.">
+                <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder <span className="inline-block w-3 h-3 text-center leading-3 rounded-full bg-stone-600 text-stone-300 text-[7px] ml-0.5 align-middle">?</span></span>
               </Tooltip>
               <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>
             </div>
@@ -740,6 +745,7 @@ useEffect(() => {
         </Modal>
 
         <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
+          <p className="text-[10px] text-stone-500 mb-3 text-center">Pick a die to enter manual mode, or tap Auto to let the Ladder manage it automatically.</p>
           <div className="grid grid-cols-3 gap-2">
             {DICE_LADDER.map((die) => (
               <button key={die} onClick={async () => { try { await handleSetDie(die); setIsDieModalOpen(false) } catch (error) { console.error('Failed to set die:', error) }}}
@@ -750,8 +756,8 @@ useEffect(() => {
             ))}
             <button onClick={async () => { try { await handleClearManualDie(); setIsDieModalOpen(false) } catch (error) { console.error('Failed to clear manual die:', error) }}}
               disabled={clearManualDieMutation.isPending}
-              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
-              Auto
+              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10'}`}>
+              {session.manual_die ? 'Auto' : 'Auto ✓'}
             </button>
           </div>
         </Modal>

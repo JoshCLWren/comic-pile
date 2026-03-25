@@ -3,12 +3,13 @@
 ## 2026-03-25
 
 **Ladder Mode UX Improvements (#367)**
-- Added clear explanation tooltip to Ladder indicator explaining automatic die adjustment based on ratings
-- Manual die picker now visually dimmed when Ladder mode is active
-- Added "Manual" label indicator when manual die is selected
-- Toast notification appears when Ladder automatically steps die after rating
-- Added tooltips to manual die buttons explaining manual override behavior
-- Enhanced Auto button tooltip explaining difference from Ladder mode
+- Added info icon next to Ladder indicator with tooltip explaining how Ladder mode works
+- Die picker shows "Auto" label when Ladder is managing the die, "Manual" when overridden
+- Toast notification now explains why the die changed (e.g. "Pool shrank to 4 — using d4")
+- Die buttons show "Switch to manual mode to override Ladder" when Ladder is active
+- Auto button tooltip explains it toggles between Ladder and manual mode
+- Mobile die picker modal includes help text explaining the relationship between modes
+- Mobile Auto button shows checkmark when Ladder mode is active
 
 ## 2026-03-24
 
