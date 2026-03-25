@@ -395,10 +395,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(issue.router, tags=["issues"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(session.router, prefix="/api", tags=["session"])
-    # Expose a v1-compatible alias for session endpoints to satisfy /api/v1/sessions/* paths
-    # This avoids double-prefix issues when the router already uses "/sessions" as its prefix.
-    app.include_router(session.router, prefix="/api/v1", tags=["session"])
+    app.include_router(session.router, prefix="/api/sessions", tags=["session"])
+    app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
