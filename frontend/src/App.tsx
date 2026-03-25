@@ -18,6 +18,7 @@ const QueuePage = lazy(() => import('./pages/QueuePage'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const SessionPage = lazy(() => import('./pages/SessionPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 
@@ -247,6 +248,16 @@ function AppRoutes() {
             <ProtectedRoute>
               <AuthenticatedLayout>
                 <AnalyticsPage />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/help"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
+                <HelpPage />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }
