@@ -450,6 +450,9 @@ cmd_review() {
             wt=$(worktree_dir "$issue")
             log="$(state_dir "$issue")/review.log"
 
+            local critique_file
+            critique_file="$(state_dir "$issue")/review_critique.md"
+
             local prompt
             prompt="You are a HARSH code reviewer for GitHub issue #${issue} in the comic-pile repo.
 The implementation is already in your working directory on branch $(branch_name "$issue").
@@ -461,12 +464,16 @@ The implementation is already in your working directory on branch $(branch_name 
 5. Check EVERY acceptance criterion — mark each one PASS or FAIL
 6. Look hard for: missing edge cases, wrong behaviour, type errors, mobile/a11y issues, missing tests
 
-Be thorough and critical. List every problem clearly, numbered.
-If the implementation is genuinely complete and all criteria pass, write APPROVED on its own line.
-Do NOT write APPROVED if any criterion is unmet or any test fails."
+Write your findings to the file: $(basename "$critique_file")
+Use this exact format:
+- If approved: first line must be exactly: APPROVED
+- If rejected: numbered list of problems, one per line
+
+Do not write anything else to that file — just the verdict and problems.
+Be thorough and critical. Do NOT write APPROVED if any criterion is unmet or any test fails."
 
             if run_with_fallback "$issue" "review" "$prompt" "$log" "${REVIEW_MODELS[@]}"; then
-                if grep -qE "^APPROVED$|^APPROVED\." "$log"; then
+                if grep -qiE "^APPROVED$|^APPROVED\b" "$critique_file" 2>/dev/null; then
                     set_state "$issue" "fixed"
                     log_ok "#$issue — approved by reviewer, skipping fix stage"
                     gh_comment "$issue" "✅ **[Reviewer approved]** — proceeding directly to PR"
@@ -501,11 +508,11 @@ cmd_fix() {
             set_state "$issue" "fixing"
             log_info "#$issue — addressing review critique"
 
-            local wt review_log fix_log review_summary
+            local wt fix_log critique_file review_summary
             wt=$(worktree_dir "$issue")
-            review_log="$(state_dir "$issue")/review.log"
             fix_log="$(state_dir "$issue")/fix.log"
-            review_summary=$(tail -100 "$review_log" 2>/dev/null || echo "No review log found")
+            critique_file="$(state_dir "$issue")/review_critique.md"
+            review_summary=$(grep -v "^$" "$critique_file" 2>/dev/null | head -50 || echo "No review critique found")
 
             local prompt
             prompt="You are fixing code review feedback for GitHub issue #${issue} in the comic-pile repo.
