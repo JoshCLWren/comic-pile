@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-25
+
+**Route Versioning Fix (#376)**
+- Expose /api/v1/sessions/* endpoints as aliases of /api/sessions/* to avoid
+  double-prefix issues and ensure identical behavior across both prefixes.
+- No changes to existing /api/sessions/* behavior; both paths now mirror responses.
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
