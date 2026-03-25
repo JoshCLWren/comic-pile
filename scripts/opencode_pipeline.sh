@@ -537,9 +537,14 @@ cmd_fix() {
             wt=$(worktree_dir "$issue")
             fix_log="$(state_dir "$issue")/fix.log"
             critique_file="$(state_dir "$issue")/review_critique.md"
-            # Prefer clean critique file; fall back to stripped review log
+            # Prefer clean critique file (state dir or worktree); fall back to stripped review log
+            local wt_critique
+            wt_critique="$(worktree_dir "$issue")/review_critique.md"
             if [[ -s "$critique_file" ]]; then
                 review_summary=$(grep -v "^$" "$critique_file" | head -50)
+            elif [[ -s "$wt_critique" ]]; then
+                review_summary=$(grep -v "^$" "$wt_critique" | head -50)
+                cp "$wt_critique" "$critique_file"
             else
                 review_summary=$(sed 's/\x1b\[[0-9;]*m//g' "$(state_dir "$issue")/review.log" 2>/dev/null | grep -v "^>" | grep -v "^\s*$" | tail -80 || echo "No review found")
             fi
