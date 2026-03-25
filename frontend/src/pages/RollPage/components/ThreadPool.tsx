@@ -63,19 +63,27 @@ export function ThreadPool({
       </div>
 
       <div className="space-y-2" data-roll-pool aria-label="Roll pool collection">
-        {pool.length === 0 && blockedThreads.length === 0 ? (
+        {pool.length === 0 && blockedThreads.length === 0 && snoozedThreads.length === 0 ? (
           <div className="text-center py-10 space-y-4">
             <div className="text-4xl">📚</div>
             <div>
               <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">Your Queue Is Empty</p>
               <p className="text-xs text-stone-500 mt-1">Add comics to start rolling.</p>
             </div>
-            <button
-              onClick={() => navigate('/queue')}
-              className="mt-4 px-6 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
-            >
-              Go to Queue
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
+              <button
+                onClick={() => navigate('/queue', { state: { openCreate: true } })}
+                className="w-full h-11 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500"
+              >
+                Add Thread
+              </button>
+              <button
+                onClick={() => navigate('/queue')}
+                className="w-full h-11 sm:h-10 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 mt-2 sm:mt-0"
+              >
+                Go to Queue
+              </button>
+            </div>
           </div>
         ) : pool.length === 0 && blockedThreads.length > 0 ? (
           <div className="text-center py-10 space-y-4">
@@ -84,6 +92,20 @@ export function ThreadPool({
               <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All Threads Blocked</p>
               <p className="text-xs text-stone-500 mt-1">Resolve dependencies to roll.</p>
             </div>
+          </div>
+        ) : pool.length === 0 && snoozedThreads.length > 0 && blockedThreads.length === 0 ? (
+          <div className="text-center py-10 space-y-4">
+            <div className="text-4xl">⏸️</div>
+            <div>
+              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All Threads Snoozed</p>
+              <p className="text-xs text-stone-500 mt-1">Wake threads to start rolling.</p>
+            </div>
+            <button
+              onClick={() => navigate('/queue')}
+              className="mt-4 px-6 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
+            >
+              Go to Queue
+            </button>
           </div>
         ) : (
           pool.map((thread, index) => {

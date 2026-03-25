@@ -71,6 +71,11 @@ export default function QueuePage() {
         navigate(location.pathname, { replace: true, state: {} })
       }
     }
+    // If navigation from RollPage or other page to create a new thread, auto-open create modal
+    if (location.state?.openCreate) {
+      openCreateModal()
+      navigate(location.pathname, { replace: true, state: {} })
+    }
   }, [location.state, location.pathname, threads, navigate])
 
   async function refreshBlockedState() {
