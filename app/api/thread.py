@@ -23,6 +23,7 @@ from app.schemas import (
     ReactivateRequest,
     RollResponse,
     ThreadCreate,
+    ThreadListResponse,
     ThreadResponse,
     ThreadUpdate,
 )
@@ -139,7 +140,7 @@ clear_cache = None
 get_threads_cached = None
 
 
-@router.get("/", response_model=list[ThreadResponse])
+@router.get("/", response_model=ThreadListResponse)
 @limiter.limit("100/minute")
 async def list_threads(
     request: Request,
@@ -147,21 +148,26 @@ async def list_threads(
     db: AsyncSession = Depends(get_db),
     search: str | None = Query(default=None, min_length=1),
     collection_id: int | None = Query(default=None),
-) -> list[ThreadResponse]:
-    """List all threads ordered by position.
+    page_size: int = Query(default=50, ge=1, le=200),
+    page_token: str | None = Query(default=None),
+) -> ThreadListResponse:
+    """List threads ordered by position with pagination.
 
     Args:
         request: FastAPI request object for rate limiting.
         search: Optional case-insensitive title search filter.
         collection_id: Optional collection ID to filter threads.
+        page_size: Number of threads to return per page (default 50, max 200).
+        page_token: Token for pagination continuation (queue_position,thread_id).
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
     Returns:
-        List of ThreadResponse objects ordered by queue_position.
+        ThreadListResponse with paginated threads and next_page_token if more exist.
     """
     print(
-        f"[DEBUG] list_threads called: search={search}, collection_id={collection_id}, user={current_user.id}"
+        f"[DEBUG] list_threads called: search={search}, collection_id={collection_id}, "
+        f"page_size={page_size}, page_token={page_token}, user={current_user.id}"
     )
     normalized_search = search.strip() if search is not None else None
     query = select(Thread).where(Thread.user_id == current_user.id)
@@ -176,19 +182,50 @@ async def list_threads(
         result = await db.execute(query)
         threads = list(result.scalars().all())
         print(f"[DEBUG] Search path: returning {len(threads)} threads")
-        return await _threads_to_responses(threads, db)
-    elif get_threads_cached and collection_id is None:
-        print("[DEBUG] Cache path: using cached threads")
-        threads = await get_threads_cached(db, current_user.id)
-        return await _threads_to_responses(threads, db)
-    else:
-        query = query.order_by(Thread.queue_position)
-        result = await db.execute(query)
-        threads = list(result.scalars().all())
-        print(f"[DEBUG] Default path: returning {len(threads)} threads")
-        for thread in threads:
-            print(f"[DEBUG]   - {thread.title} (collection_id={thread.collection_id})")
-        return await _threads_to_responses(threads, db)
+        thread_responses = await _threads_to_responses(threads, db)
+        return ThreadListResponse(threads=thread_responses, next_page_token=None)
+
+    query = query.order_by(Thread.queue_position)
+
+    if page_token:
+        try:
+            parts = page_token.split(",")
+            if len(parts) != 2:
+                raise ValueError("Invalid format")
+            cursor_position = int(parts[0])
+            cursor_id = int(parts[1])
+            from sqlalchemy import or_
+
+            query = query.where(
+                or_(
+                    Thread.queue_position > cursor_position,
+                    (Thread.queue_position == cursor_position) & (Thread.id > cursor_id),
+                )
+            )
+        except ValueError:
+            from fastapi import HTTPException, status
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid page_token format",
+            ) from None
+
+    query = query.limit(page_size + 1)
+    result = await db.execute(query)
+    threads = list(result.scalars().all())
+
+    has_more = len(threads) > page_size
+    threads_to_return = threads[:page_size]
+
+    print(f"[DEBUG] Default path: returning {len(threads_to_return)} threads (has_more={has_more})")
+    thread_responses = await _threads_to_responses(threads_to_return, db)
+
+    next_page_token = None
+    if has_more and threads_to_return:
+        last = threads_to_return[-1]
+        next_page_token = f"{last.queue_position},{last.id}"
+
+    return ThreadListResponse(threads=thread_responses, next_page_token=next_page_token)
 
 
 @router.get("/completed", response_class=HTMLResponse)

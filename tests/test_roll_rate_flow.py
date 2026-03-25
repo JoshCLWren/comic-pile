@@ -65,7 +65,9 @@ async def test_roll_rate_history_consistency(
 
     history_response = await auth_client.get("/api/sessions/")
     assert history_response.status_code == 200
-    history_sessions = history_response.json()
+    history_data = history_response.json()
+    assert "sessions" in history_data
+    history_sessions = history_data["sessions"]
     assert history_sessions
     latest = history_sessions[0]
     assert latest["id"] == session_data["id"]

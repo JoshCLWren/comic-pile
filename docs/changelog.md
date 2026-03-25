@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-25
+
+**Thread and Session Pagination (#378)**
+- Added cursor-based pagination to `GET /api/threads/` endpoint with `page_size` (default 50, max 200) and `page_token` query parameters
+- Added cursor-based pagination to `GET /api/sessions/` endpoint with same pagination parameters
+- Both endpoints return `next_page_token` in response when more results exist
+- Frontend updated to transparently fetch all pages when listing threads and sessions
+- Implementation follows existing pattern from `GET /api/collections/` endpoint
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**

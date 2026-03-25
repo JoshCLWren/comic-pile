@@ -152,3 +152,10 @@ class SessionDetailsResponse(BaseModel):
         if value is None:
             return None
         return _to_utc_iso(value)
+
+
+class SessionListResponse(BaseModel):
+    """Schema for paginated session list response."""
+
+    sessions: list[SessionResponse]
+    next_page_token: str | None = None

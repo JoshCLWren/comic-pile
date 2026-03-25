@@ -19,11 +19,13 @@ import type {
   RollResponse,
   SessionCurrent,
   SessionDetails,
+  SessionListResponse,
   SessionSnapshotsResponse,
   SessionSummary,
   Thread,
   ThreadCreatePayload,
   ThreadDependenciesResponse,
+  ThreadListResponse,
   ThreadQueryParams,
   ThreadUpdatePayload,
 } from '../types'
@@ -206,7 +208,20 @@ rawApi.interceptors.response.use(
 export default api
 
 export const threadsApi = {
-  list: (params?: ThreadQueryParams) => api.get<Thread[]>('/threads/', { params }),
+  list: async (params?: ThreadQueryParams): Promise<Thread[]> => {
+    const threads: Thread[] = []
+    let pageToken: string | null = null
+
+    do {
+      const response = await api.get<ThreadListResponse>('/threads/', {
+        params: { ...params, page_token: pageToken },
+      })
+      threads.push(...response.threads)
+      pageToken = response.next_page_token
+    } while (pageToken)
+
+    return threads
+  },
   get: (id: number) => api.get<Thread>(`/threads/${id}`),
   create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/threads/', data),
   update: (id: number, data: ThreadUpdatePayload) =>
@@ -233,7 +248,20 @@ export const rateApi = {
 }
 
 export const sessionApi = {
-  list: (params?: Record<string, unknown>) => api.get<SessionSummary[]>('/sessions/', { params }),
+  list: async (params?: Record<string, unknown>): Promise<SessionSummary[]> => {
+    const sessions: SessionSummary[] = []
+    let pageToken: string | null = null
+
+    do {
+      const response = await api.get<SessionListResponse>('/sessions/', {
+        params: { ...params, page_token: pageToken },
+      })
+      sessions.push(...response.sessions)
+      pageToken = response.next_page_token
+    } while (pageToken)
+
+    return sessions
+  },
   get: (id: number) => api.get<SessionSummary>(`/sessions/${id}`),
   getCurrent: () => api.get<SessionCurrent>('/sessions/current/'),
   getDetails: (id: number | string) => api.get<SessionDetails>(`/sessions/${id}/details`),

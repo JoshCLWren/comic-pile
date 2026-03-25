@@ -170,7 +170,9 @@ async def test_list_sessions_includes_restore_point_for_each(
 
     response = await safe_mode_auth_client.get("/api/sessions/")
     assert response.status_code == 200
-    sessions = response.json()
+    data = response.json()
+    assert "sessions" in data
+    sessions = data["sessions"]
     assert len(sessions) == 2
 
     session1_data = next((s for s in sessions if s["id"] == session1.id), None)

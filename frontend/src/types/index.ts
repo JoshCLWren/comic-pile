@@ -193,6 +193,16 @@ export interface CollectionListResponse {
   collections: Collection[];
 }
 
+export interface ThreadListResponse {
+  threads: Thread[];
+  next_page_token: string | null;
+}
+
+export interface SessionListResponse {
+  sessions: SessionSummary[];
+  next_page_token: string | null;
+}
+
 export interface BlockingInfoResponse {
   blocking_reasons: string[];
 }

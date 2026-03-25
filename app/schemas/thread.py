@@ -60,3 +60,10 @@ class ReactivateRequest(BaseModel):
 
     thread_id: int
     issues_to_add: int = Field(..., gt=0)
+
+
+class ThreadListResponse(BaseModel):
+    """Schema for paginated thread list response."""
+
+    threads: list[ThreadResponse]
+    next_page_token: str | None = None

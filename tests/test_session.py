@@ -571,9 +571,11 @@ async def test_list_sessions(
         async_db.add(session)
     await async_db.commit()
 
-    response = await auth_client.get("/api/sessions/?limit=3&offset=0")
+    response = await auth_client.get("/api/sessions/?page_size=3")
     assert response.status_code == 200
-    sessions = response.json()
+    data = response.json()
+    assert "sessions" in data
+    sessions = data["sessions"]
     assert len(sessions) == 3
 
 
@@ -582,6 +584,7 @@ async def test_list_sessions_pagination(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
     """Test session pagination works correctly."""
+    import time
     from app.models import Session as SessionModel
 
     for i in range(5):
@@ -589,19 +592,29 @@ async def test_list_sessions_pagination(
             start_die=6 + i, user_id=default_user.id, started_at=datetime.now(UTC)
         )
         async_db.add(session)
-    await async_db.commit()
+        await async_db.commit()
+        time.sleep(0.01)
 
-    first_page = await auth_client.get("/api/sessions/?limit=2&offset=0")
+    first_page = await auth_client.get("/api/sessions/?page_size=2")
     assert first_page.status_code == 200
-    first_sessions = first_page.json()
+    first_data = first_page.json()
+    assert "sessions" in first_data
+    first_sessions = first_data["sessions"]
     assert len(first_sessions) == 2
 
-    second_page = await auth_client.get("/api/sessions/?limit=2&offset=2")
-    assert second_page.status_code == 200
-    second_sessions = second_page.json()
-    assert len(second_sessions) == 2
+    next_token = first_data.get("next_page_token")
+    assert next_token is not None
 
-    assert first_sessions[0]["id"] != second_sessions[0]["id"]
+    second_page = await auth_client.get("/api/sessions/", params={"page_token": next_token})
+    assert second_page.status_code == 200
+    second_data = second_page.json()
+    assert "sessions" in second_data
+    second_sessions = second_data["sessions"]
+    assert len(second_sessions) >= 1
+
+    first_ids = {s["id"] for s in first_sessions}
+    second_ids = {s["id"] for s in second_sessions}
+    assert first_ids.isdisjoint(second_ids), "First and second page should have different sessions"
 
 
 @pytest.mark.asyncio

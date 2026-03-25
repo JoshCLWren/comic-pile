@@ -113,6 +113,8 @@ async def test_filter_threads_by_collection(
         "/api/threads/", params={"collection_id": sample_collection.id}
     )
     assert response.status_code == 200
-    threads = response.json()
+    data = response.json()
+    assert "threads" in data
+    threads = data["threads"]
     assert len(threads) == 1
     assert threads[0]["id"] == sample_thread.id
