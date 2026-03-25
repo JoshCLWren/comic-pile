@@ -369,7 +369,7 @@ cmd_status() {
 # ── Role: implement ───────────────────────────────────────────────────────────
 
 cmd_implement() {
-    log_info "Implementer online — models: ${IMPLEMENT_MODELS[*]}"
+    log_info "Implementer online — ${#IMPLEMENT_MODELS[@]} models in pool"
     while true; do
         local claimed=0
         for issue in "${ISSUES[@]}"; do
@@ -436,7 +436,7 @@ Start immediately. Do not ask questions."
 # ── Role: review ──────────────────────────────────────────────────────────────
 
 cmd_review() {
-    log_info "Reviewer online — models: ${REVIEW_MODELS[*]}"
+    log_info "Reviewer online — ${#REVIEW_MODELS[@]} models in pool"
     while true; do
         local claimed=0
         for issue in "${ISSUES[@]}"; do
@@ -491,7 +491,7 @@ Do NOT write APPROVED if any criterion is unmet or any test fails."
 # ── Role: fix ─────────────────────────────────────────────────────────────────
 
 cmd_fix() {
-    log_info "Fixer online — models: ${FIX_MODELS[*]}"
+    log_info "Fixer online — ${#FIX_MODELS[@]} models in pool"
     while true; do
         local claimed=0
         for issue in "${ISSUES[@]}"; do
@@ -545,7 +545,7 @@ Do not skip any critique item. Do not open a PR. Do not ask questions."
 # ── Role: pr ──────────────────────────────────────────────────────────────────
 
 cmd_pr() {
-    log_info "PR opener online — models: ${PR_MODELS[*]}"
+    log_info "PR opener online — ${#PR_MODELS[@]} models in pool"
     while true; do
         local claimed=0
         for issue in "${ISSUES[@]}"; do
