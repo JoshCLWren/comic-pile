@@ -300,7 +300,8 @@ cmd_init() {
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
 
     # Kill any lingering opencode/pipeline processes from previous sessions
-    pkill -f "opencode_pipeline.sh" 2>/dev/null || true
+    # Exclude current PID and parent so init doesn't kill itself
+    pgrep -f "opencode_pipeline.sh" | grep -v "^$$\$\|^$PPID\$" | xargs kill 2>/dev/null || true
     pkill -f "opencode run" 2>/dev/null || true
     sleep 2
 
