@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-03-25
+
+**Dependency Safety (#373)**
+- Added undo toast notification when removing dependencies
+- Optimistic UI removal with 5-second undo window
+- Toast includes dependency label and undo button
+- Modal close triggers immediate deletion if undo pending
+- Improved mobile safety with larger touch targets
+- No backend changes required
+
+**Security & Stability Fixes**
+- Fixed Range Expansion DoS vulnerability in issue parser by validating range size before expansion
+- Fixed dashed literals bypassing length limit by moving length check before dash processing
+- Fixed ID collision in issue edges by using unique string format instead of mathematical formula
+- Fixed tests creating issue dependencies without issues by creating issues via API before dependencies
+- Fixed thread deletion returning 500 error by changing Issue model relationships from lazy="raise" to lazy="select"
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**

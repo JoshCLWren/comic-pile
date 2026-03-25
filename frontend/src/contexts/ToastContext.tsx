@@ -6,11 +6,15 @@ type Toast = {
   id: string
   message: string
   type: ToastType
+  action?: {
+    label: string
+    onClick: () => void
+  }
 }
 
 type ToastContextType = {
   toasts: Toast[]
-  showToast: (message: string, type?: ToastType) => void
+  showToast: (message: string, type?: ToastType, action?: { label: string; onClick: () => void }) => void
   removeToast: (id: string) => void
 }
 
@@ -22,9 +26,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const timeoutIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
 
-  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+  const showToast = useCallback((message: string, type: ToastType = 'info', action?: { label: string; onClick: () => void }) => {
     const id = `${Date.now()}-${Math.random().toString(36).substring(7)}`
-    const newToast: Toast = { id, message, type }
+    const newToast: Toast = { id, message, type, action }
 
     setToasts((prev) => [...prev, newToast])
 
@@ -32,7 +36,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       setToasts((prev) => prev.filter((t) => t.id !== id))
       timeoutIdsRef.current.delete(timeoutId)
     }, TOAST_DURATION)
-    
+   
     timeoutIdsRef.current.add(timeoutId)
   }, [])
 
@@ -53,28 +57,37 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            data-testid="toast-notification"
-            className={`pointer-events-auto px-4 py-3 rounded-lg shadow-lg border backdrop-blur-sm max-w-md animate-slide-in
-              ${toast.type === 'error' ? 'bg-red-900/90 border-red-700 text-red-100' :
-                toast.type === 'success' ? 'bg-green-900/90 border-green-700 text-green-100' :
-                toast.type === 'warning' ? 'bg-amber-900/90 border-amber-700 text-amber-100' :
-                'bg-stone-800/90 border-stone-600 text-stone-100'
-              }`}
-            role="alert"
-          >
-            <div className="flex items-start gap-2">
-              <span className="text-sm font-medium">{toast.message}</span>
-              <button
-                onClick={() => removeToast(toast.id)}
-                className="ml-auto text-sm opacity-70 hover:opacity-100"
-                aria-label="Close notification"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+           <div
+             key={toast.id}
+             data-testid="toast-notification"
+             className={`pointer-events-auto px-4 py-3 rounded-lg shadow-lg border backdrop-blur-sm max-w-md animate-slide-in
+               ${toast.type === 'error' ? 'bg-red-900/90 border-red-700 text-red-100' :
+                 toast.type === 'success' ? 'bg-green-900/90 border-green-700 text-green-100' :
+                 toast.type === 'warning' ? 'bg-amber-900/90 border-amber-700 text-amber-100' :
+                 'bg-stone-800/90 border-stone-600 text-stone-100'
+               }`}
+             role="alert"
+           >
+             <div className="flex items-start gap-2">
+               <span className="text-sm font-medium">{toast.message}</span>
+               {toast.action && (
+                 <button
+                   onClick={toast.action.onClick}
+                   className="ml-auto text-sm opacity-70 hover:opacity-100"
+                   aria-label={toast.action.label}
+                 >
+                   {toast.action.label}
+                 </button>
+               )}
+               <button
+                 onClick={() => removeToast(toast.id)}
+                 className="ml-auto text-sm opacity-70 hover:opacity-100"
+                 aria-label="Close notification"
+               >
+                 ✕
+               </button>
+             </div>
+           </div>
         ))}
       </div>
     </ToastContext.Provider>

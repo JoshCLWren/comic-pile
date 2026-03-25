@@ -6,6 +6,7 @@ import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
 import { getApiErrorDetail } from '../utils/apiError'
+import { useToast } from '../contexts/ToastContext'
 
 function getDefaultDependencyMode(thread: Thread | null): 'thread' | 'issue' {
   return thread?.next_unread_issue_id ? 'issue' : 'thread'
@@ -56,6 +57,13 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [migrationLastRead, setMigrationLastRead] = useState('')
   const [migrationTotal, setMigrationTotal] = useState('')
   const [isMigrating, setIsMigrating] = useState(false)
+  // Undo state for dependency deletion
+  const [pendingDeletion, setPendingDeletion] = useState<{
+    dependencyId: number
+    dependencyData: Dependency
+    timeoutId: ReturnType<typeof setTimeout>
+  } | null>(null)
+  const toast = useToast()
 
   const selectedThread = useMemo(
     () => searchResults.find((candidate) => candidate.id === selectedThreadId) || null,
@@ -98,7 +106,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       const threadDeps: FlowchartDependency[] = allDeps
         .filter((dep) => dep.source_thread_id != null && dep.target_thread_id != null)
         .map((dep) => ({
-          id: dep.id,
+          id: String(dep.id),
           source_id: dep.source_thread_id as number,
           target_id: dep.target_thread_id as number,
           created_at: dep.created_at,
@@ -149,7 +157,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         }
 
         issueEdges.push({
-          id: -Date.now() - Math.floor(Math.random() * 1000000),
+          id: `issue-edge-${srcNodeId}-${tgtNodeId}-${Date.now()}`,
           source_id: srcNodeId,
           target_id: tgtNodeId,
           is_issue_level: true,
@@ -197,6 +205,14 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     setSourceIssues([])
     setTargetIssues([])
     setShowInlineMigration(false)
+    
+    // Clean up any pending deletion when modal closes
+    if (pendingDeletion) {
+      clearTimeout(pendingDeletion.timeoutId)
+      setPendingDeletion(null)
+      toast.removeToast(`dependency-undo-${pendingDeletion.dependencyId}`)
+    }
+    
     loadDependencies()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, thread?.id, loadDependencies])
@@ -393,10 +409,65 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   async function handleDeleteDependency(dependencyId: number) {
     setError('')
     try {
-      await dependenciesApi.deleteDependency(dependencyId)
-      await loadDependencies()
-      if (showFlowchart) await loadFlowchartData()
-      onChanged?.()
+      // Find the dependency to delete
+      const dependencyToDelete = [...dependencies.blocking, ...dependencies.blocked_by].find(
+        (dep) => dep.id === dependencyId
+      )
+      
+      if (!dependencyToDelete) return
+      
+      // Optimistic UI: remove immediately
+      setDependencies((prev) => ({
+        blocking: prev.blocking.filter((dep) => dep.id !== dependencyId),
+        blocked_by: prev.blocked_by.filter((dep) => dep.id !== dependencyId),
+      }))
+      
+      // Show undo toast with action button
+      const message = dependencyToDelete.source_label && dependencyToDelete.target_label
+        ? `${dependencyToDelete.source_label} → ${dependencyToDelete.target_label}`
+        : `Dependency #${dependencyId}`
+      
+      const timeoutId = setTimeout(async () => {
+        try {
+          await dependenciesApi.deleteDependency(dependencyId)
+          setPendingDeletion(null)
+          await loadDependencies()
+          if (showFlowchart) await loadFlowchartData()
+          onChanged?.()
+        } catch (deleteError: unknown) {
+          setError(getApiErrorDetail(deleteError))
+          // Restore the dependency if deletion fails
+          await loadDependencies()
+        }
+      }, 5000)
+      
+      // Store pending deletion for undo
+      setPendingDeletion({
+        dependencyId,
+        dependencyData: dependencyToDelete,
+        timeoutId,
+      })
+      
+      toast.showToast(
+        `${message} removed.`,
+        'info',
+        {
+          label: 'Undo',
+          onClick: () => {
+            clearTimeout(timeoutId)
+            setPendingDeletion(null)
+            
+            // Restore the dependency
+            setDependencies((prev) => ({
+              blocking: [...prev.blocking, dependencyToDelete],
+              blocked_by: [...prev.blocked_by, dependencyToDelete],
+            }))
+            
+            toast.removeToast(`dependency-undo-${dependencyId}`)
+          }
+        }
+      )
+      
     } catch (deleteError: unknown) {
       setError(getApiErrorDetail(deleteError))
     }
