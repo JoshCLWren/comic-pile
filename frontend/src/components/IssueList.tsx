@@ -21,8 +21,8 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  const loadIssues = useCallback(async (append: boolean) => {
-    if (append && !issues.length) return;
+  const loadIssues = useCallback(async (append: boolean = false) => {
+    if (append && !issues.length) return
 
     if (append) {
       setIsLoadingMore(true)
@@ -36,34 +36,36 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         page_token: append ? nextPageToken ?? undefined : undefined,
       })
 
-      const updatedIssues = append ? [...issues, ...response.issues] : response.issues
-      setIssues(updatedIssues)
-      setTotalCount(response.total_count)
-      setNextPageToken(response.next_page_token)
+       const updatedIssues = append ? [...issues, ...response.issues] : response.issues
+       setIssues(updatedIssues)
+       setTotalCount(response.total_count)
+       setNextPageToken(response.next_page_token)
 
-      try {
-        await Promise.all(
-          response.issues.map(async (issue) => {
-            try {
-              const deps = await dependenciesApi.getIssueDependencies(issue.id)
-              if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
-                setDependencies((prev) => ({ ...prev, [issue.id]: deps }))
-              }
-            } catch (error) {
-              console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
-            }
-          })
-        )
-      } catch (error) {
-        console.error('Failed to load dependencies:', error)
-      }
-    } catch (error) {
-      console.error('Failed to load issues:', error)
-    } finally {
-      setIsLoading(false)
-      setIsLoadingMore(false)
-    }
-  }, [thread.id, filter, nextPageToken, issues, dependencies])
+  const depsMap: Record<number, IssueDependenciesResponse> = { ...dependencies }
+  try {
+    await Promise.all(
+      response.issues.map(async (issue) => {
+        try {
+          const deps = await dependenciesApi.getIssueDependencies(issue.id)
+          if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
+            depsMap[issue.id] = deps
+          }
+        } catch (error) {
+          console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
+        }
+      })
+    )
+    setDependencies(depsMap)
+  } catch (error) {
+    console.error('Failed to load dependencies:', error)
+  }
+  } catch (error) {
+    console.error('Failed to load issues:', error)
+  } finally {
+    setIsLoading(false)
+    setIsLoadingMore(false)
+  }
+  }, [thread.id, filter, nextPageToken, dependencies, issues])
 
   useEffect(() => {
     abortControllerRef.current = new AbortController()

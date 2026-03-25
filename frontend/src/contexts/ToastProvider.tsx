@@ -1,5 +1,4 @@
-import { useState, useCallback, useEffect, useRef, ReactNode } from 'react'
-import { ToastContext } from './ToastContext'
+import { createContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 import { TOAST_DURATION } from './toastConstants'
 
 type ToastType = 'info' | 'success' | 'warning' | 'error'
@@ -86,3 +85,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     </ToastContext.Provider>
   )
 }
+
+// This is exported from toastUtils.ts now
+// export function useToast() {
+//   const context = useContext(ToastContext)
+//   if (!context) {
+//     throw new Error('useToast must be used within a ToastProvider')
+//   }
+//   return context
+// }
