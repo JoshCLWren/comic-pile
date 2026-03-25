@@ -483,13 +483,19 @@ The implementation is already in your working directory on branch $(branch_name 
 5. Check EVERY acceptance criterion — mark each one PASS or FAIL
 6. Look hard for: missing edge cases, wrong behaviour, type errors, mobile/a11y issues, missing tests
 
-Write your findings to the file: $(basename "$critique_file")
-Use this exact format:
-- If approved: first line must be exactly: APPROVED
-- If rejected: numbered list of problems, one per line
+IMPORTANT: When you are done with your review, write your findings to this exact file path:
+${critique_file}
 
-Do not write anything else to that file — just the verdict and problems.
-Be thorough and critical. Do NOT write APPROVED if any criterion is unmet or any test fails."
+Use this exact format in that file:
+- If everything passes: write only the single word: APPROVED
+- If there are problems: write a numbered list, one problem per line
+
+Example of approved: just write APPROVED
+Example of rejected: write lines like:
+1. Missing test for edge case X
+2. Lint error in file Y
+
+Do not write anything else to that file. Be thorough. Do NOT write APPROVED if any criterion is unmet."
 
             if run_with_fallback "$issue" "review" "$prompt" "$log" "${REVIEW_MODELS[@]}"; then
                 if grep -qiE "^APPROVED$|^APPROVED\b" "$critique_file" 2>/dev/null; then
@@ -531,7 +537,12 @@ cmd_fix() {
             wt=$(worktree_dir "$issue")
             fix_log="$(state_dir "$issue")/fix.log"
             critique_file="$(state_dir "$issue")/review_critique.md"
-            review_summary=$(grep -v "^$" "$critique_file" 2>/dev/null | head -50 || echo "No review critique found")
+            # Prefer clean critique file; fall back to stripped review log
+            if [[ -s "$critique_file" ]]; then
+                review_summary=$(grep -v "^$" "$critique_file" | head -50)
+            else
+                review_summary=$(sed 's/\x1b\[[0-9;]*m//g' "$(state_dir "$issue")/review.log" 2>/dev/null | grep -v "^>" | grep -v "^\s*$" | tail -80 || echo "No review found")
+            fi
 
             local prompt
             prompt="You are fixing code review feedback for GitHub issue #${issue} in the comic-pile repo.
