@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-25
+
+**Dependency Reading Order (Issue #371)**
+- Dependency modal now opens with a "View Reading Order" timeline that displays each issue span and gate in linear order
+- Gates highlight prerequisites, show blocked/satisfied/dormant status, and call out the current reading position
+- Timeline is mobile-friendly, scrollable, and works even when there are zero, one, or many gates
+- Classic node-based flowchart is still available as a secondary tab for cross-thread context
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
