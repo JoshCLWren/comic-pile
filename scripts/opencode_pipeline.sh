@@ -321,7 +321,9 @@ log_error() { echo "[$(date '+%H:%M:%S')] [ERROR] $*"; }
 run_with_fallback() {
     local issue=$1 role=$2 prompt=$3 log=$4
     shift 4
-    local models=("$@")
+    # Shuffle per-call so concurrent workers don't all hammer the same model
+    local models=()
+    while IFS= read -r m; do models+=("$m"); done < <(printf '%s\n' "$@" | shuf)
     local wt
     wt=$(worktree_dir "$issue")
 
