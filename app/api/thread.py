@@ -472,8 +472,8 @@ async def delete_thread(
         await db.rollback()
         logger.exception("Unexpected error deleting thread %s", thread_id)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete thread: {exc}",
         ) from exc
     if clear_cache:
         clear_cache()

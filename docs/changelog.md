@@ -21,6 +21,14 @@
 - FormatSelect component: Added optional `id` prop for label association
 - Rating slider: Already had proper aria-label, maintained consistency
 
+**Issue Dependencies (#366)**
+- Added dependency indicators (🔗) to issues with dependencies
+- Added tooltips to show linked issues and threads on hover
+- Added dependency status to issue list in queue edit modal
+- Added mobile-friendly tooltips for dependency information
+- Added edit icon next to issue number in rating view
+- Added quick correction dialog for adjusting current issue number
+
 ## 2026-03-21
 
 **Collection Management UI Redesign**
