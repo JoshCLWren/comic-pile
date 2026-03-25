@@ -560,8 +560,18 @@ useEffect(() => {
           )}
           {session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
             <div className="flex items-center gap-2 mt-1">
-              <span className="modifier-badge text-[10px] font-black text-amber-500">+{session.snoozed_threads.length}</span>
-              <span className="text-[9px] text-stone-500 uppercase tracking-wider">snoozed offset active</span>
+              <Tooltip content="Offset: Your roll pool is increased by the number of snoozed threads. Tap to view snoozed threads.">
+                <span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session.snoozed_threads.length}</span>
+              </Tooltip>
+              <Tooltip content="Snoozed threads: Threads temporarily excluded from rolling. Tap to view.">
+                <span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">snoozed</span>
+              </Tooltip>
+              <Tooltip content="Offset active: The pool size is automatically increased by the number of snoozed threads to compensate.">
+                <span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">offset</span>
+              </Tooltip>
+              <Tooltip content="Ladder mode: Automatic die size adjustment based on your ratings is active.">
+                <span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">active</span>
+              </Tooltip>
             </div>
           )}
         </div>
