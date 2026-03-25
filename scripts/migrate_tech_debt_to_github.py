@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Migrate TECH_DEBT.md items to GitHub Issues."""
+"""Migrate TECH_DEBT.md items to GitHub Issues using modern GitHub CLI syntax."""
 
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
 def read_tech_debt() -> str:
     """Read TECH_DEBT.md content."""
     debt_file = Path(__file__).parent.parent / "TECH_DEBT.md"
-    with open(debt_file) as f:
-        return f.read()
+    try:
+        with open(debt_file) as f:
+            return f.read()
+    except FileNotFoundError:
+        print(f"❌ Error: TECH_DEBT.md not found at {debt_file}")
+        sys.exit(1)
 
 
 def get_item_priority(content: str, item_number: int) -> str:
@@ -113,7 +118,7 @@ def priority_to_github(priority: str) -> str:
 
 
 def create_github_issue(item: dict[str, str], dry_run: bool = False) -> str | None:
-    """Create GitHub issue for a debt item."""
+    """Create GitHub issue for a debt item using modern GitHub CLI syntax."""
     task_id = f"DEBT-{int(item['number']):03d}"
     title = f"{task_id}: {item['title'][:60]}"
 
@@ -153,7 +158,7 @@ def create_github_issue(item: dict[str, str], dry_run: bool = False) -> str | No
         print()
         return None
 
-    # Create issue using gh CLI
+    # Create issue using gh CLI with modern syntax
     cmd = [
         "gh",
         "issue",
@@ -165,6 +170,8 @@ def create_github_issue(item: dict[str, str], dry_run: bool = False) -> str | No
         "--repo",
         os.getenv("GITHUB_REPO", "JoshCLWren/comic-pile"),
     ]
+
+    # Add labels using the modern --label flag (multiple allowed)
     for label in labels:
         cmd.extend(["--label", label])
 
@@ -179,13 +186,19 @@ def create_github_issue(item: dict[str, str], dry_run: bool = False) -> str | No
         print(f"✗ Failed to create: {title}")
         print(f"  Error: {e.stderr}")
         return None
+    except FileNotFoundError:
+        print(f"✗ Failed to create: {title}")
+        print("  Error: 'gh' command not found. Please install GitHub CLI: https://cli.github.com")
+        return None
 
 
 def main() -> None:
     """Main migration function."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Migrate TECH_DEBT.md items to GitHub Issues")
+    parser = argparse.ArgumentParser(
+        description="Migrate TECH_DEBT.md items to GitHub Issues using modern GitHub CLI syntax"
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Show what would be created without creating issues"
     )
@@ -195,6 +208,12 @@ def main() -> None:
         default="JoshCLWren/comic-pile",
         help="GitHub repository (default: JoshCLWren/comic-pile)",
     )
+    parser.add_argument(
+        "--github-cli",
+        type=str,
+        default="gh",
+        help="GitHub CLI command (default: 'gh')",
+    )
     args = parser.parse_args()
 
     os.environ["GITHUB_REPO"] = args.repo
@@ -203,7 +222,7 @@ def main() -> None:
     content = read_tech_debt()
 
     # Find all item numbers
-    item_numbers = re.findall(r"### (\d+)\.", content)
+    item_numbers = re.findall(r"### (\\d+)\\. ", content)
 
     print(f"Found {len(item_numbers)} debt items\n")
 
@@ -243,4 +262,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n✗ Migration cancelled by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n✗ Unexpected error: {e}")
+        sys.exit(1)
