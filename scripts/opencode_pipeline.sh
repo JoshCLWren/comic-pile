@@ -127,6 +127,7 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
+        "mistral/mistral-small-3.1-24b-instruct-free"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
