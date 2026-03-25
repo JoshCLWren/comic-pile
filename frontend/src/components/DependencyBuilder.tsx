@@ -57,14 +57,18 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [migrationLastRead, setMigrationLastRead] = useState('')
   const [migrationTotal, setMigrationTotal] = useState('')
   const [isMigrating, setIsMigrating] = useState(false)
-  // Undo state for dependency deletion
-  const [pendingDeletion, setPendingDeletion] = useState<{
-    dependencyId: number
-    dependencyData: Dependency
-    timeoutId: ReturnType<typeof setTimeout>
-    toastId: string
-  } | null>(null)
-  const toast = useToast()
+// Undo state for dependency deletion
+const [pendingDeletion, setPendingDeletion] = useState<{
+  dependencyId: number
+  dependencyData: Dependency
+  timeoutId: ReturnType<typeof setTimeout>
+  toastId: string
+} | null>(null)
+const toast = useToast()
+// Note editing state
+const [editingNoteId, setEditingNoteId] = useState<number | null>(null)
+const [noteText, setNoteText] = useState('')
+const [isSavingNote, setIsSavingNote] = useState(false)
 
   const selectedThread = useMemo(
     () => searchResults.find((candidate) => candidate.id === selectedThreadId) || null,
@@ -520,6 +524,39 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     }
   }
 
+  async function handleSaveNote(dependencyId: number) {
+    if (noteText.length > 255) {
+      setError('Note must be 255 characters or less.')
+      return
+    }
+    setIsSavingNote(true)
+    setError('')
+    try {
+      const updated = await dependenciesApi.updateDependency(dependencyId, noteText.trim() || null)
+      setDependencies((prev) => ({
+        ...prev,
+        blocking: prev.blocking.map((d) => (d.id === dependencyId ? updated : d)),
+        blocked_by: prev.blocked_by.map((d) => (d.id === dependencyId ? updated : d)),
+      }))
+      setEditingNoteId(null)
+      setNoteText('')
+    } catch (saveError: unknown) {
+      setError(getApiErrorDetail(saveError))
+    } finally {
+      setIsSavingNote(false)
+    }
+  }
+
+  function handleStartEditNote(dep: Dependency) {
+    setEditingNoteId(dep.id)
+    setNoteText(dep.note ?? '')
+  }
+
+  function handleCancelEditNote() {
+    setEditingNoteId(null)
+    setNoteText('')
+  }
+
   async function handleToggleFlowchart() {
     if (!showFlowchart) {
       await loadFlowchartData()
@@ -758,10 +795,17 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                 {deps.map((dep) => (
                   <DependencyRow
                     key={dep.id}
-                    dependencyId={dep.id}
+                    dependency={dep}
                     title={dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Thread #${dep.source_thread_id}`)}
                     subtitle={dep.source_issue_id ? 'Issue-level block' : 'Thread-level block'}
                     onDelete={handleDeleteDependency}
+                    onEditNote={handleStartEditNote}
+                    editingNoteId={editingNoteId}
+                    noteText={noteText}
+                    onNoteChange={setNoteText}
+                    onSaveNote={handleSaveNote}
+                    onCancelNote={handleCancelEditNote}
+                    isSavingNote={isSavingNote}
                   />
                 ))}
               </div>
@@ -782,10 +826,17 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                 {deps.map((dep) => (
                   <DependencyRow
                     key={dep.id}
-                    dependencyId={dep.id}
+                    dependency={dep}
                     title={dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Thread #${dep.target_thread_id}`)}
                     subtitle={dep.target_issue_id ? 'Issue-level block' : 'Thread-level block'}
                     onDelete={handleDeleteDependency}
+                    onEditNote={handleStartEditNote}
+                    editingNoteId={editingNoteId}
+                    noteText={noteText}
+                    onNoteChange={setNoteText}
+                    onSaveNote={handleSaveNote}
+                    onCancelNote={handleCancelEditNote}
+                    isSavingNote={isSavingNote}
                   />
                 ))}
               </div>
@@ -804,26 +855,95 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
 }
 
 interface DependencyRowProps {
-  dependencyId: number
+  dependency: Dependency
   title: string
   subtitle: string
   onDelete: (id: number) => void
+  onEditNote: (dep: Dependency) => void
+  editingNoteId: number | null
+  noteText: string
+  onNoteChange: (text: string) => void
+  onSaveNote: (id: number) => void
+  onCancelNote: () => void
+  isSavingNote: boolean
 }
 
-function DependencyRow({ dependencyId, title, subtitle, onDelete }: DependencyRowProps) {
+function DependencyRow({
+  dependency,
+  title,
+  subtitle,
+  onDelete,
+  onEditNote,
+  editingNoteId,
+  noteText,
+  onNoteChange,
+  onSaveNote,
+  onCancelNote,
+  isSavingNote,
+}: DependencyRowProps) {
+  const isEditing = editingNoteId === dependency.id
+
   return (
-    <div className="flex items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-      <div className="min-w-0">
-        <p className="text-sm text-stone-300 truncate">{title}</p>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{subtitle}</p>
+    <div className="flex flex-col gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-stone-300 truncate">{title}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{subtitle}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onDelete(dependency.id)}
+          className="text-red-300 hover:text-red-200 text-xs font-black uppercase tracking-widest"
+        >
+          Remove
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={() => onDelete(dependencyId)}
-        className="text-red-300 hover:text-red-200 text-xs font-black uppercase tracking-widest min-h-[44px] px-4 flex items-center"
-      >
-        Remove
-      </button>
+      {isEditing ? (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={noteText}
+            onChange={(e) => onNoteChange(e.target.value)}
+            placeholder="Add a note..."
+            maxLength={255}
+            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-stone-300"
+          />
+          <button
+            type="button"
+            onClick={() => onSaveNote(dependency.id)}
+            disabled={isSavingNote || noteText.length > 255}
+            className="min-h-[44px] px-3 bg-amber-600/20 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-black uppercase tracking-widest disabled:opacity-50"
+          >
+            {isSavingNote ? 'Saving...' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={onCancelNote}
+            className="min-h-[44px] px-3 text-stone-400 hover:text-stone-300 text-xs font-black uppercase tracking-widest"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : dependency.note ? (
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-stone-400 italic flex-1">{dependency.note}</p>
+          <button
+            type="button"
+            onClick={() => onEditNote(dependency)}
+            className="text-stone-500 hover:text-stone-300 text-[10px] font-black uppercase tracking-widest"
+          >
+            Edit note
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onEditNote(dependency)}
+          className="text-stone-600 hover:text-stone-400 text-[10px] font-black uppercase tracking-widest text-left"
+        >
+          + Add note
+        </button>
+      )}
     </div>
   )
 }
