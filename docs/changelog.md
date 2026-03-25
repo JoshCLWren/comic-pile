@@ -19,6 +19,12 @@
 - Shows "Add note" link when empty, displays note with "Edit note" button when present
 - Notes are deleted with their dependency (not preserved on re-add)
 
+**Dependency Modal UX Fix (#359)**
+- "This thread is blocked by" now shows full source → target pair for issue-level dependencies (e.g., "Stormwatch Vol. 2 #11 → Planetary #10")
+- "This thread blocks" now shows full source → target pair for issue-level dependencies
+- Thread-level (non-issue) dependencies remain unchanged
+- Remove button remains functional for each entry
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
