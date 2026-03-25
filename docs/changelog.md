@@ -19,6 +19,11 @@
 - Shows "Add note" link when empty, displays note with "Edit note" button when present
 - Notes are deleted with their dependency (not preserved on re-add)
 
+**UX Clarity Improvements (#358)**
+- Changed queue thread progress label from ambiguous "On #N" to clear "Up next: #N" format
+- Label now unambiguously indicates the next issue to read, not the last-read issue
+- Improved user understanding of issue-level dependencies and reading progress
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
