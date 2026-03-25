@@ -523,7 +523,11 @@ async def auth_client(
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
-            user = User(id=1, username=test_username, created_at=datetime.now(UTC))
+            # Generate a unique ID for the test user to avoid conflicts
+            result = await async_db.execute(text("SELECT MAX(id) FROM users"))
+            max_id = result.scalar() or 0
+            user_id = max_id + 1
+            user = User(id=user_id, username=test_username, created_at=datetime.now(UTC))
             async_db.add(user)
             await async_db.flush()
             await async_db.refresh(user)
