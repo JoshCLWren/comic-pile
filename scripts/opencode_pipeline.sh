@@ -8,6 +8,7 @@
 #   ./scripts/opencode_pipeline.sh review     # picks up implemented issues
 #   ./scripts/opencode_pipeline.sh fix        # picks up reviewed issues
 #   ./scripts/opencode_pipeline.sh pr         # opens PRs for fixed issues
+#   ./scripts/opencode_pipeline.sh ci_check   # checks CI + CodeRabbit, posts AC to issue
 #   ./scripts/opencode_pipeline.sh arbiter    # watchdog: resets stalemates
 #   ./scripts/opencode_pipeline.sh status     # show state of all issues
 #   ./scripts/opencode_pipeline.sh timesheet  # show model usage log
@@ -16,7 +17,9 @@
 # lock ensures only one worker handles each issue at a time.
 #
 # State machine:
-#   pending → implementing → implemented → reviewing → reviewed → fixing → fixed → pr_open → done
+#   pending → implementing → implemented → reviewing → reviewed → fixing → fixed
+#     → pr_open → pr_opened → ci_checking → done
+#                                        ↘ ci_failing → fixing (loops back)
 #
 # Env overrides:
 #   STALE_MINUTES=30    staleness threshold before arbiter resets a stage
@@ -25,6 +28,7 @@
 #   REVIEW_MODEL=...    override first model for reviewer
 #   FIX_MODEL=...       override first model for fixer
 #   PR_MODEL=...        override first model for PR opener
+#   CI_CHECK_MODEL=...  override first model for CI checker
 
 set -uo pipefail
 
@@ -78,10 +82,11 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     )
 fi
 
-IMPLEMENT_MODELS=( "${IMPLEMENT_MODEL:-}" "${_MODEL_POOL[@]}" )
-REVIEW_MODELS=(    "${REVIEW_MODEL:-}"    "${_MODEL_POOL[@]}" )
-FIX_MODELS=(       "${FIX_MODEL:-}"       "${_MODEL_POOL[@]}" )
-PR_MODELS=(        "${PR_MODEL:-}"        "${_MODEL_POOL[@]}" )
+IMPLEMENT_MODELS=(  "${IMPLEMENT_MODEL:-}"  "${_MODEL_POOL[@]}" )
+REVIEW_MODELS=(     "${REVIEW_MODEL:-}"     "${_MODEL_POOL[@]}" )
+FIX_MODELS=(        "${FIX_MODEL:-}"        "${_MODEL_POOL[@]}" )
+PR_MODELS=(         "${PR_MODEL:-}"         "${_MODEL_POOL[@]}" )
+CI_CHECK_MODELS=(   "${CI_CHECK_MODEL:-}"   "${_MODEL_POOL[@]}" )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -168,9 +173,11 @@ timesheet_entry() {
 # ── Circuit breakers ──────────────────────────────────────────────────────────
 
 _GH_BREAKER="$LOG_DIR/.gh_circuit_breaker"
-_MODEL_BLACKLIST="$LOG_DIR/.model_blacklist"
-_CIRCUIT_COOLDOWN=300  # 5 minutes
+_CIRCUIT_COOLDOWN=300   # 5 minutes
 _INSTANT_FAIL_THRESHOLD=10  # seconds — faster than this = auth/availability error
+_MODEL_BACKOFF_DIR="$LOG_DIR/.model_backoff"
+_MODEL_BACKOFF_BASE=15   # seconds for first failure
+_MODEL_BACKOFF_MAX=3600  # cap at 1 hour
 
 # GitHub circuit breaker — if gh fails, block calls for 5min then retry
 gh_ok() {
@@ -201,6 +208,51 @@ gh_comment() {
     fi
 }
 
+# Per-model exponential backoff — replaces permanent blacklist
+# Backoff file: $_MODEL_BACKOFF_DIR/<sanitized_model>  →  "<fail_count>\n<last_fail_ts>"
+# Backoff duration: min(BASE * 2^(fail_count-1), MAX)  →  15s 30s 60s … 1hr
+# Reset to zero on any success.
+
+_model_backoff_file() {
+    local safe
+    safe=$(echo "$1" | tr '/:' '__')
+    echo "$_MODEL_BACKOFF_DIR/$safe"
+}
+
+model_in_backoff() {
+    local f
+    f=$(_model_backoff_file "$1")
+    [[ ! -f "$f" ]] && return 1
+    local fail_count last_fail now backoff_s
+    fail_count=$(sed -n '1p' "$f")
+    last_fail=$(sed -n '2p' "$f")
+    now=$(date +%s)
+    # backoff = BASE * 2^(fail_count-1), capped at MAX
+    backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
+    [[ $backoff_s -gt $_MODEL_BACKOFF_MAX ]] && backoff_s=$_MODEL_BACKOFF_MAX
+    [[ $(( now - last_fail )) -lt $backoff_s ]]
+}
+
+record_model_fail() {
+    local model=$1 duration=$2
+    local f
+    f=$(_model_backoff_file "$model")
+    mkdir -p "$_MODEL_BACKOFF_DIR"
+    local fail_count=0
+    [[ -f "$f" ]] && fail_count=$(sed -n '1p' "$f")
+    fail_count=$(( fail_count + 1 ))
+    printf '%s\n%s\n' "$fail_count" "$(date +%s)" > "$f"
+    local backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
+    [[ $backoff_s -gt $_MODEL_BACKOFF_MAX ]] && backoff_s=$_MODEL_BACKOFF_MAX
+    log_warn "Model backoff #${fail_count} for $model — retry in ${backoff_s}s (duration was ${duration}s)"
+}
+
+record_model_success() {
+    local f
+    f=$(_model_backoff_file "$1")
+    rm -f "$f"
+}
+
 # Per-issue backoff — after all models fail, cool off before retrying
 _fail_ts_file() { echo "$LOG_DIR/issue_$1/.fail_ts"; }
 
@@ -220,16 +272,6 @@ record_issue_fail() {
     log_warn "#$1 — entered backoff for ${BACKOFF_SECONDS}s"
 }
 
-# Model blacklist — instant failures mean auth/unavailable, skip forever this session
-model_blacklisted() {
-    grep -qxF "$1" "$_MODEL_BLACKLIST" 2>/dev/null
-}
-
-blacklist_model() {
-    local model=$1
-    echo "$model" >> "$_MODEL_BLACKLIST"
-    log_warn "Blacklisted model (instant fail): $model"
-}
 
 # Cache file for open PR bodies — refreshed at most once per TTL
 _PR_CACHE_FILE="$LOG_DIR/.pr_cache"
@@ -289,7 +331,7 @@ run_with_fallback() {
     local attempts=0
     for model in "${models[@]}"; do
         [[ -z "$model" ]] && continue
-        model_blacklisted "$model" && continue
+        model_in_backoff "$model" && continue
         [[ $attempts -ge $MAX_ATTEMPTS ]] && { log_warn "#$issue — hit MAX_ATTEMPTS ($MAX_ATTEMPTS), stopping"; break; }
         attempts=$(( attempts + 1 ))
 
@@ -315,19 +357,19 @@ run_with_fallback() {
 
         if [[ $exit_code -eq 0 ]]; then
             outcome="success"
+            record_model_success "$model"
             timesheet_entry "$issue" "$role" "$model" "$start" "$end" "$outcome"
             gh_comment "$issue" "✅ **[$role_title done]** · model: \`$model\` · duration: ${duration}s"
             return 0
         elif [[ $exit_code -eq 124 ]]; then
             outcome="timeout"
             log_warn "#$issue — $model timed out after ${duration}s, trying next"
+            # Timeouts still count as failures for backoff — model may be overloaded
+            record_model_fail "$model" "$duration"
         else
             outcome="failed"
-            log_warn "#$issue — $model failed (exit $exit_code), trying next"
-            # Instant failure = auth/unavailable → blacklist for this session
-            if [[ $duration -le $_INSTANT_FAIL_THRESHOLD ]]; then
-                blacklist_model "$model"
-            fi
+            log_warn "#$issue — $model failed (exit $exit_code, ${duration}s), trying next"
+            record_model_fail "$model" "$duration"
         fi
 
         timesheet_entry "$issue" "$role" "$model" "$start" "$end" "$outcome"
@@ -361,8 +403,9 @@ cmd_init() {
         fi
     done
 
-    # Reset session state: circuit breakers, model blacklist, and per-issue backoffs
-    rm -f "$_GH_BREAKER" "$_MODEL_BLACKLIST"
+    # Reset session state: circuit breakers, model backoffs, and per-issue backoffs
+    rm -f "$_GH_BREAKER"
+    rm -rf "$_MODEL_BACKOFF_DIR"
     rm -f "$LOG_DIR"/issue_*/.fail_ts
 
     # Load issue list from GitHub
@@ -582,53 +625,76 @@ cmd_fix() {
         _load_issues  # refresh and shuffle
         local claimed=0
         for issue in "${ISSUES[@]}"; do
-            [[ "$(get_state "$issue")" != "reviewed" ]] && continue
+            local cur_state
+            cur_state=$(get_state "$issue")
+            [[ "$cur_state" != "reviewed" && "$cur_state" != "ci_failing" ]] && continue
             acquire_lock "$issue" || continue
 
             set_state "$issue" "fixing"
-            log_info "#$issue — addressing review critique"
 
             local wt fix_log critique_file review_summary
             wt=$(worktree_dir "$issue")
             fix_log="$(state_dir "$issue")/fix.log"
-            critique_file="$(state_dir "$issue")/review_critique.md"
-            # Prefer clean critique file (state dir or worktree); fall back to stripped review log
+
+            # ci_failing uses ci_critique.md; reviewed uses review_critique.md
+            if [[ "$cur_state" == "ci_failing" ]]; then
+                log_info "#$issue — addressing CI failures"
+                critique_file="$(state_dir "$issue")/ci_critique.md"
+            else
+                log_info "#$issue — addressing review critique"
+                critique_file="$(state_dir "$issue")/review_critique.md"
+            fi
+
+            # Prefer clean critique file (state dir or worktree); fall back to stripped log
             local wt_critique
-            wt_critique="$(worktree_dir "$issue")/review_critique.md"
+            wt_critique="$(worktree_dir "$issue")/$(basename "$critique_file")"
             if [[ -s "$critique_file" ]]; then
-                review_summary=$(grep -v "^$" "$critique_file" | head -50)
+                review_summary=$(grep -v "^$" "$critique_file" | head -80)
             elif [[ -s "$wt_critique" ]]; then
-                review_summary=$(grep -v "^$" "$wt_critique" | head -50)
+                review_summary=$(grep -v "^$" "$wt_critique" | head -80)
                 cp "$wt_critique" "$critique_file"
+            elif [[ "$cur_state" == "ci_failing" ]]; then
+                review_summary=$(sed 's/\x1b\[[0-9;]*m//g' "$(state_dir "$issue")/ci_check.log" 2>/dev/null | grep -v "^>" | grep -v "^\s*$" | tail -80 || echo "No CI critique found")
             else
                 review_summary=$(sed 's/\x1b\[[0-9;]*m//g' "$(state_dir "$issue")/review.log" 2>/dev/null | grep -v "^>" | grep -v "^\s*$" | tail -80 || echo "No review found")
             fi
 
+            local fix_context
+            if [[ "$cur_state" == "ci_failing" ]]; then
+                fix_context="CI checks and CodeRabbit review found these problems on the open PR"
+            else
+                fix_context="The code reviewer found these problems"
+            fi
+
             local prompt
-            prompt="You are fixing code review feedback for GitHub issue #${issue} in the comic-pile repo.
+            prompt="You are fixing issues for GitHub issue #${issue} in the comic-pile repo.
 The code is already in your working directory on branch $(branch_name "$issue").
 
-The reviewer found these problems:
+${fix_context}:
 ---
 ${review_summary}
 ---
 
 Your tasks:
-1. Address EVERY numbered problem the reviewer listed
+1. Address EVERY numbered problem listed above
 2. Run make lint — must pass
 3. Run make pytest — aim for ≥96% coverage; commit even if not fully passing yet
-4. Commit your changes: git add -A && git -c core.hooksPath=/dev/null commit -m 'fix: address review feedback for #${issue}'
-5. Write a brief summary of what you changed to address each critique point
+4. Commit your changes: git add -A && git -c core.hooksPath=/dev/null commit -m 'fix: address CI/review feedback for #${issue}'
+5. Push the branch: git push -u origin HEAD
+6. Write a brief summary of what you changed for each item
 
 IMPORTANT: Always use 'git -c core.hooksPath=/dev/null commit' to bypass pre-commit hooks.
-Do not skip any critique item. Do not open a PR. Do not ask questions."
+Do not skip any item. Do not open a new PR. Do not ask questions."
+
+            local reset_state
+            [[ "$cur_state" == "ci_failing" ]] && reset_state="ci_failing" || reset_state="reviewed"
 
             if run_with_fallback "$issue" "fix" "$prompt" "$fix_log" "${FIX_MODELS[@]}"; then
                 set_state "$issue" "fixed"
                 log_ok "#$issue — fixes applied, ready for PR"
             else
-                set_state "$issue" "reviewed"
-                log_error "#$issue — all fixers failed, reset to reviewed"
+                set_state "$issue" "$reset_state"
+                log_error "#$issue — all fixers failed, reset to $reset_state"
             fi
 
             release_lock "$issue"
@@ -680,12 +746,10 @@ Steps:
 Do not ask questions. Open the PR now."
 
             if run_with_fallback "$issue" "pr" "$prompt" "$log" "${PR_MODELS[@]}"; then
-                set_state "$issue" "done"
+                set_state "$issue" "pr_opened"
                 local pr_url
                 pr_url=$(grep -o 'https://github.com[^ ]*pull[^ ]*' "$log" | tail -1 || echo "")
-                log_ok "#$issue — done${pr_url:+ → $pr_url}"
-                # Clean up worktree now that PR is open
-                remove_worktree "$issue"
+                log_ok "#$issue — PR opened${pr_url:+ → $pr_url}, queued for CI check"
             else
                 set_state "$issue" "fixed"
                 log_error "#$issue — PR opener failed, reset to fixed"
@@ -696,6 +760,108 @@ Do not ask questions. Open the PR now."
             break
         done
 
+        [[ $claimed -eq 0 ]] && sleep "$POLL_SECONDS"
+    done
+}
+
+# ── Role: ci_check ────────────────────────────────────────────────────────────
+
+cmd_ci_check() {
+    log_info "CI checker online — ${#CI_CHECK_MODELS[@]} models in pool"
+    while true; do
+        _load_issues
+        local claimed=0
+        for issue in "${ISSUES[@]}"; do
+            [[ "$(get_state "$issue")" != "pr_opened" ]] && continue
+            acquire_lock "$issue" || continue
+
+            set_state "$issue" "ci_checking"
+            log_info "#$issue — locating open PR"
+
+            # Find the PR number for this issue
+            local pr_number
+            refresh_pr_cache
+            pr_number=$(gh pr list --state open --json number,body \
+                --jq ".[] | select(.body | test(\"#${issue}[^0-9]\"; \"g\")) | .number" \
+                2>/dev/null | head -1)
+
+            if [[ -z "$pr_number" ]]; then
+                log_warn "#$issue — no open PR found, marking done"
+                set_state "$issue" "done"
+                release_lock "$issue"
+                continue
+            fi
+
+            log_info "#$issue — PR #$pr_number found, checking CI status"
+
+            # Check CI — collect failing checks (exclude CodeRabbit which is advisory)
+            local failing_checks
+            failing_checks=$(gh pr checks "$pr_number" 2>/dev/null \
+                | grep -v -iE "pass|skip|pending|neutral|CodeRabbit" \
+                | grep -v "^$" || true)
+
+            if [[ -z "$failing_checks" ]]; then
+                log_ok "#$issue — PR #$pr_number all CI green → done"
+                set_state "$issue" "done"
+                remove_worktree "$issue"
+                release_lock "$issue"
+                claimed=$(( claimed + 1 ))
+                break
+            fi
+
+            log_warn "#$issue — CI failures on PR #$pr_number, running analysis agent"
+
+            local ci_critique log
+            ci_critique="$(state_dir "$issue")/ci_critique.md"
+            log="$(state_dir "$issue")/ci_check.log"
+
+            local prompt
+            prompt="You are a CI triage agent for GitHub issue #${issue} in the comic-pile repo.
+PR #${pr_number} has failing CI checks. Your job is to analyze the failures and document
+what needs to be fixed.
+
+Steps:
+1. Get the failing checks: gh pr checks ${pr_number}
+2. For each failing check, find its run ID and fetch the logs:
+   gh run list --branch pipeline/issue-${issue} --limit 5
+   gh run view <run_id> --log-failed
+3. Read any CodeRabbit review: gh pr view ${pr_number} --comments
+4. Identify the root cause of each failure — is it a real bug, a flaky test, or a missing feature?
+
+Then do TWO things:
+
+A. Write a structured report to this exact file: ${ci_critique}
+   Use this format:
+   ## Failing CI Checks
+   - <check name>: <root cause — real bug / flaky / missing feature>
+
+   ## Acceptance Criteria to Fix
+   1. <specific testable fix — e.g. 'Add test for X', 'Fix selector Y in component Z'>
+   2. ...
+
+   ## CodeRabbit Issues (if any)
+   - <severity> <file>:<line> — <description>
+
+   If a check is clearly flaky (test passed in other shards, no code change could affect it),
+   note it as FLAKY and do NOT list it in Acceptance Criteria.
+
+B. Post the report as a comment on the issue:
+   gh issue comment ${issue} --body \"\$(cat ${ci_critique})\"
+
+Do NOT make any code changes. Do NOT open a new PR. Analyze and report only."
+
+            if run_with_fallback "$issue" "ci_check" "$prompt" "$log" "${CI_CHECK_MODELS[@]}"; then
+                log_warn "#$issue — CI failures documented in ${ci_critique}, queued for fixing"
+                set_state "$issue" "ci_failing"
+            else
+                log_error "#$issue — CI check agent failed, reset to pr_opened"
+                set_state "$issue" "pr_opened"
+            fi
+
+            release_lock "$issue"
+            claimed=$(( claimed + 1 ))
+            break
+        done
         [[ $claimed -eq 0 ]] && sleep "$POLL_SECONDS"
     done
 }
@@ -721,6 +887,7 @@ cmd_arbiter() {
                 reviewing)    reset_to="implemented" ;;
                 fixing)       reset_to="reviewed" ;;
                 pr_open)      reset_to="fixed" ;;
+                ci_checking)  reset_to="pr_opened" ;;
                 *)            continue ;;
             esac
 
@@ -783,21 +950,28 @@ case "$ROLE" in
     review)     cmd_review ;;
     fix)        cmd_fix ;;
     pr)         cmd_pr ;;
+    ci_check)   cmd_ci_check ;;
     arbiter)    cmd_arbiter ;;
     timesheet)  cmd_timesheet ;;
     *)
-        echo "Usage: $0 {init|status|implement|review|fix|pr|arbiter|timesheet}"
+        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet}"
         echo ""
         echo "Workflow:"
         echo "  1. $0 init           — seed state files + clean stale worktrees"
         echo "  2. Open terminals:"
         echo "       $0 implement    — creates worktree per issue, implements"
         echo "       $0 review       — reviews in the issue's worktree"
-        echo "       $0 fix          — fixes critique in the issue's worktree"
-        echo "       $0 pr           — opens PR, removes worktree"
+        echo "       $0 fix          — fixes critique or CI failures"
+        echo "       $0 pr           — opens PR"
+        echo "       $0 ci_check     — checks CI + CodeRabbit, posts AC, routes failures back"
         echo "       $0 arbiter      — watchdog: resets stalemates every 5m"
         echo "  3. $0 status         — see all issue states + active worktrees"
         echo "  4. $0 timesheet      — see model usage log"
+        echo ""
+        echo "State machine:"
+        echo "  pending → implementing → implemented → reviewing → reviewed"
+        echo "    → fixing → fixed → pr_open → pr_opened → ci_checking → done"
+        echo "                                          ↘ ci_failing → fixing (loops)"
         echo ""
         echo "Scale up: open multiple terminals with the same role — they compete via locks."
         echo "Worktrees: $WORKTREE_BASE"
