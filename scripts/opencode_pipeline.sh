@@ -49,7 +49,6 @@ fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
         "mistralai/mistral-medium-2505"
-        "mistral/codestral-latest"
         "cerebras/qwen-3-235b-a22b-instruct-2507"
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
