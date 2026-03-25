@@ -283,8 +283,11 @@ run_with_fallback() {
         else
             outcome="failed"
             log_warn "#$issue — $model failed (exit $exit_code), trying next"
-            # Instant failure = auth/unavailable → blacklist for this session
-            if [[ $duration -le $_INSTANT_FAIL_THRESHOLD ]]; then
+            # If provider reports model not found or insufficient balance, blacklist regardless of duration
+            if grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance" "$log" 2>/dev/null; then
+                blacklist_model "$model"
+            # Also blacklist on instant failures (auth/unavailable) to avoid repeated attempts
+            elif [[ $duration -le $_INSTANT_FAIL_THRESHOLD ]]; then
                 blacklist_model "$model"
             fi
         fi
