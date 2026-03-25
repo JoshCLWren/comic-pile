@@ -148,8 +148,15 @@ async def list_threads(
     db: AsyncSession = Depends(get_db),
     search: str | None = Query(default=None, min_length=1),
     collection_id: int | None = Query(default=None),
-    page_size: int = Query(default=50, ge=1, le=200),
-    page_token: str | None = Query(default=None),
+    page_size: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="Number of threads to return per page (default 50, max 200)",
+    ),
+    page_token: str | None = Query(
+        default=None, description="Token for pagination continuation (queue_position,thread_id)"
+    ),
 ) -> ThreadListResponse:
     """List threads ordered by position with pagination.
 
