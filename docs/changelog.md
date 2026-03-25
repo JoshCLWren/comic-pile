@@ -27,6 +27,7 @@
 - Implemented focus trap in Modal component to keep focus within dialog
 - Added focus return to trigger element on Modal close
 - Fixed ESLint warnings for React hook dependencies in RollPage
+- Fixed touch targets in IssueToggleList to be at least 44px for mobile accessibility (#358)
 
 **Documentation Updates (#220)**
 - README.md: Added prominent async-only PostgreSQL warning and guidance
