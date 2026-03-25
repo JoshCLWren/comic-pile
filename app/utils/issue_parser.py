@@ -45,6 +45,10 @@ def parse_issue_ranges(input_str: str) -> list[str]:
             continue
 
         if "-" in part:
+            # Check literal length BEFORE processing as range to prevent bypass
+            if len(part) > MAX_LITERAL_LENGTH:
+                raise ValueError(f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)")
+
             # Try to parse as an integer range
             range_parts = part.split("-", 1)
             if len(range_parts) == 2:
@@ -68,18 +72,12 @@ def parse_issue_ranges(input_str: str) -> list[str]:
                     continue
                 except ValueError as exc:
                     # If conversion failed because it's not an integer,
-                    # fall through to store as literal after length check
+                    # fall through to store as literal (length already checked above)
                     if "invalid literal" in str(exc):
-                        if len(part) > MAX_LITERAL_LENGTH:
-                            raise ValueError(
-                                f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)"
-                            ) from None
                         result.append(part)
                         continue
                     raise
-            # More than one dash and not a valid range — store as literal after length check
-            if len(part) > MAX_LITERAL_LENGTH:
-                raise ValueError(f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)")
+            # More than one dash and not a valid range — store as literal (length already checked above)
             result.append(part)
         else:
             # Single token — accept any non-empty string as a literal identifier

@@ -14,7 +14,7 @@ type Toast = {
 
 type ToastContextType = {
   toasts: Toast[]
-  showToast: (message: string, type?: ToastType, action?: { label: string; onClick: () => void }) => void
+  showToast: (message: string, type?: ToastType, action?: { label: string; onClick: () => void }) => string
   removeToast: (id: string) => void
 }
 
@@ -38,6 +38,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, TOAST_DURATION)
    
     timeoutIdsRef.current.add(timeoutId)
+    return id
   }, [])
 
   const removeToast = useCallback((id: string) => {
@@ -73,7 +74,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                {toast.action && (
                  <button
                    onClick={toast.action.onClick}
-                   className="ml-auto text-sm opacity-70 hover:opacity-100"
+                    className="ml-auto text-sm opacity-70 hover:opacity-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
                    aria-label={toast.action.label}
                  >
                    {toast.action.label}
@@ -81,7 +82,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                )}
                <button
                  onClick={() => removeToast(toast.id)}
-                 className="ml-auto text-sm opacity-70 hover:opacity-100"
+                  className="ml-auto text-sm opacity-70 hover:opacity-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
                  aria-label="Close notification"
                >
                  ✕

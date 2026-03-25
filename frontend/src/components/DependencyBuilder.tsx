@@ -62,6 +62,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     dependencyId: number
     dependencyData: Dependency
     timeoutId: ReturnType<typeof setTimeout>
+    toastId: string
   } | null>(null)
   const toast = useToast()
 
@@ -209,8 +210,25 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     // Clean up any pending deletion when modal closes
     if (pendingDeletion) {
       clearTimeout(pendingDeletion.timeoutId)
-      setPendingDeletion(null)
-      toast.removeToast(`dependency-undo-${pendingDeletion.dependencyId}`)
+      // Fire DELETE immediately (commit the deletion)
+      dependenciesApi.deleteDependency(pendingDeletion.dependencyId)
+        .then(() => {
+          // Deletion succeeded, reload dependencies
+          onChanged?.()
+        })
+        .catch((deleteError: unknown) => {
+          // If deletion fails, restore the dependency
+          setError(getApiErrorDetail(deleteError))
+          // Restore the dependency
+          setDependencies((prev) => ({
+            blocking: [...prev.blocking, pendingDeletion.dependencyData],
+            blocked_by: [...prev.blocked_by, pendingDeletion.dependencyData],
+          }))
+        })
+        .finally(() => {
+          toast.removeToast(pendingDeletion.toastId)
+          setPendingDeletion(null)
+        })
     }
     
     loadDependencies()
@@ -441,14 +459,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         }
       }, 5000)
       
-      // Store pending deletion for undo
-      setPendingDeletion({
-        dependencyId,
-        dependencyData: dependencyToDelete,
-        timeoutId,
-      })
-      
-      toast.showToast(
+      // Show toast and capture its ID
+      const toastId = toast.showToast(
         `${message} removed.`,
         'info',
         {
@@ -463,10 +475,18 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
               blocked_by: [...prev.blocked_by, dependencyToDelete],
             }))
             
-            toast.removeToast(`dependency-undo-${dependencyId}`)
+            toast.removeToast(toastId)
           }
         }
       )
+      
+      // Store pending deletion for undo
+      setPendingDeletion({
+        dependencyId,
+        dependencyData: dependencyToDelete,
+        timeoutId,
+        toastId,
+      })
       
     } catch (deleteError: unknown) {
       setError(getApiErrorDetail(deleteError))
@@ -771,7 +791,7 @@ function DependencyRow({ dependencyId, title, subtitle, onDelete }: DependencyRo
       <button
         type="button"
         onClick={() => onDelete(dependencyId)}
-        className="text-red-300 hover:text-red-200 text-xs font-black uppercase tracking-widest"
+        className="text-red-300 hover:text-red-200 text-xs font-black uppercase tracking-widest min-h-[44px] px-4 flex items-center"
       >
         Remove
       </button>

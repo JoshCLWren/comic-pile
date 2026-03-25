@@ -17,18 +17,20 @@ async function getIssueIdByNumber(authenticatedPage: any, threadId: number, issu
 }
 
 test.describe('Dependency Flowchart', () => {
-  test('shows flowchart toggle after creating a dependency', async ({ authenticatedPage }) => {
-    await createThread(authenticatedPage, {
-      title: 'Flowchart Source',
-      format: 'Comics',
-      issues_remaining: 3,
-    })
+test('shows flowchart toggle after creating a dependency', async ({ authenticatedPage }) => {
+  await createThread(authenticatedPage, {
+    title: 'Flowchart Source',
+    format: 'Comics',
+    issues_remaining: 3,
+    total_issues: 5,
+  })
 
-    await createThread(authenticatedPage, {
-      title: 'Flowchart Target',
-      format: 'Comics',
-      issues_remaining: 3,
-    })
+  await createThread(authenticatedPage, {
+    title: 'Flowchart Target',
+    format: 'Comics',
+    issues_remaining: 3,
+    total_issues: 5,
+  })
 
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
@@ -62,18 +64,20 @@ test.describe('Dependency Flowchart', () => {
     await expect(authenticatedPage.locator('[data-testid="toggle-flowchart"]')).toBeVisible()
   })
 
-  test('renders flowchart with nodes and edges when toggled', async ({ authenticatedPage }) => {
-    // Create two threads via API
+test('renders flowchart with nodes and edges when toggled', async ({ authenticatedPage }) => {
+  // Create two threads via API
     const sourceResult = await createThread(authenticatedPage, {
       title: 'FC Node Source',
       format: 'Comics',
       issues_remaining: 2,
+      total_issues: 5,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'FC Node Target',
       format: 'Comics',
       issues_remaining: 2,
+      total_issues: 5,
     })
 
     // Create dependency via API
@@ -130,17 +134,19 @@ test.describe('Dependency Flowchart', () => {
     }
   })
 
-  test('flowchart zoom controls work', async ({ authenticatedPage }) => {
+test('flowchart zoom controls work', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Zoom Source',
       format: 'Comics',
       issues_remaining: 1,
+      total_issues: 3,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Zoom Target',
       format: 'Comics',
       issues_remaining: 1,
+      total_issues: 3,
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
@@ -186,17 +192,19 @@ test.describe('Dependency Flowchart', () => {
     expect(resetTransform).toContain('scale(1)')
   })
 
-  test('flowchart shows tooltip on node hover', async ({ authenticatedPage }) => {
+test('flowchart shows tooltip on node hover', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Hover Source Thread',
       format: 'Comics',
       issues_remaining: 1,
+      total_issues: 3,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Hover Target Thread',
       format: 'Comics',
       issues_remaining: 1,
+      total_issues: 3,
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
@@ -235,17 +243,19 @@ test.describe('Dependency Flowchart', () => {
     }
   })
 
-  test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage }) => {
+test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage }) => {
     const sourceResult = await createThread(authenticatedPage, {
       title: 'Blocker Thread',
       format: 'Comics',
       issues_remaining: 1,
+      total_issues: 3,
     })
 
     const targetResult = await createThread(authenticatedPage, {
       title: 'Blocked Thread FC',
       format: 'Comics',
       issues_remaining: 1,
+      total_issues: 3,
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
@@ -292,6 +302,7 @@ test.describe('Dependency Flowchart', () => {
       title: 'Toggle Target',
       format: 'Comics',
       issues_remaining: 1,
+      total_issues: 3,
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
@@ -329,6 +340,7 @@ test.describe('Dependency Flowchart', () => {
       title: 'Lonely Thread',
       format: 'Comics',
       issues_remaining: 1,
+      total_issues: 3,
     })
 
     await authenticatedPage.goto('/queue')
