@@ -38,39 +38,28 @@ TIMESHEET="$LOG_DIR/timesheet.jsonl"
 STALE_MINUTES="${STALE_MINUTES:-30}"
 POLL_SECONDS="${POLL_SECONDS:-20}"
 
-# Confirmed working models from test_models.sh (2026-03-25)
-IMPLEMENT_MODELS=(
-    "${IMPLEMENT_MODEL:-}"
-    "mistral/devstral-2512"                          # agentic coding specialist ✅
-    "mistral/codestral-latest"                       # dedicated code model ✅
-    "openrouter/qwen/qwen3-coder-30b-a3b-instruct"  # Qwen3 Coder ✅
-    "openrouter/x-ai/grok-code-fast-1"              # xAI coding model ✅
-    "openrouter/openai/gpt-oss-120b"                # 120B fallback ✅
-    "opencode/nemotron-3-super-free"                 # free fallback ✅
-)
-REVIEW_MODELS=(
-    "${REVIEW_MODEL:-}"
-    "mistral/magistral-medium-latest"                # reasoning, great for critique ✅
-    "cerebras/qwen-3-235b-a22b-instruct-2507"        # 235B at ~2000 t/s ✅
-    "openrouter/x-ai/grok-4.1-fast"                 # strong reasoning ✅
-    "mistral/devstral-medium-latest"                 # agentic, good at critique ✅
-    "opencode/big-pickle"                            # free fallback ✅
-)
-FIX_MODELS=(
-    "${FIX_MODEL:-}"
-    "mistral/devstral-2512"                          # agentic coding specialist ✅
-    "mistral/codestral-latest"                       # dedicated code model ✅
-    "openrouter/qwen/qwen3-coder-30b-a3b-instruct"  # Qwen3 Coder ✅
-    "openrouter/x-ai/grok-code-fast-1"              # xAI coding model ✅
-    "openrouter/openai/gpt-oss-120b"                # 120B fallback ✅
-    "opencode/nemotron-3-super-free"                 # free fallback ✅
-)
-PR_MODELS=(
-    "${PR_MODEL:-}"
-    "openrouter/z-ai/glm-4.5-air:free"              # free, sufficient for PR task ✅
-    "opencode/mimo-v2-pro-free"                      # free ✅
-    "opencode/nemotron-3-super-free"                 # free fallback ✅
-)
+# Load all confirmed working models from test results (shuffled for load distribution)
+_MODEL_POOL=()
+if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
+    while IFS= read -r model; do
+        _MODEL_POOL+=("$model")
+    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
+fi
+# Fallback hardcoded list if test results not available
+if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
+    _MODEL_POOL=(
+        "mistral/devstral-2512"
+        "mistral/codestral-latest"
+        "cerebras/qwen-3-235b-a22b-instruct-2507"
+        "opencode/nemotron-3-super-free"
+        "opencode/big-pickle"
+    )
+fi
+
+IMPLEMENT_MODELS=( "${IMPLEMENT_MODEL:-}" "${_MODEL_POOL[@]}" )
+REVIEW_MODELS=(    "${REVIEW_MODEL:-}"    "${_MODEL_POOL[@]}" )
+FIX_MODELS=(       "${FIX_MODEL:-}"       "${_MODEL_POOL[@]}" )
+PR_MODELS=(        "${PR_MODEL:-}"        "${_MODEL_POOL[@]}" )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -152,9 +141,93 @@ timesheet_entry() {
         >> "$TIMESHEET"
 }
 
+# ── Circuit breakers ──────────────────────────────────────────────────────────
+
+_GH_BREAKER="$LOG_DIR/.gh_circuit_breaker"
+_MODEL_BLACKLIST="$LOG_DIR/.model_blacklist"
+_CIRCUIT_COOLDOWN=300  # 5 minutes
+_INSTANT_FAIL_THRESHOLD=10  # seconds — faster than this = auth/availability error
+
+# GitHub circuit breaker — if gh fails, block calls for 5min then retry
+gh_ok() {
+    [[ ! -f "$_GH_BREAKER" ]] && return 0
+    local tripped now age
+    tripped=$(cat "$_GH_BREAKER" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    age=$(( now - tripped ))
+    [[ $age -ge $_CIRCUIT_COOLDOWN ]]
+}
+
+trip_gh_breaker() {
+    date +%s > "$_GH_BREAKER"
+    log_warn "GitHub circuit breaker TRIPPED — pausing gh calls for ${_CIRCUIT_COOLDOWN}s"
+}
+
+reset_gh_breaker() {
+    rm -f "$_GH_BREAKER"
+}
+
 gh_comment() {
     local issue=$1 body=$2
-    gh issue comment "$issue" --body "$body" 2>/dev/null || true
+    gh_ok || return 0
+    if ! gh issue comment "$issue" --body "$body" 2>/dev/null; then
+        trip_gh_breaker
+    else
+        reset_gh_breaker
+    fi
+}
+
+# Model blacklist — instant failures mean auth/unavailable, skip forever this session
+model_blacklisted() {
+    grep -qxF "$1" "$_MODEL_BLACKLIST" 2>/dev/null
+}
+
+blacklist_model() {
+    local model=$1
+    echo "$model" >> "$_MODEL_BLACKLIST"
+    log_warn "Blacklisted model (instant fail): $model"
+}
+
+# Cache file for open PR bodies — refreshed at most once per TTL
+_PR_CACHE_FILE="$LOG_DIR/.pr_cache"
+_PR_CACHE_TTL=120  # seconds
+
+refresh_pr_cache() {
+    gh_ok || return 0
+    local now age=99999
+    now=$(date +%s)
+    if [[ -f "$_PR_CACHE_FILE" ]]; then
+        local mtime
+        mtime=$(stat -c %Y "$_PR_CACHE_FILE" 2>/dev/null || echo 0)
+        age=$(( now - mtime ))
+    fi
+    if [[ $age -ge $_PR_CACHE_TTL ]]; then
+        if ! gh pr list --state open --json body --jq '.[].body' 2>/dev/null > "$_PR_CACHE_FILE"; then
+            trip_gh_breaker
+        else
+            reset_gh_breaker
+        fi
+    fi
+}
+
+issue_has_open_pr() {
+    local issue=$1
+    grep -qi "#${issue}" "$_PR_CACHE_FILE" 2>/dev/null
+}
+
+# Cache gh issue view title per issue (titles don't change)
+gh_issue_title() {
+    local issue=$1
+    local cache="$LOG_DIR/issue_${issue}/.title_cache"
+    if [[ -f "$cache" ]]; then
+        cat "$cache"
+        return
+    fi
+    gh_ok || { echo "unknown"; return; }
+    local title
+    title=$(gh issue view "$issue" --json title --jq '.title' 2>/dev/null || echo "unknown")
+    echo "$title" > "$cache"
+    echo "$title"
 }
 
 log_info()  { echo "[$(date '+%H:%M:%S')] [INFO]  $*"; }
@@ -172,13 +245,13 @@ run_with_fallback() {
 
     for model in "${models[@]}"; do
         [[ -z "$model" ]] && continue
+        model_blacklisted "$model" && continue
 
         log_info "#$issue — trying model: $model"
         echo "$model" > "$(model_file "$issue")"
 
         local role_title
         role_title="$(tr '[:lower:]' '[:upper:]' <<< "${role:0:1}")${role:1}"
-        gh_comment "$issue" "🤖 **[$role_title started]** · model: \`$model\` · $(date -u '+%Y-%m-%d %H:%M UTC')"
 
         local start exit_code=0
         start=$(date +%s)
@@ -205,10 +278,13 @@ run_with_fallback() {
         else
             outcome="failed"
             log_warn "#$issue — $model failed (exit $exit_code), trying next"
+            # Instant failure = auth/unavailable → blacklist for this session
+            if [[ $duration -le $_INSTANT_FAIL_THRESHOLD ]]; then
+                blacklist_model "$model"
+            fi
         fi
 
         timesheet_entry "$issue" "$role" "$model" "$start" "$end" "$outcome"
-        gh_comment "$issue" "⚠️ **[$role_title $outcome]** · model: \`$model\` · duration: ${duration}s"
     done
 
     log_error "#$issue — all models exhausted for role: $role"
@@ -223,12 +299,16 @@ cmd_init() {
     # Clean up stale worktrees from previous runs
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
 
+    # Reset session state: circuit breakers and model blacklist
+    rm -f "$_GH_BREAKER" "$_MODEL_BLACKLIST"
+
     local seeded=0 skipped=0
 
     for issue in "${ISSUES[@]}"; do
         mkdir -p "$(state_dir "$issue")"
 
-        if gh pr list --state open --json body --jq '.[].body' 2>/dev/null | grep -qi "#${issue}"; then
+        refresh_pr_cache
+        if issue_has_open_pr "$issue"; then
             if [[ "$(get_state "$issue")" != "done" ]]; then
                 set_state "$issue" "done"
                 remove_worktree "$issue"
@@ -298,7 +378,7 @@ cmd_implement() {
 
             set_state "$issue" "implementing"
             local title
-            title=$(gh issue view "$issue" --json title --jq '.title' 2>/dev/null || echo "unknown")
+            title=$(gh_issue_title "$issue")
             log_info "#$issue — creating worktree and implementing: $title"
 
             if ! create_worktree "$issue"; then
@@ -474,7 +554,7 @@ cmd_pr() {
 
             set_state "$issue" "pr_open"
             local title wt log
-            title=$(gh issue view "$issue" --json title --jq '.title' 2>/dev/null || echo "unknown")
+            title=$(gh_issue_title "$issue")
             wt=$(worktree_dir "$issue")
             log="$(state_dir "$issue")/pr.log"
             log_info "#$issue — opening PR: $title"
