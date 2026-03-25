@@ -923,4 +923,151 @@ describe('Rating View', () => {
       expect(refetchThreadsSpy).toHaveBeenCalled()
     })
   })
+
+  describe('Empty state', () => {
+    it('shows empty state with "Nothing to roll yet" when no threads exist', async () => {
+      mockedUseSession.mockReturnValue({
+        data: {
+          current_die: 6,
+          last_rolled_result: null,
+          manual_die: null,
+          has_restore_point: false,
+          snoozed_threads: [],
+        },
+        refetch: vi.fn(),
+      })
+      mockedUseThreads.mockReturnValue({
+        data: [],
+        refetch: vi.fn(),
+      })
+      mockedUseStaleThreads.mockReturnValue({ data: [] })
+
+      render(<RollPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
+        expect(screen.getByText('Your reading queue is empty — add some comic threads to get started.')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: '+ Add a Thread' })).toBeInTheDocument()
+        expect(screen.getByText('How it works:')).toBeInTheDocument()
+      })
+    })
+
+    it('shows "All threads are blocked or snoozed" when threads exist but all blocked', async () => {
+      mockedUseSession.mockReturnValue({
+        data: {
+          current_die: 6,
+          last_rolled_result: null,
+          manual_die: null,
+          has_restore_point: false,
+          snoozed_threads: [],
+        },
+        refetch: vi.fn(),
+      })
+      mockedUseThreads.mockReturnValue({
+        data: [
+          { id: 1, title: 'Saga', format: 'Comics', status: 'active', is_blocked: true },
+        ],
+        refetch: vi.fn(),
+      })
+      mockedUseStaleThreads.mockReturnValue({ data: [] })
+
+      render(<RollPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('All threads are blocked or snoozed')).toBeInTheDocument()
+        expect(screen.getByText('Check your queue to see what needs to be read to unlock more options.')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Go to Queue' })).toBeInTheDocument()
+      })
+    })
+
+    it('shows "All threads are blocked or snoozed" when threads exist but all snoozed', async () => {
+      mockedUseSession.mockReturnValue({
+        data: {
+          current_die: 6,
+          last_rolled_result: null,
+          manual_die: null,
+          has_restore_point: false,
+          snoozed_threads: [
+            { id: 1, title: 'Saga', format: 'Comics' },
+            { id: 2, title: 'X-Men', format: 'Comics' },
+          ],
+        },
+        refetch: vi.fn(),
+      })
+      mockedUseThreads.mockReturnValue({
+        data: [],
+        refetch: vi.fn(),
+      })
+      mockedUseStaleThreads.mockReturnValue({ data: [] })
+
+      render(<RollPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('All threads are blocked or snoozed')).toBeInTheDocument()
+        expect(screen.getByText('Check your queue to see what needs to be read to unlock more options.')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Go to Queue' })).toBeInTheDocument()
+      })
+    })
+
+    it('navigates to queue with openCreate when clicking "Add a Thread"', async () => {
+      mockedUseSession.mockReturnValue({
+        data: {
+          current_die: 6,
+          last_rolled_result: null,
+          manual_die: null,
+          has_restore_point: false,
+          snoozed_threads: [],
+        },
+        refetch: vi.fn(),
+      })
+      mockedUseThreads.mockReturnValue({
+        data: [],
+        refetch: vi.fn(),
+      })
+      mockedUseStaleThreads.mockReturnValue({ data: [] })
+
+      const user = userEvent.setup()
+      render(<RollPage />)
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '+ Add a Thread' })).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: '+ Add a Thread' }))
+
+      expect(navigateSpy).toHaveBeenCalledWith('/queue', { state: { openCreate: true } })
+    })
+
+    it('navigates to queue when clicking "Go to Queue" in blocked/snoozed state', async () => {
+      mockedUseSession.mockReturnValue({
+        data: {
+          current_die: 6,
+          last_rolled_result: null,
+          manual_die: null,
+          has_restore_point: false,
+          snoozed_threads: [
+            { id: 1, title: 'Saga', format: 'Comics' },
+          ],
+        },
+        refetch: vi.fn(),
+      })
+      mockedUseThreads.mockReturnValue({
+        data: [],
+        refetch: vi.fn(),
+      })
+      mockedUseStaleThreads.mockReturnValue({ data: [] })
+
+      const user = userEvent.setup()
+      render(<RollPage />)
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Go to Queue' })).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Go to Queue' }))
+
+      expect(navigateSpy).toHaveBeenCalledWith('/queue')
+    })
+  })
 })
+      
