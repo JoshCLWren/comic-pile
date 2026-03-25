@@ -39,11 +39,17 @@ STALE_MINUTES="${STALE_MINUTES:-30}"
 POLL_SECONDS="${POLL_SECONDS:-20}"
 
 # Load all confirmed working models from test results (shuffled for load distribution)
+# Filter out models that have error messages in their response
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-    while IFS= read -r model; do
+    while IFS= read -r line; do
+        model=$(echo "$line" | awk '{print $2}')
+        # Skip models that have error responses (e.g., "[Error: ...]")
+        if echo "$line" | grep -q "\[Error:"; then
+            continue
+        fi
         _MODEL_POOL+=("$model")
-    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
+    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | shuf)
 fi
 # Fallback hardcoded list if test results not available
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then

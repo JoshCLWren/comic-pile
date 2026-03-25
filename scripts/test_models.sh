@@ -33,9 +33,15 @@ test_model() {
     elif [[ $exit_code -ne 0 ]]; then
         echo "FAIL     $model  [exit $exit_code]"
     else
-        # Strip ANSI codes and extract last non-empty line as the response
-        response=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -v "^>" | grep -v "^$" | tail -1 | xargs)
-        echo "OK       $model  [$response]"
+        local cleaned
+        cleaned=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+        if echo "$cleaned" | grep -qiE "Error:|not found|not supported|unauthorized|invalid|authentication|does not exist|no endpoint"; then
+            reason=$(echo "$cleaned" | grep -iE "Error:|not found|not supported|unauthorized|invalid|authentication|does not exist|no endpoint" | head -1 | xargs)
+            echo "FAIL     $model  [$reason]"
+        else
+            response=$(echo "$cleaned" | grep -v "^>" | grep -v "^$" | tail -1 | xargs)
+            echo "OK       $model  [$response]"
+        fi
     fi
 }
 
