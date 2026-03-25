@@ -299,6 +299,24 @@ cmd_init() {
     # Clean up stale worktrees from previous runs
     git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
 
+    # Kill any lingering opencode/pipeline processes from previous sessions
+    pkill -f "opencode_pipeline.sh" 2>/dev/null || true
+    pkill -f "opencode run" 2>/dev/null || true
+    sleep 2
+
+    # Clear all stale locks
+    for _issue in "${ISSUES[@]}"; do
+        local _lock
+        _lock=$(lock_dir "$_issue")
+        if [[ -d "$_lock" ]]; then
+            local _pid
+            _pid=$(cat "$_lock/pid" 2>/dev/null)
+            if ! kill -0 "$_pid" 2>/dev/null; then
+                rm -rf "$_lock"
+            fi
+        fi
+    done
+
     # Reset session state: circuit breakers and model blacklist
     rm -f "$_GH_BREAKER" "$_MODEL_BLACKLIST"
 
