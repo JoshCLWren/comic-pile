@@ -331,23 +331,23 @@ const hasDeps = dependencies[issue.id] !== undefined
               onDragOver={handleDragOver(issue.id)}
               onDrop={handleDrop(issue.id)}
             >
-              <button
-                type="button"
-                draggable={!isBusy}
-                onDragStart={handleDragStart(issue.id)}
-                onDragEnd={handleDragEnd}
-                onClick={() => handleToggle(issue)}
-                disabled={isBusy}
-                className={[
-                  'px-2 py-0.5 text-xs font-bold transition-all',
-                  isBusy ? '' : 'hover:opacity-80 cursor-grab active:cursor-grabbing',
-                ].join(' ')}
-                title={`#${issue.issue_number}: ${issue.status}. Drag to reorder.`}
-                aria-label={`Toggle issue #${issue.issue_number}`}
-                data-testid={`issue-toggle-${issue.id}`}
-              >
-                #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
-              </button>
+                 <button
+                   type="button"
+                   draggable={!isBusy}
+                   onDragStart={handleDragStart(issue.id)}
+                   onDragEnd={handleDragEnd}
+                   onClick={() => handleToggle(issue)}
+                   disabled={isBusy}
+                   className={[
+                     'min-h-[44px] min-w-[44px] flex items-center justify-center px-2 py-0.5 text-xs font-bold transition-all',
+                     isBusy ? '' : 'hover:opacity-80 cursor-grab active:cursor-grabbing',
+                   ].join(' ')}
+                   title={`#${issue.issue_number}: ${issue.status}. Drag to reorder.`}
+                   aria-label={`Toggle issue #${issue.issue_number}`}
+                   data-testid={`issue-toggle-${issue.id}`}
+                 >
+                   #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
+                 </button>
               {hasDeps && tooltipContent && (
                 <>
                   <Tooltip content={tooltipContent}>
@@ -366,54 +366,54 @@ const hasDeps = dependencies[issue.id] !== undefined
                   </Tooltip>
                 </>
               )}
-              <div className="flex border-l border-white/10">
-                <button
-                  type="button"
-                  onClick={() => handleMoveIssue(issue, 'up')}
-                  disabled={isBusy || !canMoveUp}
-                  className={[
-                    'h-7 w-7 text-[11px] font-black text-stone-500 transition-colors',
-                    'hover:text-amber-300 disabled:opacity-40',
-                  ].join(' ')}
-                  aria-label={`Move issue #${issue.issue_number} up`}
-                  data-testid={`issue-move-up-${issue.id}`}
-                  data-move-control={`up-${issue.id}`}
-                  title={`Move issue #${issue.issue_number} up`}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMoveIssue(issue, 'down')}
-                  disabled={isBusy || !canMoveDown}
-                  className={[
-                    'h-7 w-7 text-[11px] font-black text-stone-500 transition-colors',
-                    'hover:text-amber-300 disabled:opacity-40',
-                  ].join(' ')}
-                  aria-label={`Move issue #${issue.issue_number} down`}
-                  data-testid={`issue-move-down-${issue.id}`}
-                  data-move-control={`down-${issue.id}`}
-                  title={`Move issue #${issue.issue_number} down`}
-                >
-                  ↓
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  void handleDeleteIssue(issue)
-                }}
-                disabled={deleting.has(issue.id)}
-                className={[
-                  'pr-2 text-[10px] font-black text-stone-500 transition-colors',
-                  'hover:text-red-300 disabled:opacity-50',
-                ].join(' ')}
-                aria-label={`Delete issue #${issue.issue_number}`}
-                data-testid={`issue-delete-${issue.id}`}
-                title={`Delete issue #${issue.issue_number}`}
-              >
-                x
-              </button>
+               <div className="flex border-l border-white/10">
+                 <button
+                   type="button"
+                   onClick={() => handleMoveIssue(issue, 'up')}
+                   disabled={isBusy || !canMoveUp}
+                   className={[
+                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
+                     'hover:text-amber-300 disabled:opacity-40',
+                   ].join(' ')}
+                   aria-label={`Move issue #${issue.issue_number} up`}
+                   data-testid={`issue-move-up-${issue.id}`}
+                   data-move-control={`up-${issue.id}`}
+                   title={`Move issue #${issue.issue_number} up`}
+                 >
+                   ↑
+                 </button>
+                 <button
+                   type="button"
+                   onClick={() => handleMoveIssue(issue, 'down')}
+                   disabled={isBusy || !canMoveDown}
+                   className={[
+                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-[11px] font-black text-stone-500 transition-colors',
+                     'hover:text-amber-300 disabled:opacity-40',
+                   ].join(' ')}
+                   aria-label={`Move issue #${issue.issue_number} down`}
+                   data-testid={`issue-move-down-${issue.id}`}
+                   data-move-control={`down-${issue.id}`}
+                   title={`Move issue #${issue.issue_number} down`}
+                 >
+                   ↓
+                 </button>
+               </div>
+               <button
+                 type="button"
+                 onClick={() => {
+                   void handleDeleteIssue(issue)
+                 }}
+                 disabled={deleting.has(issue.id)}
+                 className={[
+                   'min-h-[44px] min-w-[44px] flex items-center justify-center pr-2 text-[10px] font-black text-stone-500 transition-colors',
+                   'hover:text-red-300 disabled:opacity-50',
+                 ].join(' ')}
+                 aria-label={`Delete issue #${issue.issue_number}`}
+                 data-testid={`issue-delete-${issue.id}`}
+                 title={`Delete issue #${issue.issue_number}`}
+               >
+                 x
+               </button>
             </div>
           )
         })}
