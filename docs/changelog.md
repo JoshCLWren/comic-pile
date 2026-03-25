@@ -12,6 +12,11 @@
 
 ## 2026-03-24
 
+**UX: Add Help/Glossary Page (#380)**
+- Implemented a new static Help page accessible from the bottom navigation via a new Help item (❓). Provides concise definitions for core concepts: Thread, Roll pool, Ladder mode, Offset, Snoozed, Dependencies, and Collections. Page is mobile-friendly and requires no backend changes.
+- Added route /help and integrated navigation link to trigger the page.
+- Updated frontend to ship with a compact, responsive glossary in a single-page layout.
+
 **Accessibility Improvements (#220)**
 - Added `aria-label="Roll pool collection"` to ThreadPool container for screen reader support
 - Added `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` to Modal component
