@@ -431,14 +431,14 @@ const hasDeps = dependencies[issue.id] !== undefined
             }
           }}
           placeholder="Add issues: 19-24 or 0, Annual 1"
-          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-stone-300"
+          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-4 text-xs text-stone-300"
           data-testid="issue-add-input"
         />
         <button
           type="button"
           onClick={() => handleAddIssues()}
           disabled={isAdding || !addRange.trim()}
-          className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
+          className="px-3 py-4 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
           data-testid="issue-add-button"
         >
           {isAdding ? '…' : 'Add'}
