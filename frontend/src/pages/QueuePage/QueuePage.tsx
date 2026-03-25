@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
@@ -41,29 +41,32 @@ export default function QueuePage() {
   const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
 
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [isEditOpen, setIsEditOpen] = useState(false)
-  const [isReactivateOpen, setIsReactivateOpen] = useState(false)
-  const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
-  const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
-  const [editingThread, setEditingThread] = useState<Thread | null>(null)
-  const [reactivateThreadId, setReactivateThreadId] = useState('')
-  const [issuesToAdd, setIssuesToAdd] = useState(1)
-  const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
-  const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
-  const [repositioningThread, setRepositioningThread] = useState<Thread | null>(null)
-  const [reorderError, setReorderError] = useState<string | null>(null)
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
-  const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
-  const [showMigrationDialog, setShowMigrationDialog] = useState(false)
-  const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
-  const [blockedThreadIds, setBlockedThreadIds] = useState<number[]>([])
-  const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
-  const [dependencyThread, setDependencyThread] = useState<Thread | null>(null)
-  const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
-  const [issuePreview, setIssuePreview] = useState<number | null>(null)
-  const [issueParseError, setIssueParseError] = useState<string | null>(null)
+   const [isCreateOpen, setIsCreateOpen] = useState(false)
+   const [isEditOpen, setIsEditOpen] = useState(false)
+   const [isReactivateOpen, setIsReactivateOpen] = useState(false)
+   const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
+   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+   const [editingThread, setEditingThread] = useState<Thread | null>(null)
+   const [reactivateThreadId, setReactivateThreadId] = useState('')
+   const [issuesToAdd, setIssuesToAdd] = useState(1)
+   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
+   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
+   const [repositioningThread, setRepositioningThread] = useState<Thread | null>(null)
+   const [reorderError, setReorderError] = useState<string | null>(null)
+   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
+   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
+   const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
+   const [blockedThreadIds, setBlockedThreadIds] = useState<number[]>([])
+   const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
+   const [dependencyThread, setDependencyThread] = useState<Thread | null>(null)
+   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
+   const [issuePreview, setIssuePreview] = useState<number | null>(null)
+   const [issueParseError, setIssueParseError] = useState<string | null>(null)
+   const [searchTerm, setSearchTerm] = useState('')
+   const searchInputRef = useRef<HTMLInputElement>(null)
+   const searchTimeoutRef = useRef<any | null>(null)
 
   useEffect(() => {
     if (location.state?.editThreadId && threads) {
@@ -103,44 +106,87 @@ export default function QueuePage() {
     }
   }
 
-  useEffect(() => {
-    if (!threads) return
-    refreshBlockedState()
-  }, [threads])
+   useEffect(() => {
+     if (!threads) return
+     refreshBlockedState()
+   }, [threads])
 
-  useEffect(() => {
-    let cancelled = false
-    const calculatePreview = async () => {
-      const issueInput = createForm.issues
-      if (issueInput) {
-        try {
-          const { parseIssueRange } = await import('../../utils/issueParser')
-          const total = parseIssueRange(issueInput)
-          if (cancelled) return
-          setIssuePreview(total)
-          setIssueParseError(null)
-        } catch (err) {
-          if (cancelled) return
-          setIssuePreview(null)
-          setIssueParseError(err instanceof Error ? err.message : 'Invalid issue range')
+   useEffect(() => {
+     let cancelled = false
+     const calculatePreview = async () => {
+       const issueInput = createForm.issues
+       if (issueInput) {
+         try {
+           const { parseIssueRange } = await import('../../utils/issueParser')
+           const total = parseIssueRange(issueInput)
+           if (cancelled) return
+           setIssuePreview(total)
+           setIssueParseError(null)
+         } catch (err) {
+           if (cancelled) return
+           setIssuePreview(null)
+           setIssueParseError(err instanceof Error ? err.message : 'Invalid issue range')
+         }
+       } else {
+         if (cancelled) return
+         setIssuePreview(null)
+         setIssueParseError(null)
+       }
+     }
+     calculatePreview()
+
+     return () => {
+       cancelled = true
+     }
+   }, [createForm.issues])
+
+   // Keyboard shortcuts for search
+   useEffect(() => {
+     const handleKeyDown = (event: KeyboardEvent) => {
+       // Focus search input with / or Ctrl+F (Cmd+F on Mac)
+       if ((event.key === '/' || (event.ctrlKey && event.key.toLowerCase() === 'f')) && !event.defaultPrevented) {
+         event.preventDefault()
+         if (searchInputRef.current) {
+           searchInputRef.current.focus()
+         }
+       }
+     }
+
+     window.addEventListener('keydown', handleKeyDown)
+     return () => {
+       window.removeEventListener('keydown', handleKeyDown)
+     }
+   }, [])
+
+   const activeThreads = threads
+     ?.filter((thread) => thread.status === 'active')
+     .sort((a, b) => a.queue_position - b.queue_position) ?? []
+   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
+
+    const handleSearchChange = useCallback(
+      (event: ChangeEvent<HTMLInputElement>) => {
+        // Clear previous timeout
+        if (searchTimeoutRef.current) {
+          clearTimeout(searchTimeoutRef.current);
         }
-      } else {
-        if (cancelled) return
-        setIssuePreview(null)
-        setIssueParseError(null)
-      }
-    }
-    calculatePreview()
+        
+        // Set new timeout to update search term after 150ms
+        searchTimeoutRef.current = setTimeout(() => {
+          setSearchTerm(event.target.value);
+        }, 150);
+      },
+      []
+    );
 
-    return () => {
-      cancelled = true
-    }
-  }, [createForm.issues])
+   const filteredThreads = activeThreads.filter(
+     (thread) =>
+       thread.title.toLowerCase().includes(searchTerm.toLowerCase())
+   );
 
-  const activeThreads = threads
-    ?.filter((thread) => thread.status === 'active')
-    .sort((a, b) => a.queue_position - b.queue_position) ?? []
-  const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
+   const filteredCompletedThreads = completedThreads.filter(
+     (thread) =>
+       thread.title.toLowerCase().includes(searchTerm.toLowerCase())
+   );
 
   const handleDelete = (threadId: number) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
@@ -440,24 +486,36 @@ export default function QueuePage() {
   }
 
   return (
-    <PositionMenuProvider>
-      <div className="space-y-10 pb-10">
-      <header className="space-y-4 px-2">
-        <div className="flex justify-between items-start gap-4">
-          <div>
-            <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
-            <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
-          </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-          >
-            Add Thread
-          </button>
-        </div>
-        <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
-      </header>
+<PositionMenuProvider>
+<div className="space-y-10 pb-10">
+<header className="space-y-4 px-2">
+<div className="flex justify-between items-start gap-4">
+<div>
+<h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
+<p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
+</div>
+<button
+type="button"
+onClick={openCreateModal}
+className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+>
+Add Thread
+</button>
+</div>
+<div className="mt-2 flex w-full max-w-xl">
+<label htmlFor="queue-search" className="sr-only">Search threads</label>
+<input
+id="queue-search"
+type="text"
+value={searchTerm}
+onChange={handleSearchChange}
+ref={searchInputRef}
+placeholder="🔍 Find a thread..."
+className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-stone-300 focus:border-white/20 focus:outline-none focus:ring-2 focus:ring-white/20"
+/>
+</div>
+<CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
+</header>
 
       {/* Mobile FAB for Add Thread */}
       <button
@@ -469,23 +527,23 @@ export default function QueuePage() {
         +
       </button>
 
-      {activeThreads.length === 0 ? (
-        <div className="text-center text-stone-500">No active threads in queue</div>
-      ) : (
-        <>
-          {reorderError && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
-              {reorderError}
-            </div>
-          )}
-          <div
-            data-testid="queue-thread-list"
-            id="queue-container"
-            role="list"
-            aria-label="Thread queue"
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
-          >
-            {activeThreads.map((thread, index) => {
+       {filteredThreads.length === 0 ? (
+         <div className="text-center text-stone-500">No active threads in queue</div>
+       ) : (
+         <>
+           {reorderError && (
+             <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
+               {reorderError}
+             </div>
+           )}
+           <div
+             data-testid="queue-thread-list"
+             id="queue-container"
+             role="list"
+             aria-label="Thread queue"
+             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
+           >
+              {filteredThreads.map((thread, _index) => {
               const isDragOver = dragOverThreadId === thread.id
               const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
               const blockingReasons = blockingReasonMap[thread.id] || []
@@ -511,9 +569,9 @@ export default function QueuePage() {
                 >
                   <div className="flex justify-between items-start gap-3">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <span className="text-2xl font-black text-amber-600/30">
-                        #{index + 1}
-                      </span>
+                       <span className="text-2xl font-black text-amber-600/30">
+                         #{thread.queue_position}
+                       </span>
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Tooltip content="Drag to reorder within the queue.">
                           <button
@@ -640,11 +698,11 @@ export default function QueuePage() {
             Reactivate
           </button>
         </header>
-        {completedThreads.length === 0 ? (
-          <div className="text-center text-stone-500">No completed threads yet</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {completedThreads.map((thread) => (
+         {filteredCompletedThreads.length === 0 ? (
+           <div className="text-center text-stone-500">No completed threads yet</div>
+         ) : (
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             {filteredCompletedThreads.map((thread) => (
               <div key={thread.id} className="glass-card p-4 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
