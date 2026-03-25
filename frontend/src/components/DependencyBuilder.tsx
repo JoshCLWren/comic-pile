@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
+import ReadingOrderTimeline from './ReadingOrderTimeline'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
@@ -41,7 +42,9 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [error, setError] = useState('')
   const [dependencies, setDependencies] = useState<ThreadDependenciesResponse>({ blocking: [], blocked_by: [] })
   const [isLoadingDeps, setIsLoadingDeps] = useState(false)
-  const [showFlowchart, setShowFlowchart] = useState(false)
+  const [showReadingOrder, setShowReadingOrder] = useState(false)
+  const [readingView, setReadingView] = useState<'timeline' | 'graph'>('timeline')
+  const [isGraphLoading, setIsGraphLoading] = useState(false)
   const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
   const [flowchartDependencies, setFlowchartDependencies] = useState<FlowchartDependency[]>([])
   const [flowchartIssueNodes, setFlowchartIssueNodes] = useState<FlowchartNode[]>([])
@@ -203,7 +206,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setSearchResults([])
     setSelectedThreadId(null)
     setError('')
-    setShowFlowchart(false)
+    setShowReadingOrder(false)
+    setReadingView('timeline')
     setDependencyMode(getDefaultDependencyMode(thread))
     setSourceIssueId(null)
     setTargetIssueId(null)
@@ -445,7 +449,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setSourceIssues([])
       setTargetIssues([])
       await loadDependencies()
-      if (showFlowchart) await loadFlowchartData()
+      await refreshGraphIfVisible()
       onChanged?.()
     } catch (saveError: unknown) {
       setError(getApiErrorDetail(saveError))
@@ -461,26 +465,26 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       const dependencyToDelete = [...dependencies.blocking, ...dependencies.blocked_by].find(
         (dep) => dep.id === dependencyId
       )
-      
+
       if (!dependencyToDelete) return
-      
+
       // Optimistic UI: remove immediately
       setDependencies((prev) => ({
         blocking: prev.blocking.filter((dep) => dep.id !== dependencyId),
         blocked_by: prev.blocked_by.filter((dep) => dep.id !== dependencyId),
       }))
-      
+
       // Show undo toast with action button
       const message = dependencyToDelete.source_label && dependencyToDelete.target_label
         ? `${dependencyToDelete.source_label} → ${dependencyToDelete.target_label}`
         : `Dependency #${dependencyId}`
-      
+
       const timeoutId = setTimeout(async () => {
         try {
           await dependenciesApi.deleteDependency(dependencyId)
           setPendingDeletion(null)
           await loadDependencies()
-          if (showFlowchart) await loadFlowchartData()
+          await refreshGraphIfVisible()
           onChanged?.()
         } catch (deleteError: unknown) {
           setError(getApiErrorDetail(deleteError))
@@ -488,7 +492,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           await loadDependencies()
         }
       }, 5000)
-      
+
       // Show toast and capture its ID
       const toastId = toast.showToast(
         `${message} removed.`,
@@ -498,18 +502,18 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           onClick: () => {
             clearTimeout(timeoutId)
             setPendingDeletion(null)
-            
+
             // Restore the dependency
             setDependencies((prev) => ({
               blocking: [...prev.blocking, dependencyToDelete],
               blocked_by: [...prev.blocked_by, dependencyToDelete],
             }))
-            
+
             toast.removeToast(toastId)
           }
         }
       )
-      
+
       // Store pending deletion for undo
       setPendingDeletion({
         dependencyId,
@@ -517,7 +521,6 @@ const [isSavingNote, setIsSavingNote] = useState(false)
         timeoutId,
         toastId,
       })
-      
     } catch (deleteError: unknown) {
       setError(getApiErrorDetail(deleteError))
     }
@@ -556,37 +559,96 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setNoteText('')
   }
 
-  async function handleToggleFlowchart() {
-    if (!showFlowchart) {
+  const refreshGraphData = useCallback(async () => {
+    setIsGraphLoading(true)
+    try {
       await loadFlowchartData()
+      await loadFlowchartData()
+    } finally {
+      setIsGraphLoading(false)
     }
-    setShowFlowchart((prev) => !prev)
+  }, [loadFlowchartData])
+
+  function handleToggleReadingOrder() {
+    setShowReadingOrder((prev) => {
+      const next = !prev
+      if (!next) {
+        setReadingView('timeline')
+      }
+      return next
+    })
   }
 
-  const hasDependencies = dependencies.blocking.length > 0 || dependencies.blocked_by.length > 0
+  async function handleSelectReadingView(view: 'timeline' | 'graph') {
+    setReadingView(view)
+    if (view === 'graph') {
+      await refreshGraphData()
+    }
+  }
+
+  async function refreshGraphIfVisible() {
+    if (showReadingOrder && readingView === 'graph') {
+      await refreshGraphData()
+    }
+  }
 
   return (
     <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
       <div className="space-y-4">
         {/* Flowchart toggle */}
-        {hasDependencies && (
+        {thread && (
           <div className="space-y-2">
             <button
               type="button"
-              onClick={handleToggleFlowchart}
-              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest"
-              data-testid="toggle-flowchart"
+              onClick={handleToggleReadingOrder}
+              className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest"
+              data-testid="toggle-reading-order"
             >
-              {showFlowchart ? '▲ Hide Flowchart' : '▼ View Flowchart'}
+              {showReadingOrder ? '▲ Hide Reading Order' : '▼ View Reading Order'}
             </button>
 
-            {showFlowchart && (
-              <DependencyFlowchart
-                threads={flowchartThreads}
-                dependencies={flowchartDependencies}
-                blockedIds={blockedIds}
-                issueNodes={flowchartIssueNodes}
-              />
+            {showReadingOrder && (
+              <div className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-3">
+                <div className="flex gap-2 text-[11px] font-black uppercase tracking-widest">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectReadingView('timeline')}
+                    className={`flex-1 rounded-2xl border px-3 py-3 ${
+                      readingView === 'timeline'
+                        ? 'border-white text-white'
+                        : 'border-white/20 text-stone-400'
+                    }`}
+                  >
+                    Timeline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectReadingView('graph')}
+                    className={`flex-1 rounded-2xl border px-3 py-3 ${
+                      readingView === 'graph'
+                        ? 'border-white text-white'
+                        : 'border-white/20 text-stone-400'
+                    }`}
+                  >
+                    Flowchart
+                  </button>
+                </div>
+
+                <div className="min-h-[200px]">
+                  {readingView === 'timeline' ? (
+                    <ReadingOrderTimeline thread={thread} dependencies={dependencies.blocked_by} />
+                  ) : isGraphLoading ? (
+                    <p className="text-center text-xs text-stone-400">Loading flowchart…</p>
+                  ) : (
+                    <DependencyFlowchart
+                      threads={flowchartThreads}
+                      dependencies={flowchartDependencies}
+                      blockedIds={blockedIds}
+                      issueNodes={flowchartIssueNodes}
+                    />
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}

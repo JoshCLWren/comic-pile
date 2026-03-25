@@ -28,16 +28,11 @@
 - Shows "Add note" link when empty, displays note with "Edit note" button when present
 - Notes are deleted with their dependency (not preserved on re-add)
 
-**UX Clarity Improvements (#358)**
-- Changed queue thread progress label from ambiguous "On #N" to clear "Up next: #N" format
-- Label now unambiguously indicates the next issue to read, not the last-read issue
-- Improved user understanding of issue-level dependencies and reading progress
-
-**Dependency Modal UX Fix (#359)**
-- "This thread is blocked by" now shows full source → target pair for issue-level dependencies (e.g., "Stormwatch Vol. 2 #11 → Planetary #10")
-- "This thread blocks" now shows full source → target pair for issue-level dependencies
-- Thread-level (non-issue) dependencies remain unchanged
-- Remove button remains functional for each entry
+**Dependency Reading Order (Issue #371)**
+- Dependency modal now opens with a "View Reading Order" timeline that displays each issue span and gate in linear order
+- Gates highlight prerequisites, show blocked/satisfied/dormant status, and call out the current reading position
+- Timeline is mobile-friendly, scrollable, and works even when there are zero, one, or many gates
+- Classic node-based flowchart is still available as a secondary tab for cross-thread context
 
 ## 2026-03-24
 
