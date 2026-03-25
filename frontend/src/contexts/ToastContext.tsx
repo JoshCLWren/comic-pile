@@ -8,6 +8,8 @@ type Toast = {
   type: ToastType
 }
 
+const TOAST_DURATION = 5000
+
 type ToastContextType = {
   toasts: Toast[]
   showToast: (message: string, type?: ToastType) => void
@@ -15,8 +17,6 @@ type ToastContextType = {
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
-
-const TOAST_DURATION = 5000
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
