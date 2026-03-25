@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback, useState } from 'react'
+import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import LazyDice3D from '../../components/LazyDice3D'
 import Modal from '../../components/Modal'
@@ -11,6 +11,7 @@ import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
 import { useStaleThreads, useThreads } from '../../hooks/useThread'
 import { useCollections } from '../../contexts/CollectionContext'
+import { useToast } from '../../contexts/ToastContext'
 import {
   useClearManualDie,
   useDismissPending,
@@ -69,11 +70,13 @@ export default function RollPage() {
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
-const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-const { activeCollectionId = null } = useCollections()
+  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+  const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
+  const { showToast } = useToast()
+  const prevCurrentDieRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (isSessionError && sessionError) {
@@ -288,6 +291,15 @@ useEffect(() => {
     setRolledResult(session.last_rolled_result)
   }
 }, [session?.current_die, session?.last_rolled_result, setCurrentDie, setRolledResult])
+
+useEffect(() => {
+  if (!session?.manual_die && currentDie && prevCurrentDieRef.current !== null && prevCurrentDieRef.current !== currentDie) {
+    const prevDie = prevCurrentDieRef.current
+    const direction = currentDie < prevDie ? 'stepped down to' : 'stepped up to'
+    showToast(`Ladder ${direction} d${currentDie} — ${activeThreads.length} eligible in pool`, 'info')
+  }
+  prevCurrentDieRef.current = currentDie
+}, [session?.manual_die, currentDie, activeThreads.length, showToast])
 
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
@@ -566,19 +578,23 @@ useEffect(() => {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <div id="die-selector">
+          <div id="die-selector" className={session.manual_die ? '' : 'opacity-50'}>
             <div className="hidden md:flex gap-2">
               {DICE_LADDER.map((die) => (
-                <button key={die} onClick={() => handleSetDie(die)} disabled={setDieMutation.isPending}
-                  className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie ? 'bg-amber-600/20 border-amber-600 text-amber-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
-                  d{die}
-                </button>
+                <Tooltip key={die} content={session.manual_die ? `Switch to d${die}` : 'Exit Ladder mode to manually select die'}>
+                  <button onClick={() => handleSetDie(die)} disabled={setDieMutation.isPending}
+                    className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie ? 'bg-amber-600/20 border-amber-600 text-amber-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                    d{die}
+                  </button>
+                </Tooltip>
               ))}
-              <button onClick={handleClearManualDie} disabled={clearManualDieMutation.isPending}
-                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}>
-                Auto
-              </button>
+              <Tooltip content="Exit automatic mode and manually set die size. Ladder will not change die after ratings.">
+                <button onClick={handleClearManualDie} disabled={clearManualDieMutation.isPending}
+                  className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                  title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}>
+                  Auto
+                </button>
+              </Tooltip>
             </div>
             <div className="md:hidden">
               <button onClick={() => setIsDieModalOpen(true)} disabled={setDieMutation.isPending}
@@ -587,6 +603,9 @@ useEffect(() => {
               </button>
             </div>
           </div>
+          {session.manual_die && (
+            <span className="text-[8px] font-black text-amber-500/70 uppercase tracking-wider">Manual</span>
+          )}
           <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
             <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
               <div className="w-full h-full">
@@ -594,7 +613,7 @@ useEffect(() => {
               </div>
             </div>
             <div className="text-right">
-              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. Promotes automatically based on ratings (5→up, 1-2→down)">
+              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. After rating 5+, die steps DOWN (smaller pool). After rating 1-2, die steps UP (larger pool).">
                 <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder</span>
               </Tooltip>
               <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>

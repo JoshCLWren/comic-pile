@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-25
+
+**Ladder Mode UX Improvements (#367)**
+- Added clear explanation tooltip to Ladder indicator explaining automatic die adjustment based on ratings
+- Manual die picker now visually dimmed when Ladder mode is active
+- Added "Manual" label indicator when manual die is selected
+- Toast notification appears when Ladder automatically steps die after rating
+- Added tooltips to manual die buttons explaining manual override behavior
+- Enhanced Auto button tooltip explaining difference from Ladder mode
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
