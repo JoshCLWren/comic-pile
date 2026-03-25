@@ -176,8 +176,7 @@ _GH_BREAKER="$LOG_DIR/.gh_circuit_breaker"
 _CIRCUIT_COOLDOWN=300   # 5 minutes
 _INSTANT_FAIL_THRESHOLD=10  # seconds — faster than this = auth/availability error
 _MODEL_BACKOFF_DIR="$LOG_DIR/.model_backoff"
-_MODEL_BACKOFF_BASE=15   # seconds for first failure
-_MODEL_BACKOFF_MAX=3600  # cap at 1 hour
+_MODEL_BACKOFF_BASE=15   # seconds for first failure; doubles each time, no cap
 
 # GitHub circuit breaker — if gh fails, block calls for 5min then retry
 gh_ok() {
@@ -229,7 +228,6 @@ model_in_backoff() {
     now=$(date +%s)
     # backoff = BASE * 2^(fail_count-1), capped at MAX
     backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
-    [[ $backoff_s -gt $_MODEL_BACKOFF_MAX ]] && backoff_s=$_MODEL_BACKOFF_MAX
     [[ $(( now - last_fail )) -lt $backoff_s ]]
 }
 
@@ -243,7 +241,6 @@ record_model_fail() {
     fail_count=$(( fail_count + 1 ))
     printf '%s\n%s\n' "$fail_count" "$(date +%s)" > "$f"
     local backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
-    [[ $backoff_s -gt $_MODEL_BACKOFF_MAX ]] && backoff_s=$_MODEL_BACKOFF_MAX
     log_warn "Model backoff #${fail_count} for $model — retry in ${backoff_s}s (duration was ${duration}s)"
 }
 
