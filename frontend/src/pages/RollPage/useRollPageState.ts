@@ -7,9 +7,10 @@ export interface RollPageState {
   rolledResult: number | null
   selectedThreadId: number | null
   currentDie: number
-  diceState: string
-  staleThread: (Thread & { days: number }) | null
-  staleThreadCount: number
+   diceState: string
+   staleThreads: (Thread & { days: number })[]
+   staleThreadCount: number
+   staleExpanded: boolean
   isOverrideOpen: boolean
   overrideThreadId: string
   overrideErrorMessage: string
@@ -38,9 +39,10 @@ export interface RollPageStateSetters {
   setRolledResult: (value: number | null) => void
   setSelectedThreadId: (value: number | null) => void
   setCurrentDie: (value: number) => void
-  setDiceState: (value: string) => void
-  setStaleThread: (value: (Thread & { days: number }) | null) => void
-  setStaleThreadCount: (value: number) => void
+   setDiceState: (value: string) => void
+   setStaleThreads: (value: (Thread & { days: number })[]) => void
+   setStaleThreadCount: (value: number) => void
+   setStaleExpanded: (value: boolean) => void
   setIsOverrideOpen: (value: boolean) => void
   setOverrideThreadId: (value: string) => void
   setOverrideErrorMessage: (value: string) => void
@@ -66,9 +68,10 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [rolledResult, setRolledResult] = useState<number | null>(null)
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
   const [currentDie, setCurrentDie] = useState(6)
-  const [diceState, setDiceState] = useState('idle')
-  const [staleThread, setStaleThread] = useState<(Thread & { days: number }) | null>(null)
-  const [staleThreadCount, setStaleThreadCount] = useState(0)
+   const [diceState, setDiceState] = useState('idle')
+   const [staleThreads, setStaleThreads] = useState<(Thread & { days: number })[]>([])
+   const [staleThreadCount, setStaleThreadCount] = useState(0)
+   const [staleExpanded, setStaleExpanded] = useState(false)
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [overrideErrorMessage, setOverrideErrorMessage] = useState('')
@@ -101,12 +104,14 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setSelectedThreadId,
     currentDie,
     setCurrentDie,
-    diceState,
-    setDiceState,
-    staleThread,
-    setStaleThread,
-    staleThreadCount,
-    setStaleThreadCount,
+     diceState,
+     setDiceState,
+     staleThreads,
+     setStaleThreads,
+     staleThreadCount,
+     setStaleThreadCount,
+     staleExpanded,
+     setStaleExpanded,
     isOverrideOpen,
     setIsOverrideOpen,
     overrideThreadId,
