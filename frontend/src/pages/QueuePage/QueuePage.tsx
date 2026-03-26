@@ -658,12 +658,13 @@ export default function QueuePage() {
               ▶
             </span>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-black text-stone-200 flex items-center gap-2">
+              <p className="text-sm font-black text-stone-200 truncate">
                 Blocked ({blockedThreads.length})
-                <span className="text-[11px] text-stone-500 font-bold uppercase tracking-widest">Summary</span>
-              </p>
-              <p className="text-[11px] text-stone-400 mt-1 truncate">
-                {nextBlockedReason ? `Next unlock: ${nextBlockedReason}` : 'Waiting on dependencies'}
+                {nextBlockedReason ? (
+                  <span className="font-normal text-stone-400"> — next unlock: {nextBlockedReason}</span>
+                ) : (
+                  <span className="font-normal text-stone-400"> — Waiting on dependencies</span>
+                )}
               </p>
             </div>
             <span className="text-amber-300 text-xs font-black uppercase tracking-widest">{isBlockedCollapsed ? 'Show' : 'Hide'}</span>
