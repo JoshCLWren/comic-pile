@@ -68,22 +68,29 @@ _load_issues() {
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
-    while IFS= read -r model; do
-        _CODING_POOL+=("$model")
-    done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
+  while IFS= read -r model; do
+    # Filter out problematic providers (e.g., mistralai models that cause ProviderModelNotFoundError)
+    if ! echo "$model" | grep -qE "^mistralai/"; then
+      _CODING_POOL+=("$model")
+    fi
+  done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-    while IFS= read -r line; do
-        model=$(echo "$line" | awk '{print $2}')
-        # Skip models that have error responses (e.g., "[Error: ...]")
-        if echo "$line" | grep -q "\[Error:"; then
-            continue
-        fi
-        _MODEL_POOL+=("$model")
-    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | shuf)
+  while IFS= read -r line; do
+    model=$(echo "$line" | awk '{print $2}')
+    # Skip models that have error responses (e.g., "[Error: ...]")
+    if echo "$line" | grep -q "\[Error:"; then
+      continue
+    fi
+    # Filter out problematic providers (e.g., mistralai models that cause ProviderModelNotFoundError)
+    if echo "$model" | grep -qE "^mistralai/"; then
+      continue
+    fi
+    _MODEL_POOL+=("$model")
+  done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | shuf)
 fi
 
 # Fallback: if tool test hasn't been run yet, use full pool for everything
