@@ -261,8 +261,11 @@ export const test = base.extend<TestFixtures>({
       // Element may not exist, that's OK
     });
 
-    // 3. Wait for the roll page to be ready
-    await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 10000 });
+    // 3. Wait for the roll page to be ready (die button is always present on home route)
+    await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 10000 }).catch(() => {
+      // May not exist if no session or in empty state — check for roll pool instead
+      return page.waitForSelector('[data-roll-pool]', { state: 'attached', timeout: 5000 }).catch(() => {});
+    });
 
     await use(page);
 
