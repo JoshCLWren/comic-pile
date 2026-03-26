@@ -18,11 +18,9 @@
 - Section is completely hidden when no threads are blocked (no "0 threads hidden" message)
 - Backend endpoint `/api/v1/dependencies/blocked-with-reasons` powers the expanded blocked threads list
 
-**GitHub Projects Documentation (#363)**
-- Added deprecation notice for GitHub Projects (classic) functionality
-- Created GitHub Projects migration guide for new Projects experience
-- Updated migration script with deprecation warning
-- Documented new Projects experience REST API approach
+**GitHub Projects Cleanup (#363)**
+- Removed deprecated GitHub Projects (classic) migration documentation
+- Cleaned up unused GitHub Projects preparation files
 
 **Pipeline Simplification (#363)**
 - Simplified opencode pipeline script by removing CI checking and complex model backoff features
