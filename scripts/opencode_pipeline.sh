@@ -12,6 +12,7 @@
 #   ./scripts/opencode_pipeline.sh arbiter    # watchdog: resets stalemates
 #   ./scripts/opencode_pipeline.sh status     # show state of all issues
 #   ./scripts/opencode_pipeline.sh timesheet  # show model usage log
+#   ./scripts/opencode_pipeline.sh tool_test  # re-run tool-use tier classification
 #
 # Run multiple workers of the same role by opening more terminals — the mkdir
 # lock ensures only one worker handles each issue at a time.
@@ -995,7 +996,7 @@ case "$ROLE" in
     arbiter)    cmd_arbiter ;;
     timesheet)  cmd_timesheet ;;
     *)
-        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet}"
+        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet|tool_test}"
         echo ""
         echo "Workflow:"
         echo "  1. $0 init           — seed state files + clean stale worktrees"
@@ -1007,7 +1008,8 @@ case "$ROLE" in
         echo "       $0 ci_check     — checks CI + CodeRabbit, posts AC, routes failures back"
         echo "       $0 arbiter      — watchdog: resets stalemates every 5m"
         echo "  3. $0 status         — see all issue states + active worktrees"
-        echo "  4. $0 timesheet      — see model usage log"
+        echo "  4. $0 timesheet      — see model usage log
+  5. $0 tool_test      — re-run tool-use tier classification (refresh after adding models)"
         echo ""
         echo "State machine:"
         echo "  pending → implementing → implemented → reviewing → reviewed"
