@@ -11,6 +11,7 @@
 
 **Roll Pool Blocked Threads Expansion (#363)**
 - Enhanced expandable section for blocked threads in the roll pool with detailed blocking reasons
+- Added ARIA label to blocked threads toggle button for screen‑reader accessibility
 - Each blocked thread now shows its primary blocking reason (e.g., "Blocked by Ultimate Spider-Man #5")
 - Clicking a blocked thread navigates to the queue page with the thread highlighted
 - Added "Show all" toggle for lists with more than 10 blocked threads
