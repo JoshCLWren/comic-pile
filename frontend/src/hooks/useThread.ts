@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useContext } from 'react'
 import axios from 'axios'
 import { threadsApi } from '../services/api'
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadQueryParams, ThreadUpdatePayload } from '../types'
+import { CacheContext } from '../contexts/CacheContext'
 
 export function useThreads(searchTerm = '', collectionId: number | null = null) {
   const [data, setData] = useState<Thread[] | null>(null)
@@ -25,7 +26,7 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
 
         const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined)
         if (!cancelled) {
-          setData(result.threads)
+          setData((result as any).threads ?? (Array.isArray(result) ? result : []))
         }
       } catch {
         if (!cancelled) {
@@ -59,7 +60,7 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
         }
 
         const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined)
-        setData(result.threads)
+        setData((result as any).threads ?? (Array.isArray(result) ? result : []))
       } catch {
         setIsError(true)
       } finally {
@@ -154,32 +155,39 @@ export function useStaleThreads(days?: number) {
 }
 
 export function useCreateThread() {
+  const cache = useContext(CacheContext)
+  const invalidateQueries = cache?.invalidateQueries ?? (() => {})
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = useCallback(async (data: ThreadCreatePayload) => {
-    setIsPending(true)
-    setIsError(false)
-    try {
-      return await threadsApi.create(data)
-    } catch (error: unknown) {
-      const detail = axios.isAxiosError<{ detail?: string }>(error)
-        ? error.response?.data?.detail || error.message
-        : error instanceof Error
-          ? error.message
-          : 'Unknown error'
-      console.error('Failed to create thread:', detail)
-      setIsError(true)
-      throw error
-    } finally {
-      setIsPending(false)
-    }
-  }, [])
+const mutate = useCallback(async (data: ThreadCreatePayload) => {
+      setIsPending(true)
+      setIsError(false)
+      try {
+        const result = await threadsApi.create(data)
+        // Invalidate cached thread lists after creation
+        invalidateQueries(['threads'])
+        return result
+      } catch (error: unknown) {
+        const detail = axios.isAxiosError<{ detail?: string }>(error)
+          ? error.response?.data?.detail || error.message
+          : error instanceof Error
+            ? error.message
+            : 'Unknown error'
+        console.error('Failed to create thread:', detail)
+        setIsError(true)
+        throw error
+      } finally {
+        setIsPending(false)
+      }
+    }, [invalidateQueries])
 
   return { mutate, isPending, isError }
 }
 
 export function useUpdateThread() {
+  const cache = useContext(CacheContext)
+  const invalidateQueries = cache?.invalidateQueries ?? (() => {})
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
@@ -187,7 +195,9 @@ export function useUpdateThread() {
     setIsPending(true)
     setIsError(false)
     try {
-      return await threadsApi.update(id, data)
+      const result = await threadsApi.update(id, data)
+        invalidateQueries(['threads'])
+        return result
     } catch (error: unknown) {
       const detail = axios.isAxiosError<{ detail?: string }>(error)
         ? error.response?.data?.detail || error.message
@@ -200,12 +210,14 @@ export function useUpdateThread() {
     } finally {
       setIsPending(false)
     }
-  }, [])
+  }, [invalidateQueries])
 
   return { mutate, isPending, isError }
 }
 
 export function useDeleteThread() {
+  const cache = useContext(CacheContext)
+  const invalidateQueries = cache?.invalidateQueries ?? (() => {})
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
@@ -213,7 +225,9 @@ export function useDeleteThread() {
     setIsPending(true)
     setIsError(false)
     try {
-      return await threadsApi.delete(id)
+      const result = await threadsApi.delete(id)
+        invalidateQueries(['threads'])
+        return result
     } catch (error: unknown) {
       const detail = axios.isAxiosError<{ detail?: string }>(error)
         ? error.response?.data?.detail || error.message
@@ -226,12 +240,14 @@ export function useDeleteThread() {
     } finally {
       setIsPending(false)
     }
-  }, [])
+  }, [invalidateQueries])
 
   return { mutate, isPending, isError }
 }
 
 export function useReactivateThread() {
+  const cache = useContext(CacheContext)
+  const invalidateQueries = cache?.invalidateQueries ?? (() => {})
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
@@ -239,7 +255,9 @@ export function useReactivateThread() {
     setIsPending(true)
     setIsError(false)
     try {
-      return await threadsApi.reactivate(data)
+      const result = await threadsApi.reactivate(data)
+        invalidateQueries(['threads'])
+        return result
     } catch (error: unknown) {
       const detail = axios.isAxiosError<{ detail?: string }>(error)
         ? error.response?.data?.detail || error.message
@@ -252,7 +270,7 @@ export function useReactivateThread() {
     } finally {
       setIsPending(false)
     }
-  }, [])
+  }, [invalidateQueries])
 
   return { mutate, isPending, isError }
 }

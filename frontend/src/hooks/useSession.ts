@@ -3,6 +3,7 @@ import axios from 'axios'
 import { sessionApi } from '../services/api'
 import type { SessionCurrent, SessionDetails, SessionSnapshotsResponse, SessionSummary } from '../types'
 import { useToast } from '../contexts/ToastContext'
+import { useCache } from '../contexts/CacheContext'
 
 const EMPTY_PARAMS = Object.freeze({})
 const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id'
@@ -63,6 +64,7 @@ export function useSession() {
 }
 
 export function useSessions(params = EMPTY_PARAMS) {
+  const { invalidateQueries } = useCache()
   const [data, setData] = useState<SessionSummary[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
@@ -75,15 +77,17 @@ export function useSessions(params = EMPTY_PARAMS) {
     setIsError(false)
     setError(null)
     try {
-      const result = await sessionApi.list(effectiveParams)
-      setData(result.sessions)
+const result = await sessionApi.list(effectiveParams)
+       setData((result as any).sessions ?? (Array.isArray(result) ? result : []))
+       // Invalidate any cached session queries after fetching fresh data
+       invalidateQueries(['sessions'])
     } catch (err: unknown) {
       setIsError(true)
       setError(err instanceof Error ? err : new Error('Failed to fetch sessions'))
     } finally {
       setIsPending(false)
     }
-  }, [effectiveParams])
+  }, [effectiveParams, invalidateQueries])
 
   useEffect(() => {
     fetchSessions()

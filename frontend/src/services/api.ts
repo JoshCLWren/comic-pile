@@ -208,12 +208,16 @@ rawApi.interceptors.response.use(
 export default api
 
 export const threadsApi = {
-  list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
-    const response = await api.get<ThreadListResponse>('/threads/', {
-      params: { ...params, page_token: pageToken },
-    })
-    return response
-  },
+list: async (params?: ThreadQueryParams, pageToken?: string | null): Promise<ThreadListResponse> => {
+      const queryParams = {
+        ...(params ?? {}),
+        ...(pageToken ? { page_token: pageToken } : {}),
+      }
+      const response = await api.get<ThreadListResponse>('/threads/', {
+        params: Object.keys(queryParams).length ? queryParams : undefined,
+      })
+      return response
+    },
   get: (id: number) => api.get<Thread>(`/threads/${id}`),
   create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/threads/', data),
   update: (id: number, data: ThreadUpdatePayload) =>

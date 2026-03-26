@@ -1,39 +1,46 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-interface CacheEntry<T> {
-  data: T
-  timestamp: number
+interface CacheContextType {
+  invalidateQueries: (queries: string[]) => void;
+  cache: Map<string, any>;
+  cacheKeys: string[];
 }
 
-interface CacheContextValue {
-  getCache: (key: string) => CacheEntry<unknown> | null
-  setCache: (key: string, data: unknown, timestamp: number) => void
-}
+export const CacheContext = createContext<CacheContextType | undefined>(undefined);
 
-const CacheContext = createContext<CacheContextValue | null>(null)
+export function CacheProvider({ children }: { children: React.ReactNode }) {
+  const [cacheKeys, setCacheKeys] = useState<string[]>([]);
+  const [cache, setCache] = useState<Map<string, any>>(new Map());
 
-export const CacheProvider = ({ children }: { children: React.ReactNode }) => {
-  const cache = new Map<string, CacheEntry<unknown>>()
+  const updateCache = useCallback((key: string, value: any) => {
+    setCacheKeys((prev) => [...new Set([...prev, key])]);
+    setCache((prev) => new Map([...prev, [key, value]]));
+  }, [cacheKeys]);
 
-  const getCache = (key: string): CacheEntry<unknown> | null => {
-    return cache.get(key)
-  }
-
-  const setCache = (key: string, data: unknown, timestamp: number): void => {
-    cache.set(key, { data, timestamp })
-  }
+  const invalidateQueries = useCallback((queries: string[]) => {
+    queries.forEach((q) => {
+      setCacheKeys((prev) => prev.filter((k) => !k.startsWith(q)));
+      setCache((prev) => {
+        const newCache = new Map(prev);
+        for (const key of prev.keys()) {
+          if (key.startsWith(q)) newCache.delete(key);
+        }
+        return newCache;
+      });
+    });
+  }, [cacheKeys, cache]);
 
   return (
-    <CacheContext.Provider value={{ getCache, setCache }}>
-      {children}
-    </CacheContext.Provider>
-  )
+    <CacheContext.Provider value={{ cache, updateCache, invalidateQueries, cacheKeys }}>{children}</CacheContext.Provider>
+  );
 }
 
-export const useCache = () => {
-  const context = useContext(CacheContext)
+export function useCache() {
+  const context = useContext(CacheContext);
   if (!context) {
-    throw new Error('useCache must be used within a CacheProvider')
+    throw new Error('useCache must be used within a CacheProvider');
   }
-  return context
+  return context;
 }
+
+export * from './CacheContext';
