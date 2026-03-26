@@ -20,7 +20,7 @@ export function getDependencyTooltip(deps: IssueDependenciesResponse | undefined
   }
 
   if (deps.outgoing.length > 0) {
-    parts.push('Blocks:')
+    parts.push('Blocking:')
     deps.outgoing.forEach((edge) => {
       // For outgoing edges, the edge contains the target issue info
       // (reusing the source_* fields to represent the target)
