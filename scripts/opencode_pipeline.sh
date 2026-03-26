@@ -90,6 +90,7 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
         "openrouter/arcee-ai/trinity-large-preview:free"
+        "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
@@ -378,6 +379,26 @@ run_with_fallback() {
     # Shuffle per-call so concurrent workers don't all hammer the same model
     local models=()
     while IFS= read -r m; do models+=("$m"); done < <(printf '%s\n' "$@" | shuf)
+    
+    # Map invalid model names to valid ones
+    local mapped_models=()
+    for m in "${models[@]}"; do
+        case "$m" in
+            "mistralai/mistral-small-3.1-24b-instruct:free")
+                # Map to valid model
+                mapped_models+=("nvidia/mistralai/mistral-small-3.1-24b-instruct-2503")
+                ;;
+            "")
+                # Skip empty
+                continue
+                ;;
+            *)
+                mapped_models+=("$m")
+                ;;
+        esac
+    done
+    models=("${mapped_models[@]}")
+    
     local wt
     wt=$(worktree_dir "$issue")
 

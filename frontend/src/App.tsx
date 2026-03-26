@@ -260,9 +260,11 @@ function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
+        <CacheProvider>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </CacheProvider>
       </ToastProvider>
     </BrowserRouter>
   )

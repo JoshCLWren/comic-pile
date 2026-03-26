@@ -4,7 +4,7 @@ import { useCache } from '../contexts/CacheContext'
 import { threadsApi } from '../services/api'
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadQueryParams, ThreadUpdatePayload } from '../types'
 
-export function useThreads(searchTerm = '', collectionId: number | null = null) {
+export function useThreads(searchTerm?: string, collectionId?: number | null) {
   const [data, setData] = useState<Thread[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
@@ -12,7 +12,7 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
   const { getCache, setCache } = useCache()
 
   const cacheKey = useMemo(() => {
-    return `threads-${searchTerm}-${collectionId}`
+    return `threads-${searchTerm ?? ''}-${collectionId ?? ''}`
   }, [searchTerm, collectionId])
 
   useEffect(() => {
@@ -141,7 +141,7 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
   return { data, isPending, isError, refetch }
 }
 
-export function useThread(id: number | null | undefined) {
+export function useThread(id?: number | null) {
   const [data, setData] = useState<Thread | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
@@ -185,7 +185,7 @@ export function useThread(id: number | null | undefined) {
   return { data, isPending, isError }
 }
 
-export function useStaleThreads(days = 30) {
+export function useStaleThreads(days?: number) {
   const [data, setData] = useState<Thread[] | null>(null)
   const [isPending, setIsPending] = useState(true)
   const [isError, setIsError] = useState(false)
