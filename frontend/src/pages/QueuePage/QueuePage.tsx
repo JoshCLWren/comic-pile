@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
 import PositionSlider from '../../components/PositionSlider'
-import Tooltip from '../../components/Tooltip'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
@@ -18,9 +17,9 @@ import { issuesApi } from '../../services/api-issues'
 import { useCollections } from '../../contexts/CollectionContext'
 import type { Thread } from '../../types'
 import { getApiErrorDetail } from '../../utils/apiError'
-import { CollectionBadge } from './CollectionBadge'
 import { FormatSelect } from './FormatSelect'
 import { IssueToggleList } from './IssueToggleList'
+import QueueThreadCard from './QueueThreadCard'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from './types'
 
 export default function QueuePage() {
@@ -58,6 +57,7 @@ export default function QueuePage() {
   const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
   const [blockedThreadIds, setBlockedThreadIds] = useState<number[]>([])
   const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
+  const [isBlockedCollapsed, setIsBlockedCollapsed] = useState(true)
   const [dependencyThread, setDependencyThread] = useState<Thread | null>(null)
   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
@@ -107,6 +107,12 @@ export default function QueuePage() {
   }, [threads])
 
   useEffect(() => {
+    if (!blockedThreads.length) {
+      setIsBlockedCollapsed(true)
+    }
+  }, [blockedThreads.length])
+
+  useEffect(() => {
     let cancelled = false
     const calculatePreview = async () => {
       const issueInput = createForm.issues
@@ -135,10 +141,40 @@ export default function QueuePage() {
     }
   }, [createForm.issues])
 
-  const activeThreads = threads
-    ?.filter((thread) => thread.status === 'active')
-    .sort((a, b) => a.queue_position - b.queue_position) ?? []
-  const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
+  const snoozedThreadIds = useMemo(
+    () => new Set(session?.snoozed_threads?.map((thread) => thread.id) ?? []),
+    [session?.snoozed_threads]
+  )
+
+  const blockedThreadSet = useMemo(() => {
+    const ids = new Set<number>()
+    threads?.forEach((thread) => {
+      if (thread.is_blocked) ids.add(thread.id)
+    })
+    blockedThreadIds.forEach((id) => ids.add(id))
+    return ids
+  }, [threads, blockedThreadIds])
+
+  const queueThreads = useMemo(
+    () =>
+      threads
+        ?.filter((thread) => thread.status === 'active' && !snoozedThreadIds.has(thread.id))
+        .sort((a, b) => a.queue_position - b.queue_position) ?? [],
+    [threads, snoozedThreadIds]
+  )
+
+  const activeThreads = useMemo(
+    () => queueThreads.filter((thread) => !blockedThreadSet.has(thread.id)),
+    [queueThreads, blockedThreadSet]
+  )
+  const blockedThreads = useMemo(
+    () => queueThreads.filter((thread) => blockedThreadSet.has(thread.id)),
+    [queueThreads, blockedThreadSet]
+  )
+  const completedThreads = useMemo(
+    () => threads?.filter((thread) => thread.status === 'completed') ?? [],
+    [threads]
+  )
 
   const handleDelete = (threadId: number) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
@@ -181,7 +217,7 @@ export default function QueuePage() {
     }
 
     setReorderError(null)
-    const targetThread = activeThreads.find((thread) => thread.id === threadId)
+    const targetThread = queueThreads.find((thread) => thread.id === threadId)
     if (targetThread) {
       moveToPositionMutation.mutate({ id: draggedThreadId, position: targetThread.queue_position })
         .then(() => {
@@ -373,7 +409,7 @@ export default function QueuePage() {
       switch (action) {
         case 'read':
           {
-            const isBlocked = blockedThreadIds.includes(selectedThread.id) || selectedThread.is_blocked
+            const isBlocked = blockedThreadSet.has(selectedThread.id)
             if (isBlocked) {
               const reasons = blockingReasonMap[selectedThread.id] || ['This thread is blocked by a dependency.']
               alert(`Cannot read yet:\n\n${reasons.join('\n')}`)
@@ -418,7 +454,7 @@ export default function QueuePage() {
   const handleRepositionConfirm = async (targetPosition: number) => {
     if (!repositioningThread) return
 
-    if (targetPosition < 1 || targetPosition > activeThreads.length) {
+    if (targetPosition < 1 || targetPosition > queueThreads.length) {
       alert('Invalid position specified. Please choose a valid position.');
       return;
     }
@@ -432,6 +468,16 @@ export default function QueuePage() {
       alert('Failed to reposition thread. Please try again.')
     }
   }
+
+  const getBlockingReasons = (thread: Thread): string[] => {
+    const reasons = blockingReasonMap[thread.id]
+    if (reasons && reasons.length > 0) {
+      return reasons
+    }
+    return thread.blocking_reasons ?? []
+  }
+
+  const nextBlockedReason = blockedThreads.length > 0 ? getBlockingReasons(blockedThreads[0])[0] ?? null : null
 
   if (isPending) {
     return <LoadingSpinner fullScreen />
@@ -466,15 +512,21 @@ export default function QueuePage() {
         +
       </button>
 
-      {activeThreads.length === 0 ? (
-        <div className="text-center text-stone-500">No active threads in queue</div>
-      ) : (
-        <>
-          {reorderError && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
-              {reorderError}
-            </div>
-          )}
+      <section className="space-y-3">
+        <header className="flex items-center justify-between px-2">
+          <div>
+            <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Active</p>
+            <h2 className="text-xl font-black uppercase text-stone-200">Active Threads ({activeThreads.length})</h2>
+          </div>
+        </header>
+        {reorderError && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium">
+            {reorderError}
+          </div>
+        )}
+        {activeThreads.length === 0 ? (
+          <div className="text-center text-stone-500">No active threads in queue</div>
+        ) : (
           <div
             data-testid="queue-thread-list"
             id="queue-container"
@@ -482,178 +534,98 @@ export default function QueuePage() {
             aria-label="Thread queue"
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
           >
-            {activeThreads.map((thread, index) => {
-              const isDragOver = dragOverThreadId === thread.id
-              const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
-              const blockingReasons = blockingReasonMap[thread.id] || []
-              const isMigrated = thread.total_issues !== null
+            {activeThreads.map((thread) => (
+              <QueueThreadCard
+                key={thread.id}
+                thread={thread}
+                blockingReasons={getBlockingReasons(thread)}
+                isBlocked={blockedThreadSet.has(thread.id)}
+                isBlockedSection={false}
+                isDragOver={dragOverThreadId === thread.id}
+                dragEnabled
+                onSelect={() => handleThreadClick(thread)}
+                onDragOver={handleDragOver(thread.id)}
+                onDrop={handleDrop(thread.id)}
+                onDragStart={handleDragStart(thread.id)}
+                onDragEnd={handleDragEnd}
+                onEdit={() => openEditModal(thread)}
+                onManageDependencies={() => {
+                  setDependencyThread(thread)
+                  setIsDependencyBuilderOpen(true)
+                }}
+                onDelete={() => handleDelete(thread.id)}
+                onMoveFront={() => handleMoveToFront(thread.id)}
+                onMoveBack={() => handleMoveToBack(thread.id)}
+                onReposition={() => openRepositionModal(thread)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-              return (
-                <div
+      {blockedThreads.length > 0 && (
+        <section className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setIsBlockedCollapsed((prev) => !prev)}
+            className="w-full min-h-[44px] px-4 py-3 bg-stone-900/60 border border-stone-700/70 rounded-2xl flex items-center gap-3 text-left hover:border-amber-500/40 transition-colors"
+            aria-expanded={!isBlockedCollapsed}
+            aria-controls="blocked-thread-list"
+          >
+            <span
+              className={`text-stone-400 text-sm transition-transform ${!isBlockedCollapsed ? 'rotate-90' : ''}`}
+              aria-hidden
+            >
+              ▶
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-stone-200 flex items-center gap-2">
+                Blocked ({blockedThreads.length})
+                <span className="text-[11px] text-stone-500 font-bold uppercase tracking-widest">Summary</span>
+              </p>
+              <p className="text-[11px] text-stone-400 mt-1 truncate">
+                {nextBlockedReason ? `Next unlock: ${nextBlockedReason}` : 'Waiting on dependencies'}
+              </p>
+            </div>
+            <span className="text-amber-300 text-xs font-black uppercase tracking-widest">{isBlockedCollapsed ? 'Show' : 'Hide'}</span>
+          </button>
+
+          {!isBlockedCollapsed && (
+            <div
+              id="blocked-thread-list"
+              data-testid="blocked-thread-list"
+              role="list"
+              aria-label="Blocked thread queue"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
+            >
+              {blockedThreads.map((thread) => (
+                <QueueThreadCard
                   key={thread.id}
-                  data-testid="queue-thread-item"
-                  className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''
-                    }`}
+                  thread={thread}
+                  blockingReasons={getBlockingReasons(thread)}
+                  isBlocked={blockedThreadSet.has(thread.id)}
+                  isBlockedSection
+                  isDragOver={dragOverThreadId === thread.id}
+                  dragEnabled={!isBlockedCollapsed}
+                  onSelect={() => handleThreadClick(thread)}
                   onDragOver={handleDragOver(thread.id)}
                   onDrop={handleDrop(thread.id)}
-                  onClick={() => handleThreadClick(thread)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      handleThreadClick(thread)
-                    }
+                  onDragStart={!isBlockedCollapsed ? handleDragStart(thread.id) : undefined}
+                  onDragEnd={!isBlockedCollapsed ? handleDragEnd : undefined}
+                  onEdit={() => openEditModal(thread)}
+                  onManageDependencies={() => {
+                    setDependencyThread(thread)
+                    setIsDependencyBuilderOpen(true)
                   }}
-                >
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <span className="text-2xl font-black text-amber-600/30">
-                        #{index + 1}
-                      </span>
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Tooltip content="Drag to reorder within the queue.">
-                          <button
-                            type="button"
-                            className="text-stone-500 hover:text-stone-300 transition-colors text-lg"
-                            draggable
-                            onDragStart={handleDragStart(thread.id)}
-                            onDragEnd={handleDragEnd}
-                            aria-label="Drag to reorder"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            ⠿
-                          </button>
-                        </Tooltip>
-                         <h3 className="text-lg font-bold text-white flex-1 line-clamp-2">{thread.title}</h3>
-                        {isBlocked && (
-                          <Tooltip content={blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'}>
-                            <span className="text-red-300 text-lg" aria-label="Blocked thread">🔒</span>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </div>
-                    <div className="hidden md:flex items-center gap-2">
-                      <Tooltip content="Edit thread details.">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openEditModal(thread)
-                          }}
-                          className="text-stone-500 hover:text-white transition-colors text-sm"
-                          aria-label="Edit thread"
-                        >
-                          ✎
-                        </button>
-                      </Tooltip>
-                      <Tooltip content="Manage dependencies for this thread.">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDependencyThread(thread)
-                            setIsDependencyBuilderOpen(true)
-                          }}
-                          className="text-stone-500 hover:text-white transition-colors text-sm"
-                          aria-label="Manage dependencies"
-                        >
-                          🔗
-                        </button>
-                      </Tooltip>
-                      <Tooltip content="Delete thread from queue.">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDelete(thread.id)
-                          }}
-                          className="text-stone-500 hover:text-red-400 transition-colors text-xl"
-                          aria-label="Delete thread"
-                        >
-                          &times;
-                        </button>
-                      </Tooltip>
-                    </div>
-                    {/* Mobile 3-dot menu indicator */}
-                    <div className="md:hidden text-stone-500 flex items-center justify-center w-8 h-8 text-xl">
-                      ⋮
-                    </div>
-                  </div>
-                  <div className="pl-[2.75rem]">
-                    <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
-                    {thread.collection_id && (
-                      <div className="mt-1.5 flex">
-                        <CollectionBadge collectionId={thread.collection_id} />
-                      </div>
-                    )}
-                    {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
-                    {thread.issues_remaining !== null && (
-                      <p className="text-sm text-stone-300 mt-2 font-medium">
-                        {isMigrated && thread.next_unread_issue_number
-                          ? `On #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
-                          : `${thread.issues_remaining} issues remaining`
-                        }
-                      </p>
-                    )}
-                    {isBlocked && blockingReasons.length > 0 && (
-                      <button
-                        type="button"
-                        className="mt-2 w-full text-left text-xs text-red-300/80 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 hover:bg-red-500/15 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDependencyThread(thread)
-                          setIsDependencyBuilderOpen(true)
-                        }}
-                        aria-label={`View dependencies for ${thread.title}`}
-                      >
-                        <span className="font-bold">🔒 {blockingReasons[0]}</span>
-                        {blockingReasons.length > 1 && (
-                          <span className="text-red-400/60 ml-1">+{blockingReasons.length - 1} more</span>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                  <div className="gap-2 pt-2 hidden md:flex">
-                    <Tooltip content="Move this thread to the front of the queue.">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleMoveToFront(thread.id)
-                        }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                      >
-                        Front
-                      </button>
-                    </Tooltip>
-                    <Tooltip content="Choose a specific position in the queue.">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openRepositionModal(thread)
-                        }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                      >
-                        Reposition
-                      </button>
-                    </Tooltip>
-                    <Tooltip content="Move this thread to the back of the queue.">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleMoveToBack(thread.id)
-                        }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                      >
-                        Back
-                      </button>
-                    </Tooltip>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </>
+                  onDelete={() => handleDelete(thread.id)}
+                  onMoveFront={() => handleMoveToFront(thread.id)}
+                  onMoveBack={() => handleMoveToBack(thread.id)}
+                  onReposition={() => openRepositionModal(thread)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       <section className="space-y-4">
@@ -926,7 +898,7 @@ export default function QueuePage() {
       >
         {repositioningThread && (
           <PositionSlider
-            threads={activeThreads}
+            threads={queueThreads}
             currentThread={repositioningThread}
             onPositionSelect={handleRepositionConfirm}
             onCancel={() => setRepositioningThread(null)}

@@ -2,6 +2,12 @@
 
 ## 2026-03-25
 
+**Queue UX (#369)**
+- Collapsed blocked threads into a muted summary with next-unlock teaser while keeping queue positions intact
+- Active queue now surfaces unblocked, unsnoozed threads first and keeps drag-to-reorder scoped there
+- Blocked section retains dependency context, action buttons, and collection filtering across both groups
+- Collapse state stays in-memory across re-renders without persisting between pages
+
 **Pipeline Simplification (#369)**
 - Simplified `scripts/opencode_pipeline.sh` by removing CI check stage, dynamic issue list, exponential backoff, per-model backoff, per-issue backoff, and MAX_ATTEMPTS limit
 - Replaced dynamic issue fetching with static issue list for reliability

@@ -14,7 +14,7 @@ import {
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api'
+import { dependenciesApi, threadsApi } from '../services/api'
 
 vi.mock('../hooks/useThread', () => ({
   useThreads: vi.fn(),
@@ -46,6 +46,10 @@ vi.mock('../services/api', () => ({
   collectionsApi: {
     list: vi.fn().mockResolvedValue([]),
   },
+  dependenciesApi: {
+    listBlockedThreadIds: vi.fn(),
+    getBlockingInfo: vi.fn(),
+  },
 }))
 
 vi.mock('../contexts/CollectionContext', () => ({
@@ -75,15 +79,41 @@ const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedThreadsApi = vi.mocked(threadsApi) as any
+const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
   mockedUseThreads.mockReturnValue({
     data: [
-      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
-      { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
+      {
+        id: 1,
+        title: 'Saga',
+        format: 'Comic',
+        status: 'active',
+        queue_position: 1,
+        issues_remaining: 5,
+        is_blocked: false,
+        blocking_reasons: [],
+        total_issues: null,
+        collection_id: null,
+        notes: null,
+      },
+      {
+        id: 2,
+        title: 'Descender',
+        format: 'Comic',
+        status: 'completed',
+        issues_remaining: 0,
+        is_blocked: false,
+        blocking_reasons: [],
+        queue_position: 2,
+        total_issues: null,
+        collection_id: null,
+        notes: null,
+      },
     ],
     isLoading: false,
+    isPending: false,
     refetch: vi.fn(),
   })
   mockedUseCreateThread.mockReturnValue({ mutate: vi.fn(), isPending: false })
@@ -116,6 +146,8 @@ beforeEach(() => {
     total_issues: null,
     reading_progress: null,
   } as never)
+  mockedDependenciesApi.listBlockedThreadIds.mockResolvedValue([])
+  mockedDependenciesApi.getBlockingInfo.mockResolvedValue({ blocking_reasons: [] })
 })
 
 it('renders queue items and opens create modal', async () => {
@@ -226,9 +258,22 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     })
     mockedUseThreads.mockReturnValue({
       data: [
-        { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+        {
+          id: 1,
+          title: 'Saga',
+          format: 'Comic',
+          status: 'active',
+          queue_position: 1,
+          issues_remaining: 5,
+          is_blocked: false,
+          blocking_reasons: [],
+          total_issues: null,
+          collection_id: null,
+          notes: null,
+        },
       ],
       isLoading: false,
+      isPending: false,
       refetch: mockRefetch,
     })
 
@@ -252,6 +297,63 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       expect(mockRefetchSession).toHaveBeenCalled()
       expect(mockRefetch).toHaveBeenCalled()
     })
+  })
+})
+
+describe('Blocked threads grouping', () => {
+  it('collapses blocked threads by default and shows teaser reason', async () => {
+    mockedDependenciesApi.listBlockedThreadIds.mockResolvedValue([2])
+    mockedDependenciesApi.getBlockingInfo.mockResolvedValue({ blocking_reasons: ['Read Ultimate Black Panther #1'] })
+
+    mockedUseThreads.mockReturnValue({
+      data: [
+        {
+          id: 1,
+          title: 'Saga',
+          format: 'Comic',
+          status: 'active',
+          queue_position: 1,
+          issues_remaining: 5,
+          is_blocked: false,
+          blocking_reasons: [],
+          total_issues: null,
+          collection_id: null,
+          notes: null,
+        },
+        {
+          id: 2,
+          title: 'Monstress',
+          format: 'Comic',
+          status: 'active',
+          queue_position: 2,
+          issues_remaining: 3,
+          is_blocked: true,
+          blocking_reasons: ['Read Ultimate Black Panther #1'],
+          total_issues: null,
+          collection_id: null,
+          notes: null,
+        },
+      ],
+      isLoading: false,
+      isPending: false,
+      refetch: vi.fn(),
+    })
+
+    const user = userEvent.setup()
+    render(
+      <BrowserRouter>
+        <QueuePage />
+      </BrowserRouter>
+    )
+
+    expect(await screen.findByText(/Blocked \(1\)/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Next unlock: Read Ultimate Black Panther #1/i)).toBeInTheDocument()
+    expect(screen.queryByText('Monstress')).not.toBeInTheDocument()
+
+    const toggle = screen.getByRole('button', { name: /Blocked \(1\)/i })
+    await user.click(toggle)
+
+    expect(await screen.findByText('Monstress')).toBeInTheDocument()
   })
 })
 
