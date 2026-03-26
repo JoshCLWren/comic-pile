@@ -50,7 +50,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
               }
             } catch (error) {
               console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
-            }
+            
           })
         )
         setDependencies(depsMap)
@@ -63,7 +63,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       setIsLoading(false)
       setIsLoadingMore(false)
     }
-  }, [thread.id, filter, nextPageToken, dependencies])
+  }, [thread.id, filter, nextPageToken, dependencies, issues])
 
   useEffect(() => {
     abortControllerRef.current = new AbortController()
