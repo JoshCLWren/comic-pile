@@ -6,6 +6,7 @@ import Tooltip from '../../components/Tooltip'
 import MigrationDialog from '../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../components/SimpleMigrationDialog'
 import CollectionDialog from '../../components/CollectionDialog'
+import CollectionToolbar from '../../components/CollectionToolbar'
 import { useNavigate } from 'react-router-dom'
 import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
@@ -617,6 +618,7 @@ useEffect(() => {
           </Tooltip>
         </div>
       </header>
+      <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
 
       <div className="flex-1 flex flex-col min-h-0">
         <div className="glass-card flex-1 flex flex-col relative">
