@@ -122,6 +122,7 @@ export function ThreadPool({
       onClick={onToggleBlocked}
       aria-expanded={blockedExpanded}
       aria-controls="blocked-threads-list"
+      aria-label={`${blockedThreadsWithReasons.length} threads hidden (blocked by dependencies)`}
       className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
     >
       <span
