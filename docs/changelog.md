@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-25
+
+**Pipeline Simplification (#369)**
+- Simplified `scripts/opencode_pipeline.sh` by removing CI check stage, dynamic issue list, exponential backoff, per-model backoff, per-issue backoff, and MAX_ATTEMPTS limit
+- Replaced dynamic issue fetching with static issue list for reliability
+- Removed model shuffling per call to reduce complexity
+- Removed protection against overwriting 'done' state (no longer needed)
+- Deleted obsolete test files: `frontend/src/unit/RollPageTooltips.test.tsx` and `tests/test_route_versioning.py`
+- Updated frontend dependencies (package.json, package-lock.json)
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
