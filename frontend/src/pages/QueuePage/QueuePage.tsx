@@ -108,17 +108,7 @@ export default function QueuePage() {
     refreshBlockedState()
   }, [threads])
 
-  useEffect(() => {
-    if (!blockedThreads.length) {
-      setIsBlockedCollapsed(true)
-    }
-  }, [blockedThreads.length])
 
-  useEffect(() => {
-    if (!snoozedThreads.length) {
-      setIsSnoozedCollapsed(true)
-    }
-  }, [snoozedThreads.length])
 
   useEffect(() => {
     let cancelled = false
@@ -187,6 +177,18 @@ export default function QueuePage() {
     () => threads?.filter((thread) => thread.status === 'completed') ?? [],
     [threads]
   )
+
+  useEffect(() => {
+    if (!blockedThreads.length) {
+      setIsBlockedCollapsed(true)
+    }
+  }, [blockedThreads.length])
+
+  useEffect(() => {
+    if (!snoozedThreads.length) {
+      setIsSnoozedCollapsed(true)
+    }
+  }, [snoozedThreads.length])
 
   const handleDelete = (threadId: number) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {

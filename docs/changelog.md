@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-03-26
+
+**Queue UX Fix (#369)**
+- Fixed React hook order issue where useEffect referenced blockedThreads before it was defined
+- Blocked threads collapse functionality now works correctly without runtime errors
+
 ## 2026-03-25
 
 **Queue UX (#369)**
