@@ -39,7 +39,7 @@ const DEFINITIONS: Term[] = [
   }
 ]
 
-export default function HelpPage(): JSX.Element {
+export default function HelpPage() {
   return (
     <section aria-label="Help and glossary" className="pt-4 pb-12 w-full">
       <h1 className="text-2xl font-bold mb-4">Help / Glossary</h1>
