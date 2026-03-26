@@ -63,7 +63,7 @@ export function ThreadPool({
         </div>
       </div>
 
-<div className="space-y-2" data-roll-pool aria-label="Roll pool collection">
+  <div className="space-y-2" data-roll-pool aria-label="Roll pool collection">
     {pool.length === 0 && blockedThreadsWithReasons.length === 0 ? (
       <div className="text-center py-10 space-y-4">
         <div className="text-4xl">📚</div>
@@ -78,41 +78,40 @@ export function ThreadPool({
           Go to Queue
         </button>
       </div>
-    ) : pool.length === 0 && blockedThreadsWithReasons.length > 0 ? (
-      <div className="text-center py-10 space-y-4">
-        <div className="text-4xl">🔒</div>
-        <div>
-          <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All Threads Blocked</p>
-          <p className="text-xs text-stone-500 mt-1">Resolve dependencies to roll.</p>
-        </div>
-      </div>
     ) : (
-      pool.map((thread, index) => {
-        const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
-        return (
-          <div
-            key={thread.id}
-            onClick={() => onThreadClick(thread)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onThreadClick(thread)
-              }
-            }}
-            role="button"
-            tabIndex={0}
-            className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''}`}
-          >
-            <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
-              {index + 1}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-stone-300 truncate text-sm">{thread.title}</p>
-              <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
+      <>
+        {pool.map((thread, index) => {
+          const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
+          return (
+            <div
+              key={thread.id}
+              onClick={() => onThreadClick(thread)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onThreadClick(thread)
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''}`}
+            >
+              <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
+                {index + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-stone-300 truncate text-sm">{thread.title}</p>
+                <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
+              </div>
             </div>
+          )
+        })}
+        {pool.length === 0 && blockedThreadsWithReasons.length > 0 && (
+          <div className="text-center py-6">
+            <p className="text-xs text-stone-500 italic">Resolve dependencies to unlock threads for rolling.</p>
           </div>
-        )
-      })
+        )}
+      </>
     )}
   </div>
 
