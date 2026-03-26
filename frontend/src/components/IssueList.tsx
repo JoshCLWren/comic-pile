@@ -50,7 +50,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
               }
             } catch (error) {
               console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
-            
+            }
           })
         )
         setDependencies(depsMap)
