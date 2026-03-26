@@ -2,6 +2,10 @@
 
 ## 2026-03-26
 
+**Mobile Touch Targets (#369)**
+- Increased size of dice roll control buttons (reroll, confirm, delete) to ≥44px for better mobile usability
+- Improved touch accessibility for roll interaction on mobile devices
+
 **Queue UX Fix (#369)**
 - Fixed React hook order issue where useEffect referenced blockedThreads before it was defined
 - Blocked threads collapse functionality now works correctly without runtime errors

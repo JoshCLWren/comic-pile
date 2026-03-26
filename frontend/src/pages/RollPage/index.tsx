@@ -17,6 +17,7 @@ import {
   useDismissPending,
   useOverrideRoll,
   useRoll,
+  useReroll,
   useSetDie,
 } from '../../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
@@ -93,11 +94,12 @@ useEffect(() => {
   return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
 }, [setIsCollectionDialogOpen])
 
-  const setDieMutation = useSetDie()
-  const clearManualDieMutation = useClearManualDie()
-  const rollMutation = useRoll()
-  const dismissPendingMutation = useDismissPending()
-  const overrideMutation = useOverrideRoll()
+const setDieMutation = useSetDie()
+const clearManualDieMutation = useClearManualDie()
+const rollMutation = useRoll()
+const rerollMutation = useReroll()
+const dismissPendingMutation = useDismissPending()
+const overrideMutation = useOverrideRoll()
   const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
@@ -614,16 +616,81 @@ useEffect(() => {
         <div className="glass-card flex-1 flex flex-col relative">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-amber-900/10 rounded-full blur-[120px] pointer-events-none"></div>
           <div className="flex-1 flex flex-col">
-            {!isRatingView ? (
-              <div id="main-die-3d" onClick={handleRoll} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-label="Roll the dice"
-                className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 mx-auto`}
-                style={{ width: '200px', height: '200px' }}>
-                <div className="w-full h-full main-die-optical-center">
-                  <LazyDice3D sides={currentDie} value={rolledResult || 1} isRolling={isRolling} showValue={false} color={0xffffff}
-                    onRollComplete={() => setDiceState('rolled')} />
-                </div>
+      {!isRatingView ? (
+        <div id="main-die-3d"
+          className={`dice-state-${diceState} relative z-10 shrink-0 flex items-center justify-center rounded-full transition-all mt-4 mx-auto`}
+          style={{ width: '200px', height: '240px' }}>
+          {hasValidRolledResult ? (
+            <>
+              {/* Reroll Button - Top */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+                  if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
+                  handleRoll();
+                }}
+                disabled={isRolling || rerollMutation.isPending}
+                aria-label="Reroll"
+                className="absolute -top-[30px] left-1/2 -translate-x-1/2 w-[44px] h-[44px] flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-stone-300 hover:text-amber-500 transition-all disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                  <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v1.79A9.006 9.006 0 003.755 10.5a.75.75 0 00.178.836.75.75 0 00.822.164l2.457 1.228a.75.75 0 00.566-.264l-.636-1.062a.75.75 0 00-.76-.268zM15.22 6.28a.75.75 0 00-1.06 0l-1.903 1.903 1.06-1.061a.75.75 0 000-1.06l-.72-.72a.75.75 0 00-1.06 1.06l.72.721-1.06 1.061a.75.75 0 101.06 1.06l1.902-1.903.242.142z" clipRule="evenodd" />
+                </svg>
+              </button>
+
+              {/* Confirm Button - Right */}
+              <button
+                type="button"
+                onClick={() => enterRatingView(selectedThreadId || activeThreads[Math.max(0, rolledResult - 1)]?.id || null, rolledResult)}
+                aria-label="Confirm roll"
+                className="absolute left-[calc(100%+10px)] top-1/2 -translate-y-1/2 w-[44px] h-[44px] flex items-center justify-center bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-lg text-amber-500 hover:text-amber-300 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                  <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                </svg>
+              </button>
+
+              {/* Delete Button - Bottom */}
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await dismissPendingMutation.mutate();
+                    await refetchSession();
+                    await refetchThreads();
+                    setRolledResult(null);
+                    setDiceState('idle');
+                  } catch (error) {
+                    setErrorMessage(getApiErrorDetail(error) || 'Failed to dismiss roll');
+                  }
+                }}
+                disabled={dismissIsPending}
+                aria-label="Delete roll"
+                className="absolute -bottom-[30px] left-1/2 -translate-x-1/2 w-[44px] h-[44px] flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-stone-300 hover:text-red-500 transition-all disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                  <path fillRule="evenodd" d="M10.5 1.5v1.75A2.25 2.25 0 018.25 5.5h-3.5A2.25 2.25 0 012.5 3.25v-1.75C2.5 1.946 3.201.5 4.75.5h5.5c1.549 0 2.25 1.446 2.25 2.75zM16.75 5.5h-3.5a2.25 2.25 0 00-2.25 2.25v1.5h8.5v-1.5A2.25 2.25 0 0016.75 5.5zM2.5 9.25v10.5C2.5 21.304 3.201 22.5 4.75 22.5h10.5c1.549 0 2.25-1.196 2.25-2.75v-10.5h-15zM18.25 20.5c0 .414-.336.75-.75.75h-9.5c-.414 0-.75-.336-.75-.75v-13h11v13z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </>
+          ) : (
+            <div
+              onClick={handleRoll}
+              onKeyDown={handleKeyDown}
+              role="button"
+              tabIndex={0}
+              aria-label="Roll the dice"
+              className="w-full h-full cursor-pointer flex items-center justify-center"
+            >
+              <div className="w-full h-full main-die-optical-center">
+                <LazyDice3D sides={currentDie} value={rolledResult || 1} isRolling={isRolling} showValue={false} color={0xffffff}
+                  onRollComplete={() => setDiceState('rolled')} />
               </div>
-            ) : (
+            </div>
+          )}
+        </div>
+      ) : (
               <RatingView
                 activeRatingThread={activeRatingThread}
                 currentDie={currentDie}

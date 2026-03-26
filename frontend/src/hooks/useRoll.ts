@@ -106,7 +106,7 @@ export function useClearManualDie() {
 export function useReroll() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
-  
+
   const mutate = async () => {
     setIsPending(true)
     setIsError(false)
@@ -119,6 +119,8 @@ export function useReroll() {
       setIsPending(false)
     }
   }
-  
+
   return { mutate, isPending, isError }
 }
+
+
