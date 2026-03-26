@@ -534,8 +534,14 @@ async def reactivate_thread(
         existing_issue_rows = locked_issues.all()
         existing_total = len(existing_issue_rows)
         max_position = max((row.position for row in existing_issue_rows), default=0)
-max_numeric_issue_number = max(
-            (int(row.issue_number) for row in existing_issue_rows if row.issue_number.isdigit() and int(row.issue_number) <= thread.total_issues),
+
+        max_numeric_issue_number = max(
+            (
+                int(row.issue_number)
+                for row in existing_issue_rows
+                if row.issue_number.isdigit()
+                and (thread.total_issues is None or int(row.issue_number) <= thread.total_issues)
+            ),
             default=0,
         )
 

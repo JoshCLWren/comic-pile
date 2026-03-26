@@ -6,6 +6,11 @@
 - Fixed React hook order issue where useEffect referenced blockedThreads before it was defined
 - Blocked threads collapse functionality now works correctly without runtime errors
 
+**Issue Number Logic Fix (#369)**
+- Fixed reactivate_thread to properly handle non-numeric issue numbers and total_issues=None case
+- Now correctly computes max_numeric_issue_number by filtering only numeric issues and respecting total_issues constraint
+- Ensures issue numbering continues correctly after non-numeric entries like "Annual 1"
+
 ## 2026-03-25
 
 **Queue UX (#369)**
