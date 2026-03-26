@@ -52,7 +52,7 @@ export default function Navigation() {
     }
   }, [isAuthenticated, logout])
 
-  const isActive = (path) => location.pathname === path
+  const isActive = (path: string) => location.pathname === path
 
   const handleLogout = async () => {
     try {
