@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-03-25
+## 2026-03-26
 
 **Roll Pool Blocked Threads Expansion (#363)**
 - Enhanced expandable section for blocked threads in the roll pool with detailed blocking reasons
