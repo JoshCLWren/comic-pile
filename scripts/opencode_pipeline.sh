@@ -64,29 +64,42 @@ _load_issues() {
     fi
 }
 
-# Load all confirmed working models from test results (shuffled for load distribution)
+# Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
+_CODING_POOL=()
+if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
+    while IFS= read -r model; do
+        _CODING_POOL+=("$model")
+    done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
+fi
+
+# Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
     while IFS= read -r model; do
         _MODEL_POOL+=("$model")
     done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
-# Fallback hardcoded list if test results not available
+
+# Fallback: if tool test hasn't been run yet, use full pool for everything
+if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
+    _CODING_POOL=("${_MODEL_POOL[@]}")
+fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
-        "mistral/devstral-2512"
-        "mistral/codestral-latest"
-        "cerebras/qwen-3-235b-a22b-instruct-2507"
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
+        "openrouter/arcee-ai/trinity-large-preview:free"
     )
+    _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 
-IMPLEMENT_MODELS=(  "${IMPLEMENT_MODEL:-}"  "${_MODEL_POOL[@]}" )
-REVIEW_MODELS=(     "${REVIEW_MODEL:-}"     "${_MODEL_POOL[@]}" )
-FIX_MODELS=(        "${FIX_MODEL:-}"        "${_MODEL_POOL[@]}" )
-PR_MODELS=(         "${PR_MODEL:-}"         "${_MODEL_POOL[@]}" )
-CI_CHECK_MODELS=(   "${CI_CHECK_MODEL:-}"   "${_MODEL_POOL[@]}" )
+# implement/review/fix need real tool use — use Tier 1 only
+# pr/ci_check only need gh + text — use Tier 2 (full pool)
+IMPLEMENT_MODELS=(  "${IMPLEMENT_MODEL:-}"  "${_CODING_POOL[@]}" )
+REVIEW_MODELS=(     "${REVIEW_MODEL:-}"     "${_CODING_POOL[@]}" )
+FIX_MODELS=(        "${FIX_MODEL:-}"        "${_CODING_POOL[@]}" )
+PR_MODELS=(         "${PR_MODEL:-}"         "${_MODEL_POOL[@]}"  )
+CI_CHECK_MODELS=(   "${CI_CHECK_MODEL:-}"   "${_MODEL_POOL[@]}"  )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -915,6 +928,34 @@ cmd_arbiter() {
 
 # ── Role: timesheet ───────────────────────────────────────────────────────────
 
+cmd_tool_test() {
+    local out="$LOG_DIR/model_tool_test_results.txt"
+    local total=${#_MODEL_POOL[@]}
+    log_info "Running tool-use test on $total models (15 parallel, 30s timeout) → $out"
+    mkdir -p "$LOG_DIR"
+    printf '%s\n' "${_MODEL_POOL[@]}" | \
+    xargs -P 15 -I{} bash -c '
+        model="$1"; log="$2"; exit_code=0
+        output=$(timeout 30s opencode run -m "$model" "Run this bash command and report ONLY its output, nothing else: echo TOOLTEST_OK" 2>&1) || exit_code=$?
+        clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
+        if echo "$clean" | grep -q "TOOLTEST_OK"; then
+            snippet=$(echo "$clean" | grep -v "^>" | grep -v "^$" | tail -2 | tr "\n" " " | cut -c1-60)
+            echo "TOOL_OK   $model  [$snippet]"
+        elif [[ $exit_code -eq 124 ]]; then
+            echo "TIMEOUT   $model"
+        else
+            snippet=$(echo "$clean" | grep -v "^$" | tail -1 | cut -c1-60)
+            echo "TOOL_FAIL $model  [$snippet]"
+        fi
+    ' _ {} | tee "$out"
+    local ok fail timeout
+    ok=$(grep -c "^TOOL_OK" "$out" || echo 0)
+    fail=$(grep -c "^TOOL_FAIL" "$out" || echo 0)
+    timeout=$(grep -c "^TIMEOUT" "$out" || echo 0)
+    log_ok "Tool test complete — Tier 1 (coding): $ok  Fail: $fail  Timeout: $timeout"
+    log_info "Restart workers to apply new tiers."
+}
+
 cmd_timesheet() {
     if [[ ! -f "$TIMESHEET" ]]; then
         echo "No timesheet yet."
@@ -950,6 +991,7 @@ case "$ROLE" in
     fix)        cmd_fix ;;
     pr)         cmd_pr ;;
     ci_check)   cmd_ci_check ;;
+    tool_test)  cmd_tool_test ;;
     arbiter)    cmd_arbiter ;;
     timesheet)  cmd_timesheet ;;
     *)
