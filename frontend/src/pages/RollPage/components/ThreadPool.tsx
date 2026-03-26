@@ -120,6 +120,8 @@ export function ThreadPool({
           <button
             type="button"
             onClick={onToggleBlocked}
+            aria-expanded={blockedExpanded}
+            aria-controls="blocked-threads-list"
             className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
           >
             <span
@@ -132,7 +134,7 @@ export function ThreadPool({
             </span>
           </button>
           {blockedExpanded && (
-            <div className="mt-2 space-y-1 max-h-[300px] overflow-y-auto">
+            <div id="blocked-threads-list" className="mt-2 space-y-1 max-h-[300px] overflow-y-auto">
               {(showAllBlocked ? blockedThreadsWithReasons : blockedThreadsWithReasons.slice(0, INITIAL_BLOCKED_LIMIT)).map((thread) => (
                 <button
                   key={thread.id}
