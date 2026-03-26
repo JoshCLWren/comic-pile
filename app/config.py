@@ -4,6 +4,7 @@ This module consolidates all environment variables used throughout the applicati
 Configuration is validated at startup and provides type-safe access to settings.
 """
 
+import os
 from functools import lru_cache
 import os
 from typing import Literal
@@ -29,6 +30,29 @@ class DatabaseSettings(BaseSettings):
         description="PostgreSQL database connection URL",
         json_schema_extra={"env": "DATABASE_URL"},
     )
+    database_url: str = Field(
+        ...,
+        description="PostgreSQL database connection URL",
+        json_schema_extra={"env": "DATABASE_URL"},
+    )
+    test_database_url: str | None = Field(
+        default=None,
+        description="Database URL for testing (overrides DATABASE_URL in tests)",
+        json_schema_extra={"env": "TEST_DATABASE_URL"},
+    )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def use_test_database_url(cls, v: str) -> str:
+        """Use test database URL if in test environment."""
+        if get_app_settings().environment == "test":
+            test_url = os.getenv("TEST_DATABASE_URL")
+            if test_url:
+                return test_url
+        if not v:
+            raise ValueError("DATABASE_URL is required")
+        return v
+
     test_database_url: str | None = Field(
         default=None,
         description="Database URL for testing (overrides DATABASE_URL in tests)",
@@ -38,7 +62,11 @@ class DatabaseSettings(BaseSettings):
     @property
     def async_url(self) -> str:
         """Get the asynchronous database URL with asyncpg driver."""
-        url = self.database_url
+        url = (
+            self.test_database_url
+            if get_app_settings().environment == "test" and self.test_database_url
+            else self.database_url
+        )
         if url.startswith("postgresql+asyncpg://"):
             return url
         elif url.startswith("postgresql+psycopg://"):
