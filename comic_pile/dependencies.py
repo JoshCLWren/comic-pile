@@ -61,7 +61,7 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .where(target.c.user_id == user_id)
         .where(source.c.status != "completed")
     )
-    thread_reasons = [f"Blocked by {title} (thread #{sid})" for sid, title in thread_result.all()]
+    thread_reasons = [f"blocked by {title}" for sid, title in thread_result.all()]
 
     source_issue = Issue.__table__.alias("source_issue")
     target_issue = Issue.__table__.alias("target_issue")
@@ -90,7 +90,7 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .where(target_thread.c.next_unread_issue_id.isnot(None))
     )
     issue_reasons = [
-        f"Blocked by issue #{issue_number} in {thread_title} (thread #{thread_id_val})"
+        f"blocked by {thread_title} #{issue_number}"
         for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
     ]
     return thread_reasons + issue_reasons
@@ -126,8 +126,9 @@ async def get_batch_blocking_explanations(
         .where(target.c.user_id == user_id)
         .where(source.c.status != "completed")
     )
-    for target_id, source_id, source_title in thread_result.all():
-        result_map[target_id].append(f"Blocked by {source_title} (thread #{source_id})")
+
+    for target_id, _source_id, source_title in thread_result.all():
+        result_map[target_id].append(f"blocked by {source_title}")
 
     source_issue = Issue.__table__.alias("source_issue")
     target_issue = Issue.__table__.alias("target_issue")
@@ -155,10 +156,8 @@ async def get_batch_blocking_explanations(
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
     )
-    for target_id, src_thread_id, src_thread_title, issue_number in issue_result.all():
-        result_map[target_id].append(
-            f"Blocked by issue #{issue_number} in {src_thread_title} (thread #{src_thread_id})"
-        )
+    for target_id, _src_thread_id, src_thread_title, issue_number in issue_result.all():
+        result_map[target_id].append(f"blocked by {src_thread_title} #{issue_number}")
 
     return result_map
 
