@@ -9,7 +9,7 @@
 - Added "Show all" toggle for lists with more than 10 blocked threads
 - Mobile-friendly with scrollable list and 44px minimum touch targets
 - Section is completely hidden when no threads are blocked (no "0 threads hidden" message)
-- Added batch API endpoint `/api/v1/dependencies/blocked-with-reasons` to fetch all blocked threads with reasons in a single query (avoiding N+1)
+- Backend endpoint `/api/v1/dependencies/blocked-with-reasons` now powers the expanded blocked threads list
 
 **Pipeline Simplification (#363)**
 - Simplified opencode pipeline script by removing CI checking and complex model backoff features
