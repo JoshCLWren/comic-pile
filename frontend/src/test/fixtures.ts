@@ -261,22 +261,27 @@ export const test = base.extend<TestFixtures>({
        // Element may not exist, that's OK
      });
 
-      // 3. Wait for collections to finish loading before proceeding
-      // The CollectionToolbar shows "Loading collections..." initially, then either renders the select dropdown or shows an error
-      await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 60000 }).catch(() => {
-        // If loading message doesn't appear, collections may have loaded instantly or component isn't visible
-      });
+  // 3. Wait for collections to finish loading (Loading collections... text should disappear)
+  // The CollectionToolbar component shows "Loading collections..." while fetching
+  await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 60000 }).catch(() => {
+    // Element may not exist if loading is fast, that's OK
+  });
 
-      // 4. Wait for either the collection toolbar dropdown to be visible or an error to appear
-      await page.waitForSelector('[aria-label="Filter by collection"], [role="alert"]', { state: 'visible', timeout: 60000 });
+  // 4. Wait for the collection toolbar to be ready (either dropdown or error message)
+  // We wait for either the collection dropdown to appear or an error message
+  await page.waitForSelector('[aria-label="Filter by collection"], [role="alert"]', { state: 'visible', timeout: 60000 });
 
-      // 5. Wait for the collection toolbar dropdown to be visible (critical for tests that use it)
-      // Note: If there was an error, this will timeout, but tests should handle error states appropriately
-      await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 60000 }).catch(() => {
-        // If we get here, there was likely an error loading collections - tests should handle this
-      });
+  // 5. Wait specifically for the collection toolbar dropdown to be visible
+  // If there was an error loading collections, tests should handle it appropriately
+  await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 60000 }).catch(async () => {
+    // Check if there's an error message instead - this is an acceptable state
+    const errorVisible = await page.locator('[role="alert"]').isVisible().catch(() => false);
+    if (!errorVisible) {
+      throw new Error('Collection toolbar dropdown not found and no error message visible');
+    }
+  });
 
-     // 5. Wait for the roll page to be ready (die button is always present on home route)
+  // 6. Wait for the roll page to be ready (die button is always present on home route)
      await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 10000 }).catch(() => {
        // May not exist if no session or in empty state — check for roll pool instead
        return page.waitForSelector('[data-roll-pool]', { state: 'attached', timeout: 5000 }).catch(() => {});
