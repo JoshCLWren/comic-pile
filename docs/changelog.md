@@ -3,13 +3,14 @@
 ## 2026-03-25
 
 **Roll Pool Blocked Threads Expansion (#363)**
-- Added expandable section for blocked threads in the roll pool with blocking reasons
+- Enhanced expandable section for blocked threads in the roll pool with detailed blocking reasons
 - Each blocked thread now shows its primary blocking reason (e.g., "Blocked by Ultimate Spider-Man #5")
 - Clicking a blocked thread navigates to the queue page with the thread highlighted
 - Added "Show all" toggle for lists with more than 10 blocked threads
 - Mobile-friendly with scrollable list and 44px minimum touch targets
+- Improved UI with better spacing, typography, and visual hierarchy
 - Section is completely hidden when no threads are blocked (no "0 threads hidden" message)
-- Backend endpoint `/api/v1/dependencies/blocked-with-reasons` now powers the expanded blocked threads list
+- Backend endpoint `/api/v1/dependencies/blocked-with-reasons` powers the expanded blocked threads list
 
 **Pipeline Simplification (#363)**
 - Simplified opencode pipeline script by removing CI checking and complex model backoff features

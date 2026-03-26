@@ -116,51 +116,51 @@ export function ThreadPool({
     )}
   </div>
 
-  {blockedThreadsWithReasons.length > 0 && !isRatingView && (
-    <div className="mt-4">
-      <button
-        type="button"
-        onClick={onToggleBlocked}
-        className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
-      >
-        <span
-          className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
-        >
-          ▶
-        </span>
-        <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-          {blockedThreadsWithReasons.length} thread{blockedThreadsWithReasons.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
-        </span>
-      </button>
-      {blockedExpanded && (
-        <div className="mt-2 space-y-1 max-h-[300px] overflow-y-auto">
-          {(showAllBlocked ? blockedThreadsWithReasons : blockedThreadsWithReasons.slice(0, INITIAL_BLOCKED_LIMIT)).map((thread) => (
-            <button
-              key={thread.id}
-              type="button"
-              onClick={() => navigate(`/queue?highlight=${thread.id}`)}
-              className="w-full flex items-center gap-2 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left"
+      {blockedThreadsWithReasons.length > 0 && !isRatingView && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={onToggleBlocked}
+            className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+          >
+            <span
+              className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
             >
-              <span className="text-sm">🔒</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-stone-400 truncate">{thread.title}</p>
-                <p className="text-[10px] text-stone-500 truncate">{thread.primary_blocking_reason}</p>
-              </div>
-            </button>
-          ))}
-{blockedThreadsWithReasons.length > INITIAL_BLOCKED_LIMIT && !showAllBlocked && (
-            <button
-              type="button"
-              onClick={() => setShowAllBlocked(true)}
-              className="w-full px-4 py-3 min-h-[44px] text-[10px] font-black text-stone-400 uppercase tracking-widest hover:text-stone-300 transition-colors"
-            >
-              Show all {blockedThreadsWithReasons.length} blocked threads
-            </button>
+              ▶
+            </span>
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+              {blockedThreadsWithReasons.length} thread{blockedThreadsWithReasons.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
+            </span>
+          </button>
+          {blockedExpanded && (
+            <div className="mt-2 space-y-1 max-h-[300px] overflow-y-auto">
+              {(showAllBlocked ? blockedThreadsWithReasons : blockedThreadsWithReasons.slice(0, INITIAL_BLOCKED_LIMIT)).map((thread) => (
+                <button
+                  key={thread.id}
+                  type="button"
+                  onClick={() => navigate(`/queue?highlight=${thread.id}`)}
+                  className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left"
+                >
+                  <span className="text-sm flex-shrink-0">🔒</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-stone-300 truncate font-medium">{thread.title}</p>
+                    <p className="text-xs text-stone-400 mt-0.5 truncate">{thread.primary_blocking_reason}</p>
+                  </div>
+                </button>
+              ))}
+              {blockedThreadsWithReasons.length > INITIAL_BLOCKED_LIMIT && !showAllBlocked && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllBlocked(true)}
+                  className="w-full px-4 py-3 min-h-[44px] text-[10px] font-black text-stone-400 uppercase tracking-widest hover:text-stone-300 transition-colors"
+                >
+                  Show all {blockedThreadsWithReasons.length} blocked threads
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
-    </div>
-  )}
 
   {staleThread && !isRatingView && (
         <div
