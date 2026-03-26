@@ -89,7 +89,6 @@ async def roll_dice(
     selected_thread_title = selected_thread.title
     selected_thread_format = selected_thread.format
     selected_thread_queue_position = selected_thread.queue_position
-
     selected_thread_issues_remaining = await selected_thread.get_issues_remaining(db)
 
     selected_thread_total_issues = selected_thread.total_issues
@@ -218,7 +217,6 @@ async def override_roll(
     override_thread_title = override_thread.title
     override_thread_format = override_thread.format
     override_thread_queue_position = override_thread.queue_position
-
     override_thread_issues_remaining = await override_thread.get_issues_remaining(db)
 
     override_thread_total_issues = override_thread.total_issues

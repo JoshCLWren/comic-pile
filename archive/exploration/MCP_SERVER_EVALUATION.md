@@ -270,37 +270,7 @@ Estimated $10-20/user/mo based on market positioning, but exact pricing requires
 
 ### 2.2 Developer/Open Source Solutions
 
-#### 2.2.1 GitHub Projects
 
-**Overview:** Integrated project management within GitHub repos.
-
-**API Capabilities:**
-- REST API (new as of September 2025) for project management
-- GraphQL API with comprehensive support
-- Deep integration with issues and PRs
-- OAuth apps and personal access tokens
-
-**Strengths:**
-- **Developer-Centric:** Tight integration with code, PRs, branches
-- Free for public repos, affordable for private ($4/user/mo)
-- Familiar interface for software teams
-- No additional infrastructure needed (hosted by GitHub)
-- **REST API Now Available:** Previously GraphQL-only, now has REST endpoint
-
-**Weaknesses:**
-- **No Agent Coordination:** No claiming, heartbeats, or assignment enforcement
-- **Limited Workflow:** Basic Kanban, complex workflows require external tools
-- **Git Dependency:** Tasks tied to repos, not standalone projects
-- **Real-time Updates:** Limited webhooks, no native SSE
-
-**Cost Analysis:**
-| Plan | Monthly Cost | Annual Cost |
-|------|--------------|-------------|
-| Free (public) | $0 | $0 |
-| Team | $4/user/mo | $48/user |
-| Enterprise | Custom | Custom |
-
-**Integration Effort:** Medium - Need to implement claiming/heartbeat on top of Issues API
 
 ---
 
@@ -430,7 +400,6 @@ Estimated $10-20/user/mo based on market positioning, but exact pricing requires
 | **Asana** | 3/10 | Expensive, no agent-specific features, designed for human teams |
 | **Linear** | 6/10 | Good developer experience, but no claiming/heartbeat, expensive |
 | **Notion + MCP** | 7/10 | Official MCP support is great, but database schema must be manually designed |
-| **GitHub Projects** | 5/10 | Cheap, good for dev workflows, but no agent coordination built-in |
 | **Taskwarrior** | 2/10 | No API, no multi-agent support, CLI-only |
 | **Kanboard** | 5/10 | Self-hosted, simple, but no agent-specific features, requires PHP |
 
@@ -517,7 +486,7 @@ Estimated $10-20/user/mo based on market positioning, but exact pricing requires
 
 ---
 
-### 4.4 Open Source Self-Hosted (Kanboard, GitHub Projects)
+### 4.4 Open Source Self-Hosted (Kanboard)
 
 **Benefits:**
 - **No Licensing Costs:** Free software, just pay for hosting
@@ -532,8 +501,6 @@ Estimated $10-20/user/mo based on market positioning, but exact pricing requires
 | **Agent-Specific Features** | 15-25 hours | Add claiming, heartbeat, dependency tracking |
 | **Hosting Setup** | 2-5 hours | VPS, Docker, backups |
 | **Hosting Costs** | $60-240/year | Typical VPS ($5-20/mo) |
-| **Maintenance** | 2-4 hours/quarter | Updates, backups, monitoring |
-| **Total Initial (1-year)** | 47-80 hours + $60-240 | ~$2,350-4,000 + hosting |
 
 **Tradeoffs:**
 - **Pro:** No licensing fees, self-hosted control
@@ -843,7 +810,6 @@ async def claim_task(task_id: str, agent_name: str, worktree: str) -> dict:
 - **Event-Driven Sync:** Use webhooks from external tool to trigger sync events
 
 **Tools:**
-- **GitHub Projects:** Sync tasks to issues via GitHub API
 - **Notion:** Sync tasks to Notion database via REST/MCP
 - **Jira:** Sync tasks to Jira issues via REST API
 

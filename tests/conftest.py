@@ -244,7 +244,13 @@ def test_username() -> str:
 
 
 def get_test_database_url() -> str:
-    """Get test database URL from environment (PostgreSQL only)."""
+    """Return test database URL, defaulting to local Docker test instance.
+
+    If ``TEST_DATABASE_URL`` or ``DATABASE_URL`` are not set, falls back to
+    ``postgresql+asyncpg://postgres:postgres@localhost:5437/comic_pile_test``.
+    This matches the port exposed by ``docker-compose.test.yml`` and ensures
+    the test suite can connect without requiring the user to load ``.env.test``.
+    """
     test_db_url = os.getenv("TEST_DATABASE_URL")
     if test_db_url:
         return test_db_url
@@ -253,10 +259,8 @@ def get_test_database_url() -> str:
     if database_url and database_url.startswith("postgresql"):
         return database_url
 
-    raise ValueError(
-        "No PostgreSQL test database configured. "
-        "Set TEST_DATABASE_URL or DATABASE_URL environment variable (or add them to .env)."
-    )
+    # Default fallback for test environment
+    return "postgresql+asyncpg://postgres:postgres@localhost:5437/comic_pile_test"
 
 
 @pytest.fixture(scope="function", autouse=True)
