@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 class IssueResponse(BaseModel):
     """Schema for issue response."""
 
-    id: int
-    thread_id: int
+    id: str
+    thread_id: str
     issue_number: str
     position: int
     status: str

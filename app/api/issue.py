@@ -41,8 +41,8 @@ def issue_to_response(issue: Issue) -> IssueResponse:
     Returns:
         IssueResponse schema with position field for ordering
     """
-    issue_id = issue.id
-    thread_id = issue.thread_id
+    issue_id = str(issue.id)
+    thread_id = str(issue.thread_id)
     issue_number = issue.issue_number
     issue_position = issue.position
     issue_status = issue.status

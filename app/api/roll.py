@@ -106,7 +106,7 @@ async def roll_dice(
         )
         next_issue = issue_result.scalar_one_or_none()
         if next_issue:
-            selected_thread_issue_id = next_issue.id
+            selected_thread_issue_id = str(next_issue.id)
             selected_thread_issue_number = next_issue.issue_number
 
     event = Event(
@@ -235,7 +235,7 @@ async def override_roll(
         )
         next_issue = issue_result.scalar_one_or_none()
         if next_issue:
-            override_thread_issue_id = next_issue.id
+            override_thread_issue_id = str(next_issue.id)
             override_thread_issue_number = next_issue.issue_number
 
     snoozed_ids = (

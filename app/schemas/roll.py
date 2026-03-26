@@ -24,9 +24,9 @@ class RollResponse(BaseModel):
     result: int
     offset: int
     snoozed_count: int
-    issue_id: int | None = None
+    issue_id: str | None = None
     issue_number: str | None = None
-    next_issue_id: int | None = None
+    next_issue_id: str | None = None
     next_issue_number: str | None = None
     total_issues: int | None = None
     reading_progress: str | None = None
