@@ -43,8 +43,8 @@ test.describe('Accessibility Tests', () => {
     expect(accessibilityScanResults.violations.length, `Accessibility violations found:\n${formatA11yViolations(accessibilityScanResults.violations)}`).toBe(0);
   });
 
-  test('should have no accessibility violations on queue page', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/queue');
+  test('should have no accessibility violations on help page', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/help');
 
     const accessibilityScanResults = await new AxeBuilder({ page: authenticatedPage })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
