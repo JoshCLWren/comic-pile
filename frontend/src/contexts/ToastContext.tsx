@@ -16,11 +16,10 @@ type ToastContextType = {
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
-const TOAST_DURATION = 5000
-
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const timeoutIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
+  const TOAST_DURATION = 5000
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = `${Date.now()}-${Math.random().toString(36).substring(7)}`
@@ -32,7 +31,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       setToasts((prev) => prev.filter((t) => t.id !== id))
       timeoutIdsRef.current.delete(timeoutId)
     }, TOAST_DURATION)
-    
+
     timeoutIdsRef.current.add(timeoutId)
   }, [])
 

@@ -87,6 +87,7 @@ if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
+        "mistralai/mistral-large-3-675b-instruct-2512"
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
         "openrouter/arcee-ai/trinity-large-preview:free"
