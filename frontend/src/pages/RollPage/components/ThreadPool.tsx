@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import Tooltip from '../../../components/Tooltip'
 import type { Thread } from '../../../types'
 import type { RatingThread } from '../types'
 
@@ -195,9 +196,7 @@ export function ThreadPool({
             >
               ▶
             </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              Snoozed ({snoozedThreads.length})
-            </span>
+<Tooltip content="Snoozed threads"><span className="text-[10px] font-black text-stone-400 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">Snoozed ({snoozedThreads.length})</span></Tooltip>
           </button>
           {snoozedExpanded && (
             <div className="mt-2 space-y-1">

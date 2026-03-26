@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback, useState, useRef } from 'react'
+import { useEffect, useMemo, useCallback, useState } from 'react'
 import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react'
 import LazyDice3D from '../../components/LazyDice3D'
 import Modal from '../../components/Modal'
@@ -12,7 +12,6 @@ import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
 import { useStaleThreads, useThreads } from '../../hooks/useThread'
 import { useCollections } from '../../contexts/CollectionContext'
-import { useToast } from '../../contexts/ToastContext'
 import {
   useClearManualDie,
   useDismissPending,
@@ -71,13 +70,11 @@ export default function RollPage() {
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
-  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-  const { activeCollectionId = null } = useCollections()
+const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
-  const { showToast } = useToast()
-  const prevCurrentDieRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (isSessionError && sessionError) {
@@ -292,18 +289,6 @@ useEffect(() => {
     setRolledResult(session.last_rolled_result)
   }
 }, [session?.current_die, session?.last_rolled_result, setCurrentDie, setRolledResult])
-
-useEffect(() => {
-    if (!session?.manual_die && currentDie && prevCurrentDieRef.current !== null && prevCurrentDieRef.current !== currentDie) {
-      const prevDie = prevCurrentDieRef.current
-      if (currentDie < prevDie) {
-        showToast(`Pool shrank to ${currentDie} — using d${currentDie}`, 'info')
-      } else {
-        showToast(`Pool grew to ${currentDie} — using d${currentDie}`, 'info')
-      }
-    }
-    prevCurrentDieRef.current = currentDie
-  }, [session?.manual_die, currentDie, activeThreads.length, showToast])
 
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
@@ -574,41 +559,27 @@ useEffect(() => {
               <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d20) - snoozing won't increase it further</span>
             </div>
           )}
-{session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
-  <div className="flex items-center gap-2 mt-1">
-    <Tooltip content="Offset: your roll result is shifted by +{session.snoozed_threads.length}. Tap to adjust.">
-      <span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600" aria-label="Offset, plus {session.snoozed_threads.length}, tap to adjust">+{session.snoozed_threads.length}</span>
-    </Tooltip>
-    <Tooltip content="{session.snoozed_threads.length} thread{s.session.snoozed_threads.length !== 1 ? 's' : ''} is snoozed and excluded from rolling. Tap to view.">
-      <span className="text-[9px] font-medium text-stone-600 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600" aria-label="Snoozed, {session.snoozed_threads.length} thread{s.session.snoozed_threads.length !== 1 ? 's' : ''}, tap to view">snoozed</span>
-    </Tooltip>
-    <Tooltip content="Offset is currently active: your roll pool is increased by {session.snoozed_threads.length} snoozed thread{s.session.snoozed_threads.length !== 1 ? 's' : ''}.">
-      <span className="text-[9px] text-stone-400 uppercase tracking-wider" aria-label="Offset active">offset</span>
-    </Tooltip>
-    <Tooltip content="Ladder mode is active. The die size adjusts automatically based on your eligible pool.">
-      <span className="text-[9px] text-stone-400 uppercase tracking-wider" aria-label="Ladder mode active">active</span>
-    </Tooltip>
-  </div>
-)}
+          {session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
+            <div className="flex items-center gap-2 mt-1">
+              <Tooltip content="Snoozed offset"><span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session.snoozed_threads.length}</span></Tooltip>
+              <Tooltip content="Snoozed offset active"><span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">offset active</span></Tooltip>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <div id="die-selector" className={session.manual_die ? '' : 'opacity-50'}>
+          <div id="die-selector">
             <div className="hidden md:flex gap-2">
               {DICE_LADDER.map((die) => (
-                <Tooltip key={die} content={session.manual_die ? `Switch to d${die}` : 'Switch to manual mode to override Ladder'}>
-                  <button onClick={() => handleSetDie(die)} disabled={setDieMutation.isPending}
-                    className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie ? 'bg-amber-600/20 border-amber-600 text-amber-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
-                    d{die}
-                  </button>
-                </Tooltip>
-              ))}
-              <Tooltip content={session.manual_die ? 'Return to Ladder mode — die size adjusts automatically after each rating' : 'Ladder mode is active — die adjusts based on your ratings'}>
-                <button onClick={handleClearManualDie} disabled={clearManualDieMutation.isPending}
-                  className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                  title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Ladder mode is active'}>
-                  Auto
+                <button key={die} onClick={() => handleSetDie(die)} disabled={setDieMutation.isPending}
+                  className={`die-btn px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${die === currentDie ? 'bg-amber-600/20 border-amber-600 text-amber-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+                  d{die}
                 </button>
-              </Tooltip>
+              ))}
+              <button onClick={handleClearManualDie} disabled={clearManualDieMutation.isPending}
+                className={`px-2 py-1 text-[10px] font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+                title={session.manual_die ? `Exit manual mode (currently d${session.manual_die})` : 'Return to automatic dice ladder mode'}>
+                Auto
+              </button>
             </div>
             <div className="md:hidden">
               <button onClick={() => setIsDieModalOpen(true)} disabled={setDieMutation.isPending}
@@ -617,11 +588,6 @@ useEffect(() => {
               </button>
             </div>
           </div>
-          {session.manual_die ? (
-            <span className="text-[8px] font-black text-amber-500/70 uppercase tracking-wider">Manual</span>
-          ) : (
-            <span className="text-[8px] font-black text-stone-500/70 uppercase tracking-wider">Auto</span>
-          )}
           <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
             <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
               <div className="w-full h-full">
@@ -629,9 +595,9 @@ useEffect(() => {
               </div>
             </div>
             <div className="text-right">
-               <Tooltip content="Ladder mode: Die size adjusts automatically based on your ratings. High ratings (4+) step the die down for a focused pool; low ratings step it up for more variety.">
-                 <span className="block text-[8px] font-black text-stone-500 uppercase tracking-widest cursor-help border-b border-dashed border-stone-600">Ladder <span className="inline-block w-3 h-3 text-center leading-3 rounded-full bg-stone-600 text-stone-300 text-[7px] ml-0.5 align-middle">?</span></span>
-               </Tooltip>
+              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. Promotes automatically based on ratings (5→up, 1-2→down)">
+                <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder</span>
+              </Tooltip>
               <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>
             </div>
           </div>
@@ -757,7 +723,6 @@ useEffect(() => {
         </Modal>
 
         <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
-          <p className="text-[10px] text-stone-500 mb-3 text-center">Pick a die to enter manual mode, or tap Auto to let the Ladder manage it automatically.</p>
           <div className="grid grid-cols-3 gap-2">
             {DICE_LADDER.map((die) => (
               <button key={die} onClick={async () => { try { await handleSetDie(die); setIsDieModalOpen(false) } catch (error) { console.error('Failed to set die:', error) }}}
@@ -768,8 +733,8 @@ useEffect(() => {
             ))}
             <button onClick={async () => { try { await handleClearManualDie(); setIsDieModalOpen(false) } catch (error) { console.error('Failed to clear manual die:', error) }}}
               disabled={clearManualDieMutation.isPending}
-              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10'}`}>
-              {session.manual_die ? 'Auto' : 'Auto ✓'}
+              className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${session.manual_die ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
+              Auto
             </button>
           </div>
         </Modal>

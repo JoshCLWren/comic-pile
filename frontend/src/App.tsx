@@ -262,7 +262,17 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
-      </Routes>
+        <Route
+          path="/glossary"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
+                <HelpPage />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        </Routes>
     </Suspense>
   )
 }
