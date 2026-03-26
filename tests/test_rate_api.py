@@ -371,7 +371,7 @@ async def test_rate_no_active_session(auth_client: AsyncClient) -> None:
     """Returns error if no active session."""
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
-    assert "No active session" in response.json()["detail"]
+    assert "No active session" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -388,7 +388,7 @@ async def test_rate_no_active_thread(auth_client: AsyncClient, async_db: AsyncSe
 
     response = await auth_client.post("/api/rate/", json={"rating": 4.0, "issues_read": 1})
     assert response.status_code == 400
-    assert "No active thread" in response.json()["detail"]
+    assert "No active thread" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -911,7 +911,7 @@ async def test_rate_requires_new_roll_before_second_rating(
         json={"rating": 4.0, "issues_read": 1, "finish_session": False},
     )
     assert second_rate.status_code == 400
-    assert "No active thread" in second_rate.json()["detail"]
+    assert "No active thread" in second_rate.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -1005,4 +1005,4 @@ async def test_rate_thread_with_zero_issues_remaining_returns_error(
 
     response = await auth_client.post("/api/rate/", json={"rating": 4.0})
     assert response.status_code == 400
-    assert "no issues remaining" in response.json()["detail"].lower()
+    assert "no issues remaining" in response.json()["error"]["message"].lower()

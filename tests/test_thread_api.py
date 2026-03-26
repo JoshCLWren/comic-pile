@@ -59,9 +59,7 @@ async def test_reactivate_thread_uses_max_numeric_issue_number(
     assert data["next_unread_issue_number"] == "11"
 
     result = await async_db.execute(
-        select(Issue)
-        .where(Issue.thread_id == thread.id)
-        .order_by(Issue.position, Issue.id)
+        select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position, Issue.id)
     )
     issues = result.scalars().all()
 
@@ -138,7 +136,7 @@ async def test_migrate_thread_to_issues_last_exceeds_total(
     )
 
     assert response.status_code == 400
-    assert "cannot exceed" in response.json()["detail"].lower()
+    assert "cannot exceed" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -178,7 +176,7 @@ async def test_migrate_thread_to_issues_thread_not_found(auth_client: AsyncClien
     )
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    assert "not found" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -209,7 +207,7 @@ async def test_migrate_thread_to_issues_already_migrated(
     )
 
     assert response.status_code == 400
-    assert "already uses" in response.json()["detail"].lower()
+    assert "already uses" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -240,7 +238,7 @@ async def test_migrate_thread_to_issues_other_user_thread(
     )
 
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    assert "not found" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio

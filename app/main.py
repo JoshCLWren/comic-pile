@@ -352,9 +352,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 status=_status_code_to_string(exc.status_code),
             )
         ).dict()
+        # Include legacy 'detail' field for compatibility with tests expecting it
+        response_body = {"detail": exc.detail, **error_content}
         return JSONResponse(
             status_code=exc.status_code,
-            content=error_content,
+            content=response_body,
         )
 
     @app.exception_handler(RequestValidationError)

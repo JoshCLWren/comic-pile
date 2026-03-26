@@ -27,6 +27,23 @@ async def test_http_exception_handler_for_nonexistent_thread(auth_client: AsyncC
 def test_app_with_error_routes() -> FastAPI:
     """Create a test app with routes that trigger specific exceptions."""
     test_app = FastAPI()
+    # Register custom error handler to match project-wide error response format.
+    from starlette.responses import JSONResponse
+
+    async def _custom_http_exception_handler(request, exc: StarletteHTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "code": exc.status_code,
+                    "message": str(exc.detail),
+                    "status": "UNKNOWN",
+                    "details": [],
+                }
+            },
+        )
+
+    test_app.add_exception_handler(StarletteHTTPException, _custom_http_exception_handler)  # type: ignore
 
     @test_app.get("/test-404")
     async def test_404() -> None:

@@ -140,7 +140,7 @@ async def test_duplicate_thread_dependency_returns_400(auth_client, async_db, te
         },
     )
     assert create_resp2.status_code == 400
-    assert "already exists" in create_resp2.json()["detail"].lower()
+    assert "already exists" in create_resp2.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -251,7 +251,7 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
         },
     )
     assert self_resp.status_code == 400
-    assert "self" in self_resp.json()["detail"].lower()
+    assert "self" in self_resp.json()["error"]["message"].lower()
 
     mixed_resp = await auth_client.post(
         "/api/v1/dependencies/",
@@ -263,7 +263,7 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
         },
     )
     assert mixed_resp.status_code == 400
-    assert "mixed" in mixed_resp.json()["detail"].lower()
+    assert "mixed" in mixed_resp.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -335,7 +335,7 @@ async def test_duplicate_dependency_returns_400(auth_client, async_db, test_user
         },
     )
     assert create_resp2.status_code == 400
-    assert "already exists" in create_resp2.json()["detail"].lower()
+    assert "already exists" in create_resp2.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -615,7 +615,7 @@ async def test_delete_nonexistent_dependency_returns_404(auth_client):
     fake_dep_id = 99999
     delete_resp = await auth_client.delete(f"/api/v1/dependencies/{fake_dep_id}")
     assert delete_resp.status_code == 404
-    assert "not found" in delete_resp.json()["detail"].lower()
+    assert "not found" in delete_resp.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -747,7 +747,7 @@ async def test_dependency_order_check_unauthorized_thread(auth_client, async_db,
 
     resp = await auth_client.get(f"/api/v1/threads/{other_thread.id}/dependency-order-check")
     assert resp.status_code == 404
-    assert "not found" in resp.json()["detail"].lower()
+    assert "not found" in resp.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -755,7 +755,7 @@ async def test_dependency_order_check_nonexistent_thread(auth_client):
     """Order check should return 404 for non-existent thread."""
     resp = await auth_client.get("/api/v1/threads/99999/dependency-order-check")
     assert resp.status_code == 404
-    assert "not found" in resp.json()["detail"].lower()
+    assert "not found" in resp.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio

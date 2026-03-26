@@ -1206,8 +1206,8 @@ async def test_get_issue_success(auth_client: AsyncClient, async_db: AsyncSessio
     assert response.status_code == 200
 
     data = response.json()
-    assert data["id"] == issue.id
-    assert data["thread_id"] == thread.id
+    assert data["id"] == str(issue.id)
+    assert data["thread_id"] == str(thread.id)
     assert data["issue_number"] == "1"
     assert data["status"] == "unread"
 

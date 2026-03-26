@@ -322,7 +322,7 @@ async def test_add_all_duplicate_issues_returns_400(
         f"/api/v1/threads/{thread.id}/issues", json={"issue_range": "1-5"}
     )
     assert response.status_code == 400
-    assert "already exist" in response.json()["detail"].lower()
+    assert "already exist" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio

@@ -105,7 +105,7 @@ async def test_snooze_no_pending_thread(
 
     response = await auth_client.post("/api/snooze/")
     assert response.status_code == 400
-    assert "No pending thread to snooze" in response.json()["detail"]
+    assert "No pending thread to snooze" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -117,7 +117,7 @@ async def test_snooze_no_session(auth_client: AsyncClient) -> None:
     """
     response = await auth_client.post("/api/snooze/")
     assert response.status_code == 400
-    assert "No active session" in response.json()["detail"]
+    assert "No active session" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -337,7 +337,7 @@ async def test_snooze_all_threads(
     # Now try to roll - should fail with no threads available
     roll_response = await auth_client.post("/api/roll/")
     assert roll_response.status_code == 400
-    assert "No active threads" in roll_response.json()["detail"]
+    assert "No active threads" in roll_response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio

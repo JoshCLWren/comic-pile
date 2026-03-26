@@ -48,7 +48,7 @@ async def test_roll_no_pool(auth_client: AsyncClient, async_db: AsyncSession) ->
 
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 400
-    assert "No active threads" in response.json()["detail"]
+    assert "No active threads" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -91,7 +91,7 @@ async def test_roll_blocked_when_pending_exists(
 
     second_response = await auth_client.post("/api/roll/")
     assert second_response.status_code == 409
-    assert "already pending" in second_response.json()["detail"]
+    assert "already pending" in second_response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -173,7 +173,7 @@ async def test_roll_pending_message_does_not_leak_other_user_thread_title(
 
     roll_response = await auth_client.post("/api/roll/")
     assert roll_response.status_code == 409
-    detail = roll_response.json()["detail"]
+    detail = roll_response.json()["error"]["message"]
     assert "already pending" in detail
     assert private_title not in detail
 
@@ -184,7 +184,7 @@ async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: 
     _ = sample_data
     response = await auth_client.post("/api/roll/override", json={"thread_id": 999})
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]
+    assert "not found" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -295,7 +295,7 @@ async def test_override_roll_blocked_thread(
 
     response = await auth_client.post("/api/roll/override", json={"thread_id": blocked_thread.id})
     assert response.status_code == 422
-    assert "blocked" in response.json()["detail"].lower()
+    assert "blocked" in response.json()["error"]["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -323,4 +323,4 @@ async def test_override_roll_completed_thread(
 
     response = await auth_client.post("/api/roll/override", json={"thread_id": completed_thread.id})
     assert response.status_code == 422
-    assert "completed" in response.json()["detail"].lower()
+    assert "completed" in response.json()["error"]["message"].lower()

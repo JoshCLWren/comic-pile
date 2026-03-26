@@ -5,8 +5,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Issue, Thread
+from app.models import Event, Issue, Thread, User, Snapshot
 from app.models import Session as SessionModel
+from app.auth import hash_password
 
 
 def _assert_issue_metadata(
@@ -1047,7 +1048,7 @@ async def test_migration_with_zero_issues_remaining(
 
     # Cannot migrate a completed thread with no issues remaining
     assert response.status_code == 400
-    assert "no issues remaining" in response.json()["detail"]
+    assert "no issues remaining" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -1186,3 +1187,53 @@ async def test_simple_migration_creates_correct_issues(
     assert len(read_issues) == 0
     assert unread_issues[0].issue_number == "1"
     assert unread_issues[-1].issue_number == "5"
+
+
+@pytest.mark.asyncio
+async def test_session_restore_forbidden_for_other_user(
+    client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Test that restoring another user's session returns 403 with proper error format."""
+    # Create two users
+    password_hash = hash_password("password")
+    user_a = User(username="user_a_403", password_hash=password_hash, created_at=None)
+    user_b = User(username="user_b_403", password_hash=password_hash, created_at=None)
+    async_db.add_all([user_a, user_b])
+    await async_db.commit()
+    await async_db.refresh(user_a)
+    await async_db.refresh(user_b)
+
+    # Create a session for user B
+    session_b = SessionModel(start_die=10, user_id=user_b.id)
+    async_db.add(session_b)
+    await async_db.commit()
+    await async_db.refresh(session_b)
+
+    # Create a "Session start" snapshot for this session
+    snapshot = Snapshot(
+        session_id=session_b.id,
+        event_id=None,
+        thread_states={},
+        session_state=None,
+        description="Session start",
+    )
+    async_db.add(snapshot)
+    await async_db.commit()
+
+    # Login as user A
+    login_a = await client.post(
+        "/api/auth/login", json={"username": "user_a_403", "password": "password"}
+    )
+    assert login_a.status_code == 200
+    token_a = login_a.json()["access_token"]
+
+    # Attempt to restore user B's session as user A (should return 403)
+    response = await client.post(
+        f"/api/sessions/{session_b.id}/restore-session-start",
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert response.status_code == 403
+    data = response.json()
+    assert "error" in data
+    assert data["error"]["code"] == 403
+    assert "Access denied" in data["error"]["message"]
