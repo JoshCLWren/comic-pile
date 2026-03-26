@@ -34,7 +34,8 @@ async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> Non
 
     data = response.json()
     assert data["thread_id"] == thread_id
-    assert data["title"] == "Superman"
+    # Dynamic lookup: thread_id=1 in sample_data is "Superman"
+    assert data["title"] == next(t.title for t in sample_data["threads"] if t.id == thread_id)
     assert data["die_size"] == 8
     assert data["result"] == 0
 
@@ -49,6 +50,31 @@ async def test_roll_no_pool(auth_client: AsyncClient, async_db: AsyncSession) ->
     response = await auth_client.post("/api/roll/")
     assert response.status_code == 400
     assert "No active threads" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_roll_dynamic_title(auth_client: AsyncClient, sample_data: dict) -> None:
+    """POST /roll/ returns dynamic thread title (not hardcoded)."""
+    # Roll once
+    response = await auth_client.post("/api/roll/")
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify title matches a thread in the roll pool
+    thread_ids = [t.id for t in sample_data["threads"] if t.status == "active"]
+    assert data["thread_id"] in thread_ids
+    assert data["title"] == next(
+        t.title for t in sample_data["threads"] if t.id == data["thread_id"]
+    )
+
+    # Roll again (should allow same thread again)
+    response = await auth_client.post("/api/roll/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["thread_id"] in thread_ids
+    assert data["title"] == next(
+        t.title for t in sample_data["threads"] if t.id == data["thread_id"]
+    )
 
 
 @pytest.mark.asyncio
