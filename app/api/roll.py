@@ -16,6 +16,7 @@ from app.middleware import limiter
 from app.models import Event, Thread
 from app.models.user import User
 from app.schemas import OverrideRequest, RollRequest, RollResponse
+from app.utils.mobile_detect import is_mobile_request
 from comic_pile.queue import get_roll_pool
 from comic_pile.session import get_current_die, get_or_create
 
@@ -126,6 +127,9 @@ async def roll_dice(
     if clear_cache:
         clear_cache()
 
+    touch_friendly = is_mobile_request(request)
+    selected_thread.touch_friendly = touch_friendly
+
     return RollResponse(
         thread_id=selected_thread_id,
         title=selected_thread_title,
@@ -142,6 +146,7 @@ async def roll_dice(
         next_issue_number=selected_thread_issue_number,
         total_issues=selected_thread_total_issues,
         reading_progress=selected_thread_reading_progress,
+        touch_friendly=touch_friendly,
     )
 
 
@@ -167,14 +172,16 @@ async def dismiss_pending_roll(
 
 @router.post("/override", response_model=RollResponse)
 async def override_roll(
-    request: OverrideRequest,
+    request: Request,
+    override_request: OverrideRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> RollResponse:
     """Manually select a thread.
 
     Args:
-        request: Override request containing thread_id.
+        request: FastAPI request object for mobile detection.
+        override_request: Override request containing thread_id.
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
@@ -186,7 +193,7 @@ async def override_roll(
     """
     result = await db.execute(
         select(Thread)
-        .where(Thread.id == request.thread_id)
+        .where(Thread.id == override_request.thread_id)
         .where(Thread.user_id == current_user.id)
         .with_for_update()
     )
@@ -194,19 +201,19 @@ async def override_roll(
     if not override_thread:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {request.thread_id} not found",
+            detail=f"Thread {override_request.thread_id} not found",
         )
 
     if override_thread.is_blocked:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Thread {request.thread_id} is blocked and cannot be selected",
+            detail=f"Thread {override_request.thread_id} is blocked and cannot be selected",
         )
 
     if override_thread.status != "active":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Thread {request.thread_id} is {override_thread.status} and cannot be selected",
+            detail=f"Thread {override_request.thread_id} is {override_thread.status} and cannot be selected",
         )
 
     current_session = await get_or_create(db, user_id=current_user.id)
@@ -265,6 +272,9 @@ async def override_roll(
     if clear_cache:
         clear_cache()
 
+    touch_friendly = is_mobile_request(request)
+    override_thread.touch_friendly = touch_friendly
+
     return RollResponse(
         thread_id=override_thread_id,
         title=override_thread_title,
@@ -281,6 +291,7 @@ async def override_roll(
         next_issue_number=override_thread_issue_number,
         total_issues=override_thread_total_issues,
         reading_progress=override_thread_reading_progress,
+        touch_friendly=touch_friendly,
     )
 
 

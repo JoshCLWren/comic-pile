@@ -2,9 +2,10 @@
 
 ## [unreleased]
 
-**Roll API Dynamic Title Fix (#363)**
-- Fixed `/api/roll/` endpoint to return dynamic thread titles instead of a hardcoded placeholder
-- Updated tests to validate dynamic title behavior
+**Mobile Usability - Roll Button Touch Target (#363)**
+- Backend: Added `touch_friendly` flag to `/api/roll/` endpoint for mobile detection
+- Frontend: Dynamically resize Roll button to **44px × 44px** on mobile for WCAG compliance
+- Added `touch_friendly` field to `Thread` model and database migration
 
 ## 2026-03-26
 

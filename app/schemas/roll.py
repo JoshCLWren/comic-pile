@@ -30,6 +30,7 @@ class RollResponse(BaseModel):
     next_issue_number: str | None = None
     total_issues: int | None = None
     reading_progress: str | None = None
+    touch_friendly: bool
 
 
 class OverrideRequest(BaseModel):

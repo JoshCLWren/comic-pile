@@ -56,6 +56,7 @@ class Thread(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_test: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    touch_friendly: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

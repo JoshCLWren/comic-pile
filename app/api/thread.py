@@ -686,6 +686,7 @@ async def set_pending_thread(
         next_issue_number=thread_issue_number,
         total_issues=thread_total_issues,
         reading_progress=thread_reading_progress,
+        touch_friendly=False,
     )
 
 

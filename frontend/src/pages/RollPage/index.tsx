@@ -36,8 +36,9 @@ import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
 
 export default function RollPage() {
-  const state = useRollPageState()
-  const {
+    const state = useRollPageState()
+    const [touchFriendly, setTouchFriendly] = useState(false)
+    const {
     isRolling, setIsRolling,
     rolledResult, setRolledResult,
     selectedThreadId, setSelectedThreadId,
@@ -470,10 +471,11 @@ useEffect(() => {
         rollIntervalRef.current = null
         rollTimeoutRef.current = setTimeout(async () => {
           rollTimeoutRef.current = null
-          try {
-            const response = await rollMutation.mutate()
-            enterRatingView(response.thread_id, response.result, response)
-            setIsRolling(false)
+                try {
+                    const response = await rollMutation.mutate()
+                    setTouchFriendly(response.touch_friendly)
+                    enterRatingView(response.thread_id, response.result, response)
+                    setIsRolling(false)
           } catch (error: unknown) {
             const status = getApiErrorStatus(error)
             const detail = getApiErrorDetail(error)
@@ -607,9 +609,9 @@ useEffect(() => {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-amber-900/10 rounded-full blur-[120px] pointer-events-none"></div>
           <div className="flex-1 flex flex-col">
             {!isRatingView ? (
-              <div id="main-die-3d" onClick={handleRoll} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-label="Roll the dice"
-                className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 mx-auto`}
-                style={{ width: '200px', height: '200px' }}>
+                <div id="main-die-3d" onClick={handleRoll} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-label="Roll the dice"
+                    className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 mx-auto`}
+                    style={{ width: touchFriendly ? '44px' : '200px', height: touchFriendly ? '44px' : '200px' }}>
                 <div className="w-full h-full main-die-optical-center">
                   <LazyDice3D sides={currentDie} value={rolledResult || 1} isRolling={isRolling} showValue={false} color={0xffffff}
                     onRollComplete={() => setDiceState('rolled')} />
