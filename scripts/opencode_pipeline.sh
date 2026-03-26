@@ -112,6 +112,46 @@ model_file()  { echo "$LOG_DIR/issue_$1/last_model"; }
 worktree_dir(){ echo "$WORKTREE_BASE/issue_$1"; }
 branch_name() { echo "pipeline/issue-$1"; }
 
+# Ensure the worktree for an issue exists, recreating it from remote if needed.
+# Returns 0 if worktree is ready, 1 if it could not be created (caller should skip).
+ensure_worktree() {
+    local issue=$1
+    local wt
+    wt=$(worktree_dir "$issue")
+    local branch
+    branch=$(branch_name "$issue")
+
+    # Already healthy — nothing to do
+    if [[ -d "$wt" ]] && git -C "$wt" status &>/dev/null; then
+        return 0
+    fi
+
+    log_warn "#$issue — worktree missing or broken at $wt, attempting to recreate"
+
+    # Clean up any stale registration
+    git -C "$REPO_ROOT" worktree remove "$wt" --force 2>/dev/null || rm -rf "$wt"
+    git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
+
+    # Try to fetch the remote branch and create local branch + worktree
+    git -C "$REPO_ROOT" fetch origin "$branch" 2>/dev/null || true
+
+    # Create local branch tracking remote if it doesn't exist yet
+    if ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+        git -C "$REPO_ROOT" branch "$branch" "origin/$branch" 2>/dev/null || \
+        git -C "$REPO_ROOT" branch "$branch" main 2>/dev/null || true
+    fi
+
+    mkdir -p "$WORKTREE_BASE"
+    if git -C "$REPO_ROOT" worktree add "$wt" "$branch" 2>/dev/null || \
+       git -C "$REPO_ROOT" worktree add "$wt" -b "$branch" main 2>/dev/null; then
+        log_warn "#$issue — worktree recreated at $wt"
+        return 0
+    fi
+
+    log_error "#$issue — could not recreate worktree at $wt"
+    return 1
+}
+
 get_state() { cat "$(state_file "$1")" 2>/dev/null || echo "missing"; }
 
 set_state() {
@@ -518,6 +558,13 @@ cmd_implement() {
             wt=$(worktree_dir "$issue")
             log="$(state_dir "$issue")/implement.log"
 
+            if ! ensure_worktree "$issue"; then
+                log_error "#$issue — worktree unavailable, resetting to pending"
+                set_state "$issue" "pending"
+                release_lock "$issue"
+                continue
+            fi
+
             gh_comment "$issue" "## 🚀 Pipeline: Implementation starting
 **Branch:** \`$(branch_name "$issue")\`
 **Worktree:** \`$wt\`"
@@ -578,6 +625,13 @@ cmd_review() {
             local wt log
             wt=$(worktree_dir "$issue")
             log="$(state_dir "$issue")/review.log"
+
+            if ! ensure_worktree "$issue"; then
+                log_error "#$issue — worktree unavailable, resetting to implemented"
+                set_state "$issue" "implemented"
+                release_lock "$issue"
+                continue
+            fi
 
             local critique_file
             critique_file="$(state_dir "$issue")/review_critique.md"
@@ -647,6 +701,13 @@ cmd_fix() {
 
             local wt fix_log critique_file review_summary
             wt=$(worktree_dir "$issue")
+
+            if ! ensure_worktree "$issue"; then
+                log_error "#$issue — worktree unavailable, resetting to $cur_state"
+                set_state "$issue" "$cur_state"
+                release_lock "$issue"
+                continue
+            fi
             fix_log="$(state_dir "$issue")/fix.log"
 
             # ci_failing uses ci_critique.md; reviewed uses review_critique.md
@@ -737,6 +798,13 @@ cmd_pr() {
             log="$(state_dir "$issue")/pr.log"
             log_info "#$issue — opening PR: $title"
 
+            if ! ensure_worktree "$issue"; then
+                log_error "#$issue — worktree unavailable, resetting to fixed"
+                set_state "$issue" "fixed"
+                release_lock "$issue"
+                continue
+            fi
+
             local prompt
             prompt="You are opening a pull request for GitHub issue #${issue} in the comic-pile repo.
 The code is in your working directory on branch $(branch_name "$issue").
@@ -824,9 +892,60 @@ cmd_ci_check() {
 
             log_warn "#$issue — CI failures on PR #$pr_number, running analysis agent"
 
+            # Improvement 4: if ALL failures are E2E Playwright shards (no non-E2E failures),
+            # try merging main first — fixture drift is the most common cause.
+            local _non_e2e_failures
+            _non_e2e_failures=$(echo "$failing_checks" | grep -vE "E2E|Playwright|playwright|e2e" || true)
+            if [[ -z "$_non_e2e_failures" ]] && [[ -n "$failing_checks" ]]; then
+                log_info "#$issue — only E2E failures detected, attempting merge of origin/main"
+                local _wt_tmp
+                _wt_tmp=$(worktree_dir "$issue")
+                if [[ -d "$_wt_tmp" ]]; then
+                    git -C "$_wt_tmp" fetch origin main 2>/dev/null || true
+                    # Check if PR branch already has the latest main commit
+                    local _main_sha _branch_merge_base
+                    _main_sha=$(git -C "$_wt_tmp" rev-parse origin/main 2>/dev/null || echo "")
+                    _branch_merge_base=$(git -C "$_wt_tmp" merge-base HEAD origin/main 2>/dev/null || echo "")
+                    if [[ -n "$_main_sha" && "$_main_sha" != "$_branch_merge_base" ]]; then
+                        if git -C "$_wt_tmp" merge origin/main --no-edit -X theirs \
+                               -m "chore: merge main for CI fixes" 2>/dev/null; then
+                            git -C "$_wt_tmp" push origin "$(branch_name "$issue")" 2>/dev/null || true
+                            log_info "#$issue — merged main, waiting 30s before re-checking CI"
+                            sleep 30
+                            # Re-check CI after merge
+                            local _rechecked_failures
+                            _rechecked_failures=$(gh pr checks "$pr_number" 2>/dev/null \
+                                | grep -v -iE "pass|skip|pending|neutral|CodeRabbit" \
+                                | grep -v "^$" || true)
+                            if [[ -z "$_rechecked_failures" ]]; then
+                                log_ok "#$issue — CI green after main merge → done"
+                                set_state "$issue" "done"
+                                remove_worktree "$issue"
+                                release_lock "$issue"
+                                claimed=$(( claimed + 1 ))
+                                break
+                            fi
+                            log_warn "#$issue — failures persist after main merge, proceeding to analysis"
+                            failing_checks="$_rechecked_failures"
+                        else
+                            log_warn "#$issue — merge of main failed (conflicts?), proceeding to analysis"
+                        fi
+                    else
+                        log_info "#$issue — PR branch already contains latest main, skipping merge"
+                    fi
+                fi
+            fi
+
             local ci_critique log
             ci_critique="$(state_dir "$issue")/ci_critique.md"
             log="$(state_dir "$issue")/ci_check.log"
+
+            if ! ensure_worktree "$issue"; then
+                log_error "#$issue — worktree unavailable, resetting to pr_opened"
+                set_state "$issue" "pr_opened"
+                release_lock "$issue"
+                continue
+            fi
 
             local prompt
             prompt="You are a CI triage agent for GitHub issue #${issue} in the comic-pile repo.
@@ -890,6 +1009,18 @@ cmd_arbiter() {
         local now resets=0
         now=$(date +%s)
 
+        # Improvement 1: if every model in the pool is in backoff, wipe backoffs to
+        # prevent deadlock — the arbiter can't make progress otherwise.
+        local _available_count=0
+        for _m in "${_MODEL_POOL[@]}"; do
+            [[ -z "$_m" ]] && continue
+            model_in_backoff "$_m" || _available_count=$(( _available_count + 1 ))
+        done
+        if [[ ${#_MODEL_POOL[@]} -gt 0 && $_available_count -eq 0 ]]; then
+            log_warn "All ${#_MODEL_POOL[@]} models in backoff — clearing to prevent deadlock"
+            rm -f "$_MODEL_BACKOFF_DIR"/* 2>/dev/null || true
+        fi
+
         for issue in "${ISSUES[@]}"; do
             local state
             state=$(get_state "$issue")
@@ -912,6 +1043,30 @@ cmd_arbiter() {
             ts=$(cat "$tsf")
             age=$(( now - ts ))
 
+            # Improvement 3: if a transient in-progress state has no active lock,
+            # the worker died immediately after setting state — reset right away
+            # rather than waiting for the full stale timeout.
+            local _lock_absent=false
+            [[ ! -d "$(lock_dir "$issue")" ]] && _lock_absent=true
+
+            local _fast_reset=false
+            if [[ "$_lock_absent" == "true" ]]; then
+                case "$state" in
+                    reviewing)    _fast_reset=true ;;
+                    fixing)       _fast_reset=true ;;
+                    implementing) _fast_reset=true ;;
+                    ci_checking)  _fast_reset=true ;;
+                esac
+            fi
+
+            if [[ "$_fast_reset" == "true" ]]; then
+                set_state "$issue" "$reset_to"
+                log_warn "#$issue — '$state' with no active lock → immediate reset to '$reset_to'"
+                gh_comment "$issue" "🔄 **[Arbiter]** \`$state\` had no lock — reset to \`$reset_to\`" 2>/dev/null || true
+                resets=$(( resets + 1 ))
+                continue
+            fi
+
             if [[ $age -gt $stale_seconds ]]; then
                 rm -rf "$(lock_dir "$issue")"
                 set_state "$issue" "$reset_to"
@@ -923,6 +1078,20 @@ cmd_arbiter() {
         done
 
         [[ $resets -eq 0 ]] && log_info "All clear"
+
+        # Improvement 6: canary — warn if no timesheet activity in the last 15 minutes
+        if [[ -f "$TIMESHEET" ]] && [[ -s "$TIMESHEET" ]]; then
+            local _last_entry_ts _last_ts_epoch _idle_s _idle_m
+            _last_entry_ts=$(tail -1 "$TIMESHEET" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('end', 0))" 2>/dev/null || echo 0)
+            if [[ "$_last_entry_ts" =~ ^[0-9]+$ ]] && [[ "$_last_entry_ts" -gt 0 ]]; then
+                _idle_s=$(( now - _last_entry_ts ))
+                _idle_m=$(( _idle_s / 60 ))
+                if [[ $_idle_s -gt 900 ]]; then
+                    log_warn "No pipeline activity in ${_idle_m}m — workers may be stuck or all models in backoff"
+                fi
+            fi
+        fi
+
         sleep 300
     done
 }
@@ -955,6 +1124,89 @@ cmd_tool_test() {
     timeout=$(grep -c "^TIMEOUT" "$out" || echo 0)
     log_ok "Tool test complete — Tier 1 (coding): $ok  Fail: $fail  Timeout: $timeout"
     log_info "Restart workers to apply new tiers."
+}
+
+cmd_model_manager() {
+    log_info "Model manager online — checking model pool every 10 minutes"
+    mkdir -p "$LOG_DIR"
+    while true; do
+        local results_file="$LOG_DIR/model_test_results.txt"
+        local tool_results_file="$LOG_DIR/model_tool_test_results.txt"
+        local needs_refresh=false
+
+        # Check if refresh is needed: file missing, < 20 OK lines, or older than 6 hours
+        if [[ ! -s "$results_file" ]]; then
+            needs_refresh=true
+        else
+            local ok_count file_age now_ts mtime_ts
+            ok_count=$(grep -c "^OK" "$results_file" 2>/dev/null || echo 0)
+            now_ts=$(date +%s)
+            mtime_ts=$(stat -c %Y "$results_file" 2>/dev/null || echo 0)
+            file_age=$(( now_ts - mtime_ts ))
+            if [[ $ok_count -lt 20 || $file_age -gt 21600 ]]; then
+                needs_refresh=true
+            fi
+        fi
+
+        if [[ "$needs_refresh" == "true" ]]; then
+            log_info "Refreshing model pool (running model test)..."
+            # Get models excluding openrouter/opencode/anthropic/github-copilot providers
+            local candidate_models=()
+            while IFS= read -r model; do
+                candidate_models+=("$model")
+            done < <(opencode models 2>/dev/null \
+                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/" \
+                | grep -v "^$" || true)
+
+            local total_candidates=${#candidate_models[@]}
+            log_info "Testing $total_candidates candidate models..."
+
+            # Run model availability test in parallel (30s timeout per model)
+            printf '%s\n' "${candidate_models[@]}" | \
+            xargs -P 15 -I{} bash -c '
+                model="$1"
+                exit_code=0
+                output=$(timeout 30s opencode run -m "$model" "Reply with only the word PING" 2>&1) || exit_code=$?
+                clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
+                if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
+                    echo "OK $model"
+                elif [[ $exit_code -eq 124 ]]; then
+                    echo "TIMEOUT $model"
+                else
+                    snippet=$(echo "$clean" | grep -v "^$" | tail -1 | cut -c1-60)
+                    echo "FAIL $model  [$snippet]"
+                fi
+            ' _ {} > "$results_file" 2>/dev/null
+
+            local new_ok_count
+            new_ok_count=$(grep -c "^OK" "$results_file" 2>/dev/null || echo 0)
+            log_info "Model pool refreshed: $new_ok_count OK models"
+
+            # Prune tool test results for models no longer in working set
+            if [[ -s "$tool_results_file" ]]; then
+                local working_models
+                working_models=$(grep "^OK" "$results_file" | awk '{print $2}' | sort)
+                local pruned=0
+                local tmp_tool
+                tmp_tool=$(mktemp)
+                while IFS= read -r line; do
+                    local line_model
+                    line_model=$(echo "$line" | awk '{print $2}')
+                    if echo "$working_models" | grep -qxF "$line_model"; then
+                        echo "$line" >> "$tmp_tool"
+                    else
+                        pruned=$(( pruned + 1 ))
+                    fi
+                done < "$tool_results_file"
+                mv "$tmp_tool" "$tool_results_file"
+                [[ $pruned -gt 0 ]] && log_info "Pruned $pruned stale entries from model_tool_test_results.txt"
+            fi
+        else
+            log_info "Model pool OK (skipping refresh)"
+        fi
+
+        sleep 600
+    done
 }
 
 cmd_timesheet() {
@@ -992,11 +1244,12 @@ case "$ROLE" in
     fix)        cmd_fix ;;
     pr)         cmd_pr ;;
     ci_check)   cmd_ci_check ;;
-    tool_test)  cmd_tool_test ;;
-    arbiter)    cmd_arbiter ;;
-    timesheet)  cmd_timesheet ;;
+    tool_test)      cmd_tool_test ;;
+    arbiter)        cmd_arbiter ;;
+    timesheet)      cmd_timesheet ;;
+    model_manager)  cmd_model_manager ;;
     *)
-        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet|tool_test}"
+        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet|tool_test|model_manager}"
         echo ""
         echo "Workflow:"
         echo "  1. $0 init           — seed state files + clean stale worktrees"
@@ -1006,10 +1259,12 @@ case "$ROLE" in
         echo "       $0 fix          — fixes critique or CI failures"
         echo "       $0 pr           — opens PR"
         echo "       $0 ci_check     — checks CI + CodeRabbit, posts AC, routes failures back"
-        echo "       $0 arbiter      — watchdog: resets stalemates every 5m"
+        echo "       $0 arbiter      — watchdog: resets stalemates every 5m
+       $0 model_manager — refreshes model pool every 10m (run in background)"
         echo "  3. $0 status         — see all issue states + active worktrees"
         echo "  4. $0 timesheet      — see model usage log
-  5. $0 tool_test      — re-run tool-use tier classification (refresh after adding models)"
+  5. $0 tool_test      — re-run tool-use tier classification (refresh after adding models)
+  6. $0 model_manager  — background daemon: refreshes model pool every 10 minutes"
         echo ""
         echo "State machine:"
         echo "  pending → implementing → implemented → reviewing → reviewed"
