@@ -469,6 +469,28 @@ Manage hard-blocking dependencies between threads and issues.
 
 ### GET /api/v1/dependencies/blocked
 
+### GET /api/v1/dependencies/blocked-with-reasons
+
+Retrieve blocked threads with primary blocking reasons for roll pool display. Returns an object with `blocked_threads` array containing each thread's `id`, `title`, `format`, `queue_position`, and `primary_blocking_reason`.
+
+**Response**: `200 OK`
+
+```json
+{
+  "blocked_threads": [
+    {
+      "id": 2,
+      "title": "Saga Volume 1",
+      "format": "Graphic Novel",
+      "queue_position": 5,
+      "primary_blocking_reason": "Blocked by Ultimate Spider-Man #5"
+    }
+  ]
+}
+```
+
+
+
 List all thread IDs currently blocked by dependencies.
 
 **Response**: `200 OK`
