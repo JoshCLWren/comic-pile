@@ -1,5 +1,11 @@
 # Changelog
 
+## [unreleased]
+
+**Roll API Dynamic Title Fix (#363)**
+- Fixed `/api/roll/` endpoint to return dynamic thread titles instead of a hardcoded placeholder
+- Updated tests to validate dynamic title behavior
+
 ## 2026-03-26
 
 **Roll Pool Blocked Threads Expansion (#363)**
