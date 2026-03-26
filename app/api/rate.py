@@ -357,6 +357,8 @@ async def rate_thread(
         issue_number=rated_issue_number,
     )
     db.add(event)
+    # Ensure the event gets an ID before any further DB operations that might trigger autoflush.
+    await db.flush()
 
     should_complete_thread = thread_issues_remaining <= 0
 

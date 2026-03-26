@@ -95,7 +95,8 @@ describe('ThreadPool blocked section', () => {
 
     expect(screen.getByText('Blocked Thread')).toBeInTheDocument()
     expect(screen.getByText('#4')).toBeInTheDocument()
-    expect(screen.getByText(/Finish Stormwatch Vol\. 1/)).toBeInTheDocument()
+    // Use getAllByText since the text appears in both summary and expanded view
+    expect(screen.getAllByText(/Finish Stormwatch Vol\. 1/).length).toBeGreaterThan(0)
 
     const summaryButton = screen.getByTestId('blocked-summary-toggle')
     await user.click(summaryButton)

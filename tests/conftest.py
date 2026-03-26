@@ -512,14 +512,8 @@ async def auth_client(
     app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        result = await async_db.execute(select(User).where(User.username == test_username))
-        user = result.scalar_one_or_none()
-        if not user:
-            user = User(id=1, username=test_username, created_at=datetime.now(UTC))
-            async_db.add(user)
-            await async_db.flush()
-            await async_db.refresh(user)
-            await _sync_id_sequence(async_db, "users")
+        # Reuse helper to get or create the default test user with deterministic ID
+        user = await get_or_create_user_async(async_db, username=test_username)
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})
