@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-25
+
+**Pipeline Simplification (#363)**
+- Simplified opencode pipeline script by removing CI checking and complex model backoff features
+- Removed jiti dependency causing ESLint configuration issues
+- Streamlined pipeline state machine for improved reliability
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
