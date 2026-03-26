@@ -212,7 +212,7 @@ export const threadsApi = {
     const response = await api.get<ThreadListResponse>('/threads/', {
       params: { ...params, page_token: pageToken },
     })
-    return response.data
+    return response
   },
   get: (id: number) => api.get<Thread>(`/threads/${id}`),
   create: (data: ThreadCreatePayload) => api.post<Thread, ThreadCreatePayload>('/threads/', data),
@@ -244,7 +244,7 @@ export const sessionApi = {
     const response = await api.get<SessionListResponse>('/sessions/', {
       params: { ...params, page_token: pageToken },
     })
-    return response.data
+    return response
   },
   get: (id: number) => api.get<SessionSummary>(`/sessions/${id}`),
   getCurrent: () => api.get<SessionCurrent>('/sessions/current/'),

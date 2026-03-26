@@ -26,7 +26,7 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
       // Consider cache valid for 30 seconds
       if (now - timestamp < 30000) {
         if (!cancelled) {
-          setData(data)
+          setData(data as Thread[])
           setIsPending(false)
         }
         return

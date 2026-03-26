@@ -96,7 +96,7 @@ export function useSessions(params = EMPTY_PARAMS) {
           const now = Date.now()
           if (now - timestamp < 30000) {
             if (!cancelled) {
-              setData(data)
+              setData(data as SessionSummary[])
               setIsPending(false)
             }
             return
@@ -145,18 +145,18 @@ export function useSessions(params = EMPTY_PARAMS) {
     setIsError(false)
     setError(null)
     try {
-      const cached = getCache(cacheKey)
-      if (cached) {
-        const { data, timestamp } = cached
-        const now = Date.now()
-        if (now - timestamp < 30000) {
-          if (!cancelled) {
-            setData(data)
-            setIsPending(false)
+const cached = getCache(cacheKey)
+        if (cached) {
+          const { data, timestamp } = cached
+          const now = Date.now()
+          if (now - timestamp < 30000) {
+            if (!cancelled) {
+              setData(data as SessionSummary[])
+              setIsPending(false)
+            }
+            return
           }
-          return
         }
-      }
 
       let allSessions: SessionSummary[] = []
       let nextPageToken: string | null = null
