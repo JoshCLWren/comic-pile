@@ -30,11 +30,6 @@ class DatabaseSettings(BaseSettings):
         description="PostgreSQL database connection URL",
         json_schema_extra={"env": "DATABASE_URL"},
     )
-    database_url: str = Field(
-        ...,
-        description="PostgreSQL database connection URL",
-        json_schema_extra={"env": "DATABASE_URL"},
-    )
     test_database_url: str | None = Field(
         default=None,
         description="Database URL for testing (overrides DATABASE_URL in tests)",
@@ -52,12 +47,6 @@ class DatabaseSettings(BaseSettings):
         if not v:
             raise ValueError("DATABASE_URL is required")
         return v
-
-    test_database_url: str | None = Field(
-        default=None,
-        description="Database URL for testing (overrides DATABASE_URL in tests)",
-        json_schema_extra={"env": "TEST_DATABASE_URL"},
-    )
 
     @property
     def async_url(self) -> str:

@@ -133,6 +133,7 @@ fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
         "mistralai/mistral-large-3-675b-instruct-2512"
+        "mistralai/mistral-small-3.1-24b-instruct:free"
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
     )
