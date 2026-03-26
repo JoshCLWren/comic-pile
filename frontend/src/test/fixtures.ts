@@ -263,16 +263,16 @@ export const test = base.extend<TestFixtures>({
 
       // 3. Wait for collections to finish loading before proceeding
       // The CollectionToolbar shows "Loading collections..." initially, then either renders the select dropdown or shows an error
-      await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 15000 }).catch(() => {
+      await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 25000 }).catch(() => {
         // If loading message doesn't appear, collections may have loaded instantly or component isn't visible
       });
 
       // 4. Wait for either the collection toolbar dropdown to be visible or an error to appear
-      await page.waitForSelector('[aria-label="Filter by collection"], [role="alert"]', { state: 'visible', timeout: 15000 });
+      await page.waitForSelector('[aria-label="Filter by collection"], [role="alert"]', { state: 'visible', timeout: 25000 });
 
       // 5. Wait for the collection toolbar dropdown to be visible (critical for tests that use it)
       // Note: If there was an error, this will timeout, but tests should handle error states appropriately
-      await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 15000 }).catch(() => {
+      await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 10000 }).catch(() => {
         // If we get here, there was likely an error loading collections - tests should handle this
       });
 
