@@ -4,23 +4,23 @@ import os
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 from datetime import UTC, datetime
 
-import pytest
-import pytest_asyncio
 from dotenv import load_dotenv
 
 # Set TEST_ENVIRONMENT before importing app modules
 # This must be done before app.main is imported to disable rate limiting
-if not os.getenv("TEST_ENVIRONMENT"):
-    os.environ["TEST_ENVIRONMENT"] = "true"
+os.environ["TEST_ENVIRONMENT"] = "true"
 
+# Load environment variables from .env.test before importing app modules
+load_dotenv(".env.test")
+
+import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import UniqueConstraint, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession as SQLAlchemyAsyncSession,
-)
-from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
@@ -32,7 +32,6 @@ from app.main import app
 from app.models import Event, Issue, Thread, User
 from app.models import Session as SessionModel
 
-load_dotenv()
 
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
