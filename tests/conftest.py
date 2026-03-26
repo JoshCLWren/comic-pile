@@ -345,15 +345,7 @@ async def sample_data(
 ) -> dict[str, Thread | SessionModel | Event | User | list]:
     """Create sample threads, sessions for async testing."""
     now = datetime.now(UTC)
-    username = _default_test_username()
-    user = await async_db.execute(select(User).where(User.username == username))
-    user = user.scalar_one_or_none()
-    if not user:
-        user = User(username=username, id=1, created_at=now)
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
-        await _sync_id_sequence(async_db, "users")
+    user = await _ensure_default_user_async(async_db)
 
     threads = [
         Thread(

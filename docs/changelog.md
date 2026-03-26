@@ -7,6 +7,7 @@
 - Active queue now surfaces unblocked, unsnoozed threads first and keeps drag-to-reorder scoped there
 - Blocked section retains dependency context, action buttons, and collection filtering across both groups
 - Collapse state stays in-memory across re-renders without persisting between pages
+- Roll page thread pool now mirrors the blocked summary, keeping locked threads dimmed in a collapsible list with queue numbers and dependency teasers
 
 **Pipeline Simplification (#369)**
 - Simplified `scripts/opencode_pipeline.sh` by removing CI check stage, dynamic issue list, exponential backoff, per-model backoff, per-issue backoff, and MAX_ATTEMPTS limit
