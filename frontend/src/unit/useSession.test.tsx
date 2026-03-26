@@ -22,7 +22,7 @@ vi.mock('../services/api', () => ({
 
 const mockedSessionApi = vi.mocked(sessionApi)
 
-function renderWithProvider(ui) {
+function renderWithProvider<T>(ui: () => T) {
   return renderHook(ui, {
     wrapper: ({ children }) => <ToastProvider>{children}</ToastProvider>,
   })
@@ -39,14 +39,14 @@ beforeEach(() => {
 it('loads current session', async () => {
   const { result } = renderWithProvider(() => useSession())
 
-  await waitFor(() => expect(result.current.data).toEqual({ id: 1 }))
+  await waitFor(() => expect((result.current as any).data).toEqual({ id: 1 }))
   expect(mockedSessionApi.getCurrent).toHaveBeenCalled()
 })
 
 it('loads session list', async () => {
   const { result } = renderWithProvider(() => useSessions({ status: 'done' }))
 
-  await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
+  await waitFor(() => expect((result.current as any).data).toEqual([{ id: 2 }]))
   expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done' })
 })
 
@@ -54,8 +54,8 @@ it('loads session details and snapshots', async () => {
   const { result: detailsResult } = renderWithProvider(() => useSessionDetails(3))
   const { result: snapshotsResult } = renderWithProvider(() => useSessionSnapshots(3))
 
-  await waitFor(() => expect(detailsResult.current.data).toEqual({ session_id: 3 }))
-  await waitFor(() => expect(snapshotsResult.current.data).toEqual({ snapshots: [] }))
+  await waitFor(() => expect((detailsResult.current as any).data).toEqual({ session_id: 3 }))
+  await waitFor(() => expect((snapshotsResult.current as any).data).toEqual({ snapshots: [] }))
   expect(mockedSessionApi.getDetails).toHaveBeenCalledWith(3)
   expect(mockedSessionApi.getSnapshots).toHaveBeenCalledWith(3)
 })
@@ -64,7 +64,7 @@ it('restores session start', async () => {
   const { result } = renderWithProvider(() => useRestoreSessionStart())
 
   await act(async () => {
-    await result.current.mutate(11)
+    await (result.current as any).mutate(11)
   })
 
   expect(mockedSessionApi.restoreSessionStart).toHaveBeenCalledWith(11)
