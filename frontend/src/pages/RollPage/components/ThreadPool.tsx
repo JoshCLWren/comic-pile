@@ -128,7 +128,7 @@ export function ThreadPool({
       <span
         className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
       >
-        ▼
+        ▶
       </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
               {blockedThreadsWithReasons.length} thread{blockedThreadsWithReasons.length !== 1 ? 's' : ''} hidden (blocked by dependencies)

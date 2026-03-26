@@ -18,7 +18,9 @@
 - Mobile-friendly with scrollable list and 44px minimum touch targets
 - Improved UI with better spacing, typography, and visual hierarchy
 - Section is completely hidden when no threads are blocked (no "0 threads hidden" message)
-- Backend endpoint `/api/v1/dependencies/blocked-with-reasons` powers the expanded blocked threads list
+ - Backend endpoint `/api/v1/dependencies/blocked-with-reasons` powers the expanded blocked threads list
+ - Fixed toggle arrow to display ▶ when collapsed and ▼ when expanded
+
 
 **GitHub Projects Cleanup (#363)**
 - Removed deprecated GitHub Projects (classic) migration documentation
