@@ -8,7 +8,8 @@
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "eslint": "^9.17.0",
     "globals": "^15.13.0",
-    "htmlhint": "^1.1.5"
+    "htmlhint": "^1.1.5",
+    "jiti": "^2.6.1"
   },
   "scripts": {
     "lint:js": "sh -c 'if ls static/js/*.js >/dev/null 2>&1; then npx eslint static/js/*.js; else echo \"No JavaScript files to lint\"; fi'",
