@@ -95,7 +95,7 @@ export function useThreads(searchTerm?: string, collectionId?: number | null) {
         const now = Date.now()
         if (now - timestamp < 30000) {
           if (!cancelled) {
-            setData(data)
+            setData(data as Thread[])
             setIsPending(false)
           }
           return
