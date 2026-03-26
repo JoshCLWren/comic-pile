@@ -263,23 +263,9 @@ export const test = base.extend<TestFixtures>({
 
   // 3. Wait for collections to finish loading (Loading collections... text should disappear)
   // The CollectionToolbar component shows "Loading collections..." while fetching
-  await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 60000 }).catch(() => {
-    // Element may not exist if loading is fast, that's OK
-  });
-
-  // 4. Wait for the collection toolbar to be ready (either dropdown or error message)
-  // We wait for either the collection dropdown to appear or an error message
-  await page.waitForSelector('[aria-label="Filter by collection"], [role="alert"]', { state: 'visible', timeout: 60000 });
-
-  // 5. Wait specifically for the collection toolbar dropdown to be visible
-  // If there was an error loading collections, tests should handle it appropriately
-  await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 60000 }).catch(async () => {
-    // Check if there's an error message instead - this is an acceptable state
-    const errorVisible = await page.locator('[role="alert"]').isVisible().catch(() => false);
-    if (!errorVisible) {
-      throw new Error('Collection toolbar dropdown not found and no error message visible');
-    }
-  });
+  await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 15000 }).catch(() => {});
+  // 4. Wait for the collection toolbar dropdown to be visible
+  await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 15000 });
 
   // 6. Wait for the roll page to be ready (die button is always present on home route)
      await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 10000 }).catch(() => {
