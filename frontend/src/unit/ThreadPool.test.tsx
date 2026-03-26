@@ -61,4 +61,57 @@ describe('ThreadPool blocked section', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/queue?highlight=1')
     }
   })
+
+  it('limits initial display to 10 blocked threads and shows all on button click', async () => {
+    const user = userEvent.setup()
+    const manyThreads: BlockedThreadDetail[] = Array.from({ length: 12 }, (_, i) => ({
+      id: i + 1,
+      title: `Thread ${i + 1}`,
+      format: 'Comic',
+      queue_position: i + 1,
+      primary_blocking_reason: `blocked by Dep ${i + 1}`
+    }))
+    function ManyTestWrapper() {
+      const [blockedExpanded, setBlockedExpanded] = React.useState(false)
+      return (
+        <ThreadPool
+          pool={[]}
+          blockedThreadsWithReasons={manyThreads}
+          isRatingView={false}
+          isRolling={false}
+          rolledResult={null}
+          selectedThreadId={null}
+          staleThread={null}
+          staleThreadCount={0}
+          snoozedThreads={[]}
+          snoozedExpanded={false}
+          blockedExpanded={blockedExpanded}
+          onThreadClick={() => {}}
+          onUnsnooze={() => {}}
+          onReadStale={() => {}}
+          onToggleSnoozed={() => {}}
+          onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+          unsnoozeIsPending={false}
+        />
+      )
+    }
+    render(<ManyTestWrapper />)
+    // Open blocked section
+    const toggleBtn = screen.getByRole('button', { name: /hidden/i })
+    await user.click(toggleBtn)
+    // Verify first 10 are present
+    for (let i = 1; i <= 10; i++) {
+      expect(screen.getByText(`Thread ${i}`)).toBeInTheDocument()
+    }
+    // Verify 11 and 12 not present
+    expect(screen.queryByText('Thread 11')).not.toBeInTheDocument()
+    expect(screen.queryByText('Thread 12')).not.toBeInTheDocument()
+    // Click show all button
+    const showAllBtn = screen.getByText(/show all/i)
+    await user.click(showAllBtn)
+    // Now all 12 should be present
+    for (let i = 1; i <= 12; i++) {
+      expect(screen.getByText(`Thread ${i}`)).toBeInTheDocument()
+    }
+  })
 })
