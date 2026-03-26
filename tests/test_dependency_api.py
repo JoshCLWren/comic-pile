@@ -818,3 +818,60 @@ async def test_dependency_order_check_cross_thread_dependencies(
     data = resp.json()
     assert data["thread_id"] == thread1.id
     assert data["conflicts"] == []
+
+
+@pytest.mark.asyncio
+async def test_blocked_threads_with_reasons_endpoint(auth_client, async_db, test_username):
+    """Test the blocked-with-reasons endpoint returns blocked threads with explanations."""
+    from sqlalchemy import select
+    from app.models import Thread, User, Dependency
+
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    # Create two threads
+    t1 = Thread(
+        title="Prerequisite Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    t2 = Thread(
+        title="Dependent Thread",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add_all([t1, t2])
+    await async_db.commit()
+    await async_db.refresh(t1)
+    await async_db.refresh(t2)
+
+    # Create dependency: t1 blocks t2
+    dep = Dependency(
+        source_thread_id=t1.id,
+        target_thread_id=t2.id,
+    )
+    async_db.add(dep)
+    await async_db.commit()
+
+    # Call the blocked-with-reasons endpoint
+    resp = await auth_client.get("/api/v1/dependencies/blocked-with-reasons")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    # Should return the blocked thread with reasons
+    assert "blocked_threads" in data
+    assert len(data["blocked_threads"]) == 1
+    blocked_thread = data["blocked_threads"][0]
+    assert blocked_thread["id"] == t2.id
+    assert blocked_thread["title"] == t2.title
+    assert blocked_thread["format"] == t2.format
+    assert blocked_thread["queue_position"] == t2.queue_position
+    assert "primary_blocking_reason" in blocked_thread
+    assert "Blocked by" in blocked_thread["primary_blocking_reason"]
+    assert "Prerequisite Thread" in blocked_thread["primary_blocking_reason"]
