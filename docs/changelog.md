@@ -15,6 +15,13 @@
 - Now correctly computes max_numeric_issue_number by filtering only numeric issues and respecting total_issues constraint
 - Ensures issue numbering continues correctly after non-numeric entries like "Annual 1"
 
+**Blocked Threads UX (#369)**
+- Blocked threads now collapse into a summary section by default, showing count and next unlock hint
+- Active threads display at the top, followed by collapsed "Blocked (N)" section
+- Visual styling clearly differentiates active vs. blocked threads
+- Collection filtering applies across both sections
+- Thread positions remain unchanged - this is purely a display grouping
+
 ## 2026-03-25
 
 **Queue UX (#369)**
