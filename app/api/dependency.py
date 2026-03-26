@@ -156,7 +156,7 @@ async def get_blocked_threads_with_reasons(
     blocked_threads: list[BlockedThreadDetail] = []
     for thread in blocked_thread_objs:
         reasons = reasons_map.get(thread.id, [])
-        primary_reason = reasons[0] if reasons else "Blocked by dependencies"
+        primary_reason = reasons[0] if reasons else "blocked by dependencies"
         blocked_threads.append(
             BlockedThreadDetail(
                 id=thread.id,

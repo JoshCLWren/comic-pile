@@ -873,5 +873,5 @@ async def test_blocked_threads_with_reasons_endpoint(auth_client, async_db, test
     assert blocked_thread["format"] == t2.format
     assert blocked_thread["queue_position"] == t2.queue_position
     assert "primary_blocking_reason" in blocked_thread
-    assert "Blocked by" in blocked_thread["primary_blocking_reason"]
+    assert "blocked by" in blocked_thread["primary_blocking_reason"]
     assert "Prerequisite Thread" in blocked_thread["primary_blocking_reason"]
