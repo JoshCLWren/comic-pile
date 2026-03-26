@@ -59,6 +59,7 @@ export default function QueuePage() {
   const [blockedThreadIds, setBlockedThreadIds] = useState<number[]>([])
   const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
   const [isBlockedCollapsed, setIsBlockedCollapsed] = useState(true)
+  const [isSnoozedCollapsed, setIsSnoozedCollapsed] = useState(true)
   const [dependencyThread, setDependencyThread] = useState<Thread | null>(null)
   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
@@ -114,6 +115,12 @@ export default function QueuePage() {
   }, [blockedThreads.length])
 
   useEffect(() => {
+    if (!snoozedThreads.length) {
+      setIsSnoozedCollapsed(true)
+    }
+  }, [snoozedThreads.length])
+
+  useEffect(() => {
     let cancelled = false
     const calculatePreview = async () => {
       const issueInput = createForm.issues
@@ -159,18 +166,22 @@ export default function QueuePage() {
   const queueThreads = useMemo(
     () =>
       threads
-        ?.filter((thread) => thread.status === 'active' && !snoozedThreadIds.has(thread.id))
+        ?.filter((thread) => thread.status === 'active')
         .sort((a, b) => a.queue_position - b.queue_position) ?? [],
-    [threads, snoozedThreadIds]
+    [threads]
   )
 
   const activeThreads = useMemo(
-    () => queueThreads.filter((thread) => !blockedThreadSet.has(thread.id)),
-    [queueThreads, blockedThreadSet]
+    () => queueThreads.filter((thread) => !blockedThreadSet.has(thread.id) && !snoozedThreadIds.has(thread.id)),
+    [queueThreads, blockedThreadSet, snoozedThreadIds]
+  )
+  const snoozedThreads = useMemo(
+    () => queueThreads.filter((thread) => snoozedThreadIds.has(thread.id)),
+    [queueThreads, snoozedThreadIds]
   )
   const blockedThreads = useMemo(
-    () => queueThreads.filter((thread) => blockedThreadSet.has(thread.id)),
-    [queueThreads, blockedThreadSet]
+    () => queueThreads.filter((thread) => blockedThreadSet.has(thread.id) && !snoozedThreadIds.has(thread.id)),
+    [queueThreads, blockedThreadSet, snoozedThreadIds]
   )
   const completedThreads = useMemo(
     () => threads?.filter((thread) => thread.status === 'completed') ?? [],
@@ -563,6 +574,71 @@ export default function QueuePage() {
           </div>
         )}
       </section>
+
+      {snoozedThreads.length > 0 && (
+        <section className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setIsSnoozedCollapsed((prev) => !prev)}
+            className="w-full min-h-[44px] px-4 py-3 bg-stone-900/60 border border-stone-700/70 rounded-2xl flex items-center gap-3 text-left hover:border-amber-500/40 transition-colors"
+            aria-expanded={!isSnoozedCollapsed}
+            aria-controls="snoozed-thread-list"
+          >
+            <span
+              className={`text-stone-400 text-sm transition-transform ${!isSnoozedCollapsed ? 'rotate-90' : ''}`}
+              aria-hidden
+            >
+              ▶
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-stone-200 flex items-center gap-2">
+                Snoozed ({snoozedThreads.length})
+                <span className="text-[11px] text-stone-500 font-bold uppercase tracking-widest">Summary</span>
+              </p>
+              <p className="text-[11px] text-stone-400 mt-1 truncate">
+                Paused threads will return to active queue
+              </p>
+            </div>
+            <span className="text-amber-300 text-xs font-black uppercase tracking-widest">{isSnoozedCollapsed ? 'Show' : 'Hide'}</span>
+          </button>
+
+          {!isSnoozedCollapsed && (
+            <div
+              id="snoozed-thread-list"
+              data-testid="snoozed-thread-list"
+              role="list"
+              aria-label="Snoozed thread queue"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
+            >
+              {snoozedThreads.map((thread) => (
+                <QueueThreadCard
+                  key={thread.id}
+                  thread={thread}
+                  blockingReasons={getBlockingReasons(thread)}
+                  isBlocked={blockedThreadSet.has(thread.id)}
+                  isBlockedSection={false}
+                  isDragOver={dragOverThreadId === thread.id}
+                  dragEnabled={!isSnoozedCollapsed}
+                  onSelect={() => handleThreadClick(thread)}
+                  onDragOver={handleDragOver(thread.id)}
+                  onDrop={handleDrop(thread.id)}
+                  onDragStart={!isSnoozedCollapsed ? handleDragStart(thread.id) : undefined}
+                  onDragEnd={!isSnoozedCollapsed ? handleDragEnd : undefined}
+                  onEdit={() => openEditModal(thread)}
+                  onManageDependencies={() => {
+                    setDependencyThread(thread)
+                    setIsDependencyBuilderOpen(true)
+                  }}
+                  onDelete={() => handleDelete(thread.id)}
+                  onMoveFront={() => handleMoveToFront(thread.id)}
+                  onMoveBack={() => handleMoveToBack(thread.id)}
+                  onReposition={() => openRepositionModal(thread)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {blockedThreads.length > 0 && (
         <section className="space-y-3">
