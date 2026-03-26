@@ -21,6 +21,7 @@
 **GitHub Projects Cleanup (#363)**
 - Removed deprecated GitHub Projects (classic) migration documentation
 - Cleaned up unused GitHub Projects preparation files
+- Removed GitHub Projects (classic) deprecation notices from migration scripts
 
 **Pipeline Simplification (#363)**
 - Simplified opencode pipeline script by removing CI checking and complex model backoff features

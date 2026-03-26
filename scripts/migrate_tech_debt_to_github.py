@@ -154,9 +154,6 @@ def create_github_issue(item: dict[str, str], dry_run: bool = False) -> str | No
         return None
 
     # Create issue using gh CLI
-    # Note: GitHub Projects (classic) is being deprecated in favor of the new Projects experience
-    # See: https://github.blog/changelog/2024-05-23-sunset-notice-projects-classic/
-    # The new Projects experience uses REST API instead of GraphQL for project management
     cmd = [
         "gh",
         "issue",
