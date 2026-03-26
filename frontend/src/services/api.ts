@@ -8,6 +8,7 @@ import type {
   AnalyticsMetrics,
   AuthTokens,
   BlockingInfoResponse,
+  BlockedThreadsResponse,
   Collection,
   CollectionCreate,
   CollectionListResponse,
@@ -256,6 +257,7 @@ export const undoApi = {
 
 export const dependenciesApi = {
   listBlockedThreadIds: () => api.get<number[]>('/v1/dependencies/blocked'),
+  listBlockedThreadsWithReasons: () => api.get<BlockedThreadsResponse>('/v1/dependencies/blocked-with-reasons'),
   listThreadDependencies: (threadId: number) =>
     api.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
   getIssueDependencies: (issueId: number) =>

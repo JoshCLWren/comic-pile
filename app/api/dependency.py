@@ -12,6 +12,8 @@ from app.database import get_db
 from app.models import Dependency, Issue, Thread
 from app.models.user import User
 from app.schemas.dependency import (
+    BlockedThreadDetail,
+    BlockedThreadsResponse,
     BlockingExplanation,
     DependencyCreate,
     DependencyOrderConflict,
@@ -24,6 +26,7 @@ from app.schemas.dependency import (
 )
 from comic_pile.dependencies import (
     detect_circular_dependency,
+    get_batch_blocking_explanations,
     get_blocked_thread_ids,
     get_blocking_explanations,
     get_dependency_order_conflicts,
@@ -124,6 +127,47 @@ async def get_all_blocked_thread_ids(
     """Return all currently blocked thread IDs for the current user."""
     blocked_ids = await get_blocked_thread_ids(current_user.id, db)
     return sorted(blocked_ids)
+
+
+@router.get("/dependencies/blocked-with-reasons", response_model=BlockedThreadsResponse)
+async def get_blocked_threads_with_reasons(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> BlockedThreadsResponse:
+    """Return all blocked threads with their primary blocking reason.
+
+    Returns blocked threads ordered by queue position with human-readable
+    blocking reasons for display in the roll pool.
+    """
+    blocked_ids = await get_blocked_thread_ids(current_user.id, db)
+    if not blocked_ids:
+        return BlockedThreadsResponse(blocked_threads=[])
+
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.id.in_(blocked_ids))
+        .where(Thread.user_id == current_user.id)
+        .order_by(Thread.queue_position)
+    )
+    blocked_thread_objs = result.scalars().all()
+
+    reasons_map = await get_batch_blocking_explanations(blocked_ids, current_user.id, db)
+
+    blocked_threads: list[BlockedThreadDetail] = []
+    for thread in blocked_thread_objs:
+        reasons = reasons_map.get(thread.id, [])
+        primary_reason = reasons[0] if reasons else "Blocked by dependencies"
+        blocked_threads.append(
+            BlockedThreadDetail(
+                id=thread.id,
+                title=thread.title,
+                format=thread.format,
+                queue_position=thread.queue_position,
+                primary_blocking_reason=primary_reason,
+            )
+        )
+
+    return BlockedThreadsResponse(blocked_threads=blocked_threads)
 
 
 @router.get("/threads/{thread_id}/dependencies", response_model=ThreadDependenciesResponse)

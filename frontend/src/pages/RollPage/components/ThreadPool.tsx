@@ -1,11 +1,11 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Thread } from '../../../types'
+import type { Thread, BlockedThreadDetail } from '../../../types'
 import type { RatingThread } from '../types'
 
 interface ThreadPoolProps {
   pool: Thread[]
-  blockedThreads: Thread[]
-  blockingReasonMap: Record<number, string[]>
+  blockedThreadsWithReasons: BlockedThreadDetail[]
   isRatingView: boolean
   isRolling: boolean
   rolledResult: number | null
@@ -25,8 +25,7 @@ interface ThreadPoolProps {
 
 export function ThreadPool({
   pool,
-  blockedThreads,
-  blockingReasonMap,
+  blockedThreadsWithReasons,
   isRatingView,
   isRolling,
   rolledResult,
@@ -44,6 +43,8 @@ export function ThreadPool({
   unsnoozeIsPending,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
+  const [showAllBlocked, setShowAllBlocked] = useState(false)
+  const INITIAL_BLOCKED_LIMIT = 10
   return (
     <div className={`px-4 pb-4 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-8'}`}>
       {!isRolling && rolledResult === null && !isRatingView && pool.length > 0 && (
@@ -62,98 +63,106 @@ export function ThreadPool({
         </div>
       </div>
 
-      <div className="space-y-2" data-roll-pool aria-label="Roll pool collection">
-        {pool.length === 0 && blockedThreads.length === 0 ? (
-          <div className="text-center py-10 space-y-4">
-            <div className="text-4xl">📚</div>
-            <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">Your Queue Is Empty</p>
-              <p className="text-xs text-stone-500 mt-1">Add comics to start rolling.</p>
-            </div>
-            <button
-              onClick={() => navigate('/queue')}
-              className="mt-4 px-6 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
-            >
-              Go to Queue
-            </button>
-          </div>
-        ) : pool.length === 0 && blockedThreads.length > 0 ? (
-          <div className="text-center py-10 space-y-4">
-            <div className="text-4xl">🔒</div>
-            <div>
-              <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All Threads Blocked</p>
-              <p className="text-xs text-stone-500 mt-1">Resolve dependencies to roll.</p>
-            </div>
-          </div>
-        ) : (
-          pool.map((thread, index) => {
-            const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
-            return (
-              <div
-                key={thread.id}
-                onClick={() => onThreadClick(thread)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    onThreadClick(thread)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''
-                  }`}
-              >
-                <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
-                  {index + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-stone-300 truncate text-sm">{thread.title}</p>
-                  <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
-                </div>
-              </div>
-            )
-          })
-        )}
+<div className="space-y-2" data-roll-pool aria-label="Roll pool collection">
+    {pool.length === 0 && blockedThreadsWithReasons.length === 0 ? (
+      <div className="text-center py-10 space-y-4">
+        <div className="text-4xl">📚</div>
+        <div>
+          <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">Your Queue Is Empty</p>
+          <p className="text-xs text-stone-500 mt-1">Add comics to start rolling.</p>
+        </div>
+        <button
+          onClick={() => navigate('/queue')}
+          className="mt-4 px-6 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest text-amber-500 transition-colors"
+        >
+          Go to Queue
+        </button>
       </div>
-
-      {blockedThreads.length > 0 && !isRatingView && (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={onToggleBlocked}
-            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+    ) : pool.length === 0 && blockedThreadsWithReasons.length > 0 ? (
+      <div className="text-center py-10 space-y-4">
+        <div className="text-4xl">🔒</div>
+        <div>
+          <p className="text-sm text-stone-300 font-bold uppercase tracking-widest">All Threads Blocked</p>
+          <p className="text-xs text-stone-500 mt-1">Resolve dependencies to roll.</p>
+        </div>
+      </div>
+    ) : (
+      pool.map((thread, index) => {
+        const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
+        return (
+          <div
+            key={thread.id}
+            onClick={() => onThreadClick(thread)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onThreadClick(thread)
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            className={`flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/5 rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-amber-500/30' : ''}`}
           >
-            <span
-              className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
-            >
-              ▶
+            <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
+              {index + 1}
             </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              {blockedThreads.length} thread{blockedThreads.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
-            </span>
-          </button>
-          {blockedExpanded && (
-            <div className="mt-2 space-y-1">
-              {blockedThreads.map((thread) => (
-                <div
-                  key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
-                >
-                  <span className="text-sm">🔒</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-stone-400 truncate">{thread.title}</p>
-                    {blockingReasonMap[thread.id]?.length > 0 && (
-                      <p className="text-[10px] text-stone-500 truncate">{blockingReasonMap[thread.id][0]}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-stone-300 truncate text-sm">{thread.title}</p>
+              <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
             </div>
+          </div>
+        )
+      })
+    )}
+  </div>
+
+  {blockedThreadsWithReasons.length > 0 && !isRatingView && (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={onToggleBlocked}
+        className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+      >
+        <span
+          className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
+        >
+          ▶
+        </span>
+        <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+          {blockedThreadsWithReasons.length} thread{blockedThreadsWithReasons.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
+        </span>
+      </button>
+      {blockedExpanded && (
+        <div className="mt-2 space-y-1 max-h-[300px] overflow-y-auto">
+          {(showAllBlocked ? blockedThreadsWithReasons : blockedThreadsWithReasons.slice(0, INITIAL_BLOCKED_LIMIT)).map((thread) => (
+            <button
+              key={thread.id}
+              type="button"
+              onClick={() => navigate(`/queue?highlight=${thread.id}`)}
+              className="w-full flex items-center gap-2 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left"
+            >
+              <span className="text-sm">🔒</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-stone-400 truncate">{thread.title}</p>
+                <p className="text-[10px] text-stone-500 truncate">{thread.primary_blocking_reason}</p>
+              </div>
+            </button>
+          ))}
+{blockedThreadsWithReasons.length > INITIAL_BLOCKED_LIMIT && !showAllBlocked && (
+            <button
+              type="button"
+              onClick={() => setShowAllBlocked(true)}
+              className="w-full px-4 py-3 min-h-[44px] text-[10px] font-black text-stone-400 uppercase tracking-widest hover:text-stone-300 transition-colors"
+            >
+              Show all {blockedThreadsWithReasons.length} blocked threads
+            </button>
           )}
         </div>
       )}
+    </div>
+  )}
 
-      {staleThread && !isRatingView && (
+  {staleThread && !isRatingView && (
         <div
           onClick={onReadStale}
           className="mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"

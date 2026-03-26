@@ -23,7 +23,7 @@ import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
-import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
+import type { Thread, RollResponse, SessionThread, Collection, BlockedThreadDetail } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -54,7 +54,7 @@ export default function RollPage() {
     isActionSheetOpen, setIsActionSheetOpen,
     activeRatingThread, setActiveRatingThread,
     isCollectionDialogOpen, setIsCollectionDialogOpen,
-    blockingReasonMap, setBlockingReasonMap,
+    blockedThreadsWithReasons, setBlockedThreadsWithReasons,
     showMigrationDialog, setShowMigrationDialog,
     threadToMigrate, setThreadToMigrate,
     showSimpleMigration, setShowSimpleMigration,
@@ -259,28 +259,20 @@ const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
     }
   }
 
-  const snoozedIds = useMemo(() => new Set(session?.snoozed_threads?.map((t) => t.id) ?? []), [session?.snoozed_threads])
+const snoozedIds = useMemo(() => new Set(session?.snoozed_threads?.map((t) => t.id) ?? []), [session?.snoozed_threads])
   const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked && !snoozedIds.has(t.id)) ?? [], [threads, snoozedIds])
-  const blockedThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && t.is_blocked) ?? [], [threads])
 
-useEffect(() => {
-  const fetchBlockingReasons = async () => {
-    if (!blockedThreads.length) {
-      setBlockingReasonMap({})
-      return
+  useEffect(() => {
+    const fetchBlockedThreadsWithReasons = async () => {
+      try {
+        const response = await dependenciesApi.listBlockedThreadsWithReasons()
+        setBlockedThreadsWithReasons(response.blocked_threads || [])
+      } catch {
+        setBlockedThreadsWithReasons([])
+      }
     }
-    const details: Array<[number, string[]]> = await Promise.all(
-      blockedThreads.map(async (thread) => {
-        try {
-          const info = await dependenciesApi.getBlockingInfo(thread.id)
-          return [thread.id, info.blocking_reasons || []]
-        } catch { return [thread.id, []] }
-      })
-    )
-    setBlockingReasonMap(Object.fromEntries(details))
-  }
-  fetchBlockingReasons()
-}, [blockedThreads, setBlockingReasonMap])
+    fetchBlockedThreadsWithReasons()
+  }, [threads, setBlockedThreadsWithReasons])
 
 useEffect(() => {
   if (session?.current_die) setCurrentDie(session.current_die)
@@ -657,26 +649,25 @@ useEffect(() => {
               />
             )}
 
-  <ThreadPool
-    pool={pool}
-    blockedThreads={blockedThreads}
-    blockingReasonMap={blockingReasonMap}
-    isRatingView={isRatingView}
-    isRolling={isRolling}
-    rolledResult={rolledResult}
-    selectedThreadId={selectedThreadId}
-    staleThread={staleThread}
-    staleThreadCount={staleThreadCount}
-    snoozedThreads={session?.snoozed_threads || []}
-    snoozedExpanded={snoozedExpanded}
-    blockedExpanded={blockedExpanded}
-    onThreadClick={handleThreadClick}
-    onUnsnooze={handleUnsnooze}
-    onReadStale={handleReadStale}
-    onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
-    onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
-    unsnoozeIsPending={unsnoozeMutation.isPending}
-  />
+<ThreadPool
+        pool={pool}
+        blockedThreadsWithReasons={blockedThreadsWithReasons}
+        isRatingView={isRatingView}
+        isRolling={isRolling}
+        rolledResult={rolledResult}
+        selectedThreadId={selectedThreadId}
+        staleThread={staleThread}
+        staleThreadCount={staleThreadCount}
+        snoozedThreads={session?.snoozed_threads || []}
+        snoozedExpanded={snoozedExpanded}
+        blockedExpanded={blockedExpanded}
+        onThreadClick={handleThreadClick}
+        onUnsnooze={handleUnsnooze}
+        onReadStale={handleReadStale}
+        onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
+        onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+        unsnoozeIsPending={unsnoozeMutation.isPending}
+      />
           </div>
         </div>
 

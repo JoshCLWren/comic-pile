@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import type { Thread, RollResponse, SessionThread } from '../../types'
+import type { Thread, BlockedThreadDetail } from '../../types'
 import type { RatingThread } from './types'
 
 export interface RollPageState {
@@ -20,7 +20,7 @@ export interface RollPageState {
   isActionSheetOpen: boolean
   activeRatingThread: RatingThread | null
   isCollectionDialogOpen: boolean
-  blockingReasonMap: Record<number, string[]>
+  blockedThreadsWithReasons: BlockedThreadDetail[]
   showMigrationDialog: boolean
   threadToMigrate: RatingThread | null
   showSimpleMigration: boolean
@@ -51,7 +51,7 @@ export interface RollPageStateSetters {
   setIsActionSheetOpen: (value: boolean) => void
   setActiveRatingThread: (value: RatingThread | null) => void
   setIsCollectionDialogOpen: (value: boolean) => void
-  setBlockingReasonMap: (value: Record<number, string[]>) => void
+  setBlockedThreadsWithReasons: (value: BlockedThreadDetail[]) => void
   setShowMigrationDialog: (value: boolean) => void
   setThreadToMigrate: (value: RatingThread | null) => void
   setShowSimpleMigration: (value: boolean) => void
@@ -79,7 +79,7 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [activeRatingThread, setActiveRatingThread] = useState<RatingThread | null>(null)
   const [isCollectionDialogOpen, setIsCollectionDialogOpen] = useState(false)
-  const [blockingReasonMap, setBlockingReasonMap] = useState<Record<number, string[]>>({})
+  const [blockedThreadsWithReasons, setBlockedThreadsWithReasons] = useState<BlockedThreadDetail[]>([])
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [threadToMigrate, setThreadToMigrate] = useState<RatingThread | null>(null)
   const [showSimpleMigration, setShowSimpleMigration] = useState(false)
@@ -127,8 +127,8 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setActiveRatingThread,
     isCollectionDialogOpen,
     setIsCollectionDialogOpen,
-    blockingReasonMap,
-    setBlockingReasonMap,
+    blockedThreadsWithReasons,
+    setBlockedThreadsWithReasons,
     showMigrationDialog,
     setShowMigrationDialog,
     threadToMigrate,

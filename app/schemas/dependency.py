@@ -86,3 +86,19 @@ class ThreadDependencyOrderCheckResponse(BaseModel):
 
     thread_id: int
     conflicts: list[DependencyOrderConflict]
+
+
+class BlockedThreadDetail(BaseModel):
+    """Schema for a single blocked thread with its primary blocking reason."""
+
+    id: int
+    title: str
+    format: str
+    queue_position: int
+    primary_blocking_reason: str
+
+
+class BlockedThreadsResponse(BaseModel):
+    """Schema for the list of blocked threads with reasons."""
+
+    blocked_threads: list[BlockedThreadDetail]

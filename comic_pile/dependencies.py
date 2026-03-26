@@ -96,6 +96,73 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
     return thread_reasons + issue_reasons
 
 
+async def get_batch_blocking_explanations(
+    thread_ids: set[int], user_id: int, db: AsyncSession
+) -> dict[int, list[str]]:
+    """Batch-fetch blocking reasons for multiple threads.
+
+    Args:
+        thread_ids: Set of thread IDs to get blocking reasons for.
+        user_id: User ID for ownership validation.
+        db: Database session.
+
+    Returns:
+        Dict mapping thread_id to list of blocking reason strings.
+    """
+    if not thread_ids:
+        return {}
+
+    result_map: dict[int, list[str]] = {tid: [] for tid in thread_ids}
+
+    source = Thread.__table__.alias("source_thread")
+    target = Thread.__table__.alias("target_thread")
+
+    thread_result = await db.execute(
+        select(target.c.id, source.c.id, source.c.title)
+        .join(Dependency, Dependency.source_thread_id == source.c.id)
+        .join(target, Dependency.target_thread_id == target.c.id)
+        .where(target.c.id.in_(thread_ids))
+        .where(source.c.user_id == user_id)
+        .where(target.c.user_id == user_id)
+        .where(source.c.status != "completed")
+    )
+    for target_id, source_id, source_title in thread_result.all():
+        result_map[target_id].append(f"Blocked by {source_title} (thread #{source_id})")
+
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+    source_thread = Thread.__table__.alias("source_thread")
+    target_thread = Thread.__table__.alias("target_thread")
+
+    issue_result = await db.execute(
+        select(
+            target_thread.c.id,
+            source_thread.c.id,
+            source_thread.c.title,
+            source_issue.c.issue_number,
+        )
+        .select_from(target_thread)
+        .join(
+            target_issue,
+            target_issue.c.id == target_thread.c.next_unread_issue_id,
+        )
+        .join(Dependency, Dependency.target_issue_id == target_issue.c.id)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
+        .where(target_thread.c.id.in_(thread_ids))
+        .where(target_thread.c.user_id == user_id)
+        .where(source_thread.c.user_id == user_id)
+        .where(source_issue.c.status != "read")
+        .where(target_thread.c.next_unread_issue_id.isnot(None))
+    )
+    for target_id, src_thread_id, src_thread_title, issue_number in issue_result.all():
+        result_map[target_id].append(
+            f"Blocked by issue #{issue_number} in {src_thread_title} (thread #{src_thread_id})"
+        )
+
+    return result_map
+
+
 async def validate_position_dependency_consistency(
     thread_id: int,
     user_id: int,

@@ -197,6 +197,18 @@ export interface BlockingInfoResponse {
   blocking_reasons: string[];
 }
 
+export interface BlockedThreadDetail {
+  id: number;
+  title: string;
+  format: string;
+  queue_position: number;
+  primary_blocking_reason: string;
+}
+
+export interface BlockedThreadsResponse {
+  blocked_threads: BlockedThreadDetail[];
+}
+
 export interface DependencyCreatePayload {
   sourceType?: 'thread' | 'issue';
   sourceId: number;

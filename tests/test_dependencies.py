@@ -7,6 +7,7 @@ import pytest
 from app.models import Dependency, Issue, Thread, User
 from comic_pile.dependencies import (
     detect_circular_dependency,
+    get_batch_blocking_explanations,
     get_blocked_thread_ids,
     get_blocking_explanations,
     refresh_user_blocked_status,
@@ -471,3 +472,61 @@ async def test_validate_position_dependency_consistency_warns_on_conflict(async_
     assert "issue #2" in warnings[0]
     assert "issue #1" in warnings[0]
     assert "Position is canonical" in warnings[0]
+
+
+@pytest.mark.asyncio
+async def test_batch_blocking_explanations(async_db):
+    """Batch fetch should return reasons for all blocked threads in one call."""
+    user = User(username="batch_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    source = Thread(
+        title="Source",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+    )
+    target_a = Thread(
+        title="TargetA",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+    )
+    target_b = Thread(
+        title="TargetB",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=3,
+        status="active",
+        user_id=user.id,
+    )
+    async_db.add_all([source, target_a, target_b])
+    await async_db.flush()
+
+    async_db.add_all(
+        [
+            Dependency(source_thread_id=source.id, target_thread_id=target_a.id),
+            Dependency(source_thread_id=source.id, target_thread_id=target_b.id),
+        ]
+    )
+    await async_db.commit()
+
+    blocked_ids = {target_a.id, target_b.id}
+    reasons_map = await get_batch_blocking_explanations(blocked_ids, user.id, async_db)
+
+    assert target_a.id in reasons_map
+    assert target_b.id in reasons_map
+    assert len(reasons_map[target_a.id]) == 1
+    assert "Blocked by Source" in reasons_map[target_a.id][0]
+
+
+@pytest.mark.asyncio
+async def test_batch_blocking_explanations_empty(async_db):
+    """Batch fetch should return empty dict for empty input."""
+    result = await get_batch_blocking_explanations(set(), 1, async_db)
+    assert result == {}
