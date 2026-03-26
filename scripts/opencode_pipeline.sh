@@ -1256,7 +1256,17 @@ cmd_main_fixer() {
     local LOG_LINES="${MAIN_FIXER_LOG_LINES:-100}"
     local LOCK="$LOG_DIR/.main_fixer_lock"
     local FIXER_LOG="$LOG_DIR/main_fixer.log"
-    local FIXER_MODEL="${_CODING_POOL[0]:-${_MODEL_POOL[0]}}"
+    # Always use a tool-capable model — the task requires actual file edits and git commits.
+    # Pick the first TOOL_OK model (same tier used for implement/review/fix workers).
+    local FIXER_MODEL
+    if [[ ${#_CODING_POOL[@]} -gt 0 ]]; then
+        FIXER_MODEL="${_CODING_POOL[0]}"
+    elif [[ ${#_MODEL_POOL[@]} -gt 0 ]]; then
+        FIXER_MODEL="${_MODEL_POOL[0]}"
+    else
+        log_error "main_fixer — no models available, sleeping"
+        sleep "$POLL"; return
+    fi
 
     log_info "main_fixer online — threshold=${THRESHOLD} PRs, poll=${POLL}s, model=${FIXER_MODEL}"
     mkdir -p "$LOG_DIR"
@@ -1373,6 +1383,11 @@ PROMPT
 )
 
             log_info "main_fixer — running opencode on main for '${job_name}' (model: ${FIXER_MODEL})"
+
+            # Record HEAD before opencode runs so we can detect real commits afterward
+            local pre_sha
+            pre_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
+
             {
                 echo ""
                 echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) job=${job_name} prs=${count} ==="
@@ -1380,17 +1395,26 @@ PROMPT
                 echo "=== END ==="
             } | tee -a "$FIXER_LOG"
 
+            # Verify success by checking for an ACTUAL new commit, not just the sentinel string.
+            # Models sometimes echo the sentinel without doing any work.
+            local post_sha
+            post_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
             local run_tail
             run_tail=$(tail -200 "$FIXER_LOG")
-            if echo "$run_tail" | grep -q "$sentinel"; then
-                log_ok "main_fixer — fix confirmed for '${job_name}'"
+
+            if [[ "$post_sha" != "$pre_sha" ]] && echo "$run_tail" | grep -q "$sentinel"; then
+                log_ok "main_fixer — fix committed (${pre_sha:0:7}→${post_sha:0:7}) for '${job_name}'"
+                fixed_something=true
+            elif [[ "$post_sha" != "$pre_sha" ]]; then
+                # Commit happened but sentinel missing — still accept the fix
+                log_ok "main_fixer — fix committed (${pre_sha:0:7}→${post_sha:0:7}) for '${job_name}' (no sentinel, but commit present)"
                 fixed_something=true
             elif echo "$run_tail" | grep -q "MAIN_FIXER_SKIP"; then
                 local reason
                 reason=$(echo "$run_tail" | grep "MAIN_FIXER_SKIP" | tail -1)
                 log_warn "main_fixer — skipped '${job_name}': $reason"
             else
-                log_warn "main_fixer — no confirmation sentinel for '${job_name}'"
+                log_warn "main_fixer — no real commit made for '${job_name}' (model may have hallucinated)"
             fi
         done
 
