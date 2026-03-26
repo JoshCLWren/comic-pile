@@ -1,18 +1,17 @@
+import React from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useNavigate } from 'react-router-dom'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
 import type { Thread, BlockedThreadDetail } from '../types'
 
+const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
   return {
     ...actual,
-    useNavigate: vi.fn(),
+    useNavigate: () => mockNavigate,
   }
 })
-
-const mockedNavigate = vi.mocked(useNavigate)
 
 function TestWrapper() {
   const [blockedExpanded, setBlockedExpanded] = React.useState(false)
@@ -54,10 +53,12 @@ describe('ThreadPool blocked section', () => {
     await user.click(toggleBtn)
     expect(screen.getByText('Thread A')).toBeInTheDocument()
     expect(screen.getByText('Thread B')).toBeInTheDocument()
+    
     const firstRow = screen.getByText('Thread A').closest('button')
     if (firstRow) {
       await user.click(firstRow)
-      expect(mockedNavigate).toHaveBeenCalledWith('/queue?highlight=1')
+      // Check that navigate was called
+      expect(mockNavigate).toHaveBeenCalledWith('/queue?highlight=1')
     }
   })
 })
