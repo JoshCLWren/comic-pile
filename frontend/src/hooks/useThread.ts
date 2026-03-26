@@ -46,7 +46,7 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
         }
         // Fetch all pages transparently
         let allThreads: Thread[] = []
-        let nextPageToken: string | undefined = undefined
+        let nextPageToken: string | null = null
         let pageCount = 0
         const maxPages = 100 // Safety limit
 
@@ -110,7 +110,7 @@ export function useThreads(searchTerm = '', collectionId: number | null = null) 
         params.collection_id = collectionId
       }
       let allThreads: Thread[] = []
-      let nextPageToken: string | undefined = undefined
+      let nextPageToken: string | null = null
       let pageCount = 0
       do {
         const response = await threadsApi.list(

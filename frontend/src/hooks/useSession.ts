@@ -104,7 +104,7 @@ export function useSessions(params = EMPTY_PARAMS) {
         }
 
         let allSessions: SessionSummary[] = []
-        let nextPageToken: string | undefined = undefined
+        let nextPageToken: string | null = null
         let pageCount = 0
         const maxPages = 100
 
@@ -159,7 +159,7 @@ export function useSessions(params = EMPTY_PARAMS) {
       }
 
       let allSessions: SessionSummary[] = []
-      let nextPageToken: string | undefined = undefined
+      let nextPageToken: string | null = null
       let pageCount = 0
       do {
         const response = await sessionApi.list(effectiveParams, nextPageToken)
