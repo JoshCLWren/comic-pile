@@ -1236,6 +1236,214 @@ print('{ts}  #{issue:<8}  {role:<8}  {model:<44}  {dur:<8}  {outcome}'.format(
     echo "Total: $(wc -l < "$TIMESHEET")  OK: $(grep -c '"outcome":"success"' "$TIMESHEET" || echo 0)  FAIL: $(grep -c '"outcome":"failed"' "$TIMESHEET" || echo 0)  TIMEOUT: $(grep -c '"outcome":"timeout"' "$TIMESHEET" || echo 0)"
 }
 
+# ── Role: main_fixer ──────────────────────────────────────────────────────────
+#
+# Surveys CI failures across ALL open PRs. When the same job fails on
+# MAIN_FIXER_THRESHOLD or more branches it's almost certainly a main-branch
+# regression, not a per-PR bug. The daemon:
+#   1. Fetches the latest CI run for every open PR branch.
+#   2. Tallies which job names are failing and on how many branches.
+#   3. When a job clears the threshold, grabs failure logs from one run and
+#      asks opencode (running in REPO_ROOT / main checkout) to diagnose + fix.
+#   4. On a confirmed fix, pushes main and merges into every open PR branch.
+#
+# Lock file: $LOG_DIR/.main_fixer_lock  — prevents concurrent runs.
+#
+# Env overrides:
+#   MAIN_FIXER_POLL=600        seconds between surveys (default 10 min)
+#   MAIN_FIXER_THRESHOLD=3     min PRs with same failing job to trigger a fix
+#   MAIN_FIXER_LOG_LINES=100   lines of failure log passed to opencode
+
+cmd_main_fixer() {
+    local POLL="${MAIN_FIXER_POLL:-600}"
+    local THRESHOLD="${MAIN_FIXER_THRESHOLD:-3}"
+    local LOG_LINES="${MAIN_FIXER_LOG_LINES:-100}"
+    local LOCK="$LOG_DIR/.main_fixer_lock"
+    local FIXER_LOG="$LOG_DIR/main_fixer.log"
+    local FIXER_MODEL="${_CODING_POOL[0]:-${_MODEL_POOL[0]}}"
+
+    log_info "main_fixer online — threshold=${THRESHOLD} PRs, poll=${POLL}s, model=${FIXER_MODEL}"
+    mkdir -p "$LOG_DIR"
+
+    while true; do
+        if ! mkdir "$LOCK" 2>/dev/null; then
+            sleep "$POLL"; continue
+        fi
+
+        log_info "main_fixer — surveying CI across open PRs"
+
+        # ── 1. Enumerate open PRs ───────────────────────────────────────────
+        local pr_data
+        pr_data=$(gh pr list --state open --json number,headRefName \
+            --jq '.[] | "\(.number) \(.headRefName)"' 2>/dev/null || true)
+        if [[ -z "$pr_data" ]]; then
+            log_info "main_fixer — no open PRs"
+            rm -rf "$LOCK"; sleep "$POLL"; continue
+        fi
+
+        # job_name → count of PRs where it's failing
+        declare -A job_fail_count=()
+        # job_name → "pr_num run_id branch" for log extraction
+        declare -A job_sample=()
+
+        while IFS=' ' read -r pr_num branch; do
+            [[ -z "$branch" ]] && continue
+            local run_info
+            run_info=$(gh run list --branch "$branch" --limit 1 \
+                --json databaseId,conclusion \
+                --jq '.[0] | "\(.databaseId) \(.conclusion)"' \
+                2>/dev/null || true)
+            [[ -z "$run_info" ]] && continue
+
+            local run_id conclusion
+            read -r run_id conclusion <<< "$run_info"
+            [[ "$conclusion" != "failure" ]] && continue
+
+            local failed_jobs
+            failed_jobs=$(gh run view "$run_id" --json jobs \
+                --jq '.jobs[] | select(.conclusion=="failure") | .name' \
+                2>/dev/null || true)
+            [[ -z "$failed_jobs" ]] && continue
+
+            while IFS= read -r job_name; do
+                [[ -z "$job_name" ]] && continue
+                job_fail_count["$job_name"]=$(( ${job_fail_count["$job_name"]:-0} + 1 ))
+                [[ -z "${job_sample["$job_name"]:-}" ]] && \
+                    job_sample["$job_name"]="$pr_num $run_id $branch"
+            done <<< "$failed_jobs"
+        done <<< "$pr_data"
+
+        # ── 2. Find jobs above threshold ────────────────────────────────────
+        local common_jobs=()
+        for job_name in "${!job_fail_count[@]}"; do
+            local count=${job_fail_count["$job_name"]}
+            if [[ $count -ge $THRESHOLD ]]; then
+                common_jobs+=("$job_name")
+                log_warn "main_fixer — '${job_name}' failing on ${count}/${#pr_data} PRs"
+            fi
+        done
+
+        if [[ ${#common_jobs[@]} -eq 0 ]]; then
+            log_info "main_fixer — no common failures. Sleeping ${POLL}s."
+            rm -rf "$LOCK"; sleep "$POLL"; continue
+        fi
+
+        # ── 3. Fix each common failure ──────────────────────────────────────
+        local fixed_something=false
+
+        for job_name in "${common_jobs[@]}"; do
+            local sample="${job_sample["$job_name"]}"
+            local sample_pr sample_run _sample_branch
+            read -r sample_pr sample_run _sample_branch <<< "$sample"
+            local count=${job_fail_count["$job_name"]}
+
+            log_info "main_fixer — fetching logs: PR #${sample_pr} run ${sample_run} job '${job_name}'"
+            local fail_logs
+            fail_logs=$(gh run view "$sample_run" --log-failed 2>/dev/null \
+                | grep -A2 "$job_name" | head -n "$LOG_LINES" || \
+              gh run view "$sample_run" --log-failed 2>/dev/null \
+                | tail -n "$LOG_LINES" || true)
+            [[ -z "$fail_logs" ]] && { log_warn "main_fixer — no logs for $job_name, skipping"; continue; }
+
+            local sentinel="MAIN_FIXER_DONE_${job_name//[^a-zA-Z0-9]/_}"
+
+            local fixer_prompt
+            fixer_prompt=$(cat <<PROMPT
+You are a CI triage agent for the comic-pile repository. The CI job named '${job_name}'
+is currently failing on ${count} open PRs. When the same job fails across many PRs it means
+there is a regression on the main branch — NOT a problem in the individual PR branches.
+
+Failure log (last ${LOG_LINES} lines from PR #${sample_pr}):
+
+\`\`\`
+${fail_logs}
+\`\`\`
+
+Instructions:
+1. Identify the root cause from the log. Find which source file, component, or function
+   is broken and why.
+2. Fix only the source code. Do NOT modify test files unless the test itself contains a
+   factually wrong assertion (e.g., wrong aria-label because the source label changed
+   intentionally).
+3. After fixing, do a quick sanity check:
+   - Frontend issue: run  cd frontend && npm run build 2>&1 | tail -20
+   - Backend issue:  run  cd /mnt/extra/josh/code/comic-pile && uv run pytest --tb=short -q 2>&1 | tail -30
+4. Commit the fix with:  git add -p  then  git commit -m "fix(ci): <short description>"
+5. When completely done, output the exact string: ${sentinel}
+
+If you cannot determine a safe fix (ambiguous cause, needs human judgment), output:
+MAIN_FIXER_SKIP — <one-line reason>
+PROMPT
+)
+
+            log_info "main_fixer — running opencode on main for '${job_name}' (model: ${FIXER_MODEL})"
+            {
+                echo ""
+                echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) job=${job_name} prs=${count} ==="
+                timeout 30m opencode run -m "$FIXER_MODEL" --dir "$REPO_ROOT" "$fixer_prompt" 2>&1
+                echo "=== END ==="
+            } | tee -a "$FIXER_LOG"
+
+            local run_tail
+            run_tail=$(tail -200 "$FIXER_LOG")
+            if echo "$run_tail" | grep -q "$sentinel"; then
+                log_ok "main_fixer — fix confirmed for '${job_name}'"
+                fixed_something=true
+            elif echo "$run_tail" | grep -q "MAIN_FIXER_SKIP"; then
+                local reason
+                reason=$(echo "$run_tail" | grep "MAIN_FIXER_SKIP" | tail -1)
+                log_warn "main_fixer — skipped '${job_name}': $reason"
+            else
+                log_warn "main_fixer — no confirmation sentinel for '${job_name}'"
+            fi
+        done
+
+        # ── 4. Push main + merge into all PR branches ───────────────────────
+        if [[ "$fixed_something" == true ]]; then
+            log_info "main_fixer — pushing main"
+            ALLOW_MAIN_PUSH=1 git -C "$REPO_ROOT" push origin main 2>&1 || \
+                log_error "main_fixer — push to main failed"
+
+            git -C "$REPO_ROOT" fetch origin main 2>/dev/null || true
+            log_info "main_fixer — propagating main to all open PR branches"
+
+            while IFS=' ' read -r _pr_num branch; do
+                [[ -z "$branch" ]] && continue
+                local wt_issue
+                wt_issue=$(echo "$branch" | grep -oP 'issue-\K[0-9]+' || true)
+                if [[ -n "$wt_issue" ]]; then
+                    local wt_path
+                    wt_path=$(worktree_dir "$wt_issue")
+                    if [[ -d "$wt_path" ]] && git -C "$wt_path" status &>/dev/null; then
+                        git -C "$wt_path" merge origin/main --no-edit -X theirs 2>/dev/null && \
+                            git -C "$wt_path" push origin "$branch" 2>/dev/null && \
+                            log_info "main_fixer — merged main → $branch" || \
+                            log_warn "main_fixer — failed: $branch"
+                        continue
+                    fi
+                fi
+                # Fallback: scratch worktree
+                local tmpwt
+                tmpwt=$(mktemp -d)
+                if git -C "$REPO_ROOT" worktree add "$tmpwt" "origin/$branch" --detach 2>/dev/null; then
+                    git -C "$tmpwt" merge origin/main --no-edit -X theirs 2>/dev/null && \
+                        git -C "$tmpwt" push origin "HEAD:$branch" 2>/dev/null && \
+                        log_info "main_fixer — merged main → $branch (scratch)" || \
+                        log_warn "main_fixer — failed: $branch (scratch)"
+                    git -C "$REPO_ROOT" worktree remove "$tmpwt" --force 2>/dev/null
+                else
+                    rm -rf "$tmpwt"
+                    log_warn "main_fixer — could not create scratch worktree for $branch"
+                fi
+            done <<< "$pr_data"
+        fi
+
+        rm -rf "$LOCK"
+        log_info "main_fixer — cycle complete. Sleeping ${POLL}s."
+        sleep "$POLL"
+    done
+}
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 
 ROLE="${1:-}"
@@ -1252,8 +1460,9 @@ case "$ROLE" in
     arbiter)        cmd_arbiter ;;
     timesheet)      cmd_timesheet ;;
     model_manager)  cmd_model_manager ;;
+    main_fixer)     cmd_main_fixer ;;
     *)
-        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet|tool_test|model_manager}"
+        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet|tool_test|model_manager|main_fixer}"
         echo ""
         echo "Workflow:"
         echo "  1. $0 init           — seed state files + clean stale worktrees"
@@ -1263,12 +1472,14 @@ case "$ROLE" in
         echo "       $0 fix          — fixes critique or CI failures"
         echo "       $0 pr           — opens PR"
         echo "       $0 ci_check     — checks CI + CodeRabbit, posts AC, routes failures back"
-        echo "       $0 arbiter      — watchdog: resets stalemates every 5m
-       $0 model_manager — refreshes model pool every 10m (run in background)"
+        echo "       $0 arbiter      — watchdog: resets stalemates every 5m"
+        echo "       $0 model_manager — refreshes model pool every 10m"
+        echo "       $0 main_fixer   — surveys CI across all PRs, fixes main-branch regressions"
         echo "  3. $0 status         — see all issue states + active worktrees"
-        echo "  4. $0 timesheet      — see model usage log
-  5. $0 tool_test      — re-run tool-use tier classification (refresh after adding models)
-  6. $0 model_manager  — background daemon: refreshes model pool every 10 minutes"
+        echo "  4. $0 timesheet      — see model usage log"
+        echo "  5. $0 tool_test      — re-run tool-use tier classification"
+        echo "  6. $0 model_manager  — background daemon: refreshes model pool every 10 minutes"
+        echo "  7. $0 main_fixer     — background daemon: auto-fixes main-branch CI regressions"
         echo ""
         echo "State machine:"
         echo "  pending → implementing → implemented → reviewing → reviewed"
