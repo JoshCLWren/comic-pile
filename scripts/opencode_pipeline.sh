@@ -90,6 +90,10 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
         "openrouter/arcee-ai/trinity-large-preview:free"
+        "openrouter/nomic-ai/telechat-large"
+        "openrouter/perplexity/llama-3.1-sonar-large-128k-chat"
+        "openrouter/google/gemini-2.0-flash-thinking-exp"
+        "opencode/codestral-mamba"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi

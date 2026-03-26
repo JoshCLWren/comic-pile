@@ -261,11 +261,34 @@ export const test = base.extend<TestFixtures>({
       // Element may not exist, that's OK
     });
 
-    // 3. Wait for the roll page to be ready (die button is always present on home route)
-    await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 10000 }).catch(() => {
-      // May not exist if no session or in empty state — check for roll pool instead
-      return page.waitForSelector('[data-roll-pool]', { state: 'attached', timeout: 5000 }).catch(() => {});
-    });
+    // 3. Wait for the roll page to be ready using multiple stable selectors with conditional logic
+    const waitForRollPage = async () => {
+      try {
+        // Try most stable selector first: Roll Dice button or Home tab
+        await page.waitForSelector('[data-roll-dice-button], [aria-label="Home"], [data-home-tab]', { 
+          state: 'visible', 
+          timeout: 8000 
+        });
+        console.debug('Found stable Roll Dice/Home selector');
+        return;
+      } catch (_e) {
+        console.debug('Stable selector not found, trying fallback...');
+      }
+
+      try {
+        // Try the original Roll the dice selector
+        await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 5000 });
+        console.debug('Found Roll the dice selector');
+      } catch (_e) {
+        console.debug('Roll the dice selector not found, trying roll pool...');
+      }
+
+      // Final fallback: wait for roll pool
+      await page.waitForSelector('[data-roll-pool]', { state: 'attached', timeout: 5000 }).catch(() => {});
+      console.debug('Roll page ready (or timeout)');
+    };
+
+    await waitForRollPage();
 
     await use(page);
 
