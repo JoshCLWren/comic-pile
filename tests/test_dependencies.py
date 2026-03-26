@@ -51,7 +51,7 @@ async def test_get_blocked_thread_ids_and_explanations(async_db):
 
     reasons = await get_blocking_explanations(b.id, user.id, async_db)
     assert reasons
-    assert "Blocked by A" in reasons[0]
+    assert "blocked by A" in reasons[0]
 
 
 @pytest.mark.asyncio
@@ -328,7 +328,7 @@ async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
     assert target_thread.id in blocked
 
     reasons = await get_blocking_explanations(target_thread.id, user.id, async_db)
-    assert any("issue #1" in reason.lower() for reason in reasons)
+    assert any("#1" in reason for reason in reasons)
 
     source_issue_1.status = "read"
     source_issue_1.read_at = datetime.now(UTC)
@@ -522,7 +522,7 @@ async def test_batch_blocking_explanations(async_db):
     assert target_a.id in reasons_map
     assert target_b.id in reasons_map
     assert len(reasons_map[target_a.id]) == 1
-    assert "Blocked by Source" in reasons_map[target_a.id][0]
+    assert "blocked by Source" in reasons_map[target_a.id][0]
 
 
 @pytest.mark.asyncio

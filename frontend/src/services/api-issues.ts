@@ -85,7 +85,7 @@ export const issuesApi = {
 
   /**
    * Rewrite the full issue order for a thread
-   * @param threadId - The thread whose issues should be reordered
+    * @param threadId - The thread ID to migrate (updated to /v1)
    * @param issueIds - Full ordered list of issue IDs
    */
   reorder: async (threadId: number, issueIds: number[]): Promise<void> => {
