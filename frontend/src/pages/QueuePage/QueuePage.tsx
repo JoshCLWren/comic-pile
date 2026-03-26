@@ -140,6 +140,28 @@ export default function QueuePage() {
     .sort((a, b) => a.queue_position - b.queue_position) ?? []
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
 
+  // Highlight thread when navigating from roll page with ?highlight=<id>
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const highlightId = searchParams.get('highlight');
+    if (highlightId) {
+      const id = Number(highlightId);
+      if (!isNaN(id) && activeThreads.some(t => t.id === id)) {
+        const timer = setTimeout(() => {
+          const element = document.getElementById(`thread-${id}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            element.classList.add('highlight-thread');
+            setTimeout(() => {
+              element.classList.remove('highlight-thread');
+            }, 2000);
+          }
+        }, 0);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [location.search, activeThreads]);
+
   const handleDelete = (threadId: number) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
       deleteMutation.mutate(threadId).then(() => refetch()).catch((err: unknown) => {
@@ -488,9 +510,10 @@ export default function QueuePage() {
               const blockingReasons = blockingReasonMap[thread.id] || []
               const isMigrated = thread.total_issues !== null
 
-              return (
+                return (
                 <div
                   key={thread.id}
+                  id={`thread-${thread.id}`}
                   data-testid="queue-thread-item"
                   className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''
                     }`}
