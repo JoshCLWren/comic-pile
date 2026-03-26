@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import axios from 'axios'
-import { useCache } from '../contexts/CacheContext'
 import { sessionApi } from '../services/api'
 import type { SessionCurrent, SessionDetails, SessionSnapshotsResponse, SessionSummary } from '../types'
 import { useToast } from '../contexts/ToastContext'
@@ -30,8 +29,8 @@ export function useSession() {
       const previousSessionId = storedSessionId ? parseInt(storedSessionId, 10) : null
 
       if (previousSessionId !== null &&
-          currentSessionId !== previousSessionId &&
-          currentSessionId !== lastNotifiedSessionIdRef.current) {
+        currentSessionId !== previousSessionId &&
+        currentSessionId !== lastNotifiedSessionIdRef.current) {
         showToast('Session expired. A new session has started.', 'info')
         lastNotifiedSessionIdRef.current = currentSessionId
       }
@@ -71,121 +70,26 @@ export function useSessions(params = EMPTY_PARAMS) {
 
   const effectiveParams = params ?? EMPTY_PARAMS
 
-  const { getCache, setCache } = useCache()
-
-  const cacheKey = useMemo(() => {
-    const sortedKeys = Object.keys(effectiveParams).sort()
-    const paramsString = sortedKeys
-      .map(key => `${key}=${String(effectiveParams[key])}`)
-      .join('&')
-    return `sessions-${paramsString}`
-  }, [effectiveParams])
-
-  useEffect(() => {
-    let cancelled = false
-
-    const fetchData = async () => {
-      setIsPending(true)
-      setIsError(false)
-      setError(null)
-      try {
-        // Check cache first
-        const cached = getCache(cacheKey)
-        if (cached) {
-          const { data, timestamp } = cached
-          const now = Date.now()
-          if (now - timestamp < 30000) {
-            if (!cancelled) {
-              setData(data as SessionSummary[])
-              setIsPending(false)
-            }
-            return
-          }
-        }
-
-        let allSessions: SessionSummary[] = []
-        let nextPageToken: string | null = null
-        let pageCount = 0
-        const maxPages = 100
-
-        do {
-          const response = await sessionApi.list(effectiveParams, nextPageToken)
-          pageCount++
-          allSessions = [...allSessions, ...response.sessions]
-          nextPageToken = response.next_page_token
-        } while (nextPageToken && pageCount < maxPages)
-
-        setCache(cacheKey, allSessions, Date.now())
-
-        if (!cancelled) {
-          setData(allSessions)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setIsError(true)
-          setError(err instanceof Error ? err : new Error('Failed to fetch sessions'))
-        }
-      } finally {
-        if (!cancelled) {
-          setIsPending(false)
-        }
-      }
-    }
-
-    fetchData()
-
-    return () => {
-      cancelled = true
-    }
-  }, [effectiveParams, cacheKey, getCache, setCache])
-
-  const refetch = useCallback(async () => {
-    let cancelled = false
+  const fetchSessions = useCallback(async () => {
     setIsPending(true)
     setIsError(false)
     setError(null)
     try {
-const cached = getCache(cacheKey)
-        if (cached) {
-          const { data, timestamp } = cached
-          const now = Date.now()
-          if (now - timestamp < 30000) {
-            if (!cancelled) {
-              setData(data as SessionSummary[])
-              setIsPending(false)
-            }
-            return
-          }
-        }
-
-      let allSessions: SessionSummary[] = []
-      let nextPageToken: string | null = null
-      let pageCount = 0
-      do {
-        const response = await sessionApi.list(effectiveParams, nextPageToken)
-        pageCount++
-        allSessions = [...allSessions, ...response.sessions]
-        nextPageToken = response.next_page_token
-      } while (nextPageToken && pageCount < 100)
-
-      setCache(cacheKey, allSessions, Date.now())
-
-      if (!cancelled) {
-        setData(allSessions)
-      }
-    } catch (err) {
-      if (!cancelled) {
-        setIsError(true)
-        setError(err instanceof Error ? err : new Error('Failed to fetch sessions'))
-      }
+      const result = await sessionApi.list(effectiveParams)
+      setData(result.sessions)
+    } catch (err: unknown) {
+      setIsError(true)
+      setError(err instanceof Error ? err : new Error('Failed to fetch sessions'))
     } finally {
-      if (!cancelled) {
-        setIsPending(false)
-      }
+      setIsPending(false)
     }
-  }, [effectiveParams, cacheKey, getCache, setCache])
+  }, [effectiveParams])
 
-  return { data, isPending, isError, error, refetch }
+  useEffect(() => {
+    fetchSessions()
+  }, [fetchSessions])
+
+  return { data, isPending, isError, error, refetch: fetchSessions }
 }
 
 export function useSessionDetails(id: number | string | null | undefined) {
