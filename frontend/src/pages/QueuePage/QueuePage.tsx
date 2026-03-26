@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+// UI grouping for blocked threads collapsed/expanded (issue #369)
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
