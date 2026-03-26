@@ -1154,12 +1154,12 @@ cmd_model_manager() {
 
         if [[ "$needs_refresh" == "true" ]]; then
             log_info "Refreshing model pool (running model test)..."
-            # Get models excluding openrouter/opencode/anthropic/github-copilot providers
+            # Get models excluding openrouter/opencode/anthropic/github-copilot/mistralai providers
             local candidate_models=()
             while IFS= read -r model; do
                 candidate_models+=("$model")
             done < <(opencode models 2>/dev/null \
-                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/" \
+                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/" \
                 | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
