@@ -228,7 +228,7 @@ describe('Action Sheet', () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
-    const snoozedToggleButton = screen.getByText(/Snoozed \(1\)/)
+    const snoozedToggleButton = screen.getByText(/Paused \(1\)/)
     await user.click(snoozedToggleButton)
 
     const unsnoozeButton = screen.getByLabelText('Unsnooze this comic')

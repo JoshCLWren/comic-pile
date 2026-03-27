@@ -482,7 +482,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
 
                 <div className="min-h-[200px]">
                   {readingView === 'timeline' ? (
-                    <ReadingOrderTimeline thread={thread} dependencies={dependencies.blocked_by} />
+                    <ReadingOrderTimeline thread={thread} dependencies={[...dependencies.blocking, ...dependencies.blocked_by]} />
                   ) : isGraphLoading ? (
                     <p className="text-center text-xs text-stone-400">Loading flowchart…</p>
                   ) : (

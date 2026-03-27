@@ -15,7 +15,13 @@ logger = logging.getLogger(__name__)
 
 _db_settings = get_database_settings()
 
-DATABASE_URL = _db_settings.database_url
+# Use test_database_url if in test environment, otherwise use database_url
+if (
+    os.getenv("ENVIRONMENT") == "test" or os.getenv("TEST_ENVIRONMENT") == "true"
+) and _db_settings.test_database_url:
+    DATABASE_URL = _db_settings.test_database_url
+else:
+    DATABASE_URL = _db_settings.database_url
 ASYNC_DATABASE_URL = _db_settings.async_url
 
 # Log database URLs with password redacted

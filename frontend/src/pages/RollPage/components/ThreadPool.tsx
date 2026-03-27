@@ -196,7 +196,7 @@ export function ThreadPool({
               ▶
             </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              Snoozed ({snoozedThreads.length})
+              Paused ({snoozedThreads.length})
             </span>
           </button>
           {snoozedExpanded && (

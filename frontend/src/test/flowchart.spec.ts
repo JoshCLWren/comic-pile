@@ -59,7 +59,7 @@ test.describe('Dependency Flowchart', () => {
     ])
 
     // The flowchart toggle button should appear
-    await expect(authenticatedPage.locator('[data-testid="toggle-flowchart"]')).toBeVisible()
+    await expect(authenticatedPage.locator('[data-testid="toggle-reading-order"]')).toBeVisible()
   })
 
   test('renders flowchart with nodes and edges when toggled', async ({ authenticatedPage }) => {
@@ -100,7 +100,7 @@ test.describe('Dependency Flowchart', () => {
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
     // Toggle flowchart
-    await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
     // Flowchart should render
     await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
@@ -163,7 +163,7 @@ test.describe('Dependency Flowchart', () => {
       .filter({ hasText: 'Zoom Target' })
       .first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-    await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
 
@@ -219,7 +219,7 @@ test.describe('Dependency Flowchart', () => {
       .filter({ hasText: 'Hover Target Thread' })
       .first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-    await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
 
@@ -268,7 +268,7 @@ test.describe('Dependency Flowchart', () => {
       .filter({ hasText: 'Blocked Thread FC' })
       .first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-    await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
 
@@ -316,11 +316,11 @@ test.describe('Dependency Flowchart', () => {
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
     // Toggle on
-    await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
     await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
 
     // Toggle off
-    await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
     await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).not.toBeVisible()
   })
 
@@ -341,7 +341,7 @@ test.describe('Dependency Flowchart', () => {
     await card.locator('button[aria-label="Manage dependencies"]').click()
 
     // Should not show flowchart toggle when there are no dependencies
-    await expect(authenticatedPage.locator('[data-testid="toggle-flowchart"]')).not.toBeVisible()
+    await expect(authenticatedPage.locator('[data-testid="toggle-reading-order"]')).not.toBeVisible()
   })
 
   test.describe('Issue-level flowchart nodes', () => {
@@ -408,13 +408,13 @@ test.describe('Dependency Flowchart', () => {
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       // Wait for toggle button to appear
-      await authenticatedPage.waitForSelector('[data-testid="toggle-flowchart"]', { state: 'visible', timeout: 10000 })
+      await authenticatedPage.waitForSelector('[data-testid="toggle-reading-order"]', { state: 'visible', timeout: 10000 })
 
       // Click the toggle button
-      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
       // Wait for toggle button text to change to "Hide Flowchart"
-      await authenticatedPage.waitForSelector('[data-testid="toggle-flowchart"]:has-text("Hide Flowchart")', { timeout: 5000 })
+      await authenticatedPage.waitForSelector('[data-testid="toggle-reading-order"]:has-text("Hide Reading Order")', { timeout: 5000 })
 
       // Wait for flowchart container to appear
       await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
@@ -518,7 +518,7 @@ test.describe('Dependency Flowchart', () => {
         .filter({ hasText: 'Animal Man' })
         .first()
       await animalManCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
       await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
 
@@ -603,7 +603,7 @@ test.describe('Dependency Flowchart', () => {
         .filter({ hasText: 'Target Series' })
         .first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
       // Check issue node styling
       const issueNode = authenticatedPage.locator(`[data-testid="flowchart-node--${issue5Id}"]`)
@@ -676,7 +676,7 @@ test.describe('Dependency Flowchart', () => {
         .filter({ hasText: 'Blocked Target' })
         .first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
       // Issue node should not have lock icon
       const issueNodeIcon = authenticatedPage
@@ -752,7 +752,7 @@ test.describe('Dependency Flowchart', () => {
         .filter({ hasText: 'Edge Target' })
         .first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
       // Check that issue-level edge has the dashed cyan class
       const issueEdge = authenticatedPage.locator('.edge--issue-level')
@@ -846,7 +846,7 @@ test.describe('Dependency Flowchart', () => {
         .filter({ hasText: 'Thread Beta' })
         .first()
       await betaCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-flowchart"]')
+      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
 
       // Should have both thread nodes
       await expect(
