@@ -8,6 +8,10 @@
 - Frontend: Dynamically resize Roll button to **44px × 44px** on mobile for WCAG compliance
 - Added `touch_friendly` field to `Thread` model and database migration
 
+**Test Fixes (#363)**
+- Fixed `test_roll_dynamic_title`: removed invalid second roll assertion to properly handle pending roll conflicts
+- Fixed `test_admin_routes_accessible_when_enabled`: added database dependency override to use test session
+
 ## 2026-03-26
 
 **Roll Pool Blocked Threads Expansion (#363)**

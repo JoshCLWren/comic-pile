@@ -7,6 +7,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from tests.conftest import _create_async_db_override
 
 
@@ -52,6 +53,8 @@ async def test_admin_routes_accessible_when_enabled(
     from app.main import app
 
     try:
+        # Override database dependency to use test session
+        app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             response = await ac.get("/api/admin/export/csv/")
@@ -63,6 +66,7 @@ async def test_admin_routes_accessible_when_enabled(
             response = await ac.get("/api/admin/export/summary/")
             assert response.status_code == 200
     finally:
+        app.dependency_overrides.clear()
         if original_value is None:
             os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
         else:

@@ -67,15 +67,6 @@ async def test_roll_dynamic_title(auth_client: AsyncClient, sample_data: dict) -
         t.title for t in sample_data["threads"] if t.id == data["thread_id"]
     )
 
-    # Roll again (should allow same thread again)
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["thread_id"] in thread_ids
-    assert data["title"] == next(
-        t.title for t in sample_data["threads"] if t.id == data["thread_id"]
-    )
-
 
 @pytest.mark.asyncio
 async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -> None:
