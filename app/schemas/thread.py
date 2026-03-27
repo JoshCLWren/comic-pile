@@ -53,6 +53,7 @@ class ThreadResponse(BaseModel):
     next_unread_issue_number: str | None = None
     blocked_by_thread_ids: list[int] = []
     blocked_by_issue_ids: list[int] = []
+    touch_friendly: bool = False
 
 
 class ReactivateRequest(BaseModel):
