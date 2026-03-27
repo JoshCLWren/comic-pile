@@ -18,18 +18,22 @@ _is_problematic_model() {
     local model="$1"
     # Filter out models that start with problematic providers (case-insensitive)
     if echo "$model" | grep -qiE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+        echo "WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
     # Filter out models that contain mistralai provider in the path (case-insensitive)
     if echo "$model" | grep -qi "/mistralai/"; then
+        echo "WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
     # Filter out models ending with :free (case-insensitive)
     if echo "$model" | grep -qi ":free$"; then
+        echo "WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
     # Filter out specific problematic models
     if echo "$model" | grep -qi "mistral-small-3\.1-24b-instruct:free"; then
+        echo "WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
     return 1
