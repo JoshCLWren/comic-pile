@@ -68,17 +68,23 @@ _load_issues() {
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
-    while IFS= read -r model; do
-        _CODING_POOL+=("$model")
-    done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
+while IFS= read -r model; do
+# Filter out problematic providers
+if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+_CODING_POOL+=("$model")
+fi
+done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-    while IFS= read -r model; do
-        _MODEL_POOL+=("$model")
-    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
+while IFS= read -r model; do
+# Filter out problematic providers
+if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+_MODEL_POOL+=("$model")
+fi
+done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Fallback: if tool test hasn't been run yet, use full pool for everything
@@ -88,10 +94,9 @@ fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
 _MODEL_POOL=(
 "mistral/mistral-large-2512"
-"mistral/mistral-small-2506"
 "opencode/nemotron-3-super-free"
 "opencode/big-pickle"
-    "openrouter/arcee-ai/trinity-large-preview:free"
+"openrouter/arcee-ai/trinity-large-preview:free"
 )
 _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
