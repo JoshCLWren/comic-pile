@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
+import PositionMenu from '../../components/PositionMenu'
 import PositionSlider from '../../components/PositionSlider'
 import Tooltip from '../../components/Tooltip'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -16,6 +17,7 @@ import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
 import { useCollections } from '../../contexts/CollectionContext'
+import { PositionMenuProvider } from '../../contexts/PositionMenuContext'
 import type { Thread } from '../../types'
 import { getApiErrorDetail } from '../../utils/apiError'
 import { CollectionBadge } from './CollectionBadge'
@@ -438,7 +440,8 @@ export default function QueuePage() {
   }
 
   return (
-    <div className="space-y-10 pb-10">
+    <PositionMenuProvider>
+      <div className="space-y-10 pb-10">
       <header className="space-y-4 px-2">
         <div className="flex justify-between items-start gap-4">
           <div>
@@ -533,7 +536,7 @@ export default function QueuePage() {
                         )}
                       </div>
                     </div>
-                    <div className="hidden md:flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <Tooltip content="Edit thread details.">
                         <button
                           type="button"
@@ -574,10 +577,12 @@ export default function QueuePage() {
                           &times;
                         </button>
                       </Tooltip>
-                    </div>
-                    {/* Mobile 3-dot menu indicator */}
-                    <div className="md:hidden text-stone-500 flex items-center justify-center w-8 h-8 text-xl">
-                      ⋮
+                      <PositionMenu
+                        thread={thread}
+                        onMoveToFront={handleMoveToFront}
+                        onReposition={openRepositionModal}
+                        onMoveToBack={handleMoveToBack}
+                      />
                     </div>
                   </div>
                   <div className="pl-[2.75rem]">
@@ -613,41 +618,6 @@ export default function QueuePage() {
                         )}
                       </button>
                     )}
-                  </div>
-                  <div className="gap-2 pt-2 hidden md:flex">
-                    <Tooltip content="Move this thread to the front of the queue.">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleMoveToFront(thread.id)
-                        }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                      >
-                        Front
-                      </button>
-                    </Tooltip>
-                    <Tooltip content="Choose a specific position in the queue.">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          openRepositionModal(thread)
-                        }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                      >
-                        Reposition
-                      </button>
-                    </Tooltip>
-                    <Tooltip content="Move this thread to the back of the queue.">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleMoveToBack(thread.id)
-                        }}
-                        className="flex-1 py-2 bg-white/5 border border-white/10 text-stone-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
-                      >
-                        Back
-                      </button>
-                    </Tooltip>
                   </div>
                 </div>
               )
@@ -1009,7 +979,8 @@ export default function QueuePage() {
           onSkip={handleMigrationSkip}
           onClose={handleMigrationClose}
         />
-      )}
-    </div>
-  )
-}
+       )}
+     </div>
+     </PositionMenuProvider>
+   )
+ }
