@@ -31,15 +31,16 @@ _is_problematic_model() {
         echo "WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
-    # Filter out specific problematic models
-    if echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    if echo "$model" | grep -qi "mistral-small-3\.1-24b-instruct:free"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
+     # Filter out specific problematic models
+     # Note: Removed mistral-small-3.1-24b-instruct:free as it's now supported
+     # if echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
+     #     echo "WARNING: Filtering out problematic model: $model" >&2
+     #     return 0
+     # fi
+     # if echo "$model" | grep -qi "mistral-small-3\.1-24b-instruct:free"; then
+     #     echo "WARNING: Filtering out problematic model: $model" >&2
+     #     return 0
+     # fi
     return 1
 }
 
