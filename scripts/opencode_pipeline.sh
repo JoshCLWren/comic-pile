@@ -1192,7 +1192,7 @@ if [[ "$needs_refresh" == "true" ]]; then
   while IFS= read -r model; do
     candidate_models+=("$model")
   done < <(opencode models 2>/dev/null \
-  | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/" \
+  | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free" \
   | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
