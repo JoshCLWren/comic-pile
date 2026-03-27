@@ -2,6 +2,8 @@
 
 ## [unreleased]
 
+- Fixed blocked-threads toggle to use functional state updater to avoid stale closures, ensuring the expand/collapse action reliably shows blocking reasons (closes #363).
+
 * Enhanced expandable "N threads hidden" section with detailed blocking reasons
 * Each blocked thread shows its primary blocking reason (e.g., "Blocked by Ultimate Spider-Man #5")
 * For threads with multiple blockers, the most immediate blocker (by queue position) is shown first

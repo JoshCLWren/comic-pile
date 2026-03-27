@@ -159,8 +159,8 @@ const TOUCH_TARGET_MIN_SIZE = 44
                   >
                    <span className="text-sm flex-shrink-0">🔒</span>
                    <div className="flex-1 min-w-0">
-                     <p className="text-sm text-stone-300 truncate font-medium">{thread.title}</p>
-                     <p className="text-xs text-stone-400 mt-0.5 truncate">{thread.primary_blocking_reason}</p>
+                    <p className="text-sm text-stone-300 truncate font-medium">{thread.title}</p>
+                    <p className="text-xs text-stone-400 mt-0.5 truncate">blocked by {thread.primary_blocking_reason}</p>
                    </div>
                  </button>
                ))}

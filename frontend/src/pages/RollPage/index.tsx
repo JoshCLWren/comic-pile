@@ -676,8 +676,8 @@ useEffect(() => {
         onThreadClick={handleThreadClick}
         onUnsnooze={handleUnsnooze}
         onReadStale={handleReadStale}
-        onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
-        onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+        onToggleSnoozed={() => setSnoozedExpanded(prev => !prev)}
+        onToggleBlocked={() => setBlockedExpanded(prev => !prev)}
         unsnoozeIsPending={unsnoozeMutation.isPending}
       />
           </div>
