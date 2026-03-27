@@ -27,9 +27,17 @@ _is_problematic_model() {
         echo "WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
+    # Filter out mistral-small-3.1-24b-instruct (case-insensitive)
+    if echo "$model" | grep -qi "mistral-small-3.1-24b-instruct"; then
+        echo "WARNING: Filtering out problematic model: $model" >&2
+        return 0
+    fi
     # Filter out models ending with :free (case-insensitive)
     # Note: All :free models are problematic and should be filtered out
     if echo "$model" | grep -qi ":free$"; then
+        echo "WARNING: Filtering out problematic model: $model" >&2
+        return 0
+    fi
     return 1
 }
 
