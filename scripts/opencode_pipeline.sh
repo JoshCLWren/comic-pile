@@ -275,13 +275,29 @@ gh_comment() {
 
 # Per-model exponential backoff — replaces permanent blacklist
 # Backoff file: $_MODEL_BACKOFF_DIR/<sanitized_model>  →  "<fail_count>\n<last_fail_ts>"
-# Backoff duration: min(BASE * 2^(fail_count-1), MAX)  →  15s 30s 60s … 1hr
+# Backoff duration: BASE * 2^(fail_count-1), capped at _MODEL_BACKOFF_MAX (6h)
+# At max: model is evicted from both pool files and backoff file removed.
+#         model_manager will re-test and re-add it if it recovers.
 # Reset to zero on any success.
+
+_MODEL_BACKOFF_MAX=21600  # 6 hours
 
 _model_backoff_file() {
     local safe
     safe=$(echo "$1" | tr '/:' '__')
     echo "$_MODEL_BACKOFF_DIR/$safe"
+}
+
+# Evict a model from both pool files so model_manager re-tests it next cycle
+_evict_model() {
+    local model=$1
+    local safe
+    safe=$(echo "$model" | tr '/:' '__')
+    sed -i "/ ${model} /d;/^[A-Z_]*  *${safe//\//\\/}/d" \
+        "$LOG_DIR/model_test_results.txt" \
+        "$LOG_DIR/model_tool_test_results.txt" 2>/dev/null || true
+    rm -f "$(_model_backoff_file "$model")"
+    log_warn "Model EVICTED (hit ${_MODEL_BACKOFF_MAX}s max backoff): $model — model_manager will re-test"
 }
 
 model_in_backoff() {
@@ -292,8 +308,8 @@ model_in_backoff() {
     fail_count=$(sed -n '1p' "$f")
     last_fail=$(sed -n '2p' "$f")
     now=$(date +%s)
-    # backoff = BASE * 2^(fail_count-1), capped at MAX
     backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
+    [[ $backoff_s -gt $_MODEL_BACKOFF_MAX ]] && backoff_s=$_MODEL_BACKOFF_MAX
     [[ $(( now - last_fail )) -lt $backoff_s ]]
 }
 
@@ -305,8 +321,12 @@ record_model_fail() {
     local fail_count=0
     [[ -f "$f" ]] && fail_count=$(sed -n '1p' "$f")
     fail_count=$(( fail_count + 1 ))
-    printf '%s\n%s\n' "$fail_count" "$(date +%s)" > "$f"
     local backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
+    if [[ $backoff_s -ge $_MODEL_BACKOFF_MAX ]]; then
+        _evict_model "$model"
+        return
+    fi
+    printf '%s\n%s\n' "$fail_count" "$(date +%s)" > "$f"
     log_warn "Model backoff #${fail_count} for $model — retry in ${backoff_s}s (duration was ${duration}s)"
 }
 
