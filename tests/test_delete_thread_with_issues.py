@@ -24,9 +24,10 @@ async def test_delete_thread_with_issues_reproduces_lazy_raise_bug(
     4. During cascade, it tries to access Issue.thread relationship
     5. lazy="raise" causes InvalidRequestError
     """
-    # Create a user
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one()
+    # Ensure a valid user exists for FK references (use test helper to align with auth)
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
     user_id = user.id
 
     # Create a thread with issue tracking

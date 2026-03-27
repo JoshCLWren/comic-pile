@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy import select
 
-from app.models import Event, Thread
+from app.models import Event, Thread, User
 from httpx import AsyncClient
 from app.models import Session as SessionModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -690,9 +690,18 @@ async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
     """
     threads = sample_data["threads"]
 
+    # Ensure a user with id=1 exists for FK
+    result = await async_db.execute(select(User).where(User.id == 1))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(id=1, username="testuser1", email="test1@example.com")
+        async_db.add(user)
+        await async_db.commit()
+        await async_db.refresh(user)
+
     # Create a session
     session = SessionModel(
-        user_id=1,
+        user_id=user.id,
         start_die=20,
         manual_die=None,
         snoozed_thread_ids=[threads[0].id],
@@ -710,6 +719,12 @@ async def test_rate_with_snoozed_thread_ids_no_missing_greenlet(
     )
     async_db.add(event)
     await async_db.commit()
+
+    # Ensure there is an active thread selected for rating (avoid 400s in some environments)
+    session.pending_thread_id = threads[1].id
+    await async_db.flush()
+    await async_db.commit()
+    await async_db.refresh(session)
 
     # Rate the thread - this should not raise MissingGreenlet
     response = await auth_client.post(

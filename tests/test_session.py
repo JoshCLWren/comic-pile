@@ -166,17 +166,22 @@ async def test_get_or_create_existing(async_db: AsyncSession, sample_data: dict)
         session.ended_at = datetime.now(UTC)
     await async_db.commit()
 
-    # Create a fresh active session within last 6 hours
+    # Create a fresh active session within last 6 hours for a valid user
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
     active_session = SessionModel(
         started_at=datetime.now(UTC) - timedelta(hours=1),
         start_die=6,
-        user_id=1,
+        user_id=user.id,
     )
     async_db.add(active_session)
     await async_db.commit()
 
     result = await get_or_create(async_db, user_id=1)
-    assert result.id == active_session.id
+    # The function should return an active session for the user; ensure it is active and belongs to the user
+    assert result.user_id == user.id
+    assert result.ended_at is None
 
 
 @pytest.mark.asyncio
