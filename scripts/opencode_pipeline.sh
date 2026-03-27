@@ -110,7 +110,7 @@ fi
 _filter_override() {
     local model="$1"
     # Return empty string if model matches problematic providers, otherwise return model
-    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|mistral-small-3\.1-24b-instruct"; then
+    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
         echo ""
     else
         echo "$model"
@@ -1176,7 +1176,7 @@ cmd_model_manager() {
                 candidate_models+=("$model")
             done < <(opencode models 2>/dev/null \
                 | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/" \
-                | grep -v "mistral-small-3\.1-24b-instruct" \
+                | grep -v "mistralai/mistral-small-3\.1-24b-instruct" \
                 | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
