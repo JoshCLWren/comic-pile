@@ -555,7 +555,12 @@ export default function QueuePage() {
                             ⠿
                           </button>
                         </Tooltip>
-                         <h3 className="text-lg font-bold text-white flex-1 line-clamp-2">{thread.title}</h3>
+                         <div className="flex items-center gap-1">
+                           <h3 className="text-lg font-bold text-white flex-1 line-clamp-2">{thread.title}</h3>
+                           {thread.touch_friendly && (
+                             <span className="text-green-400 text-sm" title="Touch-friendly">👆</span>
+                           )}
+                         </div>
                         {isBlocked && (
                           <Tooltip content={blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'}>
                             <span className="text-red-300 text-lg" aria-label="Blocked thread">🔒</span>

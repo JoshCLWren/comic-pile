@@ -102,10 +102,15 @@ const TOUCH_TARGET_MIN_SIZE = 44
               <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
                 {index + 1}
               </span>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-stone-300 truncate text-sm">{thread.title}</p>
-                <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
-              </div>
+               <div className="flex-1 min-w-0">
+                 <div className="flex items-center gap-2">
+                   <p className="font-bold text-stone-300 truncate text-sm">{thread.title}</p>
+                   {thread.touch_friendly && (
+                     <span className="text-green-400 text-xs" title="Touch-friendly">👆</span>
+                   )}
+                 </div>
+                 <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
+               </div>
             </div>
           )
         })}

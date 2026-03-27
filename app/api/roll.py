@@ -123,12 +123,11 @@ async def roll_dice(
         current_session.pending_thread_id = selected_thread_id
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
+    touch_friendly = is_mobile_request(request)
+    selected_thread.touch_friendly = touch_friendly
     await db.commit()
     if clear_cache:
         clear_cache()
-
-    touch_friendly = is_mobile_request(request)
-    selected_thread.touch_friendly = touch_friendly
 
     return RollResponse(
         thread_id=selected_thread_id,
@@ -148,26 +147,6 @@ async def roll_dice(
         reading_progress=selected_thread_reading_progress,
         touch_friendly=touch_friendly,
     )
-
-
-@router.post("/dismiss-pending", status_code=status.HTTP_204_NO_CONTENT)
-async def dismiss_pending_roll(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> None:
-    """Clear any pending thread for the current session.
-
-    Args:
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-    """
-    current_session = await get_or_create(db, user_id=current_user.id)
-    current_session.pending_thread_id = None
-    current_session.pending_thread_updated_at = None
-    await db.commit()
-
-    if clear_cache:
-        clear_cache()
 
 
 @router.post("/override", response_model=RollResponse)
