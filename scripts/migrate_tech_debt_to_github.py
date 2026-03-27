@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Migrate TECH_DEBT.md items to GitHub Issues."""
+"""Migrate TECH_DEBT.md items to GitHub Issues.
+
+IMPORTANT: This script uses the GitHub Issues API which is NOT deprecated.
+However, be aware that GitHub has deprecated Projects (classic) GraphQL API.
+See: https://github.blog/changelog/2024-05-23-sunset-notice-projects-classic/
+
+When adding new GitHub API functionality, always:
+1. Check the latest GitHub API documentation
+2. Avoid deprecated endpoints (especially Projects classic GraphQL)
+3. Use the newest stable API versions available
+"""
 
 import os
 import re
