@@ -20,7 +20,12 @@ LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
 # Use a working default model to avoid misconfigured global defaults
-MODEL="${OPENCODE_MODEL:-opencode/nemotron-3-super-free}"
+# Filter out problematic providers from OPENCODE_MODEL override
+if [[ -n "${OPENCODE_MODEL:-}" ]] && ! echo "$OPENCODE_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    MODEL="$OPENCODE_MODEL"
+else
+    MODEL="opencode/nemotron-3-super-free"
+fi
 
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
 ISSUES=(357 361 362 358 366 367 368 370 373 379 359 360 363 365 369 371 372 376 377 378 364 380)

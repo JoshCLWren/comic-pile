@@ -103,11 +103,36 @@ fi
 
 # implement/review/fix need real tool use — use Tier 1 only
 # pr/ci_check only need gh + text — use Tier 2 (full pool)
-IMPLEMENT_MODELS=(  "${IMPLEMENT_MODEL:-}"  "${_CODING_POOL[@]}" )
-REVIEW_MODELS=(     "${REVIEW_MODEL:-}"     "${_CODING_POOL[@]}" )
-FIX_MODELS=(        "${FIX_MODEL:-}"        "${_CODING_POOL[@]}" )
-PR_MODELS=(         "${PR_MODEL:-}"         "${_MODEL_POOL[@]}"  )
-CI_CHECK_MODELS=(   "${CI_CHECK_MODEL:-}"   "${_MODEL_POOL[@]}"  )
+# Build model arrays, filtering out any override models from problematic providers
+IMPLEMENT_MODELS=()
+if [[ -n "${IMPLEMENT_MODEL:-}" ]] && ! echo "$IMPLEMENT_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    IMPLEMENT_MODELS+=("$IMPLEMENT_MODEL")
+fi
+IMPLEMENT_MODELS+=("${_CODING_POOL[@]}")
+
+REVIEW_MODELS=()
+if [[ -n "${REVIEW_MODEL:-}" ]] && ! echo "$REVIEW_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    REVIEW_MODELS+=("$REVIEW_MODEL")
+fi
+REVIEW_MODELS+=("${_CODING_POOL[@]}")
+
+FIX_MODELS=()
+if [[ -n "${FIX_MODEL:-}" ]] && ! echo "$FIX_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    FIX_MODELS+=("$FIX_MODEL")
+fi
+FIX_MODELS+=("${_CODING_POOL[@]}")
+
+PR_MODELS=()
+if [[ -n "${PR_MODEL:-}" ]] && ! echo "$PR_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    PR_MODELS+=("$PR_MODEL")
+fi
+PR_MODELS+=("${_MODEL_POOL[@]}")
+
+CI_CHECK_MODELS=()
+if [[ -n "${CI_CHECK_MODEL:-}" ]] && ! echo "$CI_CHECK_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    CI_CHECK_MODELS+=("$CI_CHECK_MODEL")
+fi
+CI_CHECK_MODELS+=("${_MODEL_POOL[@]}")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
