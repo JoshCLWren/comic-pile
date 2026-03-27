@@ -13,4 +13,5 @@
 * Blocked threads list now respects the active collection filter, ensuring count and navigation are context-aware
 * Fixed test expectations for new navigation behavior
 * Fixed Python indentation errors in roll API endpoint
+* Implemented missing `POST /roll/dismiss-pending` endpoint for canceling pending rolls
 * Verified issue-level dependencies work correctly (closes #363)

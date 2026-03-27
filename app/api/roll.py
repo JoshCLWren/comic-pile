@@ -5,7 +5,7 @@ import random
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
@@ -335,3 +335,24 @@ async def clear_manual_die(
     await db.refresh(current_session)
     current_die = await get_current_die(current_session.id, db)
     return f"d{current_die}"
+
+
+@router.post("/dismiss-pending", status_code=204)
+async def dismiss_pending(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Clear any pending thread from the current session.
+
+    Args:
+        current_user: The authenticated user.
+        db: Database session.
+
+    Returns:
+        Empty response with 204 No Content status.
+    """
+    session = await get_or_create(db, user_id=current_user.id)
+    session.pending_thread_id = None
+    session.pending_issue_id = None
+    await db.commit()
+    return Response(status_code=204)
