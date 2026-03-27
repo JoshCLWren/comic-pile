@@ -70,7 +70,7 @@ _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
   while IFS= read -r model; do
     # Filter out problematic providers (keep only known-good providers)
-    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistral/"; then
+    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
       _CODING_POOL+=("$model")
     fi
   done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
@@ -81,7 +81,7 @@ _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
   while IFS= read -r model; do
     # Filter out problematic providers (keep only known-good providers)
-    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistral/"; then
+    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
       _MODEL_POOL+=("$model")
     fi
   done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
