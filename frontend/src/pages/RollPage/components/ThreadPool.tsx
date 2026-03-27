@@ -158,10 +158,10 @@ const TOUCH_TARGET_MIN_SIZE = 44
                     className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
                   >
                    <span className="text-sm flex-shrink-0">🔒</span>
-                   <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm text-stone-300 truncate font-medium">{thread.title}</p>
                     <p className="text-xs text-stone-400 mt-0.5 truncate">blocked by {thread.primary_blocking_reason}</p>
-                   </div>
+                  </div>
                  </button>
                ))}
                {blockedThreadsWithReasons.length > INITIAL_BLOCKED_LIMIT && !showAllBlocked && (
