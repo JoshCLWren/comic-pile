@@ -86,12 +86,12 @@ if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
-    _MODEL_POOL=(
-        "opencode/nemotron-3-super-free"
-        "opencode/big-pickle"
-        "openrouter/arcee-ai/trinity-large-preview:free"
-        "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
-    )
+_MODEL_POOL=(
+    "opencode/nemotron-3-super-free"
+    "opencode/big-pickle"
+    "openrouter/arcee-ai/trinity-large-preview:free"
+    "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+  )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 
@@ -400,24 +400,24 @@ run_with_fallback() {
     local models=()
     while IFS= read -r m; do models+=("$m"); done < <(printf '%s\n' "$@" | shuf)
     
-    # Map invalid model names to valid ones
-    local mapped_models=()
-    for m in "${models[@]}"; do
-        case "$m" in
-            "mistralai/mistral-small-3.1-24b-instruct:free")
-                # Map to valid model
-                mapped_models+=("nvidia/mistralai/mistral-small-3.1-24b-instruct-2503")
-                ;;
-            "")
-                # Skip empty
-                continue
-                ;;
-            *)
-                mapped_models+=("$m")
-                ;;
-        esac
-    done
-    models=("${mapped_models[@]}")
+  # Map invalid model names to valid ones
+  local mapped_models=()
+  for m in "${models[@]}"; do
+    case "$m" in
+      "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
+        # Map to valid model (without :free suffix which causes ProviderModelNotFoundError)
+        mapped_models+=("nvidia/mistralai/mistral-small-3.1-24b-instruct-2503")
+        ;;
+      "")
+        # Skip empty
+        continue
+        ;;
+      *)
+        mapped_models+=("$m")
+        ;;
+    esac
+  done
+  models=("${mapped_models[@]}")
     
     local wt
     wt=$(worktree_dir "$issue")

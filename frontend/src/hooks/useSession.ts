@@ -163,7 +163,7 @@ export function useSessionSnapshots(id: number | string | null | undefined) {
     fetchSnapshots();
   }, [fetchSnapshots]);
 
-  return { data, isPending, IsisError, error, refetch: fetchSnapshots };
+  return { data, isPending, isError, error, refetch: fetchSnapshots };
 }
 
 export function useRestoreSessionStart() {

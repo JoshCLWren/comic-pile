@@ -37,7 +37,7 @@ export function useThreads(options = { searchTerm: '', collectionId: null }) {
         setNextPageToken((result as any).next_page_token ?? null);
         invalidateQueries?.(['threads']);
       }
-    } catch (err) {
+    } catch (_err) {
       if (!cancelled) {
         setIsError(true);
       }
@@ -83,18 +83,18 @@ export function useThread(id?: number | null) {
         if (isMounted) {
           setData(result);
         }
-      } catch {
-        if (isMounted) {
-          setIsError(true);
-        }
-      } finally {
-        if (isMounted) {
-          setIsPending(false);
-        }
+    } catch {
+      if (isMounted) {
+        setIsError(true);
       }
-    ];
+    } finally {
+      if (isMounted) {
+        setIsPending(false);
+      }
+    }
+  };
 
-    fetchData();
+  fetchData();
 
     return () => {
       isMounted = false;
