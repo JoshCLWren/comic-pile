@@ -1210,7 +1210,11 @@ if [[ "$needs_refresh" == "true" ]]; then
                 exit_code=0
                 output=$(timeout 30s opencode run -m "$model" "Reply with only the word PING" 2>&1) || exit_code=$?
                 clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
-                if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
+                # opencode exits 0 even on model-not-found — detect via output
+                if [[ $exit_code -eq 0 ]] && echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
+                    exit_code=1
+                fi
+                if [[ $exit_code -eq 0 ]]; then
                     echo "OK $model"
                 elif [[ $exit_code -eq 124 ]]; then
                     echo "TIMEOUT $model"
