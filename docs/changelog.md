@@ -2,6 +2,19 @@
 
 ## [unreleased]
 
+**Expandable Blocked Threads Section (#363)**
+- Implemented expandable "N threads hidden (blocked by dependencies)" section on roll page
+- Clicking ▶ toggle expands to show list of blocked threads with primary blocking reasons
+- Each blocked thread displays its name and reason (e.g., "blocked by Ultimate Spider-Man #5")
+- Shows most immediate blocker when multiple exist (first in the list)
+- Clicking a blocked thread row navigates to queue with thread highlighted (`/queue?highlight={id}`)
+- ▼ toggle collapses the section cleanly
+- Mobile-optimized: scrollable list with max-height and 44px touch targets
+- Section hidden entirely when no threads are blocked (no "0 threads hidden")
+- Limit to 10 entries initially with "Show all" toggle for larger lists
+- Backend: `/api/v1/dependencies/blocked-with-reasons` endpoint returns all blocked threads with reasons
+- Batch-fetch blocking reasons to avoid N+1 queries
+
 **Mobile Usability - Roll Button Touch Target (#363)**
 - Added unit tests for blocked threads UI expansion (#363)
 - Backend: Added `touch_friendly` flag to `/api/roll/` endpoint for mobile detection
