@@ -70,9 +70,9 @@ _load_issues() {
   if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
        while IFS= read -r model; do
       # Filter out problematic providers (keep only known-good providers)
-      if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/"; then
-        _CODING_POOL+=("$model")
-      fi
+if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && ! echo "$model" | grep -qE "^mistralai/"; then
+    _CODING_POOL+=("$model")
+  fi
    done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
@@ -81,9 +81,9 @@ fi
   if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
        while IFS= read -r model; do
       # Filter out problematic providers (keep only known-good providers)
-      if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/"; then
-        _MODEL_POOL+=("$model")
-      fi
+if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && ! echo "$model" | grep -qE "^mistralai/"; then
+    _MODEL_POOL+=("$model")
+  fi
    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
@@ -1207,10 +1207,11 @@ if [[ "$needs_refresh" == "true" ]]; then
         local candidate_models=()
          while IFS= read -r model; do
              candidate_models+=("$model")
-          done < <(opencode models 2>/dev/null \
-              | grep -E "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" \
-              | grep -v ':' \
-              | grep -v "^$" || true)
+done < <(opencode models 2>/dev/null \
+| grep -E "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" \
+| grep -v ':' \
+| grep -v "^mistralai/" \
+| grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
             log_info "Testing $total_candidates candidate models..."
