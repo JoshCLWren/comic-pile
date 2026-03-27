@@ -1,11 +1,14 @@
 # Changelog
 
-## 2026-03-27
+## 2026-03-25
 
-**OpenCode Pipeline Stability (#362)**
-- Added model filtering to avoid `ProviderModelNotFoundError` from mistralai models (e.g., `mistral-small-3.1-24b-instruct:free`)
-- Updated `scripts/opencode_pipeline.sh`, `scripts/run_opencode_issues.sh`, and `scripts/test_models.sh` to skip problematic models
-- Implemented `_should_skip_model` function for consistent filtering across pipeline roles
+**Roll Page Header Indicators (#366)**
+- Added labels and tooltips to roll page header indicators (+1, snoozed, offset, active)
+- Each indicator now has a visible text label or accessible tooltip with explanatory copy
+- Interactive indicators have clear visual affordances (cursor-help, dashed borders)
+- Tooltips explain what each value means and whether/how it can be changed
+- Screen readers can read each indicator's label and value via aria-label attributes
+- No layout changes to the roll page — tooltips fit within existing header space
 
 ## 2026-03-24
 
@@ -27,6 +30,14 @@
 - Edit Thread modal: Improved label associations for title, format, issues, notes
 - FormatSelect component: Added optional `id` prop for label association
 - Rating slider: Already had proper aria-label, maintained consistency
+
+**Issue Dependencies (#366)**
+- Added dependency indicators (🔗) to issues with dependencies
+- Added tooltips to show linked issues and threads on hover
+- Added dependency status to issue list in queue edit modal
+- Added mobile-friendly tooltips for dependency information
+- Added edit icon next to issue number in rating view
+- Added quick correction dialog for adjusting current issue number
 
 ## 2026-03-21
 
