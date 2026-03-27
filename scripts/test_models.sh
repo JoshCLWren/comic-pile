@@ -28,10 +28,19 @@ test_model() {
   local actual_model="$model"
   # Trim whitespace
   actual_model=$(echo "$actual_model" | xargs)
+  
+  # Explicitly handle the known problematic model first
+  if [[ "$actual_model" == "mistralai/mistral-small-3.1-24b-instruct:free" ]]; then
+    actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+  fi
+  
   case "$actual_model" in
     # Mistral Small 3.1 - map all variants to the working NVIDIA version
     "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct"|"mistralai/mistral-small-3.1-24b-instruct")
       actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+      ;;
+    *)
+      # Keep the model as-is for other cases
       ;;
   esac
     
