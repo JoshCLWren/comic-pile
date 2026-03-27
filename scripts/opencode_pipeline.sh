@@ -97,6 +97,7 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
         "opencode/big-pickle"
         "opencode/mimo-v2-pro-free"
         "opencode/minimax-m2.5-free"
+        "opencode/mimo-v2-omni-free"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
