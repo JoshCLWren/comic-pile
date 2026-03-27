@@ -120,17 +120,17 @@ const TOUCH_TARGET_MIN_SIZE = 44
 
       {blockedThreadsWithReasons.length > 0 && !isRatingView && (
         <div className="mt-4">
-    <button
-      type="button"
-      onClick={onToggleBlocked}
-      aria-expanded={blockedExpanded}
-      aria-controls="blocked-threads-list"
-      aria-label={`${blockedThreadsWithReasons.length} threads hidden (blocked by dependencies)`}
-      className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
-    >
-      <span className="text-stone-400 text-xs">
-        {blockedExpanded ? '▼' : '▶'}
-      </span>
+          <button
+            type="button"
+            onClick={onToggleBlocked}
+            aria-expanded={blockedExpanded}
+            aria-controls="blocked-threads-list"
+            aria-label={`${blockedThreadsWithReasons.length} threads hidden (blocked by dependencies)`}
+            className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
+          >
+            <span className="text-stone-400 text-xs">
+              {blockedExpanded ? '▼' : '▶'}
+            </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
               {blockedThreadsWithReasons.length} thread{blockedThreadsWithReasons.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
             </span>

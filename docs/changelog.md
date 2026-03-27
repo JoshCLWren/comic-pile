@@ -2,7 +2,6 @@
 
 ## [unreleased]
 
-
 **Roll Pool Blocked Threads Enhancement (#363)**
 - Enhanced expandable "N threads hidden" section with detailed blocking reasons
 - Each blocked thread shows its primary blocking reason (e.g., "Blocked by Ultimate Spider-Man #5")
@@ -12,6 +11,7 @@
 - Shows first 10 threads with "show X more" toggle for larger lists
 - Section hidden entirely when no threads are blocked
 - Fixed test expectations for new navigation behavior
+- Fixed Python indentation errors in roll API endpoint
 
 **Mobile Usability - Roll Button Touch Target (#363)**
 - Added unit tests for blocked threads UI expansion (#363)
