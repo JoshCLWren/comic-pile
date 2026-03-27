@@ -21,16 +21,18 @@ echo "Results: $RESULTS_FILE"
 echo ""
 
 test_model() {
-    local model="$1"
-    local output exit_code=0
-    
-    # Map invalid model names to valid ones
-    local actual_model="$model"
-    case "$model" in
-        "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
-            actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
-            ;;
-    esac
+  local model="$1"
+  local output exit_code=0
+
+  # Map invalid model names to valid ones
+  local actual_model="$model"
+  # Trim whitespace
+  actual_model=$(echo "$actual_model" | xargs)
+  case "$actual_model" in
+  "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
+    actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+  ;;
+  esac
     
     output=$(timeout 30s opencode run -m "$actual_model" "say hello in one word" 2>&1) || exit_code=$?
 
