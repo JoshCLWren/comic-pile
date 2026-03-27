@@ -790,7 +790,7 @@ test.describe('Roll Dice Feature', () => {
 
       const blockedToggle = authenticatedPage.locator('button[aria-label*="threads hidden"]')
       await expect(blockedToggle).toBeVisible({ timeout: 10000 })
-      await expect(blockedToggle).toContainText('1 thread hidden')
+      await expect(blockedToggle).toContainText('1 thread hidden (blocked by dependencies)')
 
       await blockedToggle.click()
 

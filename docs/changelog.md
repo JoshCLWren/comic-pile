@@ -1,19 +1,6 @@
-# Changelog
+## Changelog
 
-## [unreleased]
-
-- Fixed blocked-threads toggle to use functional state updater to avoid stale closures, ensuring the expand/collapse action reliably shows blocking reasons (closes #363).
-
-* Enhanced expandable "N threads hidden" section with detailed blocking reasons
-* Each blocked thread shows its primary blocking reason (e.g., "Blocked by Ultimate Spider-Man #5")
-* For threads with multiple blockers, the most immediate blocker (by queue position) is shown first
-* Clicking a thread navigates to queue page with automatic scroll to highlighted thread
-* Mobile-optimized with 44px touch targets and scrollable list
-* Shows first 10 threads with "show X more" toggle for larger lists
-* Fixed show-all toggle resetting when section collapses
-* Section hidden entirely when no threads are blocked
-* Blocked threads list now respects the active collection filter, ensuring count and navigation are context-aware
-* Fixed test expectations for new navigation behavior
-* Fixed Python indentation errors in roll API endpoint
-* Implemented missing `POST /roll/dismiss-pending` endpoint for canceling pending rolls
-* Verified issue-level dependencies work correctly (closes #363)
+- 2026-03-27: Fix Roll Pool UI for blocked threads (closes #363).
+  - Make the blocked-threads section expandable and clearly describe blocking
+    reasons by rendering text like "blocked by <reason>" alongside thread titles.
+  - Improve accessibility labels to reflect blocking context.
