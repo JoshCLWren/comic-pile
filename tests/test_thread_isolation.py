@@ -246,7 +246,9 @@ async def test_thread_creation_sets_user_id(
     thread_data = response.json()
     assert thread_data["title"] == "User B Thread"
 
-    result = await async_db.execute(select(Thread))
+    result = await async_db.execute(
+        select(Thread).where(Thread.user_id.in_([user_a.id, user_b.id]))
+    )
     all_threads = result.scalars().all()
     assert len(all_threads) == 2
     for thread in all_threads:
