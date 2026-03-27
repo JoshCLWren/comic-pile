@@ -28,8 +28,8 @@ _should_skip_model() {
     return 0
   fi
 
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
+  # Skip any model containing "mistralai" anywhere in the name, except mistralai/mistral-small-3.1-24b-instruct:free
+  if [[ "$lower_model" =~ mistralai ]] && [[ "$lower_model" != "mistralai/mistral-small-3.1-24b-instruct:free" ]]; then
     return 0
   fi
 
