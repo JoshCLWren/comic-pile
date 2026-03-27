@@ -1310,12 +1310,14 @@ cmd_main_fixer() {
         done <<< "$pr_data"
 
         # ── 2. Find jobs above threshold ────────────────────────────────────
+        local total_prs
+        total_prs=$(echo "$pr_data" | wc -l)
         local common_jobs=()
         for job_name in "${!job_fail_count[@]}"; do
             local count=${job_fail_count["$job_name"]}
             if [[ $count -ge $THRESHOLD ]]; then
                 common_jobs+=("$job_name")
-                log_warn "main_fixer — '${job_name}' failing on ${count}/${#pr_data} PRs"
+                log_warn "main_fixer — '${job_name}' failing on ${count}/${total_prs} PRs"
             fi
         done
 
@@ -1341,8 +1343,6 @@ cmd_main_fixer() {
                 | tail -n "$LOG_LINES" || true)
             [[ -z "$fail_logs" ]] && { log_warn "main_fixer — no logs for $job_name, skipping"; continue; }
 
-            local sentinel="MAIN_FIXER_DONE_${job_name//[^a-zA-Z0-9]/_}"
-
             local fixer_prompt
             fixer_prompt=$(cat <<PROMPT
 You are a CI triage agent for the comic-pile repository. The CI job named '${job_name}'
@@ -1364,11 +1364,10 @@ Instructions:
 3. After fixing, do a quick sanity check:
    - Frontend issue: run  cd frontend && npm run build 2>&1 | tail -20
    - Backend issue:  run  cd /mnt/extra/josh/code/comic-pile && uv run pytest --tb=short -q 2>&1 | tail -30
-4. Commit the fix with:  git add -p  then  git commit -m "fix(ci): <short description>"
-5. When completely done, output the exact string: ${sentinel}
+4. Commit the fix: git add <files> && git commit -m "fix(ci): <short description>"
+   Do NOT use git add -p (non-interactive only). Do NOT amend existing commits.
 
-If you cannot determine a safe fix (ambiguous cause, needs human judgment), output:
-MAIN_FIXER_SKIP — <one-line reason>
+If you cannot determine a safe fix, do NOT commit anything. Just stop.
 PROMPT
 )
 
@@ -1398,16 +1397,31 @@ PROMPT
             local changed_files lint_exit=0
             changed_files=$(git -C "$REPO_ROOT" diff "$head_before" HEAD --name-only)
 
-            if echo "$changed_files" | grep -qE "^frontend/"; then
+            if [[ -z "$changed_files" ]]; then
+                log_warn "main_fixer — commit made but no files changed? Reverting."
+                git -C "$REPO_ROOT" reset --hard "$head_before" >> "$FIXER_LOG" 2>&1
+                continue
+            fi
+
+            # Always run frontend lint if any frontend file changed
+            if grep -qE "^frontend/" <<< "$changed_files"; then
                 npm run lint --prefix "$REPO_ROOT/frontend" >> "$FIXER_LOG" 2>&1 || lint_exit=$?
             fi
-            if echo "$changed_files" | grep -qE "\.py$"; then
+            # Always run backend lint if any Python file changed
+            if grep -qE "\.py$" <<< "$changed_files"; then
                 make -C "$REPO_ROOT" lint >> "$FIXER_LOG" 2>&1 || lint_exit=$?
+            fi
+            # If neither frontend nor Python — other file types (config, shell, etc.)
+            # still require at least a build check to avoid breaking things
+            if ! grep -qE "^frontend/|\.py$" <<< "$changed_files"; then
+                log_warn "main_fixer — changed files are neither frontend nor Python: $changed_files — reverting to be safe"
+                git -C "$REPO_ROOT" reset --hard "$head_before" >> "$FIXER_LOG" 2>&1
+                continue
             fi
 
             if [[ $lint_exit -ne 0 ]]; then
                 log_error "main_fixer — lint FAILED after fix for '${job_name}' — reverting commit"
-                git -C "$REPO_ROOT" reset --hard "$head_before" 2>&1 >> "$FIXER_LOG"
+                git -C "$REPO_ROOT" reset --hard "$head_before" >> "$FIXER_LOG" 2>&1
                 continue
             fi
 
@@ -1427,31 +1441,35 @@ PROMPT
             while IFS=' ' read -r _pr_num branch; do
                 [[ -z "$branch" ]] && continue
                 local wt_issue
-                wt_issue=$(echo "$branch" | grep -oP 'issue-\K[0-9]+' || true)
+                wt_issue=$(grep -oP 'issue-\K[0-9]+' <<< "$branch" || true)
                 if [[ -n "$wt_issue" ]]; then
                     local wt_path
                     wt_path=$(worktree_dir "$wt_issue")
                     if [[ -d "$wt_path" ]] && git -C "$wt_path" status &>/dev/null; then
-                        git -C "$wt_path" merge origin/main --no-edit -X theirs 2>/dev/null && \
-                            git -C "$wt_path" push origin "$branch" 2>/dev/null && \
-                            log_info "main_fixer — merged main → $branch" || \
+                        if timeout 30s git -C "$wt_path" merge origin/main --no-edit -X theirs >> "$FIXER_LOG" 2>&1 && \
+                           timeout 30s git -C "$wt_path" push origin "$branch" >> "$FIXER_LOG" 2>&1; then
+                            log_info "main_fixer — merged main → $branch"
+                        else
                             log_warn "main_fixer — failed: $branch"
+                        fi
                         continue
                     fi
                 fi
                 # Fallback: scratch worktree
                 local tmpwt
                 tmpwt=$(mktemp -d)
-                if git -C "$REPO_ROOT" worktree add "$tmpwt" "origin/$branch" --detach 2>/dev/null; then
-                    git -C "$tmpwt" merge origin/main --no-edit -X theirs 2>/dev/null && \
-                        git -C "$tmpwt" push origin "HEAD:$branch" 2>/dev/null && \
-                        log_info "main_fixer — merged main → $branch (scratch)" || \
+                if git -C "$REPO_ROOT" worktree add "$tmpwt" "origin/$branch" --detach >> "$FIXER_LOG" 2>&1; then
+                    if timeout 30s git -C "$tmpwt" merge origin/main --no-edit -X theirs >> "$FIXER_LOG" 2>&1 && \
+                       timeout 30s git -C "$tmpwt" push origin "HEAD:$branch" >> "$FIXER_LOG" 2>&1; then
+                        log_info "main_fixer — merged main → $branch (scratch)"
+                    else
                         log_warn "main_fixer — failed: $branch (scratch)"
-                    git -C "$REPO_ROOT" worktree remove "$tmpwt" --force 2>/dev/null
+                    fi
+                    git -C "$REPO_ROOT" worktree remove "$tmpwt" --force >> "$FIXER_LOG" 2>&1 || true
                 else
-                    rm -rf "$tmpwt"
                     log_warn "main_fixer — could not create scratch worktree for $branch"
                 fi
+                rm -rf "$tmpwt"
             done <<< "$pr_data"
         fi
 
