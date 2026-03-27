@@ -339,7 +339,7 @@ map_model() {
   
   case "$model" in
     # Mistral Small 3.1 - map all variants to the working NVIDIA version
-    "mistralai/mistral-small-3.1-24b-instruct:free"|"nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct"|"mistralai/mistral-small-3.1-24b-instruct")
+    "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct"|"mistralai/mistral-small-3.1-24b-instruct")
       echo "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
       ;;
     *)
