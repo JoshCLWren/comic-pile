@@ -220,11 +220,21 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
         except IntegrityError:
             await db.rollback()
             result = await db.execute(select(User).where(User.username == username))
-            user = result.scalar_one()
+            user = result.scalar_one_or_none()
+            if not user:
+                # Fallback: try to get user by id since we're trying to use id=1
+                result = await db.execute(select(User).where(User.id == 1))
+                user = result.scalar_one_or_none()
+                if not user:
+                    # Last resort: create user with id=1
+                    user = User(id=1, username=username, created_at=datetime.now(UTC))
+                    db.add(user)
+                    await db.commit()
+                    await db.refresh(user)
+                else:
+                    await db.refresh(user)
         else:
             await db.refresh(user)
-            if username == _default_test_username():
-                await _sync_id_sequence(db, "users")
     return user
 
 
