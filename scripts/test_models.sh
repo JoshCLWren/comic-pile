@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Fixed model handling for #380
 # Test every opencode model with a simple "say hello in one word" prompt.
 # Runs up to PARALLEL jobs at once. Results saved to .opencode_logs/model_test_results.txt
 #
