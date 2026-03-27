@@ -14,7 +14,12 @@ mkdir -p "$(dirname "$RESULTS_FILE")"
 > "$RESULTS_FILE"  # truncate
 
 MODELS=$(opencode models 2>/dev/null)
-TOTAL=$(echo "$MODELS" | wc -l)
+
+# Filter out models known to cause ProviderModelNotFoundError
+# Filter out only problematic model IDs
+FILTERED_MODELS=$(echo "$MODELS" | grep -viE 'mistralai|mistral-small-3\.1-24b-instruct')
+
+TOTAL=$(echo "$FILTERED_MODELS" | wc -l)
 
 echo "Testing $TOTAL models ($PARALLEL at a time)..."
 echo "Results: $RESULTS_FILE"
@@ -44,15 +49,21 @@ case "$actual_model" in
     elif [[ $exit_code -ne 0 ]]; then
         echo "FAIL     $actual_model  [exit $exit_code]"
     else
-        # Strip ANSI codes and extract last non-empty line as the response
-        response=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -v "^>" | grep -v "^$" | tail -1 | xargs)
-        echo "OK       $actual_model  [$response]"
+        local cleaned
+        cleaned=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+        if echo "$cleaned" | grep -qiE "Error:|not found|not supported|unauthorized|invalid|authentication|does not exist|no endpoint"; then
+            reason=$(echo "$cleaned" | grep -iE "Error:|not found|not supported|unauthorized|invalid|authentication|does not exist|no endpoint" | head -1 | xargs)
+            echo "FAIL     $model  [$reason]"
+        else
+            response=$(echo "$cleaned" | grep -v "^>" | grep -v "^$" | tail -1 | xargs)
+            echo "OK       $model  [$response]"
+        fi
     fi
 }
 
 export -f test_model
 
-echo "$MODELS" | xargs -P "$PARALLEL" -I{} bash -c 'test_model "$@"' _ {} | tee "$RESULTS_FILE"
+echo "$FILTERED_MODELS" | xargs -P "$PARALLEL" -I{} bash -c 'test_model "$@"' _ {} | tee "$RESULTS_FILE"
 
 echo ""
 echo "=== Summary ==="
