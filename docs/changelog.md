@@ -3,6 +3,7 @@
 ## [unreleased]
 
 **Mobile Usability - Roll Button Touch Target (#363)**
+- Added unit tests for blocked threads UI expansion (#363)
 - Backend: Added `touch_friendly` flag to `/api/roll/` endpoint for mobile detection
 - Frontend: Dynamically resize Roll button to **44px × 44px** on mobile for WCAG compliance
 - Added `touch_friendly` field to `Thread` model and database migration
