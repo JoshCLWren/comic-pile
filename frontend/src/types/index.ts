@@ -56,6 +56,8 @@ export interface Thread {
   last_activity_at?: string | null;
   /** ISO 8601 timestamp when the thread was created */
   created_at: string;
+  /** Whether the thread was rolled from a mobile/touch device */
+  touch_friendly?: boolean;
 }
 
 export interface AuthUser {
