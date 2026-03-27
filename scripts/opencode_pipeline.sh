@@ -93,7 +93,6 @@ if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
 _MODEL_POOL=(
-"mistralai/mistral-large-2512"
 "opencode/nemotron-3-super-free"
 "opencode/big-pickle"
 "openrouter/arcee-ai/trinity-large-preview:free"
@@ -1162,7 +1161,7 @@ cmd_model_manager() {
             while IFS= read -r model; do
                 candidate_models+=("$model")
             done < <(opencode models 2>/dev/null \
-                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/" \
+                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/" \
                 | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
