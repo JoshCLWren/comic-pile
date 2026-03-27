@@ -368,6 +368,27 @@ async def create_dependency(
             target_issue_id=dependency_data.target_id,
         )
 
+    # Pre-insert check for duplicates
+    if dependency_data.source_type == "thread":
+        existing = await db.execute(
+            select(Dependency).where(
+                Dependency.source_thread_id == dependency_data.source_id,
+                Dependency.target_thread_id == dependency_data.target_id,
+            )
+        )
+    else:
+        existing = await db.execute(
+            select(Dependency).where(
+                Dependency.source_issue_id == dependency_data.source_id,
+                Dependency.target_issue_id == dependency_data.target_id,
+            )
+        )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dependency already exists",
+        )
+
     try:
         db.add(dependency)
         await db.flush()
