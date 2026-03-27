@@ -183,23 +183,21 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
     username = _default_test_username()
-    result = await db.execute(select(User).where(User.id == 1))
+    # Skip explicit ID check to avoid primary key conflicts
+    result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
     if not user:
+        # Skip explicit ID assignment to avoid primary key conflicts
+        user = User(username=username, created_at=datetime.now(UTC))
+        db.add(user)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
         result = await db.execute(select(User).where(User.username == username))
-        user = result.scalar_one_or_none()
-        if not user:
-            user = User(id=1, username=username, created_at=datetime.now(UTC))
-            db.add(user)
-            try:
-                await db.commit()
-            except IntegrityError:
-                await db.rollback()
-                result = await db.execute(select(User).where(User.username == username))
-                user = result.scalar_one()
-            else:
-                await db.refresh(user)
-                await _sync_id_sequence(db, "users")
+        user = result.scalar_one()
+    await db.refresh(user)
+    await _sync_id_sequence(db, "users")
     return user
 
 
@@ -522,12 +520,12 @@ async def auth_client(
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
-        if not user:
-            user = User(id=1, username=test_username, created_at=datetime.now(UTC))
-            async_db.add(user)
-            await async_db.flush()
-            await async_db.refresh(user)
-            await _sync_id_sequence(async_db, "users")
+        # Skip explicit ID assignment to avoid primary key conflicts
+        user = User(username=test_username, created_at=datetime.now(UTC))
+        async_db.add(user)
+        await async_db.flush()
+        await async_db.refresh(user)
+        await _sync_id_sequence(async_db, "users")
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})
