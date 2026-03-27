@@ -627,39 +627,111 @@ useEffect(() => {
                 </div>
               </div>
             ) : (
-              <RatingView
-                activeRatingThread={activeRatingThread}
-                currentDie={currentDie}
-                rolledResult={rolledResult}
-                rating={rating}
-                predictedDie={predictedDie}
-                hasValidRolledResult={hasValidRolledResult}
-                ratingThreadVisualPosition={ratingThreadVisualPosition}
-                poolSize={pool.length}
-                errorMessage={errorMessage}
-                rateIsPending={rateMutation.isPending}
-                snoozeIsPending={snoozeMutation.isPending}
-                dismissIsPending={dismissPendingMutation.isPending}
-                onUpdateRating={updateRatingUI}
-                onSubmitRating={handleSubmitRating}
-                onSnooze={handleSnooze}
-                onRefreshThread={handleRefreshThread}
-                onCancel={async () => {
-                  try {
-                    await dismissPendingMutation.mutate()
-                    await refetchSession()
-                    await refetchThreads()
-                  } catch (error) {
-                    setErrorMessage(getApiErrorDetail(error) || 'Failed to cancel pending roll')
-                    return
+<RatingView
+              activeRatingThread={activeRatingThread}
+              currentDie={currentDie}
+              rolledResult={rolledResult}
+              rating={rating}
+              predictedDie={predictedDie}
+              hasValidRolledResult={hasValidRolledResult}
+              ratingThreadVisualPosition={ratingThreadVisualPosition}
+              poolSize={pool.length}
+              errorMessage={errorMessage}
+              rateIsPending={rateMutation.isPending}
+              snoozeIsPending={snoozeMutation.isPending}
+              dismissIsPending={dismissPendingMutation.isPending}
+              markAsReadIsPending={dismissPendingMutation.isPending}
+              skipToNextIsPending={dismissPendingMutation.isPending}
+              archiveIsPending={false}
+              resetIsPending={false}
+              onUpdateRating={updateRatingUI}
+              onSubmitRating={handleSubmitRating}
+              onSnooze={handleSnooze}
+              onRefreshThread={handleRefreshThread}
+              onCancel={async () => {
+                try {
+                  await dismissPendingMutation.mutate()
+                  await refetchSession()
+                  await refetchThreads()
+                } catch (error) {
+                  setErrorMessage(getApiErrorDetail(error) || 'Failed to cancel pending roll')
+                  return
+                }
+                setIsRatingView(false)
+                setRolledResult(null)
+                setSelectedThreadId(null)
+                setActiveRatingThread(null)
+                setErrorMessage('')
+              }}
+              onMarkAsRead={async () => {
+                try {
+                  await rateMutation.mutate({
+                    rating: 3.0, // Default rating for "mark as read"
+                    finish_session: false,
+                  })
+                  await dismissPendingMutation.mutate()
+                  await refetchSession()
+                  await refetchThreads()
+                } catch (error) {
+                  setErrorMessage(getApiErrorDetail(error) || 'Failed to mark as read')
+                  return
+                }
+                setIsRatingView(false)
+                setRolledResult(null)
+                setSelectedThreadId(null)
+                setActiveRatingThread(null)
+                setErrorMessage('')
+              }}
+              onSkipToNext={async () => {
+                try {
+                  await dismissPendingMutation.mutate()
+                  await refetchSession()
+                  await refetchThreads()
+                } catch (error) {
+                  setErrorMessage(getApiErrorDetail(error) || 'Failed to skip to next')
+                  return
+                }
+                setIsRatingView(false)
+                setRolledResult(null)
+                setSelectedThreadId(null)
+                setActiveRatingThread(null)
+                setErrorMessage('')
+              }}
+              onArchive={async () => {
+                try {
+                  if (activeRatingThread?.id) {
+                    await threadsApi.setPending(activeRatingThread.id)
                   }
-                  setIsRatingView(false)
-                  setRolledResult(null)
-                  setSelectedThreadId(null)
-                  setActiveRatingThread(null)
-                  setErrorMessage('')
-                }}
-              />
+                  await refetchSession()
+                  await refetchThreads()
+                } catch (error) {
+                  setErrorMessage(getApiErrorDetail(error) || 'Failed to archive thread')
+                  return
+                }
+                setIsRatingView(false)
+                setRolledResult(null)
+                setSelectedThreadId(null)
+                setActiveRatingThread(null)
+                setErrorMessage('')
+              }}
+              onReset={async () => {
+                try {
+                  if (session?.id && activeRatingThread?.id) {
+                    await undoApi.undo(session.id, activeRatingThread.id)
+                  }
+                  await refetchSession()
+                  await refetchThreads()
+                } catch (error) {
+                  setErrorMessage(getApiErrorDetail(error) || 'Failed to reset thread')
+                  return
+                }
+                setIsRatingView(false)
+                setRolledResult(null)
+                setSelectedThreadId(null)
+                setActiveRatingThread(null)
+                setErrorMessage('')
+              }}
+            />
             )}
 
 <ThreadPool

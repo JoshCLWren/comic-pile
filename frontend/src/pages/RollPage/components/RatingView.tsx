@@ -19,11 +19,19 @@ interface RatingViewProps {
   rateIsPending: boolean
   snoozeIsPending: boolean
   dismissIsPending: boolean
+  markAsReadIsPending: boolean
+  skipToNextIsPending: boolean
+  archiveIsPending: boolean
+  resetIsPending: boolean
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
   onCancel: () => void
   onRefreshThread: () => void
+  onMarkAsRead: () => void
+  onSkipToNext: () => void
+  onArchive: () => void
+  onReset: () => void
 }
 
 export function RatingView({
@@ -39,11 +47,19 @@ export function RatingView({
   rateIsPending,
   snoozeIsPending,
   dismissIsPending,
+  markAsReadIsPending,
+  skipToNextIsPending,
+  archiveIsPending,
+  resetIsPending,
   onUpdateRating,
   onSubmitRating,
   onSnooze,
   onCancel,
   onRefreshThread,
+  onMarkAsRead,
+  onSkipToNext,
+  onArchive,
+  onReset,
 }: RatingViewProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
 
@@ -225,6 +241,52 @@ export function RatingView({
             </button>
           </div>
         </div>
+
+        {/* Follow-up actions for queue position 0 */}
+        {activeRatingThread?.queue_position === 0 && (
+          <div className="space-y-3 pt-4 border-t border-white/10">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 text-center">Follow-Up Actions</p>
+            {activeRatingThread?.issues_remaining >= 1 ? (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={onMarkAsRead}
+                  disabled={markAsReadIsPending}
+                  className="w-full py-4 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50 min-h-[44px]"
+                >
+                  {markAsReadIsPending ? 'Updating...' : 'Mark as Read'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onSkipToNext}
+                  disabled={skipToNextIsPending}
+                  className="w-full py-4 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50 min-h-[44px]"
+                >
+                  {skipToNextIsPending ? 'Skipping...' : 'Skip to Next'}
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={onArchive}
+                  disabled={archiveIsPending}
+                  className="w-full py-4 bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50 min-h-[44px]"
+                >
+                  {archiveIsPending ? 'Archiving...' : 'Archive Thread'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onReset}
+                  disabled={resetIsPending}
+                  className="w-full py-4 bg-green-600/20 hover:bg-green-600/30 border border-green-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50 min-h-[44px]"
+                >
+                  {resetIsPending ? 'Resetting...' : 'Reset Thread'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {errorMessage && (
           <div id="error-message" className="text-[10px] text-rose-500 text-center font-bold">
