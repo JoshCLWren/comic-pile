@@ -68,23 +68,23 @@ _load_issues() {
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
-while IFS= read -r model; do
-# Filter out problematic providers
-    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+  while IFS= read -r model; do
+    # Filter out problematic providers
+    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/"; then
       _CODING_POOL+=("$model")
     fi
-done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
+  done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-while IFS= read -r model; do
-# Filter out problematic providers
-    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+  while IFS= read -r model; do
+    # Filter out problematic providers
+    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/"; then
       _MODEL_POOL+=("$model")
     fi
-done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
+  done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Fallback: if tool test hasn't been run yet, use full pool for everything
@@ -104,7 +104,7 @@ fi
 _is_valid_model() {
   local model="$1"
   [[ -z "$model" ]] && return 1
-  ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"
+  ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/"
 }
 
 # implement/review/fix need real tool use — use Tier 1 only
@@ -1185,15 +1185,15 @@ cmd_model_manager() {
             fi
         fi
 
-        if [[ "$needs_refresh" == "true" ]]; then
-            log_info "Refreshing model pool (running model test)..."
-            # Get models excluding openrouter/opencode/anthropic/github-copilot providers
-            local candidate_models=()
-            while IFS= read -r model; do
-                candidate_models+=("$model")
-            done < <(opencode models 2>/dev/null \
-                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/" \
-                | grep -v "^$" || true)
+if [[ "$needs_refresh" == "true" ]]; then
+  log_info "Refreshing model pool (running model test)..."
+  # Get models excluding openrouter/opencode/anthropic/github-copilot/nvidia-mistralai providers
+  local candidate_models=()
+  while IFS= read -r model; do
+    candidate_models+=("$model")
+  done < <(opencode models 2>/dev/null \
+  | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/" \
+  | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
             log_info "Testing $total_candidates candidate models..."
