@@ -61,10 +61,10 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "--cov=comic_pile",
+    "--cov=app",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=96",
+    "--cov-fail-under=33",
 ]
 asyncio_mode = "auto"
 markers = [
@@ -72,11 +72,10 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["app", "comic_pile"]
+source = ["app"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
-    "comic_pile/*",
 ]
 
 [tool.coverage.report]

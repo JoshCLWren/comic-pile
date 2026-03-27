@@ -82,6 +82,12 @@ export default [
     },
   },
   {
+    files: ['src/contexts/ToastContext.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     files: ['src/test/**/*.spec.ts', 'e2e/**/*.spec.ts'],
     languageOptions: {
       ecmaVersion: 2020,

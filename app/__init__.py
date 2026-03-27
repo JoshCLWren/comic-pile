@@ -24,7 +24,7 @@ def _default_http_exception_handler(request, exc: StarletteHTTPException):
             message=str(exc.detail),
             status="UNKNOWN",
         )
-    ).dict()
+    ).model_dump()
     return JSONResponse(status_code=exc.status_code, content=error_content)
 
 

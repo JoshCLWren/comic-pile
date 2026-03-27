@@ -49,8 +49,8 @@ install-githook:  ## Install git hooks for new developers
 githook: install-githook  ## Run lint checks manually (installs pre-commit hook if missing)
 	bash scripts/lint.sh
 
-test:  ## Run tests with coverage (pytest --cov=comic_pile --cov-report=term-missing)
-	$(PYTEST) --cov=comic_pile --cov-report=term-missing
+test:  ## Run tests with coverage (pytest --cov=app --cov-report=term-missing)
+	$(PYTEST) --cov=app --cov-report=term-missing
 
 pytest:  ## Run tests (pytest)
 	$(PYTEST)
@@ -264,7 +264,7 @@ docker-migrate:  ## Run database migrations in Docker container
 
 docker-test:  ## Run pytest in Docker container
 	@echo "Running tests in Docker container..."
-	@docker compose exec -T app .venv/bin/pytest --cov=comic_pile --cov-report=term-missing
+	@	docker compose exec -T app .venv/bin/pytest --cov=app --cov-report=term-missing
 
 docker-health:  ## Check Docker container health status
 	@echo "Checking Docker container health..."

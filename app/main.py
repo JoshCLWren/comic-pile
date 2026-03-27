@@ -296,7 +296,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 message="Internal server error",
                 status=_status_code_to_string(status.HTTP_500_INTERNAL_SERVER_ERROR),
             )
-        ).dict()
+        ).model_dump()
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=error_content,
@@ -351,7 +351,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 message=str(exc.detail),
                 status=_status_code_to_string(exc.status_code),
             )
-        ).dict()
+        ).model_dump()
         # Include legacy 'detail' field for compatibility with tests expecting it
         response_body = {"detail": exc.detail, **error_content}
         return JSONResponse(
@@ -406,14 +406,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         )
         error_content = ErrorResponse(
             error=GoogleError(
-                code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 message="Validation failed",
-                status=_status_code_to_string(status.HTTP_422_UNPROCESSABLE_ENTITY),
+                status=_status_code_to_string(status.HTTP_422_UNPROCESSABLE_CONTENT),
                 details=errors,
             )
-        ).dict()
+        ).model_dump()
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content=error_content,
         )
 
@@ -472,7 +472,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 message="Not Found",
                 status=_status_code_to_string(status.HTTP_404_NOT_FOUND),
             )
-        ).dict()
+        ).model_dump()
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=error_content)
 
     class CacheControlledStaticFiles(StarletteStaticFiles):

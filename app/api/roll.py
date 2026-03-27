@@ -200,13 +200,13 @@ async def override_roll(
 
     if override_thread.is_blocked:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Thread {request.thread_id} is blocked and cannot be selected",
         )
 
     if override_thread.status != "active":
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Thread {request.thread_id} is {override_thread.status} and cannot be selected",
         )
 

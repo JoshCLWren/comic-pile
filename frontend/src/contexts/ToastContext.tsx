@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 import { ToastType, Toast, ToastContextType } from './ToastTypes'
 
-export const ToastContext = createContext<ToastContextType | undefined>(undefined)
+const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 const TOAST_DURATION = 5000
 
@@ -28,9 +28,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const timeoutIds = timeoutIdsRef.current
     return () => {
-      timeoutIdsRef.current.forEach((timeoutId) => clearTimeout(timeoutId))
-      timeoutIdsRef.current.clear()
+      timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId))
+      timeoutIds.clear()
     }
   }, []);
 
