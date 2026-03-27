@@ -30,7 +30,7 @@ test_model() {
   # Map known broken models to working equivalents
 case "$actual_model" in
    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
-     actual_model="mistral/mistral-small-latest"
+     actual_model="mistral/mistral-medium-latest"
      ;;
    esac
 

@@ -69,7 +69,10 @@ _load_issues() {
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
     while IFS= read -r model; do
-        _CODING_POOL+=("$model")
+        # Filter out problematic providers
+        if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+            _CODING_POOL+=("$model")
+        fi
     done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
@@ -77,7 +80,10 @@ fi
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
     while IFS= read -r model; do
-        _MODEL_POOL+=("$model")
+        # Filter out problematic providers
+        if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+            _MODEL_POOL+=("$model")
+        fi
     done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
@@ -332,7 +338,7 @@ map_model() {
 
 case "$model" in
    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
-     echo "mistral/mistral-small-latest"
+     echo "mistral/mistral-medium-latest"
      ;;
    *)
      echo "$model"
