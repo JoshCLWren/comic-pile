@@ -21,7 +21,13 @@ mkdir -p "$LOG_DIR"
 
 # Default model: use environment variable if set, otherwise use a known working model
 # Avoid models that cause ProviderModelNotFoundError (e.g., mistralai/mistral-small-3.1-24b-instruct:free)
-OPencode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
+OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
+
+# If the selected model is known to cause ProviderModelNotFoundError, fall back to safe default
+if [[ "$OPcode_MODEL" == mistralai/* ]] || [[ "$OPcode_MODEL" =~ mistral-small-3\.1-24b-instruct ]] || [[ "$OPcode_MODEL" =~ mistralai ]]; then
+    echo "Warning: Model $OPcode_MODEL is known to cause ProviderModelNotFoundError. Falling back to opencode/nemotron-3-super-free."
+    OPcode_MODEL="opencode/nemotron-3-super-free"
+fi
 
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
 ISSUES=(357 361 362 358 366 367 368 370 373 379 359 360 363 365 369 371 372 376 377 378 364 380)
