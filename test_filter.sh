@@ -65,6 +65,6 @@ test_model "mistral/mistral-medium-latest" "KEEP"
 test_model "mistral/magistral-medium-latest" "KEEP"
 test_model "anyprovider/mistral-small-3.1-24b-instruct:beta" "SKIP"
 test_model "mistralai/some-other-model" "SKIP"
-test_model "mistralai/mistral-small-3.1-24b-instruct:free" "SKIP"
+test_model "mistralai/mistral-small-3.1-24b-instruct" "SKIP"
 
 echo "================================"
