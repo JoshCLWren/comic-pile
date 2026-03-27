@@ -1,0 +1,28 @@
+FAIL     cerebras/gpt-oss-120b  [Error: Model gpt-oss-120b does not exist or you do not have access to it.]
+FAIL     cerebras/zai-glm-4.7  [Error: Model zai-glm-4.7 does not exist or you do not have access to it.]
+OK       cerebras/qwen-3-235b-a22b-instruct-2507  [Hello]
+OK       opencode/minimax-m2.5-free  [Hello]
+OK       opencode/nemotron-3-super-free  [hello]
+OK       opencode/mimo-v2-omni-free  [Hello]
+OK       opencode/mimo-v2-pro-free  [Hello]
+OK       opencode/gpt-5-nano  [Hello]
+OK       opencode/big-pickle  [Hello]
+FAIL     mistral/devstral-small-2505  [Error: Invalid model: devstral-small-2505]
+FAIL     mistral/magistral-small  [Error: Invalid model: magistral-small]
+OK       mistral/magistral-medium-latest  [Hello]
+FAIL     mistral/mistral-embed  [Error: Invalid model: mistral-embed]
+TIMEOUT  cerebras/llama3.1-8b
+OK       mistral/mistral-large-2411  [Hi]
+TIMEOUT  mistral/codestral-latest
+TIMEOUT  mistral/devstral-2512
+TIMEOUT  mistral/devstral-medium-2507
+TIMEOUT  mistral/devstral-medium-latest
+TIMEOUT  mistral/devstral-small-2507
+TIMEOUT  mistral/labs-devstral-small-2512
+OK       mistral/mistral-medium-2505  [Hello]
+OK       mistral/mistral-medium-2508  [Hi]
+FAIL     mistral/mistral-nemo  [Error: Invalid model: mistral-nemo]
+OK       mistral/mistral-medium-latest  [Hi]
+TIMEOUT  mistral/ministral-3b-latest
+TIMEOUT  mistral/ministral-8b-latest
+FAIL     nvidia/black-forest-labs/flux.1-dev  [Error: Not Found: 404 page not found]

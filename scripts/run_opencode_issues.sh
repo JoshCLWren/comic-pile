@@ -20,7 +20,7 @@ LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
 # Default model: use environment variable if set, otherwise use a known working model
-# Avoid models that cause ProviderModelNotFoundError (e.g., mistralai/mistral-small-3.1-24b-instruct:free)
+# Avoid models that cause ProviderModelNotFoundError (e.g., mistralai/Mistral-7B-Instruct)
 OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
 
 # If the selected model is known to cause ProviderModelNotFoundError, fall back to safe default
