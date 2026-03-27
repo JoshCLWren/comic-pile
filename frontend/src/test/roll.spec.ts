@@ -742,6 +742,75 @@ test.describe('Roll Dice Feature', () => {
 
       expect(rollPoolText).not.toContain('Queue Blocked Thread')
     })
+
+    test('expandable blocked threads section shows blocking reasons', async ({ authenticatedPage }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+      const blockerResponse = await authenticatedPage.request.post('/api/threads/', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: {
+          title: 'Blocker Alpha',
+          format: 'Comics',
+          issues_remaining: 5,
+        },
+      })
+      const blockerThread = await blockerResponse.json()
+
+      const blockedResponse = await authenticatedPage.request.post('/api/threads/', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: {
+          title: 'Dependent Beta',
+          format: 'Comics',
+          issues_remaining: 5,
+        },
+      })
+      const blockedThread = await blockedResponse.json()
+
+      await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: {
+          source_type: 'thread',
+          source_id: blockerThread.id,
+          target_type: 'thread',
+          target_id: blockedThread.id,
+        },
+      })
+
+      await authenticatedPage.goto('/')
+      await authenticatedPage.waitForLoadState('networkidle')
+
+      const blockedToggle = authenticatedPage.locator('button[aria-label*="threads hidden"]')
+      await expect(blockedToggle).toBeVisible({ timeout: 10000 })
+      await expect(blockedToggle).toContainText('1 thread hidden')
+
+      await blockedToggle.click()
+
+      const blockedList = authenticatedPage.locator('#blocked-threads-list')
+      await expect(blockedList).toBeVisible()
+
+      await expect(blockedList.locator('button')).toContainText('Dependent Beta')
+      await expect(blockedList.locator('button')).toContainText('blocked by Blocker Alpha')
+
+      const threadRow = blockedList.locator('button').filter({ hasText: 'Dependent Beta' })
+      await expect(threadRow).toHaveAttribute('aria-label', /Dependent Beta/)
+    })
+
+    test('blocked threads section hidden when no threads blocked', async ({ authenticatedWithThreadsPage }) => {
+      await authenticatedWithThreadsPage.goto('/')
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle')
+
+      const blockedToggle = authenticatedWithThreadsPage.locator('button[aria-label*="threads hidden"]')
+      await expect(blockedToggle).not.toBeVisible({ timeout: 5000 })
+    })
   });
 
   test.describe('Snoozed thread filtering', () => {
