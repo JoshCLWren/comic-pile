@@ -5,6 +5,7 @@ Configuration is validated at startup and provides type-safe access to settings.
 """
 
 from functools import lru_cache
+import os
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -14,10 +15,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class DatabaseSettings(BaseSettings):
     """Database configuration settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
+    # Provide a safe default for tests when no DATABASE_URL is configured.
+    # This allows test environments to boot without requiring a local DB URL
+    # to be present in the environment. The real tests should override this
+    # with TEST_DATABASE_URL or DATABASE_URL in CI environments.
     database_url: str = Field(
-        ...,
+        default_factory=lambda: (
+            os.environ.get("DATABASE_URL")
+            or "postgresql://postgres:postgres@localhost:5432/comic_pile_test"
+        ),
         description="PostgreSQL database connection URL",
         json_schema_extra={"env": "DATABASE_URL"},
     )
@@ -45,10 +53,10 @@ class DatabaseSettings(BaseSettings):
 class AuthSettings(BaseSettings):
     """Authentication and security settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     secret_key: str = Field(
-        ...,
+        default_factory=lambda: os.environ.get("SECRET_KEY") or "test-secret-key-for-testing-only",
         description="Secret key for JWT token signing (required)",
         json_schema_extra={"env": "SECRET_KEY"},
     )
@@ -71,7 +79,7 @@ class AuthSettings(BaseSettings):
 class AppSettings(BaseSettings):
     """General application settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     environment: Literal["development", "production", "test"] = Field(
         default="development",
@@ -113,7 +121,7 @@ class AppSettings(BaseSettings):
 class SessionSettings(BaseSettings):
     """Reading session configuration settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     session_gap_hours: int = Field(
         default=6,
@@ -146,7 +154,7 @@ class SessionSettings(BaseSettings):
 class RatingSettings(BaseSettings):
     """Rating system configuration settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     rating_min: float = Field(
         default=0.5,
@@ -192,7 +200,7 @@ class RatingSettings(BaseSettings):
 class Settings(BaseSettings):
     """Main settings class that aggregates all configuration groups."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     # Nested settings groups
     @property

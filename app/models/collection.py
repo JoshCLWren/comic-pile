@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,3 +31,5 @@ class Collection(Base):
     threads: Mapped[list["Thread"]] = relationship(
         "Thread", back_populates="collection", lazy="raise"
     )
+
+    __table_args__ = (Index("ix_collections_user_id", "user_id"),)

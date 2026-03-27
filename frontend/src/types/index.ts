@@ -371,7 +371,7 @@ export interface FlowchartEdge {
  * form with negative IDs to distinguish from thread IDs.
  */
 export interface FlowchartDependency {
-  id: string;
+  id: number | string;
   source_id: number;
   target_id: number;
   /** True when this edge was synthesized from issue-level dependencies */

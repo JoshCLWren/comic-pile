@@ -1,0 +1,12 @@
+TOOL_OK   opencode/mimo-v2-pro-free  [TOOLTEST_OK TOOLTEST_OK[e~[ ]
+TOOL_OK   mistral/mistral-medium-2508  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   mistral/mistral-medium-latest  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   mistral/mistral-medium-2505  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   opencode/minimax-m2.5-free  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   opencode/big-pickle  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   mistral/magistral-medium-latest  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   opencode/mimo-v2-omni-free  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   mistral/mistral-large-2411  [- /help: Get help with using opencode - To give feedback, us]
+TOOL_OK   opencode/nemotron-3-super-free  [TOOLTEST_OK TOOLTEST_OK ]
+TIMEOUT   cerebras/qwen-3-235b-a22b-instruct-2507
+TOOL_OK   opencode/gpt-5-nano  [$ echo TOOLTEST_OK TOOLTEST_OK ]

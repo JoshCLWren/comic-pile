@@ -19,6 +19,18 @@ TIMEOUT="${TIMEOUT:-45m}"
 LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
+# Default model: use environment variable if set, otherwise use a known working model
+# Skip specific problematic model only: mistralai/mistral-small-3.1-24b-instruct
+OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
+
+# If the selected model is known to cause ProviderModelNotFoundError, fall back to safe default
+# Perform case-insensitive check to catch all variants (e.g., MistralAI/...)
+lower_model=$(echo "$OPcode_MODEL" | tr '[:upper:]' '[:lower:]')
+if [[ "$lower_model" =~ mistralai/mistral-small-3\.1-24b-instruct ]]; then
+    echo "Warning: Model $OPcode_MODEL is known to cause ProviderModelNotFoundError. Falling back to opencode/nemotron-3-super-free."
+    OPcode_MODEL="opencode/nemotron-3-super-free"  # safe fallback for problematic models
+fi
+
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
 ISSUES=(357 361 362 358 366 367 368 370 373 379 359 360 363 365 369 371 372 376 377 378 364 380)
 
@@ -58,7 +70,7 @@ STANDARDS:
 
 Do not ask clarifying questions. Start immediately."
 
-    if timeout "$TIMEOUT" opencode run "$prompt" >"$log" 2>&1; then
+    if timeout "$TIMEOUT" opencode run -m "$OPcode_MODEL" "$prompt" >"$log" 2>&1; then
         echo "[DONE]  #$issue — see $log"
     else
         exit_code=$?

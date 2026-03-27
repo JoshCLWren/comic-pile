@@ -2,20 +2,13 @@
 
 ## 2026-03-25
 
-**Dependency Safety (#373)**
-- Added undo toast notification when removing dependencies
-- Optimistic UI removal with 5-second undo window
-- Toast includes dependency label and undo button
-- Modal close triggers immediate deletion if undo pending
-- Improved mobile safety with larger touch targets
-- No backend changes required
-
-**Security & Stability Fixes**
-- Fixed Range Expansion DoS vulnerability in issue parser by validating range size before expansion
-- Fixed dashed literals bypassing length limit by moving length check before dash processing
-- Fixed ID collision in issue edges by using unique string format instead of mathematical formula
-- Fixed tests creating issue dependencies without issues by creating issues via API before dependencies
-- Fixed thread deletion returning 500 error by changing Issue model relationships from lazy="raise" to lazy="select"
+**Roll Page Header Indicators (#366)**
+- Added labels and tooltips to roll page header indicators (+1, snoozed, offset, active)
+- Each indicator now has a visible text label or accessible tooltip with explanatory copy
+- Interactive indicators have clear visual affordances (cursor-help, dashed borders)
+- Tooltips explain what each value means and whether/how it can be changed
+- Screen readers can read each indicator's label and value via aria-label attributes
+- No layout changes to the roll page — tooltips fit within existing header space
 
 ## 2026-03-24
 
@@ -37,6 +30,14 @@
 - Edit Thread modal: Improved label associations for title, format, issues, notes
 - FormatSelect component: Added optional `id` prop for label association
 - Rating slider: Already had proper aria-label, maintained consistency
+
+**Issue Dependencies (#366)**
+- Added dependency indicators (🔗) to issues with dependencies
+- Added tooltips to show linked issues and threads on hover
+- Added dependency status to issue list in queue edit modal
+- Added mobile-friendly tooltips for dependency information
+- Added edit icon next to issue number in rating view
+- Added quick correction dialog for adjusting current issue number
 
 ## 2026-03-21
 
