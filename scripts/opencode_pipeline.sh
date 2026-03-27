@@ -478,14 +478,18 @@ for model in "${models[@]}"; do
         local start exit_code=0
         start=$(date +%s)
 
-        timeout 45m opencode run -m "$model" --dir "$wt" "$prompt" >> "$log" 2>&1 || exit_code=$?
+        local run_output
+        run_output=$(timeout 45m opencode run -m "$model" --dir "$wt" "$prompt" 2>&1) || exit_code=$?
+        echo "$run_output" >> "$log"
 
         local end duration outcome
         end=$(date +%s)
         duration=$(( end - start ))
 
-        # opencode exits 0 even on model-not-found — detect via log
-        if [[ $exit_code -eq 0 ]] && grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance" "$log" 2>/dev/null; then
+        # opencode exits 0 even on model-not-found — detect via current attempt only
+        # Must check $run_output (not $log) because $log accumulates across attempts
+        # and a previous failure would falsely taint subsequent successful attempts.
+        if [[ $exit_code -eq 0 ]] && echo "$run_output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
             exit_code=1
         fi
 
