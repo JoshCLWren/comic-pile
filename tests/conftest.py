@@ -84,6 +84,10 @@ def _looks_like_test_database(database_url: str) -> bool:
         if db_name.startswith(f"{prefix}_") or db_name.startswith(f"{prefix}-"):
             return True
 
+    # Also allow any database name containing "test" (for SQLite test.db, etc.)
+    if "test" in db_name:
+        return True
+
     return db_name.endswith("_test") or db_name.endswith("-test")
 
 

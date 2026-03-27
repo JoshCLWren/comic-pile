@@ -20,13 +20,13 @@ LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
 # Default model: use environment variable if set, otherwise use a known working model
-# Avoid models that cause ProviderModelNotFoundError (e.g., mistralai/Mistral-7B-Instruct)
+# Skip specific problematic model only: mistralai/mistral-small-3.1-24b-instruct
 OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
 
 # If the selected model is known to cause ProviderModelNotFoundError, fall back to safe default
 # Perform case-insensitive check to catch all variants (e.g., MistralAI/...)
 lower_model=$(echo "$OPcode_MODEL" | tr '[:upper:]' '[:lower:]')
-if [[ "$lower_model" == mistralai/* ]] || [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]] || [[ "$lower_model" =~ mistralai ]]; then
+if [[ "$lower_model" =~ mistralai/mistral-small-3\.1-24b-instruct ]]; then
     echo "Warning: Model $OPcode_MODEL is known to cause ProviderModelNotFoundError. Falling back to opencode/nemotron-3-super-free."
     OPcode_MODEL="opencode/nemotron-3-super-free"  # safe fallback for problematic models
 fi
