@@ -345,7 +345,7 @@ async def dismiss_pending(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Clear any pending thread from the current session.
+    """Clear any pending thread or issue from the current session.
 
     Args:
         current_user: The authenticated user.
