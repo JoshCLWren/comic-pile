@@ -70,9 +70,9 @@ _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
 while IFS= read -r model; do
 # Filter out problematic providers
-if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/"; then
-_CODING_POOL+=("$model")
-fi
+    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+      _CODING_POOL+=("$model")
+    fi
 done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
@@ -81,9 +81,9 @@ _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
 while IFS= read -r model; do
 # Filter out problematic providers
-if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/"; then
-_MODEL_POOL+=("$model")
-fi
+    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+      _MODEL_POOL+=("$model")
+    fi
 done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
@@ -102,9 +102,9 @@ fi
 
 # Filter out known problematic providers from override models
 _is_valid_model() {
-    local model="$1"
-    [[ -z "$model" ]] && return 1
-    ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/"
+  local model="$1"
+  [[ -z "$model" ]] && return 1
+  ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"
 }
 
 # implement/review/fix need real tool use — use Tier 1 only
