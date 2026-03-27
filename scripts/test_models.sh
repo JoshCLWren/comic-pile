@@ -27,7 +27,7 @@ test_model() {
     # Map invalid model names to valid ones
     local actual_model="$model"
     case "$model" in
-        "mistralai/mistral-small-3.1-24b-instruct:free")
+        "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
             actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
             ;;
     esac
@@ -35,16 +35,16 @@ test_model() {
     output=$(timeout 30s opencode run -m "$actual_model" "say hello in one word" 2>&1) || exit_code=$?
 
     if [[ $exit_code -eq 124 ]]; then
-        echo "TIMEOUT  $model"
+        echo "TIMEOUT  $actual_model"
     elif echo "$output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication"; then
         reason=$(echo "$output" | grep -iE "Error:|ProviderModel|balance|not found|not supported|unauthorized|invalid|authentication" | head -1 | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        echo "FAIL     $model  [$reason]"
+        echo "FAIL     $actual_model  [$reason]"
     elif [[ $exit_code -ne 0 ]]; then
-        echo "FAIL     $model  [exit $exit_code]"
+        echo "FAIL     $actual_model  [exit $exit_code]"
     else
         # Strip ANSI codes and extract last non-empty line as the response
         response=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -v "^>" | grep -v "^$" | tail -1 | xargs)
-        echo "OK       $model  [$response]"
+        echo "OK       $actual_model  [$response]"
     fi
 }
 

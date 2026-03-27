@@ -1155,12 +1155,12 @@ cmd_tool_test() {
         clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
         if echo "$clean" | grep -q "TOOLTEST_OK"; then
             snippet=$(echo "$clean" | grep -v "^>" | grep -v "^$" | tail -2 | tr "\n" " " | cut -c1-60)
-            echo "TOOL_OK   $model  [$snippet]"
+            echo "TOOL_OK   $mapped_model  [$snippet]"
         elif [[ $exit_code -eq 124 ]]; then
-            echo "TIMEOUT   $model"
+            echo "TIMEOUT   $mapped_model"
         else
             snippet=$(echo "$clean" | grep -v "^$" | tail -1 | cut -c1-60)
-            echo "TOOL_FAIL $model  [$snippet]"
+            echo "TOOL_FAIL $mapped_model  [$snippet]"
         fi
     ' _ {} | tee "$out"
     local ok fail timeout
@@ -1215,12 +1215,12 @@ cmd_model_manager() {
                  output=$(timeout 30s opencode run -m "$mapped_model" "Reply with only the word PING" 2>&1) || exit_code=$?
                 clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
                 if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
-                    echo "OK $model"
+                    echo "OK $mapped_model"
                 elif [[ $exit_code -eq 124 ]]; then
-                    echo "TIMEOUT $model"
+                    echo "TIMEOUT $mapped_model"
                 else
                     snippet=$(echo "$clean" | grep -v "^$" | tail -1 | cut -c1-60)
-                    echo "FAIL $model  [$snippet]"
+                    echo "FAIL $mapped_model  [$snippet]"
                 fi
             ' _ {} > "$results_file" 2>/dev/null
 
