@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-03-27
+
+**OpenCode Pipeline Stability (#362)**
+- Added model filtering to avoid `ProviderModelNotFoundError` from mistralai models (e.g., `mistral-small-3.1-24b-instruct:free`)
+- Updated `scripts/opencode_pipeline.sh`, `scripts/run_opencode_issues.sh`, and `scripts/test_models.sh` to skip problematic models
+- Implemented `_should_skip_model` function for consistent filtering across pipeline roles
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
