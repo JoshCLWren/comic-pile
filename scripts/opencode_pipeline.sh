@@ -69,15 +69,21 @@ _load_issues() {
 # Returns 0 (true) if model should be skipped, 1 (false) otherwise
 _should_skip_model() {
   local model="$1"
+  # Trim whitespace
+  model=$(echo "$model" | xargs)
+  
   # Skip mistralai models that cause ProviderModelNotFoundError
-  # This includes all mistralai provider models and specific model variants
-  if echo "$model" | grep -qE "^mistralai/"; then
+  # This includes all mistralai provider models
+  if [[ "$model" == mistralai/* ]]; then
     return 0
   fi
+  
   # Also skip specific problematic model IDs regardless of provider
-  if echo "$model" | grep -qE "mistral-small-3\.1-24b-instruct"; then
+  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
+  if [[ "$model" =~ mistral-small-3\.1-24b-instruct ]]; then
     return 0
   fi
+  
   return 1
 }
 
