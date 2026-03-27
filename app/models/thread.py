@@ -166,7 +166,7 @@ class Thread(Base):
             Progress percentage string like "50%" or None if not tracking issues
         """
         if not self.uses_issue_tracking() or self.total_issues is None:
-            return None
+            return "0%"
 
         from sqlalchemy import func, select
 
