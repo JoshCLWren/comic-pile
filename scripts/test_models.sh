@@ -14,7 +14,9 @@ RESULTS_FILE="$(dirname "$0")/../.opencode_logs/model_test_results.txt"
 mkdir -p "$(dirname "$RESULTS_FILE")"
 > "$RESULTS_FILE"  # truncate
 
-MODELS=$(opencode models 2>/dev/null)
+# Fetch available models and filter out known problematic providers
+# Exclude: openrouter, opencode, opencode-go, anthropic, github-copilot, mistralai, mistral
+MODELS=$(opencode models 2>/dev/null | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/" | grep -v "^$")
 TOTAL=$(echo "$MODELS" | wc -l)
 
 echo "Testing $TOTAL models ($PARALLEL at a time)..."
