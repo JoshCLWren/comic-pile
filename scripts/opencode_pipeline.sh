@@ -69,8 +69,16 @@ _load_issues() {
 # Returns 0 (true) if model should be skipped, 1 (false) otherwise
 _should_skip_model() {
   local model="$1"
-  # Skip mistralai models that cause ProviderModelNotFoundError, including known failing variants
-  echo "$model" | grep -qE "^mistralai/|mistral-small-3\.1-24b-instruct"
+  # Skip mistralai models that cause ProviderModelNotFoundError
+  # This includes all mistralai provider models and specific model variants
+  if echo "$model" | grep -qE "^mistralai/"; then
+    return 0
+  fi
+  # Also skip specific problematic model IDs regardless of provider
+  if echo "$model" | grep -qE "mistral-small-3\.1-24b-instruct"; then
+    return 0
+  fi
+  return 1
 }
 
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
