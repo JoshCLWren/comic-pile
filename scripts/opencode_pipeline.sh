@@ -82,7 +82,10 @@ _should_skip_model() {
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
   # Explicitly skip the problematic model that causes ProviderModelNotFoundError
-  if [[ "$lower_model" == "mistralai/mistral-small-3.1-24b-instruct" ]]; then
+  # Match the exact model and any suffix variations (including :free, :beta, etc.)
+  if [[ "$lower_model" == "mistralai/mistral-small-3.1-24b-instruct" ]] || \
+     [[ "$lower_model" == "mistralai/mistral-small-3.1-24b-instruct:free" ]] || \
+     [[ "$lower_model" == "mistralai/mistral-small-3.1-24b-instruct:beta" ]]; then
     return 0
   fi
 
