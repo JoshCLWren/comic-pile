@@ -65,20 +65,65 @@ _load_issues() {
     fi
 }
 
+# Helper function to check if a model should be skipped
+# Returns 0 (true) if model should be skipped, 1 (false) otherwise
+_should_skip_model() {
+  local model="$1"
+  # Trim whitespace
+  model=$(echo "$model" | xargs)
+
+  # Skip empty models
+  if [[ -z "$model" ]]; then
+    return 0
+  fi
+
+  # Convert to lowercase for case-insensitive matching
+  local lower_model
+  lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
+
+# Skip only the previously problematic mistral model
+  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+  return 0
+fi
+
+  # Also skip specific problematic model IDs regardless of provider
+  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
+  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+    return 0
+  fi
+
+  # Skip any model containing "mistralai" anywhere in the name
+  if [[ "$lower_model" =~ mistralai ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
-    while IFS= read -r model; do
-        _CODING_POOL+=("$model")
-    done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
+  while IFS= read -r model; do
+    if ! _should_skip_model "$model"; then
+      _CODING_POOL+=("$model")
+    fi
+  done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-    while IFS= read -r model; do
-        _MODEL_POOL+=("$model")
-    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
+  while IFS= read -r line; do
+    model=$(echo "$line" | awk '{print $2}')
+    # Skip models that have error responses (e.g., "[Error: ...]")
+    if echo "$line" | grep -q "\[Error:"; then
+      continue
+    fi
+    if _should_skip_model "$model"; then
+      continue
+    fi
+    _MODEL_POOL+=("$model")
+  done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | shuf)
 fi
 
 # Fallback: if tool test hasn't been run yet, use full pool for everything
@@ -89,18 +134,32 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
-        "openrouter/arcee-ai/trinity-large-preview:free"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only
 # pr/ci_check only need gh + text — use Tier 2 (full pool)
-IMPLEMENT_MODELS=(  "${IMPLEMENT_MODEL:-}"  "${_CODING_POOL[@]}" )
-REVIEW_MODELS=(     "${REVIEW_MODEL:-}"     "${_CODING_POOL[@]}" )
-FIX_MODELS=(        "${FIX_MODEL:-}"        "${_CODING_POOL[@]}" )
-PR_MODELS=(         "${PR_MODEL:-}"         "${_MODEL_POOL[@]}"  )
-CI_CHECK_MODELS=(   "${CI_CHECK_MODEL:-}"   "${_MODEL_POOL[@]}"  )
+# Filter environment variable overrides to skip problematic models
+IMPLEMENT_MODELS=()
+[[ -n "${IMPLEMENT_MODEL:-}" ]] && ! _should_skip_model "${IMPLEMENT_MODEL:-}" && IMPLEMENT_MODELS+=( "${IMPLEMENT_MODEL}" )
+IMPLEMENT_MODELS+=( "${_CODING_POOL[@]}" )
+
+REVIEW_MODELS=()
+[[ -n "${REVIEW_MODEL:-}" ]] && ! _should_skip_model "${REVIEW_MODEL:-}" && REVIEW_MODELS+=( "${REVIEW_MODEL}" )
+REVIEW_MODELS+=( "${_CODING_POOL[@]}" )
+
+FIX_MODELS=()
+[[ -n "${FIX_MODEL:-}" ]] && ! _should_skip_model "${FIX_MODEL:-}" && FIX_MODELS+=( "${FIX_MODEL}" )
+FIX_MODELS+=( "${_CODING_POOL[@]}" )
+
+PR_MODELS=()
+[[ -n "${PR_MODEL:-}" ]] && ! _should_skip_model "${PR_MODEL:-}" && PR_MODELS+=( "${PR_MODEL}" )
+PR_MODELS+=( "${_MODEL_POOL[@]}" )
+
+CI_CHECK_MODELS=()
+[[ -n "${CI_CHECK_MODEL:-}" ]] && ! _should_skip_model "${CI_CHECK_MODEL:-}" && CI_CHECK_MODELS+=( "${CI_CHECK_MODEL}" )
+CI_CHECK_MODELS+=( "${_MODEL_POOL[@]}" )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -431,14 +490,15 @@ run_with_fallback() {
     local wt
     wt=$(worktree_dir "$issue")
 
-    local attempts=0
-    for model in "${models[@]}"; do
-        [[ -z "$model" ]] && continue
-        model_in_backoff "$model" && continue
-        [[ $attempts -ge $MAX_ATTEMPTS ]] && { log_warn "#$issue — hit MAX_ATTEMPTS ($MAX_ATTEMPTS), stopping"; break; }
-        attempts=$(( attempts + 1 ))
+local attempts=0
+for model in "${models[@]}"; do
+  [[ -z "$model" ]] && continue
+  model_in_backoff "$model" && continue
+  _should_skip_model "$model" && { log_skip "#$issue — skipping problematic model: $model"; continue; }
+  [[ $attempts -ge $MAX_ATTEMPTS ]] && { log_warn "#$issue — hit MAX_ATTEMPTS ($MAX_ATTEMPTS), stopping"; break; }
+  attempts=$(( attempts + 1 ))
 
-        log_info "#$issue — trying model: $model (attempt $attempts/$MAX_ATTEMPTS)"
+  log_info "#$issue — trying model: $model (attempt $attempts/$MAX_ATTEMPTS)"
         echo "$model" > "$(model_file "$issue")"
 
         local role_title
@@ -447,14 +507,18 @@ run_with_fallback() {
         local start exit_code=0
         start=$(date +%s)
 
-        timeout 45m opencode run -m "$model" --dir "$wt" "$prompt" >> "$log" 2>&1 || exit_code=$?
+        local run_output
+        run_output=$(timeout 45m opencode run -m "$model" --dir "$wt" "$prompt" 2>&1) || exit_code=$?
+        echo "$run_output" >> "$log"
 
         local end duration outcome
         end=$(date +%s)
         duration=$(( end - start ))
 
-        # opencode exits 0 even on model-not-found — detect via log
-        if [[ $exit_code -eq 0 ]] && grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance" "$log" 2>/dev/null; then
+        # opencode exits 0 even on model-not-found — detect via current attempt only
+        # Must check $run_output (not $log) because $log accumulates across attempts
+        # and a previous failure would falsely taint subsequent successful attempts.
+        if [[ $exit_code -eq 0 ]] && echo "$run_output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
             exit_code=1
         fi
 
