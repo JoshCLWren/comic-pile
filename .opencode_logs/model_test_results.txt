@@ -38,4 +38,5 @@ TIMEOUT  nvidia/meta/llama-3.2-1b-instruct
 TIMEOUT  nvidia/meta/llama-3.3-70b-instruct
 OK       nvidia/moonshotai/kimi-k2-instruct  [hello]
 OK       nvidia/nvidia/cosmos-nemotron-34b  [Error: Not Found: 404 page not found]
-OK       nvidia/moonshotai/kimi-k2-instruct-0905  [hello]
+OK nvidia/moonshotai/kimi-k2-instruct-0905 [hello]
+OK nvidia/mistralai/mistral-large-3-675b-instruct-2512 [Hi]
