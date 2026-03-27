@@ -68,23 +68,23 @@ _load_issues() {
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
-  while IFS= read -r model; do
-    # Filter out problematic providers
-    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free"; then
-      _CODING_POOL+=("$model")
-    fi
-  done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
+	while IFS= read -r model; do
+		# Filter out problematic providers
+		if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3.1-24b-instruct:free"; then
+			_CODING_POOL+=("$model")
+		fi
+	done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-  while IFS= read -r model; do
-    # Filter out problematic providers
-    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free"; then
-      _MODEL_POOL+=("$model")
-    fi
-  done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
+	while IFS= read -r model; do
+		# Filter out problematic providers
+		if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3.1-24b-instruct:free"; then
+			_MODEL_POOL+=("$model")
+		fi
+	done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Fallback: if tool test hasn't been run yet, use full pool for everything
@@ -102,13 +102,13 @@ fi
 
 # Filter out known problematic providers from override models
 _is_valid_model() {
-  local model="$1"
-  [[ -z "$model" ]] && return 1
-  # Robust blacklist: exclude known providers and specific problematic models.
-  if echo "$model" | grep -qiE "(^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3\.1-24b-instruct:free|mistral-small-3\.1-24b-instruct)"; then
-    return 1
-  fi
-  return 0
+	local model="$1"
+	[[ -z "$model" ]] && return 1
+	# Robust blacklist: exclude known providers and specific problematic models.
+	if echo "$model" | grep -qiE "(^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3\.1-24b-instruct:free)"; then
+		return 1
+	fi
+	return 0
 }
 
 # implement/review/fix need real tool use — use Tier 1 only
@@ -1195,9 +1195,9 @@ if [[ "$needs_refresh" == "true" ]]; then
   local candidate_models=()
   while IFS= read -r model; do
     candidate_models+=("$model")
-  done < <(opencode models 2>/dev/null \
-  | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free" \
-  | grep -v "^$" || true)
+	done < <(opencode models 2>/dev/null \
+		| grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3.1-24b-instruct:free" \
+		| grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
             log_info "Testing $total_candidates candidate models..."
