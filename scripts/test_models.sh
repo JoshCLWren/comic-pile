@@ -16,8 +16,8 @@ mkdir -p "$(dirname "$RESULTS_FILE")"
 MODELS=$(opencode models 2>/dev/null)
 
 # Filter out models known to cause ProviderModelNotFoundError
-# Skip any mistralai provider models and mistral-small-3.1-24b-instruct variants
-FILTERED_MODELS=$(echo "$MODELS" | grep -v '^mistralai/' | grep -v 'mistral-small-3\.1-24b-instruct')
+# Use case-insensitive matching and catch all mistralai provider models and specific problematic model IDs
+FILTERED_MODELS=$(echo "$MODELS" | grep -viE '^mistralai/|mistral-small-3\.1-24b-instruct|mistralai')
 
 TOTAL=$(echo "$FILTERED_MODELS" | wc -l)
 

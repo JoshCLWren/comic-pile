@@ -77,20 +77,24 @@ _should_skip_model() {
     return 0
   fi
 
+  # Convert to lowercase for case-insensitive matching
+  local lower_model
+  lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
+
   # Skip mistralai models that cause ProviderModelNotFoundError
   # This includes all mistralai provider models
-  if [[ "$model" == mistralai/* ]]; then
+  if [[ "$lower_model" == mistralai/* ]]; then
     return 0
   fi
 
   # Also skip specific problematic model IDs regardless of provider
   # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$model" =~ mistral-small-3\.1-24b-instruct ]]; then
+  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
     return 0
   fi
 
   # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$model" =~ mistralai ]]; then
+  if [[ "$lower_model" =~ mistralai ]]; then
     return 0
   fi
 
