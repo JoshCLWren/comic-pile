@@ -19,6 +19,10 @@ TIMEOUT="${TIMEOUT:-45m}"
 LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
+# Default model: use environment variable if set, otherwise use a known working model
+# Avoid models that cause ProviderModelNotFoundError (e.g., mistralai/mistral-small-3.1-24b-instruct:free)
+OPencode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
+
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
 ISSUES=(357 361 362 358 366 367 368 370 373 379 359 360 363 365 369 371 372 376 377 378 364 380)
 
@@ -58,7 +62,7 @@ STANDARDS:
 
 Do not ask clarifying questions. Start immediately."
 
-    if timeout "$TIMEOUT" opencode run "$prompt" >"$log" 2>&1; then
+    if timeout "$TIMEOUT" opencode run -m "$OPcode_MODEL" "$prompt" >"$log" 2>&1; then
         echo "[DONE]  #$issue — see $log"
     else
         exit_code=$?

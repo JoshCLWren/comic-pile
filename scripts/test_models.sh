@@ -14,7 +14,12 @@ mkdir -p "$(dirname "$RESULTS_FILE")"
 > "$RESULTS_FILE"  # truncate
 
 MODELS=$(opencode models 2>/dev/null)
-TOTAL=$(echo "$MODELS" | wc -l)
+
+# Filter out models known to cause ProviderModelNotFoundError
+# Skip any mistralai provider models and mistral-small-3.1-24b-instruct variants
+FILTERED_MODELS=$(echo "$MODELS" | grep -v '^mistralai/' | grep -v 'mistral-small-3\.1-24b-instruct')
+
+TOTAL=$(echo "$FILTERED_MODELS" | wc -l)
 
 echo "Testing $TOTAL models ($PARALLEL at a time)..."
 echo "Results: $RESULTS_FILE"
@@ -47,7 +52,7 @@ test_model() {
 
 export -f test_model
 
-echo "$MODELS" | xargs -P "$PARALLEL" -I{} bash -c 'test_model "$@"' _ {} | tee "$RESULTS_FILE"
+echo "$FILTERED_MODELS" | xargs -P "$PARALLEL" -I{} bash -c 'test_model "$@"' _ {} | tee "$RESULTS_FILE"
 
 echo ""
 echo "=== Summary ==="
