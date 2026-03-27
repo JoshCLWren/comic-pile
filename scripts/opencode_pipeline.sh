@@ -85,23 +85,13 @@ _is_problematic_model() {
     # are now supported. Allow this specific model to pass through instead of
     # being excluded by the generic ":free" filter.
     if echo "$model" | grep -qi ":free$"; then
-        if echo "$model" | grep -qiE "^mistralai/mistral-small-3\\.1-24b-instruct:free$|^mistralai/mistral-small-3\\.1-24b-instruct:free/"; then
+        if echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
             : # allow this specific mistral free model
         else
             echo "[PIPELINE] WARNING: Filtering out problematic model: $model" >&2
             return 0
         fi
     fi
-     # Filter out specific problematic models
-     # Note: Removed mistral-small-3.1-24b-instruct:free as it's now supported
-     # if echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
-     #     echo "[PIPELINE] WARNING: Filtering out problematic model: $model" >&2
-     #     return 0
-     # fi
-     # if echo "$model" | grep -qi "mistral-small-3\.1-24b-instruct:free"; then
-     #     echo "[PIPELINE] WARNING: Filtering out problematic model: $model" >&2
-     #     return 0
-     # fi
     return 1
 }
 
@@ -129,15 +119,13 @@ fi
      if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
          _CODING_POOL=("${_MODEL_POOL[@]}")
      fi
-     if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
-         local fallback_models=(
-             "cerebras/zai-glm-4.7"
-             "nvidia/deepseek-ai/deepseek-r1"
-             "mistral/mistral-medium-latest"
-             "nvidia/google/codegemma-7b"
-             # Note: Removed mistral-small-3.1-24b-instruct:free as it's now supported
-# (removed from model pool)
-         )
+      if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
+          local fallback_models=(
+              "cerebras/zai-glm-4.7"
+              "nvidia/deepseek-ai/deepseek-r1"
+              "mistral/mistral-medium-latest"
+              "nvidia/google/codegemma-7b"
+          )
          for model in "${fallback_models[@]}"; do
              if ! _is_problematic_model "$model"; then
                  _MODEL_POOL+=("$model")

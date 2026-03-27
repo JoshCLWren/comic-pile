@@ -37,20 +37,15 @@ _is_problematic_model() {
         return 0
     fi
     # Filter out models ending with :free (case-insensitive)
+    # Allow mistralai/mistral-small-3.1-24b-instruct:free as it's now supported
     if echo "$model" | grep -qi ":free$"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
+        if echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
+            : # allow this specific mistral free model
+        else
+            echo "WARNING: Filtering out problematic model: $model" >&2
+            return 0
+        fi
     fi
-     # Filter out specific problematic models
-     # Note: Removed mistral-small-3.1-24b-instruct:free as it's now supported
-     # if echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
-     #     echo "WARNING: Filtering out problematic model: $model" >&2
-     #     return 0
-     # fi
-     # if echo "$model" | grep -qi "mistral-small-3\.1-24b-instruct:free"; then
-     #     echo "WARNING: Filtering out problematic model: $model" >&2
-     #     return 0
-     # fi
     return 1
 }
 
