@@ -84,14 +84,8 @@ _should_skip_model() {
 # Skip all mistralai models to prevent ProviderModelNotFoundError
 # This comprehensive filtering prevents any mistralai model from being used
 if [[ "$lower_model" == mistralai/* ]]; then
- return 0
+  return 0
 fi
-
-  # Skip mistralai models that cause ProviderModelNotFoundError
-  # This includes all mistralai provider models
-  if [[ "$lower_model" == mistralai/* ]]; then
-    return 0
-  fi
 
   # Also skip specific problematic model IDs regardless of provider
   # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
