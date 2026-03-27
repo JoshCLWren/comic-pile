@@ -19,6 +19,9 @@ TIMEOUT="${TIMEOUT:-45m}"
 LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
+# Default model to use (override with OPENCODER_MODEL env var)
+DEFAULT_MODEL="${OPENCODER_MODEL:-cerebras/zai-glm-4.7}"
+
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
 ISSUES=(357 361 362 358 366 367 368 370 373 379 359 360 363 365 369 371 372 376 377 378 364 380)
 
@@ -58,7 +61,7 @@ STANDARDS:
 
 Do not ask clarifying questions. Start immediately."
 
-    if timeout "$TIMEOUT" opencode run "$prompt" >"$log" 2>&1; then
+     if timeout "$TIMEOUT" opencode run -m "$DEFAULT_MODEL" "$prompt" >"$log" 2>&1; then
         echo "[DONE]  #$issue — see $log"
     else
         exit_code=$?
