@@ -28,7 +28,7 @@ OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
 lower_model=$(echo "$OPcode_MODEL" | tr '[:upper:]' '[:lower:]')
 if [[ "$lower_model" == mistralai/* ]] || [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]] || [[ "$lower_model" =~ mistralai ]]; then
     echo "Warning: Model $OPcode_MODEL is known to cause ProviderModelNotFoundError. Falling back to opencode/nemotron-3-super-free."
-    OPcode_MODEL="opencode/nemotron-3-super-free"
+    OPcode_MODEL="opencode/nemotron-3-super-free"  # safe fallback for problematic models
 fi
 
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
