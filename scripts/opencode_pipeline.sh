@@ -325,6 +325,20 @@ record_model_success() {
     rm -f "$f"
 }
 
+# Map known invalid model identifiers to working equivalents
+map_model() {
+  local model="$1"
+  case "$model" in
+    "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
+      echo "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+      ;;
+    *)
+      echo "$model"
+      ;;
+  esac
+}
+export -f map_model
+
 # Per-issue backoff — after all models fail, cool off before retrying
 _fail_ts_file() { echo "$LOG_DIR/issue_$1/.fail_ts"; }
 
@@ -403,19 +417,8 @@ run_with_fallback() {
   # Map invalid model names to valid ones
   local mapped_models=()
   for m in "${models[@]}"; do
-    case "$m" in
-      "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
-        # Map to valid model (without :free suffix which causes ProviderModelNotFoundError)
-        mapped_models+=("nvidia/mistralai/mistral-small-3.1-24b-instruct-2503")
-        ;;
-      "")
-        # Skip empty
-        continue
-        ;;
-      *)
-        mapped_models+=("$m")
-        ;;
-    esac
+    [[ -z "$m" ]] && continue
+    mapped_models+=("$(map_model "$m")")
   done
   models=("${mapped_models[@]}")
     
@@ -1147,7 +1150,8 @@ cmd_tool_test() {
     printf '%s\n' "${_MODEL_POOL[@]}" | \
     xargs -P 15 -I{} bash -c '
         model="$1"; log="$2"; exit_code=0
-        output=$(timeout 30s opencode run -m "$model" "Run this bash command and report ONLY its output, nothing else: echo TOOLTEST_OK" 2>&1) || exit_code=$?
+        mapped_model=$(map_model "$model")
+        output=$(timeout 30s opencode run -m "$mapped_model" "Run this bash command and report ONLY its output, nothing else: echo TOOLTEST_OK" 2>&1) || exit_code=$?
         clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
         if echo "$clean" | grep -q "TOOLTEST_OK"; then
             snippet=$(echo "$clean" | grep -v "^>" | grep -v "^$" | tail -2 | tr "\n" " " | cut -c1-60)
@@ -1207,7 +1211,8 @@ cmd_model_manager() {
             xargs -P 15 -I{} bash -c '
                 model="$1"
                 exit_code=0
-                output=$(timeout 30s opencode run -m "$model" "Reply with only the word PING" 2>&1) || exit_code=$?
+                 mapped_model=$(map_model "$model")
+                 output=$(timeout 30s opencode run -m "$mapped_model" "Reply with only the word PING" 2>&1) || exit_code=$?
                 clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
                 if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
                     echo "OK $model"
@@ -1297,7 +1302,7 @@ cmd_main_fixer() {
     local LOG_LINES="${MAIN_FIXER_LOG_LINES:-100}"
     local LOCK="$LOG_DIR/.main_fixer_lock"
     local FIXER_LOG="$LOG_DIR/main_fixer.log"
-    local FIXER_MODEL="${_CODING_POOL[0]:-${_MODEL_POOL[0]}}"
+    local FIXER_MODEL=$(map_model "${_CODING_POOL[0]:-${_MODEL_POOL[0]}}")
 
     log_info "main_fixer online — threshold=${THRESHOLD} PRs, poll=${POLL}s, model=${FIXER_MODEL}"
     mkdir -p "$LOG_DIR"
