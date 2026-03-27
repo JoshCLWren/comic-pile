@@ -77,8 +77,6 @@ def _looks_like_test_database(database_url: str) -> bool:
     db_name = (url.database or "").lower()
 
     allow_list = {"test", "ci", "dev", "comic_pile_test"}
-    if "test" in db_name:
-        return True
     if db_name in allow_list:
         return True
 
