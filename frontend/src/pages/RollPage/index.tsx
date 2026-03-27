@@ -79,11 +79,19 @@ export default function RollPage() {
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
-
 const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
+
+  const fetchBlockedThreadsWithReasons = useCallback(async () => {
+    try {
+      const response = await dependenciesApi.listBlockedThreadsWithReasons(activeCollectionId)
+      setBlockedThreadsWithReasons(response.blocked_threads || [])
+    } catch {
+      setBlockedThreadsWithReasons([])
+    }
+  }, [activeCollectionId, setBlockedThreadsWithReasons])
 
   useEffect(() => {
     if (isSessionError && sessionError) {
@@ -271,15 +279,6 @@ const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
 
 const snoozedIds = useMemo(() => new Set(session?.snoozed_threads?.map((t) => t.id) ?? []), [session?.snoozed_threads])
   const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked && !snoozedIds.has(t.id)) ?? [], [threads, snoozedIds])
-
-  const fetchBlockedThreadsWithReasons = useCallback(async () => {
-    try {
-      const response = await dependenciesApi.listBlockedThreadsWithReasons(activeCollectionId)
-      setBlockedThreadsWithReasons(response.blocked_threads || [])
-    } catch {
-      setBlockedThreadsWithReasons([])
-    }
-  }, [activeCollectionId, setBlockedThreadsWithReasons])
 
   useEffect(() => {
     fetchBlockedThreadsWithReasons()
