@@ -311,9 +311,9 @@ _model_backoff_file() {
 # Evict a model from both pool files so model_manager re-tests it next cycle
 _evict_model() {
     local model=$1
-    local safe
     safe=$(echo "$model" | tr '/:' '__')
-    sed -i "/ ${model} /d;/^[A-Z_]*  *${safe//\//\\/}/d" \
+    # Use | delimiter to avoid issues with '/' in model names
+    sed -i "\| ${model} |d; /^[A-Z_]*  *${safe//\//\\/}/d" \
         "$LOG_DIR/model_test_results.txt" \
         "$LOG_DIR/model_tool_test_results.txt" 2>/dev/null || true
     rm -f "$(_model_backoff_file "$model")"
