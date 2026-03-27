@@ -24,6 +24,7 @@
 **Test Fixes (#363)**
 - Fixed `test_roll_dynamic_title`: removed invalid second roll assertion to properly handle pending roll conflicts
 - Fixed `test_admin_routes_accessible_when_enabled`: added database dependency override to use test session
+- Fixed React hook ordering in RollPage that caused ReferenceError during tests
 
 ## 2026-03-26
 

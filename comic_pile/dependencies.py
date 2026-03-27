@@ -107,18 +107,20 @@ async def get_batch_blocking_explanations(
         db: Database session.
 
     Returns:
-        Dict mapping thread_id to list of blocking reason strings.
+        Dict mapping thread_id to list of blocking reason strings, sorted by
+        the blocking thread's queue position (ascending) to show the most immediate blocker first.
     """
     if not thread_ids:
         return {}
 
-    result_map: dict[int, list[str]] = {tid: [] for tid in thread_ids}
+    # Map thread_id to list of (queue_position, reason) tuples
+    result_map: dict[int, list[tuple[int, str]]] = {tid: [] for tid in thread_ids}
 
     source = Thread.__table__.alias("source_thread")
     target = Thread.__table__.alias("target_thread")
 
     thread_result = await db.execute(
-        select(target.c.id, source.c.id, source.c.title)
+        select(target.c.id, source.c.queue_position, source.c.title)
         .join(Dependency, Dependency.source_thread_id == source.c.id)
         .join(target, Dependency.target_thread_id == target.c.id)
         .where(target.c.id.in_(thread_ids))
@@ -127,8 +129,9 @@ async def get_batch_blocking_explanations(
         .where(source.c.status != "completed")
     )
 
-    for target_id, _source_id, source_title in thread_result.all():
-        result_map[target_id].append(f"blocked by {source_title}")
+    for target_id, src_queue_pos, src_title in thread_result.all():
+        reason = f"blocked by {src_title}"
+        result_map[target_id].append((src_queue_pos, reason))
 
     source_issue = Issue.__table__.alias("source_issue")
     target_issue = Issue.__table__.alias("target_issue")
@@ -138,7 +141,7 @@ async def get_batch_blocking_explanations(
     issue_result = await db.execute(
         select(
             target_thread.c.id,
-            source_thread.c.id,
+            source_thread.c.queue_position,
             source_thread.c.title,
             source_issue.c.issue_number,
         )
@@ -156,10 +159,18 @@ async def get_batch_blocking_explanations(
         .where(source_issue.c.status != "read")
         .where(target_thread.c.next_unread_issue_id.isnot(None))
     )
-    for target_id, _src_thread_id, src_thread_title, issue_number in issue_result.all():
-        result_map[target_id].append(f"blocked by {src_thread_title} #{issue_number}")
 
-    return result_map
+    for target_id, src_queue_pos, src_thread_title, issue_number in issue_result.all():
+        reason = f"blocked by {src_thread_title} #{issue_number}"
+        result_map[target_id].append((src_queue_pos, reason))
+
+    # Sort the reasons for each thread by the blocking thread's queue position (ascending)
+    final_map: dict[int, list[str]] = {}
+    for tid, entries in result_map.items():
+        entries.sort(key=lambda x: x[0])
+        final_map[tid] = [reason for _pos, reason in entries]
+
+    return final_map
 
 
 async def validate_position_dependency_consistency(

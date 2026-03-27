@@ -39,6 +39,7 @@ export default function RollPage() {
     const state = useRollPageState()
     const [touchFriendly, setTouchFriendly] = useState(false)
 
+  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   // Ensure touch-friendly is properly updated from roll response
   useEffect(() => {
     if (session?.touch_friendly !== undefined) {
@@ -78,7 +79,7 @@ export default function RollPage() {
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
-const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+
 const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
