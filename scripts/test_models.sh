@@ -33,8 +33,8 @@ test_model() {
     if [[ $exit_code -eq 124 ]]; then
         echo "TIMEOUT  $model"
     elif echo "$output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication"; then
-        reason=$(echo "$output" | grep -iE "Error:|ProviderModel|balance|not found|not supported|unauthorized|invalid|authentication" | head -1 | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        echo "FAIL     $model  [$reason]"
+        # Model unavailable; treat as skipped
+        echo "SKIP     $model  [unavailable]"
     elif [[ $exit_code -ne 0 ]]; then
         echo "FAIL     $model  [exit $exit_code]"
     else
