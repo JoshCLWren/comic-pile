@@ -331,12 +331,12 @@ map_model() {
   model=$(echo "$model" | xargs)
 
   case "$model" in
-     *mistral-small-3.1-24b-instruct*)
-       echo "mistralai/mistral-small-latest"
-       ;;
-    *)
-      echo "$model"
-      ;;
+  *mistral-small-3.1-24b-instruct*)
+    echo "openrouter/deepseek/deepseek-chat-v3-0324:free"
+    ;;
+  *)
+    echo "$model"
+    ;;
   esac
 }
 export -f map_model

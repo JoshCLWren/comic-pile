@@ -26,15 +26,15 @@ test_model() {
 
   local actual_model="$model"
   actual_model=$(echo "$actual_model" | xargs)
-  
+
+  # Map known broken models to working equivalents
   case "$actual_model" in
-    *mistral-small-3.1-24b-instruct*)
-      echo "SKIP     $actual_model  [broken model]"
-      return
-      ;;
+  *mistral-small-3.1-24b-instruct*)
+    actual_model="openrouter/deepseek/deepseek-chat-v3-0324:free"
+    ;;
   esac
-    
-    output=$(timeout 30s opencode run -m "$actual_model" "say hello in one word" 2>&1) || exit_code=$?
+
+  output=$(timeout 30s opencode run -m "$actual_model" "say hello in one word" 2>&1) || exit_code=$?
 
     if [[ $exit_code -eq 124 ]]; then
         echo "TIMEOUT  $actual_model"
