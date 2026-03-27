@@ -8,6 +8,7 @@
 * Clicking a thread navigates to queue page with automatic scroll to highlighted thread
 * Mobile-optimized with 44px touch targets and scrollable list
 * Shows first 10 threads with "show X more" toggle for larger lists
+* Fixed show-all toggle resetting when section collapses
 * Section hidden entirely when no threads are blocked
 * Blocked threads list now respects the active collection filter, ensuring count and navigation are context-aware
 * Fixed test expectations for new navigation behavior

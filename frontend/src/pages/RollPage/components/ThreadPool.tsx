@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Thread, BlockedThreadDetail } from '../../../types'
 import type { RatingThread } from '../types'
@@ -45,6 +45,13 @@ export function ThreadPool({
   const navigate = useNavigate()
   const [showAllBlocked, setShowAllBlocked] = useState(false)
   const INITIAL_BLOCKED_LIMIT = 10
+
+  // Reset showAllBlocked when section collapses
+  useEffect(() => {
+    if (!blockedExpanded) {
+      setShowAllBlocked(false)
+    }
+  }, [blockedExpanded])
 
 // Ensure touch targets are at least 44px for mobile accessibility
 const TOUCH_TARGET_MIN_SIZE = 44
