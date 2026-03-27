@@ -42,12 +42,9 @@
 
 
 **GitHub Projects Cleanup (#363)**
-- Removed deprecated GitHub Projects (classic) migration documentation
-- Cleaned up unused GitHub Projects preparation files
-- Removed GitHub Projects (classic) deprecation notices from migration scripts
-- Updated MCP_SERVER_EVALUATION.md to reflect GitHub Projects (classic) deprecation
-- Added deprecation notes and updated API references in exploration documentation
-- Updated capability matrix to indicate GitHub Projects (classic) is deprecated
+- Removed references to deprecated GitHub Projects (classic) from MCP_SERVER_EVALUATION.md
+- Cleaned up capability matrix to remove deprecated GitHub Projects
+- Removed GitHub Projects API references from exploration documentation
 
 **Pipeline Simplification (#363)**
 - Simplified opencode pipeline script by removing CI checking and complex model backoff features

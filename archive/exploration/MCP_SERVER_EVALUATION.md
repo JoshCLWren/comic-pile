@@ -345,10 +345,10 @@ Estimated $10-20/user/mo based on market positioning, but exact pricing requires
 
 ### 3.1 Feature Comparison Table
 
-| Feature | MCP Server | Current REST API | Jira | Asana | Linear | Notion | GitHub Projects | Taskwarrior | Kanboard |
-|---------|------------|------------------|------|-------|--------|--------|----------------|-------------|----------|
-| **Real-time Updates** | SSE ✅ | Polling only ❌ | Webhooks ✅ | Webhooks ✅ | GraphQL Subscriptions ✅ | Limited Webhooks ❌ | Webhooks ✅ | None ❌ | Webhooks ✅ |
-| **API Maturity** | Low ❌ | Medium ✅ | High ✅ | High ✅ | High ✅ | Medium ✅ | High ✅ [Deprecated] | None ❌ | Medium ✅ |
+| Feature | MCP Server | Current REST API | Jira | Asana | Linear | Notion | Taskwarrior | Kanboard |
+|---------|------------|------------------|------|-------|--------|--------|-------------|----------|
+| **Real-time Updates** | SSE ✅ | Polling only ❌ | Webhooks ✅ | Webhooks ✅ | GraphQL Subscriptions ✅ | Limited Webhooks ❌ | None ❌ | Webhooks ✅ |
+| **API Maturity** | Low ❌ | Medium ✅ | High ✅ | High ✅ | High ✅ | Medium ✅ | None ❌ | Medium ✅ |
 | **Agent Claiming** | Custom ✅ | Built-in ✅ | Custom ❌ | Custom ❌ | Custom ❌ | Custom ❌ | Custom ❌ | None ❌ | Custom ❌ |
 | **Heartbeat Monitoring** | Custom ✅ | Built-in ✅ | External ❌ | External ❌ | External ❌ | External ❌ | External ❌ | None ❌ | External ❌ |
 | **Dependency Management** | Custom ✅ | Built-in ✅ | Built-in ✅ | Basic ❌ | Built-in ✅ | Manual ❌ | None ❌ | Built-in ✅ | Manual ❌ |
@@ -938,7 +938,6 @@ async def claim_task(task_id: str, agent_name: str, worktree: str) -> dict:
 - [Jira API Documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro/)
 - [Asana API Documentation](https://developers.asana.com/docs)
 - [Linear API Documentation](https://developers.linear.app/docs/graphql/working-with-the-graphql-api)
-- [GitHub Projects API](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-api-to-manage-projects) *(Note: GitHub Projects (classic) API is deprecated in favor of the new Projects experience)*
 - [Notion API + MCP](https://developers.notion.com/docs/mcp)
 
 ### Open Source Tools
