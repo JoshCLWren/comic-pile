@@ -1256,17 +1256,7 @@ cmd_main_fixer() {
     local LOG_LINES="${MAIN_FIXER_LOG_LINES:-100}"
     local LOCK="$LOG_DIR/.main_fixer_lock"
     local FIXER_LOG="$LOG_DIR/main_fixer.log"
-    # Always use a tool-capable model — the task requires actual file edits and git commits.
-    # Pick the first TOOL_OK model (same tier used for implement/review/fix workers).
-    local FIXER_MODEL
-    if [[ ${#_CODING_POOL[@]} -gt 0 ]]; then
-        FIXER_MODEL="${_CODING_POOL[0]}"
-    elif [[ ${#_MODEL_POOL[@]} -gt 0 ]]; then
-        FIXER_MODEL="${_MODEL_POOL[0]}"
-    else
-        log_error "main_fixer — no models available, sleeping"
-        sleep "$POLL"; return
-    fi
+    local FIXER_MODEL="${_CODING_POOL[0]:-${_MODEL_POOL[0]}}"
 
     log_info "main_fixer online — threshold=${THRESHOLD} PRs, poll=${POLL}s, model=${FIXER_MODEL}"
     mkdir -p "$LOG_DIR"
@@ -1382,12 +1372,11 @@ MAIN_FIXER_SKIP — <one-line reason>
 PROMPT
 )
 
+            # Snapshot HEAD before opencode runs — proof of a real commit
+            local head_before
+            head_before=$(git -C "$REPO_ROOT" rev-parse HEAD)
+
             log_info "main_fixer — running opencode on main for '${job_name}' (model: ${FIXER_MODEL})"
-
-            # Record HEAD before opencode runs so we can detect real commits afterward
-            local pre_sha
-            pre_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
-
             {
                 echo ""
                 echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) job=${job_name} prs=${count} ==="
@@ -1395,27 +1384,35 @@ PROMPT
                 echo "=== END ==="
             } | tee -a "$FIXER_LOG"
 
-            # Verify success by checking for an ACTUAL new commit, not just the sentinel string.
-            # Models sometimes echo the sentinel without doing any work.
-            local post_sha
-            post_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
-            local run_tail
-            run_tail=$(tail -200 "$FIXER_LOG")
+            local head_after
+            head_after=$(git -C "$REPO_ROOT" rev-parse HEAD)
 
-            if [[ "$post_sha" != "$pre_sha" ]] && echo "$run_tail" | grep -q "$sentinel"; then
-                log_ok "main_fixer — fix committed (${pre_sha:0:7}→${post_sha:0:7}) for '${job_name}'"
-                fixed_something=true
-            elif [[ "$post_sha" != "$pre_sha" ]]; then
-                # Commit happened but sentinel missing — still accept the fix
-                log_ok "main_fixer — fix committed (${pre_sha:0:7}→${post_sha:0:7}) for '${job_name}' (no sentinel, but commit present)"
-                fixed_something=true
-            elif echo "$run_tail" | grep -q "MAIN_FIXER_SKIP"; then
-                local reason
-                reason=$(echo "$run_tail" | grep "MAIN_FIXER_SKIP" | tail -1)
-                log_warn "main_fixer — skipped '${job_name}': $reason"
-            else
-                log_warn "main_fixer — no real commit made for '${job_name}' (model may have hallucinated)"
+            # Gate 1: a real new commit must exist (not just sentinel text in output)
+            if [[ "$head_after" == "$head_before" ]]; then
+                log_warn "main_fixer — no commit made for '${job_name}' (HEAD unchanged), skipping push"
+                continue
             fi
+
+            # Gate 2: lint must pass before we push to main
+            log_info "main_fixer — running lint gate on '${job_name}' fix"
+            local changed_files lint_exit=0
+            changed_files=$(git -C "$REPO_ROOT" diff "$head_before" HEAD --name-only)
+
+            if echo "$changed_files" | grep -qE "^frontend/"; then
+                npm run lint --prefix "$REPO_ROOT/frontend" >> "$FIXER_LOG" 2>&1 || lint_exit=$?
+            fi
+            if echo "$changed_files" | grep -qE "\.py$"; then
+                make -C "$REPO_ROOT" lint >> "$FIXER_LOG" 2>&1 || lint_exit=$?
+            fi
+
+            if [[ $lint_exit -ne 0 ]]; then
+                log_error "main_fixer — lint FAILED after fix for '${job_name}' — reverting commit"
+                git -C "$REPO_ROOT" reset --hard "$head_before" 2>&1 >> "$FIXER_LOG"
+                continue
+            fi
+
+            log_ok "main_fixer — fix verified for '${job_name}' (commit: ${head_after:0:8})"
+            fixed_something=true
         done
 
         # ── 4. Push main + merge into all PR branches ───────────────────────
