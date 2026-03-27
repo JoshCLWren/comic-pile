@@ -331,9 +331,9 @@ map_model() {
   model=$(echo "$model" | xargs)
 
   case "$model" in
-    *mistral-small-3.1-24b-instruct*)
-      return 1
-      ;;
+     *mistral-small-3.1-24b-instruct*)
+       echo "mistralai/mistral-small-latest"
+       ;;
     *)
       echo "$model"
       ;;
