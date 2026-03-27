@@ -29,7 +29,7 @@ test_model() {
 
   # Map known broken models to working equivalents
   case "$actual_model" in
-  *mistral-small-3.1-24b-instruct*)
+  *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*)
     actual_model="opencode/nemotron-3-super-free"
     ;;
   esac
