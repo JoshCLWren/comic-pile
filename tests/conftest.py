@@ -148,36 +148,51 @@ async def _sync_id_sequence(db: SQLAlchemyAsyncSession, table_name: str) -> None
     )
 
 
+# Added async lock to prevent concurrent schema drops
+import asyncio
+
+_engine_lock = asyncio.Lock()
+
+
 @pytest_asyncio.fixture(scope="session")
 async def db_engine() -> AsyncIterator[AsyncEngine]:
-    """Create and prepare the shared async engine for backend tests."""
+    """Create and prepare the shared async engine for backend tests, ensuring only one initialization occurs."""
     global _SHARED_TEST_ENGINE
 
-    database_url = get_test_database_url()
-    engine = create_async_engine(database_url, echo=False, poolclass=NullPool)
+    async with _engine_lock:
+        # Initialize engine only once
+        if _SHARED_TEST_ENGINE is None:
+            database_url = get_test_database_url()
+            engine = create_async_engine(database_url, echo=False, poolclass=NullPool)
 
-    async with engine.begin() as conn:
+            async with engine.begin() as conn:
 
-        def _check_and_drop(sync_conn: Connection) -> None:
-            if _has_schema_drift(sync_conn):
-                if not _looks_like_test_database(database_url):
-                    raise RuntimeError(
-                        "Refusing to reset schema on non-test database. "
-                        f"Database '{make_url(database_url).database}' must include 'test'."
-                    )
-                sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-                sync_conn.exec_driver_sql("CREATE SCHEMA public")
-            Base.metadata.create_all(bind=sync_conn)
+                def _check_and_drop(sync_conn: Connection) -> None:
+                    if _has_schema_drift(sync_conn):
+                        if not _looks_like_test_database(database_url):
+                            raise RuntimeError(
+                                "Refusing to reset schema on non-test database. "
+                                f"Database '{make_url(database_url).database}' must include 'test'."
+                            )
+                        sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+                        sync_conn.exec_driver_sql("CREATE SCHEMA public")
+                    Base.metadata.create_all(bind=sync_conn)
 
-        await conn.run_sync(_check_and_drop)
-        await conn.execute(TRUNCATE_TEST_DATA_SQL)
+                await conn.run_sync(_check_and_drop)
+                await conn.execute(TRUNCATE_TEST_DATA_SQL)
 
-    _SHARED_TEST_ENGINE = engine
+            _SHARED_TEST_ENGINE = engine
+        else:
+            engine = _SHARED_TEST_ENGINE
+
     try:
         yield engine
     finally:
-        _SHARED_TEST_ENGINE = None
-        await engine.dispose()
+        # Cleanup only when the fixture is fully torn down (session end)
+        async with _engine_lock:
+            if _SHARED_TEST_ENGINE is not None:
+                await _SHARED_TEST_ENGINE.dispose()
+            _SHARED_TEST_ENGINE = None
 
 
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
