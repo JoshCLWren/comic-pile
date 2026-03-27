@@ -198,6 +198,7 @@ export interface CollectionListResponse {
 }
 
 export interface BlockingInfoResponse {
+  is_blocked: boolean;
   blocking_reasons: string[];
 }
 

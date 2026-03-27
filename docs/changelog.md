@@ -1,5 +1,11 @@
 ## Changelog
 
+- 2026-03-27: Fix blocked threads display on roll page (closes #363).
+- Fix double "blocked by" prefix in expanded blocked threads list
+- Refetch blocked threads list after rating, rolling, and migration to keep
+  the count and reasons up-to-date without navigating away
+- Add missing `is_blocked` field to `BlockingInfoResponse` TypeScript type
+
 - 2026-03-27: TypeScript fixes for Roll Page and Thread types (closes #363).
 - Fix setSnoozedExpanded and setBlockedExpanded to accept functional updates
 - Add touch_friendly field to Thread type for proper type checking

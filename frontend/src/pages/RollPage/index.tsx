@@ -210,11 +210,11 @@ const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
     setSelectedThreadId(null)
     setActiveRatingThread(null)
     setErrorMessage('')
-    Promise.allSettled([refetchSession(), refetchThreads()])
+    Promise.allSettled([refetchSession(), refetchThreads(), fetchBlockedThreadsWithReasons()])
   }).catch((error: unknown) => {
     setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
   })
-}, [rating, rateMutation, refetchSession, refetchThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+}, [rating, rateMutation, refetchSession, refetchThreads, fetchBlockedThreadsWithReasons, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
     if (!selectedThread) return
@@ -272,17 +272,18 @@ const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
 const snoozedIds = useMemo(() => new Set(session?.snoozed_threads?.map((t) => t.id) ?? []), [session?.snoozed_threads])
   const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked && !snoozedIds.has(t.id)) ?? [], [threads, snoozedIds])
 
-  useEffect(() => {
-    const fetchBlockedThreadsWithReasons = async () => {
-      try {
-        const response = await dependenciesApi.listBlockedThreadsWithReasons(activeCollectionId)
-        setBlockedThreadsWithReasons(response.blocked_threads || [])
-      } catch {
-        setBlockedThreadsWithReasons([])
-      }
+  const fetchBlockedThreadsWithReasons = useCallback(async () => {
+    try {
+      const response = await dependenciesApi.listBlockedThreadsWithReasons(activeCollectionId)
+      setBlockedThreadsWithReasons(response.blocked_threads || [])
+    } catch {
+      setBlockedThreadsWithReasons([])
     }
-    fetchBlockedThreadsWithReasons()
   }, [activeCollectionId, setBlockedThreadsWithReasons])
+
+  useEffect(() => {
+    fetchBlockedThreadsWithReasons()
+  }, [fetchBlockedThreadsWithReasons])
 
 useEffect(() => {
   if (session?.current_die) setCurrentDie(session.current_die)
@@ -396,7 +397,7 @@ useEffect(() => {
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
-      const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
+      const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads(), fetchBlockedThreadsWithReasons()])
       if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
         setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
       }
@@ -423,6 +424,7 @@ useEffect(() => {
   async function handleRefreshThread() {
     await refetchSession()
     await refetchThreads()
+    await fetchBlockedThreadsWithReasons()
   }
 
   const dieSize = currentDie || 6
