@@ -45,6 +45,9 @@ export function ThreadPool({
   const navigate = useNavigate()
   const [showAllBlocked, setShowAllBlocked] = useState(false)
   const INITIAL_BLOCKED_LIMIT = 10
+
+// Ensure touch targets are at least 44px for mobile accessibility
+const TOUCH_TARGET_MIN_SIZE = 44
   return (
     <div className={`px-4 pb-4 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-8'}`}>
       {!isRolling && rolledResult === null && !isRatingView && pool.length > 0 && (
@@ -123,7 +126,7 @@ export function ThreadPool({
       aria-expanded={blockedExpanded}
       aria-controls="blocked-threads-list"
       aria-label={`${blockedThreadsWithReasons.length} threads hidden (blocked by dependencies)`}
-      className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+      className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
     >
       <span className="text-stone-400 text-xs">
         {blockedExpanded ? '▼' : '▶'}
@@ -139,7 +142,7 @@ export function ThreadPool({
                   key={thread.id}
                   type="button"
                   onClick={() => navigate(`/queue?highlight=${thread.id}`)}
-                  className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
                 >
                   <span className="text-sm flex-shrink-0">🔒</span>
                   <div className="flex-1 min-w-0">
@@ -165,7 +168,7 @@ export function ThreadPool({
   {staleThread && !isRatingView && (
         <div
           onClick={onReadStale}
-          className="mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+          className="mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -197,7 +200,7 @@ export function ThreadPool({
           <button
             type="button"
             onClick={onToggleSnoozed}
-            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
+            className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
           >
             <span className="text-stone-400 text-xs">
               {snoozedExpanded ? '▼' : '▶'}
@@ -211,14 +214,14 @@ export function ThreadPool({
               {snoozedThreads.map((thread) => (
                 <div
                   key={thread.id}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg"
+                  className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/5 rounded-lg" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
                 >
                   <p className="flex-1 text-sm text-stone-400 truncate">{thread.title}</p>
                   <button
                     type="button"
                     onClick={() => onUnsnooze(thread.id)}
                     disabled={unsnoozeIsPending}
-                    className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50"
+                    className="px-2 py-1 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
                     title="Unsnooze this comic"
                     aria-label="Unsnooze this comic"
                   >
