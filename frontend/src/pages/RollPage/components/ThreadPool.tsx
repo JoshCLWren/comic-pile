@@ -154,7 +154,7 @@ const TOUCH_TARGET_MIN_SIZE = 44
                     key={thread.id}
                     type="button"
                     onClick={() => navigate(`/queue?highlight=${thread.id}&scroll=true`)}
-                    aria-label={`${thread.title} - ${thread.primary_blocking_reason}`}
+                    aria-label={`${thread.title} - blocked by ${thread.primary_blocking_reason}`}
                     className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
                   >
                    <span className="text-sm flex-shrink-0">🔒</span>
