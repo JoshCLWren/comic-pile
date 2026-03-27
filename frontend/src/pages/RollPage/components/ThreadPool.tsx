@@ -136,14 +136,14 @@ const TOUCH_TARGET_MIN_SIZE = 44
             </span>
           </button>
            {blockedExpanded && (
-             <div id="blocked-threads-list" className="mt-2 space-y-1">
-               {(showAllBlocked ? blockedThreadsWithReasons : blockedThreadsWithReasons.slice(0, INITIAL_BLOCKED_LIMIT)).map((thread) => (
-                 <button
-                   key={thread.id}
-                   type="button"
-                   onClick={() => navigate(`/queue?highlight=${thread.id}&scroll=true`)}
-                   className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
-                 >
+              <div id="blocked-threads-list" className="mt-2 space-y-1 max-h-[60vh] overflow-y-auto">
+                {(showAllBlocked ? blockedThreadsWithReasons : blockedThreadsWithReasons.slice(0, INITIAL_BLOCKED_LIMIT)).map((thread) => (
+                  <button
+                    key={thread.id}
+                    type="button"
+                    onClick={() => navigate(`/queue?highlight=${thread.id}&scroll=true`)}
+                    className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-colors text-left" style={{ minHeight: `${TOUCH_TARGET_MIN_SIZE}px` }}
+                  >
                    <span className="text-sm flex-shrink-0">🔒</span>
                    <div className="flex-1 min-w-0">
                      <p className="text-sm text-stone-300 truncate font-medium">{thread.title}</p>
