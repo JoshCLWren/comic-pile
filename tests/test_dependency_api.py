@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 from sqlalchemy import select
 
-from app.models import Issue, Thread, User
+from app.models import Dependency, Issue, Thread, User
 
 
 @pytest.mark.asyncio
@@ -141,6 +141,16 @@ async def test_duplicate_thread_dependency_returns_400(auth_client, async_db, te
     )
     assert create_resp2.status_code == 400
     assert "already exists" in create_resp2.json()["detail"].lower()
+
+    # Verify exactly one dependency exists in the database
+    result = await async_db.execute(
+        select(Dependency).where(
+            Dependency.source_thread_id == t1.id,
+            Dependency.target_thread_id == t2.id,
+        )
+    )
+    deps = result.scalars().all()
+    assert len(deps) == 1
 
 
 @pytest.mark.asyncio

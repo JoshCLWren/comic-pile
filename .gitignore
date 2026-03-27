@@ -161,6 +161,9 @@ logs/
 # Node.js dependencies
 node_modules/
 
+# Pipeline artifacts (never commit these)
+review_critique.md
+
 # Frontend build artifacts
 static/react/
 test-results/

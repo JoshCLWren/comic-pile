@@ -21,7 +21,9 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  const loadIssues = useCallback(async (append: boolean = false) => {
+  const loadIssues = useCallback(async (append: boolean) => {
+    if (append && !issues.length) return;
+
     if (append) {
       setIsLoadingMore(true)
     } else {
@@ -63,7 +65,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       setIsLoading(false)
       setIsLoadingMore(false)
     }
-   }, [thread.id, filter, nextPageToken, dependencies, issues])
+  }, [thread.id, filter, nextPageToken, issues])
 
   useEffect(() => {
     abortControllerRef.current = new AbortController()
@@ -92,8 +94,8 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
 
       window.dispatchEvent(new CustomEvent('thread-updated', { detail: { threadId: thread.id } }))
 
-      await loadIssues()
-    } catch (error) {
+       await loadIssues(false)
+     } catch (error) {
       console.error('Failed to toggle issue status:', error)
     }
   }

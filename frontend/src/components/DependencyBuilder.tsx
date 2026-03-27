@@ -152,7 +152,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
         }
 
         issueEdges.push({
-          id: -Date.now() - Math.floor(Math.random() * 1000000),
+          id: `issue-edge-${d.source_issue_id}-${d.target_issue_id}-${Date.now()}`,
           source_id: srcNodeId,
           target_id: tgtNodeId,
           is_issue_level: true,
@@ -305,7 +305,34 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     }
   }, [selectedThreadId, dependencyMode, isOpen, thread?.id, selectedThreadNeedsMigration])
 
-  async function handleInlineMigration(e: FormEvent) {
+   function isDuplicateDependency(): boolean {
+     if (!thread?.id || !selectedThreadId) return false
+
+     if (dependencyMode === 'thread') {
+       // Check if thread-level dependency already exists
+       return (
+         dependencies.blocking.some(
+           (dep) => dep.source_thread_id === selectedThreadId && dep.target_thread_id === thread.id
+         ) ||
+         dependencies.blocked_by.some(
+           (dep) => dep.source_thread_id === selectedThreadId && dep.target_thread_id === thread.id
+         )
+       )
+     } else {
+       // Check if issue-level dependency already exists
+       if (!sourceIssueId || !targetIssueId) return false
+       return (
+         dependencies.blocking.some(
+           (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
+         ) ||
+         dependencies.blocked_by.some(
+           (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
+         )
+       )
+     }
+   }
+
+   async function handleInlineMigration(e: FormEvent) {
     e.preventDefault()
     if (!selectedThreadId) return
     if (!migrationLastRead.trim() || !migrationTotal.trim()) {
@@ -667,24 +694,26 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
                )}
              </div>
            )}
-           <button
-             type="button"
-             onClick={handleCreateDependency}
-             disabled={
-               dependencyMode === 'issue'
-                 ? !selectedThread || selectedThreadNeedsMigration || !sourceIssueId || !targetIssueId || isSaving
-                 : !selectedThread || isSaving
-             }
-             className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
-           >
-              {isSaving
-                ? 'Adding dependency…'
-                : selectedThread
-                  ? dependencyMode === 'issue'
-                    ? `Block issue #${targetIssues.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
-                    : `Block with thread: ${selectedThread.title}`
-                  : 'Select a prerequisite'}
-           </button>
+            <button
+              type="button"
+              onClick={handleCreateDependency}
+              disabled={
+                dependencyMode === 'issue'
+                  ? !selectedThread || selectedThreadNeedsMigration || !sourceIssueId || !targetIssueId || isSaving || isDuplicateDependency()
+                  : !selectedThread || isSaving || isDuplicateDependency()
+              }
+              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
+            >
+               {isSaving
+                 ? 'Adding dependency…'
+                 : isDuplicateDependency()
+                 ? 'Already added'
+                 : selectedThread
+                 ? dependencyMode === 'issue'
+                     ? `Block issue #${targetIssues.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
+                     : `Block with thread: ${selectedThread.title}`
+                 : 'Select a prerequisite'}
+            </button>
          </div>
 
         <div className="space-y-2">
