@@ -17,8 +17,10 @@ async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None
     assert "title" in data
     assert "die_size" in data
     assert "result" in data
+    assert "touch_friendly" in data  # Mobile detection field
     assert data["die_size"] == 8
     assert 1 <= data["result"] <= 8
+    assert isinstance(data["touch_friendly"], bool)  # Should be boolean
 
     thread_ids = [t.id for t in sample_data["threads"] if t.status == "active"]
     assert data["thread_id"] in thread_ids
@@ -34,6 +36,8 @@ async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> Non
 
     data = response.json()
     assert data["thread_id"] == thread_id
+    assert "touch_friendly" in data  # Mobile detection field
+    assert isinstance(data["touch_friendly"], bool)  # Should be boolean
     # Dynamic lookup: thread_id=1 in sample_data is "Superman"
     assert data["title"] == next(t.title for t in sample_data["threads"] if t.id == thread_id)
     assert data["die_size"] == 8
