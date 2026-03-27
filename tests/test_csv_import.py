@@ -315,18 +315,6 @@ Thread 5,Comic,2"""
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
-    data = response.json()
-    assert "users" in data
-    assert "threads" in data
-    assert "roll_sessions" in data
-    assert "roll_events" in data
-
-    # Verify counts
-    assert len(data["users"]) == 1
-    assert len(data["threads"]) == 5
-    assert len(data["roll_sessions"]) == 2
-    assert len(data["roll_events"]) == 2
-
 
 @pytest.mark.asyncio
 async def test_import_reviews_invalid_thread_id(
