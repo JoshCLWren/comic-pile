@@ -348,11 +348,10 @@ async def sample_data(
     user = await async_db.execute(select(User).where(User.username == username))
     user = user.scalar_one_or_none()
     if not user:
-        user = User(username=username, id=1, created_at=now)
+        user = User(username=username, created_at=now)
         async_db.add(user)
         await async_db.commit()
         await async_db.refresh(user)
-        await _sync_id_sequence(async_db, "users")
 
     threads = [
         Thread(
@@ -522,11 +521,11 @@ async def auth_client(
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
-            user = User(id=1, username=test_username, created_at=datetime.now(UTC))
-            async_db.add(user)
-            await async_db.flush()
-            await async_db.refresh(user)
-            await _sync_id_sequence(async_db, "users")
+            user = User(username=test_username, created_at=datetime.now(UTC))
+        async_db.add(user)
+        await async_db.flush()
+        await async_db.refresh(user)
+        await _sync_id_sequence(async_db, "users")
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})

@@ -311,17 +311,23 @@ async def test_get_or_create_creates_user_id_1(async_db: AsyncSession) -> None:
     await async_db.execute(delete(User))
     await async_db.commit()
 
+    # Verify user with id=1 doesn't exist
     user = await async_db.get(User, 1)
     assert user is None
 
+    # Create session with user_id=1 - this should trigger creation of default user
     new_session = await get_or_create(async_db, user_id=1)
 
     assert new_session is not None
     assert new_session.user_id == 1
 
-    user = await async_db.get(User, 1)
+    # Verify user was created with the correct username
+    result = await async_db.execute(select(User).where(User.username == "user_1"))
+    user = result.scalar_one_or_none()
     assert user is not None
     assert user.username == "user_1"
+    assert user.id == 1  # The id should be 1 due to the _ensure_default_user_async logic
+    assert user.id == 1  # The id should be 1 due to the _ensure_default_user_async logic
 
 
 @pytest.mark.asyncio
