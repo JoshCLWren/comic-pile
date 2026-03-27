@@ -103,7 +103,7 @@ fi
 
 # implement/review/fix need real tool use — use Tier 1 only
 # pr/ci_check only need gh + text — use Tier 2 (full pool)
-# Build model arrays, only allowing override models from known-good providers
+# Build model arrays, only allowing override models from known-good providers (ensures unknown models like mistralai are ignored)
 IMPLEMENT_MODELS=()
 if [[ -n "${IMPLEMENT_MODEL:-}" ]] && echo "$IMPLEMENT_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
   IMPLEMENT_MODELS+=("$IMPLEMENT_MODEL")
