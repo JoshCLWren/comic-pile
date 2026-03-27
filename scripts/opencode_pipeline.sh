@@ -332,7 +332,7 @@ map_model() {
 
   case "$model" in
   *mistral-small-3.1-24b-instruct*)
-    echo "openrouter/deepseek/deepseek-chat-v3-0324:free"
+    echo "opencode/nemotron-3-super-free"
     ;;
   *)
     echo "$model"
