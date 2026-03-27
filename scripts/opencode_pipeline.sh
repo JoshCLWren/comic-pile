@@ -1193,11 +1193,12 @@ if [[ "$needs_refresh" == "true" ]]; then
   log_info "Refreshing model pool (running model test)..."
   # Get models excluding openrouter/opencode/anthropic/github-copilot/nvidia-mistralai providers
   local candidate_models=()
-  while IFS= read -r model; do
-    candidate_models+=("$model")
-	done < <(opencode models 2>/dev/null \
-		| grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3.1-24b-instruct:free" \
-		| grep -v "^$" || true)
+   while IFS= read -r model; do
+     candidate_models+=("$model")
+   done < <(opencode models 2>/dev/null \
+       | sed 's/^[[:space:]]*//' \
+       | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3.1-24b-instruct:free" \
+       | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
             log_info "Testing $total_candidates candidate models..."
