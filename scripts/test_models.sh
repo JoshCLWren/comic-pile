@@ -28,11 +28,11 @@ test_model() {
   actual_model=$(echo "$actual_model" | xargs)
 
   # Map known broken models to working equivalents
-  case "$actual_model" in
-  *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
-    actual_model="opencode/nemotron-3-super-free"
-    ;;
-  esac
+case "$actual_model" in
+   *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
+     actual_model="opencode/big-pickle"
+     ;;
+   esac
 
   output=$(timeout 30s opencode run -m "$actual_model" "say hello in one word" 2>&1) || exit_code=$?
 

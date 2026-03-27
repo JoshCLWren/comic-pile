@@ -330,10 +330,10 @@ map_model() {
   local model="$1"
   model=$(echo "$model" | xargs)
 
-  case "$model" in
-  *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
-    echo "opencode/nemotron-3-super-free"
-    ;;
+case "$model" in
+   *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
+     echo "opencode/big-pickle"
+     ;;
   *)
     echo "$model"
     ;;
