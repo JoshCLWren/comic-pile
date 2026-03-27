@@ -1,5 +1,12 @@
 ## Changelog
 
+- 2026-03-27: Expandable blocked threads section with detailed blocking reasons (closes #363).
+- Roll pool now shows "N threads hidden (blocked by dependencies)" as expandable section
+- Expanded view displays each blocked thread with primary blocking reason
+- Threads link to queue page with highlighting for easy navigation
+- Mobile-friendly design with touch targets ≥44px and scrollable list
+- Section hidden entirely when no threads are blocked
+
 - 2026-03-27: Add follow-up actions to roll result display (closes #363).
 - Add "Mark as Read", "Skip to Next", "Archive Thread", and "Reset Thread" buttons
 - Fix missing undoApi import in RollPage component
