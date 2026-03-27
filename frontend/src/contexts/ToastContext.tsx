@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
+import { createContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
 
 type ToastType = 'info' | 'success' | 'warning' | 'error'
 
@@ -14,7 +14,7 @@ type ToastContextType = {
   removeToast: (id: string) => void
 }
 
-const ToastContext = createContext<ToastContextType | undefined>(undefined)
+export const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 const TOAST_DURATION = 5000
 
@@ -81,10 +81,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useToast() {
-  const context = useContext(ToastContext)
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider')
-  }
-  return context
-}
+

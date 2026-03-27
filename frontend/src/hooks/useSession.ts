@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useMemo, useRef } from 'react'
 import axios from 'axios'
 import { sessionApi } from '../services/api'
 import type { SessionCurrent, SessionDetails, SessionSnapshotsResponse, SessionSummary } from '../types'
-import { useToast } from '../contexts/ToastContext'
+import { useToast } from '../contexts/useToast'
 
 const EMPTY_PARAMS = Object.freeze({})
 const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id'

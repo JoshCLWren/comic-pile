@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
@@ -135,10 +135,17 @@ export default function QueuePage() {
     }
   }, [createForm.issues])
 
-  const activeThreads = threads
-    ?.filter((thread) => thread.status === 'active')
-    .sort((a, b) => a.queue_position - b.queue_position) ?? []
-  const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
+  const activeThreads = useMemo(() => {
+    if (!threads) return []
+    return threads
+      .filter(thread => thread.status === 'active')
+      .sort((a, b) => a.queue_position - b.queue_position)
+  }, [threads])
+
+  const completedThreads = useMemo(() => {
+    if (!threads) return []
+    return threads.filter(thread => thread.status === 'completed')
+  }, [threads])
 
   // Highlight thread when navigating from roll page with ?highlight=<id>
   useEffect(() => {
