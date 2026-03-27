@@ -22,6 +22,34 @@ mkdir -p "$LOG_DIR"
 # Default model to use (override with OPENCODER_MODEL env var)
 DEFAULT_MODEL="${OPENCODER_MODEL:-cerebras/zai-glm-4.7}"
 
+# Filter out known problematic models to avoid ProviderModelNotFoundError and similar
+_is_problematic_model() {
+    local model="$1"
+    # Filter out models that start with problematic providers (case-insensitive)
+    if echo "$model" | grep -qiE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+        return 0
+    fi
+    # Filter out models that contain mistralai provider in the path (case-insensitive)
+    if echo "$model" | grep -qi "/mistralai/"; then
+        return 0
+    fi
+    # Filter out models ending with :free (case-insensitive)
+    if echo "$model" | grep -qi ":free$"; then
+        return 0
+    fi
+    # Filter out specific problematic models
+    if echo "$model" | grep -qi "mistral-small-3\.1-24b-instruct:free"; then
+        return 0
+    fi
+    return 1
+}
+
+# If the default (or overridden) model is problematic, fall back to safe default
+if _is_problematic_model "$DEFAULT_MODEL"; then
+    echo "WARNING: Model '$DEFAULT_MODEL' is problematic; falling back to 'cerebras/zai-glm-4.7'"
+    DEFAULT_MODEL="cerebras/zai-glm-4.7"
+fi
+
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
 ISSUES=(357 361 362 358 366 367 368 370 373 379 359 360 363 365 369 371 372 376 377 378 364 380)
 
