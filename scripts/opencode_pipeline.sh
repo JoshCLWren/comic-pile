@@ -1219,9 +1219,9 @@ if [[ "$needs_refresh" == "true" ]]; then
                 model="$1"
                 exit_code=0
                 output=$(timeout 30s opencode run -m "$model" "Reply with only the word PING" 2>&1) || exit_code=$?
-                clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
-                if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
-                    echo "OK $model"
+clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
+if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication|does not exist or you do not have access"; then
+echo "OK $model"
                 elif [[ $exit_code -eq 124 ]]; then
                     echo "TIMEOUT $model"
                 else
