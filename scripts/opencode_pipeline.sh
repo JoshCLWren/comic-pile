@@ -1175,9 +1175,10 @@ cmd_model_manager() {
             while IFS= read -r model; do
                 candidate_models+=("$model")
             done < <(opencode models 2>/dev/null \
-                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/" \
-                | grep -v "mistralai/mistral-small" \
-                | grep -v "mistralai/mistral-small-3.1" \
+  | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/" \
+    | grep -v "mistralai/mistral-small" \
+    | grep -v "mistralai/mistral-small-3.1" \
+    | grep -v ":free$" \
                 | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
