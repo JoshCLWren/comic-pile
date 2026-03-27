@@ -130,7 +130,7 @@ const TOUCH_TARGET_MIN_SIZE = 44
     )}
   </div>
 
-      {blockedThreadsWithReasons.length > 0 && !isRatingView && (
+      {blockedThreadsWithReasons.length > 0 && !isRatingView && ( // Expandable blocked threads section with reasons
         <div className="mt-4">
           <button
             type="button"

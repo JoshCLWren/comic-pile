@@ -1,4 +1,5 @@
 ## Changelog
+- 2026-03-27: Added comment to ThreadPool for blocked threads UI clarity (closes #363)
 - 2026-03-27: Verified expandable blocked threads UI (closes #363).
 
 - 2026-03-27: Expandable blocked threads section with detailed blocking reasons (closes #363).
