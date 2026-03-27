@@ -29,9 +29,10 @@ test_model() {
   # Trim whitespace
   actual_model=$(echo "$actual_model" | xargs)
   case "$actual_model" in
-  "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
-    actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
-  ;;
+    # Mistral Small 3.1 - map all variants to the working NVIDIA version
+    "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct"|"mistralai/mistral-small-3.1-24b-instruct")
+      actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+      ;;
   esac
     
     output=$(timeout 30s opencode run -m "$actual_model" "say hello in one word" 2>&1) || exit_code=$?
