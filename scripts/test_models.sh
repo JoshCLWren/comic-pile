@@ -13,7 +13,7 @@ RESULTS_FILE="$(dirname "$0")/../.opencode_logs/model_test_results.txt"
 mkdir -p "$(dirname "$RESULTS_FILE")"
 > "$RESULTS_FILE"  # truncate
 
-MODELS=$(opencode models 2>/dev/null)
+MODELS=$(opencode models 2>/dev/null | grep -vE "^mistralai/" || true)
 TOTAL=$(echo "$MODELS" | wc -l)
 
 echo "Testing $TOTAL models ($PARALLEL at a time)..."
