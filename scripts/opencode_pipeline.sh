@@ -91,8 +91,8 @@ _MODEL_POOL=(
 "mistral/mistral-small-2506"
 "opencode/nemotron-3-super-free"
 "opencode/big-pickle"
-"openrouter/arcee-ai/trinity-large-preview:free"
-"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"
+    "openrouter/arcee-ai/trinity-large-preview:free"
+    "openrouter/mistralai/mistral-small-2501"
 )
 _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
