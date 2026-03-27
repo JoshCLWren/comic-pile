@@ -1,0 +1,72 @@
+OK       cerebras/gpt-oss-120b  [Error: Model gpt-oss-120b does not exist or you do not have access to it.]
+OK       cerebras/zai-glm-4.7  [Error: Model zai-glm-4.7 does not exist or you do not have access to it.]
+OK       opencode/nemotron-3-super-free  [Hello]
+OK       opencode/minimax-m2.5-free  [Hello]
+OK       opencode/big-pickle  [Hello]
+OK       cerebras/qwen-3-235b-a22b-instruct-2507  [Hello]
+OK       opencode/gpt-5-nano  [Hello]
+OK       mistral/devstral-small-2505  [Error: Invalid model: devstral-small-2505]
+OK       mistral/magistral-medium-latest  [Hello]
+OK       mistral/magistral-small  [Error: Invalid model: magistral-small]
+TIMEOUT  cerebras/llama3.1-8b
+TIMEOUT  opencode/mimo-v2-omni-free
+TIMEOUT  opencode/mimo-v2-pro-free
+OK       mistral/mistral-embed  [Error: Invalid model: mistral-embed]
+OK       mistral/mistral-large-2411  [Hello]
+TIMEOUT  mistral/codestral-latest
+TIMEOUT  mistral/devstral-2512
+TIMEOUT  mistral/devstral-medium-2507
+TIMEOUT  mistral/devstral-medium-latest
+OK       mistral/mistral-medium-2505  [Hello]
+TIMEOUT  mistral/devstral-small-2507
+TIMEOUT  mistral/labs-devstral-small-2512
+OK       mistral/mistral-nemo  [Error: Invalid model: mistral-nemo]
+OK       mistral/mistral-medium-latest  [Hi]
+OK       mistral/mistral-medium-2508  [Hi]
+TIMEOUT  mistral/ministral-3b-latest
+TIMEOUT  mistral/ministral-8b-latest
+OK       nvidia/black-forest-labs/flux.1-dev  [Error: Not Found: 404 page not found]
+TIMEOUT  mistral/mistral-large-2512
+TIMEOUT  mistral/mistral-large-latest
+OK       nvidia/deepseek-ai/deepseek-coder-6.7b-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e503b15c-62b0-4d69-b532-a88f0bfa2656': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+OK       nvidia/deepseek-ai/deepseek-r1  [Error: Gone: {type:about:blank,title:Gone,status:410,detail:The model 'deepseek-ai/deepseek-r1' has reached its end of life on 2026-01-26T00:00:00Z and is no longer available.}]
+OK       nvidia/deepseek-ai/deepseek-r1-0528  [Error: Gone: {type:about:blank,title:Gone,status:410,detail:The model 'deepseek-ai/deepseek-r1-0528' has reached its end of life on 2026-01-26T00:00:00Z and is no longer available.}]
+TIMEOUT  mistral/mistral-small-2506
+TIMEOUT  mistral/mistral-small-latest
+TIMEOUT  mistral/open-mistral-7b
+OK       nvidia/deepseek-ai/deepseek-v3.1  [hello]
+OK       nvidia/deepseek-ai/deepseek-v3.1-terminus  [Hello!]
+TIMEOUT  mistral/open-mixtral-8x22b
+TIMEOUT  mistral/open-mixtral-8x7b
+TIMEOUT  mistral/pixtral-12b
+OK       nvidia/google/codegemma-1.1-7b  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e2d298c5-204e-4213-b921-9f492cc9011b': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+OK       nvidia/google/codegemma-7b  [Error: Not Found: {status:404,title:Not Found,detail:Function '7dfc10a8-3cc4-448e-97c1-2213308dc222': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+OK       nvidia/google/gemma-2-2b-it  [Extra inputs are not permitted (type=extra_forbidden)]
+OK       nvidia/google/gemma-3-1b-it  [Error: Bad Request: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
+OK       nvidia/google/gemma-3-27b-it  [Error: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
+OK       nvidia/google/gemma-3-12b-it  [Extra inputs are not permitted (type=extra_forbidden)]
+OK       nvidia/google/gemma-3n-e2b-it  [Error: Bad Request: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
+OK       nvidia/meta/codellama-70b  [Error: Not Found: {status:404,title:Not Found,detail:Function 'f6b06895-d073-4714-8bb2-26c09e9f6597': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+TIMEOUT  mistral/pixtral-large-latest
+OK       nvidia/meta/llama-4-maverick-17b-128e-instruct  [{type: function, name: bash, parameters: {command: echo hello, description: Prints hello}}]
+OK       nvidia/meta/llama-4-scout-17b-16e-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function 'b6bb6e01-780e-4ba0-a5b8-379f00ed9b1c': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+OK       nvidia/meta/llama3-8b-instruct  [Error: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
+OK       nvidia/meta/llama3-70b-instruct  [Error: Requested token count exceeds the model's maximum context length of 8192 tokens. You requested a total of 9935 tokens: 5839 tokens from the input messages and 4096 tokens for the completion. Please reduce the number of tokens in the input messages or the completion to fit within the limit.]
+TIMEOUT  nvidia/deepseek-ai/deepseek-v3.2
+OK       nvidia/microsoft/phi-3-medium-128k-instruct  [Hi]
+OK       nvidia/microsoft/phi-3-medium-4k-instruct  [Error: Bad Request: This]
+TIMEOUT  nvidia/google/gemma-2-27b-it
+OK       nvidia/meta/llama-3.1-70b-instruct  [I]
+OK       nvidia/microsoft/phi-3-small-128k-instruct  [Extra inputs are not permitted (type=extra_forbidden)]
+OK       nvidia/microsoft/phi-3-vision-128k-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function '20f2537e-8593-4eb9-ad40-60eee3bbaa55': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+OK       nvidia/microsoft/phi-3-small-8k-instruct  [Extra inputs are not permitted (type=extra_forbidden)]
+OK       nvidia/microsoft/phi-3.5-moe-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e6cab982-62f4-481e-9a7a-3dedb87dbd01': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+TIMEOUT  nvidia/google/gemma-3n-e4b-it
+OK       nvidia/microsoft/phi-3.5-vision-instruct  [Error: Bad Request: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
+TIMEOUT  nvidia/meta/llama-3.1-405b-instruct
+OK       nvidia/minimaxai/minimax-m2.1  [Error: Gone: {type:about:blank,title:Gone,status:410,detail:The model 'minimaxai/minimax-m2.1' has reached its end of life on 2026-03-26T00:00:00Z and is no longer available.}]
+TIMEOUT  nvidia/meta/llama-3.2-11b-vision-instruct
+TIMEOUT  nvidia/meta/llama-3.2-1b-instruct
+TIMEOUT  nvidia/meta/llama-3.3-70b-instruct
+OK       nvidia/mistralai/codestral-22b-instruct-v0.1  [Error: Not Found: {status:404,title:Not Found,detail:Function id '9a10b012-e6df-46fd-83b2-700dcbc75814' version 'null': Specified function in account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo' is not found}]
+OK       nvidia/minimaxai/minimax-m2.5  [Hello]

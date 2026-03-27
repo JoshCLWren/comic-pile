@@ -332,12 +332,12 @@ map_model() {
 
 case "$model" in
    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
-     echo "opencode/big-pickle"
+     echo "mistral/mistral-small-latest"
      ;;
-  *)
-    echo "$model"
-    ;;
-  esac
+   *)
+     echo "$model"
+     ;;
+   esac
 }
 export -f map_model
 
