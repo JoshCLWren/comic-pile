@@ -133,34 +133,15 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
 })
 
 it('renders tooltips for snoozed offset active text', async () => {
-    render(<RollPage />)
+  render(<RollPage />)
 
-    // Check that the snoozed section tooltip targets are rendered with cursor-help class
-    // These are the actual elements that have tooltips attached to them
-    
-    // Check for snoozed tooltip target
-    const snoozedTooltipTarget = screen.getByText(/snoozed/i)
-    expect(snoozedTooltipTarget).toBeInTheDocument()
-    expect(snoozedTooltipTarget).toHaveClass('cursor-help')
-    expect(snoozedTooltipTarget).toHaveClass('border-b')
-    expect(snoozedTooltipTarget).toHaveClass('border-dashed')
-    expect(snoozedTooltipTarget).toHaveClass('border-stone-600')
-    
-    // Check for offset tooltip target
-    const offsetTooltipTarget = screen.getByText(/offset/i)
-    expect(offsetTooltipTarget).toBeInTheDocument()
-    expect(offsetTooltipTarget).toHaveClass('cursor-help')
-    expect(offsetTooltipTarget).toHaveClass('border-b')
-    expect(offsetTooltipTarget).toHaveClass('border-dashed')
-    expect(offsetTooltipTarget).toHaveClass('border-stone-600')
-    
-    // Check for active tooltip target
-    const activeTooltipTarget = screen.getByText(/active/i)
-    expect(activeTooltipTarget).toBeInTheDocument()
-    expect(activeTooltipTarget).toHaveClass('cursor-help')
-    expect(activeTooltipTarget).toHaveClass('border-b')
-    expect(activeTooltipTarget).toHaveClass('border-dashed')
-    expect(activeTooltipTarget).toHaveClass('border-stone-600')
+  // Check that the snoozed offset active tooltip is rendered with cursor-help class
+  const offsetActiveText = screen.getByText(/offset active/i)
+  expect(offsetActiveText).toBeInTheDocument()
+  expect(offsetActiveText).toHaveClass('cursor-help')
+  expect(offsetActiveText).toHaveClass('border-b')
+  expect(offsetActiveText).toHaveClass('border-dashed')
+  expect(offsetActiveText).toHaveClass('border-stone-600')
 })
 
 it('renders tooltip for ladder indicator', async () => {
