@@ -126,6 +126,7 @@ async def roll_dice(
     touch_friendly = is_mobile_request(request)
     selected_thread.touch_friendly = touch_friendly
     await db.commit()
+    await db.refresh(selected_thread)
     if clear_cache:
         clear_cache()
 
@@ -253,6 +254,8 @@ async def override_roll(
 
     touch_friendly = is_mobile_request(request)
     override_thread.touch_friendly = touch_friendly
+    await db.commit()
+    await db.refresh(override_thread)
 
     return RollResponse(
         thread_id=override_thread_id,
