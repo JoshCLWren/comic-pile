@@ -9,7 +9,9 @@
 
 ## Executive Summary
 
-This document evaluates whether to implement the Task API as a Model Context Protocol (MCP) server or use alternative task management technologies. After comprehensive analysis of MCP capabilities, existing tools (Jira, Asana, GitHub Projects, Linear, Notion, Taskwarrior, Kanboard), and current custom REST API implementation, the recommendation is to **keep the current custom REST API while planning a future hybrid MCP adapter layer**.
+This document evaluates whether to implement the Task API as a Model Context Protocol (MCP) server or use alternative task management technologies. After comprehensive analysis of MCP capabilities, existing tools (Jira, Asana, GitHub Projects [classic - deprecated], Linear, Notion, Taskwarrior, Kanboard), and current custom REST API implementation, the recommendation is to **keep the current custom REST API while planning a future hybrid MCP adapter layer**.
+
+**Note:** GitHub Projects (classic) has been deprecated in favor of the new GitHub Projects experience (powered by GitHub Issues). See [GitHub's deprecation notice](https://github.blog/changelog/2024-05-23-sunset-notice-projects-classic/).
 
 **Key Finding:** MCP is promising for LLM-native integrations but remains immature for production use. Existing commercial tools are too heavyweight for hobbyist projects, while open-source alternatives lack agent-specific features like claiming and heartbeats.
 
@@ -345,9 +347,10 @@ Estimated $10-20/user/mo based on market positioning, but exact pricing requires
 
 ### 3.1 Feature Comparison Table
 
-| Feature | MCP Server | Current REST API | Jira | Asana | Linear | Notion | GitHub Projects | Taskwarrior | Kanboard |
+| Feature | MCP Server | Current REST API | Jira | Asana | Linear | Notion | GitHub Projects [classic] | Taskwarrior | Kanboard |
 |---------|------------|------------------|------|-------|--------|--------|----------------|-------------|----------|
 | **Real-time Updates** | SSE ✅ | Polling only ❌ | Webhooks ✅ | Webhooks ✅ | GraphQL Subscriptions ✅ | Limited Webhooks ❌ | Webhooks ✅ | None ❌ | Webhooks ✅ |
+| **API Maturity** | Low ❌ | Medium ✅ | High ✅ | High ✅ | High ✅ | Medium ✅ | High ✅ [Deprecated] | None ❌ | Medium ✅ |
 | **Agent Claiming** | Custom ✅ | Built-in ✅ | Custom ❌ | Custom ❌ | Custom ❌ | Custom ❌ | Custom ❌ | None ❌ | Custom ❌ |
 | **Heartbeat Monitoring** | Custom ✅ | Built-in ✅ | External ❌ | External ❌ | External ❌ | External ❌ | External ❌ | None ❌ | External ❌ |
 | **Dependency Management** | Custom ✅ | Built-in ✅ | Built-in ✅ | Basic ❌ | Built-in ✅ | Manual ❌ | None ❌ | Built-in ✅ | Manual ❌ |
@@ -937,7 +940,7 @@ async def claim_task(task_id: str, agent_name: str, worktree: str) -> dict:
 - [Jira API Documentation](https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro/)
 - [Asana API Documentation](https://developers.asana.com/docs)
 - [Linear API Documentation](https://developers.linear.app/docs/graphql/working-with-the-graphql-api)
-- [GitHub Projects API](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-api-to-manage-projects)
+- [GitHub Projects API](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/using-the-api-to-manage-projects) *(Note: GitHub Projects (classic) API is deprecated in favor of the new Projects experience)*
 - [Notion API + MCP](https://developers.notion.com/docs/mcp)
 
 ### Open Source Tools
