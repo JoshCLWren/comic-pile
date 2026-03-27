@@ -81,6 +81,11 @@ _should_skip_model() {
   local lower_model
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
+  # Explicitly skip the problematic model that causes ProviderModelNotFoundError
+  if [[ "$lower_model" == "mistralai/mistral-small-3.1-24b-instruct:free" ]]; then
+    return 0
+  fi
+
   # Skip mistralai models that cause ProviderModelNotFoundError
   # This includes all mistralai provider models
   if [[ "$lower_model" == mistralai/* ]]; then
