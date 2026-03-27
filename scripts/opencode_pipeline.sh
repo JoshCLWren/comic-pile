@@ -70,7 +70,7 @@ _load_issues() {
 _is_problematic_model() {
     local model="$1"
     # Filter out models that start with problematic providers (case-insensitive)
-    if echo "$model" | grep -qiE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    if echo "$model" | grep -qiE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
         echo "[PIPELINE] WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
