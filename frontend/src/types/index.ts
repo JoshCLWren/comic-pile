@@ -119,6 +119,8 @@ export interface SessionCurrent {
   ladder_path?: string;
   active_thread?: SessionThread | null;
   snoozed_threads?: SessionThread[];
+  /** Whether the roll was from a mobile/touch device */
+  touch_friendly?: boolean;
 }
 
 export interface SessionSummary {
@@ -445,4 +447,6 @@ export interface RollResponse {
   reading_progress: string | null;
   /** Last rolled result for active thread context (when present) */
   last_rolled_result?: number | null;
+  /** Whether the roll was from a mobile/touch device */
+  touch_friendly?: boolean;
 }
