@@ -66,6 +66,7 @@ _load_issues() {
 }
 
   # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
+# Ensure no mistralai models slip into the pool (they cause ProviderModelNotFoundError)
   _CODING_POOL=()
   if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
        while IFS= read -r model; do
