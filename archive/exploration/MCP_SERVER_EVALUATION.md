@@ -9,9 +9,7 @@
 
 ## Executive Summary
 
-This document evaluates whether to implement the Task API as a Model Context Protocol (MCP) server or use alternative task management technologies. After comprehensive analysis of MCP capabilities, existing tools (Jira, Asana, GitHub Projects [classic - deprecated], Linear, Notion, Taskwarrior, Kanboard), and current custom REST API implementation, the recommendation is to **keep the current custom REST API while planning a future hybrid MCP adapter layer**.
-
-**Note:** GitHub Projects (classic) has been deprecated in favor of the new GitHub Projects experience (powered by GitHub Issues). See [GitHub's deprecation notice](https://github.blog/changelog/2024-05-23-sunset-notice-projects-classic/).
+This document evaluates whether to implement the Task API as a Model Context Protocol (MCP) server or use alternative task management technologies. After comprehensive analysis of MCP capabilities, existing tools (Jira, Asana, GitHub Projects, Linear, Notion, Taskwarrior, Kanboard), and current custom REST API implementation, the recommendation is to **keep the current custom REST API while planning a future hybrid MCP adapter layer**.
 
 **Key Finding:** MCP is promising for LLM-native integrations but remains immature for production use. Existing commercial tools are too heavyweight for hobbyist projects, while open-source alternatives lack agent-specific features like claiming and heartbeats.
 
@@ -347,7 +345,7 @@ Estimated $10-20/user/mo based on market positioning, but exact pricing requires
 
 ### 3.1 Feature Comparison Table
 
-| Feature | MCP Server | Current REST API | Jira | Asana | Linear | Notion | GitHub Projects [classic] | Taskwarrior | Kanboard |
+| Feature | MCP Server | Current REST API | Jira | Asana | Linear | Notion | GitHub Projects | Taskwarrior | Kanboard |
 |---------|------------|------------------|------|-------|--------|--------|----------------|-------------|----------|
 | **Real-time Updates** | SSE ✅ | Polling only ❌ | Webhooks ✅ | Webhooks ✅ | GraphQL Subscriptions ✅ | Limited Webhooks ❌ | Webhooks ✅ | None ❌ | Webhooks ✅ |
 | **API Maturity** | Low ❌ | Medium ✅ | High ✅ | High ✅ | High ✅ | Medium ✅ | High ✅ [Deprecated] | None ❌ | Medium ✅ |
