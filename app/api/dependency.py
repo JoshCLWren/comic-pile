@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -133,22 +133,27 @@ async def get_all_blocked_thread_ids(
 async def get_blocked_threads_with_reasons(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
+    collection_id: int | None = Query(None, description="Filter by collection ID"),
 ) -> BlockedThreadsResponse:
     """Return all blocked threads with their primary blocking reason.
 
     Returns blocked threads ordered by queue position with human-readable
-    blocking reasons for display in the roll pool.
+    blocking reasons for display in the roll pool. Optionally filter by collection.
     """
     blocked_ids = await get_blocked_thread_ids(current_user.id, db)
     if not blocked_ids:
         return BlockedThreadsResponse(blocked_threads=[])
 
-    result = await db.execute(
+    query = (
         select(Thread)
         .where(Thread.id.in_(blocked_ids))
         .where(Thread.user_id == current_user.id)
         .order_by(Thread.queue_position)
     )
+    if collection_id is not None:
+        query = query.where(Thread.collection_id == collection_id)
+
+    result = await db.execute(query)
     blocked_thread_objs = result.scalars().all()
 
     reasons_map = await get_batch_blocking_explanations(blocked_ids, current_user.id, db)

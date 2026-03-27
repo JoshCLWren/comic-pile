@@ -10,6 +10,7 @@
 - Mobile-optimized with 44px touch targets and scrollable list
 - Shows first 10 threads with "show X more" toggle for larger lists
 - Section hidden entirely when no threads are blocked
+- Blocked threads list now respects the active collection filter, ensuring count and navigation are context-aware
 - Fixed test expectations for new navigation behavior
 - Fixed Python indentation errors in roll API endpoint
 

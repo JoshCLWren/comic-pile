@@ -275,14 +275,14 @@ const snoozedIds = useMemo(() => new Set(session?.snoozed_threads?.map((t) => t.
   useEffect(() => {
     const fetchBlockedThreadsWithReasons = async () => {
       try {
-        const response = await dependenciesApi.listBlockedThreadsWithReasons()
+        const response = await dependenciesApi.listBlockedThreadsWithReasons(activeCollectionId)
         setBlockedThreadsWithReasons(response.blocked_threads || [])
       } catch {
         setBlockedThreadsWithReasons([])
       }
     }
     fetchBlockedThreadsWithReasons()
-  }, [threads, setBlockedThreadsWithReasons])
+  }, [activeCollectionId, setBlockedThreadsWithReasons])
 
 useEffect(() => {
   if (session?.current_die) setCurrentDie(session.current_die)

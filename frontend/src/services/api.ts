@@ -257,7 +257,13 @@ export const undoApi = {
 
 export const dependenciesApi = {
   listBlockedThreadIds: () => api.get<number[]>('/v1/dependencies/blocked'),
-  listBlockedThreadsWithReasons: () => api.get<BlockedThreadsResponse>('/v1/dependencies/blocked-with-reasons'),
+  listBlockedThreadsWithReasons: (collectionId?: number | null) => {
+    const params: Record<string, number> = {};
+    if (collectionId != null) {
+      params.collection_id = collectionId as number;
+    }
+    return api.get<BlockedThreadsResponse>('/v1/dependencies/blocked-with-reasons', { params });
+  },
   listThreadDependencies: (threadId: number) =>
     api.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
   getIssueDependencies: (issueId: number) =>
