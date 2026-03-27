@@ -69,10 +69,10 @@ _load_issues() {
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
      while IFS= read -r model; do
-           # Filter out problematic providers (keep only known-good providers)
-           if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/" && ! echo "$model" | grep -qE '(:free|:pro|:plus)$'; then
-              _CODING_POOL+=("$model")
-          fi
+    # Filter out problematic providers (keep only known-good providers)
+    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/"; then
+      _CODING_POOL+=("$model")
+    fi
    done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
@@ -80,10 +80,10 @@ fi
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
      while IFS= read -r model; do
-           # Filter out problematic providers (keep only known-good providers)
-           if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/" && ! echo "$model" | grep -qE '(:free|:pro|:plus)$'; then
-              _MODEL_POOL+=("$model")
-          fi
+    # Filter out problematic providers (keep only known-good providers)
+    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/"; then
+      _MODEL_POOL+=("$model")
+    fi
    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
@@ -105,32 +105,32 @@ fi
 # implement/review/fix need real tool use — use Tier 1 only
 # pr/ci_check only need gh + text — use Tier 2 (full pool)
 # Build model arrays, only allowing override models from known-good providers
- IMPLEMENT_MODELS=()
-  if [[ -n "${IMPLEMENT_MODEL:-}" ]] && echo "$IMPLEMENT_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/" && ! echo "$IMPLEMENT_MODEL" | grep -qE '(:free|:pro|:plus)$'; then
-   IMPLEMENT_MODELS+=("$IMPLEMENT_MODEL")
- fi
+IMPLEMENT_MODELS=()
+if [[ -n "${IMPLEMENT_MODEL:-}" ]] && echo "$IMPLEMENT_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/"; then
+  IMPLEMENT_MODELS+=("$IMPLEMENT_MODEL")
+fi
 IMPLEMENT_MODELS+=("${_CODING_POOL[@]}")
 
- REVIEW_MODELS=()
-  if [[ -n "${REVIEW_MODEL:-}" ]] && echo "$REVIEW_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/" && ! echo "$REVIEW_MODEL" | grep -qE '(:free|:pro|:plus)$'; then
-   REVIEW_MODELS+=("$REVIEW_MODEL")
- fi
+REVIEW_MODELS=()
+if [[ -n "${REVIEW_MODEL:-}" ]] && echo "$REVIEW_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/"; then
+  REVIEW_MODELS+=("$REVIEW_MODEL")
+fi
 REVIEW_MODELS+=("${_CODING_POOL[@]}")
 
- FIX_MODELS=()
-      if [[ -n "${FIX_MODEL:-}" ]] && echo "$FIX_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/" && ! echo "$FIX_MODEL" | grep -qE '(:free|:pro|:plus)$'; then
-   FIX_MODELS+=("$FIX_MODEL")
- fi
+FIX_MODELS=()
+if [[ -n "${FIX_MODEL:-}" ]] && echo "$FIX_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/"; then
+  FIX_MODELS+=("$FIX_MODEL")
+fi
 FIX_MODELS+=("${_CODING_POOL[@]}")
 
 PR_MODELS=()
-     if [[ -n "${PR_MODEL:-}" ]] && echo "$PR_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/" && ! echo "$PR_MODEL" | grep -qE '(:free|:pro|:plus)$'; then
+if [[ -n "${PR_MODEL:-}" ]] && echo "$PR_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/"; then
   PR_MODELS+=("$PR_MODEL")
 fi
 PR_MODELS+=("${_MODEL_POOL[@]}")
 
 CI_CHECK_MODELS=()
-     if [[ -n "${CI_CHECK_MODEL:-}" ]] && echo "$CI_CHECK_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/" && ! echo "$CI_CHECK_MODEL" | grep -qE '(:free|:pro|:plus)$'; then
+if [[ -n "${CI_CHECK_MODEL:-}" ]] && echo "$CI_CHECK_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/"; then
   CI_CHECK_MODELS+=("$CI_CHECK_MODEL")
 fi
 CI_CHECK_MODELS+=("${_MODEL_POOL[@]}")
