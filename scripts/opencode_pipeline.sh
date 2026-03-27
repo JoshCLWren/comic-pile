@@ -65,12 +65,30 @@ _load_issues() {
     fi
 }
 
+# Helper function to filter problematic models
+# Returns 0 (success) if model should be EXCLUDED, 1 (failure) if model should be INCLUDED
+_is_problematic_model() {
+    local model="$1"
+    # Filter out models that start with problematic providers
+    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+        return 0
+    fi
+    # Filter out models that contain mistralai provider in the path
+    if echo "$model" | grep -q "/mistralai/"; then
+        return 0
+    fi
+    # Filter out models ending with :free
+    if echo "$model" | grep -q ":free$"; then
+        return 0
+    fi
+    return 1
+}
+
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
   while IFS= read -r model; do
-    # Filter out problematic providers that cause ProviderModelNotFoundError
-    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    if ! _is_problematic_model "$model"; then
       _CODING_POOL+=("$model")
     fi
   done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
@@ -80,19 +98,18 @@ fi
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
   while IFS= read -r model; do
-    # Filter out problematic providers that cause ProviderModelNotFoundError
-    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    if ! _is_problematic_model "$model"; then
       _MODEL_POOL+=("$model")
     fi
   done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
-# Fallback: if tool test hasn't been run yet, use full pool for everything
+# Fallback: if tool test hasn't been run yet, use filtered default pool
 if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
-    _MODEL_POOL=(
+    local fallback_models=(
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
         "openrouter/arcee-ai/trinity-large-preview:free"
@@ -101,6 +118,11 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
         "openrouter/google/gemini-2.0-flash-thinking-exp"
         "opencode/codestral-mamba"
     )
+    for model in "${fallback_models[@]}"; do
+        if ! _is_problematic_model "$model"; then
+            _MODEL_POOL+=("$model")
+        fi
+    done
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 
@@ -109,8 +131,11 @@ fi
 # Filter out problematic providers from override variables
 _filter_override() {
     local model="$1"
-    # Return empty string if model matches problematic providers, otherwise return model
-    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    if [[ -z "$model" ]]; then
+        echo ""
+        return
+    fi
+    if _is_problematic_model "$model"; then
         echo ""
     else
         echo "$model"
@@ -1170,16 +1195,13 @@ cmd_model_manager() {
 
         if [[ "$needs_refresh" == "true" ]]; then
             log_info "Refreshing model pool (running model test)..."
-            # Get models excluding openrouter/opencode/anthropic/github-copilot/mistralai providers
             local candidate_models=()
             while IFS= read -r model; do
+                if _is_problematic_model "$model"; then
+                    continue
+                fi
                 candidate_models+=("$model")
-            done < <(opencode models 2>/dev/null \
-  | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/" \
-    | grep -v "mistralai/mistral-small" \
-    | grep -v "mistralai/mistral-small-3.1" \
-    | grep -v ":free$" \
-                | grep -v "^$" || true)
+            done < <(opencode models 2>/dev/null | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
             log_info "Testing $total_candidates candidate models..."
