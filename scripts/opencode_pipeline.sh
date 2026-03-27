@@ -70,7 +70,7 @@ _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
   while IFS= read -r model; do
     # Filter out problematic providers
-    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/"; then
+    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free"; then
       _CODING_POOL+=("$model")
     fi
   done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
@@ -81,7 +81,7 @@ _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
   while IFS= read -r model; do
     # Filter out problematic providers
-    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/"; then
+    if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free"; then
       _MODEL_POOL+=("$model")
     fi
   done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
@@ -104,7 +104,7 @@ fi
 _is_valid_model() {
   local model="$1"
   [[ -z "$model" ]] && return 1
-  ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/"
+  ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free"
 }
 
 # implement/review/fix need real tool use — use Tier 1 only
