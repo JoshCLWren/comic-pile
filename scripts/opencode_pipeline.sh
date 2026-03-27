@@ -1176,7 +1176,7 @@ cmd_model_manager() {
                 candidate_models+=("$model")
             done < <(opencode models 2>/dev/null \
                 | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/" \
-                | grep -v "mistralai/mistral-small-3\.1-24b-instruct" \
+                | grep -v "mistralai/mistral-small" \
                 | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
