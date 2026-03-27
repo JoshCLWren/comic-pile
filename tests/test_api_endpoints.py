@@ -245,9 +245,25 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
 
     from app.models import Event, Session as SessionModel, Snapshot, Thread, User
 
-    now = datetime.now(UTC)
+    now = (
+        datetime.now(UTC)
+        if datetime.now(UTC) is not None
+        else datetime.utcnow().replace(tzinfo=UTC)
+    )
     result = await async_db.execute(select(User).where(User.id == 1))
+    if result.scalar() is None:
+        user = User(id=1, username="test")
+        async_db.add(user)
+        await async_db.commit()
+        result = await async_db.execute(select(User).where(User.id == 1))
+    if result.scalar() is None:
+        user = User(id=1, username="test")
+        async_db.add(user)
+        await async_db.commit()
+        result = await async_db.execute(select(User).where(User.id == 1))
     user = result.scalar_one()
+    user_id = user.id  # Extract before commit
+    user_id = user.id  # Extract before commit
     user_id = user.id  # Extract before commit
 
     thread = Thread(
