@@ -58,7 +58,7 @@ describe('ThreadPool blocked section', () => {
     if (firstRow) {
       await user.click(firstRow)
       // Check that navigate was called
-      expect(mockNavigate).toHaveBeenCalledWith('/queue?highlight=1')
+      expect(mockNavigate).toHaveBeenCalledWith('/queue?highlight=1&scroll=true')
     }
   })
 
@@ -107,7 +107,7 @@ describe('ThreadPool blocked section', () => {
     expect(screen.queryByText('Thread 11')).not.toBeInTheDocument()
     expect(screen.queryByText('Thread 12')).not.toBeInTheDocument()
     // Click show all button
-    const showAllBtn = screen.getByText(/show all/i)
+    const showAllBtn = screen.getByText(/show 2 more/i)
     await user.click(showAllBtn)
     // Now all 12 should be present
     for (let i = 1; i <= 12; i++) {
