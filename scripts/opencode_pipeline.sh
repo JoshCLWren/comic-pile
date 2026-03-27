@@ -68,9 +68,9 @@ _load_issues() {
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
-  while IFS= read -r model; do
-        # Filter out problematic providers (keep only known-good providers)
-        if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/"; then
+   while IFS= read -r model; do
+         # Filter out problematic providers (keep only known-good providers)
+         if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/"; then
             _CODING_POOL+=("$model")
         fi
   done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
@@ -79,9 +79,9 @@ fi
 # Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-  while IFS= read -r model; do
-        # Filter out problematic providers (keep only known-good providers)
-        if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/"; then
+   while IFS= read -r model; do
+         # Filter out problematic providers (keep only known-good providers)
+         if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/mistralai/|^nvidia/|^deepseek/|^mistralai/"; then
             _MODEL_POOL+=("$model")
         fi
   done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
