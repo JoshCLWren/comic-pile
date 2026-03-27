@@ -2,14 +2,13 @@
 
 ## 2026-03-25
 
-**Ladder Mode UX Improvements (#367)**
-- Added info icon next to Ladder indicator with tooltip explaining how Ladder mode works
-- Die picker shows "Auto" label when Ladder is managing the die, "Manual" when overridden
-- Toast notification now explains why the die changed (e.g. "Pool shrank to 4 — using d4")
-- Die buttons show "Switch to manual mode to override Ladder" when Ladder is active
-- Auto button tooltip explains it toggles between Ladder and manual mode
-- Mobile die picker modal includes help text explaining the relationship between modes
-- Mobile Auto button shows checkmark when Ladder mode is active
+**Roll Page Header Indicators (#366)**
+- Added labels and tooltips to roll page header indicators (+1, snoozed, offset, active)
+- Each indicator now has a visible text label or accessible tooltip with explanatory copy
+- Interactive indicators have clear visual affordances (cursor-help, dashed borders)
+- Tooltips explain what each value means and whether/how it can be changed
+- Screen readers can read each indicator's label and value via aria-label attributes
+- No layout changes to the roll page — tooltips fit within existing header space
 
 ## 2026-03-24
 
@@ -31,6 +30,14 @@
 - Edit Thread modal: Improved label associations for title, format, issues, notes
 - FormatSelect component: Added optional `id` prop for label association
 - Rating slider: Already had proper aria-label, maintained consistency
+
+**Issue Dependencies (#366)**
+- Added dependency indicators (🔗) to issues with dependencies
+- Added tooltips to show linked issues and threads on hover
+- Added dependency status to issue list in queue edit modal
+- Added mobile-friendly tooltips for dependency information
+- Added edit icon next to issue number in rating view
+- Added quick correction dialog for adjusting current issue number
 
 ## 2026-03-21
 
