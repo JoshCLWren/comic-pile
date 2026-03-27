@@ -16,7 +16,7 @@ mkdir -p "$(dirname "$RESULTS_FILE")"
 
 # Fetch available models and filter out known problematic providers
 # Exclude: openrouter, opencode, opencode-go, anthropic, github-copilot, mistralai, mistral, nvidia/mistralai, nvidia/mistral, mistral-small-3.1-24b-instruct:free, mistral-small-3.1-24b-instruct:free
-MODELS=$(opencode models 2>/dev/null | sed 's/^[[:space:]]*//' | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free" | grep -v "^$")
+MODELS=$(opencode models 2>/dev/null | sed 's/^[[:space:]]*//' | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/" | grep -v "^$")
 TOTAL=$(echo "$MODELS" | wc -l)
 
 echo "Testing $TOTAL models ($PARALLEL at a time)..."

@@ -70,7 +70,7 @@ _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
 	while IFS= read -r model; do
 		# Filter out problematic providers
-		if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3.1-24b-instruct:free|^mistral-small-3.1-24b-instruct:free"; then
+		if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3\.1-24b-instruct:free|^mistral-small-3\.1-24b-instruct:free"; then
 			_CODING_POOL+=("$model")
 		fi
 	done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
@@ -81,7 +81,7 @@ _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
 	while IFS= read -r model; do
 		# Filter out problematic providers
-		if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3.1-24b-instruct:free|^mistral-small-3.1-24b-instruct:free"; then
+		if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3\.1-24b-instruct:free|^mistral-small-3\.1-24b-instruct:free"; then
 			_MODEL_POOL+=("$model")
 		fi
 	done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
@@ -1197,7 +1197,7 @@ if [[ "$needs_refresh" == "true" ]]; then
      candidate_models+=("$model")
    done < <(opencode models 2>/dev/null \
        | sed 's/^[[:space:]]*//' \
-| grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3.1-24b-instruct:free|^mistral-small-3.1-24b-instruct:free" \
+| grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3\.1-24b-instruct:free|^mistral-small-3\.1-24b-instruct:free" \
        | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
