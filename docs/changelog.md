@@ -2,6 +2,7 @@
 
 ## [unreleased]
 
+
 **Roll Pool Blocked Threads Enhancement (#363)**
 - Enhanced expandable "N threads hidden" section with detailed blocking reasons
 - Each blocked thread shows its primary blocking reason (e.g., "Blocked by Ultimate Spider-Man #5")
