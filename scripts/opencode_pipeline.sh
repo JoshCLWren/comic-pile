@@ -86,14 +86,15 @@ if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
-    _MODEL_POOL=(
-        "mistralai/mistral-large-3-675b-instruct-2512"
-        "mistralai/mistral-small-3.1-24b-instruct:free"
-        "opencode/nemotron-3-super-free"
-        "opencode/big-pickle"
-        "openrouter/arcee-ai/trinity-large-preview:free"
-    )
-    _CODING_POOL=("${_MODEL_POOL[@]}")
+_MODEL_POOL=(
+"mistral/mistral-large-2512"
+"mistral/mistral-small-2506"
+"opencode/nemotron-3-super-free"
+"opencode/big-pickle"
+"openrouter/arcee-ai/trinity-large-preview:free"
+"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"
+)
+_CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only
