@@ -331,15 +331,15 @@ map_model() {
   # Trim whitespace
   model=$(echo "$model" | xargs)
   
-  # Explicitly handle the known problematic model first
-  if [[ "$model" == "mistralai/mistral-small-3.1-24b-instruct:free" ]]; then
+  # Explicitly handle the known problematic model first (with and without provider prefix)
+  if [[ "$model" == "mistralai/mistral-small-3.1-24b-instruct:free" ]] || [[ "$model" == "mistral-small-3.1-24b-instruct:free" ]]; then
     echo "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
     return
   fi
   
   case "$model" in
-    # Mistral Small 3.1 - map all variants to the working NVIDIA version
-    "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct"|"mistralai/mistral-small-3.1-24b-instruct")
+    # Mistral Small 3.1 - map all variants to the working NVIDIA version (with and without provider prefix)
+    "mistralai/mistral-small-3.1-24b-instruct:free"|"mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct"|"mistralai/mistral-small-3.1-24b-instruct"|"openrouter/mistral-small-3.1-24b-instruct:free"|"openrouter/mistral-small-3.1-24b-instruct")
       echo "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
       ;;
     *)
