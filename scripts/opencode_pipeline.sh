@@ -91,7 +91,6 @@ _MODEL_POOL=(
     "opencode/big-pickle"
     "openrouter/arcee-ai/trinity-large-preview:free"
     "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
-    "mistralai/mistral-small-3.1-24b-instruct:free"
   )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
