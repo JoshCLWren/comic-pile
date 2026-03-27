@@ -127,7 +127,8 @@ fi
              "nvidia/deepseek-ai/deepseek-r1"
              "mistral/mistral-medium-latest"
              "nvidia/google/codegemma-7b"
-             "mistralai/mistral-small-3.1-24b-instruct:free"  # Added as a supported model
+             # Note: Removed mistral-small-3.1-24b-instruct:free as it's now supported
+# (removed from model pool)
          )
          for model in "${fallback_models[@]}"; do
              if ! _is_problematic_model "$model"; then
