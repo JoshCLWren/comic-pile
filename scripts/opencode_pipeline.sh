@@ -90,7 +90,6 @@ _MODEL_POOL=(
     "opencode/nemotron-3-super-free"
     "opencode/big-pickle"
     "openrouter/arcee-ai/trinity-large-preview:free"
-    "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
   )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
@@ -325,22 +324,15 @@ record_model_success() {
     rm -f "$f"
 }
 
-# Map known invalid model identifiers to working equivalents
+# Map known invalid model identifiers to working equivalents.
+# Models that are unconditionally broken return empty (callers must skip empty).
 map_model() {
   local model="$1"
-  # Trim whitespace
   model=$(echo "$model" | xargs)
-  
-  # Explicitly handle the known problematic model first (with and without provider prefix)
-  if [[ "$model" == "mistralai/mistral-small-3.1-24b-instruct:free" ]] || [[ "$model" == "mistral-small-3.1-24b-instruct:free" ]]; then
-    echo "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
-    return
-  fi
-  
+
   case "$model" in
-    # Mistral Small 3.1 - map all variants to the working NVIDIA version (with and without provider prefix)
-    "mistralai/mistral-small-3.1-24b-instruct:free"|"mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct"|"mistralai/mistral-small-3.1-24b-instruct"|"openrouter/mistral-small-3.1-24b-instruct:free"|"openrouter/mistral-small-3.1-24b-instruct")
-      echo "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+    *mistral-small-3.1-24b-instruct*)
+      return 1
       ;;
     *)
       echo "$model"
@@ -1161,6 +1153,7 @@ cmd_tool_test() {
     xargs -P 15 -I{} bash -c '
         model="$1"; log="$2"; exit_code=0
         mapped_model=$(map_model "$model")
+        [[ -z "$mapped_model" ]] && { echo "SKIP     $model  [broken model]"; exit 0; }
         output=$(timeout 30s opencode run -m "$mapped_model" "Run this bash command and report ONLY its output, nothing else: echo TOOLTEST_OK" 2>&1) || exit_code=$?
         clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
         if echo "$clean" | grep -q "TOOLTEST_OK"; then
@@ -1222,6 +1215,7 @@ cmd_model_manager() {
                 model="$1"
                 exit_code=0
                  mapped_model=$(map_model "$model")
+                 [[ -z "$mapped_model" ]] && { echo "SKIP $model  [broken model]"; exit 0; }
                  output=$(timeout 30s opencode run -m "$mapped_model" "Reply with only the word PING" 2>&1) || exit_code=$?
                 clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
                 if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then

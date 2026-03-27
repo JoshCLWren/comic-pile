@@ -24,23 +24,13 @@ test_model() {
   local model="$1"
   local output exit_code=0
 
-  # Map invalid model names to valid ones
   local actual_model="$model"
-  # Trim whitespace
   actual_model=$(echo "$actual_model" | xargs)
   
-  # Explicitly handle the known problematic model first (with and without provider prefix)
-  if [[ "$actual_model" == "mistralai/mistral-small-3.1-24b-instruct:free" ]] || [[ "$actual_model" == "mistral-small-3.1-24b-instruct:free" ]]; then
-    actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
-  fi
-  
   case "$actual_model" in
-  # Mistral Small 3.1 - map all variants to the working NVIDIA version (with and without provider prefix)
-  "mistralai/mistral-small-3.1-24b-instruct:free"|"mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct"|"mistralai/mistral-small-3.1-24b-instruct"|"openrouter/mistral-small-3.1-24b-instruct:free"|"openrouter/mistral-small-3.1-24b-instruct")
-    actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
-      ;;
-    *)
-      # Keep the model as-is for other cases
+    *mistral-small-3.1-24b-instruct*)
+      echo "SKIP     $actual_model  [broken model]"
+      return
       ;;
   esac
     
