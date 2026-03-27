@@ -32,6 +32,16 @@ if [ -n "$PYTHON_FILES" ]; then
     fi
 fi
 
+# Block forbidden paths — node_modules, pipeline artifacts, etc.
+FORBIDDEN_STAGED=$(git diff --cached --name-only | grep -E "^node_modules|^frontend/node_modules|^review_critique\.md" || true)
+if [ -n "$FORBIDDEN_STAGED" ]; then
+    echo ""
+    echo "${RED}ERROR: Forbidden files staged for commit:${NC}"
+    echo "$FORBIDDEN_STAGED" | sed 's/^/  /'
+    echo "${RED}Remove them with: git rm --cached <file>${NC}"
+    exit 1
+fi
+
 # Run the shared lint script (only for staged, relevant files)
 bash scripts/lint.sh --staged
 
