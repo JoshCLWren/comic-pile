@@ -28,6 +28,10 @@ _is_problematic_model() {
     if echo "$model" | grep -qi ":free$"; then
         return 0
     fi
+    # Filter out specific problematic models
+    if echo "$model" | grep -qi "mistral-small-3\.1-24b-instruct:free"; then
+        return 0
+    fi
     return 1
 }
 
