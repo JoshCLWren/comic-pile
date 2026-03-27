@@ -125,10 +125,8 @@ export function ThreadPool({
       aria-label={`${blockedThreadsWithReasons.length} threads hidden (blocked by dependencies)`}
       className="w-full px-4 py-3 min-h-[44px] bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
     >
-      <span
-        className={`text-stone-400 text-xs transition-transform ${blockedExpanded ? 'rotate-90' : ''}`}
-      >
-        ▶
+      <span className="text-stone-400 text-xs">
+        {blockedExpanded ? '▼' : '▶'}
       </span>
             <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
               {blockedThreadsWithReasons.length} thread{blockedThreadsWithReasons.length !== 1 ? 's' : ''} hidden (blocked by dependencies)
@@ -201,14 +199,12 @@ export function ThreadPool({
             onClick={onToggleSnoozed}
             className="w-full px-4 py-2 bg-stone-500/5 border border-stone-500/10 rounded-xl flex items-center gap-2 hover:bg-stone-500/10 transition-colors"
           >
-            <span
-              className={`text-stone-400 text-xs transition-transform ${snoozedExpanded ? 'rotate-90' : ''}`}
-            >
-              ▶
+            <span className="text-stone-400 text-xs">
+              {snoozedExpanded ? '▼' : '▶'}
             </span>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
-              Snoozed ({snoozedThreads.length})
-            </span>
+<span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">
+                          Snoozed ({snoozedThreads.length})
+                        </span>
           </button>
           {snoozedExpanded && (
             <div className="mt-2 space-y-1">
