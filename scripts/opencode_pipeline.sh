@@ -65,65 +65,20 @@ _load_issues() {
     fi
 }
 
-# Helper function to check if a model should be skipped
-# Returns 0 (true) if model should be skipped, 1 (false) otherwise
-_should_skip_model() {
-  local model="$1"
-  # Trim whitespace
-  model=$(echo "$model" | xargs)
-
-  # Skip empty models
-  if [[ -z "$model" ]]; then
-    return 0
-  fi
-
-  # Convert to lowercase for case-insensitive matching
-  local lower_model
-  lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
-
-# Skip only the previously problematic mistral model
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-  return 0
-fi
-
-  # Also skip specific problematic model IDs regardless of provider
-  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-    return 0
-  fi
-
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
-    return 0
-  fi
-
-  return 1
-}
-
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
-  while IFS= read -r model; do
-    if ! _should_skip_model "$model"; then
-      _CODING_POOL+=("$model")
-    fi
-  done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
+    while IFS= read -r model; do
+        _CODING_POOL+=("$model")
+    done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-  while IFS= read -r line; do
-    model=$(echo "$line" | awk '{print $2}')
-    # Skip models that have error responses (e.g., "[Error: ...]")
-    if echo "$line" | grep -q "\[Error:"; then
-      continue
-    fi
-    if _should_skip_model "$model"; then
-      continue
-    fi
-    _MODEL_POOL+=("$model")
-  done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | shuf)
+    while IFS= read -r model; do
+        _MODEL_POOL+=("$model")
+    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Fallback: if tool test hasn't been run yet, use full pool for everything
@@ -131,37 +86,24 @@ if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
-    _MODEL_POOL=(
-        "mistralai/mistral-large-3-675b-instruct-2512"
-        "mistralai/mistral-small-3.1-24b-instruct:free"
-        "opencode/nemotron-3-super-free"
-        "opencode/big-pickle"
-    )
-    _CODING_POOL=("${_MODEL_POOL[@]}")
+_MODEL_POOL=(
+"mistral/mistral-large-2512"
+"mistral/mistral-small-2506"
+"opencode/nemotron-3-super-free"
+"opencode/big-pickle"
+"openrouter/arcee-ai/trinity-large-preview:free"
+"openrouter/mistralai/mistral-small-3.1-24b-instruct:free"
+)
+_CODING_POOL=("${_MODEL_POOL[@]}")
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only
 # pr/ci_check only need gh + text — use Tier 2 (full pool)
-# Filter environment variable overrides to skip problematic models
-IMPLEMENT_MODELS=()
-[[ -n "${IMPLEMENT_MODEL:-}" ]] && ! _should_skip_model "${IMPLEMENT_MODEL:-}" && IMPLEMENT_MODELS+=( "${IMPLEMENT_MODEL}" )
-IMPLEMENT_MODELS+=( "${_CODING_POOL[@]}" )
-
-REVIEW_MODELS=()
-[[ -n "${REVIEW_MODEL:-}" ]] && ! _should_skip_model "${REVIEW_MODEL:-}" && REVIEW_MODELS+=( "${REVIEW_MODEL}" )
-REVIEW_MODELS+=( "${_CODING_POOL[@]}" )
-
-FIX_MODELS=()
-[[ -n "${FIX_MODEL:-}" ]] && ! _should_skip_model "${FIX_MODEL:-}" && FIX_MODELS+=( "${FIX_MODEL}" )
-FIX_MODELS+=( "${_CODING_POOL[@]}" )
-
-PR_MODELS=()
-[[ -n "${PR_MODEL:-}" ]] && ! _should_skip_model "${PR_MODEL:-}" && PR_MODELS+=( "${PR_MODEL}" )
-PR_MODELS+=( "${_MODEL_POOL[@]}" )
-
-CI_CHECK_MODELS=()
-[[ -n "${CI_CHECK_MODEL:-}" ]] && ! _should_skip_model "${CI_CHECK_MODEL:-}" && CI_CHECK_MODELS+=( "${CI_CHECK_MODEL}" )
-CI_CHECK_MODELS+=( "${_MODEL_POOL[@]}" )
+IMPLEMENT_MODELS=(  "${IMPLEMENT_MODEL:-}"  "${_CODING_POOL[@]}" )
+REVIEW_MODELS=(     "${REVIEW_MODEL:-}"     "${_CODING_POOL[@]}" )
+FIX_MODELS=(        "${FIX_MODEL:-}"        "${_CODING_POOL[@]}" )
+PR_MODELS=(         "${PR_MODEL:-}"         "${_MODEL_POOL[@]}"  )
+CI_CHECK_MODELS=(   "${CI_CHECK_MODEL:-}"   "${_MODEL_POOL[@]}"  )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -322,45 +264,15 @@ gh_comment() {
     fi
 }
 
-# ── Model candidate list ──────────────────────────────────────────────────────
-# Single source of truth for which models to test/use.
-# Rules:
-#   nvidia / mistral / zai-coding-plan / opencode / cerebras — all models OK
-#   openrouter — free tier (:free suffix) only
-#   openai — excluded (no subscription)
-
-_candidate_models() {
-    opencode models 2>/dev/null | grep -E \
-        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
-    opencode models 2>/dev/null | grep -E \
-        "^openrouter/.*(:free$|-free$)"
-}
-
-# ── Per-model exponential backoff — replaces permanent blacklist
+# Per-model exponential backoff — replaces permanent blacklist
 # Backoff file: $_MODEL_BACKOFF_DIR/<sanitized_model>  →  "<fail_count>\n<last_fail_ts>"
-# Backoff duration: BASE * 2^(fail_count-1), capped at _MODEL_BACKOFF_MAX (6h)
-# At max: model is evicted from both pool files and backoff file removed.
-#         model_manager will re-test and re-add it if it recovers.
+# Backoff duration: min(BASE * 2^(fail_count-1), MAX)  →  15s 30s 60s … 1hr
 # Reset to zero on any success.
-
-_MODEL_BACKOFF_MAX=21600  # 6 hours
 
 _model_backoff_file() {
     local safe
     safe=$(echo "$1" | tr '/:' '__')
     echo "$_MODEL_BACKOFF_DIR/$safe"
-}
-
-# Evict a model from both pool files so model_manager re-tests it next cycle
-_evict_model() {
-    local model=$1
-    local safe
-    safe=$(echo "$model" | tr '/:' '__')
-    sed -i "/ ${model} /d;/^[A-Z_]*  *${safe//\//\\/}/d" \
-        "$LOG_DIR/model_test_results.txt" \
-        "$LOG_DIR/model_tool_test_results.txt" 2>/dev/null || true
-    rm -f "$(_model_backoff_file "$model")"
-    log_warn "Model EVICTED (hit ${_MODEL_BACKOFF_MAX}s max backoff): $model — model_manager will re-test"
 }
 
 model_in_backoff() {
@@ -371,41 +283,21 @@ model_in_backoff() {
     fail_count=$(sed -n '1p' "$f")
     last_fail=$(sed -n '2p' "$f")
     now=$(date +%s)
-    if [[ "$fail_count" == "ratelimit" ]]; then
-        backoff_s=10800  # flat 3h for rate-limited models
-    else
-        backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
-        [[ $backoff_s -gt $_MODEL_BACKOFF_MAX ]] && backoff_s=$_MODEL_BACKOFF_MAX
-    fi
+    # backoff = BASE * 2^(fail_count-1), capped at MAX
+    backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
     [[ $(( now - last_fail )) -lt $backoff_s ]]
 }
 
 record_model_fail() {
-    local model=$1 duration=$2 log_snippet="${3:-}"
+    local model=$1 duration=$2
     local f
     f=$(_model_backoff_file "$model")
     mkdir -p "$_MODEL_BACKOFF_DIR"
-
-    # Rate-limit detection — flat 3h backoff instead of exponential eviction
-    # Keeps zai-coding-plan models alive through their 3h throttle window
-    if echo "$log_snippet" | grep -qiE "rate.?limit|429|too many requests|quota exceeded"; then
-        local ratelimit_backoff=10800  # 3 hours
-        printf 'ratelimit\n%s\n' "$(date +%s)" > "$f"
-        log_warn "Model rate-limited: $model — flat 3h backoff"
-        return
-    fi
-
     local fail_count=0
-    if [[ -f "$f" ]] && [[ "$(sed -n '1p' "$f")" != "ratelimit" ]]; then
-        fail_count=$(sed -n '1p' "$f")
-    fi
+    [[ -f "$f" ]] && fail_count=$(sed -n '1p' "$f")
     fail_count=$(( fail_count + 1 ))
-    local backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
-    if [[ $backoff_s -ge $_MODEL_BACKOFF_MAX ]]; then
-        _evict_model "$model"
-        return
-    fi
     printf '%s\n%s\n' "$fail_count" "$(date +%s)" > "$f"
+    local backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
     log_warn "Model backoff #${fail_count} for $model — retry in ${backoff_s}s (duration was ${duration}s)"
 }
 
@@ -492,15 +384,14 @@ run_with_fallback() {
     local wt
     wt=$(worktree_dir "$issue")
 
-local attempts=0
-for model in "${models[@]}"; do
-  [[ -z "$model" ]] && continue
-  model_in_backoff "$model" && continue
-  _should_skip_model "$model" && { log_skip "#$issue — skipping problematic model: $model"; continue; }
-  [[ $attempts -ge $MAX_ATTEMPTS ]] && { log_warn "#$issue — hit MAX_ATTEMPTS ($MAX_ATTEMPTS), stopping"; break; }
-  attempts=$(( attempts + 1 ))
+    local attempts=0
+    for model in "${models[@]}"; do
+        [[ -z "$model" ]] && continue
+        model_in_backoff "$model" && continue
+        [[ $attempts -ge $MAX_ATTEMPTS ]] && { log_warn "#$issue — hit MAX_ATTEMPTS ($MAX_ATTEMPTS), stopping"; break; }
+        attempts=$(( attempts + 1 ))
 
-  log_info "#$issue — trying model: $model (attempt $attempts/$MAX_ATTEMPTS)"
+        log_info "#$issue — trying model: $model (attempt $attempts/$MAX_ATTEMPTS)"
         echo "$model" > "$(model_file "$issue")"
 
         local role_title
@@ -509,18 +400,14 @@ for model in "${models[@]}"; do
         local start exit_code=0
         start=$(date +%s)
 
-        local run_output
-        run_output=$(timeout 45m opencode run -m "$model" --dir "$wt" "$prompt" 2>&1) || exit_code=$?
-        echo "$run_output" >> "$log"
+        timeout 45m opencode run -m "$model" --dir "$wt" "$prompt" >> "$log" 2>&1 || exit_code=$?
 
         local end duration outcome
         end=$(date +%s)
         duration=$(( end - start ))
 
-        # opencode exits 0 even on model-not-found — detect via current attempt only
-        # Must check $run_output (not $log) because $log accumulates across attempts
-        # and a previous failure would falsely taint subsequent successful attempts.
-        if [[ $exit_code -eq 0 ]] && echo "$run_output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
+        # opencode exits 0 even on model-not-found — detect via log
+        if [[ $exit_code -eq 0 ]] && grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance" "$log" 2>/dev/null; then
             exit_code=1
         fi
 
@@ -533,13 +420,12 @@ for model in "${models[@]}"; do
         elif [[ $exit_code -eq 124 ]]; then
             outcome="timeout"
             log_warn "#$issue — $model timed out after ${duration}s, trying next"
+            # Timeouts still count as failures for backoff — model may be overloaded
             record_model_fail "$model" "$duration"
         else
             outcome="failed"
             log_warn "#$issue — $model failed (exit $exit_code, ${duration}s), trying next"
-            local log_tail
-            log_tail=$(tail -5 "$log" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
-            record_model_fail "$model" "$duration" "$log_tail"
+            record_model_fail "$model" "$duration"
         fi
 
         timesheet_entry "$issue" "$role" "$model" "$start" "$end" "$outcome"
@@ -1217,12 +1103,10 @@ cmd_arbiter() {
 
 cmd_tool_test() {
     local out="$LOG_DIR/model_tool_test_results.txt"
-    local candidates
-    mapfile -t candidates < <(_candidate_models)
-    local total=${#candidates[@]}
+    local total=${#_MODEL_POOL[@]}
     log_info "Running tool-use test on $total models (15 parallel, 30s timeout) → $out"
     mkdir -p "$LOG_DIR"
-    printf '%s\n' "${candidates[@]}" | \
+    printf '%s\n' "${_MODEL_POOL[@]}" | \
     xargs -P 15 -I{} bash -c '
         model="$1"; log="$2"; exit_code=0
         output=$(timeout 30s opencode run -m "$model" "Run this bash command and report ONLY its output, nothing else: echo TOOLTEST_OK" 2>&1) || exit_code=$?
@@ -1269,8 +1153,14 @@ cmd_model_manager() {
 
         if [[ "$needs_refresh" == "true" ]]; then
             log_info "Refreshing model pool (running model test)..."
+            # Get models excluding openrouter/opencode/anthropic/github-copilot providers
             local candidate_models=()
-            mapfile -t candidate_models < <(_candidate_models)
+            while IFS= read -r model; do
+                candidate_models+=("$model")
+            done < <(opencode models 2>/dev/null \
+                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/" \
+                | grep -v "^$" || true)
+
             local total_candidates=${#candidate_models[@]}
             log_info "Testing $total_candidates candidate models..."
 
