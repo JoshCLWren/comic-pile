@@ -2,6 +2,7 @@ Fixed issue #363
 ## Changelog
 - 2026-03-27: Added comment to ThreadPool for blocked threads UI clarity (closes #363)
 - 2026-03-27: Verified expandable blocked threads UI (closes #363).
+- 2026-03-27: Verified implementation completeness - expandable blocked threads section with detailed blocking reasons is fully functional (closes #363).
 
 - 2026-03-27: Expandable blocked threads section with detailed blocking reasons (closes #363).
 - Roll pool now shows "N threads hidden (blocked by dependencies)" as expandable section
