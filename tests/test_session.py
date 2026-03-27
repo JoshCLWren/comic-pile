@@ -309,6 +309,9 @@ async def test_get_or_create_creates_user_id_1(async_db: AsyncSession) -> None:
 
     await async_db.execute(delete(Snapshot))
     await async_db.execute(delete(Session))
+    from sqlalchemy import delete
+
+    await async_db.execute(delete(Thread))
     await async_db.execute(delete(User))
     await async_db.commit()
 
