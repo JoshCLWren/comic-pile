@@ -91,6 +91,9 @@ fi
 # Fallback: if tool test hasn't been run yet, use full pool for everything
 if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
+# Defensive: remove any mistralai models from pools
+_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -v '^mistralai/'))
+_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -v '^mistralai/'))
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
@@ -101,6 +104,9 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
         "opencode/mimo-v2-omni-free"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
+# Defensive: remove any mistralai models from pools
+_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -v '^mistralai/'))
+_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -v '^mistralai/'))
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only

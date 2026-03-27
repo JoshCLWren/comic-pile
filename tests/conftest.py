@@ -165,8 +165,9 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
                         "Refusing to reset schema on non-test database. "
                         f"Database '{make_url(database_url).database}' must include 'test'."
                     )
-                sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-                sync_conn.exec_driver_sql("CREATE SCHEMA public")
+                # Reset schema by truncating all tables instead of dropping schema to avoid deadlocks
+                for tbl in Base.metadata.sorted_tables:
+                    sync_conn.exec_driver_sql(f"TRUNCATE TABLE {tbl.name} RESTART IDENTITY CASCADE")
             Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
