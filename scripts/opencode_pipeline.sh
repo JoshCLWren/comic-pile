@@ -104,7 +104,11 @@ fi
 _is_valid_model() {
   local model="$1"
   [[ -z "$model" ]] && return 1
-  ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3.1-24b-instruct:free"
+  # Robust blacklist: exclude known providers and specific problematic models.
+  if echo "$model" | grep -qiE "(^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistral-small-3\.1-24b-instruct:free|mistral-small-3\.1-24b-instruct)"; then
+    return 1
+  fi
+  return 0
 }
 
 # implement/review/fix need real tool use — use Tier 1 only
