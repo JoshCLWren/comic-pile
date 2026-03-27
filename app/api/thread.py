@@ -136,11 +136,7 @@ async def list_stale_threads(
     return await _threads_to_responses(threads, db)
 
 
-clear_cache = None
-get_threads_cached = None
-
-
-@router.get("/", response_model=ThreadListResponse)
+@router.get("/", response_model=list[ThreadResponse])
 @limiter.limit("100/minute")
 async def list_threads(
     request: Request,
@@ -189,50 +185,16 @@ async def list_threads(
         result = await db.execute(query)
         threads = list(result.scalars().all())
         print(f"[DEBUG] Search path: returning {len(threads)} threads")
-        thread_responses = await _threads_to_responses(threads, db)
-        return ThreadListResponse(threads=thread_responses, next_page_token=None)
+        return await _threads_to_responses(threads, db)
 
-    query = query.order_by(Thread.queue_position)
-
-    if page_token:
-        try:
-            parts = page_token.split(",")
-            if len(parts) != 2:
-                raise ValueError("Invalid format")
-            cursor_position = int(parts[0])
-            cursor_id = int(parts[1])
-            from sqlalchemy import or_
-
-            query = query.where(
-                or_(
-                    Thread.queue_position > cursor_position,
-                    (Thread.queue_position == cursor_position) & (Thread.id > cursor_id),
-                )
-            )
-        except ValueError:
-            from fastapi import HTTPException, status
-
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid page_token format",
-            ) from None
-
-    query = query.limit(page_size + 1)
-    result = await db.execute(query)
-    threads = list(result.scalars().all())
-
-    has_more = len(threads) > page_size
-    threads_to_return = threads[:page_size]
-
-    print(f"[DEBUG] Default path: returning {len(threads_to_return)} threads (has_more={has_more})")
-    thread_responses = await _threads_to_responses(threads_to_return, db)
-
-    next_page_token = None
-    if has_more and threads_to_return:
-        last = threads_to_return[-1]
-        next_page_token = f"{last.queue_position},{last.id}"
-
-    return ThreadListResponse(threads=thread_responses, next_page_token=next_page_token)
+    else:
+        query = query.order_by(Thread.queue_position)
+        result = await db.execute(query)
+        threads = list(result.scalars().all())
+        print(f"[DEBUG] Default path: returning {len(threads)} threads")
+        for thread in threads:
+            print(f"[DEBUG]   - {thread.title} (collection_id={thread.collection_id})")
+        return await _threads_to_responses(threads, db)
 
 
 @router.get("/completed", response_class=HTMLResponse)
@@ -359,8 +321,7 @@ async def create_thread(
             db.add(new_thread)
             await db.commit()
             await db.refresh(new_thread)
-            if clear_cache:
-                clear_cache()
+
             return await thread_to_response(new_thread, db)
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -461,8 +422,7 @@ async def update_thread(
         thread.collection_id = thread_data.collection_id
     await db.commit()
     await db.refresh(thread)
-    if clear_cache:
-        clear_cache()
+
     return await thread_to_response(thread, db)
 
 
@@ -509,18 +469,16 @@ async def delete_thread(
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot delete thread: {exc}",
         ) from exc
     except Exception as exc:
         await db.rollback()
         logger.exception("Unexpected error deleting thread %s", thread_id)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete thread: {exc}",
         ) from exc
-    if clear_cache:
-        clear_cache()
 
 
 @router.post("/reactivate", response_model=ThreadResponse)
@@ -613,8 +571,7 @@ async def reactivate_thread(
     thread.queue_position = 1
     await db.commit()
     await db.refresh(thread)
-    if clear_cache:
-        clear_cache()
+
     return await thread_to_response(thread, db)
 
 
@@ -711,8 +668,6 @@ async def set_pending_thread(
         snoozed_count = len(snoozed_ids)
 
     await db.commit()
-    if clear_cache:
-        clear_cache()
 
     return RollResponse(
         thread_id=thread_id_int,
@@ -776,8 +731,6 @@ async def move_thread_to_collection(
 
     response = await thread_to_response(thread, db)
     await db.commit()
-    if clear_cache:
-        clear_cache()
 
     return response
 
@@ -873,8 +826,6 @@ async def migrate_thread_to_issues(
     response = await thread_to_response(thread, db)
 
     await db.commit()
-    if clear_cache:
-        clear_cache()
 
     return response
 
@@ -996,7 +947,5 @@ async def migrate_thread_to_issues_simple(
     response = await thread_to_response(thread, db)
 
     await db.commit()
-    if clear_cache:
-        clear_cache()
 
     return response

@@ -2,12 +2,13 @@
 
 ## 2026-03-25
 
-**Thread and Session Pagination (#378)**
-- Added cursor-based pagination to `GET /api/threads/` endpoint with `page_size` (default 50, max 200) and `page_token` query parameters
-- Added cursor-based pagination to `GET /api/sessions/` endpoint with same pagination parameters
-- Both endpoints return `next_page_token` in response when more results exist
-- Frontend updated to transparently fetch all pages when listing threads and sessions
-- Implementation follows existing pattern from `GET /api/collections/` endpoint
+**Roll Page Header Indicators (#366)**
+- Added labels and tooltips to roll page header indicators (+1, snoozed, offset, active)
+- Each indicator now has a visible text label or accessible tooltip with explanatory copy
+- Interactive indicators have clear visual affordances (cursor-help, dashed borders)
+- Tooltips explain what each value means and whether/how it can be changed
+- Screen readers can read each indicator's label and value via aria-label attributes
+- No layout changes to the roll page — tooltips fit within existing header space
 
 ## 2026-03-24
 
@@ -29,6 +30,14 @@
 - Edit Thread modal: Improved label associations for title, format, issues, notes
 - FormatSelect component: Added optional `id` prop for label association
 - Rating slider: Already had proper aria-label, maintained consistency
+
+**Issue Dependencies (#366)**
+- Added dependency indicators (🔗) to issues with dependencies
+- Added tooltips to show linked issues and threads on hover
+- Added dependency status to issue list in queue edit modal
+- Added mobile-friendly tooltips for dependency information
+- Added edit icon next to issue number in rating view
+- Added quick correction dialog for adjusting current issue number
 
 ## 2026-03-21
 
