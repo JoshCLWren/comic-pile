@@ -5,6 +5,7 @@
 **Roll Pool Blocked Threads Enhancement (#363)**
 - Enhanced expandable "N threads hidden" section with detailed blocking reasons
 - Each blocked thread shows its primary blocking reason (e.g., "Blocked by Ultimate Spider-Man #5")
+- For threads with multiple blockers, the most immediate blocker (by queue position) is shown first
 - Clicking a thread navigates to queue page with automatic scroll to highlighted thread
 - Mobile-optimized with 44px touch targets and scrollable list
 - Shows first 10 threads with "show X more" toggle for larger lists
@@ -28,13 +29,14 @@
 - Enhanced expandable section for blocked threads in the roll pool with detailed blocking reasons
 - Added ARIA label to blocked threads toggle button for screen‑reader accessibility
 - Each blocked thread now shows its primary blocking reason (e.g., "Blocked by Ultimate Spider-Man #5")
+- For threads with multiple blockers, the most immediate blocker (by queue position) is shown first
 - Clicking a blocked thread navigates to the queue page with the thread highlighted
 - Added "Show all" toggle for lists with more than 10 blocked threads
 - Mobile-friendly with scrollable list and 44px minimum touch targets
 - Improved UI with better spacing, typography, and visual hierarchy
 - Section is completely hidden when no threads are blocked (no "0 threads hidden" message)
- - Backend endpoint `/api/v1/dependencies/blocked-with-reasons` powers the expanded blocked threads list
- - Fixed toggle arrow to display ▶ when collapsed and ▼ when expanded
+- Backend endpoint `/api/v1/dependencies/blocked-with-reasons` powers the expanded blocked threads list
+- Fixed toggle arrow to display ▶ when collapsed and ▼ when expanded
 
 
 **GitHub Projects Cleanup (#363)**
