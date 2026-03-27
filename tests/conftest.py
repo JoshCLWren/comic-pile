@@ -277,39 +277,55 @@ def set_skip_worktree_check() -> Iterator[None]:
 
 @pytest_asyncio.fixture(scope="function")
 async def async_db(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSession]:
-    """Create an async test session isolated by per-test transaction rollback."""
+    """Create an async test session with full database cleanup after each test.
+
+    This fixture ensures complete isolation by truncating all test tables before
+    and after each test, even if the test commits its changes.
+    """
     async with db_engine.connect() as connection:
-        transaction = await connection.begin()
+        # Ensure clean state before test
+        await connection.execute(TRUNCATE_TEST_DATA_SQL)
+        await connection.commit()
+
         session = SQLAlchemyAsyncSession(
             bind=connection,
             expire_on_commit=False,
-            join_transaction_mode="create_savepoint",
         )
         try:
             yield session
         finally:
+            # Close the session, discarding any uncommitted changes
             await session.close()
-            if transaction.is_active:
-                await transaction.rollback()
+            # Rollback any remaining transaction just in case
+            if connection.in_transaction():
+                await connection.rollback()
+            # Truncate all tables to clean up any committed data
+            await connection.execute(TRUNCATE_TEST_DATA_SQL)
+            await connection.commit()
 
 
 @pytest_asyncio.fixture(scope="function")
 async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSession]:
-    """Create an async test session that uses real commits across connections."""
+    """Create an async test session that uses real commits and ensures cleanup."""
     session_maker = async_sessionmaker(
         bind=db_engine,
         expire_on_commit=False,
         class_=SQLAlchemyAsyncSession,
     )
-
     async with session_maker() as session:
+        # Ensure clean start
         await session.execute(TRUNCATE_TEST_DATA_SQL)
         await session.commit()
-        yield session
-
-    async with session_maker() as cleanup_session:
-        await cleanup_session.execute(TRUNCATE_TEST_DATA_SQL)
-        await cleanup_session.commit()
+        try:
+            yield session
+        finally:
+            # Rollback any uncommitted changes
+            if session.in_transaction():
+                await session.rollback()
+            # Truncate all tables to remove any committed data
+            await session.execute(TRUNCATE_TEST_DATA_SQL)
+            await session.commit()
+            await session.close()
 
 
 async def _create_async_db_override(
