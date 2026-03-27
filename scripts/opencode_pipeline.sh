@@ -313,15 +313,45 @@ gh_comment() {
     fi
 }
 
-# Per-model exponential backoff — replaces permanent blacklist
+# ── Model candidate list ──────────────────────────────────────────────────────
+# Single source of truth for which models to test/use.
+# Rules:
+#   nvidia / mistral / zai-coding-plan / opencode / cerebras — all models OK
+#   openrouter — free tier (:free suffix) only
+#   openai — excluded (no subscription)
+
+_candidate_models() {
+    opencode models 2>/dev/null | grep -E \
+        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
+    opencode models 2>/dev/null | grep -E \
+        "^openrouter/.*(:free$|-free$)"
+}
+
+# ── Per-model exponential backoff — replaces permanent blacklist
 # Backoff file: $_MODEL_BACKOFF_DIR/<sanitized_model>  →  "<fail_count>\n<last_fail_ts>"
-# Backoff duration: min(BASE * 2^(fail_count-1), MAX)  →  15s 30s 60s … 1hr
+# Backoff duration: BASE * 2^(fail_count-1), capped at _MODEL_BACKOFF_MAX (6h)
+# At max: model is evicted from both pool files and backoff file removed.
+#         model_manager will re-test and re-add it if it recovers.
 # Reset to zero on any success.
+
+_MODEL_BACKOFF_MAX=21600  # 6 hours
 
 _model_backoff_file() {
     local safe
     safe=$(echo "$1" | tr '/:' '__')
     echo "$_MODEL_BACKOFF_DIR/$safe"
+}
+
+# Evict a model from both pool files so model_manager re-tests it next cycle
+_evict_model() {
+    local model=$1
+    local safe
+    safe=$(echo "$model" | tr '/:' '__')
+    sed -i "/ ${model} /d;/^[A-Z_]*  *${safe//\//\\/}/d" \
+        "$LOG_DIR/model_test_results.txt" \
+        "$LOG_DIR/model_tool_test_results.txt" 2>/dev/null || true
+    rm -f "$(_model_backoff_file "$model")"
+    log_warn "Model EVICTED (hit ${_MODEL_BACKOFF_MAX}s max backoff): $model — model_manager will re-test"
 }
 
 model_in_backoff() {
@@ -332,21 +362,41 @@ model_in_backoff() {
     fail_count=$(sed -n '1p' "$f")
     last_fail=$(sed -n '2p' "$f")
     now=$(date +%s)
-    # backoff = BASE * 2^(fail_count-1), capped at MAX
-    backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
+    if [[ "$fail_count" == "ratelimit" ]]; then
+        backoff_s=10800  # flat 3h for rate-limited models
+    else
+        backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
+        [[ $backoff_s -gt $_MODEL_BACKOFF_MAX ]] && backoff_s=$_MODEL_BACKOFF_MAX
+    fi
     [[ $(( now - last_fail )) -lt $backoff_s ]]
 }
 
 record_model_fail() {
-    local model=$1 duration=$2
+    local model=$1 duration=$2 log_snippet="${3:-}"
     local f
     f=$(_model_backoff_file "$model")
     mkdir -p "$_MODEL_BACKOFF_DIR"
+
+    # Rate-limit detection — flat 3h backoff instead of exponential eviction
+    # Keeps zai-coding-plan models alive through their 3h throttle window
+    if echo "$log_snippet" | grep -qiE "rate.?limit|429|too many requests|quota exceeded"; then
+        local ratelimit_backoff=10800  # 3 hours
+        printf 'ratelimit\n%s\n' "$(date +%s)" > "$f"
+        log_warn "Model rate-limited: $model — flat 3h backoff"
+        return
+    fi
+
     local fail_count=0
-    [[ -f "$f" ]] && fail_count=$(sed -n '1p' "$f")
+    if [[ -f "$f" ]] && [[ "$(sed -n '1p' "$f")" != "ratelimit" ]]; then
+        fail_count=$(sed -n '1p' "$f")
+    fi
     fail_count=$(( fail_count + 1 ))
-    printf '%s\n%s\n' "$fail_count" "$(date +%s)" > "$f"
     local backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
+    if [[ $backoff_s -ge $_MODEL_BACKOFF_MAX ]]; then
+        _evict_model "$model"
+        return
+    fi
+    printf '%s\n%s\n' "$fail_count" "$(date +%s)" > "$f"
     log_warn "Model backoff #${fail_count} for $model — retry in ${backoff_s}s (duration was ${duration}s)"
 }
 
@@ -469,12 +519,13 @@ run_with_fallback() {
         elif [[ $exit_code -eq 124 ]]; then
             outcome="timeout"
             log_warn "#$issue — $model timed out after ${duration}s, trying next"
-            # Timeouts still count as failures for backoff — model may be overloaded
             record_model_fail "$model" "$duration"
         else
             outcome="failed"
             log_warn "#$issue — $model failed (exit $exit_code, ${duration}s), trying next"
-            record_model_fail "$model" "$duration"
+            local log_tail
+            log_tail=$(tail -5 "$log" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+            record_model_fail "$model" "$duration" "$log_tail"
         fi
 
         timesheet_entry "$issue" "$role" "$model" "$start" "$end" "$outcome"
@@ -1152,10 +1203,12 @@ cmd_arbiter() {
 
 cmd_tool_test() {
     local out="$LOG_DIR/model_tool_test_results.txt"
-    local total=${#_MODEL_POOL[@]}
+    local candidates
+    mapfile -t candidates < <(_candidate_models)
+    local total=${#candidates[@]}
     log_info "Running tool-use test on $total models (15 parallel, 30s timeout) → $out"
     mkdir -p "$LOG_DIR"
-    printf '%s\n' "${_MODEL_POOL[@]}" | \
+    printf '%s\n' "${candidates[@]}" | \
     xargs -P 15 -I{} bash -c '
         model="$1"; log="$2"; exit_code=0
         output=$(timeout 30s opencode run -m "$model" "Run this bash command and report ONLY its output, nothing else: echo TOOLTEST_OK" 2>&1) || exit_code=$?
@@ -1203,13 +1256,7 @@ cmd_model_manager() {
         if [[ "$needs_refresh" == "true" ]]; then
             log_info "Refreshing model pool (running model test)..."
             local candidate_models=()
-            while IFS= read -r model; do
-                if _is_problematic_model "$model"; then
-                    continue
-                fi
-                candidate_models+=("$model")
-            done < <(opencode models 2>/dev/null | grep -v "^$" || true)
-
+            mapfile -t candidate_models < <(_candidate_models)
             local total_candidates=${#candidate_models[@]}
             log_info "Testing $total_candidates candidate models..."
 
