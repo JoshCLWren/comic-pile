@@ -94,8 +94,8 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
 
       window.dispatchEvent(new CustomEvent('thread-updated', { detail: { threadId: thread.id } }))
 
-      await loadIssues()
-    } catch (error) {
+       await loadIssues(false)
+     } catch (error) {
       console.error('Failed to toggle issue status:', error)
     }
   }
