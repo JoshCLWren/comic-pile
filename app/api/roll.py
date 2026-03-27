@@ -18,6 +18,11 @@ from app.models.user import User
 from app.schemas import OverrideRequest, RollRequest, RollResponse
 from app.utils.mobile_detect import is_mobile_request
 from comic_pile.queue import get_roll_pool
+
+# Prevent use of deprecated GitHub Projects (classic) API
+# This project does not use GitHub API for project management
+# Any usage of Projects (classic) GraphQL API is prohibited
+# See: https://github.blog/changelog/2024-05-23-sunset-notice-projects-classic/
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["roll"])
