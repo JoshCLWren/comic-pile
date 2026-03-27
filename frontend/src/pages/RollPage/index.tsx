@@ -680,6 +680,7 @@ useEffect(() => {
         onToggleSnoozed={() => setSnoozedExpanded(prev => !prev)}
         onToggleBlocked={() => setBlockedExpanded(prev => !prev)}
         unsnoozeIsPending={unsnoozeMutation.isPending}
+        showBlockedThreads={blockedExpanded}
       />
           </div>
         </div>
