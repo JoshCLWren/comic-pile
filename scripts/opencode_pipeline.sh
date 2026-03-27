@@ -1204,8 +1204,10 @@ cmd_model_manager() {
         if [[ "$needs_refresh" == "true" ]]; then
             log_info "Refreshing model pool (running model test)..."
             # Get models excluding openrouter/opencode/anthropic/github-copilot providers
+            # Also skip known problematic models (e.g., mistralai) to avoid errors in logs
             local candidate_models=()
             while IFS= read -r model; do
+                _should_skip_model "$model" && continue
                 candidate_models+=("$model")
             done < <(opencode models 2>/dev/null \
                 | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/" \
