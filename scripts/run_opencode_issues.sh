@@ -58,7 +58,7 @@ STANDARDS:
 
 Do not ask clarifying questions. Start immediately."
 
-    if timeout "$TIMEOUT" opencode run "$prompt" >"$log" 2>&1; then
+    if timeout "$TIMEOUT" opencode run -m "mistral/mistral-small-latest" "$prompt" >"$log" 2>&1; then
         echo "[DONE]  #$issue — see $log"
     else
         exit_code=$?
