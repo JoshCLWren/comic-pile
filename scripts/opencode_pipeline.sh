@@ -69,16 +69,16 @@ _load_issues() {
 # Returns 0 (success) if model should be EXCLUDED, 1 (failure) if model should be INCLUDED
 _is_problematic_model() {
     local model="$1"
-    # Filter out models that start with problematic providers
-    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+    # Filter out models that start with problematic providers (case-insensitive)
+    if echo "$model" | grep -qiE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
         return 0
     fi
-    # Filter out models that contain mistralai provider in the path
-    if echo "$model" | grep -q "/mistralai/"; then
+    # Filter out models that contain mistralai provider in the path (case-insensitive)
+    if echo "$model" | grep -qi "/mistralai/"; then
         return 0
     fi
-    # Filter out models ending with :free
-    if echo "$model" | grep -q ":free$"; then
+    # Filter out models ending with :free (case-insensitive)
+    if echo "$model" | grep -qi ":free$"; then
         return 0
     fi
     return 1
@@ -110,13 +110,10 @@ if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     local fallback_models=(
-        "opencode/nemotron-3-super-free"
-        "opencode/big-pickle"
-        "openrouter/arcee-ai/trinity-large-preview:free"
-        "openrouter/nomic-ai/telechat-large"
-        "openrouter/perplexity/llama-3.1-sonar-large-128k-chat"
-        "openrouter/google/gemini-2.0-flash-thinking-exp"
-        "opencode/codestral-mamba"
+        "cerebras/zai-glm-4.7"
+        "nvidia/deepseek-ai/deepseek-r1"
+        "mistral/mistral-medium-latest"
+        "nvidia/google/codegemma-7b"
     )
     for model in "${fallback_models[@]}"; do
         if ! _is_problematic_model "$model"; then

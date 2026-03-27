@@ -13,8 +13,36 @@ RESULTS_FILE="$(dirname "$0")/../.opencode_logs/model_test_results.txt"
 mkdir -p "$(dirname "$RESULTS_FILE")"
 > "$RESULTS_FILE"  # truncate
 
-MODELS=$(opencode models 2>/dev/null)
-TOTAL=$(echo "$MODELS" | wc -l)
+# Helper function to filter problematic models (same logic as pipeline)
+_is_problematic_model() {
+    local model="$1"
+    # Filter out models that start with problematic providers (case-insensitive)
+    if echo "$model" | grep -qiE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
+        return 0
+    fi
+    # Filter out models that contain mistralai provider in the path (case-insensitive)
+    if echo "$model" | grep -qi "/mistralai/"; then
+        return 0
+    fi
+    # Filter out models ending with :free (case-insensitive)
+    if echo "$model" | grep -qi ":free$"; then
+        return 0
+    fi
+    return 1
+}
+
+MODELS_RAW=$(opencode models 2>/dev/null)
+# Filter models
+FILTERED_MODELS=()
+while IFS= read -r model; do
+    [[ -z "$model" ]] && continue
+    if ! _is_problematic_model "$model"; then
+        FILTERED_MODELS+=("$model")
+    fi
+done <<< "$MODELS_RAW"
+
+MODELS=$(printf '%s\n' "${FILTERED_MODELS[@]}")
+TOTAL=${#FILTERED_MODELS[@]}
 
 echo "Testing $TOTAL models ($PARALLEL at a time)..."
 echo "Results: $RESULTS_FILE"
