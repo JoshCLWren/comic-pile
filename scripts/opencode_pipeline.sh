@@ -71,29 +71,32 @@ _load_issues() {
   if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
        while IFS= read -r model; do
       # Filter out problematic providers (keep only known-good providers)
-if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && ! echo "$model" | grep -qE "^mistralai/"; then
+      # Explicitly exclude ALL mistralai models to prevent ProviderModelNotFoundError
+ if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && echo "$model" | grep -qvE "(^|/)mistralai/"; then
     _CODING_POOL+=("$model")
   fi
    done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
-fi
+ fi
 
-  # Tier 2: all OK models — for roles that only need text + simple gh commands
+# Tier 2: all OK models — for roles that only need text + simple gh commands
   _MODEL_POOL=()
   if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
        while IFS= read -r model; do
       # Filter out problematic providers (keep only known-good providers)
-if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && ! echo "$model" | grep -qE "^mistralai/"; then
+      # Explicitly exclude ALL mistralai models to prevent ProviderModelNotFoundError
+ if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && echo "$model" | grep -qvE "(^|/)mistralai/"; then
     _MODEL_POOL+=("$model")
   fi
    done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
-fi
+ fi
 
 # Fallback: if tool test hasn't been run yet, use full pool for everything
 if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
 # Defensive: remove any mistralai models from pools
-_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -v '^mistralai/'))
-_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -v '^mistralai/'))
+# Updated regex to catch all mistralai variants including those with prefixes
+_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '(^|/)mistralai/'))
+_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '(^|/)mistralai/'))
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
@@ -105,8 +108,9 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 # Defensive: remove any mistralai models from pools
-_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -v '^mistralai/'))
-_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -v '^mistralai/'))
+# Updated regex to catch all mistralai variants including those with prefixes
+_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '(^|/)mistralai/'))
+_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '(^|/)mistralai/'))
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only
@@ -1217,7 +1221,7 @@ if [[ "$needs_refresh" == "true" ]]; then
 done < <(opencode models 2>/dev/null \
 | grep -E "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" \
 | grep -v ':' \
-| grep -v "^mistralai/" \
+| grep -vE '(^|/)mistralai/' \
 | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
