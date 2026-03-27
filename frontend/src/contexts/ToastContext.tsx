@@ -1,20 +1,5 @@
-import { createContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
-
-type ToastType = 'info' | 'success' | 'warning' | 'error'
-
-type Toast = {
-  id: string
-  message: string
-  type: ToastType
-}
-
-type ToastContextType = {
-  toasts: Toast[]
-  showToast: (message: string, type?: ToastType) => void
-  removeToast: (id: string) => void
-}
-
-export const ToastContext = createContext<ToastContextType | undefined>(undefined)
+import { useState, useCallback, useEffect, useRef, ReactNode } from 'react'
+import { ToastContext, type ToastType, type Toast } from './ToastContextTypes'
 
 const TOAST_DURATION = 5000
 
