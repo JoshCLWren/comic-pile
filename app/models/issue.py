@@ -20,7 +20,7 @@ class Issue(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     thread_id: Mapped[int] = mapped_column(
-        ForeignKey("threads.id", ondelete="CASCADE"), nullable=False
+        ForeignKey("threads.id", ondelete="CASCADE"), nullable=False, index=False
     )
     issue_number: Mapped[str] = mapped_column(String(50), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -33,9 +33,8 @@ class Issue(Base):
     # Indexes for performance
     __table_args__ = (
         UniqueConstraint("thread_id", "issue_number", name="uq_issue_thread_number"),
-        Index("ix_issue_thread_id", "thread_id"),
-        Index("ix_issue_thread_is_read", "thread_id", "status"),
-        Index("ix_issue_thread_position", "thread_id", "position"),
+        # Index("ix_issue_thread_id", "thread_id"),
+        Index("ix_issue_thread_position", "thread_id", "position", "id"),
     )
 
     thread: Mapped["Thread"] = relationship(

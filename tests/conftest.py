@@ -8,11 +8,6 @@ import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 
-# Set TEST_ENVIRONMENT before importing app modules
-# This must be done before app.main is imported to disable rate limiting
-if not os.getenv("TEST_ENVIRONMENT"):
-    os.environ["TEST_ENVIRONMENT"] = "true"
-
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import UniqueConstraint, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -29,7 +24,7 @@ from sqlalchemy.pool import NullPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import Event, Issue, Thread, User
+from app.models import Event, Thread, User
 from app.models import Session as SessionModel
 
 load_dotenv()
@@ -174,7 +169,7 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
             Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
-        # await conn.execute(TRUNCATE_TEST_DATA_SQL)  # Disabled truncate to avoid deadlocks
+        # await conn.execute(TRUNCATE_TEST_DATA_SQL)  # Skip initial truncate to avoid deadlocks
 
     _SHARED_TEST_ENGINE = engine
     try:
@@ -187,23 +182,25 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
     username = _default_test_username()
+
+    # First try to find existing user
     result = await db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
+
     if not user:
-        result = await db.execute(select(User).where(User.username == username))
-        user = result.scalar_one_or_none()
-        if not user:
-            user = User(id=1, username=username, created_at=datetime.now(UTC))
-            db.add(user)
-            try:
-                await db.commit()
-            except IntegrityError:
-                await db.rollback()
-                result = await db.execute(select(User).where(User.username == username))
-                user = result.scalar_one()
-            else:
-                await db.refresh(user)
-                await _sync_id_sequence(db, "users")
+        # Try to create the user with id=1
+        user = User(id=1, username=username, created_at=datetime.now(UTC))
+        db.add(user)
+        try:
+            await db.commit()
+            await db.refresh(user)
+        except IntegrityError:
+            await db.rollback()
+            # User was created by another process, get it now
+            result = await db.execute(select(User).where(User.username == username))
+            user = result.scalar_one()
+
+    await _sync_id_sequence(db, "users")
     return user
 
 
@@ -211,9 +208,13 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
     """Get or create user with given username (async)."""
     if username is None:
         username = _default_test_username()
+
+    # First try to find existing user
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
+
     if not user:
+        # Try to create the user
         user_kwargs: dict[str, object] = {
             "username": username,
             "created_at": datetime.now(UTC),
@@ -222,12 +223,15 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
         db.add(user)
         try:
             await db.commit()
+            await db.refresh(user)
         except IntegrityError:
             await db.rollback()
+            # User was created by another process, get it now
             result = await db.execute(select(User).where(User.username == username))
             user = result.scalar_one()
-        else:
-            await db.refresh(user)
+
+    if username == _default_test_username():
+        await _sync_id_sequence(db, "users")
     return user
 
 
@@ -273,7 +277,9 @@ def set_skip_worktree_check() -> Iterator[None]:
 async def async_db(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSession]:
     """Create an async test session isolated by per-test transaction rollback."""
     async with db_engine.connect() as connection:
+        # Ensure a clean state for tables that may have been left with committed data from async_db_committed tests
         transaction = await connection.begin()
+        await connection.execute(text("TRUNCATE TABLE users CASCADE"))
         session = SQLAlchemyAsyncSession(
             bind=connection,
             expire_on_commit=False,
@@ -312,12 +318,41 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
     )
 
     async with session_maker() as session:
-        await session.execute(TRUNCATE_TEST_DATA_SQL)
+        # Use DELETE instead of TRUNCATE to avoid exclusive locks and deadlocks
+        await session.execute(text("DELETE FROM sessions"))
+        await session.execute(text("DELETE FROM events"))
+        await session.execute(text("DELETE FROM threads"))
+        await session.execute(text("DELETE FROM issues"))
+        await session.execute(text("DELETE FROM snapshots"))
+        await session.execute(text("DELETE FROM dependencies"))
+        await session.execute(text("DELETE FROM revoked_tokens"))
+        await session.execute(text("DELETE FROM users"))
+        await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_id"))
         await session.commit()
+
+        # Reset sequences manually to avoid conflicts
+        await session.execute(text("SELECT setval('users_id_seq', 1, false)"))
+        await session.execute(text("SELECT setval('sessions_id_seq', 1, false)"))
+        await session.execute(text("SELECT setval('threads_id_seq', 1, false)"))
+        await session.execute(text("SELECT setval('issues_id_seq', 1, false)"))
+        await session.execute(text("SELECT setval('events_id_seq', 1, false)"))
+        await session.execute(text("SELECT setval('snapshots_id_seq', 1, false)"))
+        await session.execute(text("SELECT setval('dependencies_id_seq', 1, false)"))
+        await session.execute(text("SELECT setval('revoked_tokens_id_seq', 1, false)"))
+        await session.commit()
+
         yield session
 
     async with session_maker() as cleanup_session:
-        await cleanup_session.execute(TRUNCATE_TEST_DATA_SQL)
+        # Cleanup: Delete all data
+        await cleanup_session.execute(text("DELETE FROM sessions"))
+        await cleanup_session.execute(text("DELETE FROM events"))
+        await cleanup_session.execute(text("DELETE FROM threads"))
+        await cleanup_session.execute(text("DELETE FROM issues"))
+        await cleanup_session.execute(text("DELETE FROM snapshots"))
+        await cleanup_session.execute(text("DELETE FROM dependencies"))
+        await cleanup_session.execute(text("DELETE FROM revoked_tokens"))
+        await cleanup_session.execute(text("DELETE FROM users"))
         await cleanup_session.commit()
 
 
@@ -357,6 +392,24 @@ async def sample_data(
     async_db: SQLAlchemyAsyncSession,
 ) -> dict[str, Thread | SessionModel | Event | User | list]:
     """Create sample threads, sessions for async testing."""
+    from sqlalchemy import delete
+    from app.models import Snapshot, Event, Thread, Session, User
+
+    batman_issues = []
+
+    await async_db.execute(delete(Snapshot))
+    await async_db.execute(delete(Event))
+    await async_db.execute(delete(Thread))
+    await async_db.execute(delete(Session))
+    await async_db.execute(delete(User))
+
+    await async_db.execute(delete(Snapshot))
+    await async_db.execute(delete(Event))
+    await async_db.execute(delete(Thread))
+    await async_db.execute(delete(Session))
+    await async_db.execute(delete(User))
+    await async_db.flush()
+
     now = datetime.now(UTC)
     username = _default_test_username()
     user = await async_db.execute(select(User).where(User.username == username))
@@ -364,7 +417,7 @@ async def sample_data(
     if not user:
         user = User(username=username, id=1, created_at=now)
         async_db.add(user)
-        await async_db.commit()
+        await async_db.flush()
         await async_db.refresh(user)
         await _sync_id_sequence(async_db, "users")
 
@@ -430,9 +483,8 @@ async def sample_data(
     for thread in threads:
         await async_db.refresh(thread)
 
-    # Create Issue records for migrated threads (Batman only)
-    # Batman: 10 total, issues 1-5 read, 6-10 unread (5 remaining)
-    batman_issues = []
+    from app.models import Issue
+
     for i in range(1, 11):
         issue = Issue(
             id=i,

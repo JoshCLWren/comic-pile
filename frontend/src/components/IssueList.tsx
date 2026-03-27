@@ -66,7 +66,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       setIsLoading(false)
       setIsLoadingMore(false)
     }
-  }, [thread.id, filter])
+}, [thread.id, filter, nextPageToken, issues])
 
   useEffect(() => {
     abortControllerRef.current = new AbortController()

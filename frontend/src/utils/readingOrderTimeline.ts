@@ -124,21 +124,22 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
     return entries
   }
 
-  const hasZeroIndexedIssues = sortedGates.some((gate) => gate.issueNumberValue === 0) || nextIssueNumberValue === 0
-  let cursor: number | null = hasZeroIndexedIssues ? 0 : 1
+  // Create a span for issues before the first gate, if any
+  const firstGateIssueNumber = sortedGates[0]?.issueNumberValue ?? null
+  if (firstGateIssueNumber !== null && firstGateIssueNumber > 1) {
+    const span = createSpanEntry({
+      start: 1,
+      end: firstGateIssueNumber - 1,
+      label: `Issues 1–${firstGateIssueNumber - 1}`,
+      nextValue: nextIssueNumberValue,
+      isOpenEnded: false,
+    })
+    entries.push({ kind: 'span', span })
+  }
 
+  // Add gate entries (no intermediate spans)
+  let lastGateIssueNumber: number | null = null
   for (const gate of sortedGates) {
-    if (cursor !== null && gate.issueNumberValue !== null && gate.issueNumberValue > cursor) {
-      const span = createSpanEntry({
-        start: cursor,
-        end: gate.issueNumberValue - 1,
-        label: `Issues ${cursor}–${gate.issueNumberValue - 1}`,
-        nextValue: nextIssueNumberValue,
-        isOpenEnded: false,
-      })
-      entries.push({ kind: 'span', span })
-    }
-
     const status = resolveGateStatus({
       isThreadComplete,
       gateValue: gate.orderValue,
@@ -159,32 +160,32 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
         isCurrent: status === 'blocked',
       },
     })
-
     if (gate.issueNumberValue !== null) {
-      cursor = gate.issueNumberValue + 1
+      lastGateIssueNumber = gate.issueNumberValue
     }
   }
 
-  if (cursor !== null) {
-    if (thread.total_issues !== null && cursor <= thread.total_issues) {
-      const span = createSpanEntry({
-        start: cursor,
-        end: thread.total_issues,
-        label: `Issues ${cursor}–${thread.total_issues}`,
-        nextValue: nextIssueNumberValue,
-        isOpenEnded: false,
-      })
-      entries.push({ kind: 'span', span })
-    } else if (thread.total_issues === null) {
-      const span = createSpanEntry({
-        start: cursor,
-        end: null,
-        label: `Issues ${cursor}+`,
-        nextValue: nextIssueNumberValue,
-        isOpenEnded: true,
-      })
-      entries.push({ kind: 'span', span })
-    }
+  // Create a span for issues after the last gate, if any
+  const afterStart = (lastGateIssueNumber ?? 0) + 1
+  if (thread.total_issues !== null && afterStart <= thread.total_issues) {
+    const span = createSpanEntry({
+      start: afterStart,
+      end: thread.total_issues,
+      label: `Issues ${afterStart}–${thread.total_issues}`,
+      nextValue: nextIssueNumberValue,
+      isOpenEnded: false,
+    })
+    entries.push({ kind: 'span', span })
+  } else if (thread.total_issues === null) {
+    // For open-ended threads, always show the span after the last gate
+    const span = createSpanEntry({
+      start: afterStart,
+      end: null,
+      label: `Issues ${afterStart}+`,
+      nextValue: nextIssueNumberValue,
+      isOpenEnded: true,
+    })
+    entries.push({ kind: 'span', span })
   }
 
   return entries

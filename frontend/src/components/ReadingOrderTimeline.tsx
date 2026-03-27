@@ -91,7 +91,7 @@ function GateCard({ gate }: { gate: TimelineGateEntry }) {
     <div className="rounded-2xl border border-white/10 bg-stone-950/40 p-3 text-sm text-stone-200 shadow-inner">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-base font-semibold text-white">Issue #{gate.issueNumberText ?? '??'}</p>
+          <p className="text-base font-semibold text-white">Issue #{gate.issueNumberText ?? gate.targetLabel?.match(/#(\S+)/)?.[1] ?? '??'}</p>
           <p className="text-xs text-stone-400">{gate.targetLabel}</p>
         </div>
         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black uppercase tracking-wide ${statusMeta.classes}`}>
