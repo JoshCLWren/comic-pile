@@ -22,7 +22,7 @@ import {
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
-import { threadsApi, dependenciesApi } from '../../services/api'
+import { threadsApi, dependenciesApi, undoApi } from '../../services/api'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import type { Thread, RollResponse, SessionThread, Collection, BlockedThreadDetail } from '../../types'
 import { useRollPageState } from './useRollPageState'
@@ -752,7 +752,6 @@ useEffect(() => {
         onToggleSnoozed={() => setSnoozedExpanded(prev => !prev)}
         onToggleBlocked={() => setBlockedExpanded(prev => !prev)}
         unsnoozeIsPending={unsnoozeMutation.isPending}
-        showBlockedThreads={blockedExpanded}
       />
           </div>
         </div>

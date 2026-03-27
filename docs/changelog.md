@@ -1,5 +1,10 @@
 ## Changelog
 
+- 2026-03-27: Add follow-up actions to roll result display (closes #363).
+- Add "Mark as Read", "Skip to Next", "Archive Thread", and "Reset Thread" buttons
+- Fix missing undoApi import in RollPage component
+- Remove unused showBlockedThreads prop from ThreadPool component
+
 - 2026-03-27: Fix blocked threads display on roll page (closes #363).
 - Fix double "blocked by" prefix in expanded blocked threads list
 - Refetch blocked threads list after rating, rolling, and migration to keep
