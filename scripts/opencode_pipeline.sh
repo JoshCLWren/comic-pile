@@ -329,9 +329,12 @@ record_model_success() {
 map_model() {
   local model="$1"
   case "$model" in
-    "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
-      echo "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
-      ;;
+  "mistralai/mistral-small-3.1-24b-instruct:free"|"openrouter/mistralai/mistral-small-3.1-24b-instruct:free")
+  actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+  ;;
+  "nvidia/mistralai/mistral-small-3.1-24b-instruct-2503")
+  actual_model="nvidia/mistralai/mistral-small-3.1-24b-instruct-2503"
+  ;;
     *)
       echo "$model"
       ;;
