@@ -75,23 +75,14 @@ _is_problematic_model() {
         return 0
     fi
     # Filter out models that contain mistralai provider in the path (case-insensitive)
-    # Allow mistralai/mistral-small-3.1-24b-instruct:free as it's now supported
-    if echo "$model" | grep -qi "/mistralai/" && ! echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
+    # Filter out all mistralai models as they are not available
+    if echo "$model" | grep -qi "/mistralai/"; then
         echo "[PIPELINE] WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
     # Filter out models ending with :free (case-insensitive)
-    # Note: Some mistralai models (e.g. mistralai/mistral-small-3.1-24b-instruct:free)
-    # are now supported. Allow this specific model to pass through instead of
-    # being excluded by the generic ":free" filter.
+    # Note: All :free models are problematic and should be filtered out
     if echo "$model" | grep -qi ":free$"; then
-        if echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
-            : # allow this specific mistral free model
-        else
-            echo "[PIPELINE] WARNING: Filtering out problematic model: $model" >&2
-            return 0
-        fi
-    fi
     return 1
 }
 
