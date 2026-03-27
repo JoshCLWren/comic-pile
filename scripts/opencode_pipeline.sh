@@ -95,7 +95,8 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
         "opencode/nemotron-3-super-free"
         "opencode/big-pickle"
-        "openrouter/arcee-ai/trinity-large-preview:free"
+        "opencode/mimo-v2-pro-free"
+        "opencode/minimax-m2.5-free"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi

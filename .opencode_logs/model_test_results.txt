@@ -1,0 +1,7 @@
+OK       cerebras/zai-glm-4.7  [Error: Model zai-glm-4.7 does not exist or you do not have access to it.]
+OK       cerebras/gpt-oss-120b  [Error: Model gpt-oss-120b does not exist or you do not have access to it.]
+OK       cerebras/qwen-3-235b-a22b-instruct-2507  [Hello]
+OK       opencode/nemotron-3-super-free  [Hello]
+OK       opencode/mimo-v2-pro-free  [Hello]
+OK       opencode/big-pickle  [Hello]
+OK       opencode/minimax-m2.5-free  [Hello]
