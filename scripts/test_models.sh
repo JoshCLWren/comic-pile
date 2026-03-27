@@ -22,7 +22,8 @@ _is_problematic_model() {
         return 0
     fi
     # Filter out models that contain mistralai provider in the path (case-insensitive)
-    if echo "$model" | grep -qi "/mistralai/"; then
+    # Allow mistralai/mistral-small-3.1-24b-instruct:free as it's now supported
+    if echo "$model" | grep -qi "/mistralai/" && ! echo "$model" | grep -qiE "^mistralai/mistral-small-3\.1-24b-instruct:free$|^mistralai/mistral-small-3\.1-24b-instruct:free/"; then
         echo "WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
