@@ -13,7 +13,7 @@ RESULTS_FILE="$(dirname "$0")/../.opencode_logs/model_test_results.txt"
 mkdir -p "$(dirname "$RESULTS_FILE")"
 > "$RESULTS_FILE"  # truncate
 
-MODELS=$(opencode models 2>/dev/null | grep -vE "^mistralai/" || true)
+MODELS=$(opencode models 2>/dev/null | grep -E "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/" || true)
 TOTAL=$(echo "$MODELS" | wc -l)
 
 echo "Testing $TOTAL models ($PARALLEL at a time)..."
@@ -26,20 +26,20 @@ test_model() {
     output=$(timeout 30s opencode run -m "$model" "say hello in one word" 2>&1) || exit_code=$?
 
     if [[ $exit_code -eq 124 ]]; then
-        echo "TIMEOUT  $model"
-    elif echo "$output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication|Error: Model.*does not exist"; then
+        echo "TIMEOUT $model"
+    elif echo "$output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication|Error: Model.*does not exist|does not exist or you do not have access"; then
         reason=$(echo "$output" | grep -iE "Error:|ProviderModel|balance|not found|not supported|unauthorized|invalid|authentication|does not exist" | head -1 | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        echo "FAIL     $model  [$reason]"
+        echo "FAIL $model [$reason]"
     elif [[ $exit_code -ne 0 ]]; then
-        echo "FAIL     $model  [exit $exit_code]"
+        echo "FAIL $model [exit $exit_code]"
     else
         # Strip ANSI codes and extract last non-empty line as the response
         response=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -v "^>" | grep -v "^$" | tail -1 | xargs)
         # Only mark as OK if we got a valid response
         if echo "$response" | grep -qiE "hello|hi|hey|greetings|hola|ciao|salut|hallo"; then
-            echo "OK       $model  [$response]"
+            echo "OK $model [$response]"
         else
-            echo "FAIL     $model  [invalid response: $response]"
+            echo "FAIL $model [invalid response: $response]"
         fi
     fi
 }

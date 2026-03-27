@@ -68,23 +68,23 @@ _load_issues() {
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
-while IFS= read -r model; do
-# Filter out problematic providers
-if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
-_CODING_POOL+=("$model")
-fi
-done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
+  while IFS= read -r model; do
+    # Filter out problematic providers (keep only known-good providers)
+    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+      _CODING_POOL+=("$model")
+    fi
+  done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Tier 2: all OK models — for roles that only need text + simple gh commands
 _MODEL_POOL=()
 if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
-while IFS= read -r model; do
-# Filter out problematic providers
-if ! echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
-_MODEL_POOL+=("$model")
-fi
-done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
+  while IFS= read -r model; do
+    # Filter out problematic providers (keep only known-good providers)
+    if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+      _MODEL_POOL+=("$model")
+    fi
+  done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
 fi
 
 # Fallback: if tool test hasn't been run yet, use full pool for everything
@@ -103,34 +103,34 @@ fi
 
 # implement/review/fix need real tool use — use Tier 1 only
 # pr/ci_check only need gh + text — use Tier 2 (full pool)
-# Build model arrays, filtering out any override models from problematic providers
+# Build model arrays, only allowing override models from known-good providers
 IMPLEMENT_MODELS=()
-if [[ -n "${IMPLEMENT_MODEL:-}" ]] && ! echo "$IMPLEMENT_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
-    IMPLEMENT_MODELS+=("$IMPLEMENT_MODEL")
+if [[ -n "${IMPLEMENT_MODEL:-}" ]] && echo "$IMPLEMENT_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+  IMPLEMENT_MODELS+=("$IMPLEMENT_MODEL")
 fi
 IMPLEMENT_MODELS+=("${_CODING_POOL[@]}")
 
 REVIEW_MODELS=()
-if [[ -n "${REVIEW_MODEL:-}" ]] && ! echo "$REVIEW_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
-    REVIEW_MODELS+=("$REVIEW_MODEL")
+if [[ -n "${REVIEW_MODEL:-}" ]] && echo "$REVIEW_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+  REVIEW_MODELS+=("$REVIEW_MODEL")
 fi
 REVIEW_MODELS+=("${_CODING_POOL[@]}")
 
 FIX_MODELS=()
-if [[ -n "${FIX_MODEL:-}" ]] && ! echo "$FIX_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
-    FIX_MODELS+=("$FIX_MODEL")
+if [[ -n "${FIX_MODEL:-}" ]] && echo "$FIX_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+  FIX_MODELS+=("$FIX_MODEL")
 fi
 FIX_MODELS+=("${_CODING_POOL[@]}")
 
 PR_MODELS=()
-if [[ -n "${PR_MODEL:-}" ]] && ! echo "$PR_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
-    PR_MODELS+=("$PR_MODEL")
+if [[ -n "${PR_MODEL:-}" ]] && echo "$PR_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+  PR_MODELS+=("$PR_MODEL")
 fi
 PR_MODELS+=("${_MODEL_POOL[@]}")
 
 CI_CHECK_MODELS=()
-if [[ -n "${CI_CHECK_MODEL:-}" ]] && ! echo "$CI_CHECK_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
-    CI_CHECK_MODELS+=("$CI_CHECK_MODEL")
+if [[ -n "${CI_CHECK_MODEL:-}" ]] && echo "$CI_CHECK_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+  CI_CHECK_MODELS+=("$CI_CHECK_MODEL")
 fi
 CI_CHECK_MODELS+=("${_MODEL_POOL[@]}")
 
@@ -1200,15 +1200,15 @@ cmd_model_manager() {
             fi
         fi
 
-        if [[ "$needs_refresh" == "true" ]]; then
-            log_info "Refreshing model pool (running model test)..."
-            # Get models excluding openrouter/opencode/anthropic/github-copilot providers
-            local candidate_models=()
-            while IFS= read -r model; do
-                candidate_models+=("$model")
-            done < <(opencode models 2>/dev/null \
-                | grep -vE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/" \
-                | grep -v "^$" || true)
+if [[ "$needs_refresh" == "true" ]]; then
+  log_info "Refreshing model pool (running model test)..."
+  # Get models from known-good providers only
+  local candidate_models=()
+  while IFS= read -r model; do
+    candidate_models+=("$model")
+  done < <(opencode models 2>/dev/null \
+  | grep -E "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/" \
+  | grep -v "^$" || true)
 
             local total_candidates=${#candidate_models[@]}
             log_info "Testing $total_candidates candidate models..."

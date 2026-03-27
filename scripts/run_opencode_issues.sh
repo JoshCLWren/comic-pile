@@ -20,11 +20,11 @@ LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
 # Use a working default model to avoid misconfigured global defaults
-# Filter out problematic providers from OPENCODE_MODEL override
-if [[ -n "${OPENCODE_MODEL:-}" ]] && ! echo "$OPENCODE_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/"; then
-    MODEL="$OPENCODE_MODEL"
+# Only allow OPENCODE_MODEL override if it's from a known-good provider
+if [[ -n "${OPENCODE_MODEL:-}" ]] && echo "$OPENCODE_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
+  MODEL="$OPENCODE_MODEL"
 else
-    MODEL="opencode/nemotron-3-super-free"
+  MODEL="opencode/nemotron-3-super-free"
 fi
 
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
