@@ -1,5 +1,6 @@
 """Shared pytest fixtures."""
 
+import asyncio
 import os
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 from datetime import UTC, datetime
@@ -147,9 +148,6 @@ async def _sync_id_sequence(db: SQLAlchemyAsyncSession, table_name: str) -> None
         )
     )
 
-
-# Added async lock to prevent concurrent schema drops
-import asyncio
 
 _engine_lock = asyncio.Lock()
 
