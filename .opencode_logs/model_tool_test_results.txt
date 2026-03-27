@@ -1,0 +1,3 @@
+TOOL_OK   openrouter/arcee-ai/trinity-large-preview:free  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   opencode/big-pickle  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   opencode/nemotron-3-super-free  [TOOLTEST_OK TOOLTEST_OK ]
