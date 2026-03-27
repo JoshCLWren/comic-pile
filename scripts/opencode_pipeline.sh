@@ -65,12 +65,19 @@ _load_issues() {
     fi
 }
 
+# Helper function to check if a model should be skipped
+# Returns 0 (true) if model should be skipped, 1 (false) otherwise
+_should_skip_model() {
+  local model="$1"
+  # Skip mistralai models that cause ProviderModelNotFoundError
+  echo "$model" | grep -qE "^mistralai/"
+}
+
 # Tier 1: tool-use verified — for roles that need bash/file/gh tool calls
 _CODING_POOL=()
 if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
   while IFS= read -r model; do
-    # Filter out problematic providers (e.g., mistralai models that cause ProviderModelNotFoundError)
-    if ! echo "$model" | grep -qE "^mistralai/"; then
+    if ! _should_skip_model "$model"; then
       _CODING_POOL+=("$model")
     fi
   done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
@@ -85,8 +92,7 @@ if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
     if echo "$line" | grep -q "\[Error:"; then
       continue
     fi
-    # Filter out problematic providers (e.g., mistralai models that cause ProviderModelNotFoundError)
-    if echo "$model" | grep -qE "^mistralai/"; then
+    if _should_skip_model "$model"; then
       continue
     fi
     _MODEL_POOL+=("$model")
@@ -108,11 +114,26 @@ fi
 
 # implement/review/fix need real tool use — use Tier 1 only
 # pr/ci_check only need gh + text — use Tier 2 (full pool)
-IMPLEMENT_MODELS=(  "${IMPLEMENT_MODEL:-}"  "${_CODING_POOL[@]}" )
-REVIEW_MODELS=(     "${REVIEW_MODEL:-}"     "${_CODING_POOL[@]}" )
-FIX_MODELS=(        "${FIX_MODEL:-}"        "${_CODING_POOL[@]}" )
-PR_MODELS=(         "${PR_MODEL:-}"         "${_MODEL_POOL[@]}"  )
-CI_CHECK_MODELS=(   "${CI_CHECK_MODEL:-}"   "${_MODEL_POOL[@]}"  )
+# Filter environment variable overrides to skip problematic models
+IMPLEMENT_MODELS=()
+[[ -n "${IMPLEMENT_MODEL:-}" ]] && ! _should_skip_model "${IMPLEMENT_MODEL:-}" && IMPLEMENT_MODELS+=( "${IMPLEMENT_MODEL}" )
+IMPLEMENT_MODELS+=( "${_CODING_POOL[@]}" )
+
+REVIEW_MODELS=()
+[[ -n "${REVIEW_MODEL:-}" ]] && ! _should_skip_model "${REVIEW_MODEL:-}" && REVIEW_MODELS+=( "${REVIEW_MODEL}" )
+REVIEW_MODELS+=( "${_CODING_POOL[@]}" )
+
+FIX_MODELS=()
+[[ -n "${FIX_MODEL:-}" ]] && ! _should_skip_model "${FIX_MODEL:-}" && FIX_MODELS+=( "${FIX_MODEL}" )
+FIX_MODELS+=( "${_CODING_POOL[@]}" )
+
+PR_MODELS=()
+[[ -n "${PR_MODEL:-}" ]] && ! _should_skip_model "${PR_MODEL:-}" && PR_MODELS+=( "${PR_MODEL}" )
+PR_MODELS+=( "${_MODEL_POOL[@]}" )
+
+CI_CHECK_MODELS=()
+[[ -n "${CI_CHECK_MODEL:-}" ]] && ! _should_skip_model "${CI_CHECK_MODEL:-}" && CI_CHECK_MODELS+=( "${CI_CHECK_MODEL}" )
+CI_CHECK_MODELS+=( "${_MODEL_POOL[@]}" )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -413,14 +434,15 @@ run_with_fallback() {
     local wt
     wt=$(worktree_dir "$issue")
 
-    local attempts=0
-    for model in "${models[@]}"; do
-        [[ -z "$model" ]] && continue
-        model_in_backoff "$model" && continue
-        [[ $attempts -ge $MAX_ATTEMPTS ]] && { log_warn "#$issue — hit MAX_ATTEMPTS ($MAX_ATTEMPTS), stopping"; break; }
-        attempts=$(( attempts + 1 ))
+local attempts=0
+for model in "${models[@]}"; do
+  [[ -z "$model" ]] && continue
+  model_in_backoff "$model" && continue
+  _should_skip_model "$model" && { log_skip "#$issue — skipping problematic model: $model"; continue; }
+  [[ $attempts -ge $MAX_ATTEMPTS ]] && { log_warn "#$issue — hit MAX_ATTEMPTS ($MAX_ATTEMPTS), stopping"; break; }
+  attempts=$(( attempts + 1 ))
 
-        log_info "#$issue — trying model: $model (attempt $attempts/$MAX_ATTEMPTS)"
+  log_info "#$issue — trying model: $model (attempt $attempts/$MAX_ATTEMPTS)"
         echo "$model" > "$(model_file "$issue")"
 
         local role_title
