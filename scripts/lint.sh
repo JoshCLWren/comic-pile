@@ -267,49 +267,58 @@ fi
 
 if should_run_static_js; then
     ANY_CHECKED=1
-    echo ""
-    echo "Running ESLint for JavaScript..."
+echo ""
+echo "Running ESLint for JavaScript..."
 
-    if ! npm run lint:js; then
-        echo ""
-        echo "${RED}ERROR: JavaScript linting failed.${NC}"
-        echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
-        exit 1
-    fi
+if ! bash scripts/lint-js.sh; then
+  echo ""
+  echo "${RED}ERROR: JavaScript linting failed.${NC}"
+  echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
+  exit 1
+fi
 fi
 
 if should_run_frontend; then
     ANY_CHECKED=1
     echo ""
-    # Guard frontend lint to avoid hard failures in environments lacking Node tooling
-    if command -v npm >/dev/null 2>&1; then
-        echo "Running frontend ESLint..."
-        if [ -n "$CI" ]; then
-            echo "CI environment: Installing frontend dependencies..."
-            (cd frontend && npm ci --legacy-peer-deps) || {
-                echo "${YELLOW}Warning: Could not install frontend dependencies; skipping frontend lint${NC}"
-            }
-        fi
-        if (cd frontend && npm run lint); then
-            :
-        else
-            echo "${YELLOW}Warning: Frontend lint failed or skipped; continuing with other checks${NC}"
-        fi
-    else
-        echo "${YELLOW}Warning: npm not found; skipping frontend lint${NC}"
+    echo "Running frontend ESLint..."
+    
+    if [ -n "$CI" ]; then
+        echo "CI environment: Installing frontend dependencies..."
+        (cd frontend && npm ci --legacy-peer-deps) || {
+            echo "${RED}ERROR: Failed to install frontend dependencies.${NC}"
+            exit 1
+        }
     fi
+    
+# Work around npm exit code bug (returns 216 instead of 0)
+set +e  # Temporarily disable exit-on-error
+(cd frontend && npm run lint)
+lint_exit_code=$?
+set -e  # Re-enable exit-on-error
+# npm 11.x has a bug where it returns 216 instead of 0 on success
+if [ $lint_exit_code -ne 0 ] && [ $lint_exit_code -ne 216 ]; then
+  echo ""
+  echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"
+  exit 1
+fi
 fi
 
 if should_run_html; then
-    ANY_CHECKED=1
+  ANY_CHECKED=1
+  echo ""
+  echo "Running htmlhint for HTML templates..."
+  # Work around npm exit code bug (returns 216 instead of 0)
+  set +e
+  npm run lint:html
+  html_exit_code=$?
+  set -e
+  if [ $html_exit_code -ne 0 ] && [ $html_exit_code -ne 216 ]; then
     echo ""
-    echo "Running htmlhint for HTML templates..."
-    if ! npm run lint:html; then
-        echo ""
-        echo "${RED}ERROR: HTML linting failed.${NC}"
-        echo "${RED}Fix HTML template issues manually.${NC}"
-        exit 1
-    fi
+    echo "${RED}ERROR: HTML linting failed.${NC}"
+    echo "${RED}Fix HTML template issues manually.${NC}"
+    exit 1
+  fi
 fi
 
 if [ "$ANY_CHECKED" -eq 0 ]; then
