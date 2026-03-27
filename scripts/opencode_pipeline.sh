@@ -1256,17 +1256,7 @@ cmd_main_fixer() {
     local LOG_LINES="${MAIN_FIXER_LOG_LINES:-100}"
     local LOCK="$LOG_DIR/.main_fixer_lock"
     local FIXER_LOG="$LOG_DIR/main_fixer.log"
-    # Always use a tool-capable model — the task requires actual file edits and git commits.
-    # Pick the first TOOL_OK model (same tier used for implement/review/fix workers).
-    local FIXER_MODEL
-    if [[ ${#_CODING_POOL[@]} -gt 0 ]]; then
-        FIXER_MODEL="${_CODING_POOL[0]}"
-    elif [[ ${#_MODEL_POOL[@]} -gt 0 ]]; then
-        FIXER_MODEL="${_MODEL_POOL[0]}"
-    else
-        log_error "main_fixer — no models available, sleeping"
-        sleep "$POLL"; return
-    fi
+    local FIXER_MODEL="${_CODING_POOL[0]:-${_MODEL_POOL[0]}}"
 
     log_info "main_fixer online — threshold=${THRESHOLD} PRs, poll=${POLL}s, model=${FIXER_MODEL}"
     mkdir -p "$LOG_DIR"
@@ -1320,12 +1310,14 @@ cmd_main_fixer() {
         done <<< "$pr_data"
 
         # ── 2. Find jobs above threshold ────────────────────────────────────
+        local total_prs
+        total_prs=$(echo "$pr_data" | wc -l)
         local common_jobs=()
         for job_name in "${!job_fail_count[@]}"; do
             local count=${job_fail_count["$job_name"]}
             if [[ $count -ge $THRESHOLD ]]; then
                 common_jobs+=("$job_name")
-                log_warn "main_fixer — '${job_name}' failing on ${count}/${#pr_data} PRs"
+                log_warn "main_fixer — '${job_name}' failing on ${count}/${total_prs} PRs"
             fi
         done
 
@@ -1351,8 +1343,6 @@ cmd_main_fixer() {
                 | tail -n "$LOG_LINES" || true)
             [[ -z "$fail_logs" ]] && { log_warn "main_fixer — no logs for $job_name, skipping"; continue; }
 
-            local sentinel="MAIN_FIXER_DONE_${job_name//[^a-zA-Z0-9]/_}"
-
             local fixer_prompt
             fixer_prompt=$(cat <<PROMPT
 You are a CI triage agent for the comic-pile repository. The CI job named '${job_name}'
@@ -1374,20 +1364,18 @@ Instructions:
 3. After fixing, do a quick sanity check:
    - Frontend issue: run  cd frontend && npm run build 2>&1 | tail -20
    - Backend issue:  run  cd /mnt/extra/josh/code/comic-pile && uv run pytest --tb=short -q 2>&1 | tail -30
-4. Commit the fix with:  git add -p  then  git commit -m "fix(ci): <short description>"
-5. When completely done, output the exact string: ${sentinel}
+4. Commit the fix: git add <files> && git commit -m "fix(ci): <short description>"
+   Do NOT use git add -p (non-interactive only). Do NOT amend existing commits.
 
-If you cannot determine a safe fix (ambiguous cause, needs human judgment), output:
-MAIN_FIXER_SKIP — <one-line reason>
+If you cannot determine a safe fix, do NOT commit anything. Just stop.
 PROMPT
 )
 
+            # Snapshot HEAD before opencode runs — proof of a real commit
+            local head_before
+            head_before=$(git -C "$REPO_ROOT" rev-parse HEAD)
+
             log_info "main_fixer — running opencode on main for '${job_name}' (model: ${FIXER_MODEL})"
-
-            # Record HEAD before opencode runs so we can detect real commits afterward
-            local pre_sha
-            pre_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
-
             {
                 echo ""
                 echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ) job=${job_name} prs=${count} ==="
@@ -1395,27 +1383,50 @@ PROMPT
                 echo "=== END ==="
             } | tee -a "$FIXER_LOG"
 
-            # Verify success by checking for an ACTUAL new commit, not just the sentinel string.
-            # Models sometimes echo the sentinel without doing any work.
-            local post_sha
-            post_sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
-            local run_tail
-            run_tail=$(tail -200 "$FIXER_LOG")
+            local head_after
+            head_after=$(git -C "$REPO_ROOT" rev-parse HEAD)
 
-            if [[ "$post_sha" != "$pre_sha" ]] && echo "$run_tail" | grep -q "$sentinel"; then
-                log_ok "main_fixer — fix committed (${pre_sha:0:7}→${post_sha:0:7}) for '${job_name}'"
-                fixed_something=true
-            elif [[ "$post_sha" != "$pre_sha" ]]; then
-                # Commit happened but sentinel missing — still accept the fix
-                log_ok "main_fixer — fix committed (${pre_sha:0:7}→${post_sha:0:7}) for '${job_name}' (no sentinel, but commit present)"
-                fixed_something=true
-            elif echo "$run_tail" | grep -q "MAIN_FIXER_SKIP"; then
-                local reason
-                reason=$(echo "$run_tail" | grep "MAIN_FIXER_SKIP" | tail -1)
-                log_warn "main_fixer — skipped '${job_name}': $reason"
-            else
-                log_warn "main_fixer — no real commit made for '${job_name}' (model may have hallucinated)"
+            # Gate 1: a real new commit must exist (not just sentinel text in output)
+            if [[ "$head_after" == "$head_before" ]]; then
+                log_warn "main_fixer — no commit made for '${job_name}' (HEAD unchanged), skipping push"
+                continue
             fi
+
+            # Gate 2: lint must pass before we push to main
+            log_info "main_fixer — running lint gate on '${job_name}' fix"
+            local changed_files lint_exit=0
+            changed_files=$(git -C "$REPO_ROOT" diff "$head_before" HEAD --name-only)
+
+            if [[ -z "$changed_files" ]]; then
+                log_warn "main_fixer — commit made but no files changed? Reverting."
+                git -C "$REPO_ROOT" reset --hard "$head_before" >> "$FIXER_LOG" 2>&1
+                continue
+            fi
+
+            # Always run frontend lint if any frontend file changed
+            if grep -qE "^frontend/" <<< "$changed_files"; then
+                npm run lint --prefix "$REPO_ROOT/frontend" >> "$FIXER_LOG" 2>&1 || lint_exit=$?
+            fi
+            # Always run backend lint if any Python file changed
+            if grep -qE "\.py$" <<< "$changed_files"; then
+                make -C "$REPO_ROOT" lint >> "$FIXER_LOG" 2>&1 || lint_exit=$?
+            fi
+            # If neither frontend nor Python — other file types (config, shell, etc.)
+            # still require at least a build check to avoid breaking things
+            if ! grep -qE "^frontend/|\.py$" <<< "$changed_files"; then
+                log_warn "main_fixer — changed files are neither frontend nor Python: $changed_files — reverting to be safe"
+                git -C "$REPO_ROOT" reset --hard "$head_before" >> "$FIXER_LOG" 2>&1
+                continue
+            fi
+
+            if [[ $lint_exit -ne 0 ]]; then
+                log_error "main_fixer — lint FAILED after fix for '${job_name}' — reverting commit"
+                git -C "$REPO_ROOT" reset --hard "$head_before" >> "$FIXER_LOG" 2>&1
+                continue
+            fi
+
+            log_ok "main_fixer — fix verified for '${job_name}' (commit: ${head_after:0:8})"
+            fixed_something=true
         done
 
         # ── 4. Push main + merge into all PR branches ───────────────────────
@@ -1430,31 +1441,35 @@ PROMPT
             while IFS=' ' read -r _pr_num branch; do
                 [[ -z "$branch" ]] && continue
                 local wt_issue
-                wt_issue=$(echo "$branch" | grep -oP 'issue-\K[0-9]+' || true)
+                wt_issue=$(grep -oP 'issue-\K[0-9]+' <<< "$branch" || true)
                 if [[ -n "$wt_issue" ]]; then
                     local wt_path
                     wt_path=$(worktree_dir "$wt_issue")
                     if [[ -d "$wt_path" ]] && git -C "$wt_path" status &>/dev/null; then
-                        git -C "$wt_path" merge origin/main --no-edit -X theirs 2>/dev/null && \
-                            git -C "$wt_path" push origin "$branch" 2>/dev/null && \
-                            log_info "main_fixer — merged main → $branch" || \
+                        if timeout 30s git -C "$wt_path" merge origin/main --no-edit -X theirs >> "$FIXER_LOG" 2>&1 && \
+                           timeout 30s git -C "$wt_path" push origin "$branch" >> "$FIXER_LOG" 2>&1; then
+                            log_info "main_fixer — merged main → $branch"
+                        else
                             log_warn "main_fixer — failed: $branch"
+                        fi
                         continue
                     fi
                 fi
                 # Fallback: scratch worktree
                 local tmpwt
                 tmpwt=$(mktemp -d)
-                if git -C "$REPO_ROOT" worktree add "$tmpwt" "origin/$branch" --detach 2>/dev/null; then
-                    git -C "$tmpwt" merge origin/main --no-edit -X theirs 2>/dev/null && \
-                        git -C "$tmpwt" push origin "HEAD:$branch" 2>/dev/null && \
-                        log_info "main_fixer — merged main → $branch (scratch)" || \
+                if git -C "$REPO_ROOT" worktree add "$tmpwt" "origin/$branch" --detach >> "$FIXER_LOG" 2>&1; then
+                    if timeout 30s git -C "$tmpwt" merge origin/main --no-edit -X theirs >> "$FIXER_LOG" 2>&1 && \
+                       timeout 30s git -C "$tmpwt" push origin "HEAD:$branch" >> "$FIXER_LOG" 2>&1; then
+                        log_info "main_fixer — merged main → $branch (scratch)"
+                    else
                         log_warn "main_fixer — failed: $branch (scratch)"
-                    git -C "$REPO_ROOT" worktree remove "$tmpwt" --force 2>/dev/null
+                    fi
+                    git -C "$REPO_ROOT" worktree remove "$tmpwt" --force >> "$FIXER_LOG" 2>&1 || true
                 else
-                    rm -rf "$tmpwt"
                     log_warn "main_fixer — could not create scratch worktree for $branch"
                 fi
+                rm -rf "$tmpwt"
             done <<< "$pr_data"
         fi
 
