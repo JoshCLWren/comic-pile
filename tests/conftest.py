@@ -38,8 +38,7 @@ if not os.getenv("SECRET_KEY"):
 
 
 TRUNCATE_TEST_DATA_SQL = text(
-    "TRUNCATE TABLE sessions, events, threads, issues, snapshots, dependencies, "
-    "revoked_tokens, users RESTART IDENTITY CASCADE;"
+    "DELETE FROM sessions; DELETE FROM events; DELETE FROM threads; DELETE FROM issues; DELETE FROM snapshots; DELETE FROM dependencies; DELETE FROM revoked_tokens; DELETE FROM users;"
 )
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
 
@@ -163,17 +162,21 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
 
         def _check_and_drop(sync_conn: Connection) -> None:
             if _has_schema_drift(sync_conn):
-                if not _looks_like_test_database(database_url):
-                    raise RuntimeError(
-                        "Refusing to reset schema on non-test database. "
-                        f"Database '{make_url(database_url).database}' must include 'test'."
-                    )
-                sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-                sync_conn.exec_driver_sql("CREATE SCHEMA public")
-            Base.metadata.create_all(bind=sync_conn)
+                # Only reset schema for PostgreSQL databases; SQLite does not support DROP SCHEMA.
+                if database_url.startswith("postgresql"):
+                    if not _looks_like_test_database(database_url):
+                        raise RuntimeError(
+                            "Refusing to reset schema on non-test database. "
+                            f"Database '{make_url(database_url).database}' must include 'test'."
+                        )
+                    sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+                    sync_conn.exec_driver_sql("CREATE SCHEMA public")
+                # For SQLite, just ensure tables are created.
+                Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
-        await conn.execute(TRUNCATE_TEST_DATA_SQL)
+        if database_url.startswith("postgresql"):
+            await conn.execute(TRUNCATE_TEST_DATA_SQL)
 
     _SHARED_TEST_ENGINE = engine
     try:
