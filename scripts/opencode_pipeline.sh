@@ -70,11 +70,11 @@ _load_issues() {
   _CODING_POOL=()
   if [[ -f "$LOG_DIR/model_tool_test_results.txt" ]]; then
 while IFS= read -r model; do
-       # Filter out problematic providers (keep only known-good providers)
-       # Explicitly exclude ALL mistralai models to prevent ProviderModelNotFoundError
- 	if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && echo "$model" | grep -qvE "(^|/)mistralai/.*"; then
-     _CODING_POOL+=("$model")
-   fi
+        # Filter out problematic providers (keep only known-good providers)
+        # Explicitly mistralai provider models to prevent ProviderModelNotFoundError
+  	if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && echo "$model" | grep -qvE "^mistralai/.*"; then
+      _CODING_POOL+=("$model")
+    fi
     done < <(grep "^TOOL_OK" "$LOG_DIR/model_tool_test_results.txt" | awk '{print $2}' | shuf)
  fi
 
@@ -82,11 +82,11 @@ while IFS= read -r model; do
   _MODEL_POOL=()
   if [[ -f "$LOG_DIR/model_test_results.txt" ]]; then
 while IFS= read -r model; do
-       # Filter out problematic providers (keep only known-good providers)
-       # Explicitly exclude ALL mistralai models to prevent ProviderModelNotFoundError
- 	if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && echo "$model" | grep -qvE "(^|/)mistralai/.*"; then
-     _MODEL_POOL+=("$model")
-   fi
+        # Filter out problematic providers (keep only known-good providers)
+        # Explicitly mistralai provider models to prevent ProviderModelNotFoundError
+  	if echo "$model" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^nvidia/|^deepseek/" && echo "$model" | grep -qvE "^mistralai/.*"; then
+      _MODEL_POOL+=("$model")
+    fi
     done < <(grep "^OK" "$LOG_DIR/model_test_results.txt" | awk '{print $2}' | shuf)
  fi
 
@@ -95,8 +95,8 @@ if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
 # Defensive: remove any mistralai models from pools
 # Updated regex to catch all mistralai variants including those with prefixes
-_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '(^|/)mistralai/.*'))
-_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '(^|/)mistralai/.*'))
+_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '^mistralai/.*'))
+_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '^mistralai/.*'))
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
@@ -109,8 +109,8 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
 # Defensive: remove any mistralai models from pools
 # Updated regex to catch all mistralai variants including those with prefixes
-_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '(^|/)mistralai/.*'))
-_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '(^|/)mistralai/.*'))
+_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '^mistralai/.*'))
+_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '^mistralai/.*'))
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only

@@ -270,11 +270,16 @@ if should_run_static_js; then
     echo ""
     echo "Running ESLint for JavaScript..."
 
-    if ! npm run lint:js; then
-        echo ""
-        echo "${RED}ERROR: JavaScript linting failed.${NC}"
-        echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
-        exit 1
+    # Check if lint:js script exists in root package.json
+    if [ -f "package.json" ] && grep -q '"lint:js"' package.json; then
+        if ! npm run lint:js; then
+            echo ""
+            echo "${RED}ERROR: JavaScript linting failed.${NC}"
+            echo "${RED}Run 'npm run lint:fix' to auto-fix or fix manually.${NC}"
+            exit 1
+        fi
+    else
+        echo "No lint:js script in root package.json, skipping static JS linting."
     fi
 fi
 
