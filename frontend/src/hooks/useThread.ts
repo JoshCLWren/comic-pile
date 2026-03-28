@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useContext } from 'react';
 import axios from 'axios';
 import { threadsApi } from '../services/api';
-import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadQueryParams, ThreadUpdatePayload } from '../types';
-import { CacheContext } from '../../contexts/CacheContext';
+import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadListResponse, ThreadQueryParams, ThreadUpdatePayload } from '../types';
+import { CacheContext } from '../contexts/CacheContext';
 
 export function useThreads(options = { searchTerm: '', collectionId: null }) {
   const [data, setData] = useState<Thread[] | null>(null);
@@ -19,22 +19,45 @@ export function useThreads(options = { searchTerm: '', collectionId: null }) {
     let cancelled = false;
 
     try {
-      const params: ThreadQueryParams = {};
+      const baseParams: ThreadQueryParams = {};
       if (searchTerm?.trim()) {
-        params.search = searchTerm.trim();
+        baseParams.search = searchTerm.trim();
       }
       if (collectionId !== null) {
-        params.collection_id = collectionId;
+        baseParams.collection_id = collectionId;
       }
-      if (pageToken) {
-        params.page_token = pageToken;
+      // For initial load (no pageToken), fetch all pages with large page_size
+      if (!pageToken) {
+        baseParams.page_size = 200; // max allowed by backend
       }
 
-      const result = await threadsApi.list(Object.keys(params).length > 0 ? params : undefined);
+      let allThreads: Thread[] = [];
+      let currentToken: string | undefined = pageToken;
+      let nextToken: string | null = null;
+
+      do {
+        const params = { ...baseParams };
+        if (currentToken) {
+          params.page_token = currentToken;
+        }
+        const result: ThreadListResponse = await threadsApi.list(
+          Object.keys(params).length > 0 ? params : undefined,
+          currentToken
+        );
+        allThreads = allThreads.concat(result.threads);
+        nextToken = result.next_page_token;
+        // If we are fetching all pages (no initial pageToken), continue with next token
+        if (!pageToken && nextToken) {
+          currentToken = nextToken;
+        } else {
+          // If we were called with a specific pageToken, stop after one page
+          break;
+        }
+      } while (!pageToken && nextToken);
 
       if (!cancelled) {
-        setData((result as any).threads ?? []);
-        setNextPageToken((result as any).next_page_token ?? null);
+        setData(allThreads);
+        setNextPageToken(nextToken);
         invalidateQueries?.(['threads']);
       }
     } catch (_err) {

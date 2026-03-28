@@ -422,6 +422,10 @@ map_model() {
   model=$(echo "$model" | xargs)
 
 case "$model" in
+    # Map known problematic mistral small variants to a safe replacement.
+    # Covers: mistralai/mistral-small-3.1-24b-instruct*,
+    #         mistral-small-3.1-24b-instruct*,
+    #         mistral-small-3.1-24b-instruct:free
     *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
       echo "nvidia/mistral/mistral-14b-instruct-2512"
       ;;

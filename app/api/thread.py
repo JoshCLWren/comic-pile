@@ -9,7 +9,7 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +23,7 @@ from app.schemas import (
     ReactivateRequest,
     RollResponse,
     ThreadCreate,
+    ThreadListResponse,
     ThreadResponse,
     ThreadUpdate,
 )
@@ -135,7 +136,7 @@ async def list_stale_threads(
     return await _threads_to_responses(threads, db)
 
 
-@router.get("/", response_model=dict[str, list[ThreadResponse]])
+@router.get("/", response_model=ThreadListResponse)
 @limiter.limit("100/minute")
 async def list_threads(
     request: Request,
@@ -152,8 +153,8 @@ async def list_threads(
     page_token: str | None = Query(
         default=None, description="Token for pagination continuation (queue_position,thread_id)"
     ),
-) -> dict[str, list[ThreadResponse]]:
-    """List threads ordered by position.
+) -> ThreadListResponse:
+    """List threads ordered by position with cursor-based pagination.
 
     Args:
         request: FastAPI request object for rate limiting.
@@ -165,31 +166,64 @@ async def list_threads(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        dict[str, list[ThreadResponse]]: A dictionary with key "threads" containing a list of thread objects.
+        ThreadListResponse with paginated threads and next_page_token if more exist.
     """
-    print(
-        f"[DEBUG] list_threads called: search={search}, collection_id={collection_id}, "
-        f"page_size={page_size}, page_token={page_token}, user={current_user.id}"
-    )
     normalized_search = search.strip() if search is not None else None
     query = select(Thread).where(Thread.user_id == current_user.id)
 
     if collection_id is not None:
-        print(f"[DEBUG] Applying collection filter: {collection_id}")
         query = query.where(Thread.collection_id == collection_id)
 
     if normalized_search:
         query = query.where(Thread.title.ilike(f"%{normalized_search}%"))
-    query = query.order_by(Thread.queue_position)
+
+    query = query.order_by(Thread.queue_position, Thread.id)
+
+    # Apply cursor-based pagination if page_token provided
+    # Uses composite cursor of (queue_position, id) to handle non-unique positions
+    if page_token:
+        try:
+            parts = page_token.split(",")
+            if len(parts) != 2:
+                raise ValueError("Invalid format")
+            cursor_position = int(parts[0])
+            cursor_id = int(parts[1])
+            # Filter: (queue_position > cursor_position) OR (queue_position == cursor_position AND id > cursor_id)
+            query = query.where(
+                or_(
+                    Thread.queue_position > cursor_position,
+                    (Thread.queue_position == cursor_position) & (Thread.id > cursor_id),
+                )
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid page_token format",
+            ) from None
+
+    # Query for page_size + 1 to detect if there's a next page
+    query = query.limit(page_size + 1)
     result = await db.execute(query)
     threads = list(result.scalars().all())
-    if normalized_search:
-        print(f"[DEBUG] Search path: returning {len(threads)} threads")
-    else:
-        print(f"[DEBUG] Default path: returning {len(threads)} threads")
-        for thread in threads:
-            print(f"[DEBUG] - {thread.title} (collection_id={thread.collection_id})")
-    return {"threads": await _threads_to_responses(threads, db)}
+
+    # Check if there are more pages
+    has_more = len(threads) > page_size
+
+    # Only return the first page_size items
+    threads_to_return = threads[:page_size]
+
+    thread_responses = await _threads_to_responses(threads_to_return, db)
+
+    # Set next_page_token to composite cursor of last item if there are more pages
+    next_token = None
+    if has_more and threads_to_return:
+        last = threads_to_return[-1]
+        next_token = f"{last.queue_position},{last.id}"
+
+    return ThreadListResponse(
+        threads=thread_responses,
+        next_page_token=next_token,
+    )
 
 
 @router.get("/completed", response_class=HTMLResponse)

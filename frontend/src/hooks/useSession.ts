@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { sessionApi } from '../services/api';
-import type { SessionCurrent, SessionDetails, SessionSnapshotsResponse, SessionSummary } from '../types';
+import type { SessionCurrent, SessionDetails, SessionListResponse, SessionSnapshotsResponse, SessionSummary } from '../types';
 import { useToast } from '../contexts/ToastContext';
-import { useCache } from '../../contexts/CacheContext';  
+import { useCache } from '../contexts/CacheContext';
 
 const EMPTY_PARAMS = Object.freeze({});
 const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id';
@@ -77,8 +77,23 @@ export function useSessions(params = EMPTY_PARAMS) {
     setIsError(false);
     setError(null);
     try {
-      const result = await sessionApi.list(effectiveParams);
-      setData((result as any).sessions ?? (Array.isArray(result) ? result : []));
+      // Fetch all pages with large page_size
+      const baseParams = { ...effectiveParams, page_size: 200 };
+      let allSessions: SessionSummary[] = [];
+      let nextToken: string | null = null;
+      let currentToken: string | undefined = undefined;
+      do {
+        const params = { ...baseParams };
+        if (currentToken) {
+          params.page_token = currentToken;
+        }
+        const result: SessionListResponse = await sessionApi.list(params, currentToken);
+        allSessions = allSessions.concat(result.sessions);
+        nextToken = result.next_page_token;
+        currentToken = nextToken ?? undefined;
+      } while (nextToken);
+      
+      setData(allSessions);
       // Invalidate any cached session queries after fetching fresh data
       invalidateQueries(['sessions']);
     } catch (err: unknown) {

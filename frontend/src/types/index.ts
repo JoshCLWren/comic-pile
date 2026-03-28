@@ -72,6 +72,8 @@ export interface AuthTokens {
 export interface ThreadQueryParams {
   search?: string;
   collection_id?: number;
+  page_size?: number;
+  page_token?: string;
 }
 
 export interface ThreadCreatePayload {
