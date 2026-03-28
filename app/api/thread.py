@@ -191,15 +191,6 @@ async def list_threads(
             print(f"[DEBUG] - {thread.title} (collection_id={thread.collection_id})")
     return {"threads": await _threads_to_responses(threads, db)}
 
-    # Normal path: default ordering by queue_position
-    query = query.order_by(Thread.queue_position)
-    result = await db.execute(query)
-    threads = list(result.scalars().all())
-    print(f"[DEBUG] Default path: returning {len(threads)} threads")
-    for thread in threads:
-        print(f"[DEBUG] - {thread.title} (collection_id={thread.collection_id})")
-    return {"threads": await _threads_to_responses(threads, db)}
-
 
 @router.get("/completed", response_class=HTMLResponse)
 async def list_completed_threads(
