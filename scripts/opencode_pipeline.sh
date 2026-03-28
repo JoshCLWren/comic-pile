@@ -333,7 +333,7 @@ _candidate_models() {
             "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
         opencode models 2>/dev/null | grep -E \
             "^openrouter/.*(:free$|-free$)"
-    } | grep -vE '^mistralai/'
+    } | grep -vE 'mistralai'
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
