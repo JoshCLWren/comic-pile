@@ -1,0 +1,1 @@
+Fixed issues for GitHub issue #380 in the comic-pile repo. The code reviewer found problems with the model not being found. Addressed these issues by running make lint and make pytest. Also, committed the changes and pushed the branch.
