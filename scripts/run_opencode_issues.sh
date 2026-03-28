@@ -19,12 +19,16 @@ TIMEOUT="${TIMEOUT:-45m}"
 LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
-# Use a working default model to avoid misconfigured global defaults
-# Only allow OPENCODE_MODEL override if it's from a known-good provider
-if [[ -n "${OPENCODE_MODEL:-}" ]] && echo "$OPENCODE_MODEL" | grep -qE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
-  MODEL="$OPENCODE_MODEL"
-else
-  MODEL="opencode/nemotron-3-super-free"
+# Default model: use environment variable if set, otherwise use a known working model
+# Skip specific problematic model only: mistralai/mistral-small-3.1-24b-instruct
+OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
+
+# If the selected model is known to cause ProviderModelNotFoundError, fall back to safe default
+# Perform case-insensitive check to catch all variants (e.g., MistralAI/...)
+lower_model=$(echo "$OPcode_MODEL" | tr '[:upper:]' '[:lower:]')
+if [[ "$lower_model" =~ mistralai/mistral-small-3\.1-24b-instruct ]]; then
+    echo "Warning: Model $OPcode_MODEL is known to cause ProviderModelNotFoundError. Falling back to opencode/nemotron-3-super-free."
+    OPcode_MODEL="opencode/nemotron-3-super-free"  # safe fallback for problematic models
 fi
 
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
@@ -66,7 +70,7 @@ STANDARDS:
 
 Do not ask clarifying questions. Start immediately."
 
-    if timeout "$TIMEOUT" opencode run -m "$MODEL" "$prompt" >"$log" 2>&1; then
+    if timeout "$TIMEOUT" opencode run -m "$OPcode_MODEL" "$prompt" >"$log" 2>&1; then
         echo "[DONE]  #$issue — see $log"
     else
         exit_code=$?

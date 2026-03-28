@@ -53,7 +53,7 @@ test:  ## Run tests with coverage (pytest --cov=app --cov-report=term-missing)
 	$(PYTEST) --cov=app --cov-report=term-missing
 
 pytest:  ## Run tests (pytest)
-	$(PYTEST)
+	@bash -c 'set -a; source .env.test; set +a; $(PYTHON) -m pytest -o addopts='
 
 sync:  ## Install dependencies via uv
 	uv sync --all-extras
