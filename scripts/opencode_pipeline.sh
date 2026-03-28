@@ -126,8 +126,8 @@ if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
     # Defensive: remove any mistralai models from pools
     # Updated regex to catch all mistralai variants including those with prefixes
-    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '^mistralai/.*'))
-    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '^mistralai/.*'))
+    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -viE '^mistralai/.*'))
+    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -viE '^mistralai/.*'))
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
@@ -137,8 +137,8 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
     # Defensive: remove any mistralai models from pools
     # Updated regex to catch all mistralai variants including those with prefixes
-    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '^mistralai/.*'))
-    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '^mistralai/.*'))
+    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -viE '^mistralai/.*'))
+    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -viE '^mistralai/.*'))
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only
@@ -333,10 +333,10 @@ gh_comment() {
 _candidate_models() {
     opencode models 2>/dev/null | grep -E \
         "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/" | \
-        grep -vE 'mistralai|mistral-small-3\.1-24b-instruct'
+        grep -viE 'mistralai|mistral-small-3\.1-24b-instruct'
     opencode models 2>/dev/null | grep -E \
         "^openrouter/.*(:free$|-free$)" | \
-        grep -vE 'mistralai|mistral-small-3\.1-24b-instruct'
+        grep -viE 'mistralai|mistral-small-3\.1-24b-instruct'
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
