@@ -30,7 +30,7 @@ _should_skip_model() {
 }
 
 # Test with the problematic model
-model="mistralai/mistral-small-3.1-24b-instruct:free"
+model="mistralai/mistral-medium"
 if _should_skip_model "$model"; then
   echo "Model '$model' should be skipped (returns 0)"
   exit 0
