@@ -4,11 +4,11 @@ This module consolidates all environment variables used throughout the applicati
 Configuration is validated at startup and provides type-safe access to settings.
 """
 
-from functools import lru_cache
 import os
-from typing import Literal
+from functools import lru_cache
+from typing import Literal, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +34,39 @@ class DatabaseSettings(BaseSettings):
         description="Database URL for testing (overrides DATABASE_URL in tests)",
         json_schema_extra={"env": "TEST_DATABASE_URL"},
     )
+
+    @field_validator("database_url")
+    @classmethod
+    def ensure_database_url(cls, v: str) -> str:
+        """Ensure database_url is set, using TEST_DATABASE_URL in test environment if needed."""
+        if not v:
+            # If DATABASE_URL is not set, use TEST_DATABASE_URL in test environment
+            test_url = os.getenv("TEST_DATABASE_URL")
+            if test_url and os.getenv("TEST_ENVIRONMENT") == "true":
+                return test_url
+            raise ValueError("DATABASE_URL is required")
+        return v
+
+    @model_validator(mode="after")
+    def set_default_database_url(self) -> "Self":
+        """Set database_url to test database URL if not set and in test environment."""
+        # If database_url is still not set after validation, use the test database URL
+        if not self.database_url and os.getenv("TEST_ENVIRONMENT") == "true":
+            test_url = os.getenv("TEST_DATABASE_URL")
+            if test_url:
+                self.database_url = test_url
+        return self
+
+    @field_validator("test_database_url")
+    @classmethod
+    def ensure_test_database_url(cls, v: str) -> str:
+        """Ensure test_database_url is set, using DATABASE_URL if not set."""
+        if not v:
+            # If TEST_DATABASE_URL is not set, use DATABASE_URL
+            db_url = os.getenv("DATABASE_URL")
+            if db_url:
+                return db_url
+        return v
 
     @property
     def async_url(self) -> str:

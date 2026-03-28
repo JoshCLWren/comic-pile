@@ -81,21 +81,11 @@ _should_skip_model() {
   local lower_model
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
-# Skip only the previously problematic mistral model
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-  return 0
-fi
+# Filter out specific problematic model variants (case-insensitive)
+ # Allow valid model variants including nvidia/mistralai/mistral-small-3.1-24b-instruct:free
+ # Only filter out truly problematic patterns, not all mistral variants
 
-  # Also skip specific problematic model IDs regardless of provider
-  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-    return 0
-  fi
-
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
-    return 0
-  fi
+# Allow models ending with :free including nvidia/mistralai/mistral-small-3.1-24b-instruct:free
 
   return 1
 }
@@ -328,10 +318,16 @@ gh_comment() {
 #   openai — excluded (no subscription)
 
 _candidate_models() {
-    opencode models 2>/dev/null | grep -E \
-        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
-    opencode models 2>/dev/null | grep -E \
-        "^openrouter/.*(:free$|-free$)"
+    {
+        opencode models 2>/dev/null | grep -E \
+            "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
+        opencode models 2>/dev/null | grep -E \
+            "^openrouter/.*(:free$|-free$)"
+    } | while IFS= read -r model; do
+        if [[ -n "$model" ]] && ! _should_skip_model "$model"; then
+            echo "$model"
+        fi
+    done
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist

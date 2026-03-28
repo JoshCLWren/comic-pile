@@ -240,15 +240,13 @@ async def test_delete_thread_cascades_to_events_and_snapshots(
     sample_data: dict, async_db: AsyncSession, auth_client: AsyncClient
 ) -> None:
     """Test that deleting a thread also deletes associated events and snapshots."""
-    _ = sample_data
     from datetime import UTC, datetime
 
-    from app.models import Event, Session as SessionModel, Snapshot, Thread, User
+    from app.models import Event, Session as SessionModel, Snapshot, Thread
 
     now = datetime.now(UTC)
-    result = await async_db.execute(select(User).where(User.id == 1))
-    user = result.scalar_one()
-    user_id = user.id  # Extract before commit
+    user = sample_data["user"]
+    user_id = user.id
 
     thread = Thread(
         title="Test Thread",
@@ -593,14 +591,14 @@ async def test_get_sessions_pagination(auth_client: AsyncClient, sample_data: di
 @pytest.mark.asyncio
 async def test_get_session(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/{id} returns single session."""
-    _ = sample_data
+    user = sample_data["user"]
     response = await auth_client.get("/api/sessions/1")
     assert response.status_code == 200
 
     session = response.json()
     assert session["id"] == 1
     assert session["start_die"] == 6
-    assert session["user_id"] == 1
+    assert session["user_id"] == user.id
     assert "ladder_path" in session
 
 
