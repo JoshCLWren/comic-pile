@@ -9,12 +9,7 @@ _is_problematic_model() {
         echo "WARNING: Filtering out problematic model: $model" >&2
         return 0
     fi
-    # Filter out specific problematic mistralai models (case-insensitive)
-    # Note: We now allow valid mistralai models but filter out specific problematic ones
-    if echo "$model" | grep -qi "mistralai/mistral-small-3.1-24b-instruct:free"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
+
     # Filter out mistral-small-3.1-24b-instruct (case-insensitive)
     if echo "$model" | grep -qi "mistral-small-3.1-24b-instruct"; then
         echo "WARNING: Filtering out problematic model: $model" >&2
