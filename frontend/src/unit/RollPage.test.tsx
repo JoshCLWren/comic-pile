@@ -15,6 +15,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
+import { ToastProvider } from '../contexts/ToastContext'
 import type { RollResponse } from '../types'
 
 const navigateSpy = vi.fn()
@@ -58,6 +59,10 @@ vi.mock('../hooks', async (importOriginal) => {
   }
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
+vi.mock('../contexts/ToastContext', () => ({
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
 
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
