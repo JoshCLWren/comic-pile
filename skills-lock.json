@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "model-recommendation": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "computedHash": "d300d9c634bba27fbaa908c6769a24cc54b8bce09beebd9c8eeb958261d3f338"
+    }
+  }
+}

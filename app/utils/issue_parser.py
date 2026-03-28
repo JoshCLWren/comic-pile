@@ -49,6 +49,10 @@ def parse_issue_ranges(input_str: str) -> list[str]:
             raise ValueError(f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)")
 
         if "-" in part:
+            # Check literal length BEFORE processing as range to prevent bypass
+            if len(part) > MAX_LITERAL_LENGTH:
+                raise ValueError(f"Issue identifier too long (max {MAX_LITERAL_LENGTH} chars)")
+
             # Try to parse as an integer range
             range_parts = part.split("-", 1)
             if len(range_parts) == 2:
