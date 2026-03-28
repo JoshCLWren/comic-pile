@@ -24,7 +24,7 @@ from app.schemas.session import SnoozedThreadInfo
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
 
-router = APIRouter(prefix="/sessions", tags=["sessions"])
+router = APIRouter(tags=["sessions"])
 
 clear_cache = None
 get_current_session_cached = None
