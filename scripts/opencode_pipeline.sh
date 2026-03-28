@@ -86,8 +86,11 @@ _should_skip_model() {
     return 0
   fi
 
-  # Skip mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+# Skip mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
+   if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+     # Also skip the specific free tier model from mistralai provider
+     return 0
+   fi
     return 0
   fi
 
