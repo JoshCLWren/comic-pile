@@ -135,7 +135,7 @@ async def list_stale_threads(
     return await _threads_to_responses(threads, db)
 
 
-@router.get("/", response_model=list[ThreadResponse])
+@router.get("/", response_model=dict[str, list[ThreadResponse]])
 @limiter.limit("100/minute")
 async def list_threads(
     request: Request,
@@ -152,7 +152,7 @@ async def list_threads(
     page_token: str | None = Query(
         default=None, description="Token for pagination continuation (queue_position,thread_id)"
     ),
-) -> list[ThreadResponse]:
+) -> dict[str, list[ThreadResponse]]:
     """List threads ordered by position.
 
     Args:
@@ -165,7 +165,7 @@ async def list_threads(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        list[ThreadResponse]: A list of thread objects.
+        dict[str, list[ThreadResponse]]: A dictionary with key "threads" containing a list of thread objects.
     """
     print(
         f"[DEBUG] list_threads called: search={search}, collection_id={collection_id}, "
@@ -180,20 +180,25 @@ async def list_threads(
 
     if normalized_search:
         query = query.where(Thread.title.ilike(f"%{normalized_search}%"))
-        query = query.order_by(Thread.queue_position)
-        result = await db.execute(query)
-        threads = list(result.scalars().all())
+    query = query.order_by(Thread.queue_position)
+    result = await db.execute(query)
+    threads = list(result.scalars().all())
+    if normalized_search:
         print(f"[DEBUG] Search path: returning {len(threads)} threads")
-        return await _threads_to_responses(threads, db)
-
     else:
-        query = query.order_by(Thread.queue_position)
-        result = await db.execute(query)
-        threads = list(result.scalars().all())
         print(f"[DEBUG] Default path: returning {len(threads)} threads")
         for thread in threads:
-            print(f"[DEBUG]   - {thread.title} (collection_id={thread.collection_id})")
-        return await _threads_to_responses(threads, db)
+            print(f"[DEBUG] - {thread.title} (collection_id={thread.collection_id})")
+    return {"threads": await _threads_to_responses(threads, db)}
+
+    # Normal path: default ordering by queue_position
+    query = query.order_by(Thread.queue_position)
+    result = await db.execute(query)
+    threads = list(result.scalars().all())
+    print(f"[DEBUG] Default path: returning {len(threads)} threads")
+    for thread in threads:
+        print(f"[DEBUG] - {thread.title} (collection_id={thread.collection_id})")
+    return {"threads": await _threads_to_responses(threads, db)}
 
 
 @router.get("/completed", response_class=HTMLResponse)
