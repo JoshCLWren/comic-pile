@@ -97,10 +97,14 @@ _should_skip_model() {
     return 0
   fi
 
-  # Additional safety: catch any model with "mistral-small-3.1-24b-instruct" in any form
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-    return 0
-  fi
+    # Additional safety: catch any model with "mistral-small-3.1-24b-instruct" in any form
+    if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+        return 0
+    fi
+    # Skip any models with ':free' suffix (common for free tier models that may be unavailable)
+    if [[ "$lower_model" == *":free" ]]; then
+        return 0
+    fi
 
   return 1
 }
