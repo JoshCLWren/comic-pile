@@ -218,8 +218,6 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
             "username": username,
             "created_at": datetime.now(UTC),
         }
-        if username == _default_test_username():
-            user_kwargs["id"] = 1
         user = User(**user_kwargs)
         db.add(user)
         try:
@@ -230,8 +228,6 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
             user = result.scalar_one()
         else:
             await db.refresh(user)
-            if username == _default_test_username():
-                await _sync_id_sequence(db, "users")
     return user
 
 
