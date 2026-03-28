@@ -7,12 +7,6 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
-
-# Set TEST_ENVIRONMENT before importing app modules
-# This must be done before app.main is imported to disable rate limiting
-if not os.getenv("TEST_ENVIRONMENT"):
-    os.environ["TEST_ENVIRONMENT"] = "true"
-
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import UniqueConstraint, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -32,7 +26,21 @@ from app.main import app
 from app.models import Event, Issue, Thread, User
 from app.models import Session as SessionModel
 
+# Load environment variables
 load_dotenv()
+
+# Set TEST_ENVIRONMENT to disable rate limiting
+if not os.getenv("TEST_ENVIRONMENT"):
+    os.environ["TEST_ENVIRONMENT"] = "true"
+
+# Unique test database per process to avoid deadlocks
+TEST_DB_COUNTER = os.getpid()
+DEFAULT_TEST_DB_NAME = "comic_pile_test"
+if "TEST_DATABASE_URL" not in os.environ:
+    # Create unique test database for this process
+    os.environ["TEST_DATABASE_URL"] = (
+        f"postgresql+asyncpg://postgres:postgres@localhost:5437/{DEFAULT_TEST_DB_NAME}_{TEST_DB_COUNTER}"
+    )
 
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
@@ -191,7 +199,10 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
     if not user:
-        user = User(id=1, username=username, created_at=datetime.now(UTC))
+        # Get next available ID to avoid conflicts
+        result = await db.execute(text("SELECT COALESCE(MAX(id), 0) + 1 FROM users"))
+        next_id = result.scalar()
+        user = User(id=next_id, username=username, created_at=datetime.now(UTC))
         db.add(user)
         try:
             await db.commit()
