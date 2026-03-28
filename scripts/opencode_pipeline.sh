@@ -68,6 +68,11 @@ _load_issues() {
 # Helper function to check if a model should be skipped
 # Returns 0 (true) if model should be skipped, 1 (false) otherwise
 _should_skip_model() {
+  # Explicit skip for known problematic model variant with free tier
+  if [[ "$model" =~ ^mistralai/mistral-small-3\.1-24b-instruct:free$ ]]; then
+    echo "[PIPELINE] WARNING: Explicitly filtering problematic free-tier model: $model" >&2
+    return 0
+  fi
   local model="$1"
   # Trim whitespace
   model=$(echo "$model" | xargs)
