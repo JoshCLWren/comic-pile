@@ -24,9 +24,9 @@ mkdir -p "$LOG_DIR"
 OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
 
 # If the selected model is known to cause ProviderModelNotFoundError, fall back to safe default
-# Perform case-insensitive check to catch all variants (e.g., MistralAI/..., with :free suffix, etc.)
+# Perform case-insensitive check to catch all variants (e.g., MistralAI/..., Mistral/..., with :free suffix, etc.)
 lower_model=$(echo "$OPcode_MODEL" | tr '[:upper:]' '[:lower:]')
-if [[ "$lower_model" =~ ^(mistralai/)?mistral-small-3\.1-24b-instruct ]]; then
+if [[ "$lower_model" =~ ^(mistral(ai)?/)?mistral-small-3\.1-24b-instruct ]]; then
   echo "Warning: Model $OPcode_MODEL is known to cause ProviderModelNotFoundError. Falling back to opencode/nemotron-3-super-free."
   OPcode_MODEL="opencode/nemotron-3-super-free" # safe fallback for problematic models
 fi
