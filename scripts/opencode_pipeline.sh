@@ -422,10 +422,10 @@ map_model() {
   model=$(echo "$model" | xargs)
 
 case "$model" in
-   *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
-     echo "mistral/mistral-medium-latest"
-     ;;
-   *)
+    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
+      echo "nvidia/mistral/mistral-14b-instruct-2512"
+      ;;
+    *)
      echo "$model"
      ;;
    esac
