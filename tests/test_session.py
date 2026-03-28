@@ -178,7 +178,7 @@ async def test_get_or_create_existing(async_db: AsyncSession, sample_data: dict)
     async_db.add(active_session)
     await async_db.commit()
 
-    result = await get_or_create(async_db, user_id=1)
+    result = await get_or_create(async_db, user_id=user.id)
     # The function should return an active session for the user; ensure it is active and belongs to the user
     assert result.user_id == user.id
     assert result.ended_at is None
