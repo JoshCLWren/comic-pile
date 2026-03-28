@@ -1,5 +1,5 @@
 
-const { parseIssueRange } = require('./src/utils/issueParser');
+import { parseIssueRange } from './src/utils/issueParser.js';
 
 var testCases = [
     '1-5-10',      // Should be literal according to test
