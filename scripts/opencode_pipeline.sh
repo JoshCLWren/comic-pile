@@ -86,11 +86,11 @@ _should_skip_model() {
   return 0
 fi
 
-  # Also skip specific problematic model IDs regardless of provider
-  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-    return 0
-  fi
+   # Also skip specific problematic model IDs regardless of provider
+   # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
+   if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct(:[^:]+)?$ ]]; then
+     return 0
+   fi
 
   # Skip any model containing "mistralai" anywhere in the name
   if [[ "$lower_model" =~ mistralai ]]; then
