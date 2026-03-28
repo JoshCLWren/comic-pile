@@ -33,6 +33,8 @@ _should_skip_model() {
 model="mistralai/mistral-small-3.1-24b-instruct:free"
 if _should_skip_model "$model"; then
   echo "Model '$model' should be skipped (returns 0)"
+  exit 0
 else
   echo "Model '$model' should NOT be skipped (returns 1)"
+  exit 1
 fi
