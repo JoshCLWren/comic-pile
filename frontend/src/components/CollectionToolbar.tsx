@@ -64,9 +64,9 @@ export default function CollectionToolbar({ showNewLabel = true, className = '',
             type="button"
             onClick={onNewCollection}
             className="shrink-0 px-3 py-1.5 glass-button text-[10px] font-black uppercase tracking-wider whitespace-nowrap min-h-[44px]"
-            aria-label="New collection"
+            aria-label="Create new collection"
           >
-            + New Collection
+            Create new collection
           </button>
         )}
       </div>

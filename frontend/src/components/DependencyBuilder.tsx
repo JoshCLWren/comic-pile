@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import Modal from './Modal'
 import DependencyFlowchart from './DependencyFlowchart'
+import ReadingOrderTimeline from './ReadingOrderTimeline'
 import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
@@ -41,7 +42,9 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
   const [error, setError] = useState('')
   const [dependencies, setDependencies] = useState<ThreadDependenciesResponse>({ blocking: [], blocked_by: [] })
   const [isLoadingDeps, setIsLoadingDeps] = useState(false)
-  const [showFlowchart, setShowFlowchart] = useState(false)
+  const [showReadingOrder, setShowReadingOrder] = useState(false)
+  const [readingView, setReadingView] = useState<'timeline' | 'graph'>('timeline')
+  const [isGraphLoading, setIsGraphLoading] = useState(false)
   const [flowchartThreads, setFlowchartThreads] = useState<Thread[]>([])
   const [flowchartDependencies, setFlowchartDependencies] = useState<FlowchartDependency[]>([])
   const [flowchartIssueNodes, setFlowchartIssueNodes] = useState<FlowchartNode[]>([])
@@ -199,7 +202,8 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     setSearchResults([])
     setSelectedThreadId(null)
     setError('')
-    setShowFlowchart(false)
+    setShowReadingOrder(false)
+    setReadingView('timeline')
     setDependencyMode(getDefaultDependencyMode(thread))
     setSourceIssueId(null)
     setTargetIssueId(null)
@@ -442,7 +446,7 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
       setSourceIssues([])
       setTargetIssues([])
       await loadDependencies()
-      if (showFlowchart) await loadFlowchartData()
+      await refreshGraphIfVisible()
       onChanged?.()
     } catch (saveError: unknown) {
       setError(getApiErrorDetail(saveError))
@@ -520,37 +524,95 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     }
   }
 
-  async function handleToggleFlowchart() {
-    if (!showFlowchart) {
+  const refreshGraphData = useCallback(async () => {
+    setIsGraphLoading(true)
+    try {
       await loadFlowchartData()
+    } finally {
+      setIsGraphLoading(false)
     }
-    setShowFlowchart((prev) => !prev)
+  }, [loadFlowchartData])
+
+  function handleToggleReadingOrder() {
+    setShowReadingOrder((prev) => {
+      const next = !prev
+      if (!next) {
+        setReadingView('timeline')
+      }
+      return next
+    })
   }
 
-  const hasDependencies = dependencies.blocking.length > 0 || dependencies.blocked_by.length > 0
+  async function handleSelectReadingView(view: 'timeline' | 'graph') {
+    setReadingView(view)
+    if (view === 'graph') {
+      await refreshGraphData()
+    }
+  }
+
+  async function refreshGraphIfVisible() {
+    if (showReadingOrder && readingView === 'graph') {
+      await refreshGraphData()
+    }
+  }
 
   return (
     <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
       <div className="space-y-4">
         {/* Flowchart toggle */}
-        {hasDependencies && (
+        {thread && (
           <div className="space-y-2">
             <button
               type="button"
-              onClick={handleToggleFlowchart}
-              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest"
-              data-testid="toggle-flowchart"
+              onClick={handleToggleReadingOrder}
+              className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest"
+              data-testid="toggle-reading-order"
             >
-              {showFlowchart ? '▲ Hide Flowchart' : '▼ View Flowchart'}
+              {showReadingOrder ? '▲ Hide Reading Order' : '▼ View Reading Order'}
             </button>
 
-            {showFlowchart && (
-              <DependencyFlowchart
-                threads={flowchartThreads}
-                dependencies={flowchartDependencies}
-                blockedIds={blockedIds}
-                issueNodes={flowchartIssueNodes}
-              />
+            {showReadingOrder && (
+              <div className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-3">
+                <div className="flex gap-2 text-[11px] font-black uppercase tracking-widest">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectReadingView('timeline')}
+                    className={`flex-1 rounded-2xl border px-3 py-3 ${
+                      readingView === 'timeline'
+                        ? 'border-white text-white'
+                        : 'border-white/20 text-stone-400'
+                    }`}
+                  >
+                    Timeline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectReadingView('graph')}
+                    className={`flex-1 rounded-2xl border px-3 py-3 ${
+                      readingView === 'graph'
+                        ? 'border-white text-white'
+                        : 'border-white/20 text-stone-400'
+                    }`}
+                  >
+                    Flowchart
+                  </button>
+                </div>
+
+                <div className="min-h-[200px]">
+                  {readingView === 'timeline' ? (
+                    <ReadingOrderTimeline thread={thread} dependencies={[...dependencies.blocking, ...dependencies.blocked_by]} />
+                  ) : isGraphLoading ? (
+                    <p className="text-center text-xs text-stone-400">Loading flowchart…</p>
+                  ) : (
+                    <DependencyFlowchart
+                      threads={flowchartThreads}
+                      dependencies={flowchartDependencies}
+                      blockedIds={blockedIds}
+                      issueNodes={flowchartIssueNodes}
+                    />
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}
