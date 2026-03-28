@@ -402,54 +402,57 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
     }
   }
 
-  async function handleCreateDependency() {
-    if (!thread?.id || !selectedThreadId) return
+   async function handleCreateDependency() {
+     if (!thread?.id || !selectedThreadId) return
 
-    const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
-    if (dependencyMode === 'issue' && !targetHasIssueTracking) {
-      setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
-      return
-    }
+     const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
+     if (dependencyMode === 'issue' && !targetHasIssueTracking) {
+       setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
+       return
+     }
 
-    if (dependencyMode === 'issue' && (!sourceIssueId || !targetIssueId)) {
-      setError('Both prerequisite issue and target issue must be selected.')
-      return
-    }
+     if (dependencyMode === 'issue' && (!sourceIssueId || !targetIssueId)) {
+       setError('Both prerequisite issue and target issue must be selected.')
+       return
+     }
 
-    setIsSaving(true)
-    setError('')
-    try {
-      if (dependencyMode === 'issue') {
-        await dependenciesApi.createDependency({
-          sourceType: 'issue',
-          sourceId: sourceIssueId!,
-          targetType: 'issue',
-          targetId: targetIssueId!,
-        })
-      } else {
-        await dependenciesApi.createDependency({
-          sourceType: 'thread',
-          sourceId: selectedThreadId,
-          targetType: 'thread',
-          targetId: thread.id,
-        })
-      }
-      setSearchQuery('')
-      setSearchResults([])
-      setSelectedThreadId(null)
-      setSourceIssueId(null)
-      setTargetIssueId(null)
-      setSourceIssues([])
-      setTargetIssues([])
-      await loadDependencies()
-      if (showFlowchart) await loadFlowchartData()
-      onChanged?.()
-    } catch (saveError: unknown) {
-      setError(getApiErrorDetail(saveError))
-    } finally {
-      setIsSaving(false)
-    }
-  }
+     setIsSaving(true)
+     setError('')
+     try {
+       if (dependencyMode === 'issue') {
+         await dependenciesApi.createDependency({
+           sourceType: 'issue',
+           sourceId: sourceIssueId!,
+           targetType: 'issue',
+           targetId: targetIssueId!,
+         })
+       } else {
+         await dependenciesApi.createDependency({
+           sourceType: 'thread',
+           sourceId: selectedThreadId,
+           targetType: 'thread',
+           targetId: thread.id,
+         })
+       }
+       setSearchQuery('')
+       setSearchResults([])
+       setSelectedThreadId(null)
+       setSourceIssueId(null)
+       setTargetIssueId(null)
+       setSourceIssues([])
+       setTargetIssues([])
+       await loadDependencies()
+       if (showFlowchart) await loadFlowchartData()
+       onChanged?.()
+     } catch (saveError: unknown) {
+       const errorMessage = getApiErrorDetail(saveError)
+       setError(errorMessage)
+       // Show toast for API errors
+       toast.showToast(errorMessage, 'error')
+     } finally {
+       setIsSaving(false)
+     }
+   }
 
   async function handleDeleteDependency(dependencyId: number) {
     setError('')
