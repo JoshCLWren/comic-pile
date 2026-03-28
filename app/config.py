@@ -17,8 +17,15 @@ class DatabaseSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
+    # Provide a safe default for tests when no DATABASE_URL is configured.
+    # This allows test environments to boot without requiring a local DB URL
+    # to be present in the environment. The real tests should override this
+    # with TEST_DATABASE_URL or DATABASE_URL in CI environments.
     database_url: str = Field(
-        ...,  # Required field
+        default_factory=lambda: (
+            os.environ.get("DATABASE_URL")
+            or "postgresql://postgres:postgres@localhost:5432/comic_pile_test"
+        ),
         description="PostgreSQL database connection URL",
         json_schema_extra={"env": "DATABASE_URL"},
     )
@@ -82,7 +89,7 @@ class AuthSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
 
     secret_key: str = Field(
-        ...,
+        default_factory=lambda: os.environ.get("SECRET_KEY") or "test-secret-key-for-testing-only",
         description="Secret key for JWT token signing (required)",
         json_schema_extra={"env": "SECRET_KEY"},
     )

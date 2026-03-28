@@ -226,71 +226,54 @@ export const test = base.extend<TestFixtures>({
     }
   },
 
-  authenticatedPage: async ({ page, request }, use) => {
-    // Clear any existing auth state first for clean test isolation
-    await page.addInitScript(() => localStorage.clear());
+   authenticatedPage: async ({ page, request }, use) => {
+     // Clear any existing auth state first for clean test isolation
+     await page.addInitScript(() => localStorage.clear());
 
-    const counter = ++fixtureUserCounter;
-    const timestamp = Date.now();
-    const workerId = process.pid ?? 0;
-    const testUser = {
-      username: `auth_${timestamp}_${counter}_${workerId}`,
-      email: `auth_${timestamp}_${counter}_${workerId}@example.com`,
-      password: 'TestPass123!',
-    };
+     const counter = ++fixtureUserCounter;
+     const timestamp = Date.now();
+     const workerId = process.pid ?? 0;
+     const testUser = {
+       username: `auth_${timestamp}_${counter}_${workerId}`,
+       email: `auth_${timestamp}_${counter}_${workerId}@example.com`,
+       password: 'TestPass123!',
+     };
 
-    const { accessToken } = await registerWithRetry(request, testUser);
+     const { accessToken } = await registerWithRetry(request, testUser);
 
-    await page.addInitScript((token: string) => {
-      localStorage.setItem('auth_token', token);
-      (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
-    }, accessToken);
+     await page.addInitScript((token: string) => {
+       localStorage.setItem('auth_token', token);
+       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
+     }, accessToken);
 
-    // Navigate to home page
-    // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+     // Navigate to home page
+     // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
+     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    // Wait for auth state to stabilize:
-    // 1. Wait for "Checking authentication..." to disappear
-    await page.waitForSelector('text=Checking authentication...', { state: 'detached', timeout: 10000 }).catch(() => {
-      // Element may not exist if auth is fast, that's OK
-    });
+     // Wait for auth state to stabilize:
+     // 1. Wait for "Checking authentication..." to disappear
+     await page.waitForSelector('text=Checking authentication...', { state: 'detached', timeout: 10000 }).catch(() => {
+       // Element may not exist if auth is fast, that's OK
+     });
 
-    // 2. Wait for "Loading..." states to disappear
-    await page.waitForSelector('text=Loading...', { state: 'detached', timeout: 10000 }).catch(() => {
-      // Element may not exist, that's OK
-    });
+     // 2. Wait for "Loading..." states to disappear
+     await page.waitForSelector('text=Loading...', { state: 'detached', timeout: 10000 }).catch(() => {
+       // Element may not exist, that's OK
+     });
 
-    // 3. Wait for the roll page to be ready using multiple stable selectors with conditional logic
-    const waitForRollPage = async () => {
-      try {
-        // Try most stable selector first: Roll Dice button or Home tab
-        await page.waitForSelector('[data-roll-dice-button], [aria-label="Home"], [data-home-tab]', { 
-          state: 'visible', 
-          timeout: 8000 
-        });
-        console.debug('Found stable Roll Dice/Home selector');
-        return;
-      } catch (_e) {
-        console.debug('Stable selector not found, trying fallback...');
-      }
+  // 3. Wait for collections to finish loading (Loading collections... text should disappear)
+  // The CollectionToolbar component shows "Loading collections..." while fetching
+  await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 15000 }).catch(() => {});
+  // 4. Wait for the collection toolbar dropdown to be visible
+  await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 15000 });
 
-      try {
-        // Try the original Roll the dice selector
-        await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 5000 });
-        console.debug('Found Roll the dice selector');
-      } catch (_e) {
-        console.debug('Roll the dice selector not found, trying roll pool...');
-      }
+  // 6. Wait for the roll page to be ready (die button is always present on home route)
+     await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 10000 }).catch(() => {
+       // May not exist if no session or in empty state — check for roll pool instead
+       return page.waitForSelector('[data-roll-pool]', { state: 'attached', timeout: 5000 }).catch(() => {});
+     });
 
-      // Final fallback: wait for roll pool
-      await page.waitForSelector('[data-roll-pool]', { state: 'attached', timeout: 5000 }).catch(() => {});
-      console.debug('Roll page ready (or timeout)');
-    };
-
-    await waitForRollPage();
-
-    await use(page);
+     await use(page);
 
     // Cleanup: clear localStorage and attempt logout
     await page.evaluate(() => {

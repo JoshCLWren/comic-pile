@@ -19,41 +19,16 @@ TIMEOUT="${TIMEOUT:-45m}"
 LOG_DIR="$(dirname "$0")/../.opencode_logs"
 mkdir -p "$LOG_DIR"
 
-# Default model to use (override with OPENCODER_MODEL env var)
-DEFAULT_MODEL="${OPENCODER_MODEL:-cerebras/zai-glm-4.7}"
+# Default model: use environment variable if set, otherwise use a known working model
+# Skip specific problematic model only: mistralai/mistral-small-3.1-24b-instruct
+OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
 
-# Filter out known problematic models to avoid ProviderModelNotFoundError and similar
-_is_problematic_model() {
-    local model="$1"
-    # Filter out models that start with problematic providers (case-insensitive)
-    if echo "$model" | grep -qiE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    # Filter out models that contain mistralai provider in the path (case-insensitive)
-    # Filter out all mistralai models as they are not available
-    if echo "$model" | grep -qi "/mistralai/"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    # Filter out mistral-small-3.1-24b-instruct (case-insensitive)
-    if echo "$model" | grep -qi "mistral-small-3.1-24b-instruct"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    # Filter out models ending with :free (case-insensitive)
-    # Note: All :free models are problematic and should be filtered out
-    if echo "$model" | grep -qi ":free$"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    return 1
-}
-
-# If the default (or overridden) model is problematic, fall back to safe default
-if _is_problematic_model "$DEFAULT_MODEL"; then
-    echo "WARNING: Model '$DEFAULT_MODEL' is problematic; falling back to 'cerebras/zai-glm-4.7'"
-    DEFAULT_MODEL="cerebras/zai-glm-4.7"
+# If the selected model is known to cause ProviderModelNotFoundError, fall back to safe default
+# Perform case-insensitive check to catch all variants (e.g., MistralAI/...)
+lower_model=$(echo "$OPcode_MODEL" | tr '[:upper:]' '[:lower:]')
+if [[ "$lower_model" =~ mistralai/mistral-small-3\.1-24b-instruct ]]; then
+    echo "Warning: Model $OPcode_MODEL is known to cause ProviderModelNotFoundError. Falling back to opencode/nemotron-3-super-free."
+    OPcode_MODEL="opencode/nemotron-3-super-free"  # safe fallback for problematic models
 fi
 
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
@@ -95,7 +70,7 @@ STANDARDS:
 
 Do not ask clarifying questions. Start immediately."
 
-     if timeout "$TIMEOUT" opencode run -m "$DEFAULT_MODEL" "$prompt" >"$log" 2>&1; then
+    if timeout "$TIMEOUT" opencode run -m "$OPcode_MODEL" "$prompt" >"$log" 2>&1; then
         echo "[DONE]  #$issue — see $log"
     else
         exit_code=$?

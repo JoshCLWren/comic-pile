@@ -13,46 +13,13 @@ RESULTS_FILE="$(dirname "$0")/../.opencode_logs/model_test_results.txt"
 mkdir -p "$(dirname "$RESULTS_FILE")"
 > "$RESULTS_FILE"  # truncate
 
-# Helper function to filter problematic models (same logic as pipeline)
-_is_problematic_model() {
-    local model="$1"
-    # Filter out models that start with problematic providers (case-insensitive)
-    if echo "$model" | grep -qiE "^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    # Filter out models that contain mistralai provider in the path (case-insensitive)
-    # Filter out all mistralai models as they are not available
-    if echo "$model" | grep -qi "/mistralai/"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    # Filter out mistral-small-3.1-24b-instruct (case-insensitive)
-    if echo "$model" | grep -qi "mistral-small-3.1-24b-instruct"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    # Filter out models ending with :free (case-insensitive)
-    # Note: All :free models are problematic and should be filtered out
-    if echo "$model" | grep -qi ":free$"; then
-        echo "WARNING: Filtering out problematic model: $model" >&2
-        return 0
-    fi
-    return 1
-}
+MODELS=$(opencode models 2>/dev/null)
 
-MODELS_RAW=$(opencode models 2>/dev/null)
-# Filter models
-FILTERED_MODELS=()
-while IFS= read -r model; do
-    [[ -z "$model" ]] && continue
-    if ! _is_problematic_model "$model"; then
-        FILTERED_MODELS+=("$model")
-    fi
-done <<< "$MODELS_RAW"
+# Filter out specific problematic model variants
+# Note: We now allow valid mistralai models but filter out specific problematic ones
+FILTERED_MODELS=$(echo "$MODELS" | grep -viE 'mistral-small-3\.1-24b-instruct:free|:free$')
 
-MODELS=$(printf '%s\n' "${FILTERED_MODELS[@]}")
-TOTAL=${#FILTERED_MODELS[@]}
+TOTAL=$(echo "$FILTERED_MODELS" | wc -l)
 
 echo "Testing $TOTAL models ($PARALLEL at a time)..."
 echo "Results: $RESULTS_FILE"
@@ -71,15 +38,21 @@ test_model() {
     elif [[ $exit_code -ne 0 ]]; then
         echo "FAIL     $model  [exit $exit_code]"
     else
-        # Strip ANSI codes and extract last non-empty line as the response
-        response=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g' | grep -v "^>" | grep -v "^$" | tail -1 | xargs)
-        echo "OK       $model  [$response]"
+        local cleaned
+        cleaned=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')
+        if echo "$cleaned" | grep -qiE "Error:|not found|not supported|unauthorized|invalid|authentication|does not exist|no endpoint"; then
+            reason=$(echo "$cleaned" | grep -iE "Error:|not found|not supported|unauthorized|invalid|authentication|does not exist|no endpoint" | head -1 | xargs)
+            echo "FAIL     $model  [$reason]"
+        else
+            response=$(echo "$cleaned" | grep -v "^>" | grep -v "^$" | tail -1 | xargs)
+            echo "OK       $model  [$response]"
+        fi
     fi
 }
 
 export -f test_model
 
-echo "$MODELS" | xargs -P "$PARALLEL" -I{} bash -c 'test_model "$@"' _ {} | tee "$RESULTS_FILE"
+echo "$FILTERED_MODELS" | xargs -P "$PARALLEL" -I{} bash -c 'test_model "$@"' _ {} | tee "$RESULTS_FILE"
 
 echo ""
 echo "=== Summary ==="
