@@ -23,7 +23,6 @@ from app.schemas import (
     ReactivateRequest,
     RollResponse,
     ThreadCreate,
-    ThreadListResponse,
     ThreadResponse,
     ThreadUpdate,
 )
@@ -153,8 +152,8 @@ async def list_threads(
     page_token: str | None = Query(
         default=None, description="Token for pagination continuation (queue_position,thread_id)"
     ),
-) -> ThreadListResponse:
-    """List threads ordered by position with pagination.
+) -> list[ThreadResponse]:
+    """List threads ordered by position.
 
     Args:
         request: FastAPI request object for rate limiting.
@@ -166,7 +165,7 @@ async def list_threads(
         db: SQLAlchemy session for database operations.
 
     Returns:
-        ThreadListResponse with paginated threads and next_page_token if more exist.
+        list[ThreadResponse]: A list of thread objects.
     """
     print(
         f"[DEBUG] list_threads called: search={search}, collection_id={collection_id}, "

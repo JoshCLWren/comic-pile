@@ -1397,7 +1397,34 @@ cmd_main_fixer() {
     local LOG_LINES="${MAIN_FIXER_LOG_LINES:-100}"
     local LOCK="$LOG_DIR/.main_fixer_lock"
     local FIXER_LOG="$LOG_DIR/main_fixer.log"
-    local FIXER_MODEL=$(map_model "${_CODING_POOL[0]:-${_MODEL_POOL[0]}}")
+
+    # Determine a safe fixer model from the pools, ensuring it's not problematic
+    local candidate_models=()
+    # Prefer coding pool (tool-use verified) first
+    if [ ${#_CODING_POOL[@]} -gt 0 ]; then
+        candidate_models+=("${_CODING_POOL[@]}")
+    else
+        candidate_models+=("${_MODEL_POOL[@]}")
+    fi
+    # If still empty, use safe defaults
+    if [ ${#candidate_models[@]} -eq 0 ]; then
+        candidate_models=("opencode/nemotron-3-super-free" "opencode/big-pickle")
+    fi
+    local FIXER_MODEL=""
+    for m in "${candidate_models[@]}"; do
+        [[ -z "$m" ]] && continue
+        mapped=$(map_model "$m")
+        [[ -z "$mapped" ]] && continue
+        if _should_skip_model "$mapped"; then
+            continue
+        fi
+        FIXER_MODEL="$mapped"
+        break
+    done
+    # If no suitable model found, fall back to safe default
+    if [ -z "$FIXER_MODEL" ]; then
+        FIXER_MODEL="opencode/nemotron-3-super-free"
+    fi
 
     log_info "main_fixer online — threshold=${THRESHOLD} PRs, poll=${POLL}s, model=${FIXER_MODEL}"
     mkdir -p "$LOG_DIR"
