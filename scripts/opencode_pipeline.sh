@@ -124,10 +124,10 @@ fi
 # Fallback: if tool test hasn't been run yet, use full pool for everything
 if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
-# Defensive: remove any mistralai models from pools
-# Updated regex to catch all mistralai variants including those with prefixes
-_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '^mistralai/.*'))
-_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '^mistralai/.*'))
+    # Defensive: remove any mistralai models from pools
+    # Updated regex to catch all mistralai variants including those with prefixes
+    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '^mistralai/.*'))
+    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '^mistralai/.*'))
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
@@ -135,10 +135,10 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
         "opencode/big-pickle"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
-# Defensive: remove any mistralai models from pools
-# Updated regex to catch all mistralai variants including those with prefixes
-_CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '^mistralai/.*'))
-_MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '^mistralai/.*'))
+    # Defensive: remove any mistralai models from pools
+    # Updated regex to catch all mistralai variants including those with prefixes
+    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -vE '^mistralai/.*'))
+    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -vE '^mistralai/.*'))
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only
