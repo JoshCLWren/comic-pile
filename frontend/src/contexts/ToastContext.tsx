@@ -25,6 +25,7 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined)
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const timeoutIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
+  const TOAST_DURATION = 5000
 
   const showToast = useCallback((message: string, type: ToastType = 'info', action?: { label: string; onClick: () => void }) => {
     const id = `${Date.now()}-${Math.random().toString(36).substring(7)}`
@@ -95,7 +96,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useToast() {
+export function useToast(): ToastContextType {
   const context = useContext(ToastContext)
   if (!context) {
     throw new Error('useToast must be used within a ToastProvider')

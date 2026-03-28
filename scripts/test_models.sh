@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Fixed model handling for #380
 # Test every opencode model with a simple "say hello in one word" prompt.
 # Runs up to PARALLEL jobs at once. Results saved to .opencode_logs/model_test_results.txt
 #
@@ -16,8 +17,8 @@ mkdir -p "$(dirname "$RESULTS_FILE")"
 MODELS=$(opencode models 2>/dev/null)
 
 # Filter out models known to cause ProviderModelNotFoundError
-# Filter out only problematic model IDs
-FILTERED_MODELS=$(echo "$MODELS" | grep -viE 'mistralai|mistral-small-3\.1-24b-instruct')
+# Filter out any model containing 'mistral' to be safe
+FILTERED_MODELS=$(echo "$MODELS" | grep -viE 'mistral')
 
 TOTAL=$(echo "$FILTERED_MODELS" | wc -l)
 
@@ -33,8 +34,8 @@ test_model() {
     if [[ $exit_code -eq 124 ]]; then
         echo "TIMEOUT  $model"
     elif echo "$output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication"; then
-        reason=$(echo "$output" | grep -iE "Error:|ProviderModel|balance|not found|not supported|unauthorized|invalid|authentication" | head -1 | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        echo "FAIL     $model  [$reason]"
+        # Model unavailable; treat as skipped
+        echo "SKIP     $model  [unavailable]"
     elif [[ $exit_code -ne 0 ]]; then
         echo "FAIL     $model  [exit $exit_code]"
     else

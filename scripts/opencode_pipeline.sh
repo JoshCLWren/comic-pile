@@ -81,19 +81,16 @@ _should_skip_model() {
   local lower_model
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
-# Skip only the previously problematic mistral model
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-  return 0
-fi
-
-  # Also skip specific problematic model IDs regardless of provider
-  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+  # Skip any model containing "mistralai" anywhere in the name (case-insensitive)
+  if [[ "$lower_model" =~ mistralai ]]; then
     return 0
   fi
 
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
+# Skip mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
+   if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+     # Also skip the specific free tier model from mistralai provider
+     return 0
+   fi
     return 0
   fi
 
@@ -137,6 +134,17 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
 fi
+
+# Filter out known problematic providers from override models
+_is_valid_model() {
+	local model="$1"
+	[[ -z "$model" ]] && return 1
+	# Robust blacklist: exclude known providers and specific problematic models.
+  if echo "$model" | grep -qiE "(^openrouter/|^opencode/|^opencode-go/|^anthropic/|^github-copilot/|^mistralai/|^mistral/|^nvidia/mistralai/|^nvidia/mistral/|^mistralai/mistral-small-3\.1-24b-instruct:free|^mistral-small-3\.1-24b-instruct:free)"; then
+		return 1
+	fi
+	return 0
+}
 
 # implement/review/fix need real tool use — use Tier 1 only
 # pr/ci_check only need gh + text — use Tier 2 (full pool)
@@ -328,10 +336,19 @@ gh_comment() {
 #   openai — excluded (no subscription)
 
 _candidate_models() {
-    opencode models 2>/dev/null | grep -E \
-        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
-    opencode models 2>/dev/null | grep -E \
-        "^openrouter/.*(:free$|-free$)"
+    local models_list
+    models_list=$(opencode models 2>/dev/null)
+    # Filter out known problematic models using _should_skip_model
+    echo "$models_list" | grep -E "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/" | while IFS= read -r model; do
+        if ! _should_skip_model "$model"; then
+            echo "$model"
+        fi
+    done
+    echo "$models_list" | grep -E "^openrouter/.*(:free$|-free$)" | while IFS= read -r model; do
+        if ! _should_skip_model "$model"; then
+            echo "$model"
+        fi
+    done
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
@@ -1279,7 +1296,11 @@ cmd_model_manager() {
                 exit_code=0
                 output=$(timeout 30s opencode run -m "$model" "Reply with only the word PING" 2>&1) || exit_code=$?
                 clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
-                if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
+                # opencode exits 0 even on model-not-found — detect via output
+                if [[ $exit_code -eq 0 ]] && echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
+                    exit_code=1
+                fi
+                if [[ $exit_code -eq 0 ]]; then
                     echo "OK $model"
                 elif [[ $exit_code -eq 124 ]]; then
                     echo "TIMEOUT $model"

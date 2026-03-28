@@ -307,6 +307,7 @@ async def test_get_or_create_creates_user_id_1(async_db: AsyncSession) -> None:
     from app.models import User, Thread
     from sqlalchemy import delete
 
+    await async_db.execute(delete(Snapshot))
     await async_db.execute(delete(Session))
     await async_db.execute(delete(Thread).where(Thread.user_id == 1))
     await async_db.execute(delete(User))
@@ -1320,6 +1321,7 @@ async def test_get_current_session_after_get_or_create_no_lazy_load(
     """
     from sqlalchemy import delete
 
+    await async_db.execute(delete(Snapshot))
     await async_db.execute(delete(SessionModel))
     await async_db.commit()
 

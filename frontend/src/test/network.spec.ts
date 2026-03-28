@@ -97,7 +97,7 @@ test.describe('Network & API Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 30000));
     });
 
-    await authenticatedPage.goto('/threads');
+    await authenticatedPage.goto('/queue');
 
     const timeoutMessage = authenticatedPage.locator('text=timeout|took too long|try again');
     const hasTimeout = await timeoutMessage.count().then(count => count > 0);

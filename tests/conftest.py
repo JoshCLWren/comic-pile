@@ -1,4 +1,8 @@
-"""Shared pytest fixtures."""
+"""Shared pytest fixtures.
+
+This module contains pytest fixtures that are shared across multiple test files.
+It provides database setup, test data creation, and authentication utilities.
+"""
 
 import os
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
@@ -7,20 +11,12 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
-
-# Set TEST_ENVIRONMENT before importing app modules
-# This must be done before app.main is imported to disable rate limiting
-if not os.getenv("TEST_ENVIRONMENT"):
-    os.environ["TEST_ENVIRONMENT"] = "true"
-
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import UniqueConstraint, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession as SQLAlchemyAsyncSession,
-)
-from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
@@ -32,7 +28,12 @@ from app.main import app
 from app.models import Event, Issue, Thread, User
 from app.models import Session as SessionModel
 
-load_dotenv()
+load_dotenv(".env.test")
+
+# Set TEST_ENVIRONMENT before importing app modules
+# This must be done before app.main is imported to disable rate limiting
+if not os.getenv("TEST_ENVIRONMENT"):
+    os.environ["TEST_ENVIRONMENT"] = "true"
 
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
@@ -171,7 +172,7 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
                     )
                 sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
                 sync_conn.exec_driver_sql("CREATE SCHEMA public")
-            Base.metadata.create_all(bind=sync_conn)
+                Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
         await conn.execute(TRUNCATE_TEST_DATA_SQL)
@@ -201,9 +202,11 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
                 await db.rollback()
                 result = await db.execute(select(User).where(User.username == username))
                 user = result.scalar_one()
-            else:
-                await db.refresh(user)
-                await _sync_id_sequence(db, "users")
+        else:
+            await db.refresh(user)
+    else:
+        await db.refresh(user)
+    await _sync_id_sequence(db, "users")
     return user
 
 
@@ -230,8 +233,8 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
             user = result.scalar_one()
         else:
             await db.refresh(user)
-            if username == _default_test_username():
-                await _sync_id_sequence(db, "users")
+    if username == _default_test_username():
+        await _sync_id_sequence(db, "users")
     return user
 
 
@@ -310,6 +313,16 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await cleanup_session.commit()
 
 
+@pytest.fixture(scope="function")
+def clear_config_cache() -> Iterator[None]:
+    """Clear cached settings before and after each test to prevent test pollution."""
+    from app.config import clear_settings_cache
+
+    clear_settings_cache()
+    yield
+    clear_settings_cache()
+
+
 async def _create_async_db_override(
     async_session: SQLAlchemyAsyncSession | None = None,
 ) -> Callable[[], AsyncIterator[SQLAlchemyAsyncSession]]:
@@ -334,9 +347,9 @@ async def _create_async_db_override(
         )
         async with async_session_maker() as session:
             yield session
-        await connection.close()
-        if created_engine:
-            await engine.dispose()
+            await connection.close()
+            if created_engine:
+                await engine.dispose()
 
     return override_get_db
 
@@ -414,7 +427,7 @@ async def sample_data(
 
     for thread in threads:
         async_db.add(thread)
-    await async_db.flush()
+        await async_db.flush()
 
     for thread in threads:
         await async_db.refresh(thread)
@@ -457,7 +470,7 @@ async def sample_data(
 
     for sess in sessions:
         async_db.add(sess)
-    await async_db.flush()
+        await async_db.flush()
 
     for sess in sessions:
         await async_db.refresh(sess)
@@ -489,7 +502,7 @@ async def sample_data(
 
     for event in events:
         async_db.add(event)
-    await async_db.flush()
+        await async_db.flush()
 
     for event in events:
         await async_db.refresh(event)
@@ -551,13 +564,3 @@ def enable_internal_ops() -> Iterator[None]:
         os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
     else:
         os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = old_value
-
-
-@pytest.fixture(scope="function", autouse=True)
-def clear_config_cache() -> Iterator[None]:
-    """Clear cached settings before and after each test to prevent test pollution."""
-    from app.config import clear_settings_cache
-
-    clear_settings_cache()
-    yield
-    clear_settings_cache()
