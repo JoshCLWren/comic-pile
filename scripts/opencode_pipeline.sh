@@ -327,13 +327,16 @@ gh_comment() {
 
 _candidate_models() {
     # Get candidate models from standard providers and openrouter free tier
-    opencode models 2>/dev/null | grep -E "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
-    opencode models 2>/dev/null | grep -E "^openrouter/.*(:free$|-free$)"
-} | while IFS= read -r model; do
-    if ! _should_skip_model "$model"; then
-        echo "$model"
-    fi
-done
+    # and filter out known problematic models
+    {
+        opencode models 2>/dev/null | grep -E "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
+        opencode models 2>/dev/null | grep -E "^openrouter/.*(:free$|-free$)"
+    } | while IFS= read -r model; do
+        if ! _should_skip_model "$model"; then
+            echo "$model"
+        fi
+    done
+}
 
 # ── Per-model exponential backoff — replaces permanent blacklist
 # Backoff file: $_MODEL_BACKOFF_DIR/<sanitized_model>  →  "<fail_count>\n<last_fail_ts>"
