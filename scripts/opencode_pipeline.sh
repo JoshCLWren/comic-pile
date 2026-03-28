@@ -81,19 +81,9 @@ _should_skip_model() {
   local lower_model
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
-# Skip only the previously problematic mistral model
+  # Skip mistral-small-3.1-24b-instruct with any suffix (:free, :beta, etc.)
+  # and any provider prefix (mistralai/, nvidia/mistralai/, openrouter/mistralai/, etc.)
   if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-  return 0
-fi
-
-  # Also skip specific problematic model IDs regardless of provider
-  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-    return 0
-  fi
-
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
     return 0
   fi
 
@@ -333,7 +323,7 @@ _candidate_models() {
             "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
         opencode models 2>/dev/null | grep -E \
             "^openrouter/.*(:free$|-free$)"
-    } | grep -vE 'mistralai'
+    } | grep -viE 'mistral-small-3\.1-24b-instruct'
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
@@ -426,7 +416,7 @@ case "$model" in
     # Covers: mistralai/mistral-small-3.1-24b-instruct*,
     #         mistral-small-3.1-24b-instruct*,
     #         mistral-small-3.1-24b-instruct:free
-    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*|*mistralai/mistral-small-3.1-24b-instruct:free*)
+    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*|*mistralai/mistral-small-3.1-24b-instruct:free
       echo "nvidia/mistral/mistral-14b-instruct-2512"
       ;; 
     *)
