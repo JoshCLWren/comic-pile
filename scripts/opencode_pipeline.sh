@@ -87,11 +87,6 @@ _should_skip_model() {
       return 0
     fi
 
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
-    return 0
-  fi
-
   return 1
 }
 
@@ -124,10 +119,10 @@ fi
 # Fallback: if tool test hasn't been run yet, use full pool for everything
 if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
-    # Defensive: remove any mistralai models from pools
-    # Updated regex to catch all mistralai variants including those with prefixes
-    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -viE '^mistralai/.*'))
-    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -viE '^mistralai/.*'))
+    # Defensive: remove problematic models from pools
+    # Remove mistral-small-3.1-24b-instruct models regardless of provider
+    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -viE 'mistral-small-3\.1-24b-instruct'))
+    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -viE 'mistral-small-3\.1-24b-instruct'))
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
@@ -135,10 +130,10 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
         "opencode/big-pickle"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
-    # Defensive: remove any mistralai models from pools
-    # Updated regex to catch all mistralai variants including those with prefixes
-    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -viE '^mistralai/.*'))
-    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -viE '^mistralai/.*'))
+    # Defensive: remove problematic models from pools
+    # Remove mistral-small-3.1-24b-instruct models regardless of provider
+    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -viE 'mistral-small-3\.1-24b-instruct'))
+    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -viE 'mistral-small-3\.1-24b-instruct'))
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only

@@ -21,15 +21,12 @@ _should_skip_model() {
       return 0
     fi
 
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
-    return 0
-  fi
+
 
   return 1
 }
 
-# Test with the problematic model
+# Test with a model that should NOT be skipped
 model="mistralai/mistral-medium"
 if _should_skip_model "$model"; then
   echo "Model '$model' should be skipped (returns 0)"
