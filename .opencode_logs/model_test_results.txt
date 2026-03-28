@@ -1,72 +1,74 @@
-FAIL     cerebras/gpt-oss-120b  [Error: Model gpt-oss-120b does not exist or you do not have access to it.]
 FAIL     cerebras/zai-glm-4.7  [Error: Model zai-glm-4.7 does not exist or you do not have access to it.]
+FAIL     cerebras/gpt-oss-120b  [Error: Model gpt-oss-120b does not exist or you do not have access to it.]
 OK       cerebras/qwen-3-235b-a22b-instruct-2507  [Hello]
-OK       opencode/mimo-v2-pro-free  [hello[e~[]
-OK       opencode/nemotron-3-super-free  [Hello]
 OK       opencode/big-pickle  [Hello]
-OK       opencode/mimo-v2-omni-free  [Hello]
 OK       opencode/minimax-m2.5-free  [Hello]
+OK       opencode/gpt-5-nano  [Hello]
 FAIL     mistral/devstral-small-2505  [Error: Invalid model: devstral-small-2505]
-FAIL     mistral/magistral-small  [Error: Invalid model: magistral-small]
-OK       mistral/magistral-medium-latest  [hello]
-TIMEOUT  opencode/gpt-5-nano
+TIMEOUT  opencode/mimo-v2-pro-free
+TIMEOUT  opencode/mimo-v2-omni-free
+TIMEOUT  opencode/nemotron-3-super-free
 TIMEOUT  cerebras/llama3.1-8b
-FAIL     mistral/mistral-embed  [Error: Invalid model: mistral-embed]
-OK       mistral/mistral-large-2411  [Hello]
+FAIL     mistral/magistral-small  [Error: Invalid model: magistral-small]
 TIMEOUT  mistral/codestral-latest
 TIMEOUT  mistral/devstral-2512
+OK       mistral/magistral-medium-latest  [Hello]
 TIMEOUT  mistral/devstral-medium-2507
+FAIL     mistral/mistral-embed  [Error: Invalid model: mistral-embed]
 TIMEOUT  mistral/devstral-medium-latest
 TIMEOUT  mistral/devstral-small-2507
+OK       mistral/mistral-medium-2505  [Hello]
+OK       mistral/mistral-large-2411  [hello]
+OK       mistral/mistral-medium-2508  [Hi]
+OK       mistral/mistral-medium-latest  [Hi]
 TIMEOUT  mistral/labs-devstral-small-2512
 FAIL     mistral/mistral-nemo  [Error: Invalid model: mistral-nemo]
-OK       mistral/mistral-medium-2508  [Hi]
-OK       mistral/mistral-medium-2505  [Hello]
-OK       mistral/mistral-medium-latest  [Hi]
 TIMEOUT  mistral/ministral-3b-latest
 TIMEOUT  mistral/ministral-8b-latest
 FAIL     nvidia/black-forest-labs/flux.1-dev  [Error: Not Found: 404 page not found]
-FAIL     nvidia/deepseek-ai/deepseek-coder-6.7b-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e503b15c-62b0-4d69-b532-a88f0bfa2656': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
-FAIL     nvidia/deepseek-ai/deepseek-r1  [Error: Gone: {type:about:blank,title:Gone,status:410,detail:The model 'deepseek-ai/deepseek-r1' has reached its end of life on 2026-01-26T00:00:00Z and is no longer available.}]
 TIMEOUT  mistral/mistral-large-2512
 TIMEOUT  mistral/mistral-large-latest
+FAIL     nvidia/deepseek-ai/deepseek-coder-6.7b-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e503b15c-62b0-4d69-b532-a88f0bfa2656': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+FAIL     nvidia/deepseek-ai/deepseek-r1  [Error: Gone: {type:about:blank,title:Gone,status:410,detail:The model 'deepseek-ai/deepseek-r1' has reached its end of life on 2026-01-26T00:00:00Z and is no longer available.}]
 FAIL     nvidia/deepseek-ai/deepseek-r1-0528  [Error: Gone: {type:about:blank,title:Gone,status:410,detail:The model 'deepseek-ai/deepseek-r1-0528' has reached its end of life on 2026-01-26T00:00:00Z and is no longer available.}]
 TIMEOUT  mistral/mistral-small-2506
-OK       nvidia/deepseek-ai/deepseek-v3.1  [Hello]
 TIMEOUT  mistral/mistral-small-latest
-OK       nvidia/deepseek-ai/deepseek-v3.1-terminus  [Hello]
 TIMEOUT  mistral/open-mistral-7b
 TIMEOUT  mistral/open-mixtral-8x22b
 TIMEOUT  mistral/open-mixtral-8x7b
-FAIL     nvidia/google/codegemma-1.1-7b  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e2d298c5-204e-4213-b921-9f492cc9011b': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
-FAIL     nvidia/google/codegemma-7b  [Error: Not Found: {status:404,title:Not Found,detail:Function '7dfc10a8-3cc4-448e-97c1-2213308dc222': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+OK       nvidia/deepseek-ai/deepseek-v3.1-terminus  [Hello!]
 TIMEOUT  mistral/pixtral-12b
+FAIL     nvidia/google/codegemma-7b  [Error: Not Found: {status:404,title:Not Found,detail:Function '7dfc10a8-3cc4-448e-97c1-2213308dc222': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+FAIL     nvidia/google/codegemma-1.1-7b  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e2d298c5-204e-4213-b921-9f492cc9011b': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
 FAIL     nvidia/google/gemma-2-27b-it  [Error: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
-TIMEOUT  mistral/pixtral-large-latest
-FAIL     nvidia/google/gemma-2-2b-it  [Error: Unprocessable Entity: body -> tools]
 FAIL     nvidia/google/gemma-3-12b-it  [Error: Unprocessable Entity: body -> tools]
+FAIL     nvidia/google/gemma-2-2b-it  [Error: Unprocessable Entity: body -> tools]
 FAIL     nvidia/google/gemma-3-1b-it  [Error: Bad Request: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
-FAIL     nvidia/meta/codellama-70b  [Error: Not Found: {status:404,title:Not Found,detail:Function 'f6b06895-d073-4714-8bb2-26c09e9f6597': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+FAIL     nvidia/google/gemma-3-27b-it  [Error: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
+OK       nvidia/deepseek-ai/deepseek-v3.1  [Hello]
 FAIL     nvidia/google/gemma-3n-e2b-it  [Error: Bad Request: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
-OK       nvidia/deepseek-ai/deepseek-v3.2  [Hello]
+FAIL     nvidia/meta/codellama-70b  [Error: Not Found: {status:404,title:Not Found,detail:Function 'f6b06895-d073-4714-8bb2-26c09e9f6597': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+TIMEOUT  mistral/pixtral-large-latest
 FAIL     nvidia/meta/llama-4-scout-17b-16e-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function 'b6bb6e01-780e-4ba0-a5b8-379f00ed9b1c': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+OK       nvidia/meta/llama-3.3-70b-instruct  [Your input is lacking necessary details. Please provide more information or specify the task you need help with.]
+FAIL     nvidia/meta/llama3-70b-instruct  [Error: Requested token count exceeds the model's maximum context length of 8192 tokens. You requested a total of 10230 tokens: 6134 tokens from the input messages and 4096 tokens for the completion. Please reduce the number of tokens in the input messages or the completion to fit within the limit.]
 OK       nvidia/meta/llama-4-maverick-17b-128e-instruct  [{type: function, name: bash, parameters: {command: echo hello, description: Prints hello}}]
-FAIL     nvidia/meta/llama3-70b-instruct  [Error: Requested token count exceeds the model's maximum context length of 8192 tokens. You requested a total of 10117 tokens: 6021 tokens from the input messages and 4096 tokens for the completion. Please reduce the number of tokens in the input messages or the completion to fit within the limit.]
 FAIL     nvidia/meta/llama3-8b-instruct  [Error: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
 OK       nvidia/microsoft/phi-3-medium-128k-instruct  [Hi]
 FAIL     nvidia/microsoft/phi-3-medium-4k-instruct  [Error: Bad Request: This]
 FAIL     nvidia/microsoft/phi-3-small-128k-instruct  [Error: Unprocessable Entity: body -> max_tokens]
-FAIL     nvidia/microsoft/phi-3-small-8k-instruct  [Error: Unprocessable Entity: body -> max_tokens]
-TIMEOUT  nvidia/google/gemma-3-27b-it
-FAIL     nvidia/microsoft/phi-3.5-moe-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e6cab982-62f4-481e-9a7a-3dedb87dbd01': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
-TIMEOUT  nvidia/google/gemma-3n-e4b-it
-TIMEOUT  nvidia/meta/llama-3.1-405b-instruct
-FAIL     nvidia/microsoft/phi-3.5-vision-instruct  [Error: Bad Request: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
-TIMEOUT  nvidia/meta/llama-3.1-70b-instruct
+TIMEOUT  nvidia/deepseek-ai/deepseek-v3.2
 FAIL     nvidia/microsoft/phi-3-vision-128k-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function '20f2537e-8593-4eb9-ad40-60eee3bbaa55': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
-TIMEOUT  nvidia/meta/llama-3.2-11b-vision-instruct
-TIMEOUT  nvidia/meta/llama-3.2-1b-instruct
+FAIL     nvidia/microsoft/phi-3.5-moe-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function 'e6cab982-62f4-481e-9a7a-3dedb87dbd01': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
+FAIL     nvidia/microsoft/phi-3.5-vision-instruct  [Error: Bad Request: auto tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set]
 FAIL     nvidia/minimaxai/minimax-m2.1  [Error: Gone: {type:about:blank,title:Gone,status:410,detail:The model 'minimaxai/minimax-m2.1' has reached its end of life on 2026-03-26T00:00:00Z and is no longer available.}]
 FAIL     nvidia/mistralai/codestral-22b-instruct-v0.1  [Error: Not Found: {status:404,title:Not Found,detail:Function id '9a10b012-e6df-46fd-83b2-700dcbc75814' version 'null': Specified function in account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo' is not found}]
-TIMEOUT  nvidia/meta/llama-3.3-70b-instruct
+OK       nvidia/meta/llama-3.1-405b-instruct  [Hello]
+FAIL     nvidia/microsoft/phi-3-small-8k-instruct  [Error: Unprocessable Entity: body -> max_tokens]
+OK       nvidia/minimaxai/minimax-m2.5  [Hello]
+TIMEOUT  nvidia/google/gemma-3n-e4b-it
+TIMEOUT  nvidia/meta/llama-3.1-70b-instruct
+TIMEOUT  nvidia/meta/llama-3.2-11b-vision-instruct
+TIMEOUT  nvidia/meta/llama-3.2-1b-instruct
 FAIL     nvidia/mistralai/mamba-codestral-7b-v0.1  [Error: Bad Request: Tool use has not been enabled, because it is unsupported by mistralai/mamba-codestral-7b-v0.1.]
+FAIL     nvidia/mistralai/mistral-large-2-instruct  [Error: Not Found: {status:404,title:Not Found,detail:Function '7fadd4de-e22a-48e4-90e9-f02ef14a74b9': Not found for account 'dFPPGePxi2SnMmhIiJ6f2oyL4X5LShoDK9275pciaUo'}]
