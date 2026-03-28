@@ -82,10 +82,11 @@ _should_skip_model() {
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
     # Filter out specific problematic model variants (case-insensitive)
-    # Filter out mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
+    # Filter out mistral-small-3.1-24b-instruct from mistralai provider with any suffix
     # Matches: mistral-small-3.1-24b-instruct, mistralai/mistral-small-3.1-24b-instruct,
     # mistral-small-3.1-24b-instruct:free, mistralai/mistral-small-3.1-24b-instruct:free, etc.
-    if [[ "$lower_model" =~ (mistralai/)?mistral-small-3\.1-24b-instruct(:[a-z0-9.-]+)?$ ]]; then
+    # But allows: nvidia/mistralai/mistral-small-3.1-24b-instruct-2503 (working variant)
+    if [[ "$lower_model" =~ ^(mistralai/)?mistral-small-3\.1-24b-instruct(:[a-z0-9.-]+)?$ ]]; then
       echo "[PIPELINE] WARNING: Filtering out problematic model variant: $model" >&2
       return 0
     fi
