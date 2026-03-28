@@ -40,6 +40,21 @@ if not os.getenv("SECRET_KEY"):
 TRUNCATE_TEST_DATA_SQL = text(
     "DELETE FROM sessions; DELETE FROM events; DELETE FROM threads; DELETE FROM issues; DELETE FROM snapshots; DELETE FROM dependencies; DELETE FROM revoked_tokens; DELETE FROM users;"
 )
+
+TRUNCATE_TEST_DATA_SQL_POSTGRESQL = text(
+    "TRUNCATE sessions, events, threads, issues, snapshots, dependencies, revoked_tokens, users RESTART IDENTITY CASCADE;"
+)
+
+TRUNCATE_TEST_DATA_SQL_SQLITE = [
+    text("DELETE FROM sessions"),
+    text("DELETE FROM events"),
+    text("DELETE FROM threads"),
+    text("DELETE FROM issues"),
+    text("DELETE FROM snapshots"),
+    text("DELETE FROM dependencies"),
+    text("DELETE FROM revoked_tokens"),
+    text("DELETE FROM users"),
+]
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
 
 
@@ -141,13 +156,24 @@ def _default_test_username() -> str:
 
 async def _sync_id_sequence(db: SQLAlchemyAsyncSession, table_name: str) -> None:
     """Advance a table's id sequence to the current max id after explicit inserts."""
-    await db.execute(
-        text(
-            "SELECT setval("
-            f"pg_get_serial_sequence('{table_name}', 'id'), "
-            f"COALESCE((SELECT MAX(id) FROM {table_name}), 1), true)"
+    # Get the database URL to determine database type
+    database_url = get_test_database_url()
+
+    if database_url.startswith("postgresql"):
+        # PostgreSQL-specific sequence reset
+        await db.execute(
+            text(
+                "SELECT setval("
+                f"pg_get_serial_sequence('{table_name}', 'id'), "
+                f"COALESCE((SELECT MAX(id) FROM {table_name}), 1), true)"
+            )
         )
-    )
+    elif database_url.startswith("sqlite"):
+        # SQLite doesn't have sequences, so this is a no-op
+        # SQLite handles autoincrement automatically
+        pass
+    else:
+        raise ValueError(f"Unsupported database type: {database_url}")
 
 
 @pytest_asyncio.fixture(scope="session")
@@ -176,7 +202,10 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
 
         await conn.run_sync(_check_and_drop)
         if database_url.startswith("postgresql"):
-            await conn.execute(TRUNCATE_TEST_DATA_SQL)
+            await conn.execute(TRUNCATE_TEST_DATA_SQL_POSTGRESQL)
+        elif database_url.startswith("sqlite"):
+            for sql in TRUNCATE_TEST_DATA_SQL_SQLITE:
+                await conn.execute(sql)
 
     _SHARED_TEST_ENGINE = engine
     try:
@@ -303,12 +332,26 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
     )
 
     async with session_maker() as session:
-        await session.execute(TRUNCATE_TEST_DATA_SQL)
+        database_url = get_test_database_url()
+        if database_url.startswith("postgresql"):
+            await session.execute(TRUNCATE_TEST_DATA_SQL_POSTGRESQL)
+        elif database_url.startswith("sqlite"):
+            for sql in TRUNCATE_TEST_DATA_SQL_SQLITE:
+                await session.execute(sql)
+        else:
+            await session.execute(TRUNCATE_TEST_DATA_SQL)
         await session.commit()
         yield session
 
     async with session_maker() as cleanup_session:
-        await cleanup_session.execute(TRUNCATE_TEST_DATA_SQL)
+        database_url = get_test_database_url()
+        if database_url.startswith("postgresql"):
+            await cleanup_session.execute(TRUNCATE_TEST_DATA_SQL_POSTGRESQL)
+        elif database_url.startswith("sqlite"):
+            for sql in TRUNCATE_TEST_DATA_SQL_SQLITE:
+                await cleanup_session.execute(sql)
+        else:
+            await cleanup_session.execute(TRUNCATE_TEST_DATA_SQL)
         await cleanup_session.commit()
 
 
@@ -360,7 +403,6 @@ async def sample_data(
 
     threads = [
         Thread(
-            id=1,
             title="Superman",
             format="Comic",
             issues_remaining=10,
@@ -370,19 +412,17 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
-            id=2,
             title="Batman",
             format="Comic",
             issues_remaining=5,
+            total_issues=10,
             queue_position=2,
             status="active",
+            reading_progress="in_progress",
             user_id=user.id,
             created_at=now,
-            total_issues=10,
-            reading_progress="in_progress",
         ),
         Thread(
-            id=3,
             title="Wonder Woman",
             format="Comic",
             issues_remaining=0,
@@ -392,7 +432,6 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
-            id=4,
             title="Flash",
             format="Comic",
             issues_remaining=15,
@@ -402,7 +441,6 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
-            id=5,
             title="Aquaman",
             format="Comic",
             issues_remaining=8,
@@ -425,7 +463,6 @@ async def sample_data(
     batman_issues = []
     for i in range(1, 11):
         issue = Issue(
-            id=i,
             thread_id=threads[1].id,
             issue_number=str(i),
             position=i,
@@ -443,13 +480,11 @@ async def sample_data(
 
     sessions = [
         SessionModel(
-            id=1,
             start_die=6,
             user_id=user.id,
             started_at=now,
         ),
         SessionModel(
-            id=2,
             start_die=8,
             user_id=user.id,
             started_at=now,
@@ -465,18 +500,15 @@ async def sample_data(
 
     events = [
         Event(
-            id=1,
             type="roll",
             die=6,
             result=4,
             selected_thread_id=threads[0].id,
             selection_method="random",
             session_id=sessions[0].id,
-            thread_id=threads[0].id,
             timestamp=now,
         ),
         Event(
-            id=2,
             type="rate",
             rating=4.5,
             issues_read=1,
