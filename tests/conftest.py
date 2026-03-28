@@ -174,7 +174,7 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
             Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
-        await conn.execute(TRUNCATE_TEST_DATA_SQL)
+        # await conn.execute(TRUNCATE_TEST_DATA_SQL)  # Disabled truncate to avoid deadlocks
 
     _SHARED_TEST_ENGINE = engine
     try:
