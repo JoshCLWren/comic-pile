@@ -15,9 +15,8 @@ mkdir -p "$(dirname "$RESULTS_FILE")"
 
 MODELS=$(opencode models 2>/dev/null)
 
-# Filter out specific problematic model variants
-# Note: We now allow valid mistralai models but filter out specific problematic ones
-FILTERED_MODELS=$(echo "$MODELS" | grep -viE 'mistral-small-3\.1-24b-instruct:free|:free$')
+# Filter out only truly problematic models (e.g., mistral-small-3.1-24b-instruct:free may fail)
+FILTERED_MODELS=$(echo "$MODELS" | grep -viE 'mistral-small-3\.1-24b-instruct:free$')
 
 TOTAL=$(echo "$FILTERED_MODELS" | wc -l)
 

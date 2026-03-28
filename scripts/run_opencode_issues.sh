@@ -24,11 +24,11 @@ mkdir -p "$LOG_DIR"
 OPcode_MODEL="${OPcode_MODEL:-opencode/nemotron-3-super-free}"
 
 # If the selected model is known to cause ProviderModelNotFoundError, fall back to safe default
-# Perform case-insensitive check to catch all variants (e.g., MistralAI/..., Mistral/..., with :free suffix, etc.)
+# Only filter out truly problematic :free variants (e.g., mistral-small-3.1-24b-instruct:free may fail)
 lower_model=$(echo "$OPcode_MODEL" | tr '[:upper:]' '[:lower:]')
-if [[ "$lower_model" =~ ^(mistral(ai)?/)?mistral-small-3\.1-24b-instruct ]]; then
+if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct:free$ ]]; then
   echo "Warning: Model $OPcode_MODEL is known to cause ProviderModelNotFoundError. Falling back to opencode/nemotron-3-super-free."
-  OPcode_MODEL="opencode/nemotron-3-super-free" # safe fallback for problematic models
+  OPcode_MODEL="opencode/nemotron-3-super-free" # safe fallback for problematic :free variants
 fi
 
 # Ordered: bugs first, then simpler frontend-only UX, then complex UX, then API/onboarding
