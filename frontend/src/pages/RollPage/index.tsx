@@ -26,50 +26,52 @@ import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
-import { useRollPageState } from './useRollPageState'
-import type { RatingThread, ThreadMetadata } from './types'
-import {
-  RATING_THRESHOLD,
-  createExplosion,
-  buildRatingThread,
-} from './utils'
-import { RatingView } from './components/RatingView'
-import { ThreadPool } from './components/ThreadPool'
+ import { useRollPageState } from './useRollPageState'
+ import type { RatingThread, ThreadMetadata } from './types'
+ import {
+   RATING_THRESHOLD,
+   createExplosion,
+   buildRatingThread,
+ } from './utils'
+ import { RatingView } from './components/RatingView'
+ import { ThreadPool } from './components/ThreadPool'
+ import { useToast } from '../../contexts/ToastContext'
 
 export default function RollPage() {
   const state = useRollPageState()
-  const {
-    isRolling, setIsRolling,
-    rolledResult, setRolledResult,
-    selectedThreadId, setSelectedThreadId,
-    currentDie, setCurrentDie,
-    diceState, setDiceState,
-    staleThread, setStaleThread,
-    staleThreadCount, setStaleThreadCount,
-    isOverrideOpen, setIsOverrideOpen,
-    overrideThreadId, setOverrideThreadId,
-    overrideErrorMessage, setOverrideErrorMessage,
-    snoozedExpanded, setSnoozedExpanded,
-    blockedExpanded, setBlockedExpanded,
-    isDieModalOpen, setIsDieModalOpen,
-    selectedThread, setSelectedThread,
-    isActionSheetOpen, setIsActionSheetOpen,
-    activeRatingThread, setActiveRatingThread,
-    isCollectionDialogOpen, setIsCollectionDialogOpen,
-    blockingReasonMap, setBlockingReasonMap,
-    showMigrationDialog, setShowMigrationDialog,
-    threadToMigrate, setThreadToMigrate,
-    showSimpleMigration, setShowSimpleMigration,
-    isRatingView, setIsRatingView,
-    rating, setRating,
-    predictedDie, setPredictedDie,
-    errorMessage, setErrorMessage,
-    suppressPendingAutoOpenRef,
-    rollIntervalRef,
-    rollTimeoutRef,
-  } = state
+   const {
+     isRolling, setIsRolling,
+     rolledResult, setRolledResult,
+     selectedThreadId, setSelectedThreadId,
+     currentDie, setCurrentDie,
+     diceState, setDiceState,
+     staleThreads, setStaleThreads,
+     staleThreadCount, setStaleThreadCount,
+     staleExpanded, setStaleExpanded,
+     isOverrideOpen, setIsOverrideOpen,
+     overrideThreadId, setOverrideThreadId,
+     overrideErrorMessage, setOverrideErrorMessage,
+     snoozedExpanded, setSnoozedExpanded,
+     blockedExpanded, setBlockedExpanded,
+     isDieModalOpen, setIsDieModalOpen,
+     selectedThread, setSelectedThread,
+     isActionSheetOpen, setIsActionSheetOpen,
+     activeRatingThread, setActiveRatingThread,
+     isCollectionDialogOpen, setIsCollectionDialogOpen,
+     blockingReasonMap, setBlockingReasonMap,
+     showMigrationDialog, setShowMigrationDialog,
+     threadToMigrate, setThreadToMigrate,
+     showSimpleMigration, setShowSimpleMigration,
+     isRatingView, setIsRatingView,
+     rating, setRating,
+     predictedDie, setPredictedDie,
+     errorMessage, setErrorMessage,
+     suppressPendingAutoOpenRef,
+     rollIntervalRef,
+     rollTimeoutRef,
+   } = state
 
-  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   const { activeCollectionId = null } = useCollections()
