@@ -85,9 +85,10 @@ _should_skip_model() {
     # Filter out mistral-small-3.1-24b-instruct from mistral/mistralai providers with any suffix
     # Matches: mistral-small-3.1-24b-instruct, mistralai/mistral-small-3.1-24b-instruct,
     # mistral/mistral-small-3.1-24b-instruct, mistral-small-3.1-24b-instruct:free,
-    # mistralai/mistral-small-3.1-24b-instruct:free, mistral/mistral-small-3.1-24b-instruct:free, etc.
+    # mistralai/mistral-small-3.1-24b-instruct:free, mistral/mistral-small-3.1-24b-instruct:free,
+    # openrouter/mistralai/mistral-small-3.1-24b-instruct:free, etc.
     # But allows: nvidia/mistralai/mistral-small-3.1-24b-instruct-2503 (working variant)
-    if [[ "$lower_model" =~ ^(mistral(ai)?/)?mistral-small-3\.1-24b-instruct(:[a-z0-9.-]+)?$ ]]; then
+    if [[ "$lower_model" =~ ^(mistral(ai)?/)?mistral-small-3\.1-24b-instruct(:[a-z0-9.-]+)?$ ]] && [[ ! "$lower_model" =~ ^nvidia/ ]]; then
       echo "[PIPELINE] WARNING: Filtering out problematic model variant: $model" >&2
       return 0
     fi
