@@ -16,14 +16,14 @@ _should_skip_model() {
   local lower_model
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
-# Skip only problematic model identifiers
-    # Placeholder for future specific model skipping logic
-    # For now, we rely on the broader patterns below
-    :
-
-    # Also skip specific problematic model IDs regardless of provider
+  # Skip specific problematic model IDs regardless of provider
   # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
   if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+    return 0
+  fi
+  # Extra-robust guard: explicitly skip the common mistral small free variants
+  if [[ "$lower_model" =~ mistralai/mistral-small-3\.1-24b-instruct:free ]] || \
+     [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct:free ]]; then
     return 0
   fi
 
@@ -31,6 +31,15 @@ _should_skip_model() {
   if [[ "$lower_model" =~ mistralai ]]; then
     return 0
   fi
+
+    # Additional safety: catch any model with "mistral-small-3.1-24b-instruct" in any form
+    if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+        return 0
+    fi
+    # Skip any models with ':free' suffix (common for free tier models that may be unavailable)
+    if [[ "$lower_model" == *":free" ]]; then
+        return 0
+    fi
 
   return 1
 }
@@ -65,7 +74,7 @@ test_model "mistral/magistral-medium-latest" "KEEP"
 test_model "anyprovider/mistral-small-3.1-24b-instruct:beta" "SKIP"
 test_model "mistralai/some-other-model" "SKIP"
 test_model "mistralai/mistral-small-3.1-24b-instruct" "SKIP"
-
-
+test_model "mistralai/mistral-small-3.1-24b-instruct:free" "SKIP"
+test_model "opencode/gpt-5-nano" "KEEP"
 
 echo "================================"
