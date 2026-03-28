@@ -328,10 +328,12 @@ gh_comment() {
 #   openai — excluded (no subscription)
 
 _candidate_models() {
-    opencode models 2>/dev/null | grep -E \
-        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
-    opencode models 2>/dev/null | grep -E \
-        "^openrouter/.*(:free$|-free$)"
+    {
+        opencode models 2>/dev/null | grep -E \
+            "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
+        opencode models 2>/dev/null | grep -E \
+            "^openrouter/.*(:free$|-free$)"
+    } | grep -vE '^mistralai/'
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
