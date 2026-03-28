@@ -83,11 +83,12 @@ _should_skip_model() {
 
     # Filter out specific problematic model variants (case-insensitive)
     # Filter out mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-# Matches: mistral-small-3.1-24b-instruct, # mistralai/mistral-small-3.1-24b-instruct (free tier model - filtered by _should_skip_model), etc.
-if [[ "$lower_model" =~ (mistralai/)?mistral-small-3\.1-24b-instruct(?::free)?$ ]]; then
-  echo "[PIPELINE] WARNING: Filtering out problematic model variant: $model" >&2
-  return 0
-fi
+    # Matches: mistral-small-3.1-24b-instruct, mistralai/mistral-small-3.1-24b-instruct,
+    # mistral-small-3.1-24b-instruct:free, mistralai/mistral-small-3.1-24b-instruct:free, etc.
+    if [[ "$lower_model" =~ (mistralai/)?mistral-small-3\.1-24b-instruct(:[a-z0-9.-]+)?$ ]]; then
+      echo "[PIPELINE] WARNING: Filtering out problematic model variant: $model" >&2
+      return 0
+    fi
 
 # Filter out models ending with :free (case-insensitive)
 if [[ "$lower_model" =~ :free$ ]]; then
