@@ -83,7 +83,7 @@ _should_skip_model() {
 
     # Skip specific problematic model IDs regardless of provider
     # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-    if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct(:[^:]+)?$ ]]; then
+    if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
       return 0
     fi
 
@@ -332,9 +332,11 @@ gh_comment() {
 
 _candidate_models() {
     opencode models 2>/dev/null | grep -E \
-        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
+        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/" | \
+        grep -vE 'mistralai|mistral-small-3\.1-24b-instruct'
     opencode models 2>/dev/null | grep -E \
-        "^openrouter/.*(:free$|-free$)"
+        "^openrouter/.*(:free$|-free$)" | \
+        grep -vE 'mistralai|mistral-small-3\.1-24b-instruct'
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
