@@ -396,13 +396,14 @@ async def sample_data(
     user = await async_db.execute(select(User).where(User.username == username))
     user = user.scalar_one_or_none()
     if not user:
-        user = User(username=username, created_at=now)
+        user = User(username=username, id=1, created_at=now)
         async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
+        await async_db.flush()
+        await _sync_id_sequence(async_db, "users")
 
     threads = [
         Thread(
+            id=1,
             title="Superman",
             format="Comic",
             issues_remaining=10,
@@ -412,6 +413,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=2,
             title="Batman",
             format="Comic",
             issues_remaining=5,
@@ -423,6 +425,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=3,
             title="Wonder Woman",
             format="Comic",
             issues_remaining=0,
@@ -432,6 +435,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=4,
             title="Flash",
             format="Comic",
             issues_remaining=15,
@@ -441,6 +445,7 @@ async def sample_data(
             created_at=now,
         ),
         Thread(
+            id=5,
             title="Aquaman",
             format="Comic",
             issues_remaining=8,
@@ -457,6 +462,8 @@ async def sample_data(
 
     for thread in threads:
         await async_db.refresh(thread)
+
+    await _sync_id_sequence(async_db, "threads")
 
     # Create Issue records for migrated threads (Batman only)
     # Batman: 10 total, issues 1-5 read, 6-10 unread (5 remaining)
@@ -480,11 +487,13 @@ async def sample_data(
 
     sessions = [
         SessionModel(
+            id=1,
             start_die=6,
             user_id=user.id,
             started_at=now,
         ),
         SessionModel(
+            id=2,
             start_die=8,
             user_id=user.id,
             started_at=now,
@@ -497,6 +506,8 @@ async def sample_data(
 
     for sess in sessions:
         await async_db.refresh(sess)
+
+    await _sync_id_sequence(async_db, "sessions")
 
     events = [
         Event(
