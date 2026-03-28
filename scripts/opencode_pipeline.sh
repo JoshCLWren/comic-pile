@@ -82,13 +82,14 @@ _should_skip_model() {
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
     # Filter out specific problematic model variants (case-insensitive)
-# Filter out mistral-small-3.1-24b-instruct from mistral/mistralai providers with any suffix
-# Matches: mistral-small-3.1-24b-instruct, mistralai/mistral-small-3.1-24b-instruct,
-# mistral/mistral-small-3.1-24b-instruct, mistral-small-3.1-24b-instruct:free,
-# mistralai/mistral-small-3.1-24b-instruct:free, mistral/mistral-small-3.1-24b-instruct:free,
-# openrouter/mistralai/mistral-small-3.1-24b-instruct:free, etc.
-# But allows: nvidia/mistralai/mistral-small-3.1-24b-instruct-2503 (working variant)
-# Also filter out :free suffix for all mistralai models to prevent free-tier model errors
+    # Filter out mistral-small-3.1-24b-instruct from mistral/mistralai providers with any suffix
+    # Matches: mistral-small-3.1-24b-instruct, mistralai/mistral-small-3.1-24b-instruct,
+    # mistral/mistral-small-3.1-24b-instruct, mistral-small-3.1-24b-instruct:free,
+    # mistralai/mistral-small-3.1-24b-instruct:free, mistral/mistral-small-3.1-24b-instruct:free,
+    # openrouter/mistralai/mistral-small-3.1-24b-instruct:free, etc.
+    # But allows: nvidia/mistralai/mistral-small-3.1-24b-instruct-2503 (working variant)
+    # Also filter out :free suffix for all mistralai models to prevent free-tier model errors
+    # Allow nvidia/mistralai/mistral-small-3.1-24b-instruct:free as it is a valid variant
     if [[ "$lower_model" =~ ^(mistral(ai)?/)?mistral-small-3\.1-24b-instruct(:[a-z0-9.-]+)?$ ]] && [[ ! "$lower_model" =~ ^nvidia/ ]]; then
       echo "[PIPELINE] WARNING: Filtering out problematic model variant: $model" >&2
       return 0
