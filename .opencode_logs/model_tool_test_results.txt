@@ -1,12 +1,96 @@
-TOOL_OK   opencode/mimo-v2-pro-free  [TOOLTEST_OK TOOLTEST_OK[e~[ ]
-TOOL_OK   mistral/mistral-medium-2508  [TOOLTEST_OK TOOLTEST_OK ]
-TOOL_OK   mistral/mistral-medium-latest  [TOOLTEST_OK TOOLTEST_OK ]
-TOOL_OK   mistral/mistral-medium-2505  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_FAIL cerebras/gpt-oss-120b  [Error: Model gpt-oss-120b does not exist or you do not have ]
+TOOL_FAIL cerebras/zai-glm-4.7  [Error: Model zai-glm-4.7 does not exist or you do not have a]
+TOOL_FAIL mistral/devstral-small-2505  [Error: Invalid model: devstral-small-2505]
 TOOL_OK   opencode/minimax-m2.5-free  [TOOLTEST_OK TOOLTEST_OK ]
 TOOL_OK   opencode/big-pickle  [TOOLTEST_OK TOOLTEST_OK ]
 TOOL_OK   mistral/magistral-medium-latest  [TOOLTEST_OK TOOLTEST_OK ]
-TOOL_OK   opencode/mimo-v2-omni-free  [TOOLTEST_OK TOOLTEST_OK ]
-TOOL_OK   mistral/mistral-large-2411  [- /help: Get help with using opencode - To give feedback, us]
-TOOL_OK   opencode/nemotron-3-super-free  [TOOLTEST_OK TOOLTEST_OK ]
-TIMEOUT   cerebras/qwen-3-235b-a22b-instruct-2507
-TOOL_OK   opencode/gpt-5-nano  [$ echo TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   opencode/gpt-5-nano  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_FAIL mistral/magistral-small  [Error: Invalid model: magistral-small]
+TOOL_FAIL mistral/mistral-embed  [Error: Invalid model: mistral-embed]
+TIMEOUT   opencode/mimo-v2-omni-free
+TIMEOUT   mistral/devstral-2512
+TIMEOUT   opencode/mimo-v2-pro-free
+TOOL_OK   opencode/nemotron-3-super-free  [$ echo TOOLTEST_OK TOOLTEST_OK ]
+TIMEOUT   cerebras/llama3.1-8b
+TIMEOUT   mistral/codestral-latest
+TIMEOUT   mistral/devstral-medium-latest
+TIMEOUT   mistral/devstral-medium-2507
+TOOL_OK   cerebras/qwen-3-235b-a22b-instruct-2507  [$ echo TOOLTEST_OK TOOLTEST_OK ]
+TOOL_FAIL mistral/mistral-nemo  [Error: Invalid model: mistral-nemo]
+TIMEOUT   mistral/devstral-small-2507
+TIMEOUT   mistral/labs-devstral-small-2512
+TOOL_OK   mistral/mistral-medium-2508  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   mistral/mistral-medium-latest  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   mistral/mistral-medium-2505  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_FAIL nvidia/black-forest-labs/flux.1-dev  [Error: Not Found: 404 page not found]
+TOOL_FAIL nvidia/deepseek-ai/deepseek-coder-6.7b-instruct  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_FAIL nvidia/deepseek-ai/deepseek-r1  [Error: Gone: {"type":"about:blank","title":"Gone","status":4]
+TIMEOUT   mistral/ministral-3b-latest
+TIMEOUT   mistral/ministral-8b-latest
+TOOL_FAIL nvidia/deepseek-ai/deepseek-r1-0528  [Error: Gone: {"type":"about:blank","title":"Gone","status":4]
+TOOL_OK   mistral/mistral-large-2411  [workflow_test.py % WebFetch https://opencode.ai ]
+TOOL_FAIL nvidia/google/codegemma-1.1-7b  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_FAIL nvidia/google/codegemma-7b  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TIMEOUT   mistral/mistral-large-2512
+TOOL_FAIL nvidia/google/gemma-2-27b-it  [Error: "auto" tool choice requires --enable-auto-tool-choice]
+TIMEOUT   mistral/mistral-large-latest
+TIMEOUT   mistral/open-mistral-7b
+TIMEOUT   mistral/mistral-small-2506
+TIMEOUT   mistral/open-mixtral-8x22b
+TIMEOUT   mistral/mistral-small-latest
+TOOL_OK   nvidia/deepseek-ai/deepseek-v3.1-terminus  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_FAIL nvidia/google/gemma-2-2b-it  [  Extra inputs are not permitted (type=extra_forbidden)]
+TOOL_FAIL nvidia/google/gemma-3-12b-it  [  Extra inputs are not permitted (type=extra_forbidden)]
+TOOL_FAIL nvidia/google/gemma-3-1b-it  [Error: Bad Request: "auto" tool choice requires --enable-aut]
+TOOL_FAIL nvidia/google/gemma-3-27b-it  [Error: "auto" tool choice requires --enable-auto-tool-choice]
+TOOL_FAIL nvidia/meta/codellama-70b  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TIMEOUT   mistral/open-mixtral-8x7b
+TOOL_FAIL nvidia/google/gemma-3n-e2b-it  [Error: Bad Request: "auto" tool choice requires --enable-aut]
+TOOL_OK   nvidia/deepseek-ai/deepseek-v3.1  [TOOLTEST_OK TOOLTEST_OK ]
+TIMEOUT   mistral/pixtral-12b
+TIMEOUT   mistral/pixtral-large-latest
+TOOL_FAIL nvidia/meta/llama-4-scout-17b-16e-instruct  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_FAIL nvidia/meta/llama3-8b-instruct  [Error: Bad Request: {"status":400,"title":"Bad Request","det]
+TOOL_OK   nvidia/meta/llama-4-maverick-17b-128e-instruct  [{"type": "function", "name": "bash", "parameters": {"command]
+TOOL_FAIL nvidia/meta/llama3-70b-instruct  [Error: "Requested token count exceeds the model's maximum co]
+TOOL_OK   nvidia/microsoft/phi-3-medium-128k-instruct  [TOOLTEST_OK ]
+TOOL_FAIL nvidia/meta/llama-3.3-70b-instruct  [Your input is lacking necessary details. Please provide more]
+TOOL_FAIL nvidia/microsoft/phi-3-medium-4k-instruct  [Error: Bad Request: This model's maximum context length is 4]
+TOOL_FAIL nvidia/microsoft/phi-3-small-128k-instruct  [  Extra inputs are not permitted (type=extra_forbidden)]
+TOOL_FAIL nvidia/microsoft/phi-3-small-8k-instruct  [  Extra inputs are not permitted (type=extra_forbidden)]
+TIMEOUT   nvidia/deepseek-ai/deepseek-v3.2
+TOOL_FAIL nvidia/microsoft/phi-3-vision-128k-instruct  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_OK   nvidia/meta/llama-3.2-11b-vision-instruct  [TOOLTEST_OK The bash command `echo TOOLTEST_OK` is run and i]
+TOOL_FAIL nvidia/microsoft/phi-3.5-moe-instruct  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_FAIL nvidia/microsoft/phi-3.5-vision-instruct  [Error: Bad Request: "auto" tool choice requires --enable-aut]
+TOOL_FAIL nvidia/minimaxai/minimax-m2.1  [Error: Gone: {"type":"about:blank","title":"Gone","status":4]
+TOOL_FAIL nvidia/nvidia/cosmos-nemotron-34b  [Error: Not Found: 404 page not found]
+TOOL_FAIL nvidia/nvidia/llama-3.1-nemotron-70b-instruct  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_FAIL nvidia/nvidia/llama-3.1-nemotron-51b-instruct  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_OK   nvidia/moonshotai/kimi-k2-instruct  [TOOLTEST_OK TOOLTEST_OK ]
+TIMEOUT   nvidia/google/gemma-3n-e4b-it
+TIMEOUT   nvidia/meta/llama-3.1-405b-instruct
+TOOL_OK   nvidia/meta/llama-3.1-70b-instruct  [$ echo TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   nvidia/moonshotai/kimi-k2-instruct-0905  [TOOLTEST_OK TOOLTEST_OK ]
+TIMEOUT   nvidia/meta/llama-3.2-1b-instruct
+TOOL_OK   nvidia/moonshotai/kimi-k2.5  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   nvidia/nvidia/llama-3.3-nemotron-super-49b-v1  [TOOLTEST_OK Error: Bad Request: [{'type': 'string_too_short']
+TOOL_FAIL nvidia/nvidia/llama-embed-nemotron-8b  [Error: Not Found: 404 page not found]
+TOOL_FAIL nvidia/nvidia/llama3-chatqa-1.5-70b  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_FAIL nvidia/nvidia/nemoretriever-ocr-v1  [Error: Not Found: 404 page not found]
+TOOL_FAIL nvidia/nvidia/nemotron-4-340b-instruct  [Error: Not Found: {"status":404,"title":"Not Found","detail"]
+TOOL_FAIL nvidia/nvidia/parakeet-tdt-0.6b-v2  [Error: Not Found: 404 page not found]
+TOOL_FAIL nvidia/openai/whisper-large-v3  [Error: Not Found: 404 page not found]
+TOOL_OK   nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5  [</think> TOOLTEST_OK ]
+TOOL_FAIL nvidia/qwen/qwen2.5-coder-7b-instruct  [Error: Bad Request: Tool use has not been enabled, because i]
+TIMEOUT   nvidia/microsoft/phi-4-mini-instruct
+TOOL_FAIL nvidia/qwen/qwen2.5-coder-32b-instruct  [Error: Bad Request: Tool use has not been enabled, because i]
+TOOL_FAIL nvidia/qwen/qwen3-235b-a22b  [Error: Gone: {"type":"about:blank","title":"Gone","status":4]
+TOOL_OK   nvidia/minimaxai/minimax-m2.5  [$ echo TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   nvidia/nvidia/nemotron-3-super-120b-a12b  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   nvidia/nvidia/nemotron-3-nano-30b-a3b  [TOOLTEST_OK ]
+TOOL_OK   nvidia/nvidia/llama-3.1-nemotron-ultra-253b-v1  [TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   nvidia/moonshotai/kimi-k2-thinking  [$ echo TOOLTEST_OK TOOLTEST_OK ]
+TOOL_OK   nvidia/qwen/qwen3-next-80b-a3b-instruct  [TOOLTEST_OK ]
+TOOL_FAIL nvidia/qwen/qwq-32b  [Error: Bad Request: Tool use has not been enabled, because i]
+TOOL_OK   nvidia/qwen/qwen3-coder-480b-a35b-instruct  [TOOLTEST_OK TOOLTEST_OK ]
