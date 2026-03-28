@@ -83,17 +83,17 @@ _should_skip_model() {
 
     # Filter out specific problematic model variants (case-insensitive)
     # Filter out mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-    # Matches: mistral-small-3.1-24b-instruct, # mistralai/mistral-small-3.1-24b-instruct (free tier model - filtered by _should_skip_model), etc.
-    if [[ "$lower_model" =~ (mistralai/)?mistral-small-3\.1-24b-instruct ]]; then
-      echo "[PIPELINE] WARNING: Filtering out problematic model variant: $model" >&2
-      return 0
-    fi
-  
-  # Filter out models ending with :free (case-insensitive)
-  if [[ "$lower_model" =~ :free$ ]]; then
-    echo "[PIPELINE] WARNING: Filtering out problematic free-tier model: $model" >&2
-    return 0
-  fi
+# Matches: mistral-small-3.1-24b-instruct, # mistralai/mistral-small-3.1-24b-instruct (free tier model - filtered by _should_skip_model), etc.
+if [[ "$lower_model" =~ (mistralai/)?mistral-small-3\.1-24b-instruct(?::free)?$ ]]; then
+  echo "[PIPELINE] WARNING: Filtering out problematic model variant: $model" >&2
+  return 0
+fi
+
+# Filter out models ending with :free (case-insensitive)
+if [[ "$lower_model" =~ :free$ ]]; then
+  echo "[PIPELINE] WARNING: Filtering out problematic free-tier model: $model" >&2
+  return 0
+fi
 
   return 1
 }
@@ -326,10 +326,16 @@ gh_comment() {
 #   openai — excluded (no subscription)
 
 _candidate_models() {
-    opencode models 2>/dev/null | grep -E \
-        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
-    opencode models 2>/dev/null | grep -E \
-        "^openrouter/.*(:free$|-free$)"
+    {
+        opencode models 2>/dev/null | grep -E \
+            "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
+        opencode models 2>/dev/null | grep -E \
+            "^openrouter/.*(:free$|-free$)"
+    } | while IFS= read -r model; do
+        if [[ -n "$model" ]] && ! _should_skip_model "$model"; then
+            echo "$model"
+        fi
+    done
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
