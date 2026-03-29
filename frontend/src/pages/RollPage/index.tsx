@@ -25,16 +25,15 @@ import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
- import { useRollPageState } from './useRollPageState'
- import type { RatingThread, ThreadMetadata } from './types'
- import {
-   RATING_THRESHOLD,
-   createExplosion,
-   buildRatingThread,
- } from './utils'
- import { RatingView } from './components/RatingView'
- import { ThreadPool } from './components/ThreadPool'
- import { useToast } from '../../contexts/ToastContext'
+import { useRollPageState } from './useRollPageState'
+import type { RatingThread, ThreadMetadata } from './types'
+import {
+  RATING_THRESHOLD,
+  createExplosion,
+  buildRatingThread,
+} from './utils'
+import { RatingView } from './components/RatingView'
+import { ThreadPool } from './components/ThreadPool'
 
 export default function RollPage() {
   const state = useRollPageState()
