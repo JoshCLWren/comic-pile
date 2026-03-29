@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 import RollPage from '../pages/RollPage'
+import { ToastProvider } from '../contexts/ToastContext'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads, useThreads } from '../hooks/useThread'
 import {
@@ -119,7 +120,11 @@ afterEach(() => {
 })
 
 it('renders tooltip for offset indicator when snoozed threads exist', async () => {
-  render(<RollPage />)
+  render(
+ <ToastProvider>
+ <RollPage />
+ </ToastProvider>
+ )
 
   // Check that the offset indicator is rendered with tooltip
   expect(screen.getByText('+2')).toBeInTheDocument()
@@ -132,39 +137,39 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
   expect(offsetIndicator).toHaveClass('border-stone-600')
 })
 
-it('renders tooltips for snoozed offset active text', async () => {
-    render(<RollPage />)
+ it('renders tooltips for snoozed offset active text', async () => {
+ render(
+ <ToastProvider>
+ <RollPage />
+ </ToastProvider>
+ )
 
-    // Check that the snoozed section tooltip targets are rendered with cursor-help class
-    // These are the actual elements that have tooltips attached to them
-    
-    // Check for snoozed tooltip target
-    const snoozedTooltipTarget = screen.getByText(/snoozed/i)
-    expect(snoozedTooltipTarget).toBeInTheDocument()
-    expect(snoozedTooltipTarget).toHaveClass('cursor-help')
-    expect(snoozedTooltipTarget).toHaveClass('border-b')
-    expect(snoozedTooltipTarget).toHaveClass('border-dashed')
-    expect(snoozedTooltipTarget).toHaveClass('border-stone-600')
-    
-    // Check for offset tooltip target
-    const offsetTooltipTarget = screen.getByText(/offset/i)
-    expect(offsetTooltipTarget).toBeInTheDocument()
-    expect(offsetTooltipTarget).toHaveClass('cursor-help')
-    expect(offsetTooltipTarget).toHaveClass('border-b')
-    expect(offsetTooltipTarget).toHaveClass('border-dashed')
-    expect(offsetTooltipTarget).toHaveClass('border-stone-600')
-    
-    // Check for active tooltip target
-    const activeTooltipTarget = screen.getByText(/active/i)
-    expect(activeTooltipTarget).toBeInTheDocument()
-    expect(activeTooltipTarget).toHaveClass('cursor-help')
-    expect(activeTooltipTarget).toHaveClass('border-b')
-    expect(activeTooltipTarget).toHaveClass('border-dashed')
-    expect(activeTooltipTarget).toHaveClass('border-stone-600')
-})
+ // Check that the snoozed section tooltip targets are rendered with cursor-help class
+ // These are the actual elements that have tooltips attached to them
+
+ // Check for snoozed tooltip target - use aria-label to be specific
+ const snoozedTooltipTarget = screen.getByLabelText(/Snoozed, .* thread/)
+ expect(snoozedTooltipTarget).toBeInTheDocument()
+ expect(snoozedTooltipTarget).toHaveClass('cursor-help')
+ expect(snoozedTooltipTarget).toHaveClass('border-b')
+ expect(snoozedTooltipTarget).toHaveClass('border-dashed')
+ expect(snoozedTooltipTarget).toHaveClass('border-stone-600')
+
+ // Check for offset tooltip target - use aria-label for specificity
+ const offsetTooltipTarget = screen.getByLabelText('Offset active')
+ expect(offsetTooltipTarget).toBeInTheDocument()
+
+ // Check for active tooltip target
+ const activeTooltipTarget = screen.getByLabelText('Ladder mode active')
+ expect(activeTooltipTarget).toBeInTheDocument()
+ })
 
 it('renders tooltip for ladder indicator', async () => {
-  render(<RollPage />)
+  render(
+ <ToastProvider>
+ <RollPage />
+ </ToastProvider>
+ )
 
   // Check that the Ladder indicator is rendered with tooltip
   expect(screen.getByText('Ladder')).toBeInTheDocument()
@@ -190,7 +195,11 @@ it('does not render snoozed indicators when no snoozed threads', async () => {
     refetch: vi.fn(),
   })
 
-  render(<RollPage />)
+  render(
+ <ToastProvider>
+ <RollPage />
+ </ToastProvider>
+ )
 
   // Should not show the offset indicator or snoozed text
   expect(screen.queryByText('+0')).not.toBeInTheDocument()
