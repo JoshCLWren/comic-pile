@@ -120,7 +120,7 @@ afterEach(() => {
 })
 
 it('renders tooltip for offset indicator when snoozed threads exist', async () => {
-  render(<ToastProvider><RollPage /></ToastProvider>)
+    render(<ToastProvider><RollPage /></ToastProvider>)
 
   // Check that the offset indicator is rendered with tooltip
   expect(screen.getByText('+2')).toBeInTheDocument()
@@ -134,34 +134,34 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
 })
 
 it('renders tooltips for snoozed offset active text', async () => {
-  render(<ToastProvider><RollPage /></ToastProvider>)
+    render(<ToastProvider><RollPage /></ToastProvider>)
 
-  // Check that the snoozed section tooltip targets are rendered with cursor-help class
-  // These are the actual elements that have tooltips attached to them
+    // Check that the snoozed section tooltip targets are rendered with cursor-help class
+    // These are the actual elements that have tooltips attached to them
 
-  // Check for snoozed tooltip target - use aria-label to find the specific element
-  const snoozedTooltipTarget = screen.getByLabelText(/snoozed.*tap to view/i)
-  expect(snoozedTooltipTarget).toBeInTheDocument()
-  expect(snoozedTooltipTarget).toHaveClass('cursor-help')
-  expect(snoozedTooltipTarget).toHaveClass('border-b')
-  expect(snoozedTooltipTarget).toHaveClass('border-dashed')
-  expect(snoozedTooltipTarget).toHaveClass('border-stone-600')
+    // Check for snoozed tooltip target - use aria-label to find the specific element
+    const snoozedTooltipTarget = screen.getByLabelText(/snoozed.*tap to view/i)
+    expect(snoozedTooltipTarget).toBeInTheDocument()
+    expect(snoozedTooltipTarget).toHaveClass('cursor-help')
+    expect(snoozedTooltipTarget).toHaveClass('border-b')
+    expect(snoozedTooltipTarget).toHaveClass('border-dashed')
+    expect(snoozedTooltipTarget).toHaveClass('border-stone-600')
 
-  // Check for offset tooltip target - use aria-label to find the specific element
-  const offsetTooltipTarget = screen.getByLabelText(/offset.*tap to adjust/i)
-  expect(offsetTooltipTarget).toBeInTheDocument()
-  expect(offsetTooltipTarget).toHaveClass('cursor-help')
-  expect(offsetTooltipTarget).toHaveClass('border-b')
-  expect(offsetTooltipTarget).toHaveClass('border-dashed')
-  expect(offsetTooltipTarget).toHaveClass('border-stone-600')
+    // Check for offset tooltip target - use aria-label to find the specific element
+    const offsetTooltipTarget = screen.getByLabelText(/offset.*tap to adjust/i)
+    expect(offsetTooltipTarget).toBeInTheDocument()
+    expect(offsetTooltipTarget).toHaveClass('cursor-help')
+    expect(offsetTooltipTarget).toHaveClass('border-b')
+    expect(offsetTooltipTarget).toHaveClass('border-dashed')
+    expect(offsetTooltipTarget).toHaveClass('border-stone-600')
 
-  // Active is not a tooltip target, it's just static text - skip checking for cursor-help
-  const activeTooltipTarget = screen.getByLabelText('Ladder mode active')
-  expect(activeTooltipTarget).toBeInTheDocument()
-})
+    // Active is not a tooltip target, it's just static text - skip checking for cursor-help
+    const activeTooltipTarget = screen.getByLabelText('Ladder mode active')
+    expect(activeTooltipTarget).toBeInTheDocument()
+  })
 
-it('renders tooltip for ladder indicator', async () => {
-  render(<ToastProvider><RollPage /></ToastProvider>)
+  it('renders tooltip for ladder indicator', async () => {
+    render(<ToastProvider><RollPage /></ToastProvider>)
 
   // Check that the Ladder indicator is rendered with tooltip
   expect(screen.getByText('Ladder')).toBeInTheDocument()
