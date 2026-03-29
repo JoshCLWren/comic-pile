@@ -57,6 +57,10 @@ vi.mock('../hooks', async (importOriginal) => {
   }
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
+vi.mock('../contexts/ToastContext', () => ({
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
 
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
