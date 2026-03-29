@@ -39,6 +39,7 @@ async def test_issues_position_index_is_used(async_db_committed: AsyncSession):
 
     await async_db_committed.execute(text("ANALYZE issues"))
     await async_db_committed.execute(text("SET LOCAL enable_seqscan = off"))
+    await async_db_committed.execute(text("SET LOCAL enable_bitmapscan = off"))
 
     # Get EXPLAIN plan for the query pattern used by list_issues
     explain_query = text("""
@@ -120,6 +121,7 @@ async def test_issues_position_index_improves_pagination(async_db_committed: Asy
 
     await async_db_committed.execute(text("ANALYZE issues"))
     await async_db_committed.execute(text("SET LOCAL enable_seqscan = off"))
+    await async_db_committed.execute(text("SET LOCAL enable_bitmapscan = off"))
 
     # Test pagination query pattern (like page_token usage)
     cursor_position = 50

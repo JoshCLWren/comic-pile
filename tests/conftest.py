@@ -328,6 +328,7 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await session.execute(text("DELETE FROM revoked_tokens"))
         await session.execute(text("DELETE FROM users"))
         await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_id"))
+        await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_is_read"))
         await session.commit()
 
         # Reset sequences manually to avoid conflicts
