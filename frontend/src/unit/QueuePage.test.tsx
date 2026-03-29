@@ -6,11 +6,11 @@ import QueuePage from '../pages/QueuePage'
 import { CollectionProvider } from '../contexts/CollectionContext'
 import { ToastProvider } from '../contexts/ToastContext'
 import {
-  useCreateThread,
-  useDeleteThread,
-  useReactivateThread,
-  useThreads,
-  useUpdateThread,
+ useCreateThread,
+ useDeleteThread,
+ useReactivateThread,
+ useThreads,
+ useUpdateThread,
 } from '../hooks/useThread'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
@@ -124,15 +124,19 @@ beforeEach(() => {
   } as never)
 })
 
-it('renders queue items and opens create modal', async () => {
+const renderWithProviders = (ui: React.ReactElement) => {
+ return render(
+ <BrowserRouter>
+ <ToastProvider>
+ {ui}
+ </ToastProvider>
+ </BrowserRouter>
+ )
+}
+
+  it('renders queue items and opens create modal', async () => {
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderWithProviders(<QueuePage />)
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('Descender')).toBeInTheDocument()
@@ -154,15 +158,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-  it('opens action sheet when clicking thread card', async () => {
-    const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    it('opens action sheet when clicking thread card', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<QueuePage />)
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     expect(threadCard).toBeInTheDocument()
@@ -178,15 +176,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     expect(screen.getByText('Edit Thread')).toBeInTheDocument()
   })
 
-  it('calls snooze mutation when thread is not snoozed and snooze action is clicked', async () => {
-    const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    it('calls snooze mutation when thread is not snoozed and snooze action is clicked', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(<QueuePage />)
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     if (!threadCard) {
@@ -201,14 +193,15 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
-  it('calls unsnooze mutation when thread is snoozed and unsnooze action is clicked', async () => {
-    mockedUseSession.mockReturnValue({
-      data: {
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
-      },
-      refetch: vi.fn(),
-    })
+it('calls unsnooze mutation when thread is snoozed and unsnooze action is clicked', async () => {
+ mockedUseSession.mockReturnValue({
+ data: {
+ snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
+ },
+ refetch: vi.fn(),
+ })
 
+<<<<<<< HEAD
     const user = userEvent.setup()
     render(
       <BrowserRouter>
@@ -217,6 +210,10 @@ describe('Action Sheet Snooze/Unsnooze', () => {
         </ToastProvider>
       </BrowserRouter>
     )
+=======
+ const user = userEvent.setup()
+ renderWithProviders(<QueuePage />)
+>>>>>>> fe25c1c8 (fix: resolve CI failures)
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     if (!threadCard) {
@@ -247,13 +244,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     })
 
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderWithProviders(<QueuePage />)
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     if (!threadCard) {
@@ -274,13 +265,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
 describe('Keyboard Accessibility', () => {
   it('opens action sheet when pressing Enter on thread card', async () => {
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderWithProviders(<QueuePage />)
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     if (!threadCard) {
@@ -294,13 +279,7 @@ describe('Keyboard Accessibility', () => {
 
   it('opens action sheet when pressing Space on thread card', async () => {
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    renderWithProviders(<QueuePage />)
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     if (!threadCard) {
