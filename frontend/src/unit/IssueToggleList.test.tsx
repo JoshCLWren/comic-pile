@@ -504,35 +504,37 @@ describe('IssueToggleList', () => {
       expect(visibleIssues).toEqual(['8', '9', '10', '11', '12', '13', '14'])
     })
 
-    it('auto-expands when moving issue outside visible window', async () => {
-      const twentyIssues: Issue[] = Array.from({ length: 20 }, (_, i) => ({
-        id: i + 1,
-        thread_id: 99,
-        issue_number: String(i + 1),
-        status: i < 10 ? 'read' : 'unread',
-        read_at: i < 10 ? '2026-03-08T00:00:00Z' : null,
-        created_at: '2026-03-08T00:00:00Z',
-      }))
-      mockedIssuesApi.list.mockResolvedValue(buildListResponse(twentyIssues))
+  it('auto-expands when moving issue outside visible window', async () => {
+    const twentyIssues: Issue[] = Array.from({ length: 20 }, (_, i) => ({
+      id: i + 1,
+      thread_id: 99,
+      issue_number: String(i + 1),
+      status: i < 10 ? 'read' : 'unread',
+      read_at: i < 10 ? '2026-03-08T00:00:00Z' : null,
+      created_at: '2026-03-08T00:00:00Z',
+    }))
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse(twentyIssues))
 
-      render(<IssueToggleList threadId={99} />)
+    render(<IssueToggleList threadId={99} />)
 
-      await waitFor(() => {
-        expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
-      })
-
-      const showAllButton = screen.queryByRole('button', { name: 'Show all 20' })
-      expect(showAllButton).toBeInTheDocument()
-
-      const moveDownButton = screen.getByTestId('issue-move-down-8')
-      fireEvent.click(moveDownButton)
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument()
-      })
-
-      const allVisibleIssues = getIssueOrder()
-      expect(allVisibleIssues.length).toBe(20)
+    await waitFor(() => {
+      expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
     })
+
+    const showAllButton = screen.queryByRole('button', { name: 'Show all 20' })
+    expect(showAllButton).toBeInTheDocument()
+
+    // Move issue 14 (last visible) down - it should go outside the visible window
+    // and trigger auto-expand
+    const moveDownButton = screen.getByTestId('issue-move-down-14')
+    fireEvent.click(moveDownButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument()
+    })
+
+    const allVisibleIssues = getIssueOrder()
+    expect(allVisibleIssues.length).toBe(20)
+  })
   })
 })
