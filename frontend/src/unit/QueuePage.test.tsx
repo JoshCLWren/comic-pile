@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { CollectionProvider } from '../contexts/CollectionContext'
+import { ToastProvider } from '../contexts/ToastContext'
 import {
   useCreateThread,
   useDeleteThread,
@@ -119,12 +120,14 @@ beforeEach(() => {
 })
 
 it('renders queue items and opens create modal', async () => {
-  const user = userEvent.setup()
-  render(
-    <BrowserRouter>
-      <QueuePage />
-    </BrowserRouter>
-  )
+    const user = userEvent.setup()
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('Descender')).toBeInTheDocument()
@@ -146,13 +149,15 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-  it('opens action sheet when clicking thread card', async () => {
-    const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <QueuePage />
-      </BrowserRouter>
-    )
+it('opens action sheet when clicking thread card', async () => {
+      const user = userEvent.setup()
+      render(
+        <BrowserRouter>
+          <ToastProvider>
+            <QueuePage />
+          </ToastProvider>
+        </BrowserRouter>
+      )
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     expect(threadCard).toBeInTheDocument()
@@ -172,7 +177,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 
@@ -200,7 +207,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 
@@ -235,7 +244,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 
@@ -256,13 +267,15 @@ describe('Action Sheet Snooze/Unsnooze', () => {
 })
 
 describe('Keyboard Accessibility', () => {
-  it('opens action sheet when pressing Enter on thread card', async () => {
-    const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <QueuePage />
-      </BrowserRouter>
-    )
+    it('opens action sheet when pressing Enter on thread card', async () => {
+      const user = userEvent.setup()
+      render(
+        <BrowserRouter>
+          <ToastProvider>
+            <QueuePage />
+          </ToastProvider>
+        </BrowserRouter>
+      )
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     if (!threadCard) {
@@ -274,13 +287,15 @@ describe('Keyboard Accessibility', () => {
     expect(screen.getByText('Read Now')).toBeInTheDocument()
   })
 
-  it('opens action sheet when pressing Space on thread card', async () => {
-    const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <QueuePage />
-      </BrowserRouter>
-    )
+it('opens action sheet when pressing Space on thread card', async () => {
+      const user = userEvent.setup()
+      render(
+        <BrowserRouter>
+          <ToastProvider>
+            <QueuePage />
+          </ToastProvider>
+        </BrowserRouter>
+      )
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     if (!threadCard) {
