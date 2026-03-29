@@ -56,7 +56,7 @@ it('displays new collection button when showNewLabel and onNewCollection are pro
 
   render(<CollectionToolbar showNewLabel={true} onNewCollection={vi.fn()} />)
 
-  expect(screen.getByRole('button', { name: 'New collection' })).toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Create new collection' })).toBeInTheDocument()
 })
 
 it('does not display new collection button when showNewLabel is false', () => {
