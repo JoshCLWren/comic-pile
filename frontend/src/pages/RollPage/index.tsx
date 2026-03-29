@@ -38,47 +38,46 @@ import type { Thread, RollResponse, SessionThread, Collection } from '../../type
 
 export default function RollPage() {
   const state = useRollPageState()
-   const {
-     isRolling, setIsRolling,
-     rolledResult, setRolledResult,
-     selectedThreadId, setSelectedThreadId,
-     currentDie, setCurrentDie,
-     diceState, setDiceState,
-     staleThreads, setStaleThreads,
-     staleThreadCount, setStaleThreadCount,
-     staleExpanded, setStaleExpanded,
-     isOverrideOpen, setIsOverrideOpen,
-     overrideThreadId, setOverrideThreadId,
-     overrideErrorMessage, setOverrideErrorMessage,
-     snoozedExpanded, setSnoozedExpanded,
-     blockedExpanded, setBlockedExpanded,
-     isDieModalOpen, setIsDieModalOpen,
-     selectedThread, setSelectedThread,
-     isActionSheetOpen, setIsActionSheetOpen,
-     activeRatingThread, setActiveRatingThread,
-     isCollectionDialogOpen, setIsCollectionDialogOpen,
-     blockingReasonMap, setBlockingReasonMap,
-     showMigrationDialog, setShowMigrationDialog,
-     threadToMigrate, setThreadToMigrate,
-     showSimpleMigration, setShowSimpleMigration,
-     isRatingView, setIsRatingView,
-     rating, setRating,
-     predictedDie, setPredictedDie,
-     errorMessage, setErrorMessage,
-     suppressPendingAutoOpenRef,
-     rollIntervalRef,
-     rollTimeoutRef,
-   } = state
+  const {
+    isRolling, setIsRolling,
+    rolledResult, setRolledResult,
+    selectedThreadId, setSelectedThreadId,
+    currentDie, setCurrentDie,
+    diceState, setDiceState,
+    staleThread, setStaleThread,
+    staleThreadCount, setStaleThreadCount,
+    isOverrideOpen, setIsOverrideOpen,
+    overrideThreadId, setOverrideThreadId,
+    overrideErrorMessage, setOverrideErrorMessage,
+    snoozedExpanded, setSnoozedExpanded,
+    blockedExpanded, setBlockedExpanded,
+    isDieModalOpen, setIsDieModalOpen,
+    selectedThread, setSelectedThread,
+    isActionSheetOpen, setIsActionSheetOpen,
+    activeRatingThread, setActiveRatingThread,
+    isCollectionDialogOpen, setIsCollectionDialogOpen,
+    blockingReasonMap, setBlockingReasonMap,
+    showMigrationDialog, setShowMigrationDialog,
+    threadToMigrate, setThreadToMigrate,
+    showSimpleMigration, setShowSimpleMigration,
+    isRatingView, setIsRatingView,
+    rating, setRating,
+    predictedDie, setPredictedDie,
+    errorMessage, setErrorMessage,
+    suppressPendingAutoOpenRef,
+    rollIntervalRef,
+    rollTimeoutRef,
+  } = state
 
-   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
-	const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-	const { activeCollectionId = null } = useCollections()
-	const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
-	const { data: staleThreads } = useStaleThreads(7)
-	const navigate = useNavigate()
-	const { showToast } = useToast()
-	const prevCurrentDieRef = useRef<number | null>(null)
+  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+  const { activeCollectionId = null } = useCollections()
+  const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
+  const { data: staleThreads } = useStaleThreads(7)
+  const navigate = useNavigate()
+  const { showToast } = useToast()
+  const prevCurrentDieRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (isSessionError && sessionError) {
