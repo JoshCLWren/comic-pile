@@ -1,0 +1,61 @@
+QA Test Summary
+===============
+
+Date/Time: 2026-03-27 20:41
+Model: z-ai/glm4.7
+
+Areas Tested:
+- Auth (registration, login, logout)
+- Roll page (die selector, roll functionality)
+- Threads (creation, editing, deletion)
+- Analytics (dashboard, charts)
+- Collections (toolbar, switching)
+- History (reading history)
+- Dependencies (blocking, flowcharts)
+- API health (endpoints, docs)
+
+Issues Found:
+- Issue #403: Test infrastructure — fixture registration failures preventing tests from running
+- Issue #401: Roll page — die selector not visible on home page
+- Issue #405: Test infrastructure — container network misconfiguration preventing API and database communication
+- Issue #406: Database schema mismatch — touch_friendly field exists in database but not in code
+- Issue #407: Database deadlocks preventing test execution
+
+Test Results:
+- Total tests: 271
+- Auth tests: 6/7 passing (1 failing)
+- Roll tests: 12/26 passing (14 failing)
+- Display tests: Many failing across multiple areas
+
+Root Causes Identified:
+1. Container network misconfiguration - API and database containers were on different networks
+2. Database deadlocks and schema issues
+3. Test fixture registration failures due to username/email conflicts
+4. Schema mismatch between database and code (touch_friendly field in DB but not in code)
+
+Areas That Passed Cleanly:
+- API health endpoint
+- Registration endpoint
+- Basic roll page die selector display
+
+Areas With Issues:
+- Auth token persistence across page reloads
+- Roll functionality (multiple rapid rolls, inline rating, animation)
+- Issue metadata persistence
+- Blocked thread filtering
+- Snoozed thread filtering
+- Manual die selection persistence
+- Analytics dashboard display
+- Collection toolbar display
+- History page display
+- Thread queue display
+- Issue list display
+- Rate thread display
+- Session timestamps display
+
+Recommendations:
+1. Fix container network configuration to ensure API and database can communicate
+2. Resolve database deadlocks and schema issues
+3. Update test fixtures to properly clean up test users between test runs
+4. Ensure database schema is in sync with code (remove touch_friendly field or add it to code)
+5. Investigate and fix failing tests in each area

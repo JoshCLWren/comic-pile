@@ -1,0 +1,203 @@
+QA Test Summary Report
+======================
+
+Date/Time: 2026-03-27 19:00:01
+Model: nvidia/z-ai/glm4.7
+Test Environment:
+- Frontend: http://localhost:9000 (served by test server)
+- Backend: http://localhost:8002 (FastAPI)
+- Test Server: http://localhost:9000 (Playwright webServer)
+
+Areas Tested
+------------
+
+1. Auth (Authentication)
+   - Status: PARTIALLY PASSING (6/7 tests passed)
+   - Passed:
+     * should show validation error for mismatched passwords
+     * should show validation error for weak password
+     * should register a new user successfully
+     * should login with valid credentials
+     * should show error for invalid credentials
+     * should logout and redirect to login
+   - Failed:
+     * should persist auth token across page reloads (CRITICAL)
+   - Issues Found: 1
+   - GitHub Issue: #401
+
+2. Roll Page (/)
+   - Status: CRITICAL FAILURES
+   - All tests failing due to die selector not being visible
+   - Failed Tests (26 total):
+     * should display die selector on home page
+     * should roll dice and show inline rating on home page
+     * regression: roll API response should be handled and inline rating should appear
+     * should show tap instruction on first visit
+     * should support different die sizes (d4, d6, d8, d10, d12, d20)
+     * should update session state after roll
+     * should show loading state during roll animation
+     * should handle roll with empty queue gracefully
+     * should display 3D dice canvas
+     * should be accessible via keyboard navigation
+     * should prevent multiple rapid rolls
+     * should show inline rating without loading state after roll
+     * regression: animation should play on consecutive rolls after rating
+     * should show SimpleMigrationDialog and complete migration during rating
+     * should persist issue metadata after session refetch
+     * should persist issue metadata after page reload
+     * should persist issue metadata after 409 conflict recovery
+     * blocked threads do not appear in roll pool
+     * roll only selects from unblocked threads
+     * blocked thread indicator appears in queue but thread is not rollable
+     * issue #321: snoozed threads do not appear in roll pool
+     * snoozed thread appears in SNOOZED section only
+     * issue #281: manual die selection should persist after rating
+     * issue #280: manual die selection should persist after snoozing
+   - Issues Found: 1 (die selector not visible)
+   - GitHub Issue: #402
+
+3. Queue Page (/queue)
+   - Status: NOT TESTED (infrastructure issues)
+   - Unable to test due to fixture registration failures
+   - Issues Found: 0 (unable to test)
+
+4. Session Page
+   - Status: NOT TESTED (infrastructure issues)
+   - Unable to test due to fixture registration failures
+   - Issues Found: 0 (unable to test)
+
+5. History Page (/history)
+   - Status: CRITICAL FAILURES (infrastructure issues)
+   - All 12 tests failing due to fixture registration failures
+   - Failed Tests:
+     * should display history page
+     * should list past sessions
+     * should support pagination if many sessions
+     * should show session details including die size and threads
+     * should filter sessions by date
+     * should allow expanding session details
+     * should show ratings for each session
+     * should handle empty history gracefully
+     * should be accessible via navigation
+     * should show session duration
+     * should allow deleting session history
+     * should load more sessions on scroll
+   - Issues Found: 0 (infrastructure issue)
+   - Root Cause: Fixture registration failures (username/email already registered)
+
+6. Analytics Page (/analytics)
+   - Status: NOT TESTED (infrastructure issues)
+   - Unable to test due to fixture registration failures
+   - Issues Found: 0 (unable to test)
+
+7. Dependencies
+   - Status: NOT TESTED (infrastructure issues)
+   - Unable to test due to fixture registration failures
+   - Issues Found: 0 (unable to test)
+
+8. Collections
+   - Status: CRITICAL FAILURES (infrastructure issues)
+   - All 4 tests failing due to fixture registration failures
+   - Failed Tests:
+     * create and switch collections from roll pool dropdown
+     * shows collection badge on threads
+     * filters threads by selected collection on Roll page
+     * deletes collection and moves threads
+   - Issues Found: 0 (infrastructure issue)
+   - Root Cause: Fixture registration failures (username/email already registered)
+
+9. API Health
+   - Status: PASSING
+   - API endpoints are accessible:
+     * http://localhost:8002/docs - Returns 200 (Swagger UI)
+     * http://localhost:8002/openapi.json - Returns 200 (OpenAPI schema)
+   - API endpoints tested:
+     * /api/auth/register - Working
+     * /api/auth/login - Working
+     * /api/threads/ - Working (with authentication)
+     * /api/analytics/metrics - Working (with authentication)
+   - Issues Found: 0
+
+10. Thread Management
+    - Status: CRITICAL FAILURES (infrastructure issues)
+    - All 7 tests failing due to request context disposed errors
+    - Failed Tests:
+      * should create a new thread successfully
+      * should create multiple threads
+      * should validate thread title is required
+      * should display thread queue in correct order
+      * should delete thread
+      * should edit existing thread
+      * should validate issues_remaining is non-negative
+    - Issues Found: 0 (infrastructure issue)
+    - Root Cause: Request context disposed errors
+
+Issues Found
+------------
+
+1. GitHub Issue #401: qa: Auth — auth token not persisting across page reloads
+   - Severity: CRITICAL
+   - Area: Auth
+   - Description: Auth token is not persisting across page reloads, causing users to be logged out after page refresh
+   - Test: frontend/src/test/auth.spec.ts:87:3
+
+2. GitHub Issue #402: qa: Roll page — die selector not visible on home page
+   - Severity: CRITICAL
+   - Area: Roll Page
+   - Description: Die selector (#die-selector) is not visible on the home page, preventing users from selecting die sizes
+   - Tests: 26 tests failing in frontend/src/test/roll.spec.ts
+
+3. GitHub Issue #403: qa: Test infrastructure — request context disposed errors in threads tests
+   - Severity: CRITICAL
+   - Area: Test Infrastructure
+   - Description: API request context is being disposed before requests can complete, preventing thread management tests from running
+   - Tests: 7 tests failing in frontend/src/test/threads.spec.ts
+
+4. GitHub Issue #404: qa: Test infrastructure — fixture registration failures preventing tests from running
+   - Severity: CRITICAL
+   - Area: Test Infrastructure
+   - Description: Test fixtures are not properly cleaning up test users between test runs, causing username/email conflicts
+   - Tests: 23+ tests failing across multiple test files (history, collections, threads, etc.)
+
+Areas That Passed Cleanly
+--------------------------
+
+1. API Health
+   - All API endpoints are accessible and working correctly
+   - Swagger UI is available at http://localhost:8002/docs
+   - OpenAPI schema is available at http://localhost:8002/openapi.json
+
+2. Auth (Partial)
+   - 6 out of 7 auth tests are passing
+   - Registration, login, logout, and validation are working correctly
+   - Only auth token persistence is failing
+
+Summary
+-------
+
+Total Tests Run: 50+ (partial run due to infrastructure issues)
+Total Tests Passed: 6
+Total Tests Failed: 44+
+Critical Issues Found: 4
+GitHub Issues Created: 4 (#401, #402, #403, #404)
+
+Key Findings:
+1. The core API infrastructure is working correctly
+2. Auth functionality is mostly working (6/7 tests passing)
+3. The roll page has a critical UI issue (die selector not visible)
+4. Test infrastructure has critical issues preventing most tests from running
+5. Fixture registration and request context management need to be fixed
+
+Recommendations:
+1. Fix the die selector visibility issue (GitHub #402) - this is blocking the main user-facing feature
+2. Fix the auth token persistence issue (GitHub #401) - this affects user experience
+3. Fix the test infrastructure issues (GitHub #403, #404) - this is blocking most tests from running
+4. Once test infrastructure is fixed, re-run all tests to get a complete picture of the application state
+5. Consider implementing better test cleanup and isolation to prevent username/email conflicts
+
+Test Environment Notes:
+- Frontend is served by Playwright webServer on port 9000
+- Backend is running on port 8002
+- Tests are using REUSE_EXISTING_SERVER=true to connect to existing servers
+- Some tests are timing out due to infrastructure issues
+- The test database may have stale data from previous test runs

@@ -1,0 +1,120 @@
+QA Test Summary for comic-pile
+================================
+
+Date/Time: 2026-03-28 01:23:44 UTC
+Model: z-ai/glm4.7
+Test Environment: http://localhost:9000 (API + Frontend)
+
+Areas Tested
+------------
+
+1. Auth
+   - Register page: Cannot test (registration endpoint times out)
+   - Login page: Cannot test (requires registration first)
+   - Status: BLOCKED by registration timeout
+
+2. Roll page (/)
+   - Page loads: ✓ (HTML returned successfully)
+   - Die selector: ✗ (Issue #401 - die selector not visible)
+   - CollectionToolbar: Cannot verify (requires authentication)
+   - Status: PARTIAL - page loads but core UI elements missing
+
+3. Queue page (/queue)
+   - Page loads: ✓ (HTML returned successfully)
+   - Thread list: Cannot verify (requires authentication)
+   - Search/filter: Cannot verify (requires authentication)
+   - Status: BLOCKED by authentication
+
+4. Session page
+   - Thread routing: Cannot verify (requires authentication)
+   - Issues list: Cannot verify (requires authentication)
+   - Status: BLOCKED by authentication
+
+5. History page (/history)
+   - Page loads: ✓ (HTML returned successfully)
+   - Session list: Cannot verify (requires authentication)
+   - Status: BLOCKED by authentication
+
+6. Analytics page (/analytics)
+   - Page loads: ✓ (HTML returned successfully)
+   - Charts/stats: Cannot verify (requires authentication)
+   - Status: BLOCKED by authentication
+
+7. Dependencies
+   - Dependency indicators: Cannot verify (requires authentication)
+   - Tooltips: Cannot verify (requires authentication)
+   - Status: BLOCKED by authentication
+
+8. Collections
+   - Collection switcher: Cannot verify (requires authentication)
+   - New collection button: Cannot verify (requires authentication)
+   - Status: BLOCKED by authentication
+
+9. API Health
+   - /health endpoint: ✓ (returns {"status":"healthy","database":"connected"})
+   - /docs endpoint: ✓ (accessible)
+   - Status: PASS
+
+Issues Found
+------------
+
+Existing Issues (previously filed):
+- #401: Roll page — die selector not visible on home page
+- #403: Test infrastructure — fixture registration failures preventing tests from running
+- #405: Test infrastructure — container network misconfiguration preventing API and database communication
+- #406: Database schema mismatch — touch_friendly field exists in database but not in code
+- #407: Database deadlocks preventing test execution
+
+New Issues (filed during this QA):
+- #408: API — registration endpoint timing out
+
+Total QA Issues: 6
+
+Areas That Passed Cleanly
+--------------------------
+
+- API Health endpoints (/health, /docs) are working correctly
+- Frontend HTML is being served correctly (React SPA structure)
+- Basic routing is working (all pages return HTML)
+
+Critical Findings
+-----------------
+
+The QA testing was severely limited by infrastructure issues:
+
+1. **Registration Timeout (#408)**: The /api/auth/register endpoint times out after 120+ seconds, preventing any authentication-dependent testing. This is likely related to the database deadlock issue (#407).
+
+2. **Test Infrastructure Issues**: Multiple infrastructure issues (#403, #405, #406, #407) are preventing automated tests from running, making manual testing difficult.
+
+3. **Missing UI Elements**: Even where pages load, core UI elements like the die selector are missing (#401), indicating potential frontend rendering issues.
+
+Recommendations
+---------------
+
+1. **Priority 1**: Fix the database deadlock issue (#407) and registration timeout (#408) to enable authentication
+2. **Priority 2**: Resolve test infrastructure issues (#403, #405, #406) to enable automated testing
+3. **Priority 3**: Fix missing UI elements (#401) to restore core functionality
+4. **Priority 4**: Once authentication is working, conduct comprehensive end-to-end testing of all features
+
+Testing Methodology
+-------------------
+
+Due to the inability to use Playwright MCP tools (not available in the current environment) and the broken test infrastructure, testing was performed using:
+
+1. Manual API endpoint testing with curl
+2. HTML structure analysis of frontend responses
+3. Review of existing test results and GitHub issues
+4. Code review of authentication and API endpoints
+
+Limitations
+-----------
+
+- Could not test authenticated functionality due to registration timeout
+- Could not use Playwright for browser automation (MCP tools not available)
+- Could not run automated test suite (test infrastructure broken)
+- Frontend is a React SPA, so curl-based testing only shows initial HTML shell
+
+Conclusion
+----------
+
+The comic-pile application has significant infrastructure issues that prevent comprehensive QA testing. The core API server is running and responsive for health checks, but database operations (particularly user registration) are timing out. Until these infrastructure issues are resolved, end-to-end testing of the application's features is not possible.

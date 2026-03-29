@@ -1,0 +1,1 @@
+bug: is_blocked flag not recalculated when issue is marked as read

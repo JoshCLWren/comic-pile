@@ -1,0 +1,57 @@
+QA Testing Summary
+==================
+
+Date/Time: 2026-03-28 04:59:33
+Model: z-ai/glm4.7
+
+Areas Tested:
+-------------
+
+1. API Health (http://localhost:8002)
+   - ✅ API health endpoint (/health) returns 200 with {"status":"healthy","database":"connected"}
+   - ✅ API docs (/docs) loads successfully
+   - ✅ OpenAPI spec (/openapi.json) available
+   - ✅ API endpoints documented (roll, threads, etc.)
+
+2. Frontend (http://localhost:5175)
+   - ❌ Frontend not responding on port 5175 (404 error)
+   - ❌ Frontend dev server failed to start properly
+   - ❌ Unable to perform browser-based testing
+
+3. Existing QA Issues Found:
+   - #408: qa: API — registration endpoint timing out
+   - #407: qa: Database deadlocks preventing test execution
+   - #403: qa: Test infrastructure — fixture registration failures preventing tests from running
+   - #401: qa: Roll page — die selector not visible on home page
+   - #405: qa: Test infrastructure — container network misconfiguration preventing API and database communication
+   - #406: qa: Database schema mismatch — touch_friendly field exists in database but not in code
+
+Limitations:
+------------
+- Playwright MCP tools not available in current environment
+- Frontend not running on expected port (5175)
+- Unable to perform browser-based end-to-end testing
+- Cannot test UI components, user interactions, or frontend functionality
+
+Areas That Could Not Be Tested:
+--------------------------------
+1. Auth (login/register pages)
+2. Roll page (/) - UI components, dice rolling, CollectionToolbar
+3. Queue page (/queue) - thread list, search/filter, dependency indicators
+4. Session page - issues list, position controls, dependency badges
+5. History page (/history) - reading history display
+6. Analytics page (/analytics) - charts/stats rendering
+7. Dependencies - tooltips, flowcharts
+8. Collections - collection switcher, creation
+9. Frontend-backend integration
+10. User workflows and end-to-end scenarios
+
+Recommendations:
+----------------
+1. Start frontend dev server: cd frontend && npm run dev
+2. Verify frontend is accessible on correct port
+3. Set up Playwright MCP tools for browser automation
+4. Fix existing QA issues before proceeding with new testing
+5. Ensure test infrastructure is working (database, fixtures, containers)
+
+Status: INCOMPLETE - Cannot perform full QA testing without frontend and Playwright tools

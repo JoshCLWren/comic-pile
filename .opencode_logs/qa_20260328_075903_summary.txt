@@ -1,0 +1,113 @@
+QA Test Summary
+===============
+Date: 2026-03-28 07:59:03 UTC
+Model: z-ai/glm4.7
+Tester: opencode AI agent
+
+Areas Tested
+------------
+1. Auth (Authentication)
+2. Roll page
+3. Queue page
+4. Session page
+5. History page
+6. Analytics page
+7. Dependencies
+8. Collections
+9. API health
+
+Testing Methodology
+-------------------
+Due to frontend build process hanging indefinitely, comprehensive Playwright E2E tests could not be executed. Instead, API endpoints were tested manually using curl commands with authenticated requests.
+
+Test Results Summary
+--------------------
+
+✅ PASSING AREAS:
+- Authentication (register, login, token validation)
+- User profile endpoint (/api/auth/me)
+- Thread creation (/api/threads/)
+- Thread details (/api/threads/{id})
+- Roll endpoint (/api/roll/)
+- Sessions endpoint (/api/sessions/)
+- Collections endpoint (/api/v1/collections/)
+- Analytics metrics (/api/analytics/metrics)
+- API health endpoint (/health)
+- API documentation (/docs)
+- Frontend serving (via API server at port 8002)
+
+❌ FAILING AREAS:
+- Frontend build process (npm run build hangs)
+- Active threads endpoint (/api/threads/active) - Internal server error
+- Completed threads endpoint (/api/threads/completed) - Malformed JSON response
+
+⚠️  PARTIAL/UNTESTED AREAS:
+- Queue page functionality (API endpoints exist but not fully tested)
+- Dependencies (POST endpoint exists but not tested with data)
+- Rate limiting (POST endpoint exists but not tested)
+- Snooze functionality (POST endpoint exists but not tested)
+- Frontend UI/UX (could not test due to build issues)
+
+Issues Found
+------------
+1. GitHub Issue #409: Frontend build — npm run build hangs indefinitely
+   - Impact: Prevents E2E tests, blocks deployment
+   - Severity: HIGH
+
+2. GitHub Issue #410: API — /api/threads/active endpoint returns internal server error
+   - Impact: Frontend cannot display active threads, queue functionality broken
+   - Severity: HIGH
+
+3. GitHub Issue #411: API — /api/threads/completed endpoint returns malformed JSON response
+   - Impact: JSON parsing errors, potential UI crashes
+   - Severity: MEDIUM
+
+Environment Details
+-------------------
+- Frontend URL: http://localhost:5175 (NOT RUNNING - only accessible via API)
+- API URL: http://localhost:8002 (RUNNING - serving frontend)
+- Test database: PostgreSQL on localhost:5437
+- Test user: qa_test_user2 (ID: 2)
+- Node version: v24.13.1
+- Python version: 3.13
+
+API Endpoints Tested
+-------------------
+✅ POST /api/auth/register - Working
+✅ POST /api/auth/login - Working
+✅ GET /api/auth/me - Working
+✅ GET /api/analytics/metrics - Working
+✅ POST /api/threads/ - Working
+✅ GET /api/threads/{id} - Working
+❌ GET /api/threads/active - Internal server error
+❌ GET /api/threads/completed - Malformed JSON
+✅ POST /api/roll/ - Working
+✅ GET /api/sessions/ - Working
+✅ GET /api/v1/collections/ - Working
+✅ GET /health - Working
+✅ GET /docs - Working
+
+Existing QA Issues (Previously Filed)
+--------------------------------------
+- #408: API — registration endpoint timing out
+- #407: Database deadlocks preventing test execution
+- #403: Test infrastructure — fixture registration failures
+- #401: Roll page — die selector not visible on home page
+- #405: Test infrastructure — container network misconfiguration
+- #406: Database schema mismatch — touch_friendly field
+
+Recommendations
+---------------
+1. URGENT: Fix frontend build process to enable E2E testing
+2. HIGH: Investigate and fix /api/threads/active internal server error
+3. MEDIUM: Fix /api/threads/completed JSON response format
+4. MEDIUM: Complete comprehensive Playwright E2E test suite execution once build is fixed
+5. LOW: Test remaining API endpoints (dependencies, rate, snooze) with proper data
+
+Conclusion
+----------
+Core API functionality is working well for authentication, thread management, and basic operations. However, critical issues with the frontend build process and some API endpoints prevent comprehensive E2E testing. The three new issues filed should be addressed to enable full QA coverage.
+
+Total Issues Filed This Session: 3
+Total Existing QA Issues: 6
+Combined QA Issues: 9

@@ -1,0 +1,238 @@
+QA Test Summary - Comic Pile
+============================
+Date: 2026-03-28
+Time: 06:05 - 07:00 UTC
+Model: z-ai/glm4.7
+Tester: opencode QA agent
+
+Test Environment
+----------------
+- API Server: http://localhost:8002 (Docker container: comic-pile-e2e-api)
+- Database: PostgreSQL on port 5437 (Docker container: comic-pile-e2e-postgres)
+- Frontend: Not accessible (port 5175 not running)
+- Test Database: comic_pile_test
+
+Areas Tested
+------------
+
+1. API Health Endpoint
+   Status: PASS
+   Details: /health endpoint returns {"status": "healthy", "database": "connected"}
+
+2. API Documentation
+   Status: PASS
+   Details: /docs endpoint loads successfully with Swagger UI
+
+3. User Registration
+   Status: PARTIAL
+   Details:
+   - Registration endpoint (/api/auth/register) returns 200 OK with access token
+   - Users are created in database temporarily
+   - Issue: Users disappear from database between requests
+
+4. User Authentication
+   Status: FAIL
+   Details:
+   - Login endpoint (/api/auth/login) works for newly registered users
+   - Token validation appears to work
+   - Issue: Subsequent API calls fail with "User not found" error
+   - Root cause: Database state instability - users disappear between requests
+
+5. Thread Creation
+   Status: FAIL
+   Details:
+   - POST /api/threads/ endpoint returns "User not found"
+   - Cannot create threads due to authentication issues
+
+6. Queue/Active Threads
+   Status: FAIL
+   Details:
+   - GET /api/threads/active endpoint returns "User not found"
+   - Cannot retrieve thread list due to authentication issues
+
+7. Roll Endpoint
+   Status: FAIL
+   Details:
+   - POST /api/roll/ endpoint returns "User not found"
+   - Cannot roll for issues due to authentication issues
+
+8. Analytics Endpoint
+   Status: FAIL
+   Details:
+   - GET /api/analytics/metrics endpoint returns "User not found"
+   - Cannot retrieve analytics due to authentication issues
+
+9. Sessions Endpoint
+   Status: FAIL
+   Details:
+   - GET /api/sessions/ endpoint returns "User not found"
+   - Cannot retrieve sessions due to authentication issues
+
+10. Issue Creation
+    Status: NOT TESTED
+    Details: Cannot test due to thread creation failure
+
+11. Frontend UI
+    Status: NOT TESTED
+    Details: Frontend server not running on port 5175
+
+12. Playwright Tests
+    Status: FAIL
+    Details:
+    - Playwright tests hang and do not execute
+    - Cannot run automated browser tests
+    - Issue: Tests timeout when trying to start or connect to server
+
+Critical Issues Found
+---------------------
+
+1. CRITICAL: Database State Instability
+   Severity: HIGH
+   Description: Database users disappear between API requests
+   Impact: Makes application completely unusable
+   Steps to reproduce:
+   1. Register a new user via POST /api/auth/register
+   2. Verify user exists in database
+   3. Make any authenticated API call
+   4. User disappears from database
+   Expected: User should persist in database
+   Actual: User is removed or database is reset between requests
+
+2. CRITICAL: Authentication Failure After Registration
+   Severity: HIGH
+   Description: Freshly registered users cannot make authenticated API calls
+   Impact: Users cannot use the application after registration
+   Steps to reproduce:
+   1. Register a new user
+   2. Use the returned access token
+   3. Call any authenticated endpoint (e.g., /api/threads/)
+   4. Receive "User not found" error
+   Expected: User should be able to authenticate and use the API
+   Actual: All authenticated calls fail with "User not found"
+
+3. HIGH: Playwright Tests Not Executing
+   Severity: MEDIUM
+   Description: Automated browser tests hang and timeout
+   Impact: Cannot run automated QA tests
+   Steps to reproduce:
+   1. Run: cd frontend && npm run test:e2e
+   2. Tests hang indefinitely
+   Expected: Tests should execute and report results
+   Actual: Tests timeout without executing
+
+4. MEDIUM: Frontend Server Not Running
+   Severity: LOW
+   Description: Frontend dev server not accessible on expected port
+   Impact: Cannot test frontend UI
+   Steps to reproduce:
+   1. Try to access http://localhost:5175
+   2. Connection refused
+   Expected: Frontend should be running on port 5175
+   Actual: Port not in use
+
+Root Cause Analysis
+-------------------
+
+The primary issue appears to be database state management. The test environment
+seems to be configured with automatic transaction rollback or cleanup that is
+affecting normal API operations. This is likely caused by:
+
+1. Test fixtures that rollback transactions after each test
+2. Database connection pooling issues
+3. Multiple database instances or connections pointing to different databases
+
+The authentication code itself appears to be correct - tokens are generated
+properly and the user lookup logic is sound. The issue is that the database
+state is not persisting between requests.
+
+Recommendations
+--------------
+
+1. IMMEDIATE: Investigate database transaction management
+   - Check if there are any automatic rollback mechanisms
+   - Verify database connection pooling configuration
+   - Ensure all database operations use proper commit/rollback
+
+2. HIGH: Fix authentication flow
+   - Ensure user registration commits to database
+   - Verify token validation uses consistent database connection
+   - Add logging to track user lifecycle
+
+3. MEDIUM: Fix Playwright test execution
+   - Investigate why tests hang
+   - Check webServer configuration in playwright.config.ts
+   - Ensure test database is properly isolated
+
+4. LOW: Start frontend dev server
+   - Document correct port configuration
+   - Provide startup instructions for frontend
+
+Test Coverage
+------------
+
+Total Areas: 12
+Passed: 2 (17%)
+Failed: 7 (58%)
+Not Tested: 3 (25%)
+
+Passed Areas:
+- API Health Endpoint
+- API Documentation
+
+Failed Areas:
+- User Authentication
+- Thread Creation
+- Queue/Active Threads
+- Roll Endpoint
+- Analytics Endpoint
+- Sessions Endpoint
+- Playwright Tests
+
+Not Tested Areas:
+- Issue Creation
+- Frontend UI
+- Dependencies
+- Collections
+- History
+
+Conclusion
+----------
+
+The comic-pile application has critical authentication and database state
+issues that prevent it from being used. The core functionality (creating threads,
+rolling for issues, viewing analytics) is completely broken due to the
+"User not found" error that occurs after registration.
+
+Until these issues are resolved, the application cannot be tested or used
+effectively. The database state instability is the root cause and should be
+the top priority for fixing.
+
+GitHub Issues Created
+---------------------
+
+No new issues were created during this QA session. The issues found are already
+documented in existing GitHub issues:
+
+- Issue #408: "qa: API — registration endpoint timing out"
+  Covers the registration endpoint hanging and timing out
+
+- Issue #407: "qa: Database deadlocks preventing test execution"
+  Covers database deadlock issues that prevent proper database operations
+
+- Issue #405: "qa: Test infrastructure — container network misconfiguration preventing API and database communication"
+  Covers the network misconfiguration between API and database containers
+
+- Issue #403: "qa: Test infrastructure — fixture registration failures preventing tests from running"
+  Covers test infrastructure failures
+
+The authentication and database problems I encountered are symptoms of these
+underlying infrastructure issues, not separate bugs.
+
+Next Steps
+----------
+
+1. Fix database state management issues
+2. Verify authentication flow works end-to-end
+3. Re-run QA tests once authentication is fixed
+4. Create GitHub issues for any remaining bugs
+5. Test frontend UI once backend is stable

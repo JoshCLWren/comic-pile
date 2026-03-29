@@ -1,0 +1,481 @@
+Closes #372
+## Summary
+- Added bulk-remove and 'clear all dependencies' option to dependency modal
+🤖 Generated with opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+* **Chores**
+  * Internal project path reference updates with no impact on user-facing functionality.
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+Closes #370
+## Summary
+- Hid Front/Reposition/Back queue row buttons behind a collapsible menu
+🤖 Generated with opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+## Release Notes
+
+* **New Features**
+  * Added a dropdown menu for managing thread positions with options to move to front, reposition, or move to back, featuring improved keyboard navigation and accessibility controls.
+
+* **Refactor**
+  * Unified position action controls into a single consistent menu interface across all devices.
+
+* **Tests**
+  * Added comprehensive test coverage for menu interactions, keyboard navigation, and focus management.
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+Closes #365
+## Summary
+- Improved stale thread warning count with explanatory UI changes
+🤖 Generated with opencode pipeline
+Closes #361
+## Summary
+- Fixed silent creation of duplicate issue-level dependencies
+🤖 Generated with opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+## Release Notes
+
+* **Bug Fixes**
+  * Prevented users from accidentally creating duplicate dependencies
+  * The create dependency button now disables when a duplicate would be added
+
+* **Improvements**
+  * Added "Already added" message to provide clear feedback when duplicates are detected
+
+* **Tests**
+  * Enhanced test coverage for duplicate dependency prevention
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+Closes #360
+## Summary
+- Shows dormant vs active state for issue-level dependencies
+🤖 Generated with opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+* **Tests**
+  * Added test scripts to validate issue range parser functionality across various input formats, including edge cases and error conditions.
+
+* **Chores**
+  * Updated project dependencies.
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+Closes #380
+
+## Summary
+- Added help/glossary page
+
+🤖 Generated with opencode pipeline
+Closes #377
+
+## Summary
+- Standardized API error responses to Google-style format
+
+🤖 Generated with opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+## Release Notes
+
+* **Bug Fixes**
+  * Standardized error response format with consistent structure, proper HTTP status codes, and descriptive messages for validation, HTTP, and server errors.
+
+* **Tests**
+  * Updated error handling tests to validate new structured error response schema.
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+Closes #376
+
+## Summary
+- Fixed session double-prefix routing bug
+- Added /api/v1 alias tests
+
+🤖 Generated with opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+* **Bug Fixes**
+  * Fixed API route versioning issue to resolve double-prefix routing conflicts. Session endpoints are now properly exposed at both `/api/sessions/*` and `/api/v1/sessions/*` paths. Both routes return identical responses and consistent behavior across all operations. This change maintains full backward compatibility with existing applications while providing a clear migration path for API consumers.
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+Closes #379
+
+## Summary
+- Adds how-it-works explanation to roll page empty state
+- Added tests for new behavior
+
+🤖 Generated with opencode pipeline
+Closes #378
+
+## Summary
+- Adds pagination to thread list and session list API endpoints
+
+🤖 Generated with opencode pipeline
+Closes #373
+
+## Summary
+- Improves undo toast UX with proper modal close behavior and ≥44px touch targets
+
+🤖 Generated with opencode pipeline
+Closes #368
+
+## Summary
+- Adds search and jump-to functionality to queue page for long thread lists
+
+🤖 Generated with opencode pipeline
+Closes #364
+
+## Summary
+- Adds optional note field to issue dependencies
+
+🤖 Generated with opencode pipeline
+Closes #359
+
+## Summary
+- Shows source and target issue context for issue-level dependencies
+
+🤖 Generated with opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+## Release Notes
+
+* **Bug Fixes**
+  * Enhanced dependency modal UX by displaying complete source-to-target information pairs for issue-level dependencies, while preserving remove button functionality
+
+* **New Features**
+  * Implemented toast notification system enabling contextual feedback messages (info, success, warning, error types) for improved user experience
+
+* **Chores**
+  * Updated project dependencies to support development tools
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+Closes #367
+
+## Summary
+- Added explanation of Ladder mode and its relation to manual die selection
+- Improved Ladder mode UX with tooltips and notifications
+- Updated changelog
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code) via opencode pipeline
+Closes #366
+
+## Summary
+- Added labels and tooltips to roll page header indicators (+1, snoozed, offset, active)
+- Fixed ID collision in issue edges
+- Improved thread deletion error handling
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code) via opencode pipeline
+Closes #362
+
+## Summary
+- Fixed queue reorder behavior when adding/removing issue dependencies
+- Multiple review feedback iterations applied
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code) via opencode pipeline
+Closes #358
+
+## Summary
+- Clarified queue thread progress label to show "Up next: #N" instead of ambiguous "On #N"
+- Increased touch targets for add input/button to ≥44px for mobile accessibility
+- Fixed missing dependency in eslint plugins
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code) via opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+* **Bug Fixes**
+  * Improved mobile accessibility by ensuring queue issue controls meet 44px minimum touch target size
+
+* **Style**
+  * Updated queue progress label from "On #N" to "Up next: #N" for clearer communication
+  * Enhanced spacing in the add issues form for better usability
+
+* **Documentation**
+  * Added changelog entry documenting UX clarity improvements
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+Closes #357
+
+## Summary
+- Updated test configuration for issue #357
+- Fixed docker-compose.test.yml for test environment
+- Addressed review feedback with additional fixes
+
+## Test plan
+- Ran updated test suite with new configuration
+- Verified docker test environment works correctly
+
+🤖 Generated with opencode pipeline
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+* **Bug Fixes**
+  * Resolved an issue where the issue list's append behavior did not properly reflect the latest state updates, ensuring accurate data display.
+
+* **Refactor**
+  * Improved code organization by consolidating toast notification configuration and utilities into separate, dedicated modules for better maintainability.
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+## Summary
+Implements client-side sorting for the queue page with 5 sort options, persistent preferences, and comprehensive E2E test coverage.
+
+Fixes #323
+
+## Changes
+- Added client-side sorting with 5 options: Queue Order, Title (A-Z), Title (Z-A), Recently Added, Format
+- Sort preference persists in localStorage across page reloads
+- Optimized performance with useMemo to prevent unnecessary re-renders
+- Shows actual queue positions (not display positions) to avoid confusion
+- Comprehensive E2E test coverage with reliable waits
+
+## Testing
+- [x] All E2E tests pass (9/9 queue sort tests)
+- [x] All backend tests pass (514/514)
+- [x] Linting passes (make lint)
+- [x] Type checking passes (ty check)
+- [x] Manual testing completed
+
+## Code Review Notes
+**Initial Review Findings**:
+- ✅ Fixed: Added useMemo to prevent re-sorting on every render (Critical)
+- ✅ Fixed: Optimized date parsing to avoid redundant parsing (Critical)
+- ✅ Fixed: Show actual queue position instead of display position (High)
+- ✅ Fixed: Replaced magic timeouts with waitForLoadState (High)
+
+**Performance Improvements**:
+- Sorting now only runs when `threads` or `sortOption` changes
+- Date parsing happens once per thread instead of O(n log n) times
+- No performance degradation with large thread lists
+
+**UX Improvements**:
+- Queue positions always show actual database position
+- Users won't be confused about display order vs queue order
+
+## Screenshots
+Sort dropdown in queue header (desktop and mobile)
+
+## Checklist
+- [x] All tests pass (pytest, npm test, E2E)
+- [x] Linting passes (make lint)
+- [x] Type checking passes (ty check)
+- [x] Changelog updated (docs/changelog.md)
+- [x] No linter ignores added
+- [x] Code follows project conventions
+- [x] Client-side sorting doesn't mutate queue positions
+
+## Tier 1 Complete! 🎉
+
+This PR completes all Tier 1 (High Priority UX) issues from the issue triage:
+- ✅ #328: Thread details view without Edit
+- ✅ #326: Collapsible issue list in edit view
+- ✅ #325: Correct issue number from rating view
+- ✅ #324: Rating view with percentage complete
+- ✅ #323: Queue page sort/filter options (this PR)
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+* **New Features**
+  * Queue page now includes sorting options: queue order, title (A–Z/Z–A), recently added, and format
+  * Sort preference persists across page reloads
+  * Display sorting does not affect underlying queue positions
+
+* **Tests**
+  * Added comprehensive test suite for queue sorting functionality
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+## Summary
+Combined thread title with issue number and replaced queue position with percentage-based progress display for clearer status tracking.
+
+Fixes #324
+
+## Changes
+- Combined thread title and issue number on one line: "X-Force #79"
+- Replaced "Queue #X" with "You rolled a X!" message
+- Replaced "(#X of Y)" with "72% complete · 28 issues left" format
+- Increased mobile title truncation from 200px to 280px
+- Added comprehensive edge case tests (0%, 72%, 100% progress)
+- Fixed bonus bugs: pending thread progress display and completed thread UI
+
+## Testing
+- [x] All E2E tests pass (30 roll tests including 3 new edge case tests)
+- [x] All backend tests pass (514/514)
+- [x] Linting passes (make lint)
+- [x] Type checking passes (ty check)
+- [x] Manual testing completed
+
+## Code Review Notes
+**Initial Review**:
+- Fixed: Added edge case tests for 0% and 100% progress
+- Fixed: Inconsistent capitalization ("Issues left" → "issues left")
+- Fixed: Increased mobile truncation width (200px → 280px)
+- Fixed: Converted inline style to Tailwind
+
+**Verification Review**:
+- Fixed: Completed 100% test with UI verification
+
+**Bonus Bugs Found During Implementation**:
+- Fixed: Pending threads missing session data (total_issues, reading_progress)
+- Fixed: Completed threads not showing progress percentage
+
+## Screenshots
+Before:
+```
+X-Force
+# 78     (#78 of 106)     QUEUE #1
+```
+
+After:
+```
+X-Force #79
+72% complete · 28 issues left
+You rolled a 1!
+```
+
+## Checklist
+- [x] All tests pass (pytest, npm test, E2E)
+- [x] Linting passes (make lint)
+- [x] Type checking passes (ty check)
+- [x] Changelog updated (docs/changelog.md)
+- [x] No linter ignores added
+- [x] Code follows project conventions
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+## Summary by CodeRabbit
+
+* **New Features**
+  * Progress tracking now shows percentage complete and issues remaining.
+  * Added a “You rolled a …” indicator in the rating view.
+
+* **Refactor**
+  * Streamlined header: title now includes the issue number inline and removes the old “Queue #” pill.
+  * Improved truncation and dice sizing/styling for consistent layout.
+  * Thread rendering now considers total-issues metadata when choosing header state.
+
+* **Tests**
+  * Added end-to-end tests for rating view layout, progress display, and rolled-result visibility.
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+## Summary
+Implements collapsible issue list in thread edit view to improve performance with large thread counts. Default to collapsed state showing 3 issues before and 3 after next unread, with auto-expand when moving issues outside visible range.
+
+Fixes #326
+
+## Changes
+- Added collapsible issue list to thread edit view
+- Default to collapsed state showing 3 issues before and 3 after next unread
+- Auto-expand when moving issues outside visible range
+- Added comprehensive unit and E2E tests
+
+## Testing
+- [x] All unit tests pass (14/14 IssueToggleList tests)
+- [x] All E2E tests pass (5/5 collapsible issue list tests)
+- [x] All backend tests pass
+- [x] Linting passes (make lint)
+- [x] Type checking passes (ty check)
+- [x] Manual testing completed
+
+## Code Review Notes
+Addressed 3 HIGH-PRIORITY issues from initial review:
+- ✅ Fixed move controls UX with auto-expand behavior
+- ✅ Updated changelog to match implementation
+- ✅ Added missing unit test for filtering logic
+
+## Screenshots
+<!-- Attach screenshots if UI changed -->
+
+## Checklist
+- [x] All tests pass (pytest, npm test, E2E)
+- [x] Linting passes (make lint)
+- [x] Type checking passes (ty check)
+- [x] Changelog updated (docs/changelog.md)
+- [x] No linter ignores added
+- [x] Code follows project conventions
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+## Summary by CodeRabbit
+
+* **New Features**
+  * Thread issue lists collapse by default when >5 issues and show a focused window around your current reading position with “Show all” / “Show fewer” controls
+  * Moving an issue will auto-expand the list if the moved item would be hidden
+
+* **Documentation**
+  * Added changelog entry describing the new collapsible behavior
+
+* **Tests**
+  * Added end-to-end and unit tests covering collapse/expand, visibility window, and auto-expand on reorder
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->
+## Summary
+Implements a read-only thread detail view that allows users to view complete thread information without the risk of accidental edits. Thread clicks in the queue now navigate to this detail view instead of opening the edit modal.
+
+Fixes #328
+
+## Changes
+- **New component**: `ThreadDetailView.tsx` (342 lines) - Read-only display of all thread properties
+- **Route addition**: `/thread/:id` route added to App.tsx
+- **QueuePage updates**: Thread clicks navigate to detail view; edit button explicitly opens edit modal
+- **E2E tests**: 7 new tests in `thread-detail-view.spec.ts` covering navigation, display, and error states
+- **Changelog**: Updated `docs/changelog.md` with feature description
+
+## Testing
+- [x] All unit tests pass
+- [x] All E2E tests pass (7 new tests for detail view)
+- [x] Manual testing completed
+- [x] Frontend builds successfully
+- [x] Linting passes (make lint)
+- [x] Type checking passes (ty check)
+
+## Screenshots
+N/A - UI changes are straightforward navigation flow
+
+## Checklist
+- [x] All tests pass (pytest, npm test, E2E)
+- [x] Linting passes (make lint)
+- [x] Type checking passes (ty check)
+- [x] Changelog updated (docs/changelog.md)
+- [x] No linter ignores added
+- [x] Code follows project conventions
+
+## Code Review Notes
+Approved with 8.5/10 score. Minor improvements noted for follow-up:
+- Add user-facing error messages for issue fetch/edit failures (non-blocker)
+
+<!-- This is an auto-generated comment: release notes by coderabbit.ai -->
+
+## Summary by CodeRabbit
+
+## Release Notes
+
+* **New Features**
+  * Thread Detail View: Click threads to view comprehensive details including title, format, reading progress, and notes
+  * Progress tracking displays read/unread counts for eligible threads
+  * Edit threads directly from the detail view
+  * Expandable/collapsible issues list on thread details
+  * Mobile users get quick actions via a 3-dot menu
+
+<!-- end of auto-generated comment: release notes by coderabbit.ai -->

@@ -1,0 +1,1 @@
+bug: queue reorders unexpectedly when a dependency is added or removed
