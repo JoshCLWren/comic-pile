@@ -1,17 +1,29 @@
-import { useState, useEffect, useCallback, useContext } from 'react';
+import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import axios from 'axios';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadListResponse, ThreadQueryParams, ThreadUpdatePayload } from '../types';
 import { CacheContext } from '../contexts/CacheContext';
 
-export function useThreads(options = { searchTerm: '', collectionId: null }) {
+type UseThreadsOptions = {
+  searchTerm?: string;
+  collectionId?: number | null;
+};
+
+export function useThreads(searchTermOrOptions?: string | UseThreadsOptions, collectionId?: number | null) {
   const [data, setData] = useState<Thread[] | null>(null);
   const [isPending, setIsPending] = useState(true);
   const [isError, setIsError] = useState(false);
   const [nextPageToken, setNextPageToken] = useState<string | null>(null);
-  const { invalidateQueries } = useContext(CacheContext) || {};
+  const cache = useContext(CacheContext);
+  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
 
-  const { searchTerm, collectionId } = options;
+  // Support both calling conventions:
+  // useThreads('', collectionId) or useThreads({ searchTerm: '', collectionId })
+  const options: UseThreadsOptions = typeof searchTermOrOptions === 'string'
+    ? { searchTerm: searchTermOrOptions, collectionId }
+    : { ...searchTermOrOptions };
+
+  const { searchTerm = '', collectionId: cid = null } = options;
 
   const fetchData = useCallback(async (pageToken?: string) => {
     setIsPending(true);
@@ -23,8 +35,8 @@ export function useThreads(options = { searchTerm: '', collectionId: null }) {
       if (searchTerm?.trim()) {
         baseParams.search = searchTerm.trim();
       }
-      if (collectionId !== null) {
-        baseParams.collection_id = collectionId;
+      if (cid !== null) {
+        baseParams.collection_id = cid;
       }
       // For initial load (no pageToken), fetch all pages with large page_size
       if (!pageToken) {
@@ -36,12 +48,8 @@ export function useThreads(options = { searchTerm: '', collectionId: null }) {
       let nextToken: string | null = null;
 
       do {
-        const params = { ...baseParams };
-        if (currentToken) {
-          params.page_token = currentToken;
-        }
         const result: ThreadListResponse = await threadsApi.list(
-          Object.keys(params).length > 0 ? params : undefined,
+          Object.keys(baseParams).length > 0 ? baseParams : undefined,
           currentToken
         );
         allThreads = allThreads.concat(result.threads);
@@ -58,7 +66,7 @@ export function useThreads(options = { searchTerm: '', collectionId: null }) {
       if (!cancelled) {
         setData(allThreads);
         setNextPageToken(nextToken);
-        invalidateQueries?.(['threads']);
+        invalidateQueries(['threads']);
       }
     } catch (_err) {
       if (!cancelled) {
@@ -69,11 +77,12 @@ export function useThreads(options = { searchTerm: '', collectionId: null }) {
         setIsPending(false);
       }
     }
-  }, [searchTerm, collectionId, invalidateQueries]);
+  }, [searchTerm, cid, invalidateQueries]);
 
   useEffect(() => {
     fetchData();
-  }, [searchTerm, collectionId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, cid]);
 
   const refetch = useCallback((pageToken?: string) => {
     fetchData(pageToken);
@@ -167,7 +176,7 @@ export function useStaleThreads(days?: number) {
 
 export function useCreateThread() {
   const cache = useContext(CacheContext);
-  const invalidateQueries = cache?.invalidateQueries ?? (() => {});
+  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
 
@@ -199,7 +208,7 @@ export function useCreateThread() {
 
 export function useUpdateThread() {
   const cache = useContext(CacheContext);
-  const invalidateQueries = cache?.invalidateQueries ?? (() => {});
+  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
 
@@ -231,7 +240,7 @@ export function useUpdateThread() {
 
 export function useDeleteThread() {
   const cache = useContext(CacheContext);
-  const invalidateQueries = cache?.invalidateQueries ?? (() => {});
+  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
 
@@ -263,7 +272,7 @@ export function useDeleteThread() {
 
 export function useReactivateThread() {
   const cache = useContext(CacheContext);
-  const invalidateQueries = cache?.invalidateQueries ?? (() => {});
+  const invalidateQueries = useMemo(() => cache?.invalidateQueries ?? (() => {}), [cache]);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
 

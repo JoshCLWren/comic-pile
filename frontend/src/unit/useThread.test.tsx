@@ -27,7 +27,7 @@ vi.mock('../services/api', () => ({
 const mockedThreadsApi = vi.mocked(threadsApi)
 
 beforeEach(() => {
-  mockedThreadsApi.list.mockResolvedValue([{ id: 1 }] as never)
+  mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 }], next_page_token: null } as never)
   mockedThreadsApi.get.mockResolvedValue({ id: 2 } as never)
   mockedThreadsApi.listStale.mockResolvedValue([{ id: 3 }] as never)
   mockedThreadsApi.create.mockResolvedValue({} as never)

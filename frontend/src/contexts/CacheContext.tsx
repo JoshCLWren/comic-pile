@@ -2,24 +2,21 @@ import { createContext, useContext, useState, useCallback } from 'react';
 
 interface CacheContextType {
   invalidateQueries: (queries: string[]) => void;
-  cache: Map<string, any>;
-  cacheKeys: string[];
+  cache: Map<string, unknown>;
+  updateCache: (key: string, value: unknown) => void;
 }
 
 export const CacheContext = createContext<CacheContextType | undefined>(undefined);
 
 export function CacheProvider({ children }: { children: React.ReactNode }) {
-  const [cacheKeys, setCacheKeys] = useState<string[]>([]);
-  const [cache, setCache] = useState<Map<string, any>>(new Map());
+  const [cache, setCache] = useState<Map<string, unknown>>(new Map());
 
-  const updateCache = useCallback((key: string, value: any) => {
-    setCacheKeys((prev) => [...new Set([...prev, key])]);
+  const updateCache = useCallback((key: string, value: unknown) => {
     setCache((prev) => new Map([...prev, [key, value]]));
-  }, [cacheKeys]);
+  }, []);
 
   const invalidateQueries = useCallback((queries: string[]) => {
     queries.forEach((q) => {
-      setCacheKeys((prev) => prev.filter((k) => !k.startsWith(q)));
       setCache((prev) => {
         const newCache = new Map(prev);
         for (const key of prev.keys()) {
@@ -28,10 +25,10 @@ export function CacheProvider({ children }: { children: React.ReactNode }) {
         return newCache;
       });
     });
-  }, [cacheKeys, cache]);
+  }, []);
 
   return (
-    <CacheContext.Provider value={{ cache, updateCache, invalidateQueries, cacheKeys }}>{children}</CacheContext.Provider>
+    <CacheContext.Provider value={{ cache, updateCache, invalidateQueries }}>{children}</CacheContext.Provider>
   );
 }
 
@@ -42,5 +39,3 @@ export function useCache() {
   }
   return context;
 }
-
-export * from './CacheContext';

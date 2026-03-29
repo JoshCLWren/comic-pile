@@ -83,16 +83,13 @@ export function useSessions(params = EMPTY_PARAMS) {
       let nextToken: string | null = null;
       let currentToken: string | undefined = undefined;
       do {
-        const params = { ...baseParams };
-        if (currentToken) {
-          params.page_token = currentToken;
-        }
-        const result: SessionListResponse = await sessionApi.list(params, currentToken);
+        const params = currentToken ? { ...baseParams, page_token: currentToken } : baseParams;
+        const result: SessionListResponse = await sessionApi.list(params);
         allSessions = allSessions.concat(result.sessions);
         nextToken = result.next_page_token;
         currentToken = nextToken ?? undefined;
       } while (nextToken);
-      
+
       setData(allSessions);
       // Invalidate any cached session queries after fetching fresh data
       invalidateQueries(['sessions']);
