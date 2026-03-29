@@ -157,9 +157,9 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
           })
         }
 
-        issueEdges.push({
-          id: `issue-edge-${d.source_issue_id}-${d.target_issue_id}-${Date.now()}`,
-          source_id: srcNodeId,
+ issueEdges.push({
+ id: d.id,
+ source_id: srcNodeId,
           target_id: tgtNodeId,
           is_issue_level: true,
           source_parent_thread_id: d.source_issue_thread_id,
@@ -755,15 +755,20 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
             Array.from(groupByThread(dependencies.blocked_by, 'source_label')).map(([threadName, deps]) => (
               <div key={threadName} className="space-y-1">
                 <p className="text-xs font-bold text-stone-400 truncate">{threadName}</p>
-                {deps.map((dep) => (
-                  <DependencyRow
-                    key={dep.id}
-                    dependencyId={dep.id}
-                    title={dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Thread #${dep.source_thread_id}`)}
-                    subtitle={dep.source_issue_id ? 'Issue-level block' : 'Thread-level block'}
-                    onDelete={handleDeleteDependency}
-                  />
-                ))}
+                  {deps.map((dep) => {
+                    const title = dep.is_issue_level && dep.source_label && dep.target_label
+                      ? `${dep.source_label} → ${dep.target_label}`
+                      : dep.source_label ?? (dep.source_issue_id ? `Issue #${dep.source_issue_id}` : `Thread #${dep.source_thread_id}`)
+                    return (
+                      <DependencyRow
+                        key={dep.id}
+                        dependencyId={dep.id}
+                        title={title}
+                        subtitle={dep.source_issue_id ? 'Issue-level block' : 'Thread-level block'}
+                        onDelete={handleDeleteDependency}
+                      />
+                    )
+                  })}
               </div>
             ))
           )}
@@ -779,15 +784,20 @@ export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }
             Array.from(groupByThread(dependencies.blocking, 'target_label')).map(([threadName, deps]) => (
               <div key={threadName} className="space-y-1">
                 <p className="text-xs font-bold text-stone-400 truncate">{threadName}</p>
-                {deps.map((dep) => (
-                  <DependencyRow
-                    key={dep.id}
-                    dependencyId={dep.id}
-                    title={dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Thread #${dep.target_thread_id}`)}
-                    subtitle={dep.target_issue_id ? 'Issue-level block' : 'Thread-level block'}
-                    onDelete={handleDeleteDependency}
-                  />
-                ))}
+                {deps.map((dep) => {
+                  const title = dep.is_issue_level && dep.source_label && dep.target_label
+                    ? `${dep.source_label} → ${dep.target_label}`
+                    : dep.target_label ?? (dep.target_issue_id ? `Issue #${dep.target_issue_id}` : `Thread #${dep.target_thread_id}`)
+                  return (
+                    <DependencyRow
+                      key={dep.id}
+                      dependencyId={dep.id}
+                      title={title}
+                      subtitle={dep.target_issue_id ? 'Issue-level block' : 'Thread-level block'}
+                      onDelete={handleDeleteDependency}
+                    />
+                  )
+                })}
               </div>
             ))
           )}

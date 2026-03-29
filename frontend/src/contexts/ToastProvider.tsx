@@ -1,26 +1,18 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react'
+import { useState, useCallback, useEffect, useRef, ReactNode, useContext } from 'react'
+import { ToastContext } from './ToastContext'
+import { TOAST_DURATION } from './toastConstants'
 
 type ToastType = 'info' | 'success' | 'warning' | 'error'
 
 type Toast = {
-  id: string
-  message: string
-  type: ToastType
-  action?: {
-    label: string
-    onClick: () => void
-  }
+ id: string
+ message: string
+ type: ToastType
+ action?: {
+ label: string
+ onClick: () => void
+ }
 }
-
-const TOAST_DURATION = 5000
-
-type ToastContextType = {
-  toasts: Toast[]
-  showToast: (message: string, type?: ToastType, action?: { label: string; onClick: () => void }) => string
-  removeToast: (id: string) => void
-}
-
-const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
