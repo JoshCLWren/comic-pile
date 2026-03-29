@@ -57,6 +57,10 @@ vi.mock('../hooks', async (importOriginal) => {
   }
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
+vi.mock('../contexts/ToastContext', () => ({
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
 
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
@@ -133,34 +137,36 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
 })
 
 it('renders tooltips for snoozed offset active text', async () => {
-    render(<RollPage />)
+  render(<RollPage />)
 
-    // Check that the snoozed section tooltip targets are rendered with cursor-help class
-    // These are the actual elements that have tooltips attached to them
-    
-    // Check for snoozed tooltip target
-    const snoozedTooltipTarget = screen.getByText(/snoozed/i)
-    expect(snoozedTooltipTarget).toBeInTheDocument()
-    expect(snoozedTooltipTarget).toHaveClass('cursor-help')
-    expect(snoozedTooltipTarget).toHaveClass('border-b')
-    expect(snoozedTooltipTarget).toHaveClass('border-dashed')
-    expect(snoozedTooltipTarget).toHaveClass('border-stone-600')
-    
-    // Check for offset tooltip target
-    const offsetTooltipTarget = screen.getByText(/offset/i)
-    expect(offsetTooltipTarget).toBeInTheDocument()
-    expect(offsetTooltipTarget).toHaveClass('cursor-help')
-    expect(offsetTooltipTarget).toHaveClass('border-b')
-    expect(offsetTooltipTarget).toHaveClass('border-dashed')
-    expect(offsetTooltipTarget).toHaveClass('border-stone-600')
-    
-    // Check for active tooltip target
-    const activeTooltipTarget = screen.getByText(/active/i)
-    expect(activeTooltipTarget).toBeInTheDocument()
-    expect(activeTooltipTarget).toHaveClass('cursor-help')
-    expect(activeTooltipTarget).toHaveClass('border-b')
-    expect(activeTooltipTarget).toHaveClass('border-dashed')
-    expect(activeTooltipTarget).toHaveClass('border-stone-600')
+  // Check that the snoozed section tooltip targets are rendered with cursor-help class
+  // These are the actual elements that have tooltips attached to them
+
+  // Check for snoozed tooltip target - use exact aria-label match
+  const snoozedTooltipTarget = screen.getByLabelText('Snoozed, {session.snoozed_threads.length} thread{s.session.snoozed_threads.length !== 1 ? \'s\' : \'\'}, tap to view')
+  expect(snoozedTooltipTarget).toBeInTheDocument()
+  expect(snoozedTooltipTarget).toHaveClass('cursor-help')
+  expect(snoozedTooltipTarget).toHaveClass('border-b')
+  expect(snoozedTooltipTarget).toHaveClass('border-dashed')
+  expect(snoozedTooltipTarget).toHaveClass('border-stone-600')
+
+  // Check for offset tooltip target - the "+2" badge has the tooltip styling
+  const offsetTooltipTarget = screen.getByLabelText('Offset, plus {session.snoozed_threads.length}, tap to adjust')
+  expect(offsetTooltipTarget).toBeInTheDocument()
+  expect(offsetTooltipTarget).toHaveClass('cursor-help')
+  expect(offsetTooltipTarget).toHaveClass('border-b')
+  expect(offsetTooltipTarget).toHaveClass('border-dashed')
+  expect(offsetTooltipTarget).toHaveClass('border-stone-600')
+
+  // The "offset" and "active" text labels are inside Tooltip components but don't have
+  // the cursor-help styling themselves - they're just informational labels
+  const offsetLabel = screen.getByLabelText('Offset active')
+  expect(offsetLabel).toBeInTheDocument()
+  expect(offsetLabel).toHaveClass('text-stone-400')
+
+  const activeLabel = screen.getByLabelText('Ladder mode active')
+  expect(activeLabel).toBeInTheDocument()
+  expect(activeLabel).toHaveClass('text-stone-400')
 })
 
 it('renders tooltip for ladder indicator', async () => {
