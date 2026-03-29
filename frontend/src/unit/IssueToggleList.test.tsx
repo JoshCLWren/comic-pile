@@ -329,4 +329,212 @@ describe('IssueToggleList', () => {
     expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
     expect(getIssueOrder()).toEqual(['1', '2', '3'])
   })
+
+  describe('collapsible issue list', () => {
+    it('shows all issues when total issues <= 5', async () => {
+      const smallIssueList: Issue[] = [
+        {
+          id: 1,
+          thread_id: 99,
+          issue_number: '1',
+          status: 'read',
+          read_at: '2026-03-08T00:00:00Z',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+        {
+          id: 2,
+          thread_id: 99,
+          issue_number: '2',
+          status: 'read',
+          read_at: '2026-03-08T00:00:00Z',
+          created_at: '2026-03-08T00:00:00Z',
+        },
+        {
+          id: 3,
+          thread_id: 99,
+          issue_number: '3',
+          status: 'unread',
+          read_at: null,
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ]
+      mockedIssuesApi.list.mockResolvedValue(buildListResponse(smallIssueList))
+
+      render(<IssueToggleList threadId={99} />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('issue-pill-1')).toBeInTheDocument()
+      })
+
+      expect(screen.queryByRole('button', { name: /Show all/i })).not.toBeInTheDocument()
+      expect(getIssueOrder()).toEqual(['1', '2', '3'])
+    })
+
+    it('shows only issues around next unread by default when total issues > 5', async () => {
+      const largeIssueList: Issue[] = Array.from({ length: 10 }, (_, i) => ({
+        id: i + 1,
+        thread_id: 99,
+        issue_number: String(i + 1),
+        status: i < 4 ? 'read' : 'unread',
+        read_at: i < 4 ? '2026-03-08T00:00:00Z' : null,
+        created_at: '2026-03-08T00:00:00Z',
+      }))
+      mockedIssuesApi.list.mockResolvedValue(buildListResponse(largeIssueList))
+
+      render(<IssueToggleList threadId={99} />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('issue-pill-2')).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: 'Show all 10' })).toBeInTheDocument()
+      expect(screen.getByText(/Showing \d+ of 10 issues around your current position/)).toBeInTheDocument()
+
+      const visibleIssues = getIssueOrder()
+      expect(visibleIssues.length).toBeLessThan(10)
+      expect(visibleIssues).toContain('5')
+    })
+
+    it('expands to show all issues when toggle button is clicked', async () => {
+      const largeIssueList: Issue[] = Array.from({ length: 10 }, (_, i) => ({
+        id: i + 1,
+        thread_id: 99,
+        issue_number: String(i + 1),
+        status: i < 4 ? 'read' : 'unread',
+        read_at: i < 4 ? '2026-03-08T00:00:00Z' : null,
+        created_at: '2026-03-08T00:00:00Z',
+      }))
+      mockedIssuesApi.list.mockResolvedValue(buildListResponse(largeIssueList))
+
+      render(<IssueToggleList threadId={99} />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('issue-pill-2')).toBeInTheDocument()
+      })
+
+      const showAllButton = screen.getByRole('button', { name: 'Show all 10' })
+      fireEvent.click(showAllButton)
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument()
+      })
+
+      expect(getIssueOrder()).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    })
+
+    it('collapses back to show fewer issues when toggle button is clicked again', async () => {
+      const largeIssueList: Issue[] = Array.from({ length: 10 }, (_, i) => ({
+        id: i + 1,
+        thread_id: 99,
+        issue_number: String(i + 1),
+        status: i < 4 ? 'read' : 'unread',
+        read_at: i < 4 ? '2026-03-08T00:00:00Z' : null,
+        created_at: '2026-03-08T00:00:00Z',
+      }))
+      mockedIssuesApi.list.mockResolvedValue(buildListResponse(largeIssueList))
+
+      render(<IssueToggleList threadId={99} />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('issue-pill-2')).toBeInTheDocument()
+      })
+
+      const showAllButton = screen.getByRole('button', { name: 'Show all 10' })
+      fireEvent.click(showAllButton)
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument()
+      })
+
+      const showFewerButton = screen.getByRole('button', { name: 'Show fewer' })
+      fireEvent.click(showFewerButton)
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Show all 10' })).toBeInTheDocument()
+      })
+
+      const visibleIssues = getIssueOrder()
+      expect(visibleIssues.length).toBeLessThan(10)
+    })
+
+    it('shows last 3 issues when all issues are read', async () => {
+      const allReadIssueList: Issue[] = Array.from({ length: 10 }, (_, i) => ({
+        id: i + 1,
+        thread_id: 99,
+        issue_number: String(i + 1),
+        status: 'read',
+        read_at: '2026-03-08T00:00:00Z',
+        created_at: '2026-03-08T00:00:00Z',
+      }))
+      mockedIssuesApi.list.mockResolvedValue(buildListResponse(allReadIssueList))
+
+      render(<IssueToggleList threadId={99} />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: 'Show all 10' })).toBeInTheDocument()
+
+      const visibleIssues = getIssueOrder()
+      expect(visibleIssues).toEqual(['8', '9', '10'])
+    })
+
+    it('shows exactly 3 before + next unread + 3 after for large issue lists', async () => {
+      const twentyIssues: Issue[] = Array.from({ length: 20 }, (_, i) => ({
+        id: i + 1,
+        thread_id: 99,
+        issue_number: String(i + 1),
+        status: i < 10 ? 'read' : 'unread',
+        read_at: i < 10 ? '2026-03-08T00:00:00Z' : null,
+        created_at: '2026-03-08T00:00:00Z',
+      }))
+      mockedIssuesApi.list.mockResolvedValue(buildListResponse(twentyIssues))
+
+      render(<IssueToggleList threadId={99} />)
+
+      await waitFor(() => {
+        expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: 'Show all 20' })).toBeInTheDocument()
+
+      const visibleIssues = getIssueOrder()
+      expect(visibleIssues.length).toBe(7)
+      expect(visibleIssues).toEqual(['8', '9', '10', '11', '12', '13', '14'])
+    })
+
+  it('auto-expands when moving issue outside visible window', async () => {
+    const twentyIssues: Issue[] = Array.from({ length: 20 }, (_, i) => ({
+      id: i + 1,
+      thread_id: 99,
+      issue_number: String(i + 1),
+      status: i < 10 ? 'read' : 'unread',
+      read_at: i < 10 ? '2026-03-08T00:00:00Z' : null,
+      created_at: '2026-03-08T00:00:00Z',
+    }))
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse(twentyIssues))
+
+    render(<IssueToggleList threadId={99} />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('issue-pill-8')).toBeInTheDocument()
+    })
+
+    const showAllButton = screen.queryByRole('button', { name: 'Show all 20' })
+    expect(showAllButton).toBeInTheDocument()
+
+    // Move issue 14 (last visible) down - it should go outside the visible window
+    // and trigger auto-expand
+    const moveDownButton = screen.getByTestId('issue-move-down-14')
+    fireEvent.click(moveDownButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Show fewer' })).toBeInTheDocument()
+    })
+
+    const allVisibleIssues = getIssueOrder()
+    expect(allVisibleIssues.length).toBe(20)
+  })
+  })
 })
