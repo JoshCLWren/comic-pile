@@ -1,78 +1,15 @@
 # Changelog
 
-## 2026-03-25
-
-**Roll Page Header Indicators (#366)**
-- Added labels and tooltips to roll page header indicators (+1, snoozed, offset, active)
-- Each indicator now has a visible text label or accessible tooltip with explanatory copy
-- Interactive indicators have clear visual affordances (cursor-help, dashed borders)
-- Tooltips explain what each value means and whether/how it can be changed
-- Screen readers can read each indicator's label and value via aria-label attributes
-- No layout changes to the roll page — tooltips fit within existing header space
-
-## 2026-03-24
-
-**Accessibility Improvements (#220)**
-- Added `aria-label="Roll pool collection"` to ThreadPool container for screen reader support
-- Added `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` to Modal component
-- Implemented focus trap in Modal component to keep focus within dialog
-- Added focus return to trigger element on Modal close
-- Fixed ESLint warnings for React hook dependencies in RollPage
-
-**Documentation Updates (#220)**
-- README.md: Added prominent async-only PostgreSQL warning and guidance
-- docs/API.md: Documented dependency blocking behavior and issue-level endpoints
-- docs/REACT_ARCHITECTURE.md: Added mobile usage guide and accessibility section
-- Updated technology stack descriptions with current patterns
-
-**Form Accessibility**
-- Create Thread modal: All inputs now have associated labels with proper IDs
-- Edit Thread modal: Improved label associations for title, format, issues, notes
-- FormatSelect component: Added optional `id` prop for label association
-- Rating slider: Already had proper aria-label, maintained consistency
-
-**Issue Dependencies (#366)**
-- Added dependency indicators (🔗) to issues with dependencies
-- Added tooltips to show linked issues and threads on hover
-- Added dependency status to issue list in queue edit modal
-- Added mobile-friendly tooltips for dependency information
-- Added edit icon next to issue number in rating view
-- Added quick correction dialog for adjusting current issue number
-
 ## 2026-03-21
 
-**Collection Management UI Redesign**
-- Consolidated collection management into coherent toolbar on Roll and Queue pages
-- Collection selector moved from ThreadPool to page header for better discoverability
-- "+ New Collection" button now consistently available in header toolbar
-- Unified collection filtering across Roll and Queue pages
-- Improved mobile responsiveness with toolbar design
-
-**Collections**
-- Success toast notification now appears after creating a collection
-- Toast includes collection name and auto-dismisses after 5 seconds
-- No success message shown on validation or network errors
-
-**Developer Tools**
-- Added `GET /api/v1/threads/{thread_id}/dependency-order-check` endpoint to detect conflicts between dependency-implied reading order and issue position order
-- Returns structured conflict data with issue IDs, positions, and dependency requirements for debugging
-
-**Issue Dependencies**
-- New API endpoint: GET /api/v1/issues/{issue_id}/dependencies returns issue-level dependency edges
-- Dependency indicators (🔗) now shown on issues with incoming/outgoing dependencies
-- Tooltip displays linked issues and threads on hover
-- Authorization enforced: only shows dependencies for owned threads
-
-**UI Polish**
-- Issue list in queue edit modal now shows dependency status
-- Mobile-friendly tooltips for dependency information
-
-**Issue Number Correction**
-- Added edit icon next to issue number in rating view
-- Quick correction dialog allows adjusting current issue without leaving the rating page
-- +/- buttons for easy issue number adjustment
-- Validates issue number is within valid range (1 to total issues)
-- Updates thread's issue tracking state automatically
+**Thread Detail View**
+- Added read-only thread detail view accessible by clicking any thread on the Queue page
+- Detail view shows thread title, format, reading progress, and notes without requiring edit mode
+- Migrated threads display visual progress bar with percentage and issues read/remaining count
+- Issue list can be expanded and collapsed directly from detail view
+- Edit button in detail view opens edit modal for making changes
+- Mobile users can access quick actions via 3-dot menu indicator
+- Better separation between viewing and editing thread information
 
 ## 2026-03-20
 
