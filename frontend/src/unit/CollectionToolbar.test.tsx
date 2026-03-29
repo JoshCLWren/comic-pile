@@ -84,7 +84,7 @@ it('does not display new collection button when onNewCollection is not provided'
 
   render(<CollectionToolbar showNewLabel={true} />)
 
-  expect(screen.queryByRole('button', { name: 'Create new collection' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'New collection' })).not.toBeInTheDocument()
 })
 
 it('calls onNewCollection when new collection button is clicked', async () => {
@@ -101,7 +101,7 @@ it('calls onNewCollection when new collection button is clicked', async () => {
 
   render(<CollectionToolbar showNewLabel={true} onNewCollection={onNewCollection} />)
 
-  const button = screen.getByRole('button', { name: 'Create new collection' })
+  const button = screen.getByRole('button', { name: 'New collection' })
   await user.click(button)
 
   expect(onNewCollection).toHaveBeenCalledTimes(1)
