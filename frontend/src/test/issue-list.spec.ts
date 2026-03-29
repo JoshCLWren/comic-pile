@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { createThread, SELECTORS } from './helpers';
+import { createThread, SELECTORS, extractThreadsFromResponse } from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
@@ -89,17 +89,17 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.click('button[type="submit"]');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForTimeout(500);
+	await authenticatedPage.waitForLoadState('networkidle');
+	await authenticatedPage.waitForTimeout(500);
 
-    // Verify thread was created with correct number of issues - retry logic
-    let testThread: any = null;
-    let attempts = 0;
-    while (!testThread && attempts < 5) {
-      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-      expect(response.ok()).toBeTruthy();
-      const threads = await response.json();
-      testThread = threads.find((t: any) => t.title === uniqueTitle);
+	// Verify thread was created with correct number of issues - retry logic
+	let testThread: any = null;
+	let attempts = 0;
+	while (!testThread && attempts < 5) {
+		const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+		expect(response.ok()).toBeTruthy();
+		const threads = extractThreadsFromResponse(await response.json());
+		testThread = threads.find((t: any) => t.title === uniqueTitle);
       
       if (!testThread) {
         await authenticatedPage.waitForTimeout(300);
@@ -175,7 +175,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     while (!testThread && attempts < 5) {
       const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
       expect(response.ok()).toBeTruthy();
-      const threads = await response.json();
+      const threads = extractThreadsFromResponse(await response.json());
       testThread = threads.find((t: any) => t.title === uniqueTitle);
       
       if (!testThread) {
@@ -246,7 +246,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     while (!testThread && attempts < 5) {
       const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
       expect(response.ok()).toBeTruthy();
-      const threads = await response.json();
+      const threads = extractThreadsFromResponse(await response.json());
       testThread = threads.find((t: any) => t.title === uniqueTitle);
       
       if (!testThread) {
@@ -682,7 +682,7 @@ test.describe('Issue Range Edge Cases', () => {
     while (!testThread && attempts < 10) {
       const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
       expect(response.ok()).toBeTruthy();
-      const threads = await response.json();
+      const threads = extractThreadsFromResponse(await response.json());
       testThread = threads.find((t: any) => t.title === uniqueTitle);
       
       if (!testThread) {
@@ -774,7 +774,7 @@ test.describe('Issue Range Edge Cases', () => {
     while (!testThread && attempts < 5) {
       const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
       expect(response.ok()).toBeTruthy();
-      const threads = await response.json();
+      const threads = extractThreadsFromResponse(await response.json());
       testThread = threads.find((t: any) => t.title === uniqueTitle);
       
       if (!testThread) {
