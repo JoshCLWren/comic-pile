@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DependencyCreate(BaseModel):
@@ -25,10 +25,17 @@ class DependencyResponse(BaseModel):
     target_issue_id: int | None
     is_issue_level: bool = False
     created_at: datetime
+    note: str | None = None
     source_label: str | None = None
     target_label: str | None = None
     source_issue_thread_id: int | None = None
     target_issue_thread_id: int | None = None
+
+
+class DependencyNoteUpdate(BaseModel):
+    """Schema for updating a dependency note."""
+
+    note: str | None = Field(None, max_length=255)
 
 
 class BlockingExplanation(BaseModel):
