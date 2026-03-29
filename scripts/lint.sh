@@ -157,14 +157,14 @@ if should_run_python; then
     if [ "$MODE" = "--staged" ] && [ -n "$STAGED_PYTHON_FILES" ]; then
         mapfile -t STAGED_PYTHON_FILE_LIST <<<"$STAGED_PYTHON_FILES"
 
-        if ! ruff check "${STAGED_PYTHON_FILE_LIST[@]}"; then
+        if ! RUFF_NO_CACHE=true RUFF_CACHE_DIR=/tmp/ruff_cache ruff check "${STAGED_PYTHON_FILE_LIST[@]}"; then
             echo ""
             echo "${RED}ERROR: Linting failed.${NC}"
             echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
             exit 1
         fi
     else
-        if ! ruff check .; then
+        if ! RUFF_NO_CACHE=true RUFF_CACHE_DIR=/tmp/ruff_cache ruff check .; then
             echo ""
             echo "${RED}ERROR: Linting failed.${NC}"
             echo "${RED}Please fix the linting errors and check CONTRIBUTING.md for guidelines.${NC}"
