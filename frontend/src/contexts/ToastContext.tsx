@@ -6,24 +6,26 @@ type Toast = {
   id: string
   message: string
   type: ToastType
+  action?: { label: string; onClick: () => void }
 }
 
 type ToastContextType = {
   toasts: Toast[]
-  showToast: (message: string, type?: ToastType) => void
+  showToast: (message: string, type?: ToastType, action?: { label: string; onClick: () => void }) => string
   removeToast: (id: string) => void
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
+const TOAST_DURATION = 5000
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const timeoutIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
-  const TOAST_DURATION = 5000
 
-  const showToast = useCallback((message: string, type: ToastType = 'info') => {
+  const showToast = useCallback((message: string, type: ToastType = 'info', action?: { label: string; onClick: () => void }) => {
     const id = `${Date.now()}-${Math.random().toString(36).substring(7)}`
-    const newToast: Toast = { id, message, type }
+    const newToast: Toast = { id, message, type, action }
 
     setToasts((prev) => [...prev, newToast])
 
@@ -33,6 +35,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, TOAST_DURATION)
 
     timeoutIdsRef.current.add(timeoutId)
+
+    return id
   }, [])
 
   const removeToast = useCallback((id: string) => {
@@ -55,19 +59,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             data-testid="toast-notification"
-            className={`pointer-events-auto px-4 py-3 rounded-lg shadow-lg border backdrop-blur-sm max-w-md animate-slide-in
-              ${toast.type === 'error' ? 'bg-red-900/90 border-red-700 text-red-100' :
-                toast.type === 'success' ? 'bg-green-900/90 border-green-700 text-green-100' :
-                toast.type === 'warning' ? 'bg-amber-900/90 border-amber-700 text-amber-100' :
-                'bg-stone-800/90 border-stone-600 text-stone-100'
-              }`}
+            className={`pointer-events-auto px-4 py-3 rounded-lg shadow-lg border backdrop-blur-sm max-w-md animate-slide-in ${
+              toast.type === 'error'
+                ? 'bg-red-900/90 border-red-700 text-red-100'
+                : toast.type === 'success'
+                  ? 'bg-green-900/90 border-green-700 text-green-100'
+                  : toast.type === 'warning'
+                    ? 'bg-amber-900/90 border-amber-700 text-amber-100'
+                    : 'bg-stone-800/90 border-stone-600 text-stone-100'
+            }`}
             role="alert"
           >
-            <div className="flex items-start gap-2">
-              <span className="text-sm font-medium">{toast.message}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium flex-1">{toast.message}</span>
+              {toast.action && (
+                <button
+                  onClick={() => {
+                    toast.action!.onClick()
+                    removeToast(toast.id)
+                  }}
+                  className="text-sm font-bold underline hover:no-underline"
+                >
+                  {toast.action.label}
+                </button>
+              )}
               <button
                 onClick={() => removeToast(toast.id)}
-                className="ml-auto text-sm opacity-70 hover:opacity-100"
+                className="text-sm opacity-70 hover:opacity-100"
                 aria-label="Close notification"
               >
                 ✕
@@ -80,7 +98,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   )
 }
 
-export function useToast(): ToastContextType {
+export function useToast() {
   const context = useContext(ToastContext)
   if (!context) {
     throw new Error('useToast must be used within a ToastProvider')

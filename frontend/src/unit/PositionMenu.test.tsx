@@ -18,8 +18,12 @@ const mockThread = {
   collection_id: null,
   notes: null,
   total_issues: null,
+  next_unread_issue_id: null,
   next_unread_issue_number: null,
+  reading_progress: null,
+  blocking_reasons: [],
   is_blocked: false,
+  created_at: '2024-01-01T00:00:00Z',
 }
 
 describe('PositionMenu', () => {
