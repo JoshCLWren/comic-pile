@@ -81,19 +81,9 @@ _should_skip_model() {
   local lower_model
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
-# Skip only the previously problematic mistral model
+  # Skip mistral-small-3.1-24b-instruct with any suffix (:free, :beta, etc.)
+  # and any provider prefix (mistralai/, nvidia/mistralai/, openrouter/mistralai/, etc.)
   if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-  return 0
-fi
-
-  # Also skip specific problematic model IDs regardless of provider
-  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-    return 0
-  fi
-
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
     return 0
   fi
 
@@ -328,10 +318,12 @@ gh_comment() {
 #   openai — excluded (no subscription)
 
 _candidate_models() {
-    opencode models 2>/dev/null | grep -E \
-        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
-    opencode models 2>/dev/null | grep -E \
-        "^openrouter/.*(:free$|-free$)"
+    {
+        opencode models 2>/dev/null | grep -E \
+            "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
+        opencode models 2>/dev/null | grep -E \
+            "^openrouter/.*(:free$|-free$)"
+    } | grep -viE 'mistralai/mistral-small-3\.1-24b-instruct|mistral-small-3\.1-24b-instruct'
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
@@ -413,6 +405,27 @@ record_model_success() {
     rm -f "$f"
 }
 
+# Map known invalid model identifiers to working equivalents.
+# Models that are unconditionally broken return empty (callers must skip empty).
+map_model() {
+  local model="$1"
+  model=$(echo "$model" | xargs)
+
+case "$model" in
+     # Map known problematic mistral small variants to a safe replacement.
+    # Covers: mistralai/mistral-small-3.1-24b-instruct*,
+    #         mistral-small-3.1-24b-instruct*,
+    #         mistral-small-3.1-24b-instruct:free
+    *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free
+      echo "nvidia/mistral/mistral-14b-instruct-2512"
+      ;;
+    *)
+     echo "$model"
+     ;;
+   esac
+}
+export -f map_model
+
 # Per-issue backoff — after all models fail, cool off before retrying
 _fail_ts_file() { echo "$LOG_DIR/issue_$1/.fail_ts"; }
 
@@ -487,6 +500,15 @@ run_with_fallback() {
     # Shuffle per-call so concurrent workers don't all hammer the same model
     local models=()
     while IFS= read -r m; do models+=("$m"); done < <(printf '%s\n' "$@" | shuf)
+    
+  # Map invalid model names to valid ones
+  local mapped_models=()
+  for m in "${models[@]}"; do
+    [[ -z "$m" ]] && continue
+    mapped_models+=("$(map_model "$m")")
+  done
+  models=("${mapped_models[@]}")
+    
     local wt
     wt=$(worktree_dir "$issue")
 
@@ -1223,16 +1245,18 @@ cmd_tool_test() {
     printf '%s\n' "${candidates[@]}" | \
     xargs -P 15 -I{} bash -c '
         model="$1"; log="$2"; exit_code=0
-        output=$(timeout 30s opencode run -m "$model" "Run this bash command and report ONLY its output, nothing else: echo TOOLTEST_OK" 2>&1) || exit_code=$?
+        mapped_model=$(map_model "$model")
+        [[ -z "$mapped_model" ]] && { echo "SKIP     $model  [broken model]"; exit 0; }
+        output=$(timeout 30s opencode run -m "$mapped_model" "Run this bash command and report ONLY its output, nothing else: echo TOOLTEST_OK" 2>&1) || exit_code=$?
         clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
         if echo "$clean" | grep -q "TOOLTEST_OK"; then
             snippet=$(echo "$clean" | grep -v "^>" | grep -v "^$" | tail -2 | tr "\n" " " | cut -c1-60)
-            echo "TOOL_OK   $model  [$snippet]"
+            echo "TOOL_OK   $mapped_model  [$snippet]"
         elif [[ $exit_code -eq 124 ]]; then
-            echo "TIMEOUT   $model"
+            echo "TIMEOUT   $mapped_model"
         else
             snippet=$(echo "$clean" | grep -v "^$" | tail -1 | cut -c1-60)
-            echo "TOOL_FAIL $model  [$snippet]"
+            echo "TOOL_FAIL $mapped_model  [$snippet]"
         fi
     ' _ {} | tee "$out"
     local ok fail timeout
@@ -1277,15 +1301,17 @@ cmd_model_manager() {
             xargs -P 15 -I{} bash -c '
                 model="$1"
                 exit_code=0
-                output=$(timeout 30s opencode run -m "$model" "Reply with only the word PING" 2>&1) || exit_code=$?
+                 mapped_model=$(map_model "$model")
+                 [[ -z "$mapped_model" ]] && { echo "SKIP $model  [broken model]"; exit 0; }
+                 output=$(timeout 30s opencode run -m "$mapped_model" "Reply with only the word PING" 2>&1) || exit_code=$?
                 clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
                 if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
-                    echo "OK $model"
+                    echo "OK $mapped_model"
                 elif [[ $exit_code -eq 124 ]]; then
-                    echo "TIMEOUT $model"
+                    echo "TIMEOUT $mapped_model"
                 else
                     snippet=$(echo "$clean" | grep -v "^$" | tail -1 | cut -c1-60)
-                    echo "FAIL $model  [$snippet]"
+                    echo "FAIL $mapped_model  [$snippet]"
                 fi
             ' _ {} > "$results_file" 2>/dev/null
 
@@ -1367,7 +1393,34 @@ cmd_main_fixer() {
     local LOG_LINES="${MAIN_FIXER_LOG_LINES:-100}"
     local LOCK="$LOG_DIR/.main_fixer_lock"
     local FIXER_LOG="$LOG_DIR/main_fixer.log"
-    local FIXER_MODEL="${_CODING_POOL[0]:-${_MODEL_POOL[0]}}"
+
+    # Determine a safe fixer model from the pools, ensuring it's not problematic
+    local candidate_models=()
+    # Prefer coding pool (tool-use verified) first
+    if [ ${#_CODING_POOL[@]} -gt 0 ]; then
+        candidate_models+=("${_CODING_POOL[@]}")
+    else
+        candidate_models+=("${_MODEL_POOL[@]}")
+    fi
+    # If still empty, use safe defaults
+    if [ ${#candidate_models[@]} -eq 0 ]; then
+        candidate_models=("opencode/nemotron-3-super-free" "opencode/big-pickle")
+    fi
+    local FIXER_MODEL=""
+    for m in "${candidate_models[@]}"; do
+        [[ -z "$m" ]] && continue
+        mapped=$(map_model "$m")
+        [[ -z "$mapped" ]] && continue
+        if _should_skip_model "$mapped"; then
+            continue
+        fi
+        FIXER_MODEL="$mapped"
+        break
+    done
+    # If no suitable model found, fall back to safe default
+    if [ -z "$FIXER_MODEL" ]; then
+        FIXER_MODEL="opencode/nemotron-3-super-free"
+    fi
 
     log_info "main_fixer online — threshold=${THRESHOLD} PRs, poll=${POLL}s, model=${FIXER_MODEL}"
     mkdir -p "$LOG_DIR"

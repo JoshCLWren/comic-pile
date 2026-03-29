@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from app.models import Dependency, Issue, Thread, User
+from sqlalchemy import text
 from comic_pile.dependencies import (
     detect_circular_dependency,
     get_blocked_thread_ids,
@@ -22,6 +23,14 @@ async def test_get_blocked_thread_ids_and_explanations(async_db):
     user = User(username="dep_user", created_at=datetime.now(UTC))
     async_db.add(user)
     await async_db.flush()
+    # Ensure the SQL sequence for users.id is in sync with the current max(id)
+    # to avoid UniqueViolationError when autoincrement assigns the next id
+    # in environments where tests are run in a shared/test database fixture.
+    await async_db.execute(
+        text(
+            "SELECT setval(pg_get_serial_sequence('users','id'), COALESCE((SELECT MAX(id) FROM users), 1), true)"
+        )
+    )
 
     a = Thread(
         title="A",

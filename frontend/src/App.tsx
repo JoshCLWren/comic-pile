@@ -5,6 +5,7 @@ import Navigation from './components/Navigation'
 import api, { clearAccessToken, setAccessToken } from './services/api'
 import type { AuthUser } from './types'
 import { ToastProvider } from './contexts/ToastContext'
+import { CacheProvider } from './contexts/CacheContext'
 import './index.css'
 
 declare global {
@@ -260,9 +261,11 @@ function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
+        <CacheProvider>
+          <AuthProvider>
+            <AppRoutes />
+          </AuthProvider>
+        </CacheProvider>
       </ToastProvider>
     </BrowserRouter>
   )

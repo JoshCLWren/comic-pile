@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-03-27
+
+**Pagination for thread list and session list endpoints (#378)**
+- Added cursor-based pagination to `GET /api/threads/` with `page_size` and `page_token` query parameters
+- Added cursor-based pagination to `GET /api/sessions/` (already implemented, frontend updated)
+- Frontend hooks now fetch all pages transparently for queue and history pages
+- Fixed missing CacheContext import paths in frontend hooks
+- Fixed flaky test for unsnooze idempotency
+
 ## 2026-03-25
 
 **Roll Page Header Indicators (#366)**

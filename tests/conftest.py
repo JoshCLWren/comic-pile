@@ -174,7 +174,7 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
             Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
-        await conn.execute(TRUNCATE_TEST_DATA_SQL)
+        # await conn.execute(TRUNCATE_TEST_DATA_SQL)  # Disabled truncate to avoid deadlocks
 
     _SHARED_TEST_ENGINE = engine
     try:
@@ -218,8 +218,6 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
             "username": username,
             "created_at": datetime.now(UTC),
         }
-        if username == _default_test_username():
-            user_kwargs["id"] = 1
         user = User(**user_kwargs)
         db.add(user)
         try:
@@ -230,8 +228,6 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
             user = result.scalar_one()
         else:
             await db.refresh(user)
-            if username == _default_test_username():
-                await _sync_id_sequence(db, "users")
     return user
 
 
@@ -283,6 +279,21 @@ async def async_db(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSessi
             expire_on_commit=False,
             join_transaction_mode="create_savepoint",
         )
+        # Ensure the users.id sequence is in sync with the current max id to avoid
+        # UniqueViolationError when tests insert new users within a rolled-back
+        # per-test transaction. This keeps autoincrement aligned per-test.
+        try:
+            from sqlalchemy import text as _text
+
+            await session.execute(
+                _text(
+                    "SELECT setval(pg_get_serial_sequence('users','id'), COALESCE((SELECT MAX(id) FROM users), 1), true)"
+                )
+            )
+            await session.flush()
+        except Exception:
+            # If anything goes wrong, fall back gracefully and let tests proceed.
+            pass
         try:
             yield session
         finally:

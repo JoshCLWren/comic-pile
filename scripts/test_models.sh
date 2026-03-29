@@ -15,9 +15,9 @@ mkdir -p "$(dirname "$RESULTS_FILE")"
 
 MODELS=$(opencode models 2>/dev/null)
 
-# Filter out models known to cause ProviderModelNotFoundError
-# Filter out only problematic model IDs
-FILTERED_MODELS=$(echo "$MODELS" | grep -viE 'mistralai|mistral-small-3\.1-24b-instruct')
+# Filter mistral-small-x variants known to cause ProviderModelNotFoundError
+# Use replaceAll: true to handle TAB abbreviations and mixed patterns
+FILTERED_MODELS=$(echo "$MODELS" | grep -viE 'mistralai/mistral-small-3\.1-24b-instruct|mistral-small-3\.1-24b-instruct')
 
 TOTAL=$(echo "$FILTERED_MODELS" | wc -l)
 
@@ -26,17 +26,28 @@ echo "Results: $RESULTS_FILE"
 echo ""
 
 test_model() {
-    local model="$1"
-    local output exit_code=0
-    output=$(timeout 30s opencode run -m "$model" "say hello in one word" 2>&1) || exit_code=$?
+  local model="$1"
+  local output exit_code=0
+
+  local actual_model="$model"
+  actual_model=$(echo "$actual_model" | xargs)
+
+  # Map known broken models to working equivalents
+  case "$actual_model" in
+  *mistralai/mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct*|*mistral-small-3.1-24b-instruct:free*)
+    actual_model="nvidia/mistral/mistral-14b-instruct-2512"
+    ;;
+  esac
+
+  output=$(timeout 30s opencode run -m "$actual_model" "say hello in one word" 2>&1) || exit_code=$?
 
     if [[ $exit_code -eq 124 ]]; then
-        echo "TIMEOUT  $model"
+        echo "TIMEOUT  $actual_model"
     elif echo "$output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication"; then
         reason=$(echo "$output" | grep -iE "Error:|ProviderModel|balance|not found|not supported|unauthorized|invalid|authentication" | head -1 | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        echo "FAIL     $model  [$reason]"
+        echo "FAIL     $actual_model  [$reason]"
     elif [[ $exit_code -ne 0 ]]; then
-        echo "FAIL     $model  [exit $exit_code]"
+        echo "FAIL     $actual_model  [exit $exit_code]"
     else
         local cleaned
         cleaned=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')

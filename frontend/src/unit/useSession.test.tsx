@@ -9,6 +9,7 @@ import {
 } from '../hooks/useSession'
 import { sessionApi } from '../services/api'
 import { ToastProvider } from '../contexts/ToastContext'
+import { CacheProvider } from '../contexts/CacheContext'
 
 vi.mock('../services/api', () => ({
   sessionApi: {
@@ -24,13 +25,17 @@ const mockedSessionApi = vi.mocked(sessionApi)
 
 function renderWithProvider(ui) {
   return renderHook(ui, {
-    wrapper: ({ children }) => <ToastProvider>{children}</ToastProvider>,
+    wrapper: ({ children }) => (
+      <CacheProvider>
+        <ToastProvider>{children}</ToastProvider>
+      </CacheProvider>
+    ),
   })
 }
 
 beforeEach(() => {
   mockedSessionApi.getCurrent.mockResolvedValue({ id: 1 } as never)
-  mockedSessionApi.list.mockResolvedValue([{ id: 2 }] as never)
+  mockedSessionApi.list.mockResolvedValue({ sessions: [{ id: 2 }], next_page_token: null } as never)
   mockedSessionApi.getDetails.mockResolvedValue({ session_id: 3 } as never)
   mockedSessionApi.getSnapshots.mockResolvedValue({ snapshots: [] } as never)
   mockedSessionApi.restoreSessionStart.mockResolvedValue({} as never)
@@ -47,7 +52,7 @@ it('loads session list', async () => {
   const { result } = renderWithProvider(() => useSessions({ status: 'done' }))
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
-  expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done' })
+  expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done', page_size: 200 })
 })
 
 it('loads session details and snapshots', async () => {

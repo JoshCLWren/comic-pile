@@ -16,6 +16,7 @@ from app.schemas import (
     ActiveThreadInfo,
     EventDetail,
     SessionDetailsResponse,
+    SessionListResponse,
     SessionResponse,
     SnapshotResponse,
     SnapshotsListResponse,
@@ -395,39 +396,67 @@ async def get_current_session(
     raise RuntimeError(f"Failed to get current session after {max_retries} retries")
 
 
-@router.get("/")
+@router.get("/", response_model=SessionListResponse)
 async def list_sessions(
     current_user: Annotated[User, Depends(get_current_user)],
-    limit: int = Query(10, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    page_size: int = Query(
+        default=50,
+        ge=1,
+        le=200,
+        description="Number of sessions to return per page (default 50, max 200)",
+    ),
+    page_token: str | None = Query(
+        default=None, description="Token for pagination continuation (started_at,session_id)"
+    ),
     db: AsyncSession = Depends(get_db),
-) -> list[SessionResponse]:
-    """List all sessions (paginated).
+) -> SessionListResponse:
+    """List sessions with cursor-based pagination.
 
     Args:
         current_user: The authenticated user making the request.
-        limit: Maximum number of sessions to return.
-        offset: Number of sessions to skip.
+        page_size: Number of sessions to return per page (default 50, max 200).
+        page_token: Token for pagination continuation (started_at timestamp, session_id).
         db: SQLAlchemy session for database operations.
 
     Returns:
-        List of SessionResponse objects.
+        SessionListResponse with paginated sessions and next_page_token if more exist.
     """
-    from sqlalchemy import func
+    from fastapi import HTTPException, status
+    from sqlalchemy import func, or_
 
-    sessions_result = await db.execute(
-        select(SessionModel)
-        .where(SessionModel.user_id == current_user.id)
-        .order_by(SessionModel.started_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
+    query = select(SessionModel).where(SessionModel.user_id == current_user.id)
+    query = query.order_by(SessionModel.started_at.desc(), SessionModel.id.desc())
+
+    if page_token:
+        try:
+            parts = page_token.split(",")
+            if len(parts) != 2:
+                raise ValueError("Invalid format")
+            cursor_started_at = datetime.fromisoformat(parts[0])
+            cursor_id = int(parts[1])
+            query = query.where(
+                or_(
+                    SessionModel.started_at < cursor_started_at,
+                    (SessionModel.started_at == cursor_started_at) & (SessionModel.id > cursor_id),
+                )
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid page_token format",
+            ) from None
+
+    query = query.limit(page_size + 1)
+    sessions_result = await db.execute(query)
     sessions = sessions_result.scalars().all()
 
-    if not sessions:
-        return []
+    has_more = len(sessions) > page_size
+    sessions_to_return = sessions[:page_size]
 
-    session_ids = [s.id for s in sessions]
+    if not sessions_to_return:
+        return SessionListResponse(sessions=[], next_page_token=None)
+
+    session_ids = [s.id for s in sessions_to_return]
 
     active_threads_result = await db.execute(
         select(Event)
@@ -465,7 +494,7 @@ async def list_sessions(
     ladder_paths: dict[int, str] = {}
     for sid in session_ids:
         sid_events = [e for e in ladder_events if e.session_id == sid]
-        session = next(s for s in sessions if s.id == sid)
+        session = next(s for s in sessions_to_return if s.id == sid)
         if not sid_events:
             ladder_paths[sid] = str(session.start_die)
             continue
@@ -477,7 +506,7 @@ async def list_sessions(
 
     current_die: dict[int, int] = {}
     for sid in session_ids:
-        session = next(s for s in sessions if s.id == sid)
+        session = next(s for s in sessions_to_return if s.id == sid)
         if session.manual_die:
             current_die[sid] = session.manual_die
             continue
@@ -527,7 +556,7 @@ async def list_sessions(
                 active_threads_dict[sid] = None
 
     responses = []
-    for session in sessions:
+    for session in sessions_to_return:
         active_thread = active_threads_dict.get(session.id)
         snapshot_count = snapshot_counts.get(session.id, 0)
 
@@ -548,7 +577,13 @@ async def list_sessions(
                 pending_thread_id=session.pending_thread_id,
             )
         )
-    return responses
+
+    next_page_token = None
+    if has_more and sessions_to_return:
+        last = sessions_to_return[-1]
+        next_page_token = f"{last.started_at.isoformat()},{last.id}"
+
+    return SessionListResponse(sessions=responses, next_page_token=next_page_token)
 
 
 @router.get("/{session_id}")

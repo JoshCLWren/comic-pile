@@ -55,7 +55,9 @@ async def test_list_threads(auth_client: AsyncClient, sample_data: dict) -> None
     response = await auth_client.get("/api/threads/")
     assert response.status_code == 200
 
-    threads = response.json()
+    data = response.json()
+    assert "threads" in data
+    threads = data["threads"]
     assert len(threads) == 5
     assert threads[0]["title"] == "Superman"
     assert threads[1]["title"] == "Batman"
@@ -72,7 +74,9 @@ async def test_list_threads_search(auth_client: AsyncClient, sample_data: dict) 
     response = await auth_client.get("/api/threads/", params={"search": "man"})
     assert response.status_code == 200
 
-    threads = response.json()
+    data = response.json()
+    assert "threads" in data
+    threads = data["threads"]
     titles = {thread["title"] for thread in threads}
     assert titles == {"Superman", "Batman", "Aquaman", "Wonder Woman"}
 
@@ -82,7 +86,8 @@ async def test_list_threads_empty(auth_client: AsyncClient) -> None:
     """Test GET /api/threads/ with no threads returns empty list."""
     response = await auth_client.get("/api/threads/")
     assert response.status_code == 200
-    assert response.json() == []
+    data = response.json()
+    assert data == {"threads": [], "next_page_token": None}
 
 
 @pytest.mark.asyncio
@@ -574,7 +579,9 @@ async def test_get_sessions(auth_client: AsyncClient, sample_data: dict) -> None
     response = await auth_client.get("/api/sessions/")
     assert response.status_code == 200
 
-    sessions = response.json()
+    data = response.json()
+    assert "sessions" in data
+    sessions = data["sessions"]
     assert len(sessions) == 2
     assert {s["start_die"] for s in sessions} == {6, 8}
 
@@ -583,10 +590,12 @@ async def test_get_sessions(auth_client: AsyncClient, sample_data: dict) -> None
 async def test_get_sessions_pagination(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/ with pagination."""
     _ = sample_data
-    response = await auth_client.get("/api/sessions/?limit=1&offset=0")
+    response = await auth_client.get("/api/sessions/?page_size=1")
     assert response.status_code == 200
 
-    sessions = response.json()
+    data = response.json()
+    assert "sessions" in data
+    sessions = data["sessions"]
     assert len(sessions) == 1
 
 
@@ -795,7 +804,9 @@ async def test_list_threads_includes_notes(
     response = await auth_client.get("/api/threads/")
     assert response.status_code == 200
 
-    threads = response.json()
+    data = response.json()
+    assert "threads" in data
+    threads = data["threads"]
     assert len(threads) >= 2
 
     flash_thread = next((t for t in threads if t["title"] == "Flash"), None)

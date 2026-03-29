@@ -8,12 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_jump_to_position_works_for_large_distance(auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict) -> None:
+async def test_jump_to_position_works_for_large_distance(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """Jump from position 1 to last position works correctly."""
     thread_id = sample_data["threads"][0].id
 
     response = await auth_client.get("/api/threads/")
-    threads = response.json()
+    data = response.json()
+    threads = data["threads"]
     active_threads = [t for t in threads if t["status"] == "active"]
     last_position = len(active_threads)
 
@@ -35,7 +38,8 @@ async def test_jump_to_position_works_for_small_distance(
 ) -> None:
     """Jump from last position to position 1 works correctly."""
     response = await auth_client.get("/api/threads/")
-    threads = response.json()
+    data = response.json()
+    threads = data["threads"]
     last_thread_id = threads[-1]["id"]
 
     response = await auth_client.put(
@@ -49,7 +53,9 @@ async def test_jump_to_position_works_for_small_distance(
 
 
 @pytest.mark.asyncio
-async def test_drag_and_drop_updates_position(auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict) -> None:
+async def test_drag_and_drop_updates_position(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """Drag and drop reordering updates position correctly."""
     thread_id = sample_data["threads"][0].id
     new_position = 3
@@ -69,7 +75,9 @@ async def test_drag_and_drop_updates_position(auth_client: AsyncClient, async_db
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_via_api(auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict) -> None:
+async def test_move_to_front_via_api(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """Move to front endpoint works correctly."""
     thread_id = sample_data["threads"][2].id
 
@@ -82,12 +90,15 @@ async def test_move_to_front_via_api(auth_client: AsyncClient, async_db: AsyncSe
 
 
 @pytest.mark.asyncio
-async def test_move_to_back_via_api(auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict) -> None:
+async def test_move_to_back_via_api(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """Move to back endpoint works correctly."""
     thread_id = sample_data["threads"][0].id
 
     response = await auth_client.get("/api/threads/")
-    threads = response.json()
+    data = response.json()
+    threads = data["threads"]
     active_threads = [t for t in threads if t["status"] == "active"]
     last_position = max(t["queue_position"] for t in active_threads)
 

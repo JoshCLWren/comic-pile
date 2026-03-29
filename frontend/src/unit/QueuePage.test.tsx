@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { CollectionProvider } from '../contexts/CollectionContext'
+import { ToastProvider } from '../contexts/ToastContext'
 import {
   useCreateThread,
   useDeleteThread,
@@ -122,7 +123,9 @@ it('renders queue items and opens create modal', async () => {
   const user = userEvent.setup()
   render(
     <BrowserRouter>
-      <QueuePage />
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
     </BrowserRouter>
   )
 
@@ -150,7 +153,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 
@@ -172,7 +177,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 
@@ -200,7 +207,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 
@@ -235,7 +244,9 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 
@@ -260,7 +271,9 @@ describe('Keyboard Accessibility', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 
@@ -278,7 +291,9 @@ describe('Keyboard Accessibility', () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
-        <QueuePage />
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
       </BrowserRouter>
     )
 

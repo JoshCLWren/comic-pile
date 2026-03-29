@@ -41,21 +41,19 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       setTotalCount(response.total_count)
       setNextPageToken(response.next_page_token)
 
-      const depsMap: Record<number, IssueDependenciesResponse> = { ...dependencies }
       try {
         await Promise.all(
           response.issues.map(async (issue) => {
             try {
               const deps = await dependenciesApi.getIssueDependencies(issue.id)
               if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
-                depsMap[issue.id] = deps
+                setDependencies((prev) => ({ ...prev, [issue.id]: deps }))
               }
             } catch (error) {
               console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
             }
           })
         )
-        setDependencies(depsMap)
       } catch (error) {
         console.error('Failed to load dependencies:', error)
       }

@@ -626,7 +626,9 @@ async def test_session_list_with_migrated_thread(
     response = await auth_client.get("/api/sessions/")
     assert response.status_code == 200
 
-    sessions = response.json()
+    data = response.json()
+    assert "sessions" in data
+    sessions = data["sessions"]
     assert len(sessions) >= 1
     session_data = next(s for s in sessions if s["id"] == session.id)
     assert session_data["active_thread"] is not None
