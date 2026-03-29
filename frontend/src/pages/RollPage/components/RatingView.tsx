@@ -49,12 +49,13 @@ export function RatingView({
     <div className="p-4 space-y-8 relative z-10">
       <div id="thread-info" role="status" aria-live="polite">
         <div className="space-y-3 text-center">
-          {(activeRatingThread?.next_issue_number || activeRatingThread?.issue_number || activeRatingThread?.total_issues) ? (
+          {(activeRatingThread?.next_issue_number || activeRatingThread?.issue_number) ? (
             <>
-              <h2 className="text-2xl font-black text-stone-200 truncate max-w-[280px] sm:max-w-none mx-auto">
-                {activeRatingThread?.title || 'Loading...'} #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}
-              </h2>
-              <div className="flex items-center justify-center gap-2 flex-wrap">
+              <h2 className="text-2xl font-black text-stone-200 line-clamp-2">{activeRatingThread?.title || 'Loading...'}</h2>
+              <div className="flex items-center justify-center gap-3 flex-wrap">
+                <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-lg text-sm font-black uppercase tracking-[0.2em] border border-amber-500/20">
+                  #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}
+                </span>
                 <button
                   type="button"
                   onClick={() => setIsCorrectionDialogOpen(true)}
@@ -67,13 +68,9 @@ export function RatingView({
                     <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
                   </svg>
                 </button>
-                {activeRatingThread.total_issues ? (
+                {activeRatingThread.total_issues && (
                   <span className="text-stone-400 text-xs font-bold">
                     {getProgressPercentage(activeRatingThread)}% complete · {activeRatingThread.issues_remaining} issues left
-                  </span>
-                ) : (
-                  <span className="text-stone-400 text-xs font-bold">
-                    {activeRatingThread.issues_remaining} issues left
                   </span>
                 )}
                 {hasValidRolledResult && (
@@ -85,7 +82,7 @@ export function RatingView({
             </>
           ) : (
             <>
-              <h2 className="text-2xl font-black text-stone-200">{activeRatingThread?.title || 'Loading...'}</h2>
+              <h2 className="text-2xl font-black text-stone-200 line-clamp-2">{activeRatingThread?.title || 'Loading...'}</h2>
               <div className="flex items-center justify-center gap-3">
                 {hasValidRolledResult && (
                   <span className="bg-amber-600/20 text-amber-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-amber-600/20">
@@ -95,7 +92,7 @@ export function RatingView({
                 <span className="bg-red-800/20 text-red-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-red-800/20">
                   {activeRatingThread?.format || '...'}
                 </span>
-                <span className="text-stone-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} issues left</span>
+                <span className="text-stone-500 text-xs font-bold">{activeRatingThread?.issues_remaining || 0} Issues left</span>
               </div>
             </>
           )}
