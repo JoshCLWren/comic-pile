@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { test, expect } from './fixtures';
 import { SELECTORS } from './helpers';
 
@@ -989,6 +990,330 @@ test.describe('Roll Dice Feature', () => {
 
       expect(sessionAfterSnoozeData.manual_die).toBe(MANUAL_DIE);
       expect(sessionAfterSnoozeData.current_die).toBe(MANUAL_DIE);
+    });
+  });
+
+  test.describe('Rating View Layout', () => {
+    test('issue #324: rating view should show title and issue number on one line', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      const threadTitle = 'X-Force';
+      const totalIssues = 100;
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: threadTitle,
+          format: 'Comics',
+          issues_remaining: 72,
+          total_issues: totalIssues,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: { issue_range: '1-100' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: threadTitle }).first();
+      await threadElement.click();
+
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+      await readButton.click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const titleElement = authenticatedPage.locator('h2.text-2xl.font-black');
+      await expect(titleElement).toBeVisible();
+
+      const titleText = await titleElement.textContent();
+      expect(titleText).toMatch(/X-Force #\d+/);
+    });
+
+    test('issue #324: rating view should show percentage complete and issues left', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: 'Test Thread',
+          format: 'Comics',
+          issues_remaining: 100,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: { issue_range: '1-100' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const issuesResponse = await request.get(`/api/v1/threads/${thread.id}/issues?page_size=100`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!issuesResponse.ok()) {
+        throw new Error(`Failed to get issues: ${issuesResponse.status()} ${issuesResponse.statusText()}`);
+      }
+
+      const issuesData = await issuesResponse.json();
+      const issues = issuesData.issues;
+
+      for (let i = 0; i < 72; i++) {
+        await request.post(`/api/v1/issues/${issues[i].id}:markRead`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+      }
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Test Thread' }).first();
+      await threadElement.click();
+
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+      await readButton.click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const progressText = authenticatedPage.locator('#thread-info');
+      await expect(progressText).toContainText('72% complete');
+      await expect(progressText).toContainText('28 issues left');
+    });
+
+    test('issue #324: rating view should show "You rolled a X!" instead of Queue position', async ({ authenticatedWithThreadsPage }) => {
+      await authenticatedWithThreadsPage.goto('/');
+      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+
+      await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
+
+      await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const rolledText = authenticatedWithThreadsPage.locator('#thread-info');
+      await expect(rolledText).toContainText('You rolled a');
+
+      await expect(rolledText).not.toContainText('Queue #');
+    });
+
+    test('issue #324: rating view should handle long titles with truncation', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      const longTitle = 'The Amazing Spider-Man: The Complete Collection Volume One: The Stan Lee Years';
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: longTitle,
+          format: 'Comics',
+          issues_remaining: 50,
+          total_issues: 100,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: { issue_range: '1-100' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: longTitle }).first();
+      await threadElement.click();
+
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+      await readButton.click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const titleElement = authenticatedPage.locator('h2.text-2xl.font-black.truncate');
+      await expect(titleElement).toBeVisible();
+
+      const titleText = await titleElement.textContent();
+      expect(titleText).toContain('#');
+    });
+
+    test('issue #324: rating view should display 0% for unread thread', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: 'Unread Thread',
+          format: 'Comics',
+          issues_remaining: 10,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: { issue_range: '1-10' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Unread Thread' }).first();
+      await threadElement.click();
+
+      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+      await readButton.click();
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const progressText = authenticatedPage.locator('#thread-info');
+      await expect(progressText).toContainText('0% complete');
+      await expect(progressText).toContainText('10 issues left');
+    });
+
+    test('issue #324: rating view should display 100% for completed thread', async ({ authenticatedPage, request }) => {
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+
+      const threadResponse = await request.post('/api/threads/', {
+        data: {
+          title: 'Completed Thread',
+          format: 'Comics',
+          issues_remaining: 10,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!threadResponse.ok()) {
+        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+      }
+
+      const thread = await threadResponse.json();
+
+      await request.post(`/api/v1/threads/${thread.id}/issues`, {
+        data: { issue_range: '1-10' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const issuesResponse = await request.get(`/api/v1/threads/${thread.id}/issues?page_size=100`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!issuesResponse.ok()) {
+        throw new Error(`Failed to get issues: ${issuesResponse.status()} ${issuesResponse.statusText()}`);
+      }
+
+      const issuesData = await issuesResponse.json();
+      const issues = issuesData.issues;
+
+      for (const issue of issues.slice(0, -1)) {
+        await request.post(`/api/v1/issues/${issue.id}:markRead`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+      }
+
+      await request.post(`/api/threads/${thread.id}/set-pending`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      await authenticatedPage.goto('/');
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const lastIssue = issues[issues.length - 1];
+      await request.post(`/api/v1/issues/${lastIssue.id}:markRead`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      await authenticatedPage.reload();
+      await authenticatedPage.waitForLoadState('networkidle');
+
+      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+      const progressText = authenticatedPage.locator('#thread-info');
+      await expect(progressText).toContainText('100% complete', { timeout: 10000 });
+      await expect(progressText).toContainText('0 issues left');
+
+      const threadAfterResponse = await request.get(`/api/threads/${thread.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!threadAfterResponse.ok()) {
+        throw new Error(`Failed to get thread: ${threadAfterResponse.status()} ${threadAfterResponse.statusText()}`);
+      }
+
+      const threadAfter = await threadAfterResponse.json();
+
+      expect(threadAfter.total_issues).toBe(10);
+      expect(threadAfter.issues_remaining).toBe(0);
+      expect(threadAfter.reading_progress).toBe('completed');
     });
   });
 });
