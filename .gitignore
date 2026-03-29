@@ -184,3 +184,4 @@ scripts/clone_prod_users.sh
 
 # Dogfood/test output
 dogfood-output/
+test_output.txt

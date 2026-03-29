@@ -96,4 +96,4 @@ async def test_roll_rate_history_consistency(
         json={"rating": 4.5, "issues_read": 1, "finish_session": False},
     )
     assert second_rate.status_code == 400
-    assert "No active thread" in second_rate.json()["detail"]
+    assert "No active thread" in second_rate.json()["error"]["message"]

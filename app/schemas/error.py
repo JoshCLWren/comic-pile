@@ -1,7 +1,5 @@
 """Google-style API error schemas."""
 
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 
@@ -11,7 +9,8 @@ class GoogleError(BaseModel):
     code: int
     message: str
     status: str
-    details: list[Any] = Field(default_factory=list)
+    # Details is a list of arbitrary dicts, avoid using Any for typing
+    details: list[dict] = Field(default_factory=list)
 
 
 class ErrorResponse(BaseModel):

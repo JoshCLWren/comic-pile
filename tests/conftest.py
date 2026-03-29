@@ -7,12 +7,6 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
-
-# Set TEST_ENVIRONMENT before importing app modules
-# This must be done before app.main is imported to disable rate limiting
-if not os.getenv("TEST_ENVIRONMENT"):
-    os.environ["TEST_ENVIRONMENT"] = "true"
-
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import UniqueConstraint, inspect, select, text
 from sqlalchemy.exc import IntegrityError
@@ -32,7 +26,21 @@ from app.main import app
 from app.models import Event, Issue, Thread, User
 from app.models import Session as SessionModel
 
+# Load environment variables
 load_dotenv()
+
+# Set TEST_ENVIRONMENT to disable rate limiting
+if not os.getenv("TEST_ENVIRONMENT"):
+    os.environ["TEST_ENVIRONMENT"] = "true"
+
+# Unique test database per process to avoid deadlocks
+TEST_DB_COUNTER = os.getpid()
+DEFAULT_TEST_DB_NAME = "comic_pile_test"
+if "TEST_DATABASE_URL" not in os.environ:
+    # Create unique test database for this process
+    os.environ["TEST_DATABASE_URL"] = (
+        f"postgresql+asyncpg://postgres:postgres@localhost:5437/{DEFAULT_TEST_DB_NAME}_{TEST_DB_COUNTER}"
+    )
 
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
@@ -169,8 +177,9 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
                         "Refusing to reset schema on non-test database. "
                         f"Database '{make_url(database_url).database}' must include 'test'."
                     )
-                sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-                sync_conn.exec_driver_sql("CREATE SCHEMA public")
+                # Reset schema by truncating all tables instead of dropping schema to avoid deadlocks
+                for tbl in Base.metadata.sorted_tables:
+                    sync_conn.exec_driver_sql(f"TRUNCATE TABLE {tbl.name} RESTART IDENTITY CASCADE")
             Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
@@ -187,23 +196,23 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
     username = _default_test_username()
-    result = await db.execute(select(User).where(User.id == 1))
+    result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
     if not user:
-        result = await db.execute(select(User).where(User.username == username))
-        user = result.scalar_one_or_none()
-        if not user:
-            user = User(id=1, username=username, created_at=datetime.now(UTC))
-            db.add(user)
-            try:
-                await db.commit()
-            except IntegrityError:
-                await db.rollback()
-                result = await db.execute(select(User).where(User.username == username))
-                user = result.scalar_one()
-            else:
-                await db.refresh(user)
-                await _sync_id_sequence(db, "users")
+        # Get next available ID to avoid conflicts
+        result = await db.execute(text("SELECT COALESCE(MAX(id), 0) + 1 FROM users"))
+        next_id = result.scalar()
+        user = User(id=next_id, username=username, created_at=datetime.now(UTC))
+        db.add(user)
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            result = await db.execute(select(User).where(User.username == username))
+            user = result.scalar_one()
+        else:
+            await db.refresh(user)
+            await _sync_id_sequence(db, "users")
     return user
 
 
@@ -227,11 +236,21 @@ async def get_or_create_user_async(db: SQLAlchemyAsyncSession, username: str | N
         except IntegrityError:
             await db.rollback()
             result = await db.execute(select(User).where(User.username == username))
-            user = result.scalar_one()
+            user = result.scalar_one_or_none()
+            if not user:
+                # Fallback: try to get user by id since we're trying to use id=1
+                result = await db.execute(select(User).where(User.id == 1))
+                user = result.scalar_one_or_none()
+                if not user:
+                    # Last resort: create user with id=1
+                    user = User(id=1, username=username, created_at=datetime.now(UTC))
+                    db.add(user)
+                    await db.commit()
+                    await db.refresh(user)
+                else:
+                    await db.refresh(user)
         else:
             await db.refresh(user)
-            if username == _default_test_username():
-                await _sync_id_sequence(db, "users")
     return user
 
 

@@ -27,7 +27,7 @@ async def test_move_to_position_clamps_to_max(
     assert response.status_code == 400
     # Should have an error message about position being out of range
     assert "detail" in response.json()
-    detail = response.json()["detail"]
+    detail = response.json()["error"]["message"]
     assert "out of range" in detail.lower() or "maximum position" in detail.lower()
 
 
@@ -51,7 +51,7 @@ async def test_move_to_position_returns_400_for_position_beyond_queue(
     assert response.status_code == 400
     # Should have an error message
     assert "detail" in response.json()
-    assert "position" in str(response.json()["detail"]).lower()
+    assert "position" in str(response.json()["error"]["message"]).lower()
 
 
 @pytest.mark.asyncio

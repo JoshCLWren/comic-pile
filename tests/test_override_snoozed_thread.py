@@ -59,7 +59,7 @@ async def test_override_snoozed_thread_removes_from_snoozed_list(
 
     # The override should be rejected with an error
     assert override_response.status_code == 400
-    assert "snoozed" in override_response.json()["detail"].lower()
+    assert "snoozed" in override_response.json()["error"]["message"].lower()
 
     # Get current session from API to verify thread remains in snoozed list
     session_response = await auth_client.get("/api/sessions/current/")

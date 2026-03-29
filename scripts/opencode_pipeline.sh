@@ -81,21 +81,11 @@ _should_skip_model() {
   local lower_model
   lower_model=$(echo "$model" | tr '[:upper:]' '[:lower:]')
 
-# Skip only the previously problematic mistral model
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-  return 0
-fi
-
-  # Also skip specific problematic model IDs regardless of provider
-  # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.)
-  if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
-    return 0
-  fi
-
-  # Skip any model containing "mistralai" anywhere in the name
-  if [[ "$lower_model" =~ mistralai ]]; then
-    return 0
-  fi
+    # Skip specific problematic model IDs regardless of provider
+    # Match mistral-small-3.1-24b-instruct with any suffix (including :free, :beta, etc.) from any provider
+    if [[ "$lower_model" =~ mistral-small-3\.1-24b-instruct ]]; then
+      return 0
+    fi
 
   return 1
 }
@@ -129,6 +119,10 @@ fi
 # Fallback: if tool test hasn't been run yet, use full pool for everything
 if [[ ${#_CODING_POOL[@]} -eq 0 ]]; then
     _CODING_POOL=("${_MODEL_POOL[@]}")
+    # Defensive: remove problematic models from pools
+    # Remove mistral-small-3.1-24b-instruct models regardless of provider
+    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -viE 'mistral-small-3\.1-24b-instruct'))
+    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -viE 'mistral-small-3\.1-24b-instruct'))
 fi
 if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
     _MODEL_POOL=(
@@ -136,6 +130,10 @@ if [[ ${#_MODEL_POOL[@]} -eq 0 ]]; then
         "opencode/big-pickle"
     )
     _CODING_POOL=("${_MODEL_POOL[@]}")
+    # Defensive: remove problematic models from pools
+    # Remove mistral-small-3.1-24b-instruct models regardless of provider
+    _CODING_POOL=($(printf "%s\n" "${_CODING_POOL[@]}" | grep -viE 'mistral-small-3\.1-24b-instruct'))
+    _MODEL_POOL=($(printf "%s\n" "${_MODEL_POOL[@]}" | grep -viE 'mistral-small-3\.1-24b-instruct'))
 fi
 
 # implement/review/fix need real tool use — use Tier 1 only
@@ -328,10 +326,16 @@ gh_comment() {
 #   openai — excluded (no subscription)
 
 _candidate_models() {
-    opencode models 2>/dev/null | grep -E \
-        "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
-    opencode models 2>/dev/null | grep -E \
-        "^openrouter/.*(:free$|-free$)"
+    # Get candidate models from standard providers and openrouter free tier
+    # and filter out known problematic models
+    {
+        opencode models 2>/dev/null | grep -E "^(nvidia|mistral|zai-coding-plan|opencode|cerebras)/"
+        opencode models 2>/dev/null | grep -E "^openrouter/.*(:free$|-free$)"
+    } | while IFS= read -r model; do
+        if ! _should_skip_model "$model"; then
+            echo "$model"
+        fi
+    done
 }
 
 # ── Per-model exponential backoff — replaces permanent blacklist
@@ -352,9 +356,9 @@ _model_backoff_file() {
 # Evict a model from both pool files so model_manager re-tests it next cycle
 _evict_model() {
     local model=$1
-    local safe
     safe=$(echo "$model" | tr '/:' '__')
-    sed -i "/ ${model} /d;/^[A-Z_]*  *${safe//\//\\/}/d" \
+    # Use | delimiter to avoid issues with '/' in model names
+    sed -i "\| ${model} |d; /^[A-Z_]*  *${safe//\//\\/}/d" \
         "$LOG_DIR/model_test_results.txt" \
         "$LOG_DIR/model_tool_test_results.txt" 2>/dev/null || true
     rm -f "$(_model_backoff_file "$model")"
@@ -1278,9 +1282,9 @@ cmd_model_manager() {
                 model="$1"
                 exit_code=0
                 output=$(timeout 30s opencode run -m "$model" "Reply with only the word PING" 2>&1) || exit_code=$?
-                clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
-                if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance"; then
-                    echo "OK $model"
+clean=$(echo "$output" | sed "s/\x1b\[[0-9;]*m//g")
+if [[ $exit_code -eq 0 ]] && ! echo "$clean" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication|does not exist or you do not have access"; then
+echo "OK $model"
                 elif [[ $exit_code -eq 124 ]]; then
                     echo "TIMEOUT $model"
                 else

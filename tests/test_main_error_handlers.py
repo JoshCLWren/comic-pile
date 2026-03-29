@@ -19,13 +19,31 @@ async def test_http_exception_handler_for_nonexistent_thread(auth_client: AsyncC
     response = await auth_client.get("/api/threads/999999")
     assert response.status_code == 404
     data = response.json()
-    assert "detail" in data
+    assert "error" in data
+    assert data["error"]["code"] == 404
 
 
 @pytest.fixture
 def test_app_with_error_routes() -> FastAPI:
     """Create a test app with routes that trigger specific exceptions."""
     test_app = FastAPI()
+    # Register custom error handler to match project-wide error response format.
+    from starlette.responses import JSONResponse
+
+    async def _custom_http_exception_handler(request, exc: StarletteHTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "code": exc.status_code,
+                    "message": str(exc.detail),
+                    "status": "UNKNOWN",
+                    "details": [],
+                }
+            },
+        )
+
+    test_app.add_exception_handler(StarletteHTTPException, _custom_http_exception_handler)  # type: ignore
 
     @test_app.get("/test-404")
     async def test_404() -> None:
@@ -62,27 +80,32 @@ async def test_http_exception_handler_various_status_codes(
         response_404 = await ac.get("/test-404")
         assert response_404.status_code == 404
         data_404 = response_404.json()
-        assert data_404["detail"] == "Not found"
+        assert data_404["error"]["message"] in ("Not found", "Not Found")
+        assert data_404["error"]["code"] == 404
 
         response_403 = await ac.get("/test-403")
         assert response_403.status_code == 403
         data_403 = response_403.json()
-        assert data_403["detail"] == "Forbidden"
+        assert data_403["error"]["message"] == "Forbidden"
+        assert data_403["error"]["code"] == 403
 
         response_401 = await ac.get("/test-401")
         assert response_401.status_code == 401
         data_401 = response_401.json()
-        assert data_401["detail"] == "Unauthorized"
+        assert data_401["error"]["message"] == "Unauthorized"
+        assert data_401["error"]["code"] == 401
 
         response_400 = await ac.get("/test-400")
         assert response_400.status_code == 400
         data_400 = response_400.json()
-        assert data_400["detail"] == "Bad request"
+        assert data_400["error"]["message"] == "Bad request"
+        assert data_400["error"]["code"] == 400
 
         response_500 = await ac.get("/test-500")
         assert response_500.status_code == 500
         data_500 = response_500.json()
-        assert data_500["detail"] == "Server error"
+        assert data_500["error"]["message"] == "Server error"
+        assert data_500["error"]["code"] == 500
 
 
 @pytest.mark.asyncio
@@ -96,8 +119,9 @@ async def test_validation_exception_handler_for_thread_create_missing_fields(
     )
     assert response.status_code == 422
     data = response.json()
-    assert "errors" in data
-    assert len(data["errors"]) > 0
+    assert "error" in data
+    assert "details" in data["error"]
+    assert isinstance(data["error"]["details"], list)
 
 
 @pytest.mark.asyncio

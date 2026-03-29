@@ -43,7 +43,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
-  }, [])
+  }, []);
 
   useEffect(() => {
     const timeoutIds = timeoutIdsRef.current
@@ -51,10 +51,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       timeoutIds.forEach((timeoutId) => clearTimeout(timeoutId))
       timeoutIds.clear()
     }
-  }, [])
+  }, []);
 
   return (
-    <ToastContext.Provider value={{ toasts, showToast, removeToast }}>
+    <ToastContext.Provider value={{ toasts, showToast, removeToast }}> 
       {children}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
         {toasts.map((toast) => (
@@ -102,3 +102,5 @@ export function useToast() {
   }
   return context
 }
+
+

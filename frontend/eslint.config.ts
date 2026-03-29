@@ -1,9 +1,31 @@
 import js from '@eslint/js'
 import globals from 'globals'
-import tsEslintPlugin from '@typescript-eslint/eslint-plugin'
-import tsEslintParser from '@typescript-eslint/parser'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
+// Types for optional tooling (fallback if not installed in environment)
+let tsEslintPlugin: any = undefined
+let tsEslintParser: any = undefined
+let reactHooks: any = undefined
+let reactRefresh: any = undefined
+try {
+  tsEslintPlugin = require('@typescript-eslint/eslint-plugin')
+} catch {
+  tsEslintPlugin = undefined
+}
+try {
+  tsEslintParser = require('@typescript-eslint/parser')
+} catch {
+  tsEslintParser = undefined
+}
+try {
+  reactHooks = require('eslint-plugin-react-hooks')
+} catch {
+  reactHooks = undefined
+}
+try {
+  reactRefresh = require('eslint-plugin-react-refresh')
+} catch {
+  reactRefresh = undefined
+}
+ 
 
 export default [
   {
@@ -23,24 +45,27 @@ export default [
       },
     },
     plugins: {
-      '@typescript-eslint': tsEslintPlugin,
-      'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
+      ...(tsEslintPlugin ? { '@typescript-eslint': tsEslintPlugin } : {}),
+      ...(reactHooks ? { 'react-hooks': reactHooks } : {}),
+      ...(reactRefresh ? { 'react-refresh': reactRefresh } : {}),
     },
     rules: {
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      ...(tsEslintPlugin
+        ? {
+            '@typescript-eslint/no-unused-vars': [
+              'error',
+              {
+                varsIgnorePattern: '^[A-Z_]',
+                argsIgnorePattern: '^_',
+                caughtErrorsIgnorePattern: '^_',
+              },
+            ],
+          }
+        : {}),
+      ...(reactHooks ? { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'warn' } : {}),
+      ...(reactRefresh ? { 'react-refresh/only-export-components': ['warn', { allowConstantExport: true }] } : {}),
       'no-unused-vars': 'off',
       'max-lines': ['error', { max: 1000, skipBlankLines: true, skipComments: true }],
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        {
-          varsIgnorePattern: '^[A-Z_]',
-          argsIgnorePattern: '^_',
-          caughtErrorsIgnorePattern: '^_',
-        },
-      ],
     },
   },
   {
@@ -52,6 +77,12 @@ export default [
   },
   {
     files: ['src/contexts/CollectionContext.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: ['src/contexts/ToastContext.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
     },

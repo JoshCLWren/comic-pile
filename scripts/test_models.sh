@@ -31,12 +31,12 @@ test_model() {
     output=$(timeout 30s opencode run -m "$model" "say hello in one word" 2>&1) || exit_code=$?
 
     if [[ $exit_code -eq 124 ]]; then
-        echo "TIMEOUT  $model"
-    elif echo "$output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication"; then
-        reason=$(echo "$output" | grep -iE "Error:|ProviderModel|balance|not found|not supported|unauthorized|invalid|authentication" | head -1 | sed 's/\x1b\[[0-9;]*m//g' | xargs)
-        echo "FAIL     $model  [$reason]"
+        echo "TIMEOUT $model"
+    elif echo "$output" | grep -qiE "ProviderModelNotFoundError|Model not found|Insufficient balance|not supported|unauthorized|invalid api|authentication|Error: Model.*does not exist|does not exist or you do not have access"; then
+        reason=$(echo "$output" | grep -iE "Error:|ProviderModel|balance|not found|not supported|unauthorized|invalid|authentication|does not exist" | head -1 | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+        echo "FAIL $model [$reason]"
     elif [[ $exit_code -ne 0 ]]; then
-        echo "FAIL     $model  [exit $exit_code]"
+        echo "FAIL $model [exit $exit_code]"
     else
         local cleaned
         cleaned=$(echo "$output" | sed 's/\x1b\[[0-9;]*m//g')

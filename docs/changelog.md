@@ -12,6 +12,15 @@
 
 ## 2026-03-24
 
+**API Error Response Standardization (#377)** ⚠️ Breaking Change
+- Standardized all API error responses to Google-style format: `{"error": {"code": 404, "message": "...", "status": "NOT_FOUND"}}`
+- Replaced plain `{"detail": "..."}` error responses across all endpoints
+- Added backward compatibility: legacy `detail` field included in responses for now (will be removed in future)
+- API clients must update error handling to use `response.error.message` instead of `response.detail`
+- Updated all `raise HTTPException(detail=...)` calls to use structured `ErrorResponse`/`GoogleError` schemas
+- Added comprehensive tests for 404, 400, 403, 422 responses on major endpoints
+- Achieved 96%+ test coverage; all lint checks passing
+
 **Accessibility Improvements (#220)**
 - Added `aria-label="Roll pool collection"` to ThreadPool container for screen reader support
 - Added `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` to Modal component

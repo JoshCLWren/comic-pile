@@ -629,7 +629,7 @@ async def test_get_session_not_found(auth_client: AsyncClient) -> None:
     """Test getting a non-existent session."""
     response = await auth_client.get("/api/sessions/9999")
     assert response.status_code == 404
-    assert "Session not found" in response.json()["detail"]
+    assert "Session not found" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
@@ -806,7 +806,7 @@ async def test_restore_session_start_no_snapshot(
 
     response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 404
-    assert "No session start snapshot found" in response.json()["detail"]
+    assert "No session start snapshot found" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio

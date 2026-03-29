@@ -134,7 +134,7 @@ async def test_unsnooze_no_session(auth_client: AsyncClient) -> None:
     """
     response = await auth_client.post("/api/snooze/999/unsnooze")
     assert response.status_code == 400
-    assert "No active session" in response.json()["detail"]
+    assert "No active session" in response.json()["error"]["message"]
 
 
 @pytest.mark.asyncio
