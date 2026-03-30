@@ -169,8 +169,8 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
                         "Refusing to reset schema on non-test database. "
                         f"Database '{make_url(database_url).database}' must include 'test'."
                     )
-                sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-                sync_conn.exec_driver_sql("CREATE SCHEMA public")
+            sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+            sync_conn.exec_driver_sql("CREATE SCHEMA public")
             Base.metadata.create_all(bind=sync_conn)
 
         await conn.run_sync(_check_and_drop)
