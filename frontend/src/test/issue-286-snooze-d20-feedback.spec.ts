@@ -30,9 +30,9 @@ test.describe('Issue #286: Snooze feedback at d20', () => {
     const headerDieLabel = page.locator('#header-die-label');
     await expect(headerDieLabel).toContainText('d20');
 
-    // Click on the first thread to open action sheet
-    const firstThread = page.locator('[data-roll-pool] [role="button"]').first();
-    await firstThread.click();
+  // Click on the first thread to open action sheet (roll pool threads open action sheet directly)
+  const firstThread = page.locator('[data-roll-pool] [role="button"]').first();
+  await firstThread.click();
 
     // Click "Read Now" to set thread as pending
     const readButton = page.locator('button:has-text("Read Now")');

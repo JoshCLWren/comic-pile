@@ -27,21 +27,21 @@ test.describe('Issue #292: Snoozed-offset badge at d20 ceiling', () => {
     await page.waitForLoadState('networkidle');
 
     // Verify die is d20
-    const headerDieLabel = page.locator('#header-die-label');
-    await expect(headerDieLabel).toContainText('d20');
+  const headerDieLabel = page.locator('#header-die-label');
+  await expect(headerDieLabel).toContainText('d20');
 
-    // Click on the first thread to open action sheet
-    const firstThread = page.locator('[data-roll-pool] [role="button"]').first();
-    await firstThread.click();
+  // Click on the first thread to open action sheet (roll pool threads open action sheet directly)
+  const firstThread = page.locator('[data-roll-pool] [role="button"]').first();
+  await firstThread.click();
 
-    // Click "Read Now" to set thread as pending
-    const readButton = page.locator('button:has-text("Read Now")');
-    await readButton.click();
+  // Click "Read Now" to set thread as pending
+  const readButton = page.locator('button:has-text("Read Now")');
+  await readButton.click();
 
-    // Wait for rating view to appear
-    await page.waitForSelector('#rating-input', { state: 'visible', timeout: 5000 });
+  // Wait for rating view to appear
+  await page.waitForSelector('#rating-input', { state: 'visible', timeout: 5000 });
 
-    // Snooze the thread
+  // Snooze the thread
     const snoozeButton = page.locator('button:has-text("Snooze")');
     await snoozeButton.click();
 
@@ -87,21 +87,21 @@ test.describe('Issue #292: Snoozed-offset badge at d20 ceiling', () => {
     await page.waitForLoadState('networkidle');
 
     // Verify die is d6
-    const headerDieLabel = page.locator('#header-die-label');
-    await expect(headerDieLabel).toContainText('d6');
+  const headerDieLabel = page.locator('#header-die-label');
+  await expect(headerDieLabel).toContainText('d6');
 
-    // Click on the first thread to open action sheet
-    const firstThread = page.locator('[data-roll-pool] [role="button"]').first();
-    await firstThread.click();
+  // Click on the first thread to open action sheet (roll pool threads open action sheet directly)
+  const firstThread = page.locator('[data-roll-pool] [role="button"]').first();
+  await firstThread.click();
 
-    // Click "Read Now" to set thread as pending
-    const readButton = page.locator('button:has-text("Read Now")');
-    await readButton.click();
+  // Click "Read Now" to set thread as pending
+  const readButton = page.locator('button:has-text("Read Now")');
+  await readButton.click();
 
-    // Wait for rating view to appear
-    await page.waitForSelector('#rating-input', { state: 'visible', timeout: 5000 });
+  // Wait for rating view to appear
+  await page.waitForSelector('#rating-input', { state: 'visible', timeout: 5000 });
 
-    // Snooze the thread
+  // Snooze the thread
     const snoozeButton = page.locator('button:has-text("Snooze")');
     await snoozeButton.click();
 
