@@ -124,19 +124,15 @@ beforeEach(() => {
   } as never)
 })
 
-const renderWithProviders = (ui: React.ReactElement) => {
- return render(
- <BrowserRouter>
- <ToastProvider>
- {ui}
- </ToastProvider>
- </BrowserRouter>
- )
-}
-
-  it('renders queue items and opens create modal', async () => {
-    const user = userEvent.setup()
-    renderWithProviders(<QueuePage />)
+it('renders queue items and opens create modal', async () => {
+  const user = userEvent.setup()
+  render(
+    <BrowserRouter>
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
+    </BrowserRouter>
+  )
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('Descender')).toBeInTheDocument()
@@ -158,64 +154,82 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-    it('opens action sheet when clicking thread card', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<QueuePage />)
-
-    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
-    expect(threadCard).toBeInTheDocument()
-    if (!threadCard) {
-      throw new Error('Thread card not found')
-    }
-
-    await user.click(threadCard)
-    expect(screen.getByText('Read Now')).toBeInTheDocument()
-    expect(screen.getByText('Move to Front')).toBeInTheDocument()
-    expect(screen.getByText('Move to Back')).toBeInTheDocument()
-    expect(screen.getByText('Snooze')).toBeInTheDocument()
-    expect(screen.getByText('Edit Thread')).toBeInTheDocument()
-  })
-
-    it('calls snooze mutation when thread is not snoozed and snooze action is clicked', async () => {
-      const user = userEvent.setup()
-      renderWithProviders(<QueuePage />)
-
-    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
-    if (!threadCard) {
-      throw new Error('Thread card not found')
-    }
-    await user.click(threadCard)
-
-    const snoozeButton = screen.getByText('Snooze')
-    await user.click(snoozeButton)
-
-    expect(mockSnoozeMutation.mutate).toHaveBeenCalled()
-    expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
-  })
-
-it('calls unsnooze mutation when thread is snoozed and unsnooze action is clicked', async () => {
- mockedUseSession.mockReturnValue({
- data: {
- snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
- },
- refetch: vi.fn(),
- })
-
+  it('opens action sheet when clicking thread card', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<QueuePage />)
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+  
+      const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+      expect(threadCard).toBeInTheDocument()
+      if (!threadCard) {
+        throw new Error('Thread card not found')
+      }
+  
+      await user.click(threadCard)
+      expect(screen.getByText('Read Now')).toBeInTheDocument()
+      expect(screen.getByText('Move to Front')).toBeInTheDocument()
+      expect(screen.getByText('Move to Back')).toBeInTheDocument()
+      expect(screen.getByText('Snooze')).toBeInTheDocument()
+      expect(screen.getByText('Edit Thread')).toBeInTheDocument()
+    })
 
-    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
-    if (!threadCard) {
-      throw new Error('Thread card not found')
-    }
-    await user.click(threadCard)
+  it('calls snooze mutation when thread is not snoozed and snooze action is clicked', async () => {
+    const user = userEvent.setup()
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+  
+      const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+      if (!threadCard) {
+        throw new Error('Thread card not found')
+      }
+      await user.click(threadCard)
+  
+      const snoozeButton = screen.getByText('Snooze')
+      await user.click(snoozeButton)
+  
+      expect(mockSnoozeMutation.mutate).toHaveBeenCalled()
+      expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
+    })
 
-    const unsnoozeButton = screen.getByText('Unsnooze')
-    await user.click(unsnoozeButton)
-
-    expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
-    expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
-  })
+  it('calls unsnooze mutation when thread is snoozed and unsnooze action is clicked', async () => {
+    mockedUseSession.mockReturnValue({
+      data: {
+        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
+      },
+      refetch: vi.fn(),
+    })
+  
+    const user = userEvent.setup()
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+  
+      const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+      if (!threadCard) {
+        throw new Error('Thread card not found')
+      }
+      await user.click(threadCard)
+  
+      const unsnoozeButton = screen.getByText('Unsnooze')
+      await user.click(unsnoozeButton)
+  
+      expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
+      expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
+    })
 
   it('refetches session and threads after snooze action', async () => {
     const mockRefetchSession = vi.fn()
@@ -231,52 +245,70 @@ it('calls unsnooze mutation when thread is snoozed and unsnooze action is clicke
       isLoading: false,
       refetch: mockRefetch,
     })
-
+  
     const user = userEvent.setup()
-    renderWithProviders(<QueuePage />)
-
-    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
-    if (!threadCard) {
-      throw new Error('Thread card not found')
-    }
-    await user.click(threadCard)
-
-    const snoozeButton = screen.getByText('Snooze')
-    await user.click(snoozeButton)
-
-    await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
-      expect(mockRefetch).toHaveBeenCalled()
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+  
+      const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+      if (!threadCard) {
+        throw new Error('Thread card not found')
+      }
+      await user.click(threadCard)
+  
+      const snoozeButton = screen.getByText('Snooze')
+      await user.click(snoozeButton)
+  
+      await waitFor(() => {
+        expect(mockRefetchSession).toHaveBeenCalled()
+        expect(mockRefetch).toHaveBeenCalled()
+      })
     })
-  })
 })
 
 describe('Keyboard Accessibility', () => {
   it('opens action sheet when pressing Enter on thread card', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<QueuePage />)
-
-    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
-    if (!threadCard) {
-      throw new Error('Thread card not found')
-    }
-    threadCard.focus()
-    await user.keyboard('{Enter}')
-
-    expect(screen.getByText('Read Now')).toBeInTheDocument()
-  })
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+  
+      const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+      if (!threadCard) {
+        throw new Error('Thread card not found')
+      }
+      threadCard.focus()
+      await user.keyboard('{Enter}')
+  
+      expect(screen.getByText('Read Now')).toBeInTheDocument()
+    })
 
   it('opens action sheet when pressing Space on thread card', async () => {
     const user = userEvent.setup()
-    renderWithProviders(<QueuePage />)
-
-    const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
-    if (!threadCard) {
-      throw new Error('Thread card not found')
-    }
-    threadCard.focus()
-    await user.keyboard(' ')
-
-    expect(screen.getByText('Read Now')).toBeInTheDocument()
-  })
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
+  
+      const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
+      if (!threadCard) {
+        throw new Error('Thread card not found')
+      }
+      threadCard.focus()
+      await user.keyboard(' ')
+  
+      expect(screen.getByText('Read Now')).toBeInTheDocument()
+    })
 })

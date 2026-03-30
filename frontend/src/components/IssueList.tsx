@@ -12,17 +12,19 @@ interface IssueListProps {
 }
 
 export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
-  const [issues, setIssues] = useState<Issue[]>([])
-  const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
-  const [totalCount, setTotalCount] = useState<number>(0)
-  const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
-  const abortControllerRef = useRef<AbortController | null>(null)
+   const [issues, setIssues] = useState<Issue[]>([])
+   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all')
+   const [isLoading, setIsLoading] = useState(true)
+   const [isLoadingMore, setIsLoadingMore] = useState(false)
+   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
+   const [totalCount, setTotalCount] = useState<number>(0)
+   const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
+   const abortControllerRef = useRef<AbortController | null>(null)
+   const issuesRef = useRef<Issue[]>([])
+   issuesRef.current = issues
 
-  const loadIssues = useCallback(async (append: boolean) => {
-    if (append && !issues.length) return;
+  const loadIssues = useCallback(async (append = false, pageToken?: string | null) => {
+    if (append && issuesRef.current.length === 0) return
 
     if (append) {
       setIsLoadingMore(true)
@@ -33,27 +35,28 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       const response = await issuesApi.list(thread.id, {
         status: filter === 'all' ? undefined : filter,
         page_size: 50,
-        page_token: append ? nextPageToken ?? undefined : undefined,
+        page_token: pageToken ?? undefined,
       })
 
-      const updatedIssues = append ? [...issues, ...response.issues] : response.issues
-      setIssues(updatedIssues)
+      setIssues(prev => append ? [...prev, ...response.issues] : response.issues)
       setTotalCount(response.total_count)
       setNextPageToken(response.next_page_token)
 
+      const fetchedDeps: Record<number, IssueDependenciesResponse> = {}
       try {
         await Promise.all(
           response.issues.map(async (issue) => {
             try {
               const deps = await dependenciesApi.getIssueDependencies(issue.id)
               if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
-                setDependencies((prev) => ({ ...prev, [issue.id]: deps }))
+                fetchedDeps[issue.id] = deps
               }
             } catch (error) {
               console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
             }
           })
         )
+        setDependencies(prev => append ? { ...prev, ...fetchedDeps } : fetchedDeps)
       } catch (error) {
         console.error('Failed to load dependencies:', error)
       }
@@ -63,7 +66,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       setIsLoading(false)
       setIsLoadingMore(false)
     }
-  }, [thread.id, filter, nextPageToken, issues, dependencies])
+  }, [thread.id, filter])
 
   useEffect(() => {
     abortControllerRef.current = new AbortController()
@@ -166,7 +169,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         <div className="issue-list-load-more">
           <button
             type="button"
-            onClick={() => loadIssues(true)}
+            onClick={() => loadIssues(true, nextPageToken)}
             disabled={isLoadingMore}
             className="load-more-button"
           >
