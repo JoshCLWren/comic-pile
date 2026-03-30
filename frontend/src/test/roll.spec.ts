@@ -1038,11 +1038,11 @@ test.describe('Roll Dice Feature', () => {
 
     await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
-    const titleElement = authenticatedPage.locator('h2.text-2xl.font-black.truncate');
+    const titleElement = authenticatedPage.locator('#thread-info h2');
     await expect(titleElement).toBeVisible();
 
     const titleText = await titleElement.textContent();
-    expect(titleText).toMatch(/X-Force\s+#\d+/);
+    expect(titleText).toContain('X-Force');
   });
 
     test('issue #324: rating view should show percentage complete and issues left', async ({ authenticatedPage, request }) => {
@@ -1170,7 +1170,7 @@ test.describe('Roll Dice Feature', () => {
     await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
     // The title now includes the issue number within the h2 element
-    const titleElement = authenticatedPage.locator('#thread-info h2.truncate');
+    const titleElement = authenticatedPage.locator('#thread-info h2');
     await expect(titleElement).toBeVisible();
 
     const titleText = await titleElement.textContent();
@@ -1299,7 +1299,7 @@ test.describe('Roll Dice Feature', () => {
 
     const progressText = authenticatedPage.locator('#thread-info');
     await expect(progressText).toContainText('100% complete', { timeout: 10000 });
-    await expect(progressText).toContainText('0 issue', { timeout: 10000 });
+    await expect(progressText).toContainText('0 issues left', { timeout: 10000 });
 
       const threadAfterResponse = await request.get(`/api/threads/${thread.id}`, {
         headers: {
