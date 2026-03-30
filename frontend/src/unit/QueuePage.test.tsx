@@ -201,19 +201,8 @@ it('calls unsnooze mutation when thread is snoozed and unsnooze action is clicke
  refetch: vi.fn(),
  })
 
-<<<<<<< HEAD
     const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
-=======
- const user = userEvent.setup()
- renderWithProviders(<QueuePage />)
->>>>>>> fe25c1c8 (fix: resolve CI failures)
+    renderWithProviders(<QueuePage />)
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     if (!threadCard) {
