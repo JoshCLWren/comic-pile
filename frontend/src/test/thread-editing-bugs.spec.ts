@@ -479,6 +479,9 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // 3. React state update and re-render
     await authenticatedPage.waitForLoadState('networkidle');
 
+    // Wait for issues list to finish loading (not in loading state)
+    await expect(editModal.locator('text=Loading issues…')).not.toBeVisible({ timeout: 10000 });
+
     // Verify issues list in modal refreshed and shows the new annual issue
     // Increased timeout to 10s to account for: network latency, API response time, state update, re-render
     const annualInModal = editModal.getByRole('button', {

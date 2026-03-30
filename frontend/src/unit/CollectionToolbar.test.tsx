@@ -104,8 +104,8 @@ it('calls onNewCollection when new collection button is clicked', async () => {
     const button = screen.getByRole('button', { name: 'New collection' })
     await user.click(button)
 
-    expect(onNewCollection).toHaveBeenCalledTimes(1)
-  })
+  expect(onNewCollection).toHaveBeenCalledTimes(1)
+})
 
 
 it('handles collection selection change', async () => {
