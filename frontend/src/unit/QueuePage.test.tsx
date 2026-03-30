@@ -154,15 +154,15 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-  it('opens action sheet when clicking thread card', async () => {
-    const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
+    it('opens action sheet when clicking thread card', async () => {
+      const user = userEvent.setup()
+      render(
+        <BrowserRouter>
+          <ToastProvider>
+            <QueuePage />
+          </ToastProvider>
+        </BrowserRouter>
+      )
 
     const threadCard = screen.getByText('Saga').closest('[role="button"]') as HTMLElement | null
     expect(threadCard).toBeInTheDocument()

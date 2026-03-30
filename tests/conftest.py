@@ -19,10 +19,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession as SQLAlchemyAsyncSession,
+    create_async_engine,
 )
 from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
-    create_async_engine,
 )
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.pool import NullPool

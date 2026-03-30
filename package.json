@@ -19,5 +19,11 @@
     "test:dice-playground": "npm --prefix frontend run test:dice-playground",
     "test:dice-playground:update": "npm --prefix frontend run test:dice-playground:update",
     "test:e2e:prod-smoke": "npm --prefix frontend run test:e2e:prod-smoke"
+  },
+  "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.57.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "jiti": "^2.6.1"
   }
 }
