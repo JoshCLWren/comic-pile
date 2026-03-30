@@ -29,6 +29,9 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
     await expect(editModal).toBeVisible();
 
+    // Wait for issues to load (not loading state)
+    await expect(editModal.locator('text=Loading issues…')).not.toBeVisible({ timeout: 10000 });
+
     // Check that "Show all" button is present
     const showAllButton = editModal.getByRole('button', { name: 'Show all 20' });
     await expect(showAllButton).toBeVisible();
@@ -64,6 +67,9 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
 
+    // Wait for issues to load (not loading state)
+    await expect(editModal.locator('text=Loading issues…')).not.toBeVisible({ timeout: 10000 });
+
     // Click "Show all" button
     const showAllButton = editModal.getByRole('button', { name: 'Show all 15' });
     await showAllButton.click();
@@ -72,8 +78,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     await expect(editModal.getByRole('button', { name: 'Show fewer' })).toBeVisible();
 
     // Check that all issues are now visible
-    const visibleIssueCount = await editModal.locator('[data-testid^="issue-pill-"]').count();
-    expect(visibleIssueCount).toBe(15);
+    await expect(editModal.locator('[data-testid^="issue-pill-"]')).toHaveCount(15, { timeout: 10000 });
   });
 
   test('should collapse back to show fewer issues when "Show fewer" button is clicked', async ({ authenticatedPage }) => {
@@ -100,6 +105,9 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     // Wait for edit modal to open
     await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
+
+    // Wait for issues to load (not loading state)
+    await expect(editModal.locator('text=Loading issues…')).not.toBeVisible({ timeout: 10000 });
 
     // Expand to show all issues
     const showAllButton = editModal.getByRole('button', { name: 'Show all 12' });
@@ -143,13 +151,15 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
 
+    // Wait for issues to load (not loading state)
+    await expect(editModal.locator('text=Loading issues…')).not.toBeVisible({ timeout: 10000 });
+
     // Check that "Show all" button is NOT present
     const showAllButton = editModal.getByRole('button', { name: /Show all/i });
     await expect(showAllButton).not.toBeVisible();
 
     // Check that all issues are visible
-    const visibleIssueCount = await editModal.locator('[data-testid^="issue-pill-"]').count();
-    expect(visibleIssueCount).toBe(3);
+    await expect(editModal.locator('[data-testid^="issue-pill-"]')).toHaveCount(3, { timeout: 10000 });
   });
 
   test('should still allow issue toggling when list is collapsed', async ({ authenticatedPage }) => {
