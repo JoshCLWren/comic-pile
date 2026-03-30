@@ -3,11 +3,11 @@ import type { Dependency, Thread } from '../types'
 export type GateStatus = 'blocked' | 'satisfied' | 'dormant'
 
 export interface TimelineGateEntry {
-  id: number
+  targetIssueId: number
   issueNumberText: string | null
   issueNumberValue: number | null
   targetLabel: string
-  prerequisiteLabel: string
+  prerequisiteLabels: string[]
   status: GateStatus
   isCurrent: boolean
 }
@@ -89,22 +89,65 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
       dep.source_label !== undefined
   )
 
-  const gates = issueDeps.map((dep) => {
+  // Map to raw gates with necessary fields
+  type RawGate = {
+    targetIssueId: number
+    issueNumberText: string | null
+    issueNumberValue: number | null
+    orderValue: number | null
+    targetLabel: string
+    prerequisiteLabel: string
+  }
+
+  const rawGates: RawGate[] = issueDeps.map((dep) => {
     const issueNumberText = extractIssueNumber(dep.target_label)
     const issueNumberValue = issueStringToNumber(issueNumberText ?? dep.target_label ?? null)
     const orderValue = determineOrderValue(issueNumberValue, dep.target_issue_id)
     return {
-      id: dep.id,
+      targetIssueId: dep.target_issue_id!,
       issueNumberText,
       issueNumberValue,
       orderValue,
       targetLabel: dep.target_label ?? 'Issue gate',
       prerequisiteLabel: dep.source_label ?? 'Prerequisite',
-      targetIssueId: dep.target_issue_id,
     }
   })
 
-  const sortedGates = gates.sort((a, b) => compareOrder(a.orderValue, b.orderValue, a.targetLabel, b.targetLabel))
+  // Group gates by targetIssueId
+  const gateGroups = new Map<number, RawGate[]>()
+  for (const gate of rawGates) {
+    const existing = gateGroups.get(gate.targetIssueId) ?? []
+    existing.push(gate)
+    gateGroups.set(gate.targetIssueId, existing)
+  }
+
+  // Create grouped gates
+  type GroupedGate = {
+    targetIssueId: number
+    issueNumberText: string | null
+    issueNumberValue: number | null
+    orderValue: number | null
+    targetLabel: string
+    prerequisiteLabels: string[]
+  }
+
+  const groupedGates: GroupedGate[] = []
+  for (const [targetIssueId, gates] of gateGroups) {
+    const first = gates[0]
+    groupedGates.push({
+      targetIssueId,
+      issueNumberText: first.issueNumberText,
+      issueNumberValue: first.issueNumberValue,
+      orderValue: first.orderValue,
+      targetLabel: first.targetLabel,
+      prerequisiteLabels: gates.map((g) => g.prerequisiteLabel),
+    })
+  }
+
+  // Sort grouped gates by orderValue
+  const sortedGates = groupedGates.sort((a, b) =>
+    compareOrder(a.orderValue, b.orderValue, a.targetLabel, b.targetLabel)
+  )
 
   const nextIssueNumberValue = issueStringToNumber(thread.next_unread_issue_number ?? null)
   const nextOrderValue = determineOrderValue(nextIssueNumberValue, thread.next_unread_issue_id)
@@ -139,31 +182,31 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
 
   // Add gate entries (no intermediate spans)
   let lastGateIssueNumber: number | null = null
-  for (const gate of sortedGates) {
-    const status = resolveGateStatus({
-      isThreadComplete,
-      gateValue: gate.orderValue,
-      nextValue: nextOrderValue,
-      targetIssueId: gate.targetIssueId,
-      nextIssueId: thread.next_unread_issue_id,
-    })
+   for (const gate of sortedGates) {
+     const status = resolveGateStatus({
+       isThreadComplete,
+       gateValue: gate.orderValue,
+       nextValue: nextOrderValue,
+       targetIssueId: gate.targetIssueId,
+       nextIssueId: thread.next_unread_issue_id,
+     })
 
-    entries.push({
-      kind: 'gate',
-      gate: {
-        id: gate.id,
-        issueNumberText: gate.issueNumberText,
-        issueNumberValue: gate.issueNumberValue,
-        targetLabel: gate.targetLabel,
-        prerequisiteLabel: gate.prerequisiteLabel,
-        status,
-        isCurrent: status === 'blocked',
-      },
-    })
-    if (gate.issueNumberValue !== null) {
-      lastGateIssueNumber = gate.issueNumberValue
-    }
-  }
+     entries.push({
+       kind: 'gate',
+       gate: {
+         targetIssueId: gate.targetIssueId,
+         issueNumberText: gate.issueNumberText,
+         issueNumberValue: gate.issueNumberValue,
+         targetLabel: gate.targetLabel,
+         prerequisiteLabels: gate.prerequisiteLabels,
+         status,
+         isCurrent: status === 'blocked',
+       },
+     })
+     if (gate.issueNumberValue !== null) {
+       lastGateIssueNumber = gate.issueNumberValue
+     }
+   }
 
   // Create a span for issues after the last gate, if any
   const afterStart = (lastGateIssueNumber ?? 0) + 1

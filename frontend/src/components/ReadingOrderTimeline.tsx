@@ -53,14 +53,6 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
       ? `Issue #${thread.next_unread_issue_number}`
       : 'Unknown'
 
-  if (issueTimeline.length === 0) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-stone-300">
-        No issue-level dependencies yet. Issues 1–{thread.total_issues ?? '…'} are clear to read straight through.
-      </div>
-    )
-  }
-
   return (
     <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-black uppercase tracking-widest text-stone-400">
@@ -75,7 +67,7 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
       <div className="mt-3 max-h-[50vh] space-y-3 overflow-y-auto pr-1">
         {issueTimeline.map((entry) =>
           entry.kind === 'gate' ? (
-            <GateCard key={`gate-${entry.gate.id}`} gate={entry.gate} />
+            <GateCard key={`gate-${entry.gate.targetIssueId}`} gate={entry.gate} />
           ) : (
             <SpanCard key={entry.span.id} span={entry.span} />
           ),
@@ -87,11 +79,14 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
 
 function GateCard({ gate }: { gate: TimelineGateEntry }) {
   const statusMeta = STATUS_STYLES[gate.status]
+  const prerequisiteCount = gate.prerequisiteLabels.length
   return (
     <div className="rounded-2xl border border-white/10 bg-stone-950/40 p-3 text-sm text-stone-200 shadow-inner">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-base font-semibold text-white">Issue #{gate.issueNumberText ?? gate.targetLabel?.match(/#(\S+)/)?.[1] ?? '??'}</p>
+          <p className="text-base font-semibold text-white">
+            Issue #{gate.issueNumberText ?? gate.targetIssueId ?? 'Unknown'}
+          </p>
           <p className="text-xs text-stone-400">{gate.targetLabel}</p>
         </div>
         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black uppercase tracking-wide ${statusMeta.classes}`}>
@@ -99,7 +94,12 @@ function GateCard({ gate }: { gate: TimelineGateEntry }) {
         </span>
       </div>
       <p className="mt-3 text-xs text-stone-300">
-        <span className="font-semibold text-white">Prerequisite:</span> {gate.prerequisiteLabel}
+        <span className="font-semibold text-white">
+          {prerequisiteCount === 1 ? 'Prerequisite:' : 'Prerequisites:'}
+        </span>{' '}
+        {prerequisiteCount === 1
+          ? gate.prerequisiteLabels[0]
+          : `${prerequisiteCount} required`}
       </p>
       <p className="mt-1 text-[11px] uppercase tracking-widest text-stone-500">{statusMeta.description}</p>
       {gate.isCurrent && (

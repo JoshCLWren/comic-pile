@@ -609,9 +609,39 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
             {showReadingOrder && (
               <div className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-3">
-                <div className="flex gap-2 text-[11px] font-black uppercase tracking-widest">
+                <div
+                  className="flex gap-2 text-[11px] font-black uppercase tracking-widest"
+                  role="tablist"
+                  aria-label="Reading order view"
+                  onKeyDown={(e) => {
+                    const tabs = Array.from(e.currentTarget.querySelectorAll('[role="tab"]')) as HTMLElement[];
+                    const currentIndex = tabs.indexOf(document.activeElement as HTMLElement);
+                    if (currentIndex === -1) return;
+                    let newIndex = currentIndex;
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      newIndex = (currentIndex + 1) % tabs.length;
+                    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+                    } else if (e.key === 'Home') {
+                      e.preventDefault();
+                      newIndex = 0;
+                    } else if (e.key === 'End') {
+                      e.preventDefault();
+                      newIndex = tabs.length - 1;
+                    }
+                    if (newIndex !== currentIndex) {
+                      tabs[newIndex]?.focus();
+                    }
+                  }}
+                >
                   <button
                     type="button"
+                    role="tab"
+                    id="reading-order-timeline-tab"
+                    aria-selected={readingView === 'timeline'}
+                    aria-controls="timeline-panel"
                     onClick={() => handleSelectReadingView('timeline')}
                     className={`flex-1 rounded-2xl border px-3 py-3 ${
                       readingView === 'timeline'
@@ -623,6 +653,10 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                   </button>
                   <button
                     type="button"
+                    role="tab"
+                    id="reading-order-flowchart-tab"
+                    aria-selected={readingView === 'graph'}
+                    aria-controls="flowchart-panel"
                     onClick={() => handleSelectReadingView('graph')}
                     className={`flex-1 rounded-2xl border px-3 py-3 ${
                       readingView === 'graph'
@@ -635,18 +669,31 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                 </div>
 
                 <div className="min-h-[200px]">
-                  {readingView === 'timeline' ? (
+                  <div
+                    role="tabpanel"
+                    id="timeline-panel"
+                    aria-labelledby="reading-order-timeline-tab"
+                    hidden={readingView !== 'timeline'}
+                  >
                     <ReadingOrderTimeline thread={thread} dependencies={[...dependencies.blocking, ...dependencies.blocked_by]} />
-                  ) : isGraphLoading ? (
-                    <p className="text-center text-xs text-stone-400">Loading flowchart…</p>
-                  ) : (
-                    <DependencyFlowchart
-                      threads={flowchartThreads}
-                      dependencies={flowchartDependencies}
-                      blockedIds={blockedIds}
-                      issueNodes={flowchartIssueNodes}
-                    />
-                  )}
+                  </div>
+                  <div
+                    role="tabpanel"
+                    id="flowchart-panel"
+                    aria-labelledby="reading-order-flowchart-tab"
+                    hidden={readingView !== 'graph'}
+                  >
+                    {isGraphLoading ? (
+                      <p className="text-center text-xs text-stone-400">Loading flowchart…</p>
+                    ) : (
+                      <DependencyFlowchart
+                        threads={flowchartThreads}
+                        dependencies={flowchartDependencies}
+                        blockedIds={blockedIds}
+                        issueNodes={flowchartIssueNodes}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             )}
