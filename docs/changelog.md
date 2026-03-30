@@ -10,6 +10,20 @@
 - Screen readers can read each indicator's label and value via aria-label attributes
 - No layout changes to the roll page — tooltips fit within existing header space
 
+**Dependency Notes Feature (#364)**
+- Added optional `note` field to Dependency model (VARCHAR 255)
+- Added `PATCH /api/v1/dependencies/{id}` endpoint to update dependency notes
+- Notes validate max 255 characters; returns 422 if exceeded
+- Updated DependencyResponse schema to include `note: str | None`
+- Added inline note editing in DependencyBuilder modal component
+- Shows "Add note" link when empty, displays note with "Edit note" button when present
+- Notes are deleted with their dependency (not preserved on re-add)
+
+**UX Clarity Improvements (#358)**
+- Changed queue thread progress label from ambiguous "On #N" to clear "Up next: #N" format
+- Label now unambiguously indicates the next issue to read, not the last-read issue
+- Improved user understanding of issue-level dependencies and reading progress
+
 ## 2026-03-24
 
 **Accessibility Improvements (#220)**
@@ -18,6 +32,7 @@
 - Implemented focus trap in Modal component to keep focus within dialog
 - Added focus return to trigger element on Modal close
 - Fixed ESLint warnings for React hook dependencies in RollPage
+- Fixed touch targets in IssueToggleList to be at least 44px for mobile accessibility (#358)
 
 **Documentation Updates (#220)**
 - README.md: Added prominent async-only PostgreSQL warning and guidance
