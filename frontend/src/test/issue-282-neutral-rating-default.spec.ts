@@ -17,11 +17,11 @@ test.describe('Issue #282: Neutral rating slider default', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Click on the first thread to open action sheet
-    const firstThread = page.locator('[data-roll-pool] [role="button"]').first();
-    await firstThread.click();
+  // Click on the first thread to open action sheet (roll pool threads open action sheet directly)
+  const firstThread = page.locator('[data-roll-pool] [role="button"]').first();
+  await firstThread.click();
 
-    // Click "Read Now" to set thread as pending and open rating view
+  // Click "Read Now" to set thread as pending and open rating view
     const readButton = page.locator('button:has-text("Read Now")');
     await readButton.click();
 

@@ -16,6 +16,7 @@ declare global {
 
 const RollPage = lazy(() => import('./pages/RollPage'))
 const QueuePage = lazy(() => import('./pages/QueuePage'))
+const ThreadDetailView = lazy(() => import('./pages/ThreadDetailView'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const SessionPage = lazy(() => import('./pages/SessionPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
@@ -218,6 +219,16 @@ function AppRoutes() {
             <ProtectedRoute>
               <AuthenticatedLayout>
                 <QueuePage />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/thread/:id"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
+                <ThreadDetailView />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }

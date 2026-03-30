@@ -80,6 +80,15 @@
 
 ## 2026-03-21
 
+**Thread Detail View**
+- Added read-only thread detail view accessible by clicking any thread on the Queue page
+- Detail view shows thread title, format, reading progress, and notes without requiring edit mode
+- Migrated threads display visual progress bar with percentage and issues read/remaining count
+- Issue list can be expanded and collapsed directly from detail view
+- Edit button in detail view opens edit modal for making changes
+- Mobile users can access quick actions via 3-dot menu indicator
+- Better separation between viewing and editing thread information
+
 **Collection Management UI Redesign**
 - Consolidated collection management into coherent toolbar on Roll and Queue pages
 - Collection selector moved from ThreadPool to page header for better discoverability
