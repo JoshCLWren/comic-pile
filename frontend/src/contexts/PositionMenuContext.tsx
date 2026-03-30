@@ -1,6 +1,6 @@
 import { createContext } from 'react'
 
-interface PositionMenuContextType {
+export interface PositionMenuContextType {
   openThreadId: number | null
   openMenu: (threadId: number) => void
   closeMenu: () => void
@@ -8,3 +8,6 @@ interface PositionMenuContextType {
 }
 
 export const PositionMenuContext = createContext<PositionMenuContextType | undefined>(undefined)
+
+// Re-export from PositionMenuProvider for convenience
+export { PositionMenuProvider } from './PositionMenuProvider'

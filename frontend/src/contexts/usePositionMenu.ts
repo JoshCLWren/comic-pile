@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { PositionMenuContext } from './PositionMenuProvider'
+import { PositionMenuContext } from './PositionMenuContext'
 
 export function usePositionMenu() {
   const context = useContext(PositionMenuContext)

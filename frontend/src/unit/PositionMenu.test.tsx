@@ -2,7 +2,7 @@ import { render as baseRender, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import PositionMenu from '../components/PositionMenu'
-import { PositionMenuProvider } from '../contexts/PositionMenuProvider'
+import { PositionMenuProvider } from '../contexts/PositionMenuContext'
 
 function render(ui: React.ReactElement) {
   return baseRender(<PositionMenuProvider>{ui}</PositionMenuProvider>)
