@@ -101,7 +101,7 @@ it('calls onNewCollection when new collection button is clicked', async () => {
 
     render(<CollectionToolbar showNewLabel={true} onNewCollection={onNewCollection} />)
 
-    const button = screen.getByRole('button', { name: 'New collection' })
+    const button = screen.getByRole('button', { name: 'Create new collection' })
     await user.click(button)
 
     expect(onNewCollection).toHaveBeenCalledTimes(1)
