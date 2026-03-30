@@ -7,7 +7,6 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { layoutGraph, NODE_WIDTH, NODE_HEIGHT, ISSUE_NODE_WIDTH, ISSUE_NODE_HEIGHT } from '../utils/graphLayout'
-import DependencyTimeline from './DependencyTimeline'
 import type { Thread, FlowchartDependency, FlowchartNode } from '../types'
 import './DependencyFlowchart.css'
 
@@ -308,12 +307,7 @@ export default function DependencyFlowchart({
         </div>
       )}
       
-      {/* Mobile-friendly Timeline View */}
-      <div className="md:hidden block w-full mt-2">
-        <DependencyTimeline threads={threads} dependencies={dependencies} blockedIds={blockedIds} />
-      </div>
-
-      <div className="hidden md:block relative w-full h-full">
+      <div className="relative w-full h-full">
         <svg
           ref={svgRef}
           className="dependency-flowchart"

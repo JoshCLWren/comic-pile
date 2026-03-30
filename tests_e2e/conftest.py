@@ -53,6 +53,13 @@ async def _ensure_default_user(async_db: SQLAlchemyAsyncSession) -> User:
     """Ensure default user exists in database (user_id=1 for API compatibility)."""
     from app.auth import hash_password
 
+    # Delete all test users (those with usernames starting with 'auth_')
+    result = await async_db.execute(select(User).where(User.username.like("auth_%")))
+    for test_user in result.scalars().all():
+        await async_db.delete(test_user)
+    await async_db.commit()
+
+    # Ensure default user exists
     result = await async_db.execute(select(User).where(User.id == 1))
     user = result.scalar_one_or_none()
     if not user:
