@@ -5,14 +5,17 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
-    const newButton = authenticatedWithThreadsPage.getByText('+ New');
+    const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
     await newButton.click();
+
+    const dialog = authenticatedWithThreadsPage.getByRole('dialog');
+    await expect(dialog).toBeVisible();
 
     const collectionName = `Success Test ${Date.now()}`;
     const nameInput = authenticatedWithThreadsPage.getByPlaceholder('Enter collection name');
     await nameInput.fill(collectionName);
 
-    const createButton = authenticatedWithThreadsPage.getByRole('button', { name: 'Create' });
+    const createButton = dialog.getByRole('button', { name: 'Create' });
     await createButton.click();
 
     const toast = authenticatedWithThreadsPage.getByTestId('toast-notification');
@@ -24,14 +27,17 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
-    const newButton = authenticatedWithThreadsPage.getByText('+ New');
+    const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
     await newButton.click();
+
+    const dialog = authenticatedWithThreadsPage.getByRole('dialog');
+    await expect(dialog).toBeVisible();
 
     const collectionName = `Auto-Dismiss ${Date.now()}`;
     const nameInput = authenticatedWithThreadsPage.getByPlaceholder('Enter collection name');
     await nameInput.fill(collectionName);
 
-    const createButton = authenticatedWithThreadsPage.getByRole('button', { name: 'Create' });
+    const createButton = dialog.getByRole('button', { name: 'Create' });
     await createButton.click();
 
     const toast = authenticatedWithThreadsPage.getByTestId('toast-notification');
@@ -44,10 +50,13 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
-    const newButton = authenticatedWithThreadsPage.getByText('+ New');
+    const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
     await newButton.click();
 
-    const createButton = authenticatedWithThreadsPage.getByRole('button', { name: 'Create' });
+    const dialog = authenticatedWithThreadsPage.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+
+    const createButton = dialog.getByRole('button', { name: 'Create' });
     await createButton.click();
 
     const errorMessage = authenticatedWithThreadsPage.getByRole('alert');
@@ -61,8 +70,11 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
-    const newButton = authenticatedWithThreadsPage.getByText('+ New');
+    const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
     await newButton.click();
+
+    const dialog = authenticatedWithThreadsPage.getByRole('dialog');
+    await expect(dialog).toBeVisible();
 
     const collectionName = `Network Error ${Date.now()}`;
     const nameInput = authenticatedWithThreadsPage.getByPlaceholder('Enter collection name');
@@ -70,7 +82,7 @@ test.describe('CollectionDialog Success Feedback', () => {
 
     await context.route('/api/v1/collections/', route => route.abort());
 
-    const createButton = authenticatedWithThreadsPage.getByRole('button', { name: 'Create' });
+    const createButton = dialog.getByRole('button', { name: 'Create' });
     await createButton.click();
 
     const toast = authenticatedWithThreadsPage.getByTestId('toast-notification');
@@ -84,7 +96,7 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.goto('/');
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
-    const newButton = authenticatedWithThreadsPage.getByText('+ New');
+    const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
     await newButton.click();
 
     const dialog = authenticatedWithThreadsPage.getByRole('dialog');
@@ -94,7 +106,7 @@ test.describe('CollectionDialog Success Feedback', () => {
     const nameInput = authenticatedWithThreadsPage.getByPlaceholder('Enter collection name');
     await nameInput.fill(collectionName);
 
-    const createButton = authenticatedWithThreadsPage.getByRole('button', { name: 'Create' });
+    const createButton = dialog.getByRole('button', { name: 'Create' });
     await createButton.click();
 
     await expect(dialog).toBeHidden();
@@ -110,13 +122,16 @@ test.describe('CollectionDialog Success Feedback', () => {
     const collectionName = `Update Test ${Date.now()}`;
     const updatedName = `${collectionName} - Updated`;
 
-    const newButton = authenticatedWithThreadsPage.getByText('+ New');
+    const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
     await newButton.click();
+
+    const dialog = authenticatedWithThreadsPage.getByRole('dialog');
+    await expect(dialog).toBeVisible();
 
     const nameInput = authenticatedWithThreadsPage.getByPlaceholder('Enter collection name');
     await nameInput.fill(collectionName);
 
-    const createButton = authenticatedWithThreadsPage.getByRole('button', { name: 'Create' });
+    const createButton = dialog.getByRole('button', { name: 'Create' });
     await createButton.click();
 
     const toast = authenticatedWithThreadsPage.getByTestId('toast-notification');
@@ -140,13 +155,13 @@ test.describe('CollectionDialog Success Feedback', () => {
       window.dispatchEvent(new CustomEvent('test-edit-collection', { detail: col }));
     }, collection);
 
-    const dialog = authenticatedWithThreadsPage.getByRole('dialog');
+    // Dialog should reappear for editing
     await expect(dialog).toBeVisible();
 
     const editNameInput = authenticatedWithThreadsPage.getByPlaceholder('Enter collection name');
     await editNameInput.fill(updatedName);
 
-    const updateButton = authenticatedWithThreadsPage.getByRole('button', { name: 'Update' });
+    const updateButton = dialog.getByRole('button', { name: 'Update' });
     await updateButton.click();
 
     const updateToast = authenticatedWithThreadsPage.getByTestId('toast-notification');

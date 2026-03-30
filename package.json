@@ -4,17 +4,17 @@
   "version": "0.1.0",
   "description": "Dice-Driven Comic Reading Tracker - FastAPI + HTMX + Tailwind CSS",
   "devDependencies": {
-    "@eslint/js": "^9.17.0",
+    "@eslint/js": "^9.39.4",
     "eslint": "^9.17.0",
     "globals": "^15.13.0",
     "htmlhint": "^1.1.5",
     "jiti": "^2.6.1"
   },
   "scripts": {
-    "lint:js": "bash scripts/lint-js.sh",
+    "lint:js": "sh -c 'if ls static/react/assets/*.js >/dev/null 2>&1 || ls static/assets/*.js >/dev/null 2>&1; then npx eslint static/react/assets/*.js static/assets/*.js; else echo \"No JavaScript files to lint\"; fi'",
     "lint:html": "npx htmlhint app/templates/*.html",
     "lint": "npm run lint:js && npm run lint:html",
-    "lint:fix": "bash scripts/lint-js.sh --fix",
+    "lint:fix": "sh -c 'if ls static/react/assets/*.js >/dev/null 2>&1 || ls static/assets/*.js >/dev/null 2>&1; then npx eslint static/react/assets/*.js static/assets/*.js --fix; else echo \"No JavaScript files to fix\"; fi'",
     "dice:playground": "npm --prefix frontend run dice:playground",
     "test:dice-playground": "npm --prefix frontend run test:dice-playground",
     "test:dice-playground:update": "npm --prefix frontend run test:dice-playground:update",

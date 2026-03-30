@@ -8,7 +8,7 @@
     "dice:playground": "vite --host 127.0.0.1 --port 4174 --strictPort",
     "build": "vite build",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc -P tsconfig.json --noEmit && tsc -P tsconfig.test.json --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "preview": "vite preview",
     "test": "vitest",

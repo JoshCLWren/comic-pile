@@ -20,6 +20,7 @@ const ThreadDetailView = lazy(() => import('./pages/ThreadDetailView'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const SessionPage = lazy(() => import('./pages/SessionPage'))
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 
@@ -263,7 +264,27 @@ function AppRoutes() {
             </ProtectedRoute>
           }
         />
-      </Routes>
+        <Route
+          path="/help"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
+                <HelpPage />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/glossary"
+          element={
+            <ProtectedRoute>
+              <AuthenticatedLayout>
+                <HelpPage />
+              </AuthenticatedLayout>
+            </ProtectedRoute>
+          }
+        />
+        </Routes>
     </Suspense>
   )
 }

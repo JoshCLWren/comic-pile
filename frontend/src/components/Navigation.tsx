@@ -52,7 +52,7 @@ export default function Navigation() {
     }
   }, [isAuthenticated, logout])
 
-  const isActive = (path) => location.pathname === path
+  const isActive = (path: string) => location.pathname === path
 
   const handleLogout = async () => {
     try {
@@ -88,6 +88,10 @@ export default function Navigation() {
           <Link to="/analytics" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/analytics') ? 'active' : 'hover:bg-white/5'}`} aria-label="Analytics page">
             <span className="text-2xl mb-1" aria-hidden="true">📊</span>
             <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Analytics</span>
+          </Link>
+          <Link to="/help" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/help') ? 'active' : 'hover:bg-white/5'}`} aria-label="Help page">
+            <span className="text-2xl mb-1" aria-hidden="true">❓</span>
+            <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Help</span>
           </Link>
         </div>
       </nav>

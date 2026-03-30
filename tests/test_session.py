@@ -304,11 +304,14 @@ async def test_get_or_create_creates_default_user(async_db: AsyncSession) -> Non
 @pytest.mark.asyncio
 async def test_get_or_create_creates_user_id_1(async_db: AsyncSession) -> None:
     """BUG-142: Creates default user when user_id=1 doesn't exist."""
-    from app.models import User, Thread
+    from app.models import User
     from sqlalchemy import delete
 
+    await async_db.execute(delete(Snapshot))
     await async_db.execute(delete(Session))
-    await async_db.execute(delete(Thread).where(Thread.user_id == 1))
+    from sqlalchemy import delete
+
+    await async_db.execute(delete(Thread))
     await async_db.execute(delete(User))
     await async_db.commit()
 
@@ -1333,6 +1336,7 @@ async def test_get_current_session_after_get_or_create_no_lazy_load(
     """
     from sqlalchemy import delete
 
+    await async_db.execute(delete(Snapshot))
     await async_db.execute(delete(SessionModel))
     await async_db.commit()
 

@@ -4,8 +4,8 @@ This module consolidates all environment variables used throughout the applicati
 Configuration is validated at startup and provides type-safe access to settings.
 """
 
-from functools import lru_cache
 import os
+from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -35,10 +35,26 @@ class DatabaseSettings(BaseSettings):
         json_schema_extra={"env": "TEST_DATABASE_URL"},
     )
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def use_test_database_url(cls, v: str) -> str:
+        """Use test database URL if in test environment."""
+        if get_app_settings().environment == "test":
+            test_url = os.getenv("TEST_DATABASE_URL")
+            if test_url:
+                return test_url
+        if not v:
+            raise ValueError("DATABASE_URL is required")
+        return v
+
     @property
     def async_url(self) -> str:
         """Get the asynchronous database URL with asyncpg driver."""
-        url = self.database_url
+        url = (
+            self.test_database_url
+            if get_app_settings().environment == "test" and self.test_database_url
+            else self.database_url
+        )
         if url.startswith("postgresql+asyncpg://"):
             return url
         elif url.startswith("postgresql+psycopg://"):

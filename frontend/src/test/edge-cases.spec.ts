@@ -119,8 +119,8 @@ test.describe('Edge Cases & Error Handling', () => {
       (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
     }, token!);
 
-    await page1.goto('/threads');
-    await page2.goto('/threads');
+    await page1.goto('/queue');
+    await page2.goto('/queue');
 
     await createThread(page1, {
       title: 'Concurrent Tab Test',
@@ -277,7 +277,7 @@ test.describe('Edge Cases & Error Handling', () => {
   });
 
   test('should handle rapid page navigations', async ({ authenticatedPage }) => {
-    const routes = ['/', '/threads', '/queue', '/analytics', '/history'];
+    const routes = ['/', '/queue', '/analytics', '/history'];
 
     for (let i = 0; i < 5; i++) {
       for (const route of routes) {
