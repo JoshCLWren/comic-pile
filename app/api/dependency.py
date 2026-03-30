@@ -14,6 +14,7 @@ from app.models.user import User
 from app.schemas.dependency import (
     BlockingExplanation,
     DependencyCreate,
+    DependencyNoteUpdate,
     DependencyOrderConflict,
     DependencyOrderRequirement,
     DependencyResponse,
@@ -424,6 +425,34 @@ async def get_dependency(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Dependency {dependency_id} not found",
         )
+    return (await enrich_dependencies([dependency], db))[0]
+
+
+@router.patch("/dependencies/{dependency_id}", response_model=DependencyResponse)
+async def update_dependency_note(
+    dependency_id: int,
+    data: DependencyNoteUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> DependencyResponse:
+    """Update the note on a dependency owned by the current user."""
+    dependency = await db.get(Dependency, dependency_id)
+    if not dependency:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
+    if not await _is_dependency_owned_by_user(dependency, current_user.id, db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dependency {dependency_id} not found",
+        )
+
+    dependency.note = data.note
+    await db.flush()
+    await db.commit()
+    await db.refresh(dependency)
+
     return (await enrich_dependencies([dependency], db))[0]
 
 
