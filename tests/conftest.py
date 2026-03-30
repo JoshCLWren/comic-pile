@@ -1,8 +1,4 @@
-"""Shared pytest fixtures.
-
-This module contains pytest fixtures that are shared across multiple test files.
-It provides database setup, test data creation, and authentication utilities.
-"""
+"""Shared pytest fixtures."""
 
 import os
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
@@ -28,7 +24,7 @@ from app.main import app
 from app.models import Event, Issue, Thread, User
 from app.models import Session as SessionModel
 
-load_dotenv(".env.test")
+load_dotenv()
 
 # Set TEST_ENVIRONMENT before importing app modules
 # This must be done before app.main is imported to disable rate limiting
