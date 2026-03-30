@@ -299,6 +299,8 @@ export interface Dependency {
   source_issue_thread_id?: number | null;
   /** Parent thread ID of the target issue (only for issue-level deps) */
   target_issue_thread_id?: number | null;
+  /** Optional note explaining why this dependency exists */
+  note?: string | null;
 }
 
 /**

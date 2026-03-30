@@ -286,6 +286,8 @@ export const dependenciesApi = {
       target_id: targetId,
     }),
   deleteDependency: (dependencyId: number) => api.delete<void>(`/v1/dependencies/${dependencyId}`),
+  updateDependency: (dependencyId: number, note: string | null) =>
+    api.patch<Dependency, { note: string | null }>(`/v1/dependencies/${dependencyId}`, { note }),
 }
 
 export const tasksApi = {

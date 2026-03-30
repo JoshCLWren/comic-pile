@@ -19,8 +19,11 @@
 #
 # State machine:
 #   pending → implementing → implemented → reviewing → reviewed → fixing → fixed
-#     → pr_open → pr_opened → ci_checking → done
+#     → pr_open → pr_opened → ci_checking → done → [merger merges to main]
 #                                        ↘ ci_failing → fixing (loops back)
+#
+# qa role runs independently against main: starts dev-all if needed, tests with
+# Playwright MCP, files GH issues for any failures, shuts down dev-all if it started it.
 #
 # Env overrides:
 #   STALE_MINUTES=30    staleness threshold before arbiter resets a stage
@@ -367,7 +370,11 @@ model_in_backoff() {
         backoff_s=$(( _MODEL_BACKOFF_BASE * (1 << (fail_count - 1)) ))
         [[ $backoff_s -gt $_MODEL_BACKOFF_MAX ]] && backoff_s=$_MODEL_BACKOFF_MAX
     fi
-    [[ $(( now - last_fail )) -lt $backoff_s ]]
+    if [[ $(( now - last_fail )) -ge $backoff_s ]]; then
+        rm -f "$f"
+        return 1
+    fi
+    return 0
 }
 
 record_model_fail() {
@@ -1369,6 +1376,383 @@ print('{ts}  #{issue:<8}  {role:<8}  {model:<44}  {dur:<8}  {outcome}'.format(
     echo "Total: $(wc -l < "$TIMESHEET")  OK: $(grep -c '"outcome":"success"' "$TIMESHEET" || echo 0)  FAIL: $(grep -c '"outcome":"failed"' "$TIMESHEET" || echo 0)  TIMEOUT: $(grep -c '"outcome":"timeout"' "$TIMESHEET" || echo 0)"
 }
 
+# ── Role: qa ──────────────────────────────────────────────────────────────────
+#
+# QA agent: drives a real browser via Playwright MCP against the running dev app,
+# tests all major functionality end-to-end, and opens GitHub issues for anything
+# broken.  Starts the dev server via 'make dev-all' if not already running, and
+# shuts it down afterwards if it was the one that started it.
+#
+# Env overrides:
+#   QA_MODEL=...         model to use (default: nvidia/z-ai/glm4.7)
+#   QA_POLL=3600         seconds between QA runs (default: 1 hour)
+#   QA_BASE_URL=...      app URL (default: http://localhost:5173)
+#   QA_BACKEND_URL=...   backend URL (default: http://localhost:8000)
+#   QA_SERVER_WAIT=60    seconds to wait for dev server to become ready
+#
+cmd_qa() {
+    local MODEL="${QA_MODEL:-nvidia/z-ai/glm4.7}"
+    local POLL="${QA_POLL:-3600}"
+    local BASE_URL="${QA_BASE_URL:-http://localhost:5173}"
+    local BACKEND_URL="${QA_BACKEND_URL:-http://localhost:8000}"
+    local SERVER_WAIT="${QA_SERVER_WAIT:-60}"
+    local QA_LOG="$LOG_DIR/qa.log"
+    local LOCK="$LOG_DIR/.qa_lock"
+
+    # Singleton lock
+    if [[ -f "$LOCK" ]]; then
+        local existing_pid; existing_pid=$(cat "$LOCK" 2>/dev/null || true)
+        if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+            log_warn "qa agent already running (pid $existing_pid)"
+            exit 1
+        fi
+        rm -f "$LOCK"
+    fi
+    echo $$ > "$LOCK"
+    trap "rm -f '$LOCK'" EXIT
+
+    log_info "qa agent online — model=${MODEL} url=${BASE_URL} poll=${POLL}s"
+
+    # Helper: check if app is up (reads BASE_URL/BACKEND_URL at call time)
+    _qa_app_ready() {
+        curl -sf --max-time 5 "$BASE_URL" > /dev/null 2>&1 || \
+        curl -sf --max-time 5 "$BACKEND_URL/api/v1/health" > /dev/null 2>&1 || \
+        curl -sf --max-time 5 "$BACKEND_URL/health" > /dev/null 2>&1
+    }
+    # Reset URLs to defaults at the top of each cycle (may have been changed to QA ports)
+    local _default_base="$BASE_URL"
+    local _default_backend="$BACKEND_URL"
+
+    while true; do
+        local we_started_server=false
+        local dev_pid=""
+        BASE_URL="$_default_base"
+        BACKEND_URL="$_default_backend"
+
+        if ! _qa_app_ready; then
+            log_info "qa — dev server not running, starting with 'make dev-all' on QA ports"
+            BACKEND_PORT=8002 FRONTEND_PORT=5175 make -C "$REPO_ROOT" dev-all >> "$QA_LOG" 2>&1 &
+            dev_pid=$!
+            BASE_URL="http://localhost:5175"
+            BACKEND_URL="http://localhost:8002"
+            we_started_server=true
+
+            # Wait up to SERVER_WAIT seconds for the app to become ready
+            local waited=0
+            while (( waited < SERVER_WAIT )); do
+                sleep 3; (( waited += 3 ))
+                if _qa_app_ready; then
+                    log_info "qa — dev server ready after ${waited}s"
+                    break
+                fi
+            done
+
+            if ! _qa_app_ready; then
+                log_error "qa — dev server still not ready after ${SERVER_WAIT}s, aborting run"
+                [[ -n "$dev_pid" ]] && kill "$dev_pid" 2>/dev/null || true
+                sleep "$POLL"; continue
+            fi
+        else
+            log_info "qa — dev server already running"
+        fi
+
+        local run_id; run_id=$(date +%Y%m%d_%H%M%S)
+        local run_log="$LOG_DIR/qa_${run_id}.log"
+        log_info "qa — starting QA run $run_id (model: $MODEL)"
+
+        local prompt
+        prompt="$(cat <<PROMPT
+You are a QA engineer testing the comic-pile app. The app is running at ${BASE_URL} (React frontend) backed by FastAPI at ${BACKEND_URL}.
+
+Use the Playwright MCP tools to open a browser and systematically test all major functionality. For each area, verify it works end-to-end. If anything is broken, malformed, or missing, create a GitHub issue using: gh issue create --title "qa: <short description>" --body "<detailed steps to reproduce, what was expected, what actually happened>" --label "bug"
+
+## App overview
+comic-pile is a comic book reading tracker. Core concepts:
+- **Threads**: a reading sequence (e.g. "X-Men", "Amazing Spider-Man")
+- **Sessions**: a reading session within a thread (tracks position/progress)
+- **Issues**: individual comic issues in a thread
+- **Roll**: the main reading interface — shows the next issue to read with a dice metaphor
+- **Queue**: ordered list of threads to read next
+- **Dependencies**: issues/threads that must be read before another
+- **Collections**: groups of threads
+- **Analytics**: reading stats
+
+## Test checklist — work through each area:
+
+### 1. Auth
+- Navigate to ${BASE_URL}
+- If redirected to login: attempt login with test credentials (if login fails, note it but continue — the app may need a user)
+- Check that register page renders without errors
+
+### 2. Roll page (/)
+- Verify the roll page loads
+- Check that the header indicators have labels and tooltips (hover over them)
+- If a thread is shown: verify the issue details are readable
+- Click the dice/roll button — verify a result appears
+- Check CollectionToolbar renders (New collection button, switcher)
+
+### 3. Queue page (/queue)
+- Navigate to /queue
+- Verify the thread list loads
+- Check search/filter works (type in the search box)
+- Verify thread cards show correct info (title, position, status)
+- Check that dependency indicators appear where expected
+- Verify "On #N" labels are present and readable
+
+### 4. Session page
+- Click into any thread/session
+- Verify issues list loads
+- Check issue cards show number, title, read/unread state
+- Verify the position slider or controls work
+- Check dependency badges/tooltips on issues
+
+### 5. History page (/history)
+- Navigate to /history
+- Verify reading history loads
+- Check timestamps and issue references are correct
+
+### 6. Analytics page (/analytics)
+- Navigate to /analytics
+- Verify charts/stats render without blank panels
+- Check that numbers look reasonable (not NaN, not 0 when data exists)
+
+### 7. Dependencies
+- Find an issue or thread with dependencies
+- Hover over the dependency indicator
+- Verify tooltip says "Blocking" (not "Blocks") for outgoing deps
+- Verify dependency flowchart renders if present
+
+### 8. Collections
+- Open the collection switcher
+- Verify collections list loads
+- Try creating a new collection (button labelled "New collection")
+- Verify it appears in the list
+
+### 9. API health
+- Check ${BACKEND_URL}/api/v1/health (or /health) returns 200
+- Check ${BACKEND_URL}/docs loads (FastAPI auto-docs)
+
+## Issue filing rules
+- File one issue per distinct broken feature
+- Title format: "qa: <page/feature> — <what's broken>"
+- Body must include: steps to reproduce, expected behaviour, actual behaviour, and the URL where the problem was found
+- Add label "bug" and "qa" (use --label "bug" --label "qa")
+- Do NOT file issues for things that work correctly
+- Do NOT file duplicate issues. At the start of your run, fetch all existing qa issues into a variable:
+  EXISTING_QA=\$(gh issue list --state open --search "qa:" --json title --jq '.[].title')
+  Before filing each issue, check: if echo "\$EXISTING_QA" | grep -qi "KEYWORD FROM TITLE"; then skip it. fi
+  Also track titles you've already filed THIS run in a local list and skip those too.
+
+## When done
+Write a summary to ${LOG_DIR}/qa_${run_id}_summary.txt:
+- Date/time
+- Model used
+- Areas tested
+- Issues found (with GH issue numbers)
+- Areas that passed cleanly
+PROMPT
+)"
+
+        if opencode run \
+            -m "$MODEL" \
+            --dir "$REPO_ROOT" \
+            "$prompt" \
+            >> "$run_log" 2>&1; then
+            log_ok "qa — run $run_id complete (see $run_log)"
+        else
+            log_warn "qa — run $run_id exited non-zero (see $run_log)"
+        fi
+
+        # Show any issues filed this run
+        local filed
+        filed=$(grep -oP 'gh issue create.*' "$run_log" 2>/dev/null | head -5 || true)
+        [[ -n "$filed" ]] && log_info "qa — issues filed this run:\n$filed"
+
+        # Shut down dev server if we started it
+        if [[ "$we_started_server" == true && -n "$dev_pid" ]]; then
+            log_info "qa — stopping dev server (pid $dev_pid)"
+            kill "$dev_pid" 2>/dev/null || true
+            # dev-all.sh writes child PIDs to /tmp/comic-pile-dev.pids — clean those too
+            if [[ -f /tmp/comic-pile-dev.pids ]]; then
+                while IFS= read -r pid; do
+                    kill "$pid" 2>/dev/null || true
+                done < /tmp/comic-pile-dev.pids
+                rm -f /tmp/comic-pile-dev.pids
+            fi
+        fi
+
+        log_info "qa — sleeping ${POLL}s until next run"
+        sleep "$POLL"
+    done
+}
+
+# ── Role: merger ──────────────────────────────────────────────────────────────
+#
+# Traffic director for merging pipeline PRs into main.
+# Polls for pipeline/* branches that are CLEAN/MERGEABLE with all CI green,
+# merges them one at a time (lowest PR number first), then rebases all remaining
+# open pipeline branches onto updated main so they stay conflict-free.
+#
+# Env overrides:
+#   MERGER_POLL=120      seconds between merge cycles (default 2 min)
+#   MERGER_STRATEGY=squash|merge|rebase  (default: squash)
+#
+cmd_merger() {
+    local POLL="${MERGER_POLL:-120}"
+    local STRATEGY="${MERGER_STRATEGY:-squash}"
+    local MERGER_LOG="$LOG_DIR/merger.log"
+    local LOCK="$LOG_DIR/.merger_lock"
+
+    # Singleton lock
+    if [[ -f "$LOCK" ]]; then
+        local existing_pid; existing_pid=$(cat "$LOCK" 2>/dev/null || true)
+        if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
+            log_warn "merger already running (pid $existing_pid)"
+            exit 1
+        fi
+        rm -f "$LOCK"
+    fi
+    echo $$ > "$LOCK"
+    trap "rm -f '$LOCK'" EXIT
+
+    log_info "merger online — strategy=${STRATEGY} poll=${POLL}s"
+
+    while true; do
+        # Fetch all open pipeline/* PRs with merge state
+        local pr_json
+        pr_json=$(gh pr list --limit 100 \
+            --json number,headRefName,mergeable,mergeStateStatus,statusCheckRollup \
+            2>/dev/null || true)
+
+        if [[ -z "$pr_json" ]]; then
+            log_warn "merger — gh pr list failed, sleeping"
+            sleep "$POLL"; continue
+        fi
+
+        # Select pipeline/* PRs that are CLEAN/MERGEABLE, sorted ascending by number.
+        # Trust mergeStateStatus=CLEAN (GitHub's own verdict) — statusCheckRollup
+        # can return null-conclusion for neutral checks (e.g. codecov) even when green.
+        # The live gh pr checks re-verify step below catches any real failures.
+        local ready_prs
+        ready_prs=$(echo "$pr_json" | python3 -c "
+import json, sys
+prs = json.load(sys.stdin)
+ready = []
+for pr in prs:
+    if not pr.get('headRefName', '').startswith('pipeline/'):
+        continue
+    if pr.get('mergeable') != 'MERGEABLE' or pr.get('mergeStateStatus') != 'CLEAN':
+        continue
+    checks = pr.get('statusCheckRollup') or []
+    failing = [c for c in checks if c.get('conclusion') in ('FAILURE', 'ERROR')]
+    if failing:
+        continue
+    ready.append(pr['number'])
+ready.sort()
+print('\n'.join(str(n) for n in ready))
+" 2>/dev/null || true)
+
+        if [[ -z "$ready_prs" ]]; then
+            log_info "merger — no fully-green mergeable PRs, sleeping ${POLL}s"
+            sleep "$POLL"; continue
+        fi
+
+        local count; count=$(echo "$ready_prs" | wc -l | tr -d ' ')
+        log_info "merger — ${count} PR(s) eligible: $(echo "$ready_prs" | tr '\n' ' ')"
+
+        # Merge one PR per cycle (lowest number first)
+        local merged_pr=""
+        while IFS= read -r pr_number; do
+            [[ -z "$pr_number" ]] && continue
+
+            # Re-verify checks haven't changed
+            local failing_live
+            failing_live=$(gh pr checks "$pr_number" 2>/dev/null \
+                | grep -v -iE "pass|skip|neutral|CodeRabbit" \
+                | grep -iv "pending" \
+                | grep -v "^$" || true)
+            local pending_live
+            pending_live=$(gh pr checks "$pr_number" 2>/dev/null \
+                | grep -i "pending" || true)
+
+            if [[ -n "$failing_live" ]]; then
+                log_warn "merger — PR #$pr_number has new failures, skipping"
+                continue
+            fi
+            if [[ -n "$pending_live" ]]; then
+                log_info "merger — PR #$pr_number has pending checks, skipping"
+                continue
+            fi
+
+            log_info "merger — merging PR #$pr_number (--${STRATEGY})"
+            # No --delete-branch: branches are in active worktrees; pipeline cleans them up
+            local merge_flags="--${STRATEGY}"
+            # shellcheck disable=SC2086
+            if gh pr merge "$pr_number" $merge_flags 2>>"$MERGER_LOG"; then
+                log_ok "merger — merged PR #$pr_number ✓"
+                merged_pr="$pr_number"
+                break
+            else
+                log_error "merger — failed to merge PR #$pr_number (see $MERGER_LOG)"
+            fi
+        done <<< "$ready_prs"
+
+        if [[ -n "$merged_pr" ]]; then
+            # Pull updated main into the repo root
+            log_info "merger — pulling updated main"
+            git -C "$REPO_ROOT" fetch origin main >> "$MERGER_LOG" 2>&1 || true
+            git -C "$REPO_ROOT" merge --ff-only origin/main >> "$MERGER_LOG" 2>&1 || true
+
+            # Rebase all remaining open pipeline/* branches onto new main
+            log_info "merger — rebasing remaining pipeline branches onto main"
+            local open_branches
+            open_branches=$(gh pr list --limit 100 \
+                --json number,headRefName \
+                --jq '.[] | select(.headRefName | startswith("pipeline/")) | [.number, .headRefName] | @tsv' \
+                2>/dev/null || true)
+
+            while IFS=$'\t' read -r pr_num branch; do
+                [[ -z "$branch" ]] && continue
+                local wt_issue
+                wt_issue=$(grep -oP 'issue-\K[0-9]+' <<< "$branch" || true)
+                if [[ -n "$wt_issue" ]]; then
+                    local wt_path; wt_path=$(worktree_dir "$wt_issue")
+                    if [[ -d "$wt_path" ]] && git -C "$wt_path" status &>/dev/null; then
+                        # Remove stray node_modules so git merge isn't blocked
+                        rm -rf "$wt_path/node_modules" "$wt_path/frontend/node_modules" 2>/dev/null || true
+                        if timeout 30s git -C "$wt_path" fetch origin main >> "$MERGER_LOG" 2>&1 && \
+                           timeout 30s git -C "$wt_path" merge origin/main --no-edit -X theirs >> "$MERGER_LOG" 2>&1 && \
+                           timeout 30s git -C "$wt_path" push origin "$branch" >> "$MERGER_LOG" 2>&1; then
+                            log_info "merger — rebased $branch onto main"
+                        else
+                            log_warn "merger — rebase failed for $branch (PR #$pr_num)"
+                        fi
+                        continue
+                    fi
+                fi
+                # Fallback: scratch worktree
+                local tmpwt; tmpwt=$(mktemp -d)
+                if git -C "$REPO_ROOT" worktree add "$tmpwt" "origin/$branch" --detach >> "$MERGER_LOG" 2>&1; then
+                    rm -rf "$tmpwt/node_modules" "$tmpwt/frontend/node_modules" 2>/dev/null || true
+                    if timeout 30s git -C "$tmpwt" fetch origin main >> "$MERGER_LOG" 2>&1 && \
+                       timeout 30s git -C "$tmpwt" merge origin/main --no-edit -X theirs >> "$MERGER_LOG" 2>&1 && \
+                       timeout 30s git -C "$tmpwt" push origin "HEAD:$branch" >> "$MERGER_LOG" 2>&1; then
+                        log_info "merger — rebased $branch onto main (scratch)"
+                    else
+                        log_warn "merger — rebase failed for $branch (scratch)"
+                    fi
+                    git -C "$REPO_ROOT" worktree remove "$tmpwt" --force >> "$MERGER_LOG" 2>&1 || true
+                fi
+                rm -rf "$tmpwt"
+            done <<< "$open_branches"
+
+            log_ok "merger — cycle complete. Sleeping ${POLL}s before next merge."
+        fi
+
+        sleep "$POLL"
+    done
+}
+
 # ── Role: main_fixer ──────────────────────────────────────────────────────────
 #
 # Surveys CI failures across ALL open PRs. When the same job fails on
@@ -1659,9 +2043,11 @@ case "$ROLE" in
     arbiter)        cmd_arbiter ;;
     timesheet)      cmd_timesheet ;;
     model_manager)  cmd_model_manager ;;
+    qa)             cmd_qa ;;
+    merger)         cmd_merger ;;
     main_fixer)     cmd_main_fixer ;;
     *)
-        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet|tool_test|model_manager|main_fixer}"
+        echo "Usage: $0 {init|status|implement|review|fix|pr|ci_check|arbiter|timesheet|tool_test|model_manager|qa|merger|main_fixer}"
         echo ""
         echo "Workflow:"
         echo "  1. $0 init           — seed state files + clean stale worktrees"
@@ -1678,7 +2064,9 @@ case "$ROLE" in
         echo "  4. $0 timesheet      — see model usage log"
         echo "  5. $0 tool_test      — re-run tool-use tier classification"
         echo "  6. $0 model_manager  — background daemon: refreshes model pool every 10 minutes"
-        echo "  7. $0 main_fixer     — background daemon: auto-fixes main-branch CI regressions"
+        echo "  7. $0 qa             — background daemon: Playwright MCP QA against live app, files GH issues
+  8. $0 merger         — background daemon: merges green pipeline PRs one at a time
+  8. $0 main_fixer     — background daemon: auto-fixes main-branch CI regressions"
         echo ""
         echo "State machine:"
         echo "  pending → implementing → implemented → reviewing → reviewed"

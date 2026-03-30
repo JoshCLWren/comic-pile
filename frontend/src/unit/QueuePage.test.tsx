@@ -64,6 +64,11 @@ vi.mock('../contexts/CollectionContext', () => ({
   }),
 }))
 
+vi.mock('../contexts/ToastContext', () => ({
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
+
 const mockedUseThreads = vi.mocked(useThreads) as any
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any
@@ -120,14 +125,14 @@ beforeEach(() => {
 })
 
 it('renders queue items and opens create modal', async () => {
-  const user = userEvent.setup()
-  render(
-    <BrowserRouter>
-      <ToastProvider>
-        <QueuePage />
-      </ToastProvider>
-    </BrowserRouter>
-  )
+    const user = userEvent.setup()
+    render(
+      <BrowserRouter>
+        <ToastProvider>
+          <QueuePage />
+        </ToastProvider>
+      </BrowserRouter>
+    )
 
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('Descender')).toBeInTheDocument()

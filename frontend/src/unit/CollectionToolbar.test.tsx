@@ -88,24 +88,24 @@ it('does not display new collection button when onNewCollection is not provided'
 })
 
 it('calls onNewCollection when new collection button is clicked', async () => {
-  const user = userEvent.setup()
-  const onNewCollection = vi.fn()
+    const user = userEvent.setup()
+    const onNewCollection = vi.fn()
 
-  mockUseCollections.mockReturnValue({
-    collections: mockCollections,
-    activeCollectionId: null,
-    setActiveCollectionId: vi.fn(),
-    isLoading: false,
-    error: null,
+    mockUseCollections.mockReturnValue({
+      collections: mockCollections,
+      activeCollectionId: null,
+      setActiveCollectionId: vi.fn(),
+      isLoading: false,
+      error: null,
+    })
+
+    render(<CollectionToolbar showNewLabel={true} onNewCollection={onNewCollection} />)
+
+    const button = screen.getByRole('button', { name: 'New collection' })
+    await user.click(button)
+
+    expect(onNewCollection).toHaveBeenCalledTimes(1)
   })
-
-  render(<CollectionToolbar showNewLabel={true} onNewCollection={onNewCollection} />)
-
-  const button = screen.getByRole('button', { name: 'Create new collection' })
-  await user.click(button)
-
-  expect(onNewCollection).toHaveBeenCalledTimes(1)
-})
 
 it('handles collection selection change', async () => {
   const user = userEvent.setup()
