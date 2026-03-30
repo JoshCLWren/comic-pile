@@ -1,5 +1,4 @@
 import { createContext, useState, useCallback, useEffect, useRef, useContext, ReactNode } from 'react'
-import { TOAST_DURATION } from './toastConstants'
 
 type ToastType = 'info' | 'success' | 'warning' | 'error'
 
@@ -86,8 +85,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// This is exported from toastUtils.ts now
-// export function useToast() {
 export function useToast() {
   const context = useContext(ToastContext)
   if (!context) {
