@@ -41,6 +41,15 @@
 
 ## 2026-03-24
 
+## 2026-03-25
+
+**Roll Empty State UX (issue #379)**
+- Roll page now shows an explanatory empty state when the roll pool has 0 eligible threads.
+- Distinguishes between no threads and threads blocked/snoozed; includes actionable CTAs.
+- Adds quick navigation to thread creation flow via the Roll empty state (Add Thread) and a path to the queue (Go to Queue).
+- Mobile-friendly touch targets for new CTAs and improved accessibility.
+- No regression for users with eligible threads; empty state disappears once threads are available.
+
 **Accessibility Improvements (#220)**
 - Added `aria-label="Roll pool collection"` to ThreadPool container for screen reader support
 - Added `role="dialog"`, `aria-modal="true"`, and `aria-labelledby` to Modal component
