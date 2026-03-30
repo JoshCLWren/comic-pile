@@ -7,7 +7,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  workers: process.env.CI ? 1 : 4,
   timeout: 30 * 1000,
   reporter: process.env.CI
     ? [
@@ -41,7 +41,7 @@ export default defineConfig({
   webServer: {
     command: process.env.REUSE_EXISTING_SERVER
       ? 'echo "Reusing existing server"'
-      : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 1"',
+      : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4"',
     port: 9000,
     reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
     timeout: 120000,

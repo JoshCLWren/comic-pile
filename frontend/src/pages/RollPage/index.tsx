@@ -12,7 +12,6 @@ import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
 import { useStaleThreads, useThreads } from '../../hooks/useThread'
 import { useCollections } from '../../contexts/CollectionContext'
-import { useToast } from '../../contexts/ToastContext'
 import {
   useClearManualDie,
   useDismissPending,
@@ -71,13 +70,11 @@ export default function RollPage() {
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
-  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-  const { activeCollectionId = null } = useCollections()
+const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
-  const { showToast } = useToast()
-  const prevCurrentDieRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (isSessionError && sessionError) {
@@ -561,22 +558,12 @@ useEffect(() => {
               <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d20) - snoozing won't increase it further</span>
             </div>
           )}
-{session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
-                <div className="flex items-center gap-2 mt-1">
-                  <Tooltip content={`Offset: your roll result is shifted by +${session.snoozed_threads.length}. Tap to adjust.`}>
-                    <span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600" aria-label={`Offset, plus ${session.snoozed_threads.length}, tap to adjust`}>+{session.snoozed_threads.length}</span>
-                  </Tooltip>
-                  <Tooltip content={`${session.snoozed_threads.length} thread${session.snoozed_threads.length !== 1 ? 's' : ''} is snoozed and excluded from rolling. Tap to view.`}>
-                    <span className="text-[9px] font-medium text-stone-600 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600" aria-label={`Snoozed, ${session.snoozed_threads.length} thread${session.snoozed_threads.length !== 1 ? 's' : ''}, tap to view`}>snoozed</span>
-                  </Tooltip>
-                  <Tooltip content={`Offset is currently active: your roll pool is increased by ${session.snoozed_threads.length} snoozed thread${session.snoozed_threads.length !== 1 ? 's' : ''}.`}>
-                    <span className="text-[9px] text-stone-400 uppercase tracking-wider" aria-label="Offset active">offset</span>
-                  </Tooltip>
-                  <Tooltip content="Ladder mode is active. The die size adjusts automatically based on your eligible pool.">
-                    <span className="text-[9px] text-stone-400 uppercase tracking-wider" aria-label="Ladder mode active">active</span>
-                  </Tooltip>
-                </div>
-              )}
+          {session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
+            <div className="flex items-center gap-2 mt-1">
+              <Tooltip content="Snoozed offset"><span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session.snoozed_threads.length}</span></Tooltip>
+              <Tooltip content="Snoozed offset active"><span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">offset active</span></Tooltip>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div id="die-selector">
