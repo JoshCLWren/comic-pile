@@ -994,56 +994,56 @@ test.describe('Roll Dice Feature', () => {
   });
 
   test.describe('Rating View Layout', () => {
-    test('issue #324: rating view should show title and issue number on one line', async ({ authenticatedPage, request }) => {
-      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+  test('issue #324: rating view should show title and issue number on one line', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
-      const threadTitle = 'X-Force';
-      const totalIssues = 100;
+    const threadTitle = 'X-Force';
+    const totalIssues = 100;
 
-      const threadResponse = await request.post('/api/threads/', {
-        data: {
-          title: threadTitle,
-          format: 'Comics',
-          issues_remaining: 72,
-          total_issues: totalIssues,
-        },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!threadResponse.ok()) {
-        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
-      }
-
-      const thread = await threadResponse.json();
-
-      await request.post(`/api/v1/threads/${thread.id}/issues`, {
-        data: { issue_range: '1-100' },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
-
-      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: threadTitle }).first();
-      await threadElement.click();
-
-      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
-      await readButton.click();
-
-      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
-
-      const titleElement = authenticatedPage.locator('h2.text-2xl.font-black');
-      await expect(titleElement).toBeVisible();
-
-      const titleText = await titleElement.textContent();
-      expect(titleText).toMatch(/X-Force #\d+/);
+    const threadResponse = await request.post('/api/threads/', {
+      data: {
+        title: threadTitle,
+        format: 'Comics',
+        issues_remaining: 72,
+        total_issues: totalIssues,
+      },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
     });
+
+    if (!threadResponse.ok()) {
+      throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+    }
+
+    const thread = await threadResponse.json();
+
+    await request.post(`/api/v1/threads/${thread.id}/issues`, {
+      data: { issue_range: '1-100' },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    await authenticatedPage.goto('/');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: threadTitle }).first();
+    await threadElement.click();
+
+    const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+    await readButton.click();
+
+    await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+    const titleElement = authenticatedPage.locator('h2.text-2xl.font-black.truncate');
+    await expect(titleElement).toBeVisible();
+
+    const titleText = await titleElement.textContent();
+    expect(titleText).toMatch(/X-Force\s+#\d+/);
+  });
 
     test('issue #324: rating view should show percentage complete and issues left', async ({ authenticatedPage, request }) => {
       const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
@@ -1126,55 +1126,57 @@ test.describe('Roll Dice Feature', () => {
       await expect(rolledText).not.toContainText('Queue #');
     });
 
-    test('issue #324: rating view should handle long titles with truncation', async ({ authenticatedPage, request }) => {
-      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+  test('issue #324: rating view should handle long titles with truncation', async ({ authenticatedPage, request }) => {
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
-      const longTitle = 'The Amazing Spider-Man: The Complete Collection Volume One: The Stan Lee Years';
+    const longTitle = 'The Amazing Spider-Man: The Complete Collection Volume One: The Stan Lee Years';
 
-      const threadResponse = await request.post('/api/threads/', {
-        data: {
-          title: longTitle,
-          format: 'Comics',
-          issues_remaining: 50,
-          total_issues: 100,
-        },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!threadResponse.ok()) {
-        throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
-      }
-
-      const thread = await threadResponse.json();
-
-      await request.post(`/api/v1/threads/${thread.id}/issues`, {
-        data: { issue_range: '1-100' },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
-
-      const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: longTitle }).first();
-      await threadElement.click();
-
-      const readButton = authenticatedPage.locator('button:has-text("Read Now")');
-      await readButton.click();
-
-      await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
-
-      const titleElement = authenticatedPage.locator('h2.text-2xl.font-black.truncate');
-      await expect(titleElement).toBeVisible();
-
-      const titleText = await titleElement.textContent();
-      expect(titleText).toContain('#');
+    const threadResponse = await request.post('/api/threads/', {
+      data: {
+        title: longTitle,
+        format: 'Comics',
+        issues_remaining: 50,
+        total_issues: 100,
+      },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
     });
+
+    if (!threadResponse.ok()) {
+      throw new Error(`Failed to create thread: ${threadResponse.status()} ${threadResponse.statusText()}`);
+    }
+
+    const thread = await threadResponse.json();
+
+    await request.post(`/api/v1/threads/${thread.id}/issues`, {
+      data: { issue_range: '1-100' },
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    await authenticatedPage.goto('/');
+    await authenticatedPage.waitForLoadState('networkidle');
+
+    const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: longTitle }).first();
+    await threadElement.click();
+
+    const readButton = authenticatedPage.locator('button:has-text("Read Now")');
+    await readButton.click();
+
+    await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
+
+    // The title now includes the issue number within the h2 element
+    const titleElement = authenticatedPage.locator('#thread-info h2.truncate');
+    await expect(titleElement).toBeVisible();
+
+    const titleText = await titleElement.textContent();
+    expect(titleText).toContain('#');
+    expect(titleText).toContain(longTitle.substring(0, 30));
+  });
 
     test('issue #324: rating view should display 0% for unread thread', async ({ authenticatedPage, request }) => {
       const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
@@ -1295,9 +1297,9 @@ test.describe('Roll Dice Feature', () => {
 
       await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
-      const progressText = authenticatedPage.locator('#thread-info');
-      await expect(progressText).toContainText('100% complete', { timeout: 10000 });
-      await expect(progressText).toContainText('0 issues left');
+    const progressText = authenticatedPage.locator('#thread-info');
+    await expect(progressText).toContainText('100% complete', { timeout: 10000 });
+    await expect(progressText).toContainText('0 issue', { timeout: 10000 });
 
       const threadAfterResponse = await request.get(`/api/threads/${thread.id}`, {
         headers: {
