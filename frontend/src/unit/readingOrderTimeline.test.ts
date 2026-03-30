@@ -70,4 +70,27 @@ describe('buildReadingOrderTimelineEntries', () => {
     })
     expect(entries[1].kind === 'gate' && entries[1].gate.status).toBe('satisfied')
   })
+
+  it('groups multiple gates at the same issue', () => {
+    const thread = makeThread({ total_issues: 10, next_unread_issue_number: '6', next_unread_issue_id: 1006 })
+    const dependencies: Dependency[] = [
+      makeDependency({ id: 1, target_issue_id: 1006, target_label: 'Planetary #6', source_label: 'Stormwatch #11' }),
+      makeDependency({ id: 2, target_issue_id: 1006, target_label: 'Planetary #6', source_label: 'Authority #9' }),
+    ]
+
+    const entries = buildReadingOrderTimelineEntries({ thread, dependencies })
+    // Should have: span (1-5), one grouped gate for #6, span (7-10)
+    expect(entries).toHaveLength(3)
+    expect(entries[0].kind).toBe('span')
+    expect(entries[0].span.label).toBe('Issues 1–5')
+    expect(entries[1].kind).toBe('gate')
+    const gate = entries[1].gate
+    expect(gate.targetIssueId).toBe(1006)
+    expect(gate.prerequisiteLabels).toHaveLength(2)
+    expect(gate.prerequisiteLabels).toContain('Stormwatch #11')
+    expect(gate.prerequisiteLabels).toContain('Authority #9')
+    expect(gate.status).toBe('blocked')
+    expect(entries[2].kind).toBe('span')
+    expect(entries[2].span.label).toBe('Issues 7–10')
+  })
 })
