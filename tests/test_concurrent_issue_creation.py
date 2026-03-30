@@ -189,14 +189,16 @@ async def test_concurrent_issue_adds_same_thread_different_overlaps(
                 json={"issue_range": range_str},
             )
 
-        assert response.status_code in (201, 400), (
-            f"Unexpected status {response.status_code}: {response.text}"
-        )
-        if response.status_code == 400:
-            detail = response.json().get("detail", "")
-            assert "already exist" in detail.lower(), f"Unexpected 400 error: {detail}"
-            return {"issues": []}
-        return response.json()
+            assert response.status_code in (201, 400, 409), (
+                f"Unexpected status {response.status_code}: {response.text}"
+            )
+            if response.status_code in (400, 409):
+                detail = response.json().get("detail", "")
+                assert "already exist" in detail.lower(), (
+                    f"Unexpected {response.status_code} error: {detail}"
+                )
+                return {"issues": []}
+            return response.json()
 
     # Set overrides before all concurrent requests
     async def override_get_db() -> AsyncGenerator[AsyncSession]:

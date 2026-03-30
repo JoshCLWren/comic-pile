@@ -72,6 +72,8 @@ export interface AuthTokens {
 export interface ThreadQueryParams {
   search?: string;
   collection_id?: number;
+  page_size?: number;
+  page_token?: string;
 }
 
 export interface ThreadCreatePayload {
@@ -191,6 +193,16 @@ export interface AnalyticsMetrics {
 
 export interface CollectionListResponse {
   collections: Collection[];
+}
+
+export interface ThreadListResponse {
+  threads: Thread[];
+  next_page_token: string | null;
+}
+
+export interface SessionListResponse {
+  sessions: SessionSummary[];
+  next_page_token: string | null;
 }
 
 export interface BlockingInfoResponse {

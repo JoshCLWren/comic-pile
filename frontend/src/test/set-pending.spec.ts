@@ -32,18 +32,19 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
   test('should return correct RollResponse structure when setting thread as pending', async ({ authenticatedWithThreadsPage }) => {
     const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
-    const threadsResponse = await authenticatedWithThreadsPage.request.get('/api/threads/', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+	const threadsResponse = await authenticatedWithThreadsPage.request.get('/api/threads/', {
+		headers: {
+			'Authorization': `Bearer ${token}`,
+		},
+	});
 
-    expect(threadsResponse.ok()).toBeTruthy();
-    const threads = await threadsResponse.json();
-    expect(threads.length).toBeGreaterThan(0);
-    const threadId = threads[0].id;
+	expect(threadsResponse.ok()).toBeTruthy();
+	const threadsResponseJson = await threadsResponse.json();
+	const threads = threadsResponseJson.threads ?? threadsResponseJson;
+	expect(threads.length).toBeGreaterThan(0);
+	const threadId = threads[0].id;
 
-    const response = await authenticatedWithThreadsPage.request.post(`/api/threads/${threadId}/set-pending`, {
+	const response = await authenticatedWithThreadsPage.request.post(`/api/threads/${threadId}/set-pending`, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -76,18 +77,19 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
   test('should update session pending_thread_id', async ({ authenticatedWithThreadsPage }) => {
     const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
-    const threadsResponse = await authenticatedWithThreadsPage.request.get('/api/threads/', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+	const threadsResponse = await authenticatedWithThreadsPage.request.get('/api/threads/', {
+		headers: {
+			'Authorization': `Bearer ${token}`,
+		},
+	});
 
-    expect(threadsResponse.ok()).toBeTruthy();
-    const threads = await threadsResponse.json();
-    expect(threads.length).toBeGreaterThan(0);
-    const threadId = threads[0].id;
+	expect(threadsResponse.ok()).toBeTruthy();
+	const response = await threadsResponse.json();
+	const threads = response.threads ?? response;
+	expect(threads.length).toBeGreaterThan(0);
+	const threadId = threads[0].id;
 
-    const setPendingResponse = await authenticatedWithThreadsPage.request.post(`/api/threads/${threadId}/set-pending`, {
+	const setPendingResponse = await authenticatedWithThreadsPage.request.post(`/api/threads/${threadId}/set-pending`, {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,

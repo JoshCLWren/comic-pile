@@ -56,7 +56,7 @@ it('displays new collection button when showNewLabel and onNewCollection are pro
 
   render(<CollectionToolbar showNewLabel={true} onNewCollection={vi.fn()} />)
 
-  expect(screen.getByRole('button', { name: 'New collection' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Create new collection' })).toBeInTheDocument()
 })
 
 it('does not display new collection button when showNewLabel is false', () => {
@@ -70,7 +70,7 @@ it('does not display new collection button when showNewLabel is false', () => {
 
   render(<CollectionToolbar showNewLabel={false} onNewCollection={vi.fn()} />)
 
-  expect(screen.queryByRole('button', { name: 'New collection' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Create new collection' })).not.toBeInTheDocument()
 })
 
 it('does not display new collection button when onNewCollection is not provided', () => {
@@ -101,7 +101,7 @@ it('calls onNewCollection when new collection button is clicked', async () => {
 
     render(<CollectionToolbar showNewLabel={true} onNewCollection={onNewCollection} />)
 
-    const button = screen.getByRole('button', { name: 'New collection' })
+    const button = screen.getByRole('button', { name: 'Create new collection' })
     await user.click(button)
 
   expect(onNewCollection).toHaveBeenCalledTimes(1)

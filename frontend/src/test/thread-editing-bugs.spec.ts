@@ -62,7 +62,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Get the thread ID
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
+    const threads = extractThreadsFromResponse(await threadsResponse.json());
     const thread = threads.find((t: any) => t.title === uniqueTitle);
     expect(thread).toBeDefined();
 
@@ -143,7 +143,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     });
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
+    const threads = extractThreadsFromResponse(await threadsResponse.json());
     const thread = threads.find((t: any) => t.title === uniqueTitle);
     expect(thread).toBeDefined();
 
@@ -219,7 +219,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     });
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
+    const threads = extractThreadsFromResponse(await threadsResponse.json());
     const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     await authenticatedPage.goto('/queue');
@@ -283,7 +283,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     });
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
+    const threads = extractThreadsFromResponse(await threadsResponse.json());
     const thread = threads.find((t: any) => t.title === uniqueTitle);
 
     await authenticatedPage.goto('/queue');
@@ -418,7 +418,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Get the thread ID
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
+    const threads = extractThreadsFromResponse(await threadsResponse.json());
     const thread = threads.find((t: any) => t.title === uniqueTitle);
     expect(thread).toBeDefined();
     expect(thread.id).toBeDefined();

@@ -224,72 +224,82 @@ export function formatA11yViolations(violations: Violation[]): string {
 }
 
 export const SELECTORS = {
-  auth: {
-    usernameInput: 'input[name="username"]',
-    emailInput: 'input[name="email"]',
-    passwordInput: 'input[name="password"]',
-    confirmPasswordInput: 'input[name="confirmPassword"]',
-    submitButton: 'button[type="submit"]',
-  },
-  threadList: {
-    container: '#queue-container',
-    threadItem: '[data-testid=\"queue-thread-item\"]',
-    newThreadButton: 'button:has-text("Add Thread")',
-    titleInput: 'label:has-text("Title") + input',
-    formatSelect: 'label:has-text("Format") + select',
-    issuesRemainingInput: 'label:has-text("Issues Remaining") + input, label:has-text("Issues") + input',
-  },
-  roll: {
-    dieSelector: '#die-selector',
-    mainDie: '#main-die-3d',
-    rollButton: 'button[aria-label="roll"]',
-    tapInstruction: '#tap-instruction',
-    headerDieLabel: '#header-die-label',
-  },
-  rate: {
-    ratingInput: '#rating-input',
-    submitButton: 'button:has-text("Save & Continue")',
-    snoozeButton: 'button:has-text("Snooze")',
-  },
-  thread: {
-    title: '#thread-info h2',
-  },
-  navigation: {
-    homeLink: 'a[href="/"]',
-    queueLink: 'a[href="/queue"]',
-    analyticsLink: 'a[href="/analytics"]',
-    historyLink: 'a[href="/history"]',
-  },
-  dashboard: {
-    threadsContainer: '.your-threads',
-  },
-  analytics: {
-    chartContainer: '.chart-container',
-  },
-  history: {
-    sessionsList: '#sessions-list',
-  },
-  issues: {
-    issueList: '.issue-list',
-    issueItem: '.issue-item',
-    issueNumber: '.issue-number',
-    nextBadge: '.next-badge',
-    progressBar: '.progress-bar',
-    progressFill: '.progress-fill',
-    progressText: '.progress-text',
-    filter: 'select[aria-label="Filter issues"]',
-    issueIcon: '.issue-icon',
-    readDate: '.read-date',
-  },
-  threadCreate: {
-    issuesInput: 'input[placeholder*="0-25"]',
-    issuePreview: 'p:has-text("Will create")',
-  },
-  rollResult: {
-    issueNumber: '.reading-progress', // Use the reading progress container which contains issue info
-    readingProgress: '.reading-progress',
-    issueOf: 'span:has-text("of")',
-    completedLabel: 'span:has-text("Completed")',
-    inProgressLabel: 'span:has-text("In Progress")',
-  },
+	auth: {
+		usernameInput: 'input[name="username"]',
+		emailInput: 'input[name="email"]',
+		passwordInput: 'input[name="password"]',
+		confirmPasswordInput: 'input[name="confirmPassword"]',
+		submitButton: 'button[type="submit"]',
+	},
+	threadList: {
+		container: '#queue-container',
+		threadItem: '[data-testid=\\"queue-thread-item\\"]',
+		newThreadButton: 'button:has-text("Add Thread")',
+		titleInput: 'label:has-text("Title") + input',
+		formatSelect: 'label:has-text("Format") + select',
+		issuesRemainingInput: 'label:has-text("Issues Remaining") + input, label:has-text("Issues") + input',
+	},
+	roll: {
+		dieSelector: '#die-selector',
+		mainDie: '#main-die-3d',
+		rollButton: 'button[aria-label="roll"]',
+		tapInstruction: '#tap-instruction',
+		headerDieLabel: '#header-die-label',
+	},
+	rate: {
+		ratingInput: '#rating-input',
+		submitButton: 'button:has-text("Save & Continue")',
+		snoozeButton: 'button:has-text("Snooze")',
+	},
+	thread: {
+		title: '#thread-info h2',
+	},
+	navigation: {
+		homeLink: 'a[href="/"]',
+		queueLink: 'a[href="/queue"]',
+		analyticsLink: 'a[href="/analytics"]',
+		historyLink: 'a[href="/history"]',
+	},
+	dashboard: {
+		threadsContainer: '.your-threads',
+	},
+	analytics: {
+		chartContainer: '.chart-container',
+	},
+	history: {
+		sessionsList: '#sessions-list',
+	},
+	issues: {
+		issueList: '.issue-list',
+		issueItem: '.issue-item',
+		issueNumber: '.issue-number',
+		nextBadge: '.next-badge',
+		progressBar: '.progress-bar',
+		progressFill: '.progress-fill',
+		progressText: '.progress-text',
+		filter: 'select[aria-label="Filter issues"]',
+		issueIcon: '.issue-icon',
+		readDate: '.read-date',
+	},
+	threadCreate: {
+		issuesInput: 'input[placeholder*="0-25"]',
+		issuePreview: 'p:has-text("Will create")',
+	},
+	rollResult: {
+		issueNumber: '.reading-progress',
+		readingProgress: '.reading-progress',
+		issueOf: 'span:has-text("of")',
+		completedLabel: 'span:has-text("Completed")',
+		inProgressLabel: 'span:has-text("In Progress")',
+	},
 } as const;
+
+export function extractThreadsFromResponse(response: unknown): unknown[] {
+	if (Array.isArray(response)) {
+		return response;
+	}
+	if (response && typeof response === 'object' && 'threads' in response) {
+		return (response as { threads: unknown[] }).threads;
+	}
+	return [];
+}

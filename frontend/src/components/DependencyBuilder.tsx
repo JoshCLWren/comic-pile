@@ -180,8 +180,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
       const allEdges = [...threadDeps, ...issueEdges]
 
-      const allThreads = await threadsApi.list()
-      const relatedThreads = allThreads.filter((t) => relatedIds.has(t.id))
+    const allThreads = await threadsApi.list()
+    const relatedThreads = allThreads.threads.filter((t) => relatedIds.has(t.id))
 
       
 
@@ -253,13 +253,12 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setIsSearching(true)
       setError('')
       try {
-        const candidates = await threadsApi.list({ search: query })
-        if (!isCurrent) return
-        const currentThreadId = thread?.id
-        const filtered =
-          currentThreadId == null
-            ? candidates
-            : candidates.filter((candidate) => candidate.id !== currentThreadId)
+    const candidates = await threadsApi.list({ search: query })
+    if (!isCurrent) return
+    const currentThreadId = thread?.id
+    const filtered =  currentThreadId == null
+      ? candidates.threads
+      : candidates.threads.filter((candidate) => candidate.id !== currentThreadId)
         setSearchResults(filtered)
       } catch (searchError: unknown) {
         if (!isCurrent) return

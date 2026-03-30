@@ -1,44 +1,44 @@
 import { test, expect } from './fixtures';
-import { createThread, SELECTORS } from './helpers';
+import { createThread, SELECTORS, extractThreadsFromResponse } from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any): Promise<any> {
-  const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
-  const options: any = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    },
-  };
-  if (data) {
-    options.data = data;
-  }
+	const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+	const options: any = {
+		method,
+		headers: {
+			'Content-Type': 'application/json',
+			...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+		},
+	};
+	if (data) {
+		options.data = data;
+	}
 
-  return await page.request.fetch(url, options);
+	return await page.request.fetch(url, options);
 }
 
 test.describe('Issue Dependency Indicators', () => {
-  test('should show dependency indicator for issues with dependencies', async ({ authenticatedPage }) => {
-    const timestamp = Date.now();
+	test('should show dependency indicator for issues with dependencies', async ({ authenticatedPage }) => {
+		const timestamp = Date.now();
 
-    await createThread(authenticatedPage, {
-      title: `Dependency Source ${timestamp}`,
-      format: 'Comics',
-      issues_remaining: 2,
-      total_issues: 2,
-    });
+		await createThread(authenticatedPage, {
+			title: `Dependency Source ${timestamp}`,
+			format: 'Comics',
+			issues_remaining: 2,
+			total_issues: 2,
+		});
 
-    await createThread(authenticatedPage, {
-      title: `Dependency Target ${timestamp}`,
-      format: 'Comics',
-      issues_remaining: 3,
-      total_issues: 3,
-    });
+		await createThread(authenticatedPage, {
+			title: `Dependency Target ${timestamp}`,
+			format: 'Comics',
+			issues_remaining: 3,
+			total_issues: 3,
+		});
 
-    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
-    const source = threads.find((t: any) => t.title === `Dependency Source ${timestamp}`);
-    const target = threads.find((t: any) => t.title === `Dependency Target ${timestamp}`);
+		const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+		const threads = extractThreadsFromResponse(await threadsResponse.json());
+		const source = threads.find((t: any) => t.title === `Dependency Source ${timestamp}`);
+		const target = threads.find((t: any) => t.title === `Dependency Target ${timestamp}`);
 
     const sourceIssuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${source.id}/issues`);
     const sourceIssues = await sourceIssuesResponse.json();
@@ -87,9 +87,9 @@ test.describe('Issue Dependency Indicators', () => {
       total_issues: 3,
     });
 
-    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
-    const thread = threads.find((t: any) => t.title === `No Dependencies Thread ${timestamp}`);
+	const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+	const threads = extractThreadsFromResponse(await threadsResponse.json());
+	const thread = threads.find((t: any) => t.title === `No Dependencies Thread ${timestamp}`);
 
     await authenticatedPage.goto(`/queue`);
     await authenticatedPage.waitForLoadState('networkidle');
@@ -123,10 +123,10 @@ test.describe('Issue Dependency Indicators', () => {
       total_issues: 3,
     });
 
-    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
-    const source = threads.find((t: any) => t.title === `Tooltip Source ${timestamp}`);
-    const target = threads.find((t: any) => t.title === `Tooltip Target ${timestamp}`);
+	const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+	const threads = extractThreadsFromResponse(await threadsResponse.json());
+	const source = threads.find((t: any) => t.title === `Tooltip Source ${timestamp}`);
+	const target = threads.find((t: any) => t.title === `Tooltip Target ${timestamp}`);
 
     const sourceIssuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${source.id}/issues`);
     const sourceIssues = await sourceIssuesResponse.json();
@@ -193,11 +193,11 @@ test.describe('Issue Dependency Indicators', () => {
       total_issues: 3,
     });
 
-    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
-    const source1 = threads.find((t: any) => t.title === `Source 1 ${timestamp}`);
-    const source2 = threads.find((t: any) => t.title === `Source 2 ${timestamp}`);
-    const target = threads.find((t: any) => t.title === `Multi Dep Target ${timestamp}`);
+	const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+	const threads = extractThreadsFromResponse(await threadsResponse.json());
+	const source1 = threads.find((t: any) => t.title === `Source 1 ${timestamp}`);
+	const source2 = threads.find((t: any) => t.title === `Source 2 ${timestamp}`);
+	const target = threads.find((t: any) => t.title === `Multi Dep Target ${timestamp}`);
 
     const source1IssuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${source1.id}/issues`);
     const source1Issues = await source1IssuesResponse.json();
@@ -275,11 +275,11 @@ test.describe('Issue Dependency Indicators', () => {
       total_issues: 2,
     });
 
-    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-    const threads = await threadsResponse.json();
-    const source = threads.find((t: any) => t.title === `Chain Source ${timestamp}`);
-    const middle = threads.find((t: any) => t.title === `Chain Middle ${timestamp}`);
-    const target = threads.find((t: any) => t.title === `Chain Target ${timestamp}`);
+	const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+	const threads = extractThreadsFromResponse(await threadsResponse.json());
+	const source = threads.find((t: any) => t.title === `Chain Source ${timestamp}`);
+	const middle = threads.find((t: any) => t.title === `Chain Middle ${timestamp}`);
+	const target = threads.find((t: any) => t.title === `Chain Target ${timestamp}`);
 
     const sourceIssuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${source.id}/issues`);
     const sourceIssues = await sourceIssuesResponse.json();

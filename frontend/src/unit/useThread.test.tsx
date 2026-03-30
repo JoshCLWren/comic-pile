@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { CacheProvider } from '../contexts/CacheContext'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   useCreateThread,
@@ -26,7 +27,7 @@ vi.mock('../services/api', () => ({
 const mockedThreadsApi = vi.mocked(threadsApi)
 
 beforeEach(() => {
-  mockedThreadsApi.list.mockResolvedValue([{ id: 1 }] as never)
+  mockedThreadsApi.list.mockResolvedValue({ threads: [{ id: 1 }], next_page_token: null } as never)
   mockedThreadsApi.get.mockResolvedValue({ id: 2 } as never)
   mockedThreadsApi.listStale.mockResolvedValue([{ id: 3 }] as never)
   mockedThreadsApi.create.mockResolvedValue({} as never)
@@ -36,7 +37,7 @@ beforeEach(() => {
 })
 
 it('loads threads data', async () => {
-  const { result } = renderHook(() => useThreads())
+  const { result } = renderHook(() => useThreads(), { wrapper: CacheProvider })
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }]))
   expect(mockedThreadsApi.list).toHaveBeenCalled()

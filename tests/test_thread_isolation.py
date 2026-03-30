@@ -85,7 +85,9 @@ async def test_thread_scoped_by_user_on_list(
 
     response = await client.get("/api/threads/", headers={"Authorization": f"Bearer {token_a}"})
     assert response.status_code == 200
-    threads = response.json()
+    data = response.json()
+    assert "threads" in data
+    threads = data["threads"]
     assert len(threads) == 1
     assert threads[0]["title"] == "User A Thread"
 
@@ -97,7 +99,9 @@ async def test_thread_scoped_by_user_on_list(
 
     response = await client.get("/api/threads/", headers={"Authorization": f"Bearer {token_b}"})
     assert response.status_code == 200
-    threads = response.json()
+    data = response.json()
+    assert "threads" in data
+    threads = data["threads"]
     assert len(threads) == 1
     assert threads[0]["title"] == "User B Thread"
 

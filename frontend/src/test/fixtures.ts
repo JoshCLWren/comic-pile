@@ -131,22 +131,23 @@ async function createThreadsForUser(
     }
   }
 
-  let attempts = 0;
-  let threadIds: number[] = [];
-  while (attempts < 10) {
-    const threadsResponse = await request.get('/api/threads/', {
-      headers
-    });
-    if (threadsResponse.ok()) {
-      const threads = await threadsResponse.json();
-      if (threads.length >= threadCount) {
-        threadIds = threads.slice(0, threadCount).map((t: { id: number }) => t.id);
-        break;
-      }
-    }
-    await new Promise(resolve => setTimeout(resolve, 500));
-    attempts++;
-  }
+	let attempts = 0;
+	let threadIds: number[] = [];
+	while (attempts < 10) {
+		const threadsResponse = await request.get('/api/threads/', {
+			headers
+		});
+		if (threadsResponse.ok()) {
+			const response = await threadsResponse.json();
+			const threads = response.threads ?? response;
+			if (threads.length >= threadCount) {
+				threadIds = threads.slice(0, threadCount).map((t: { id: number }) => t.id);
+				break;
+			}
+		}
+		await new Promise(resolve => setTimeout(resolve, 500));
+		attempts++;
+	}
 
   if (threadIds.length === 0) {
     throw new Error('Threads not visible after creation');

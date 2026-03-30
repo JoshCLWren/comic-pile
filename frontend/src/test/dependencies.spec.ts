@@ -55,13 +55,14 @@ test.describe('Dependencies', () => {
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
-    const threadsResponse = await authenticatedPage.request.get('/api/threads/', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-    const threads = await threadsResponse.json()
+	const threadsResponse = await authenticatedPage.request.get('/api/threads/', {
+		headers: token ? { Authorization: `Bearer ${token}` } : {},
+	})
+	const response = await threadsResponse.json()
+	const threads = response.threads ?? response
 
-    const source = threads.find((thread: { title: string; id: number }) => thread.title === 'A Prequel')
-    const target = threads.find((thread: { title: string; id: number }) => thread.title === 'B Main Story')
+	const source = threads.find((thread: { title: string; id: number }) => thread.title === 'A Prequel')
+	const target = threads.find((thread: { title: string; id: number }) => thread.title === 'B Main Story')
 
     if (!source || !target) {
       throw new Error(`Failed to find expected threads: source=${source?.id}, target=${target?.id}`)
