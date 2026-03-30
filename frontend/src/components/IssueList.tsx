@@ -62,10 +62,10 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
     } catch (error) {
       console.error('Failed to load issues:', error)
     } finally {
-      setIsLoading(false)
-      setIsLoadingMore(false)
-    }
-  }, [thread.id, filter, nextPageToken, dependencies, issues])
+        setIsLoading(false)
+        setIsLoadingMore(false)
+      }
+    }, [thread.id, filter, nextPageToken, issues, dependencies])
 
   useEffect(() => {
     abortControllerRef.current = new AbortController()
