@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Thread } from '../types'
-import { usePositionMenu } from '../contexts/PositionMenuContext'
+import { usePositionMenu } from '../contexts/usePositionMenu'
 
 interface PositionMenuProps {
   thread: Thread
