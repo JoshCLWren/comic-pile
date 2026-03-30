@@ -12,6 +12,7 @@ import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
 import { useStaleThreads, useThreads } from '../../hooks/useThread'
 import { useCollections } from '../../contexts/CollectionContext'
+import { useToast } from '../../contexts/ToastContext'
 import {
   useClearManualDie,
   useDismissPending,
@@ -70,11 +71,13 @@ export default function RollPage() {
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 
-const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-const { activeCollectionId = null } = useCollections()
+  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+  const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
+  const { showToast } = useToast()
+  const prevCurrentDieRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (isSessionError && sessionError) {
@@ -343,11 +346,11 @@ useEffect(() => {
     const thread = actionable[0]
     const lastActivity = thread.last_activity_at ? new Date(thread.last_activity_at) : new Date(thread.created_at)
     const diffDays = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
-    setStaleThread(diffDays >= 8 ? { ...thread, days: diffDays } : null)
+    setStaleThread(diffDays >= 7 ? { ...thread, days: diffDays } : null)
     setStaleThreadCount(actionable.filter(t => {
       const activity = t.last_activity_at ? new Date(t.last_activity_at) : new Date(t.created_at)
       const days = Math.floor((Date.now() - activity.getTime()) / (1000 * 60 * 60 * 24))
-      return days >= 8
+      return days >= 7
     }).length)
   } else {
     setStaleThread(null)

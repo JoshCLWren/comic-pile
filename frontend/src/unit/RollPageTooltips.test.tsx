@@ -58,6 +58,10 @@ vi.mock('../hooks', async (importOriginal) => {
   }
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
+vi.mock('../contexts/ToastContext', () => ({
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
 
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
@@ -126,15 +130,15 @@ afterEach(() => {
       </ToastProvider>
     )
 
- // Check that the offset indicator is rendered with tooltip
- expect(screen.getByText('+2')).toBeInTheDocument()
+   // Check that the offset indicator is rendered with tooltip
+   expect(screen.getByText('+2')).toBeInTheDocument()
 
- // Check that the offset indicator has the cursor-help class (indicating tooltip)
- const offsetIndicator = screen.getByText('+2')
- expect(offsetIndicator).toHaveClass('cursor-help')
- expect(offsetIndicator).toHaveClass('border-b')
- expect(offsetIndicator).toHaveClass('border-dashed')
- expect(offsetIndicator).toHaveClass('border-stone-600')
+   // Check that the offset indicator has the cursor-help class (indicating tooltip)
+   const offsetIndicator = screen.getByText('+2')
+   expect(offsetIndicator).toHaveClass('cursor-help')
+   expect(offsetIndicator).toHaveClass('border-b')
+   expect(offsetIndicator).toHaveClass('border-dashed')
+   expect(offsetIndicator).toHaveClass('border-stone-600')
 })
 
   it('renders tooltips for snoozed offset active text', async () => {
@@ -186,26 +190,22 @@ afterEach(() => {
  expect(ladderText).toHaveClass('border-stone-600')
 })
 
-  it('does not render snoozed indicators when no snoozed threads', async () => {
-    // Mock session with no snoozed threads
-    mockedUseSession.mockReturnValue({
-      data: {
-        current_die: 6,
-        last_rolled_result: null,
-        manual_die: null,
-        has_restore_point: false,
-        snoozed_threads: [],
-      },
-      refetch: vi.fn(),
-    })
+it('does not render snoozed indicators when no snoozed threads', async () => {
+  // Mock session with no snoozed threads
+  mockedUseSession.mockReturnValue({
+    data: {
+      current_die: 6,
+      last_rolled_result: null,
+      manual_die: null,
+      has_restore_point: false,
+      snoozed_threads: [],
+    },
+    refetch: vi.fn(),
+  })
 
-    render(
-      <ToastProvider>
-        <RollPage />
-      </ToastProvider>
-    )
+  render(<ToastProvider><RollPage /></ToastProvider>)
 
- // Should not show the offset indicator or snoozed text
- expect(screen.queryByText('+0')).not.toBeInTheDocument()
- expect(screen.queryByText('snoozed offset active')).not.toBeInTheDocument()
+  // Should not show the offset indicator or snoozed text
+  expect(screen.queryByText('+0')).not.toBeInTheDocument()
+  expect(screen.queryByText('snoozed offset active')).not.toBeInTheDocument()
 })
