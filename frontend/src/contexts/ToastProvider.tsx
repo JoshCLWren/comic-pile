@@ -1,4 +1,5 @@
-import { createContext, useState, useCallback, useEffect, useRef, useContext, ReactNode } from 'react'
+import { useState, useCallback, useEffect, useRef, useContext, ReactNode } from 'react'
+import { ToastContext } from './ToastContext'
 
 type ToastType = 'info' | 'success' | 'warning' | 'error'
 

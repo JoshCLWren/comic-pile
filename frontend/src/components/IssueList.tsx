@@ -23,6 +23,9 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
    const issuesRef = useRef<Issue[]>([])
    issuesRef.current = issues
 
+  const filterRef = useRef<'all' | 'unread' | 'read'>('all')
+  filterRef.current = filter
+
   const loadIssues = useCallback(async (append = false, pageToken?: string | null) => {
     if (append && issuesRef.current.length === 0) return
 
@@ -33,7 +36,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
     }
     try {
       const response = await issuesApi.list(thread.id, {
-        status: filter === 'all' ? undefined : filter,
+        status: filterRef.current === 'all' ? undefined : filterRef.current,
         page_size: 50,
         page_token: pageToken ?? undefined,
       })
@@ -64,7 +67,7 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       setIsLoading(false)
       setIsLoadingMore(false)
     }
-  }, [thread.id, filter, nextPageToken, issues, dependencies])
+  }, [thread.id])
 
   useEffect(() => {
     abortControllerRef.current = new AbortController()
@@ -75,8 +78,10 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
   }, [loadIssues])
 
   const handleFilterChange = (newFilter: 'all' | 'unread' | 'read') => {
+    filterRef.current = newFilter
     setFilter(newFilter)
     setNextPageToken(null)
+    void loadIssues(false)
   }
 
   const toggleIssueStatus = async (issue: Issue) => {

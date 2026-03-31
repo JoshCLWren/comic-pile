@@ -52,12 +52,12 @@ export function RatingView({
       <>
         <h2 className="text-2xl font-black text-stone-200 truncate">
           {activeRatingThread?.title || 'Loading...'}
-          {(activeRatingThread.next_issue_number ?? activeRatingThread.issue_number) != null && (
+          {activeRatingThread && (activeRatingThread.next_issue_number ?? activeRatingThread.issue_number) != null && (
             <span className="text-stone-400"> #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}</span>
           )}
         </h2>
         <div className="flex items-center justify-center gap-3 flex-wrap">
-          {(activeRatingThread.next_issue_number ?? activeRatingThread.issue_number) != null && (
+          {(activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number) != null && (
             <button
               type="button"
               onClick={() => setIsCorrectionDialogOpen(true)}
@@ -71,12 +71,12 @@ export function RatingView({
               </svg>
             </button>
           )}
-          {activeRatingThread.total_issues && (activeRatingThread.next_issue_number ?? activeRatingThread.issue_number) != null && (
+          {activeRatingThread?.total_issues && (activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number) != null && (
             <span className="text-stone-400 text-xs font-bold">
               (#{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number} of {activeRatingThread.total_issues})
             </span>
           )}
-          {!(activeRatingThread.next_issue_number ?? activeRatingThread.issue_number) && (
+          {!(activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number) && (
             <span className="bg-red-800/20 text-red-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-red-800/20">
               {activeRatingThread?.format || '...'}
             </span>

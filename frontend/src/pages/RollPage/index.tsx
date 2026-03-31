@@ -141,37 +141,37 @@ useEffect(() => {
     setIsActionSheetOpen(true)
   }
 
-  const enterRatingView = useCallback((threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
-    suppressPendingAutoOpenRef.current = false
-    if (threadId) setSelectedThreadId(threadId)
-    if (result !== null) setRolledResult(result)
+const enterRatingView = useCallback((threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
+  if (threadId) setSelectedThreadId(threadId)
+  if (result !== null) setRolledResult(result)
 
-    const ratingThread = buildRatingThread(threadId, result, threadMetadata, session?.active_thread)
-    if (ratingThread) {
-      setActiveRatingThread(ratingThread)
-    } else if (!threadId && session?.active_thread) {
-      setActiveRatingThread({
-        id: session.active_thread.id, title: session.active_thread.title,
-        format: session.active_thread.format,
-        issues_remaining: session.active_thread.issues_remaining ?? 0,
-        queue_position: session.active_thread.queue_position ?? 0,
-        total_issues: session.active_thread.total_issues ?? null,
-        reading_progress: session.active_thread.reading_progress ?? null,
-        issue_id: session.active_thread.issue_id ?? null,
-        issue_number: session.active_thread.issue_number ?? null,
-        next_issue_id: session.active_thread.next_issue_id ?? null,
-        next_issue_number: session.active_thread.next_issue_number ?? null,
-        last_rolled_result: session.active_thread.last_rolled_result ?? null,
-      })
-    }
+  const ratingThread = buildRatingThread(threadId, result, threadMetadata, session?.active_thread)
+  if (ratingThread) {
+    setActiveRatingThread(ratingThread)
+  } else if (!threadId && session?.active_thread) {
+    setActiveRatingThread({
+      id: session.active_thread.id, title: session.active_thread.title,
+      format: session.active_thread.format,
+      issues_remaining: session.active_thread.issues_remaining ?? 0,
+      queue_position: session.active_thread.queue_position ?? 0,
+      total_issues: session.active_thread.total_issues ?? null,
+      reading_progress: session.active_thread.reading_progress ?? null,
+      issue_id: session.active_thread.issue_id ?? null,
+      issue_number: session.active_thread.issue_number ?? null,
+      next_issue_id: session.active_thread.next_issue_id ?? null,
+      next_issue_number: session.active_thread.next_issue_number ?? null,
+      last_rolled_result: session.active_thread.last_rolled_result ?? null,
+    })
+  }
 
-    setRating(3.0)
-    setErrorMessage('')
-    const die = currentDie || 6
-    const idx = DICE_LADDER.indexOf(die)
-    setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
-    setIsRatingView(true)
-  }, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
+  setRating(3.0)
+  setErrorMessage('')
+  const die = currentDie || 6
+  const idx = DICE_LADDER.indexOf(die)
+  setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
+  setIsRatingView(true)
+  suppressPendingAutoOpenRef.current = false
+}, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
 
 const handleMigrationComplete = useCallback((migratedThread: Thread) => {
   refetchThreads()
@@ -214,24 +214,25 @@ const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
 
     try {
       switch (action) {
-        case 'read': {
-          const response = await threadsApi.setPending(selectedThread.id)
-          const threadMetadata: ThreadMetadata = {
-            id: response.thread_id, title: response.title, format: response.format,
-            issues_remaining: response.issues_remaining, queue_position: response.queue_position,
-            total_issues: response.total_issues, reading_progress: response.reading_progress ?? null,
-            issue_id: response.issue_id, issue_number: response.issue_number,
-            next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
-            last_rolled_result: response.result ?? response.last_rolled_result,
-          }
-          if (response.total_issues === null) {
-            setThreadToMigrate(threadMetadata as RatingThread)
-            setShowMigrationDialog(true)
-          } else {
-            enterRatingView(response.thread_id, response.result, threadMetadata)
-          }
-          break
-        }
+case 'read': {
+      const response = await threadsApi.setPending(selectedThread.id)
+      const threadMetadata: ThreadMetadata = {
+        id: response.thread_id, title: response.title, format: response.format,
+        issues_remaining: response.issues_remaining, queue_position: response.queue_position,
+        total_issues: response.total_issues, reading_progress: response.reading_progress ?? null,
+        issue_id: response.issue_id, issue_number: response.issue_number,
+        next_issue_id: response.next_issue_id, next_issue_number: response.next_issue_number,
+        last_rolled_result: response.result ?? response.last_rolled_result,
+      }
+      if (response.total_issues === null) {
+        setThreadToMigrate(threadMetadata as RatingThread)
+        setShowMigrationDialog(true)
+      } else {
+        suppressPendingAutoOpenRef.current = true
+        enterRatingView(response.thread_id, response.result, threadMetadata)
+      }
+      break
+    }
         case 'move-front':
           await moveToFrontMutation.mutate(selectedThread.id)
           await refetchSession()

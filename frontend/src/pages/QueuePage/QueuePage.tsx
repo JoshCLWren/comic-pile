@@ -600,6 +600,13 @@ export default function QueuePage() {
           e.stopPropagation()
           openActionSheet(thread)
         }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            e.stopPropagation()
+            openActionSheet(thread)
+          }
+        }}
         className="md:hidden text-stone-500 flex items-center justify-center w-8 h-8 text-xl"
         aria-label="Open actions"
       >
