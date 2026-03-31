@@ -33,9 +33,11 @@ export function useSession() {
       const currentUserId = result.user_id ?? "anonymous";
       const storageKey = `${STORAGE_KEY_PREFIX}_${currentUserId}`;
       const storedSessionId = localStorage.getItem(storageKey);
-      const previousSessionId = storedSessionId
-        ? parseInt(storedSessionId, 10)
-        : null;
+      let previousSessionId: number | null = null;
+      if (storedSessionId) {
+        const parsed = parseInt(storedSessionId, 10);
+        previousSessionId = Number.isFinite(parsed) ? parsed : null;
+      }
 
       if (
         previousSessionId !== null &&
