@@ -19,7 +19,7 @@ type Toast = {
     onClick: () => void;
   };
 };
-//
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timeoutIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
