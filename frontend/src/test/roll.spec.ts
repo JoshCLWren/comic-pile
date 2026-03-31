@@ -830,17 +830,22 @@ test.describe('Roll Dice Feature', () => {
       const snoozeButton = authenticatedPage.locator('button:has-text("Snooze")')
       await snoozeButton.click()
 
-      // Wait for snooze to complete and return to roll page
-      await authenticatedPage.waitForLoadState('networkidle')
+       // Wait for snooze to complete and return to roll page
+       await authenticatedPage.waitForLoadState('networkidle')
 
-      // Check that snoozed thread is NOT in the roll pool
-      const rollPoolText = await authenticatedPage.evaluate(() => {
-        const poolElement = document.querySelector('[data-roll-pool]')
-        return poolElement ? poolElement.textContent : ''
-      })
+       // Wait for at least one active thread to appear in the pool
+       await expect(
+         authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Active Thread A' })
+       ).toBeVisible({ timeout: 10000 })
 
-      expect(rollPoolText).not.toContain('Snoozed Thread B')
-      expect(rollPoolText).toContain('Active Thread A')
+       // Check that snoozed thread is NOT in the roll pool
+       const rollPoolText = await authenticatedPage.evaluate(() => {
+         const poolElement = document.querySelector('[data-roll-pool]')
+         return poolElement ? poolElement.textContent : ''
+       })
+
+       expect(rollPoolText).not.toContain('Snoozed Thread B')
+       expect(rollPoolText).toContain('Active Thread A')
     })
 
     test('snoozed thread appears in SNOOZED section only', async ({ authenticatedPage }) => {
