@@ -569,14 +569,20 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     }
   }, [loadFlowchartData])
 
-  function handleToggleReadingOrder() {
+  async function handleToggleReadingOrder() {
+    const willShowReadingOrder = !showReadingOrder
     setShowReadingOrder((prev) => {
       const next = !prev
-      if (!next) {
+      if (next) {
+        setReadingView('graph')
+      } else {
         setReadingView('timeline')
       }
       return next
     })
+    if (willShowReadingOrder && readingView !== 'graph') {
+      await refreshGraphData()
+    }
   }
 
   async function handleSelectReadingView(view: 'timeline' | 'graph') {
@@ -595,17 +601,17 @@ const [isSavingNote, setIsSavingNote] = useState(false)
   return (
     <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
       <div className="space-y-4">
-        {/* Flowchart toggle */}
-        {thread && (
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={handleToggleReadingOrder}
-              className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest"
-              data-testid="toggle-reading-order"
-            >
-              {showReadingOrder ? '▲ Hide Reading Order' : '▼ View Reading Order'}
-            </button>
+      {/* Flowchart toggle */}
+      {thread && (dependencies.blocking.length > 0 || dependencies.blocked_by.length > 0) && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={handleToggleReadingOrder}
+            className="w-full py-3 glass-button text-xs font-black uppercase tracking-widest"
+            data-testid="toggle-reading-order"
+          >
+            {showReadingOrder ? '▲ Hide Reading Order' : '▼ View Reading Order'}
+          </button>
 
             {showReadingOrder && (
               <div className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-3">

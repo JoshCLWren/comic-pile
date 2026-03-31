@@ -63,7 +63,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.click(`text=${target.title}`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click('button:has-text("Edit Thread")');
+    await authenticatedPage.click('button:has-text("Edit")');
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.waitForTimeout(2000);
@@ -97,7 +97,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.click(`text=${thread.title}`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click('button:has-text("Edit Thread")');
+    await authenticatedPage.click('button:has-text("Edit")');
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.waitForTimeout(1000);
@@ -150,7 +150,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.click(`text=${target.title}`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click('button:has-text("Edit Thread")');
+    await authenticatedPage.click('button:has-text("Edit")');
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.waitForTimeout(2000);
@@ -230,7 +230,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.click(`text=${target.title}`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click('button:has-text("Edit Thread")');
+    await authenticatedPage.click('button:has-text("Edit")');
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.waitForTimeout(2000);
@@ -312,7 +312,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.click(`text=${middle.title}`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click('button:has-text("Edit Thread")');
+    await authenticatedPage.click('button:has-text("Edit")');
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.waitForTimeout(2000);
