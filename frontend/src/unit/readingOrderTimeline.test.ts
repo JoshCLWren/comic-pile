@@ -47,6 +47,7 @@ describe('buildReadingOrderTimelineEntries', () => {
     ]
 
     const entries = buildReadingOrderTimelineEntries({ thread, dependencies })
+
     expect(entries).toHaveLength(4)
     expect(entries[0].kind).toBe('span')
     expect(entries[1].kind).toBe('gate')
@@ -82,15 +83,18 @@ describe('buildReadingOrderTimelineEntries', () => {
     // Should have: span (1-5), one grouped gate for #6, span (7-10)
     expect(entries).toHaveLength(3)
     expect(entries[0].kind).toBe('span')
-    expect(entries[0].span.label).toBe('Issues 1–5')
+    expect(entries[0].kind === 'span' && entries[0].span.label).toBe('Issues 1–5')
     expect(entries[1].kind).toBe('gate')
-    const gate = entries[1].gate
-    expect(gate.targetIssueId).toBe(1006)
-    expect(gate.prerequisiteLabels).toHaveLength(2)
-    expect(gate.prerequisiteLabels).toContain('Stormwatch #11')
-    expect(gate.prerequisiteLabels).toContain('Authority #9')
-    expect(gate.status).toBe('blocked')
+    const gate = entries[1].kind === 'gate' ? entries[1].gate : null
+    expect(gate).not.toBeNull()
+    if (gate) {
+      expect(gate.targetIssueId).toBe(1006)
+      expect(gate.prerequisiteLabels).toHaveLength(2)
+      expect(gate.prerequisiteLabels).toContain('Stormwatch #11')
+      expect(gate.prerequisiteLabels).toContain('Authority #9')
+      expect(gate.status).toBe('blocked')
+    }
     expect(entries[2].kind).toBe('span')
-    expect(entries[2].span.label).toBe('Issues 7–10')
+    expect(entries[2].kind === 'span' && entries[2].span.label).toBe('Issues 7–10')
   })
 })
