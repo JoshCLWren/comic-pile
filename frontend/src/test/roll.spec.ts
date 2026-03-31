@@ -89,13 +89,13 @@ test.describe('Roll Dice Feature', () => {
     expect(canvasInfo.canvasHeight).toBeGreaterThan(0);
   });
 
-  test('should handle roll with empty queue gracefully', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/');
-    await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+   test('should handle roll with empty queue gracefully', async ({ authenticatedPage }) => {
+     await authenticatedPage.goto('/');
+     await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
-    const emptyQueueMessage = authenticatedPage.locator('text=Your Queue Is Empty');
-    await expect(emptyQueueMessage).toBeVisible();
-  });
+     const emptyQueueMessage = authenticatedPage.locator('text=Your reading queue is empty — add some comic threads to get started.');
+     await expect(emptyQueueMessage).toBeVisible();
+   });
 
   test('should update session state after roll', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');

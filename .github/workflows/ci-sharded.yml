@@ -102,29 +102,29 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+     steps:
+       - name: Check out repository
+         uses: actions/checkout@v4
 
-      - name: Remove .env file to prevent CI database override
-        run: rm -f .env .env.backup .envrc .env.local .env.production 2>/dev/null || true
+       - name: Remove .env file to prevent CI database override
+         run: rm -f .env .env.test .env.backup .envrc .env.local .env.production 2>/dev/null || true
 
-      - name: Wait for PostgreSQL
-        run: |
-          i=1
-          while [ $i -le 30 ]; do
-            if pg_isready -h postgres -p 5432 -U postgres; then
-              echo "PostgreSQL is ready"
-              exit 0
-            fi
-            echo "Waiting for PostgreSQL..."
-            sleep 2
-            i=$((i + 1))
-          done
-          echo "PostgreSQL failed to start"
-          exit 1
+       - name: Wait for PostgreSQL
+         run: |
+           i=1
+           while [ $i -le 30 ]; do
+             if pg_isready -h postgres -p 5432 -U postgres; then
+               echo "PostgreSQL is ready"
+               exit 0
+             fi
+             echo "Waiting for PostgreSQL..."
+             sleep 2
+             i=$((i + 1))
+           done
+           echo "PostgreSQL failed to start"
+           exit 1
 
-      - name: Run backend tests
+       - name: Run backend tests
         run: pytest tests/ --cov=comic_pile --cov-report=xml
 
       - name: Upload coverage to Codecov
@@ -275,29 +275,29 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     timeout-minutes: 45
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+     steps:
+       - name: Check out repository
+         uses: actions/checkout@v4
 
-      - name: Remove .env file to prevent CI database override
-        run: rm -f .env .env.backup .envrc .env.local .env.production 2>/dev/null || true
+       - name: Remove .env file to prevent CI database override
+         run: rm -f .env .env.test .env.backup .envrc .env.local .env.production 2>/dev/null || true
 
-      - name: Wait for PostgreSQL
-        run: |
-          i=1
-          while [ $i -le 30 ]; do
-            if pg_isready -h postgres -p 5432 -U postgres; then
-              echo "PostgreSQL is ready"
-              exit 0
-            fi
-            echo "Waiting for PostgreSQL..."
-            sleep 2
-            i=$((i + 1))
-          done
-          echo "PostgreSQL failed to start"
-          exit 1
+       - name: Wait for PostgreSQL
+         run: |
+           i=1
+           while [ $i -le 30 ]; do
+             if pg_isready -h postgres -p 5432 -U postgres; then
+               echo "PostgreSQL is ready"
+               exit 0
+             fi
+             echo "Waiting for PostgreSQL..."
+             sleep 2
+             i=$((i + 1))
+           done
+           echo "PostgreSQL failed to start"
+           exit 1
 
-      - name: Restore frontend toolchain from CI image
+       - name: Restore frontend toolchain from CI image
         run: |
           mkdir -p static
           rm -rf frontend/node_modules static/react

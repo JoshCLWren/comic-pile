@@ -10,8 +10,8 @@ test.describe('Issue #294: Hide roll instruction when pool is empty', () => {
     const tapInstruction = authenticatedPage.locator(SELECTORS.roll.tapInstruction);
     await expect(tapInstruction).not.toBeVisible();
 
-    const emptyQueueMessage = authenticatedPage.locator('text=Your Queue Is Empty');
-    await expect(emptyQueueMessage).toBeVisible();
+     const emptyQueueMessage = authenticatedPage.locator('text=Your reading queue is empty — add some comic threads to get started.');
+     await expect(emptyQueueMessage).toBeVisible();
   });
 
   test('should show "Tap Die to Roll" instruction when pool has threads', async ({ authenticatedPage, request }) => {
