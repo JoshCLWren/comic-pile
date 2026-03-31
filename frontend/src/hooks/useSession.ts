@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
-import axios from 'axios';
-import { sessionApi } from '../services/api';
-import type { SessionCurrent, SessionDetails, SessionListResponse, SessionSnapshotsResponse, SessionSummary } from '../types';
-import { useToast } from '../contexts/ToastContext';
-import { useCache } from '../contexts/CacheContext';
+import { useCallback, useEffect, useState, useMemo, useRef } from "react";
+import axios from "axios";
+import { sessionApi } from "../services/api";
+import type {
+  SessionCurrent,
+  SessionDetails,
+  SessionListResponse,
+  SessionSnapshotsResponse,
+  SessionSummary,
+} from "../types";
+import { useToast } from "../contexts/ToastContext";
+import { useCache } from "../contexts/CacheContext";
 
 const EMPTY_PARAMS = Object.freeze({});
-const STORAGE_KEY_PREFIX = 'comic_pile_last_session_id';
+const STORAGE_KEY_PREFIX = "comic_pile_last_session_id";
 
 export function useSession() {
   const [data, setData] = useState<SessionCurrent | null>(null);
@@ -24,15 +30,19 @@ export function useSession() {
       const result = await sessionApi.getCurrent();
 
       const currentSessionId = result.id;
-      const currentUserId = result.user_id ?? 'anonymous';
+      const currentUserId = result.user_id ?? "anonymous";
       const storageKey = `${STORAGE_KEY_PREFIX}_${currentUserId}`;
       const storedSessionId = localStorage.getItem(storageKey);
-      const previousSessionId = storedSessionId ? parseInt(storedSessionId, 10) : null;
+      const previousSessionId = storedSessionId
+        ? parseInt(storedSessionId, 10)
+        : null;
 
-      if (previousSessionId !== null &&
+      if (
+        previousSessionId !== null &&
         currentSessionId !== previousSessionId &&
-        currentSessionId !== lastNotifiedSessionIdRef.current) {
-        showToast('Session expired. A new session has started.', 'info');
+        currentSessionId !== lastNotifiedSessionIdRef.current
+      ) {
+        showToast("Session started. Happy reading!", "info");
         lastNotifiedSessionIdRef.current = currentSessionId;
       }
 
@@ -41,7 +51,11 @@ export function useSession() {
       return result;
     } catch (err: unknown) {
       setIsError(true);
-      setError(err instanceof Error ? err : new Error('Failed to fetch current session'));
+      setError(
+        err instanceof Error
+          ? err
+          : new Error("Failed to fetch current session"),
+      );
     } finally {
       setIsPending(false);
     }
@@ -51,14 +65,17 @@ export function useSession() {
     fetchSession();
   }, [fetchSession]);
 
-  const value = useMemo(() => ({
-    data,
-    setData,
-    isPending,
-    isError,
-    error,
-    refetch: fetchSession,
-  }), [data, isPending, isError, error, fetchSession]);
+  const value = useMemo(
+    () => ({
+      data,
+      setData,
+      isPending,
+      isError,
+      error,
+      refetch: fetchSession,
+    }),
+    [data, isPending, isError, error, fetchSession],
+  );
 
   return value;
 }
@@ -83,7 +100,9 @@ export function useSessions(params = EMPTY_PARAMS) {
       let nextToken: string | null = null;
       let currentToken: string | undefined = undefined;
       do {
-        const params = currentToken ? { ...baseParams, page_token: currentToken } : baseParams;
+        const params = currentToken
+          ? { ...baseParams, page_token: currentToken }
+          : baseParams;
         const result: SessionListResponse = await sessionApi.list(params);
         allSessions = allSessions.concat(result.sessions);
         nextToken = result.next_page_token;
@@ -92,10 +111,12 @@ export function useSessions(params = EMPTY_PARAMS) {
 
       setData(allSessions);
       // Invalidate any cached session queries after fetching fresh data
-      invalidateQueries(['sessions']);
+      invalidateQueries(["sessions"]);
     } catch (err: unknown) {
       setIsError(true);
-      setError(err instanceof Error ? err : new Error('Failed to fetch sessions'));
+      setError(
+        err instanceof Error ? err : new Error("Failed to fetch sessions"),
+      );
     } finally {
       setIsPending(false);
     }
@@ -130,7 +151,11 @@ export function useSessionDetails(id: number | string | null | undefined) {
       setData(result);
     } catch (err: unknown) {
       setIsError(true);
-      setError(err instanceof Error ? err : new Error('Failed to fetch session details'));
+      setError(
+        err instanceof Error
+          ? err
+          : new Error("Failed to fetch session details"),
+      );
     } finally {
       setIsPending(false);
     }
@@ -165,7 +190,11 @@ export function useSessionSnapshots(id: number | string | null | undefined) {
       setData(result);
     } catch (err: unknown) {
       setIsError(true);
-      setError(err instanceof Error ? err : new Error('Failed to fetch session snapshots'));
+      setError(
+        err instanceof Error
+          ? err
+          : new Error("Failed to fetch session snapshots"),
+      );
     } finally {
       setIsPending(false);
     }
@@ -192,12 +221,16 @@ export function useRestoreSessionStart() {
       return result;
     } catch (err: unknown) {
       setIsError(true);
-      const normalizedError = err instanceof Error ? err : new Error('Failed to restore session');
+      const normalizedError =
+        err instanceof Error ? err : new Error("Failed to restore session");
       setError(normalizedError);
       if (axios.isAxiosError(err)) {
-        console.error('Failed to restore session:', err.response?.data?.detail || err.message);
+        console.error(
+          "Failed to restore session:",
+          err.response?.data?.detail || err.message,
+        );
       } else {
-        console.error('Failed to restore session:', normalizedError.message);
+        console.error("Failed to restore session:", normalizedError.message);
       }
       throw err;
     } finally {
