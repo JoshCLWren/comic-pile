@@ -1,4 +1,5 @@
 import { type Page, expect } from '@playwright/test';
+import type { Thread } from '../types';
 
 type Violation = {
   id: string;
@@ -294,12 +295,12 @@ export const SELECTORS = {
 	},
 } as const;
 
-export function extractThreadsFromResponse(response: unknown): unknown[] {
-	if (Array.isArray(response)) {
-		return response;
-	}
-	if (response && typeof response === 'object' && 'threads' in response) {
-		return (response as { threads: unknown[] }).threads;
-	}
-	return [];
+export function extractThreadsFromResponse(response: unknown): Thread[] {
+  if (Array.isArray(response)) {
+    return response as Thread[];
+  }
+  if (response && typeof response === 'object' && 'threads' in response) {
+    return (response as { threads: Thread[] }).threads;
+  }
+  return [];
 }
