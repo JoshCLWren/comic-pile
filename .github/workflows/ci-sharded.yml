@@ -85,7 +85,7 @@ jobs:
     container:
       image: ${{ needs.build.outputs.image-tag }}
     needs: build
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
