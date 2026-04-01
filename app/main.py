@@ -615,8 +615,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         if database_ready:
             if app_settings.environment == "production":
                 logger.info("Production mode: Skipping table creation (migrations required)")
-            elif os.getenv("CI") == "true":
-                logger.info("CI mode: skipping table creation")
             else:
                 try:
                     from app.database import async_engine
