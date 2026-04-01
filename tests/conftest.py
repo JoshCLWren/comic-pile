@@ -3,10 +3,12 @@
 import os
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
+from filelock import FileLock
 
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import UniqueConstraint, inspect, select, text
@@ -27,7 +29,7 @@ from app.main import app
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
 
-load_dotenv()
+load_dotenv(".env.test")
 
 if not os.getenv("SECRET_KEY"):
     os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
@@ -148,28 +150,70 @@ async def _sync_id_sequence(db: SQLAlchemyAsyncSession, table_name: str) -> None
 
 
 @pytest_asyncio.fixture(scope="session")
-async def db_engine() -> AsyncIterator[AsyncEngine]:
-    """Create and prepare the shared async engine for backend tests."""
+async def db_engine(
+    worker_id: str, tmp_path_factory: pytest.TempPathFactory | None = None
+) -> AsyncIterator[AsyncEngine]:
+    """Create and prepare the shared async engine for backend tests.
+
+    With pytest-xdist, only gw0 worker initializes the database schema.
+    Other workers wait for initialization to complete using marker file synchronization.
+
+    When not using xdist (sequential execution), worker_id defaults to "master"
+    and behaves as the initializing worker would.
+    """
     global _SHARED_TEST_ENGINE
 
     database_url = get_test_database_url()
     engine = create_async_engine(database_url, echo=False, poolclass=NullPool)
 
-    async with engine.begin() as conn:
+    should_init = worker_id == "master" or worker_id == "gw0"
+    is_xdist = worker_id.startswith("gw")
 
-        def _check_and_drop(sync_conn: Connection) -> None:
-            if _has_schema_drift(sync_conn):
-                if not _looks_like_test_database(database_url):
-                    raise RuntimeError(
-                        "Refusing to reset schema on non-test database. "
-                        f"Database '{make_url(database_url).database}' must include 'test'."
-                    )
-            sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-            sync_conn.exec_driver_sql("CREATE SCHEMA public")
-            Base.metadata.create_all(bind=sync_conn)
+    if is_xdist:
+        root_tmp_dir = tmp_path_factory.getbasetemp() if tmp_path_factory else Path("/tmp")
+        lock_file = root_tmp_dir / "db_init.lock"
+        marker_file = root_tmp_dir / "db_init.done"
 
-        await conn.run_sync(_check_and_drop)
-        # await conn.execute(TRUNCATE_TEST_DATA_SQL)  # Skip initial truncate to avoid deadlocks
+        if should_init:
+            with FileLock(lock_file):
+                async with engine.begin() as conn:
+
+                    def _check_and_drop(sync_conn: Connection) -> None:
+                        if _has_schema_drift(sync_conn):
+                            if not _looks_like_test_database(database_url):
+                                raise RuntimeError(
+                                    "Refusing to reset schema on non-test database. "
+                                    f"Database '{make_url(database_url).database}' must include 'test'."
+                                )
+                        sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+                        sync_conn.exec_driver_sql("CREATE SCHEMA public")
+                        Base.metadata.create_all(bind=sync_conn)
+
+                    await conn.run_sync(_check_and_drop)
+
+                marker_file.touch()
+        else:
+            import time
+
+            for _ in range(300):
+                if marker_file.exists():
+                    break
+                time.sleep(0.1)
+    else:
+        async with engine.begin() as conn:
+
+            def _check_and_drop(sync_conn: Connection) -> None:
+                if _has_schema_drift(sync_conn):
+                    if not _looks_like_test_database(database_url):
+                        raise RuntimeError(
+                            "Refusing to reset schema on non-test database. "
+                            f"Database '{make_url(database_url).database}' must include 'test'."
+                        )
+                sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+                sync_conn.exec_driver_sql("CREATE SCHEMA public")
+                Base.metadata.create_all(bind=sync_conn)
+
+            await conn.run_sync(_check_and_drop)
 
     _SHARED_TEST_ENGINE = engine
     try:
@@ -180,15 +224,18 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
 
 
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
-    """Ensure default user exists in database (user_id=1 for API compatibility)."""
+    """Ensure default user exists in database (user_id=1 for API compatibility).
+
+    This function is idempotent and safe for concurrent execution from multiple
+    pytest-xdist workers. If multiple workers attempt to create the user simultaneously,
+    one will succeed and others will handle the IntegrityError and fetch the existing user.
+    """
     username = _default_test_username()
 
-    # First try to find existing user
-    result = await db.execute(select(User).where(User.id == 1))
+    result = await db.execute(select(User).where(User.username == username))
     user = result.scalar_one_or_none()
 
     if not user:
-        # Try to create the user with id=1
         user = User(id=1, username=username, created_at=datetime.now(UTC))
         db.add(user)
         try:
@@ -196,9 +243,11 @@ async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:
             await db.refresh(user)
         except IntegrityError:
             await db.rollback()
-            # User was created by another process, get it now
             result = await db.execute(select(User).where(User.username == username))
-            user = result.scalar_one()
+            user = result.scalar_one_or_none()
+            if not user:
+                result = await db.execute(select(User).where(User.id == 1))
+                user = result.scalar_one()
 
     await _sync_id_sequence(db, "users")
     return user
@@ -318,7 +367,6 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
     )
 
     async with session_maker() as session:
-        # Use DELETE instead of TRUNCATE to avoid exclusive locks and deadlocks
         await session.execute(text("DELETE FROM sessions"))
         await session.execute(text("DELETE FROM events"))
         await session.execute(text("DELETE FROM threads"))
@@ -331,21 +379,9 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_is_read"))
         await session.commit()
 
-        # Reset sequences manually to avoid conflicts
-        await session.execute(text("SELECT setval('users_id_seq', 1, false)"))
-        await session.execute(text("SELECT setval('sessions_id_seq', 1, false)"))
-        await session.execute(text("SELECT setval('threads_id_seq', 1, false)"))
-        await session.execute(text("SELECT setval('issues_id_seq', 1, false)"))
-        await session.execute(text("SELECT setval('events_id_seq', 1, false)"))
-        await session.execute(text("SELECT setval('snapshots_id_seq', 1, false)"))
-        await session.execute(text("SELECT setval('dependencies_id_seq', 1, false)"))
-        await session.execute(text("SELECT setval('revoked_tokens_id_seq', 1, false)"))
-        await session.commit()
-
         yield session
 
     async with session_maker() as cleanup_session:
-        # Cleanup: Delete all data
         await cleanup_session.execute(text("DELETE FROM sessions"))
         await cleanup_session.execute(text("DELETE FROM events"))
         await cleanup_session.execute(text("DELETE FROM threads"))
@@ -589,15 +625,15 @@ async def auth_client(
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
-            # Generate a unique ID for the test user to avoid conflicts
-            result = await async_db.execute(text("SELECT MAX(id) FROM users"))
-            max_id = result.scalar() or 0
-            user_id = max_id + 1
-            user = User(id=user_id, username=test_username, created_at=datetime.now(UTC))
+            user = User(username=test_username, created_at=datetime.now(UTC))
             async_db.add(user)
-            await async_db.flush()
-            await async_db.refresh(user)
-            await _sync_id_sequence(async_db, "users")
+            try:
+                await async_db.commit()
+                await async_db.refresh(user)
+            except IntegrityError:
+                await async_db.rollback()
+                result = await async_db.execute(select(User).where(User.username == test_username))
+                user = result.scalar_one()
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})
