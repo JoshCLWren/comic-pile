@@ -9,7 +9,11 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
     const firstThreadCard = authenticatedWithThreadsPage.locator('#queue-container .glass-card').first();
     await expect(firstThreadCard).toBeVisible({ timeout: 5000 });
 
-    await firstThreadCard.click();
+    // Set mobile viewport to make action sheet button visible
+    await authenticatedWithThreadsPage.setViewportSize({ width: 375, height: 667 });
+
+    // Click the action menu (three dots) to open action sheet
+    await firstThreadCard.locator('button[aria-label="Open actions"]').click();
 
     await expect(async () => {
       const modal = authenticatedWithThreadsPage.locator('.fixed.inset-0.z-50');

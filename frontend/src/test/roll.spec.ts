@@ -89,13 +89,13 @@ test.describe('Roll Dice Feature', () => {
     expect(canvasInfo.canvasHeight).toBeGreaterThan(0);
   });
 
-  test('should handle roll with empty queue gracefully', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/');
-    await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+   test('should handle roll with empty queue gracefully', async ({ authenticatedPage }) => {
+     await authenticatedPage.goto('/');
+     await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
-    const emptyQueueMessage = authenticatedPage.locator('text=Your Queue Is Empty');
-    await expect(emptyQueueMessage).toBeVisible();
-  });
+     const emptyQueueMessage = authenticatedPage.locator('text=Your reading queue is empty — add some comic threads to get started.');
+     await expect(emptyQueueMessage).toBeVisible();
+   });
 
   test('should update session state after roll', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
@@ -830,17 +830,22 @@ test.describe('Roll Dice Feature', () => {
       const snoozeButton = authenticatedPage.locator('button:has-text("Snooze")')
       await snoozeButton.click()
 
-      // Wait for snooze to complete and return to roll page
-      await authenticatedPage.waitForLoadState('networkidle')
+       // Wait for snooze to complete and return to roll page
+       await authenticatedPage.waitForLoadState('networkidle')
 
-      // Check that snoozed thread is NOT in the roll pool
-      const rollPoolText = await authenticatedPage.evaluate(() => {
-        const poolElement = document.querySelector('[data-roll-pool]')
-        return poolElement ? poolElement.textContent : ''
-      })
+       // Wait for at least one active thread to appear in the pool
+       await expect(
+         authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Active Thread A' })
+       ).toBeVisible({ timeout: 10000 })
 
-      expect(rollPoolText).not.toContain('Snoozed Thread B')
-      expect(rollPoolText).toContain('Active Thread A')
+       // Check that snoozed thread is NOT in the roll pool
+       const rollPoolText = await authenticatedPage.evaluate(() => {
+         const poolElement = document.querySelector('[data-roll-pool]')
+         return poolElement ? poolElement.textContent : ''
+       })
+
+       expect(rollPoolText).not.toContain('Snoozed Thread B')
+       expect(rollPoolText).toContain('Active Thread A')
     })
 
     test('snoozed thread appears in SNOOZED section only', async ({ authenticatedPage }) => {

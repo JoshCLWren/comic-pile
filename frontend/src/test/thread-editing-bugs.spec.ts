@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
-import { createThread } from './helpers';
+import { createThread, extractThreadsFromResponse } from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
@@ -481,6 +481,14 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Wait for issues list to finish loading (not in loading state)
     await expect(editModal.locator('text=Loading issues…')).not.toBeVisible({ timeout: 10000 });
+
+    // If the issues list is truncated (>5 issues and collapsed), expand to show all
+    const showAllButton = editModal.locator('button:has-text("Show all")');
+    if (await showAllButton.count() > 0) {
+      await showAllButton.click();
+      // Wait for the list to expand (the button text should change)
+      await expect(editModal.locator('button:has-text("Show fewer")')).toBeVisible({ timeout: 5000 });
+    }
 
     // Verify issues list in modal refreshed and shows the new annual issue
     // Increased timeout to 10s to account for: network latency, API response time, state update, re-render

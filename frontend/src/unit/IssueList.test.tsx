@@ -5,7 +5,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { IssueList } from '../components/IssueList'
 import { issuesApi } from '../services/api-issues'
 import { dependenciesApi } from '../services/api'
-import type { Issue, IssueListResponse, Thread } from '../types'
+import type { Issue, IssueDependenciesResponse, IssueListResponse, Thread } from '../types'
 
 vi.mock('../services/api-issues', () => ({
   issuesApi: {
@@ -60,19 +60,21 @@ const buildListResponse = (
   next_page_token: nextPageToken,
 })
 
-const mockThread: Thread = {
-  id: 99,
-  title: 'Test Thread',
-  format: 'Comic',
-  issues_remaining: 10,
-  queue_position: 1,
-  status: 'active',
-  created_at: '2026-03-08T00:00:00Z',
-  updated_at: '2026-03-08T00:00:00Z',
-  last_rating: null,
-  snoozed_until: null,
-  next_unread_issue_id: null,
-}
+  const mockThread: Thread = {
+    id: 99,
+    title: 'Test Thread',
+    format: 'Comic',
+    issues_remaining: 10,
+    total_issues: null,
+    reading_progress: null,
+    queue_position: 1,
+    status: 'active',
+    is_blocked: false,
+    blocking_reasons: [],
+    collection_id: null,
+    created_at: '2026-03-08T00:00:00Z',
+    next_unread_issue_id: null,
+  }
 
 describe('IssueList', () => {
   beforeEach(() => {
