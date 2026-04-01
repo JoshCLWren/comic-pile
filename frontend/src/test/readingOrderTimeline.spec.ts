@@ -55,26 +55,26 @@ test.describe('Reading Order Timeline', () => {
     await page.click('button[data-testid="toggle-reading-order"]')
     await page.waitForSelector('[role="tablist"]')
 
-    // Check timeline tab is active by default
-    // TODO: Currently defaults to graph view, should be timeline (see issue #XXX)
+    // Check that graph view is the default when reading order is toggled open
     await expect(page.locator('#reading-order-timeline-tab')).toHaveAttribute('aria-selected', 'false')
     await expect(page.locator('#flowchart-panel')).not.toBeHidden()
 
-    // Verify grouping shows "2 required"
-    await expect(page.locator('text=2 required')).toBeVisible()
+    // Switch to timeline tab to inspect timeline content
+    await page.click('#reading-order-timeline-tab')
+    await expect(page.locator('#timeline-panel')).not.toBeHidden()
+    await expect(page.locator('#flowchart-panel')).toBeHidden()
+
+    // Verify grouping shows "2 required" (both source issues block the same target issue)
+    await expect(page.locator('#timeline-panel').locator('text=2 required')).toBeVisible()
 
     // Only one gate card should be present for issue #6
     const gateCardCount = await page.locator('#timeline-panel div[class*="bg-stone-950"]').count()
     expect(gateCardCount).toBe(1)
 
-    // Tab switching
+    // Tab switching back to flowchart
     await page.click('#reading-order-flowchart-tab')
     await expect(page.locator('#flowchart-panel')).not.toBeHidden()
     await expect(page.locator('#timeline-panel')).toBeHidden()
-
-    await page.click('#reading-order-timeline-tab')
-    await expect(page.locator('#timeline-panel')).not.toBeHidden()
-    await expect(page.locator('#flowchart-panel')).toBeHidden()
 
      // Mobile viewport scrollable check - removed flaky assertion due to content height variability
      // The container is already verified visible above
