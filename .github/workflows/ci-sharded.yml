@@ -254,8 +254,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shardIndex: [1, 2, 3, 4, 5, 6, 7, 8]
-        totalShards: [8]
+        shardIndex: [1, 2, 3, 4, 5, 6]
+        totalShards: [6]
     env:
       CI: true
       TEST_ENVIRONMENT: "true"
@@ -317,8 +317,9 @@ jobs:
           echo "DATABASE_URL: ${DATABASE_URL:0:50}..."
           echo "TEST_DATABASE_URL: ${TEST_DATABASE_URL:0:50}..."
           echo "PGUSER: $PGUSER"
-          # Start backend with multiple workers for better concurrency (use port 9000 to avoid conflicts)
-          python -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4 --log-level warning > /tmp/backend.log 2>&1 &
+          # Each shard runs Playwright with a single worker, so one backend worker
+          # is enough and avoids extra process startup and CPU contention.
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 1 --log-level warning > /tmp/backend.log 2>&1 &
           echo $! > /tmp/backend.pid
 
       - name: Wait for backend to be ready
@@ -339,19 +340,3 @@ jobs:
 
       - name: Run Playwright tests
         run: cd frontend && REUSE_EXISTING_SERVER=true BASE_URL=http://localhost:9000 npx playwright test --project=chromium --shard=${{ matrix.shardIndex }}/${{ matrix.totalShards }}
-
-      - name: Upload Playwright test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-test-results-shard-${{ matrix.shardIndex }}
-          path: frontend/playwright-report/
-          retention-days: 7
-
-      - name: Upload Playwright videos
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-videos-shard-${{ matrix.shardIndex }}
-          path: frontend/test-results/
-          retention-days: 7
