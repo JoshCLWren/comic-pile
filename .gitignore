@@ -154,6 +154,7 @@ logs/
 .env.production
 
 # AI tool sessions and configuration
+.codex
 .codex/
 .opencode/
 .specify/

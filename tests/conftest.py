@@ -625,7 +625,7 @@ async def auth_client(
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
-            user = User(username=test_username, created_at=datetime.now(UTC))
+            user = User(id=1, username=test_username, created_at=datetime.now(UTC))
             async_db.add(user)
             try:
                 await async_db.commit()
@@ -633,7 +633,10 @@ async def auth_client(
             except IntegrityError:
                 await async_db.rollback()
                 result = await async_db.execute(select(User).where(User.username == test_username))
-                user = result.scalar_one()
+                user = result.scalar_one_or_none()
+                if not user:
+                    result = await async_db.execute(select(User).where(User.id == 1))
+                    user = result.scalar_one()
 
         token = create_access_token(data={"sub": user.username, "jti": "test"})
         ac.headers.update({"Authorization": f"Bearer {token}"})

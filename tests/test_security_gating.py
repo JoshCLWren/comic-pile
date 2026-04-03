@@ -44,6 +44,7 @@ async def test_admin_routes_accessible_when_enabled(
 ) -> None:
     """Admin routes work when ENABLE_INTERNAL_OPS_ROUTES is true."""
     _ = sample_data
+    from app.database import get_db
     from httpx import ASGITransport, AsyncClient
 
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
@@ -51,16 +52,26 @@ async def test_admin_routes_accessible_when_enabled(
 
     from app.main import app
 
+    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        response = await ac.get("/api/admin/export/csv/")
-        assert response.status_code in [200, 404], f"Unexpected status code: {response.status_code}"
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.get("/api/admin/export/csv/")
+            assert response.status_code in [200, 404], (
+                f"Unexpected status code: {response.status_code}"
+            )
 
-        response = await ac.get("/api/admin/export/json/")
-        assert response.status_code in [200, 404], f"Unexpected status code: {response.status_code}"
+            response = await ac.get("/api/admin/export/json/")
+            assert response.status_code in [200, 404], (
+                f"Unexpected status code: {response.status_code}"
+            )
 
-        response = await ac.get("/api/admin/export/summary/")
-        assert response.status_code in [200, 404], f"Unexpected status code: {response.status_code}"
+            response = await ac.get("/api/admin/export/summary/")
+            assert response.status_code in [200, 404], (
+                f"Unexpected status code: {response.status_code}"
+            )
+    finally:
+        app.dependency_overrides.clear()
         if original_value is None:
             os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
         else:
