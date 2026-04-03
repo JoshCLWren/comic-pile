@@ -55,12 +55,8 @@ test.describe('Reading Order Timeline', () => {
     await page.click('button[data-testid="toggle-reading-order"]')
     await page.waitForSelector('[role="tablist"]')
 
-    // Check that graph view is the default when reading order is toggled open
-    await expect(page.locator('#reading-order-timeline-tab')).toHaveAttribute('aria-selected', 'false')
-    await expect(page.locator('#flowchart-panel')).not.toBeHidden()
-
-    // Switch to timeline tab to inspect timeline content
-    await page.click('#reading-order-timeline-tab')
+    // Check that timeline view is the default when reading order is toggled open
+    await expect(page.locator('#reading-order-timeline-tab')).toHaveAttribute('aria-selected', 'true')
     await expect(page.locator('#timeline-panel')).not.toBeHidden()
     await expect(page.locator('#flowchart-panel')).toBeHidden()
 

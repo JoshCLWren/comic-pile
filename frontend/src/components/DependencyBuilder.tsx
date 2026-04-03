@@ -574,7 +574,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setShowReadingOrder((prev) => {
       const next = !prev
       if (next) {
-        setReadingView('graph')
+        setReadingView('timeline')
       } else {
         setReadingView('timeline')
       }
