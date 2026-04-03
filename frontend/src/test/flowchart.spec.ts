@@ -16,6 +16,12 @@ async function getIssueIdByNumber(authenticatedPage: any, threadId: number, issu
   return issue.id
 }
 
+async function openFlowchartView(authenticatedPage: any): Promise<void> {
+  await authenticatedPage.click('[data-testid="toggle-reading-order"]')
+  await authenticatedPage.click('#reading-order-flowchart-tab')
+  await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
+}
+
 test.describe('Dependency Flowchart', () => {
 test('shows flowchart toggle after creating a dependency', async ({ authenticatedPage }) => {
   await createThread(authenticatedPage, {
@@ -103,11 +109,8 @@ test('renders flowchart with nodes and edges when toggled', async ({ authenticat
       .first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
-    // Toggle flowchart
-    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
+    await openFlowchartView(authenticatedPage)
 
-    // Flowchart should render
-    await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
     await expect(authenticatedPage.locator('[data-testid="flowchart-controls"]')).toBeVisible()
 
@@ -169,8 +172,7 @@ test('flowchart zoom controls work', async ({ authenticatedPage }) => {
       .filter({ hasText: 'Zoom Target' })
       .first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
-
+    await openFlowchartView(authenticatedPage)
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
 
     // Get initial transform
@@ -227,8 +229,7 @@ test('flowchart shows tooltip on node hover', async ({ authenticatedPage }) => {
       .filter({ hasText: 'Hover Target Thread' })
       .first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
-
+    await openFlowchartView(authenticatedPage)
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
 
     // Hover over a node
@@ -278,8 +279,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       .filter({ hasText: 'Blocked Thread FC' })
       .first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
-
+    await openFlowchartView(authenticatedPage)
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
 
     // The blocked node should have the blocked class
@@ -326,9 +326,8 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       .first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
-    // Toggle on
-    await authenticatedPage.click('[data-testid="toggle-reading-order"]')
-    await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
+    // Toggle on and switch to graph view
+    await openFlowchartView(authenticatedPage)
 
     // Toggle off
     await authenticatedPage.click('[data-testid="toggle-reading-order"]')
@@ -422,14 +421,10 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       // Wait for toggle button to appear
       await authenticatedPage.waitForSelector('[data-testid="toggle-reading-order"]', { state: 'visible', timeout: 10000 })
 
-      // Click the toggle button
-      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
+      await openFlowchartView(authenticatedPage)
 
       // Wait for toggle button text to change to "Hide Flowchart"
       await authenticatedPage.waitForSelector('[data-testid="toggle-reading-order"]:has-text("Hide Reading Order")', { timeout: 5000 })
-
-      // Wait for flowchart container to appear
-      await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
 
       // Should have issue nodes (using negative IDs)
       await expect(
@@ -530,9 +525,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .filter({ hasText: 'Animal Man' })
         .first()
       await animalManCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
-
-      await expect(authenticatedPage.locator('[data-testid="flowchart-container"]')).toBeVisible()
+      await openFlowchartView(authenticatedPage)
 
       // Should have 4 distinct issue nodes visible
       await expect(authenticatedPage.locator(`[data-testid="flowchart-node--${issue17Id}"]`)).toBeVisible()
@@ -615,7 +608,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .filter({ hasText: 'Target Series' })
         .first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
+      await openFlowchartView(authenticatedPage)
 
       // Check issue node styling
       const issueNode = authenticatedPage.locator(`[data-testid="flowchart-node--${issue5Id}"]`)
@@ -688,7 +681,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .filter({ hasText: 'Blocked Target' })
         .first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
+      await openFlowchartView(authenticatedPage)
 
       // Issue node should not have lock icon
       const issueNodeIcon = authenticatedPage
@@ -764,7 +757,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .filter({ hasText: 'Edge Target' })
         .first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
+      await openFlowchartView(authenticatedPage)
 
       // Check that issue-level edge has the dashed cyan class
       const issueEdge = authenticatedPage.locator('.edge--issue-level')
@@ -858,7 +851,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .filter({ hasText: 'Thread Beta' })
         .first()
       await betaCard.locator('button[aria-label="Manage dependencies"]').click()
-      await authenticatedPage.click('[data-testid="toggle-reading-order"]')
+      await openFlowchartView(authenticatedPage)
 
       // Should have both thread nodes
       await expect(
