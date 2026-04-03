@@ -19,6 +19,12 @@ export default function Modal({
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
+
+  // Keep onCloseRef up to date without causing effect re-runs
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
 
   useEffect(() => {
     if (!isOpen) return
@@ -36,7 +42,7 @@ export default function Modal({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose()
+        onCloseRef.current()
         return
       }
 
@@ -56,13 +62,20 @@ export default function Modal({
     }
 
     document.addEventListener('keydown', handleKeyDown)
-    firstElement?.focus()
+
+    // Focus the first input/textarea/select element, or fall back to the first focusable element
+    const focusableArray = Array.from(focusableElements)
+    const firstInput = focusableArray.find(
+      el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
+    )
+    const targetElement = firstInput || firstElement
+    targetElement?.focus()
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       previousFocusRef.current?.focus()
     }
-  }, [isOpen, onClose])
+  }, [isOpen])
 
   if (!isOpen) return null
 
