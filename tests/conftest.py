@@ -625,6 +625,8 @@ async def auth_client(
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:
+            # app/api/admin.py still hardcodes user_id=1 for import/export paths,
+            # so the authenticated test user must match that contract for now.
             user = User(id=1, username=test_username, created_at=datetime.now(UTC))
             async_db.add(user)
             try:
