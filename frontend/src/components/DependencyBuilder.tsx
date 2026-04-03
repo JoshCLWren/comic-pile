@@ -563,7 +563,6 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setIsGraphLoading(true)
     try {
       await loadFlowchartData()
-      await loadFlowchartData()
     } finally {
       setIsGraphLoading(false)
     }
@@ -571,16 +570,9 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
   async function handleToggleReadingOrder() {
     const willShowReadingOrder = !showReadingOrder
-    setShowReadingOrder((prev) => {
-      const next = !prev
-      if (next) {
-        setReadingView('graph')
-      } else {
-        setReadingView('timeline')
-      }
-      return next
-    })
-    if (willShowReadingOrder && readingView !== 'graph') {
+    setShowReadingOrder(willShowReadingOrder)
+    setReadingView('timeline')
+    if (willShowReadingOrder) {
       await refreshGraphData()
     }
   }

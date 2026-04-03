@@ -308,4 +308,5 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - Branch from `main`: `git checkout -b phase/X-description`
 - Commit messages: imperative, component-scoped (e.g., "Add thread creation API endpoint")
 - Run `make lint` and `make pytest` before committing
+- Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
 - **Update `docs/changelog.md`** when deploying changes to production (add new dated entry, group by feature area, describe what changed not how)
