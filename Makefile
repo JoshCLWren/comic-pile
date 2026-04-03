@@ -293,6 +293,8 @@ deploy-prod:  ## Deploy to Railway production
 		echo "Rebase/merge and push before deploy to ensure deterministic release."; \
 		exit 1; \
 	fi
+	@echo "Running frontend TypeScript typecheck..."
+	@cd frontend && npm run typecheck
 	@echo "Deploying to Railway..."
 	@railway up --detach
 	@sleep 60
