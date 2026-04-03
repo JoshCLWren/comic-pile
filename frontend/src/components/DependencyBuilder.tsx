@@ -563,7 +563,6 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setIsGraphLoading(true)
     try {
       await loadFlowchartData()
-      await loadFlowchartData()
     } finally {
       setIsGraphLoading(false)
     }
