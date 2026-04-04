@@ -84,8 +84,6 @@ async def thread_to_response(
         reading_progress=reading_progress,
         next_unread_issue_id=next_unread_issue_id,
         next_unread_issue_number=next_unread_issue_number,
-        blocked_by_thread_ids=thread.blocked_by_thread_ids or [],
-        blocked_by_issue_ids=thread.blocked_by_issue_ids or [],
         blocking_reasons=[],
     )
 
