@@ -2,6 +2,8 @@ import { useRef, useEffect, useLayoutEffect } from 'react'
 import * as THREE from 'three'
 import { buildD10Faces } from './d10Geometry'
 import { getDiceRenderConfigForSides } from './diceRenderConfig'
+import type { Dice3DProps, DiceRenderGlobalConfig, DiceSide } from './diceTypes'
+import { isDiceSide } from './diceTypes'
 
 type Vector3Tuple = [number, number, number]
 type Vector2Tuple = [number, number]
@@ -13,29 +15,13 @@ type NormalizedUvPoint = { uNorm: number; vNorm: number }
 type TextureTileUv = { u0: number; v0: number; u1: number; v1: number }
 type ProjectedOffset = { x: number; y: number }
 type FaceRotation = { x: number; y: number; z: number }
-type DiceSide = 4 | 6 | 8 | 10 | 12 | 20
 type DiceTextureAtlas = ReturnType<typeof createTextureAtlas>
-type DiceRenderConfig = ReturnType<typeof getDiceRenderConfigForSides>
+type ResolvedDiceConfig = DiceRenderGlobalConfig
 type NumberNormals = Map<number, THREE.Vector3>
-
-interface Dice3DProps {
-  sides?: number
-  value?: number
-  isRolling?: boolean
-  freeze?: boolean
-  lockMotion?: boolean
-  color?: number
-  onRollComplete?: (() => void) | null
-  renderConfig?: Parameters<typeof getDiceRenderConfigForSides>[1]
-}
 
 function normalize(v: Vector3Tuple): Vector3Tuple {
   const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
   return [v[0] / len, v[1] / len, v[2] / len];
-}
-
-function isDiceSide(value: number): value is DiceSide {
-  return value === 4 || value === 6 || value === 8 || value === 10 || value === 12 || value === 20
 }
 
 function addTriangle(
@@ -59,7 +45,7 @@ function addTriangle(
   inds.push(idx, idx + 1, idx + 2)
 }
 
-function createTextureAtlas(maxNumber: number, renderConfig: DiceRenderConfig) {
+function createTextureAtlas(maxNumber: number, renderConfig: ResolvedDiceConfig) {
   const {
     tileSize,
     uvInset,

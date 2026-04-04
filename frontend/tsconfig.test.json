@@ -7,8 +7,7 @@
     "src/unit",
     "src/test",
     "src/test/**/*.ts",
-    "src/test/**/*.tsx",
-    "src/components/three-shim.d.ts"
+    "src/test/**/*.tsx"
   ],
   "exclude": []
 }

@@ -192,7 +192,7 @@ const handleMigrationClose = useCallback(() => {
   setThreadToMigrate(null)
 }, [setShowMigrationDialog, setThreadToMigrate])
 
-  const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
+const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
     if (!activeRatingThread) return
     setShowSimpleMigration(false)
     rateMutation.mutate({
@@ -204,14 +204,14 @@ const handleMigrationClose = useCallback(() => {
       suppressPendingAutoOpenRef.current = true
       setIsRolling(false)
       setIsRatingView(false)
-    setRolledResult(null)
-    setSelectedThreadId(null)
-    setActiveRatingThread(null)
-    setErrorMessage('')
-    Promise.allSettled([refetchSession(), refetchThreads()])
-  }).catch((error: unknown) => {
-    setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
-  })
+      setRolledResult(null)
+      setSelectedThreadId(null)
+      setActiveRatingThread(null)
+      setErrorMessage('')
+      Promise.allSettled([refetchSession(), refetchThreads()])
+    }).catch((error: unknown) => {
+      setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
+    })
   }, [activeRatingThread, rating, rateMutation, refetchSession, refetchThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
