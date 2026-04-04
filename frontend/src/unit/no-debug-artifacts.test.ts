@@ -11,8 +11,8 @@ const DEBUG_PATTERNS = [
   { pattern: '[roll-debug]', label: 'debug console label' },
 ]
 
-function collectSourceFiles(dir) {
-  const files = []
+function collectSourceFiles(dir: string): string[] {
+  const files: string[] = []
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry)
     if (statSync(full).isDirectory()) {

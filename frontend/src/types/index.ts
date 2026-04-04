@@ -89,6 +89,28 @@ export interface ThreadUpdatePayload {
   notes?: string | null;
 }
 
+export interface MoveToPositionPayload {
+  id: number;
+  position: number;
+}
+
+export interface RatePayload {
+  thread_id: number;
+  rating: number;
+  issues_read?: number;
+  finish_session?: boolean;
+  issue_number?: string;
+}
+
+export interface OverrideRollPayload {
+  thread_id: number;
+}
+
+export interface UndoPayload {
+  sessionId: number;
+  snapshotId: number;
+}
+
 export interface ReactivateThreadPayload {
   thread_id: number;
   issues_to_add: number;

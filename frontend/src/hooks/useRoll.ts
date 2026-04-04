@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { rollApi } from '../services/api'
+import { getApiErrorDetail } from '../utils/apiError'
+import type { OverrideRollPayload } from '../types'
 
 export function useRoll() {
   const [isPending, setIsPending] = useState(false)
@@ -12,9 +14,10 @@ export function useRoll() {
       const response = await rollApi.roll()
       setIsPending(false)
       return response
-    } catch (error) {
+    } catch (error: unknown) {
       setIsPending(false)
       setIsError(true)
+      console.error('Failed to roll:', getApiErrorDetail(error))
       throw error
     }
   }
@@ -26,14 +29,15 @@ export function useOverrideRoll() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const mutate = async (data) => {
+  const mutate = async (data: OverrideRollPayload) => {
     setIsPending(true)
     setIsError(false)
     try {
       const response = await rollApi.override(data)
       return response
-    } catch (error) {
+    } catch (error: unknown) {
       setIsError(true)
+      console.error('Failed to override roll:', getApiErrorDetail(error))
       throw error
     } finally {
       setIsPending(false)
@@ -52,8 +56,9 @@ export function useDismissPending() {
     setIsError(false)
     try {
       await rollApi.dismissPending()
-    } catch (error) {
+    } catch (error: unknown) {
       setIsError(true)
+      console.error('Failed to dismiss pending roll:', getApiErrorDetail(error))
       throw error
     } finally {
       setIsPending(false)
@@ -67,13 +72,14 @@ export function useSetDie() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
   
-  const mutate = async (die) => {
+  const mutate = async (die: number) => {
     setIsPending(true)
     setIsError(false)
     try {
       await rollApi.setDie(die)
-    } catch (error) {
+    } catch (error: unknown) {
       setIsError(true)
+      console.error('Failed to set die:', getApiErrorDetail(error))
       throw error
     } finally {
       setIsPending(false)
@@ -92,8 +98,9 @@ export function useClearManualDie() {
     setIsError(false)
     try {
       await rollApi.clearManualDie()
-    } catch (error) {
+    } catch (error: unknown) {
       setIsError(true)
+      console.error('Failed to clear manual die:', getApiErrorDetail(error))
       throw error
     } finally {
       setIsPending(false)
@@ -112,8 +119,9 @@ export function useReroll() {
     setIsError(false)
     try {
       await rollApi.reroll()
-    } catch (error) {
+    } catch (error: unknown) {
       setIsError(true)
+      console.error('Failed to reroll:', getApiErrorDetail(error))
       throw error
     } finally {
       setIsPending(false)

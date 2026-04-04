@@ -3,6 +3,7 @@ import {
   DEFAULT_DICE_RENDER_CONFIG,
   getDiceRenderConfigForSides,
 } from '../components/diceRenderConfig'
+import type { DiceRenderConfig } from '../components/diceTypes'
 
 it('returns default config when no overrides are provided', () => {
   const config = getDiceRenderConfigForSides(20)
@@ -19,8 +20,8 @@ it('applies global overrides', () => {
       uvInset: 0.12,
       fontScale: 0.5,
       textOffsetX: 0.07,
-    },
-  })
+    } as Partial<DiceRenderConfig['global']>,
+  } as Partial<DiceRenderConfig>)
 
   expect(config.uvInset).toBe(0.12)
   expect(config.fontScale).toBe(0.5)
@@ -31,13 +32,13 @@ it('applies per-side overrides over global values', () => {
   const config = getDiceRenderConfigForSides(20, {
     global: {
       uvInset: 0.08,
-    },
+    } as Partial<DiceRenderConfig['global']>,
     perSides: {
       '20': {
         uvInset: 0.16,
-      },
+      } as Partial<DiceRenderConfig['global']>,
     },
-  })
+  } as Partial<DiceRenderConfig>)
 
   expect(config.uvInset).toBe(0.16)
 })
@@ -62,8 +63,8 @@ it('clamps invalid values to safe ranges', () => {
       d10UvPadding: -5,
       d10TopOffsetX: 8,
       d10BottomOffsetY: -9,
-    },
-  })
+    } as Partial<DiceRenderConfig['global']>,
+  } as Partial<DiceRenderConfig>)
 
   expect(config.tileSize).toBe(256)
   expect(config.uvInset).toBe(0.25)

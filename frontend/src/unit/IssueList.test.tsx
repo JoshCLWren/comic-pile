@@ -60,26 +60,31 @@ const buildListResponse = (
   next_page_token: nextPageToken,
 })
 
-  const mockThread: Thread = {
-    id: 99,
-    title: 'Test Thread',
-    format: 'Comic',
-    issues_remaining: 10,
-    total_issues: null,
-    reading_progress: null,
-    queue_position: 1,
-    status: 'active',
-    is_blocked: false,
-    blocking_reasons: [],
-    collection_id: null,
-    created_at: '2026-03-08T00:00:00Z',
-    next_unread_issue_id: null,
-  }
+const mockThread: Thread = {
+  id: 99,
+  title: 'Test Thread',
+  format: 'Comic',
+  issues_remaining: 10,
+  total_issues: null,
+  reading_progress: null,
+  queue_position: 1,
+  status: 'active',
+  is_blocked: false,
+  blocking_reasons: [],
+  collection_id: null,
+  created_at: '2026-03-08T00:00:00Z',
+  next_unread_issue_id: null,
+  next_unread_issue_number: null,
+}
 
 describe('IssueList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockedDependenciesApi.getIssueDependencies.mockResolvedValue({ incoming: [], outgoing: [] } as IssueDependenciesResponse)
+    mockedDependenciesApi.getIssueDependencies.mockResolvedValue({
+      issue_id: 99,
+      incoming: [],
+      outgoing: [],
+    } satisfies IssueDependenciesResponse)
   })
 
   it('calls issuesApi.list once on mount', async () => {

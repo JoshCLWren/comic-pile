@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from 'react'
 import { useState } from 'react'
 import LazyDice3D from '../../../components/LazyDice3D'
+import { isDiceSide } from '../../../components/diceTypes'
 import Tooltip from '../../../components/Tooltip'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
@@ -44,6 +45,7 @@ export function RatingView({
   onRefreshThread,
 }: RatingViewProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
+  const previewDie = isDiceSide(currentDie) ? currentDie : 6
 
   return (
     <div className="p-4 space-y-8 relative z-10">
@@ -122,7 +124,7 @@ export function RatingView({
             className="dice-state-rate-flow relative flex items-center justify-center w-[120px] h-[120px] mx-auto"
           >
             <LazyDice3D
-              sides={currentDie}
+              sides={previewDie}
               value={rolledResult || 1}
               isRolling={false}
               showValue={false}

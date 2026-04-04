@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { buildD10Faces, D10_FACE_NUMBERS } from '../components/d10Geometry'
 
-function sub(a, b) {
+type Vector3Tuple = [number, number, number]
+
+function sub(a: Vector3Tuple, b: Vector3Tuple): Vector3Tuple {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
-function cross(a, b) {
+function cross(a: Vector3Tuple, b: Vector3Tuple): Vector3Tuple {
   return [
     a[1] * b[2] - a[2] * b[1],
     a[2] * b[0] - a[0] * b[2],
@@ -13,7 +15,7 @@ function cross(a, b) {
   ]
 }
 
-function dot(a, b) {
+function dot(a: Vector3Tuple, b: Vector3Tuple): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 

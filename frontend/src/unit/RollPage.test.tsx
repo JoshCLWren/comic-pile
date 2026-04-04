@@ -29,7 +29,7 @@ vi.mock('react-router-dom', async () => {
 })
 
 vi.mock('../components/LazyDice3D', () => ({
-  default: ({ sides, value }) => (
+  default: ({ sides, value }: { sides: number; value: number }) => (
     <div data-testid="lazy-dice" data-sides={String(sides)} data-value={String(value)} />
   ),
 }))
@@ -78,6 +78,20 @@ const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
 const mockedUseRate = vi.mocked(useRate) as any
 const mockedUseCollections = vi.mocked(useCollections) as any
+
+type MockThread = {
+  id: number
+  title: string
+  format: string
+  issues_remaining: number
+  queue_position: number
+  status?: string
+  total_issues?: number | null
+  reading_progress?: string | null
+  last_rolled_result?: number | null
+  next_issue_number?: string | null
+  issue_number?: string | null
+}
 
 const baseRollResponse: RollResponse = {
   thread_id: 1,
@@ -703,7 +717,7 @@ describe('Rating View', () => {
 
     const refetchSessionSpy = vi.fn()
     const refetchThreadsSpy = vi.fn()
-    let threadsData = []
+    let threadsData: MockThread[] = []
 
     mockedUseSession.mockImplementation(() => ({
       data: sessionData,
@@ -1073,4 +1087,3 @@ describe('Rating View', () => {
     })
   })
 })
-      

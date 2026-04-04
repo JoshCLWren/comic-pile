@@ -3,6 +3,12 @@
   "compilerOptions": {
     "types": ["vite/client", "vitest/globals", "node"]
   },
-  "include": ["src/unit", "src/test", "src/test/**/*.ts", "src/test/**/*.tsx"],
+  "include": [
+    "src/unit",
+    "src/test",
+    "src/test/**/*.ts",
+    "src/test/**/*.tsx",
+    "src/components/three-shim.d.ts"
+  ],
   "exclude": []
 }

@@ -932,7 +932,7 @@ export default function QueuePage() {
         )}
       </Modal>
 
-      <Modal isOpen={isActionSheetOpen} title={selectedThread?.title} onClose={() => setIsActionSheetOpen(false)}>
+      <Modal isOpen={isActionSheetOpen} title={selectedThread?.title ?? ''} onClose={() => setIsActionSheetOpen(false)}>
         <div className="space-y-2">
           <button
             type="button"
