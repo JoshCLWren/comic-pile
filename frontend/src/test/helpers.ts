@@ -17,6 +17,27 @@ type TestUser = {
   accessToken?: string;
 };
 
+export function expectDefined<T>(value: T | null | undefined, message?: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(message ?? 'Expected value to be defined')
+  }
+  return value
+}
+
+export function findByTitle<T extends { title: string }>(items: readonly T[], title: string): T {
+  return expectDefined(items.find((item) => item.title === title), `Expected item with title ${title}`)
+}
+
+export function findByIssueNumber<T extends { issue_number: string; id: number }>(
+  items: readonly T[],
+  issueNumber: string,
+): T {
+  return expectDefined(
+    items.find((item) => item.issue_number === issueNumber),
+    `Expected item with issue_number ${issueNumber}`,
+  )
+}
+
 let userIdCounter = 0;
 
 export function generateTestUser(): TestUser {
@@ -59,18 +80,20 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
   });
 
   expect(response.ok()).toBeTruthy();
-  const data = await response.json();
-  user.accessToken = data.access_token;
+  const data = (await response.json()) as { access_token: string }
+  user.accessToken = data.access_token
 
-  await page.evaluate((token: string) => {
+  await page.evaluate((token: string | null | undefined) => {
+    if (!token) return
     localStorage.setItem('auth_token', token);
     (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN = token;
-  }, user.accessToken);
+  }, user.accessToken ?? null);
 
-  await page.addInitScript((token: string) => {
+  await page.addInitScript((token: string | null | undefined) => {
+    if (!token) return
     localStorage.setItem('auth_token', token);
     (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN = token;
-  }, user.accessToken);
+  }, user.accessToken ?? null);
 
   return user.accessToken;
 }
