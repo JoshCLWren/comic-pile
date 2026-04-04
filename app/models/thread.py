@@ -10,7 +10,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
 )
@@ -42,9 +41,6 @@ class Thread(Base):
         ForeignKey("issues.id", ondelete="SET NULL"), nullable=True
     )
     reading_progress: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    # Dependency tracking fields (for Phase 3)
-    blocked_by_thread_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
-    blocked_by_issue_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
     queue_position: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="active")
     last_rating: Mapped[float | None] = mapped_column(Float, nullable=True)

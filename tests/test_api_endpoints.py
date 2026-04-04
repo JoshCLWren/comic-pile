@@ -104,6 +104,8 @@ async def test_get_thread(auth_client: AsyncClient, sample_data: dict) -> None:
     assert thread["issues_remaining"] == 10
     assert thread["queue_position"] == 1
     assert thread["status"] == "active"
+    assert "blocked_by_thread_ids" not in thread
+    assert "blocked_by_issue_ids" not in thread
 
 
 @pytest.mark.asyncio

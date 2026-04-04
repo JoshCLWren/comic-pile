@@ -51,8 +51,6 @@ class ThreadResponse(BaseModel):
     reading_progress: str | None = None
     next_unread_issue_id: int | None = None
     next_unread_issue_number: str | None = None
-    blocked_by_thread_ids: list[int] = []
-    blocked_by_issue_ids: list[int] = []
 
 
 class ReactivateRequest(BaseModel):
