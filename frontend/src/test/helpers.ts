@@ -17,6 +17,15 @@ type TestUser = {
   accessToken?: string;
 };
 
+function isAuthResponse(data: unknown): data is { access_token: string } {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'access_token' in data &&
+    typeof data.access_token === 'string'
+  )
+}
+
 export function expectDefined<T>(value: T | null | undefined, message?: string): T {
   if (value === null || value === undefined) {
     throw new Error(message ?? 'Expected value to be defined')
@@ -80,20 +89,24 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
   });
 
   expect(response.ok()).toBeTruthy();
-  const data = (await response.json()) as { access_token: string }
+  const data: unknown = await response.json()
+  if (!isAuthResponse(data)) {
+    throw new Error(`Unexpected login response shape: ${JSON.stringify(data)}`)
+  }
   user.accessToken = data.access_token
+  if (!user.accessToken) {
+    throw new Error('Login succeeded but no access_token was returned')
+  }
 
-  await page.evaluate((token: string | null | undefined) => {
-    if (!token) return
+  await page.evaluate((token: string) => {
     localStorage.setItem('auth_token', token);
     (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN = token;
-  }, user.accessToken ?? null);
+  }, user.accessToken);
 
-  await page.addInitScript((token: string | null | undefined) => {
-    if (!token) return
+  await page.addInitScript((token: string) => {
     localStorage.setItem('auth_token', token);
     (window as WindowWithAccessToken).__COMIC_PILE_ACCESS_TOKEN = token;
-  }, user.accessToken ?? null);
+  }, user.accessToken);
 
   return user.accessToken;
 }

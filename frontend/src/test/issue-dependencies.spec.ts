@@ -46,8 +46,8 @@ test.describe('Issue Dependency Indicators', () => {
     const targetIssuesResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/v1/threads/${target.id}/issues`);
     const targetIssues = await targetIssuesResponse.json();
 
-    const sourceIssue = sourceIssues.issues[0];
-    const targetIssue = targetIssues.issues[1];
+    const sourceIssue = findByIssueNumber(sourceIssues.issues, '1');
+    const targetIssue = findByIssueNumber(targetIssues.issues, '2');
 
     const createDepResponse = await makeAuthenticatedRequest(authenticatedPage, 'POST', '/api/v1/dependencies/', {
       source_type: 'issue',
