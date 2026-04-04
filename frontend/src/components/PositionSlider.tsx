@@ -1,17 +1,29 @@
 import { useState, useMemo } from 'react'
 
+interface PositionSliderThread {
+  id: number
+  title: string
+  queue_position: number
+}
+
+interface PositionSliderProps {
+  threads: PositionSliderThread[]
+  currentThread: PositionSliderThread
+  onPositionSelect: (position: number) => void
+  onCancel: () => void
+}
+
 /**
  * A visual position slider for repositioning threads in the queue.
  *
- * @param {Object} props - Component props
- * @param {Array} props.threads - Array of all threads with {id, title, queue_position}
- * @param {Object} props.currentThread - The thread being repositioned
- * @param {Function} props.onPositionSelect - Callback when position is confirmed
- * @param {Function} props.onCancel - Callback to close without selecting
- * @returns {JSX.Element} The position slider component
  */
-export default function PositionSlider({ threads, currentThread, onPositionSelect, onCancel }) {
-  const truncate = (text, maxLen = 20) => {
+export default function PositionSlider({
+  threads,
+  currentThread,
+  onPositionSelect,
+  onCancel,
+}: PositionSliderProps) {
+  const truncate = (text: string, maxLen = 20): string => {
     if (text.length <= maxLen) return text
     return text.slice(0, maxLen - 1) + '…'
   }

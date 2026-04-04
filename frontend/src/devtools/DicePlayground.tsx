@@ -6,6 +6,12 @@ import {
   DEFAULT_DICE_RENDER_CONFIG,
   getDiceRenderConfigForSides,
 } from '../components/diceRenderConfig'
+import type {
+  DiceRenderConfig,
+  DiceRenderGlobalConfig,
+  DiceRenderSideConfig,
+  DiceSide,
+} from '../components/diceTypes'
 
 const STORAGE_KEY = 'comic-pile:dice-render-config'
 const FONT_FAMILIES = [
@@ -19,7 +25,7 @@ const FONT_FAMILIES = [
   'Courier New',
   'Monaco',
 ]
-const CONTROL_HELP = {
+const CONTROL_HELP: Record<string, string> = {
   'UV Inset': 'Shrinks UVs inward to reduce tile bleeding at face edges.',
   'Font Scale': 'Scales numeral size within each atlas tile.',
   'Text Offset X': 'Moves numbers left/right inside each tile.',
@@ -40,7 +46,7 @@ const CONTROL_HELP = {
   'Font Family': 'Canvas font family used when drawing numbers.',
 }
 
-function ControlLabel({ label }) {
+function ControlLabel({ label }: { label: string }) {
   const help = CONTROL_HELP[label]
   return (
     <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-slate-300">
@@ -60,12 +66,12 @@ function ControlLabel({ label }) {
   )
 }
 
-function buildValueList(sides) {
+function buildValueList(sides: DiceSide): number[] {
   return Array.from({ length: sides }, (_, idx) => idx + 1)
 }
 
-function cloneConfig(config) {
-  return JSON.parse(JSON.stringify(config))
+function cloneConfig(config: DiceRenderConfig): DiceRenderConfig {
+  return JSON.parse(JSON.stringify(config)) as DiceRenderConfig
 }
 
 function SliderControl({
@@ -78,6 +84,16 @@ function SliderControl({
   testId,
   onInteractionStart,
   onInteractionEnd,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (value: number) => void
+  testId: string
+  onInteractionStart: () => void
+  onInteractionEnd: () => void
 }) {
   return (
     <label className="grid gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
@@ -108,6 +124,13 @@ function ToggleControl({
   testId,
   onInteractionStart,
   onInteractionEnd,
+}: {
+  label: string
+  checked: boolean
+  onChange: (value: boolean) => void
+  testId: string
+  onInteractionStart: () => void
+  onInteractionEnd: () => void
 }) {
   return (
     <label className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
@@ -130,7 +153,21 @@ function ToggleControl({
   )
 }
 
-function ColorControl({ label, value, onChange, testId, onInteractionStart, onInteractionEnd }) {
+function ColorControl({
+  label,
+  value,
+  onChange,
+  testId,
+  onInteractionStart,
+  onInteractionEnd,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  testId: string
+  onInteractionStart: () => void
+  onInteractionEnd: () => void
+}) {
   return (
     <label className="grid gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
       <ControlLabel label={label} />
@@ -161,6 +198,14 @@ function SelectControl({
   testId,
   onInteractionStart,
   onInteractionEnd,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options: string[]
+  testId: string
+  onInteractionStart: () => void
+  onInteractionEnd: () => void
 }) {
   return (
     <label className="grid gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
@@ -187,11 +232,11 @@ function SelectControl({
 }
 
 export default function DicePlayground() {
-  const [sides, setSides] = useState(20)
+  const [sides, setSides] = useState<DiceSide>(20)
   const [value, setValue] = useState(1)
   const [isRolling, setIsRolling] = useState(false)
   const [freeze, setFreeze] = useState(true)
-  const [renderConfig, setRenderConfig] = useState(() => cloneConfig(DEFAULT_DICE_RENDER_CONFIG))
+  const [renderConfig, setRenderConfig] = useState<DiceRenderConfig>(() => cloneConfig(DEFAULT_DICE_RENDER_CONFIG))
   const [jsonDraft, setJsonDraft] = useState(() => JSON.stringify(DEFAULT_DICE_RENDER_CONFIG, null, 2))
   const [statusMessage, setStatusMessage] = useState('')
   const [isTuning, setIsTuning] = useState(false)
@@ -210,17 +255,17 @@ export default function DicePlayground() {
     setIsTuning(false)
   }
 
-  function syncDraft(nextConfig) {
+  function syncDraft(nextConfig: DiceRenderConfig) {
     setRenderConfig(nextConfig)
     setJsonDraft(JSON.stringify(nextConfig, null, 2))
   }
 
-  function handleSidesClick(nextSides) {
+  function handleSidesClick(nextSides: DiceSide) {
     setSides(nextSides)
     setValue(1)
   }
 
-  function updateGlobal(key, nextValue) {
+  function updateGlobal<K extends keyof DiceRenderGlobalConfig>(key: K, nextValue: DiceRenderGlobalConfig[K]) {
     const nextConfig = {
       ...renderConfig,
       global: {
@@ -231,14 +276,13 @@ export default function DicePlayground() {
     syncDraft(nextConfig)
   }
 
-  function updateSideOverride(key, nextValue) {
-    const sideKey = String(sides)
+  function updateSideOverride<K extends keyof DiceRenderSideConfig>(key: K, nextValue: DiceRenderSideConfig[K]) {
     const nextConfig = {
       ...renderConfig,
       perSides: {
         ...renderConfig.perSides,
-        [sideKey]: {
-          ...(renderConfig.perSides?.[sideKey] ?? {}),
+        [sides]: {
+          ...(renderConfig.perSides?.[sides] ?? {}),
           [key]: nextValue,
         },
       },
@@ -247,9 +291,8 @@ export default function DicePlayground() {
   }
 
   function clearSideOverride() {
-    const sideKey = String(sides)
     const nextPerSides = { ...(renderConfig.perSides ?? {}) }
-    delete nextPerSides[sideKey]
+    delete nextPerSides[sides]
     const nextConfig = {
       ...renderConfig,
       perSides: nextPerSides,
@@ -293,9 +336,9 @@ export default function DicePlayground() {
     tryApplyJson(stored)
   }
 
-  function tryApplyJson(rawJson) {
+  function tryApplyJson(rawJson: string) {
     try {
-      const parsed = JSON.parse(rawJson)
+      const parsed: Partial<DiceRenderConfig> = JSON.parse(rawJson)
       const merged = {
         ...cloneConfig(DEFAULT_DICE_RENDER_CONFIG),
         ...(parsed ?? {}),
@@ -324,7 +367,7 @@ export default function DicePlayground() {
     setStatusMessage('Reset to defaults')
   }
 
-  const sideOverride = renderConfig.perSides?.[String(sides)] ?? {}
+  const sideOverride = renderConfig.perSides?.[sides] ?? {}
 
   return (
     <main className="min-h-screen px-4 py-8 text-slate-100">
@@ -391,7 +434,7 @@ export default function DicePlayground() {
                   key={die}
                   type="button"
                   data-testid={`die-button-${die}`}
-                  onClick={() => handleSidesClick(die)}
+                  onClick={() => handleSidesClick(die as DiceSide)}
                   className={`rounded-lg border px-3 py-2 text-sm font-black transition-colors ${
                     die === sides
                       ? 'border-cyan-300 bg-cyan-400/20 text-cyan-100'

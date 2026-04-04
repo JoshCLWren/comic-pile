@@ -1,9 +1,21 @@
-import { createContext, useState } from 'react'
+import { createContext, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import type { SessionCurrent } from '../types'
 
-const SessionContext = createContext(null)
+interface SessionContextValue {
+  currentSession: SessionCurrent | null
+  setCurrentSession: Dispatch<SetStateAction<SessionCurrent | null>>
+  hasRestorePoint: boolean
+  setHasRestorePoint: Dispatch<SetStateAction<boolean>>
+}
 
-export const SessionProvider = ({ children }) => {
-  const [currentSession, setCurrentSession] = useState(null)
+export const SessionContext = createContext<SessionContextValue | null>(null)
+
+interface SessionProviderProps {
+  children: ReactNode
+}
+
+export const SessionProvider = ({ children }: SessionProviderProps) => {
+  const [currentSession, setCurrentSession] = useState<SessionCurrent | null>(null)
   const [hasRestorePoint, setHasRestorePoint] = useState(false)
 
   return (

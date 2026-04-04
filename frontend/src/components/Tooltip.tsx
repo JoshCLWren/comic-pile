@@ -1,14 +1,14 @@
-import { useState } from 'react'
+import { useState, type PropsWithChildren } from 'react'
+
+interface TooltipProps {
+  content: string
+}
 
 /**
  * A tooltip component that displays additional information on hover/focus.
  *
- * @param {Object} props - Component props
- * @param {React.ReactNode} props.children - The element that triggers the tooltip
- * @param {string} props.content - The text content to display in the tooltip
- * @returns {JSX.Element} The tooltip wrapper component
  */
-export default function Tooltip({ children, content }) {
+export default function Tooltip({ children, content }: PropsWithChildren<TooltipProps>) {
   const [isVisible, setIsVisible] = useState(false)
 
   return (
