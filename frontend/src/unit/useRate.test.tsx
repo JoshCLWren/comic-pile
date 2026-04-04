@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useRate } from '../hooks/useRate'
 import { rateApi } from '../services/api'
+import type { RatePayload } from '../types'
 
 vi.mock('../services/api', () => ({
   rateApi: {
@@ -17,10 +18,11 @@ beforeEach(() => {
 
 it('submits ratings', async () => {
   const { result } = renderHook(() => useRate())
+  const payload: RatePayload = { thread_id: 1, rating: 4 }
 
   await act(async () => {
-    await result.current.mutate({ rating: 4 })
+    await result.current.mutate(payload)
   })
 
-  expect(mockedRateApi.rate).toHaveBeenCalledWith({ rating: 4 })
+  expect(mockedRateApi.rate).toHaveBeenCalledWith(payload)
 })

@@ -1,25 +1,51 @@
-import { useRef, useEffect, useLayoutEffect } from 'react';
-import * as THREE from 'three';
-import { buildD10Faces } from './d10Geometry';
-import { getDiceRenderConfigForSides } from './diceRenderConfig';
+import { useRef, useEffect, useLayoutEffect } from 'react'
+import * as THREE from 'three'
+import { buildD10Faces } from './d10Geometry'
+import { getDiceRenderConfigForSides } from './diceRenderConfig'
+import type { Dice3DProps, DiceRenderGlobalConfig, DiceSide } from './diceTypes'
+import { isDiceSide } from './diceTypes'
 
-function normalize(v) {
-  const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+type Vector3Tuple = [number, number, number]
+type Vector2Tuple = [number, number]
+type QuadFace = [Vector3Tuple, Vector3Tuple, Vector3Tuple, Vector3Tuple]
+type FaceProjection = { u: number; v: number }
+type FaceBasis = { uAxis: Vector3Tuple; vAxis: Vector3Tuple }
+type UVBounds = { uMin: number; uMax: number; vMin: number; vMax: number }
+type NormalizedUvPoint = { uNorm: number; vNorm: number }
+type TextureTileUv = { u0: number; v0: number; u1: number; v1: number }
+type ProjectedOffset = { x: number; y: number }
+type FaceRotation = { x: number; y: number; z: number }
+type DiceTextureAtlas = ReturnType<typeof createTextureAtlas>
+type ResolvedDiceConfig = DiceRenderGlobalConfig
+type NumberNormals = Map<number, THREE.Vector3>
+
+function normalize(v: Vector3Tuple): Vector3Tuple {
+  const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
   return [v[0] / len, v[1] / len, v[2] / len];
 }
 
-function addTriangle(verts, uvs, inds, v0, v1, v2, uv0, uv1, uv2) {
-  const idx = verts.length / 3;
+function addTriangle(
+  verts: number[],
+  uvs: number[],
+  inds: number[],
+  v0: Vector3Tuple,
+  v1: Vector3Tuple,
+  v2: Vector3Tuple,
+  uv0: Vector2Tuple,
+  uv1: Vector2Tuple,
+  uv2: Vector2Tuple,
+): void {
+  const idx = verts.length / 3
   verts.push(v0[0], v0[1], v0[2]);
   verts.push(v1[0], v1[1], v1[2]);
   verts.push(v2[0], v2[1], v2[2]);
   uvs.push(uv0[0], uv0[1]);
   uvs.push(uv1[0], uv1[1]);
   uvs.push(uv2[0], uv2[1]);
-  inds.push(idx, idx + 1, idx + 2);
+  inds.push(idx, idx + 1, idx + 2)
 }
 
-function createTextureAtlas(maxNumber, renderConfig) {
+function createTextureAtlas(maxNumber: number, renderConfig: ResolvedDiceConfig) {
   const {
     tileSize,
     uvInset,
@@ -42,13 +68,16 @@ function createTextureAtlas(maxNumber, renderConfig) {
     d10BottomOffsetY,
   } = renderConfig;
 
-  const canvas = document.createElement('canvas');
-  const cols = Math.ceil(Math.sqrt(maxNumber));
-  const rows = Math.ceil(maxNumber / cols);
+  const canvas = document.createElement('canvas')
+  const cols = Math.ceil(Math.sqrt(maxNumber))
+  const rows = Math.ceil(maxNumber / cols)
 
   canvas.width = tileSize * cols;
   canvas.height = tileSize * rows;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('Unable to create 2D canvas context for dice texture atlas')
+  }
 
   ctx.fillStyle = backgroundColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -108,7 +137,7 @@ function createTextureAtlas(maxNumber, renderConfig) {
   };
 }
 
-function getUVForNumber(number, cols, rows, uvInset = 0) {
+function getUVForNumber(number: number, cols: number, rows: number, uvInset = 0): TextureTileUv {
   const col = (number - 1) % cols;
   const row = Math.floor((number - 1) / cols);
   const tileU = 1 / cols;
@@ -123,14 +152,14 @@ function getUVForNumber(number, cols, rows, uvInset = 0) {
   };
 }
 
-function createD4Geometry(atlasInfo) {
+function createD4Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
-  const verts = [];
-  const uvs = [];
-  const inds = [];
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
 
   const scale = 1 / Math.sqrt(3);
-  const v = [
+  const v: Vector3Tuple[] = [
     [scale, scale, scale],
     [scale, -scale, -scale],
     [-scale, scale, -scale],
@@ -173,14 +202,14 @@ function createD4Geometry(atlasInfo) {
   return geometry;
 }
 
-function createD6Geometry(atlasInfo) {
+function createD6Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset } = atlasInfo;
-  const verts = [];
-  const uvs = [];
-  const inds = [];
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
   const s = 0.9;
 
-  const corners = [
+  const corners: Vector3Tuple[] = [
     [-s, -s, -s],
     [s, -s, -s],
     [s, s, -s],
@@ -226,14 +255,14 @@ function createD6Geometry(atlasInfo) {
   return geometry;
 }
 
-function createD8Geometry(atlasInfo) {
+function createD8Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
-  const verts = [];
-  const uvs = [];
-  const inds = [];
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
   const a = 1.0;
 
-  const v = [
+  const v: Vector3Tuple[] = [
     [0, a, 0],
     [0, -a, 0],
     [a, 0, 0],
@@ -272,7 +301,7 @@ function createD8Geometry(atlasInfo) {
   return geometry;
 }
 
-function createD10Geometry(atlasInfo) {
+function createD10Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const {
     cols,
     rows,
@@ -284,13 +313,13 @@ function createD10Geometry(atlasInfo) {
     d10BottomOffsetX,
     d10BottomOffsetY,
   } = atlasInfo;
-  const verts = [];
-  const uvs = [];
-  const inds = [];
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
 
   const { faces, faceNumbers } = buildD10Faces();
 
-  function calculateFaceCenter(quad) {
+  function calculateFaceCenter(quad: QuadFace): Vector3Tuple {
     const [a, b, c, d] = quad;
     const cx = (a[0] + b[0] + c[0] + d[0]) / 4;
     const cy = (a[1] + b[1] + c[1] + d[1]) / 4;
@@ -298,7 +327,7 @@ function createD10Geometry(atlasInfo) {
     return [cx, cy, cz];
   }
 
-  function calculateFaceNormal(a, b, c) {
+  function calculateFaceNormal(a: Vector3Tuple, b: Vector3Tuple, c: Vector3Tuple): Vector3Tuple {
     const v1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const v2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
     const normal = [
@@ -310,7 +339,7 @@ function createD10Geometry(atlasInfo) {
     return [normal[0] / len, normal[1] / len, normal[2] / len];
   }
 
-  function ensureOutwardQuad(quad) {
+  function ensureOutwardQuad(quad: QuadFace): QuadFace {
     const center = calculateFaceCenter(quad);
     const [a, b, c, d] = quad;
     const normal = calculateFaceNormal(a, b, c);
@@ -321,8 +350,8 @@ function createD10Geometry(atlasInfo) {
     return [a, d, c, b];
   }
 
-  function calculateFaceBasis(normal) {
-    let arb = [1, 0, 0];
+  function calculateFaceBasis(normal: Vector3Tuple): FaceBasis {
+    let arb: Vector3Tuple = [1, 0, 0]
     if (Math.abs(normal[0]) > 0.9) {
       arb = [0, 1, 0];
     }
@@ -331,12 +360,12 @@ function createD10Geometry(atlasInfo) {
       normal[2] * arb[0] - normal[0] * arb[2],
       normal[0] * arb[1] - normal[1] * arb[0]
     ];
-    const uAxis = [
+    const uAxis: Vector3Tuple = [
       normal[1] * cross[2] - normal[2] * cross[1],
       normal[2] * cross[0] - normal[0] * cross[2],
       normal[0] * cross[1] - normal[1] * cross[0]
     ];
-    const vAxis = [
+    const vAxis: Vector3Tuple = [
       normal[1] * uAxis[2] - normal[2] * uAxis[1],
       normal[2] * uAxis[0] - normal[0] * uAxis[2],
       normal[0] * uAxis[1] - normal[1] * uAxis[0]
@@ -344,7 +373,12 @@ function createD10Geometry(atlasInfo) {
     return { uAxis, vAxis };
   }
 
-  function projectVertexToPlane(vertex, center, uAxis, vAxis) {
+  function projectVertexToPlane(
+    vertex: Vector3Tuple,
+    center: Vector3Tuple,
+    uAxis: Vector3Tuple,
+    vAxis: Vector3Tuple,
+  ): FaceProjection {
     const vx = vertex[0] - center[0];
     const vy = vertex[1] - center[1];
     const vz = vertex[2] - center[2];
@@ -353,7 +387,12 @@ function createD10Geometry(atlasInfo) {
     return { u, v };
   }
 
-  function calculateUVBounds(projA, projB, projC, projD) {
+  function calculateUVBounds(
+    projA: FaceProjection,
+    projB: FaceProjection,
+    projC: FaceProjection,
+    projD: FaceProjection,
+  ): UVBounds {
     const uMin = Math.min(projA.u, projB.u, projC.u, projD.u);
     const uMax = Math.max(projA.u, projB.u, projC.u, projD.u);
     const vMin = Math.min(projA.v, projB.v, projC.v, projD.v);
@@ -361,7 +400,7 @@ function createD10Geometry(atlasInfo) {
     return { uMin, uMax, vMin, vMax };
   }
 
-  function normalizeToBounds(u, v, bounds) {
+  function normalizeToBounds(u: number, v: number, bounds: UVBounds): NormalizedUvPoint {
     const { uMin, uMax, vMin, vMax } = bounds;
     return {
       uNorm: uMax > uMin ? (u - uMin) / (uMax - uMin) : 0.5,
@@ -369,11 +408,16 @@ function createD10Geometry(atlasInfo) {
     };
   }
 
-  function clamp01(value) {
+  function clamp01(value: number): number {
     return Math.max(0, Math.min(1, value));
   }
 
-  function mapToTextureTile(uNorm, vNorm, tileUv, tilePadding) {
+  function mapToTextureTile(
+    uNorm: number,
+    vNorm: number,
+    tileUv: TextureTileUv,
+    tilePadding: number,
+  ): { u: number; v: number } {
     return {
       u: tileUv.u0 + (tilePadding + uNorm * (1 - tilePadding * 2)) * (tileUv.u1 - tileUv.u0),
       v: tileUv.v0 + (tilePadding + vNorm * (1 - tilePadding * 2)) * (tileUv.v1 - tileUv.v0)
@@ -440,18 +484,18 @@ function createD10Geometry(atlasInfo) {
   return geometry;
 }
 
-function createD12Geometry(atlasInfo) {
+function createD12Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset, d12UvRadius } = atlasInfo;
-  const verts = [];
-  const uvs = [];
-  const inds = [];
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
 
   const phi = (1 + Math.sqrt(5)) / 2;
   const a = 1 / Math.sqrt(3);
   const b = a / phi;
   const c = a * phi;
 
-  const v = [
+  const v: Vector3Tuple[] = [
     [a, a, a],
     [a, a, -a],
     [a, -a, a],
@@ -497,7 +541,7 @@ function createD12Geometry(atlasInfo) {
     const rx = (uv.u1 - uv.u0) * d12UvRadius;
     const ry = (uv.v1 - uv.v0) * d12UvRadius;
 
-    const center = [0, 0, 0];
+    const center: Vector3Tuple = [0, 0, 0]
     for (let j = 0; j < 5; j++) {
       center[0] += v[f[j]][0];
       center[1] += v[f[j]][1];
@@ -533,16 +577,16 @@ function createD12Geometry(atlasInfo) {
   return geometry;
 }
 
-function createD20Geometry(atlasInfo) {
+function createD20Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
-  const verts = [];
-  const uvs = [];
-  const inds = [];
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
 
   const t = (1 + Math.sqrt(5)) / 2;
   const s = 1.0;
 
-  const v = [
+  const v: Vector3Tuple[] = [
     normalize([-s, t * s, 0]),
     normalize([s, t * s, 0]),
     normalize([-s, -t * s, 0]),
@@ -599,7 +643,7 @@ function createD20Geometry(atlasInfo) {
   return geometry;
 }
 
-function buildGeometry(sides, atlasInfo) {
+function buildGeometry(sides: number, atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   switch (sides) {
     case 4:
       return createD4Geometry(atlasInfo);
@@ -618,18 +662,22 @@ function buildGeometry(sides, atlasInfo) {
   }
 }
 
-function getNumberFromUv(u, v, cols, rows) {
+function getNumberFromUv(u: number, v: number, cols: number, rows: number): number {
   const col = Math.max(0, Math.min(cols - 1, Math.floor(u * cols)))
   const row = Math.max(0, Math.min(rows - 1, Math.floor((1 - v) * rows)))
   return row * cols + col + 1
 }
 
-function buildNumberNormals(geometry, cols, rows) {
+function buildNumberNormals(
+  geometry: THREE.BufferGeometry,
+  cols: number,
+  rows: number,
+): NumberNormals {
   const position = geometry.getAttribute('position')
   const uv = geometry.getAttribute('uv')
   const index = geometry.getIndex()
-  const normals = new Map()
-  const counts = new Map()
+  const normals = new Map<number, THREE.Vector3>()
+  const counts = new Map<number, number>()
 
   const triangleCount = index ? index.count / 3 : position.count / 3
 
@@ -663,13 +711,13 @@ function buildNumberNormals(geometry, cols, rows) {
   }
 
   for (const [number, normal] of normals.entries()) {
-    normal.divideScalar(counts.get(number)).normalize()
+    normal.divideScalar(counts.get(number) ?? 1).normalize()
   }
 
   return normals
 }
 
-function getFaceRotation(value, normalMap) {
+function getFaceRotation(value: number, normalMap: NumberNormals | null): FaceRotation {
   const normal = normalMap?.get(value)
   if (!normal) {
     return { x: 0, y: 0, z: 0 }
@@ -681,7 +729,12 @@ function getFaceRotation(value, normalMap) {
   return { x: euler.x, y: euler.y, z: euler.z }
 }
 
-function getProjectedCenterOffsetPx(mesh, camera, width, height) {
+function getProjectedCenterOffsetPx(
+  mesh: THREE.Mesh,
+  camera: THREE.PerspectiveCamera,
+  width: number,
+  height: number,
+): ProjectedOffset {
   try {
     const worldBox = new THREE.Box3().setFromObject(mesh);
     if (worldBox.isEmpty()) {
@@ -730,7 +783,7 @@ function getProjectedCenterOffsetPx(mesh, camera, width, height) {
   }
 }
 
-function lerp(start, end, alpha) {
+function lerp(start: number, end: number, alpha: number): number {
   return start + (end - start) * alpha;
 }
 
@@ -743,19 +796,19 @@ export default function Dice3D({
   color = 0xffffff,
   onRollComplete = null,
   renderConfig = null,
-}) {
-  const containerRef = useRef(null);
-  const sceneRef = useRef(null);
-  const cameraRef = useRef(null);
-  const rendererRef = useRef(null);
-  const meshRef = useRef(null);
-  const targetRotationRef = useRef(null);
-  const numberNormalsRef = useRef(null);
-  const previousSidesRef = useRef(sides);
-  const opticalOffsetRef = useRef({ x: 0, y: 0 });
-  const viewportSizeRef = useRef({ w: 200, h: 200 });
-  const isRollingRef = useRef(isRolling);
-  const onRollCompleteRef = useRef(onRollComplete);
+}: Dice3DProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const sceneRef = useRef<THREE.Scene | null>(null)
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
+  const meshRef = useRef<THREE.Mesh | null>(null)
+  const targetRotationRef = useRef<FaceRotation | null>(null)
+  const numberNormalsRef = useRef<NumberNormals | null>(null)
+  const previousSidesRef = useRef<number>(sides)
+  const opticalOffsetRef = useRef<ProjectedOffset>({ x: 0, y: 0 })
+  const viewportSizeRef = useRef({ w: 200, h: 200 })
+  const isRollingRef = useRef<boolean>(isRolling)
+  const onRollCompleteRef = useRef<(() => void) | null>(onRollComplete)
   isRollingRef.current = isRolling;
   onRollCompleteRef.current = onRollComplete;
 
@@ -833,7 +886,8 @@ export default function Dice3D({
       }
     }
 
-    const resolvedConfig = getDiceRenderConfigForSides(sides, renderConfig);
+    const resolvedSides: DiceSide = isDiceSide(sides) ? sides : 6
+    const resolvedConfig = getDiceRenderConfigForSides(resolvedSides, renderConfig);
     const atlasInfo = createTextureAtlas(sides, resolvedConfig);
     const geometry = buildGeometry(sides, atlasInfo);
     numberNormalsRef.current = buildNumberNormals(geometry, atlasInfo.cols, atlasInfo.rows)
@@ -853,7 +907,7 @@ export default function Dice3D({
   }, [sides, color, renderConfig]);
 
   useEffect(() => {
-    let animationFrameId;
+    let animationFrameId: number | null = null
 
     const animate = () => {
       if (!meshRef.current) {
@@ -918,7 +972,7 @@ export default function Dice3D({
     animate();
 
     return () => {
-      if (animationFrameId) {
+      if (animationFrameId !== null) {
         cancelAnimationFrame(animationFrameId);
       }
       if (rendererRef.current?.domElement) {

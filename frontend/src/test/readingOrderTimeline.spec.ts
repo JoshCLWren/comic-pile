@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures'
-import { createThread, extractThreadsFromResponse } from './helpers'
+import { createThread, extractThreadsFromResponse, findByTitle, findByIssueNumber } from './helpers'
 
 test.describe('Reading Order Timeline', () => {
   test('displays grouped gates and tabs', async ({ authenticatedPage }) => {
@@ -17,14 +17,14 @@ test.describe('Reading Order Timeline', () => {
      const threadsRes = await page.request.get('/api/threads/', { headers: { Authorization: `Bearer ${token}` } })
      const threadsResponse = await threadsRes.json()
      const threads = extractThreadsFromResponse(threadsResponse)
-     const sourceA = threads.find((t: any) => t.title === 'Source A')
-     const sourceB = threads.find((t: any) => t.title === 'Source B')
-     const target = threads.find((t: any) => t.title === 'Target')
+     const sourceA = findByTitle(threads, 'Source A')
+     const sourceB = findByTitle(threads, 'Source B')
+     const target = findByTitle(threads, 'Target')
 
     // Get target issue #6
     const targetIssuesRes = await page.request.get(`/api/v1/threads/${target.id}/issues`, { headers: { Authorization: `Bearer ${token}` } })
     const targetIssues = await targetIssuesRes.json()
-    const targetIssue6 = targetIssues.issues.find((i: any) => i.issue_number === '6')
+    const targetIssue6 = findByIssueNumber(targetIssues.issues, '6')
 
     // Get source issues #1
     const [sourceAIssuesRes, sourceBIssuesRes] = await Promise.all([
@@ -33,8 +33,8 @@ test.describe('Reading Order Timeline', () => {
     ])
     const sourceAIssues = await sourceAIssuesRes.json()
     const sourceBIssues = await sourceBIssuesRes.json()
-    const sourceA1 = sourceAIssues.issues.find((i: any) => i.issue_number === '1')
-    const sourceB1 = sourceBIssues.issues.find((i: any) => i.issue_number === '1')
+    const sourceA1 = findByIssueNumber(sourceAIssues.issues, '1')
+    const sourceB1 = findByIssueNumber(sourceBIssues.issues, '1')
 
     // Create dependencies: both block target #6
     await page.request.post('/api/v1/dependencies/', {

@@ -17,6 +17,10 @@ export default function AnalyticsPage() {
     )
   }
 
+  if (!metrics) {
+    return <LoadingSpinner fullScreen message="Loading analytics..." />
+  }
+
   return (
     <div className="space-y-6 pb-10">
       <header className="flex justify-between items-center px-2">

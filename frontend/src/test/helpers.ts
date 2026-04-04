@@ -17,6 +17,36 @@ type TestUser = {
   accessToken?: string;
 };
 
+function isAuthResponse(data: unknown): data is { access_token: string } {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'access_token' in data &&
+    typeof data.access_token === 'string'
+  )
+}
+
+export function expectDefined<T>(value: T | null | undefined, message?: string): T {
+  if (value === null || value === undefined) {
+    throw new Error(message ?? 'Expected value to be defined')
+  }
+  return value
+}
+
+export function findByTitle<T extends { title: string }>(items: readonly T[], title: string): T {
+  return expectDefined(items.find((item) => item.title === title), `Expected item with title ${title}`)
+}
+
+export function findByIssueNumber<T extends { issue_number: string; id: number }>(
+  items: readonly T[],
+  issueNumber: string,
+): T {
+  return expectDefined(
+    items.find((item) => item.issue_number === issueNumber),
+    `Expected item with issue_number ${issueNumber}`,
+  )
+}
+
 let userIdCounter = 0;
 
 export function generateTestUser(): TestUser {
@@ -59,8 +89,14 @@ export async function loginUser(page: Page, user: TestUser): Promise<string> {
   });
 
   expect(response.ok()).toBeTruthy();
-  const data = await response.json();
-  user.accessToken = data.access_token;
+  const data: unknown = await response.json()
+  if (!isAuthResponse(data)) {
+    throw new Error(`Unexpected login response shape: ${JSON.stringify(data)}`)
+  }
+  user.accessToken = data.access_token
+  if (!user.accessToken) {
+    throw new Error('Login succeeded but no access_token was returned')
+  }
 
   await page.evaluate((token: string) => {
     localStorage.setItem('auth_token', token);

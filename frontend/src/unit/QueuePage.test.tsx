@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
@@ -50,7 +51,7 @@ vi.mock('../services/api', () => ({
 }))
 
 vi.mock('../contexts/CollectionContext', () => ({
-  CollectionProvider: ({ children }) => children,
+  CollectionProvider: ({ children }: { children: ReactNode }) => children,
   useCollections: vi.fn().mockReturnValue({
     collections: [],
     activeCollectionId: null,
@@ -66,7 +67,7 @@ vi.mock('../contexts/CollectionContext', () => ({
 
 vi.mock('../contexts/ToastContext', () => ({
   useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
-  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+  ToastProvider: ({ children }: { children: ReactNode }) => children,
 }))
 
 const mockedUseThreads = vi.mocked(useThreads) as any

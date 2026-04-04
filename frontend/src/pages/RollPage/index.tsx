@@ -24,6 +24,7 @@ import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
+import { isDiceSide } from '../../components/diceTypes'
 import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
@@ -192,20 +193,26 @@ const handleMigrationClose = useCallback(() => {
 }, [setShowMigrationDialog, setThreadToMigrate])
 
 const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
-  setShowSimpleMigration(false)
-  rateMutation.mutate({ rating, finish_session: false, issue_number: issueNumber }).then(() => {
-    suppressPendingAutoOpenRef.current = true
-    setIsRolling(false)
-    setIsRatingView(false)
-    setRolledResult(null)
-    setSelectedThreadId(null)
-    setActiveRatingThread(null)
-    setErrorMessage('')
-    Promise.allSettled([refetchSession(), refetchThreads()])
-  }).catch((error: unknown) => {
-    setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
-  })
-}, [rating, rateMutation, refetchSession, refetchThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+    if (!activeRatingThread) return
+    setShowSimpleMigration(false)
+    rateMutation.mutate({
+      thread_id: activeRatingThread.id,
+      rating,
+      finish_session: false,
+      issue_number: issueNumber,
+    }).then(() => {
+      suppressPendingAutoOpenRef.current = true
+      setIsRolling(false)
+      setIsRatingView(false)
+      setRolledResult(null)
+      setSelectedThreadId(null)
+      setActiveRatingThread(null)
+      setErrorMessage('')
+      Promise.allSettled([refetchSession(), refetchThreads()])
+    }).catch((error: unknown) => {
+      setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
+    })
+  }, [activeRatingThread, rating, rateMutation, refetchSession, refetchThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
     if (!selectedThread) return
@@ -264,6 +271,7 @@ case 'read': {
   const snoozedIds = useMemo(() => new Set(session?.snoozed_threads?.map((t) => t.id) ?? []), [session?.snoozed_threads])
   const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked && !snoozedIds.has(t.id)) ?? [], [threads, snoozedIds])
   const blockedThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && t.is_blocked) ?? [], [threads])
+  const displayDie = isDiceSide(currentDie) ? currentDie : 6
 
 useEffect(() => {
   const fetchBlockingReasons = async () => {
@@ -304,7 +312,7 @@ useEffect(() => {
 
     const pendingFromSession = session?.active_thread && session.active_thread.id === pendingId
       ? { id: session.active_thread.id, title: session.active_thread.title, format: session.active_thread.format,
-          issues_remaining: session.active_thread.issues_remaining, queue_position: session.active_thread.queue_position,
+          issues_remaining: session.active_thread.issues_remaining ?? 0, queue_position: session.active_thread.queue_position ?? 0,
           total_issues: session.active_thread.total_issues ?? null, reading_progress: session.active_thread.reading_progress ?? null,
           last_rolled_result: session.last_rolled_result ?? session.active_thread.last_rolled_result ?? null }
       : null
@@ -319,12 +327,12 @@ useEffect(() => {
     setSelectedThreadId(pendingId)
     if (pendingResult !== null && pendingResult !== undefined) setRolledResult(pendingResult)
     if (pendingMetadata && pendingMetadata.title) {
-      setActiveRatingThread({
-        id: pendingMetadata.id ?? pendingId, title: pendingMetadata.title, format: pendingMetadata.format,
-        issues_remaining: pendingMetadata.issues_remaining, queue_position: pendingMetadata.queue_position,
-        issue_id: pendingMetadata.issue_id ?? null, issue_number: pendingMetadata.issue_number ?? null,
-        next_issue_id: pendingMetadata.next_issue_id ?? null, next_issue_number: pendingMetadata.next_issue_number ?? null,
-        total_issues: pendingMetadata.total_issues ?? null, reading_progress: pendingMetadata.reading_progress ?? null,
+        setActiveRatingThread({
+          id: pendingMetadata.id ?? pendingId, title: pendingMetadata.title, format: pendingMetadata.format ?? '',
+          issues_remaining: pendingMetadata.issues_remaining ?? 0, queue_position: pendingMetadata.queue_position ?? 0,
+          issue_id: pendingMetadata.issue_id ?? null, issue_number: pendingMetadata.issue_number ?? null,
+          next_issue_id: pendingMetadata.next_issue_id ?? null, next_issue_number: pendingMetadata.next_issue_number ?? null,
+          total_issues: pendingMetadata.total_issues ?? null, reading_progress: pendingMetadata.reading_progress ?? null,
         last_rolled_result: pendingMetadata.last_rolled_result ?? pendingResult,
       })
     }
@@ -389,7 +397,8 @@ useEffect(() => {
       return
     }
     try {
-      await rateMutation.mutate({ rating, finish_session: finishSession })
+      if (!activeRatingThread) return
+      await rateMutation.mutate({ thread_id: activeRatingThread.id, rating, finish_session: finishSession })
       suppressPendingAutoOpenRef.current = true
       setIsRolling(false)
       setIsRatingView(false)
@@ -554,14 +563,14 @@ useEffect(() => {
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
-          {session?.snoozed_threads?.length > 0 && currentDie === 20 && (
+          {((session?.snoozed_threads?.length ?? 0) > 0) && currentDie === 20 && (
             <div className="flex items-center gap-2 mt-1">
               <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d20) - snoozing won't increase it further</span>
             </div>
           )}
-          {session?.snoozed_threads?.length > 0 && currentDie !== 20 && (
+          {((session?.snoozed_threads?.length ?? 0) > 0) && currentDie !== 20 && (
             <div className="flex items-center gap-2 mt-1">
-              <Tooltip content="Snoozed offset"><span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session.snoozed_threads.length}</span></Tooltip>
+              <Tooltip content="Snoozed offset"><span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session?.snoozed_threads?.length ?? 0}</span></Tooltip>
               <Tooltip content="Snoozed offset active"><span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">offset active</span></Tooltip>
             </div>
           )}
@@ -591,7 +600,7 @@ useEffect(() => {
           <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/10 shrink-0">
             <div className="relative flex items-center justify-center" style={{ width: '40px', height: '40px' }}>
               <div className="w-full h-full">
-                <LazyDice3D sides={currentDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
+                <LazyDice3D sides={displayDie} value={1} isRolling={false} showValue={false} color={0xffffff} />
               </div>
             </div>
             <div className="text-right">
@@ -619,7 +628,7 @@ useEffect(() => {
                 className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 mx-auto`}
                 style={{ width: '200px', height: '200px' }}>
                 <div className="w-full h-full main-die-optical-center">
-                  <LazyDice3D sides={currentDie} value={rolledResult || 1} isRolling={isRolling} showValue={false} color={0xffffff}
+                  <LazyDice3D sides={displayDie} value={rolledResult || 1} isRolling={isRolling} showValue={false} color={0xffffff}
                     onRollComplete={() => setDiceState('rolled')} />
                 </div>
               </div>
@@ -704,9 +713,9 @@ useEffect(() => {
                 <optgroup label="Active Threads">
                   {activeThreads.map((thread) => (<option key={thread.id} value={thread.id}>{thread.title} ({thread.format})</option>))}
                 </optgroup>
-                {session.snoozed_threads?.length > 0 && (
+                {(session?.snoozed_threads?.length ?? 0) > 0 && (
                   <optgroup label="Snoozed Threads">
-                    {session.snoozed_threads.map((thread) => (<option key={thread.id} value={thread.id}>{thread.title} ({thread.format})</option>))}
+                {session?.snoozed_threads?.map((thread) => (<option key={thread.id} value={thread.id}>{thread.title} ({thread.format})</option>))}
                   </optgroup>
                 )}
               </select>

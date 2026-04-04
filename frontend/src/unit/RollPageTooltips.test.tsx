@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 import RollPage from '../pages/RollPage'
@@ -28,7 +29,7 @@ vi.mock('react-router-dom', async () => {
 })
 
 vi.mock('../components/LazyDice3D', () => ({
-  default: ({ sides, value }) => (
+  default: ({ sides, value }: { sides: number; value: number }) => (
     <div data-testid="lazy-dice" data-sides={String(sides)} data-value={String(value)} />
   ),
 }))
@@ -59,7 +60,7 @@ vi.mock('../hooks', async (importOriginal) => {
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
 vi.mock('../contexts/ToastContext', () => ({
-  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+  ToastProvider: ({ children }: { children: ReactNode }) => children,
   useToast: () => ({
     showToast: vi.fn(),
     removeToast: vi.fn(),

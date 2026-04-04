@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
-import { createThread, extractThreadsFromResponse } from './helpers';
+import { createThread, extractThreadsFromResponse, findByTitle } from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
@@ -63,7 +63,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // Get the thread ID
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = extractThreadsFromResponse(await threadsResponse.json());
-    const thread = threads.find((t: any) => t.title === uniqueTitle);
+    const thread = findByTitle(threads, uniqueTitle);
     expect(thread).toBeDefined();
 
     // Step 2: Navigate to queue page
@@ -144,7 +144,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = extractThreadsFromResponse(await threadsResponse.json());
-    const thread = threads.find((t: any) => t.title === uniqueTitle);
+    const thread = findByTitle(threads, uniqueTitle);
     expect(thread).toBeDefined();
 
     await authenticatedPage.goto('/queue');
@@ -220,7 +220,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = extractThreadsFromResponse(await threadsResponse.json());
-    const thread = threads.find((t: any) => t.title === uniqueTitle);
+    const thread = findByTitle(threads, uniqueTitle);
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
@@ -284,7 +284,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = extractThreadsFromResponse(await threadsResponse.json());
-    const thread = threads.find((t: any) => t.title === uniqueTitle);
+    const thread = findByTitle(threads, uniqueTitle);
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
@@ -419,7 +419,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // Get the thread ID
     const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
     const threads = extractThreadsFromResponse(await threadsResponse.json());
-    const thread = threads.find((t: any) => t.title === uniqueTitle);
+    const thread = findByTitle(threads, uniqueTitle);
     expect(thread).toBeDefined();
     expect(thread.id).toBeDefined();
 

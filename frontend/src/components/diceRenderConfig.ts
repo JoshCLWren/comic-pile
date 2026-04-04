@@ -1,3 +1,10 @@
+import type {
+  DiceRenderConfig,
+  DiceRenderGlobalConfig,
+  DiceRenderSideConfig,
+  DiceSide,
+} from './diceTypes'
+
 const DEFAULT_GLOBAL_CONFIG = {
   tileSize: 256,
   uvInset: 0.045,
@@ -18,9 +25,9 @@ const DEFAULT_GLOBAL_CONFIG = {
   backgroundColor: '#ffffff',
   fontFamily: 'Arial',
   fontWeight: 'bold',
-}
+} satisfies DiceRenderGlobalConfig
 
-export const DEFAULT_DICE_RENDER_CONFIG = {
+export const DEFAULT_DICE_RENDER_CONFIG: DiceRenderConfig = {
   global: DEFAULT_GLOBAL_CONFIG,
   perSides: {
     6: {
@@ -39,9 +46,9 @@ export const DEFAULT_DICE_RENDER_CONFIG = {
       textOffsetY: 0.03,
     },
   },
-}
+} satisfies DiceRenderConfig
 
-function clampNumber(value, fallback, min, max) {
+function clampNumber(value: number, fallback: number, min: number, max: number): number {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) {
     return fallback
@@ -49,26 +56,26 @@ function clampNumber(value, fallback, min, max) {
   return Math.max(min, Math.min(max, numeric))
 }
 
-function clampInteger(value, fallback, min, max) {
+function clampInteger(value: number, fallback: number, min: number, max: number): number {
   return Math.round(clampNumber(value, fallback, min, max))
 }
 
-function pickString(value, fallback) {
+function pickString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.length > 0 ? value : fallback
 }
 
-function pickBoolean(value, fallback) {
+function pickBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
-export function getDiceRenderConfigForSides(sides, overrides = null) {
-  const defaultGlobal = DEFAULT_DICE_RENDER_CONFIG.global ?? {}
-  const defaultSide =
-    DEFAULT_DICE_RENDER_CONFIG.perSides?.[String(sides)] ??
-    DEFAULT_DICE_RENDER_CONFIG.perSides?.[sides] ??
-    {}
+export function getDiceRenderConfigForSides(
+  sides: DiceSide,
+  overrides: Partial<DiceRenderConfig> | null = null,
+): DiceRenderGlobalConfig {
+  const defaultGlobal = DEFAULT_DICE_RENDER_CONFIG.global
+  const defaultSide = DEFAULT_DICE_RENDER_CONFIG.perSides?.[sides] ?? {}
   const globalOverrides = overrides?.global ?? {}
-  const sideOverrides = overrides?.perSides?.[String(sides)] ?? overrides?.perSides?.[sides] ?? {}
+  const sideOverrides = overrides?.perSides?.[sides] ?? {}
 
   const raw = {
     ...DEFAULT_GLOBAL_CONFIG,

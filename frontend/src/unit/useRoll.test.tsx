@@ -9,6 +9,7 @@ import {
   useSetDie,
 } from '../hooks/useRoll'
 import { rollApi } from '../services/api'
+import type { OverrideRollPayload } from '../types'
 
 vi.mock('../services/api', () => ({
   rollApi: {
@@ -23,14 +24,21 @@ vi.mock('../services/api', () => ({
 
 const mockedRollApi = vi.mocked(rollApi)
 
-const setupMutation = async (
-  hook: () => { mutate: (args?: unknown) => Promise<unknown> },
-  args?: unknown,
-) => {
+async function setupMutation(
+  hook: () => { mutate: () => Promise<unknown> },
+): Promise<void>
+async function setupMutation<TArg>(
+  hook: () => { mutate: (args: TArg) => Promise<unknown> },
+  args: TArg,
+): Promise<void>
+async function setupMutation<TArg>(
+  hook: () => { mutate: (args?: TArg) => Promise<unknown> },
+  args?: TArg,
+): Promise<void> {
   const { result } = renderHook(() => hook())
 
   await act(async () => {
-    await result.current.mutate(args)
+    await result.current.mutate(args as never)
   })
 }
 
@@ -49,8 +57,9 @@ it('calls roll mutation', async () => {
 })
 
 it('calls override mutation', async () => {
-  await setupMutation(useOverrideRoll, { thread_id: 9 })
-  expect(mockedRollApi.override).toHaveBeenCalledWith({ thread_id: 9 })
+  const payload: OverrideRollPayload = { thread_id: 9 }
+  await setupMutation(useOverrideRoll, payload)
+  expect(mockedRollApi.override).toHaveBeenCalledWith(payload)
 })
 
 it('calls dismiss pending mutation', async () => {

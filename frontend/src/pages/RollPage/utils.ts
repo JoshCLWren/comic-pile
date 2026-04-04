@@ -30,9 +30,9 @@ export function buildRatingThread(
     return {
       id: metadata.id ?? metadata.thread_id ?? Number(threadId),
       title: metadata.title,
-      format: metadata.format,
-      issues_remaining: metadata.issues_remaining,
-      queue_position: metadata.queue_position,
+      format: metadata.format ?? sessionThread?.format ?? '',
+      issues_remaining: metadata.issues_remaining ?? sessionThread?.issues_remaining ?? 0,
+      queue_position: metadata.queue_position ?? sessionThread?.queue_position ?? 0,
       issue_id: metadata.issue_id ?? null,
       issue_number: metadata.issue_number ?? null,
       next_issue_id: metadata.next_issue_id ?? null,

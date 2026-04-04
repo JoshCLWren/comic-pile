@@ -13,7 +13,7 @@ const mockClearAccessToken = vi.fn()
 vi.mock('../services/api', () => {
   return {
     default: {
-      get: (...args) => mockApiGet(...args),
+      get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
       post: vi.fn(),
       put: vi.fn(),
       delete: vi.fn(),
@@ -22,8 +22,8 @@ vi.mock('../services/api', () => {
         response: { use: vi.fn() },
       },
     },
-    setAccessToken: (...args) => mockSetAccessToken(...args),
-    clearAccessToken: (...args) => mockClearAccessToken(...args),
+    setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
+    clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
   }
 })
 

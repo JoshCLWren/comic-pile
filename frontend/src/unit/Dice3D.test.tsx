@@ -4,7 +4,15 @@ import Dice3D from '../components/Dice3D'
 
 vi.mock('three', () => {
   class BufferGeometry {
-    attributes: Record<string, any>
+    attributes: Record<
+      string,
+      {
+        count?: number
+        getX: (idx: number) => number
+        getY?: (idx: number) => number
+        getZ?: (idx: number) => number
+      }
+    >
     index: { count: number; getX: (idx: number) => number }
 
     constructor() {
@@ -22,10 +30,10 @@ vi.mock('three', () => {
       }
       this.index = {
         count: 3,
-        getX: (idx) => idx,
+        getX: (idx: number) => idx,
       }
     }
-    getAttribute(name) {
+    getAttribute(name: string) {
       return this.attributes[name]
     }
     getIndex() {
