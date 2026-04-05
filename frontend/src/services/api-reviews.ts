@@ -8,7 +8,7 @@ export const reviewsApi = {
    * Users can have one review per thread/issue combination.
    */
   createOrUpdateReview: (data: ReviewCreatePayload) =>
-    api.post<Review, ReviewCreatePayload>('/reviews/', data),
+    api.post<Review, ReviewCreatePayload>('/v1/reviews/', data),
 
   /**
    * List reviews for current user with pagination.
@@ -18,7 +18,7 @@ export const reviewsApi = {
       page_size: params?.page_size || 20,
       ...(params?.page_token ? { page_token: params.page_token } : {}),
     }
-    const response = await api.get<ReviewListResponse>('/reviews/', {
+    const response = await api.get<ReviewListResponse>('/v1/reviews/', {
       params: Object.keys(queryParams).length ? queryParams : undefined,
     })
     return response
@@ -27,22 +27,22 @@ export const reviewsApi = {
   /**
    * Get a specific review.
    */
-  getReview: (id: number) => api.get<Review>(`/reviews/${id}`),
+  getReview: (id: number) => api.get<Review>(`/v1/reviews/${id}`),
 
   /**
    * Update an existing review.
    */
   updateReview: (id: number, data: ReviewUpdatePayload) =>
-    api.put<Review, ReviewUpdatePayload>(`/reviews/${id}`, data),
+    api.put<Review, ReviewUpdatePayload>(`/v1/reviews/${id}`, data),
 
   /**
    * Delete a review.
    */
-  deleteReview: (id: number) => api.delete<void>(`/reviews/${id}`),
+  deleteReview: (id: number) => api.delete<void>(`/v1/reviews/${id}`),
 
   /**
    * Get all reviews for a specific thread.
    */
   getThreadReviews: (threadId: number) =>
-    api.get<Review[]>(`/reviews/threads/${threadId}/reviews`),
+    api.get<Review[]>(`/v1/reviews/threads/${threadId}/reviews`),
 }
