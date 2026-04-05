@@ -270,7 +270,7 @@ export const SELECTORS = {
 	},
 	threadList: {
 		container: '#queue-container',
-		threadItem: '[data-testid=\\"queue-thread-item\\"]',
+		threadItem: '[data-testid="queue-thread-item"]',
 		newThreadButton: 'button:has-text("Add Thread")',
 		titleInput: 'label:has-text("Title") + input',
 		formatSelect: 'label:has-text("Format") + select',
