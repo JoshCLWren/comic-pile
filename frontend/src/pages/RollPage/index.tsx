@@ -411,6 +411,11 @@ useEffect(() => {
       if (!activeRatingThread) return
       const finishSession = pendingRatingAction?.finishSession || false
       
+      // Always close the review form and return to roll view first
+      setShowReviewForm(false)
+      setIsRatingView(false)
+      setPendingRatingAction(null)
+      
       // Submit the rating with review data
       await rateMutation.mutate({ 
         thread_id: activeRatingThread.id, 
@@ -428,22 +433,16 @@ useEffect(() => {
           setReviewSaveError(null)
         } catch (reviewError) {
           console.error('Failed to save review:', reviewError)
+          // Don't block the flow if review fails - rating was already saved
           setReviewSaveError(getApiErrorDetail(reviewError))
-          // Don't clear the state if review fails - preserve the draft
-          setIsRolling(false)
-          return
         }
       }
 
       suppressPendingAutoOpenRef.current = true
       setIsRolling(false)
-      setIsRatingView(false)
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
-      setShowReviewForm(false)
-      setReviewSaveError(null)
-      setPendingRatingAction(null)
       setErrorMessage('')
       const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
       if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
@@ -451,6 +450,10 @@ useEffect(() => {
       }
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
+      // Ensure we return to roll view even if rating fails
+      setShowReviewForm(false)
+      setIsRatingView(false)
+      setPendingRatingAction(null)
     }
   }
 
@@ -814,8 +817,10 @@ useEffect(() => {
             isOpen={showReviewForm}
             onClose={() => {
               setShowReviewForm(false)
+              setIsRatingView(false)
               setPendingRatingAction(null)
               setReviewSaveError(null)
+              setErrorMessage('')
             }}
             onSubmit={handleReviewSubmit}
             threadId={activeRatingThread.id}
