@@ -127,7 +127,8 @@ test.describe('Review Feature E2E Tests', () => {
     }
     
     // Debug: Check where we are and what's available
-    await authenticatedWithThreadsPage.waitForTimeout(2000); // Wait for navigation
+    // Wait for navigation to complete instead of using hard-coded timeout
+    await authenticatedWithThreadsPage.waitForURL(/\/thread\/\d+/, { timeout: 10000 });
     const currentUrl = authenticatedWithThreadsPage.url();
     console.log('Current URL after clicking thread:', currentUrl);
     
@@ -164,7 +165,8 @@ test.describe('Review Feature E2E Tests', () => {
     await rollButton.click();
     
     // Debug: Check where we are after clicking Roll
-    await authenticatedWithThreadsPage.waitForTimeout(2000); // Wait for navigation
+    // Wait for navigation to complete instead of using hard-coded timeout
+    await authenticatedWithThreadsPage.waitForURL(/\/roll/, { timeout: 10000 });
     const currentUrlAfterRoll = authenticatedWithThreadsPage.url();
     console.log('Current URL after clicking Roll:', currentUrlAfterRoll);
     
