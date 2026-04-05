@@ -290,8 +290,8 @@ console.log('Input elements found:', allInputs.length);
     await expect(authenticatedWithThreadsPage.locator('text=Reviewing')).toBeVisible();
     await expect(authenticatedWithThreadsPage.locator('text=Rating:')).toBeVisible();
     
-    // Look for the rating value in the modal specifically
-    const modalRating = reviewModal.locator('text=/\\d\\.\\d/');
+    // Look for the rating value in the modal specifically - re-query to avoid stale locator
+    const modalRating = authenticatedWithThreadsPage.locator('[data-testid="modal"]').locator('text=/\\d\\.\\d/');
     await expect(modalRating).toBeVisible({ timeout: 10000 });
     
     // Write a review
@@ -479,7 +479,9 @@ console.log('Input elements found:', allInputs.length);
     await expect(reviewModal).toBeVisible({ timeout: 15000 });
     
     // Check for either Edit Review or Write a Review? (depends on implementation)
-    const modalTitle = reviewModal.locator('h2');
+    // Re-query reviewModal to avoid stale locator
+    const freshReviewModal = authenticatedWithThreadsPage.locator('[data-testid="modal"]');
+    const modalTitle = freshReviewModal.locator('h2');
     await expect(modalTitle).toBeVisible();
     const titleText = await modalTitle.textContent();
     expect(titleText).toMatch(/(Edit Review|Write a Review\?)/);
@@ -574,14 +576,16 @@ console.log('Input elements found:', allInputs.length);
     
     // Verify error message appears and modal stays open
     // Look for error message with better selector
-    const errorMessage = reviewModal.locator('.text-red-400');
+    // Re-query reviewModal to avoid stale locator
+    const freshReviewModal = authenticatedWithThreadsPage.locator('[data-testid="modal"]');
+    const errorMessage = freshReviewModal.locator('.text-red-400');
     const errorVisible = await errorMessage.isVisible().catch(() => false);
     
     if (errorVisible) {
       await expect(errorMessage).toBeVisible();
     } else {
       // If error message isn't visible, check if modal is still open (which indicates error)
-      await expect(reviewModal).toBeVisible();
+      await expect(freshReviewModal).toBeVisible();
     }
     
     // Verify save button is no longer in saving state
@@ -872,14 +876,16 @@ for (let i = 0; i < threadCount; i++) {
     await textarea.fill('This review will be cancelled');
     
     // Close the modal using the close button
-    const closeButton = reviewModal.locator('button[aria-label="Close modal"]');
+    // Re-query reviewModal to avoid stale locator
+    const freshReviewModal = authenticatedWithThreadsPage.locator('[data-testid="modal"]');
+    const closeButton = freshReviewModal.locator('button[aria-label="Close modal"]');
     const closeButtonVisible = await closeButton.isVisible().catch(() => false);
     
     if (closeButtonVisible) {
       await closeButton.click();
     } else {
       // Fallback: use skip button if close button not available
-      const skipButton = reviewModal.locator('button:has-text("Skip")');
+      const skipButton = freshReviewModal.locator('button:has-text("Skip")');
       await expect(skipButton).toBeVisible();
       await skipButton.click();
     }

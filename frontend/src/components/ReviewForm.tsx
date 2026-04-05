@@ -48,10 +48,12 @@ export default function ReviewForm({
       }
 
       await onSubmit(reviewData)
-      setReviewText('')
-      onClose()
+      // Don't call onClose() here - let parent control when to close
+      // This allows parent to handle errors and preserve draft
     } catch (error) {
       console.error('Failed to submit review:', error)
+      // Don't call onClose() on error - preserve the draft
+      throw error // Re-throw so parent can handle
     } finally {
       setIsSubmitting(false)
     }
@@ -67,9 +69,11 @@ export default function ReviewForm({
         ...(issueNumber && { issue_number: issueNumber }),
       }
       await onSubmit(reviewData)
-      onClose()
+      // Don't call onClose() here - let parent control when to close
     } catch (error) {
       console.error('Failed to submit rating:', error)
+      // Don't call onClose() on error - preserve the draft
+      throw error // Re-throw so parent can handle
     } finally {
       setIsSubmitting(false)
     }

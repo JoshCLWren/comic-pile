@@ -42,7 +42,7 @@ async def _find_existing_review(
             and_(
                 Review.user_id == user_id,
                 Review.thread_id == thread_id,
-                Review.issue_id == issue_id,
+                Review.issue_id.is_(issue_id),
             )
         )
         .options(selectinload(Review.thread), selectinload(Review.issue))
