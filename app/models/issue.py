@@ -57,5 +57,5 @@ class Issue(Base):
         passive_deletes=True,
     )
     reviews: Mapped[list["Review"]] = relationship(
-        "Review", back_populates="issue", cascade="all, delete-orphan", lazy="raise"
+        "Review", back_populates="issue", lazy="raise", passive_deletes=True
     )

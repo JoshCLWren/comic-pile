@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Modal from '../components/Modal'
 import type { Review, ReviewCreatePayload } from '../types'
 
@@ -11,6 +11,7 @@ interface ReviewFormProps {
   issueNumber?: string
   rating: number
   existingReview?: Review | null
+  error?: string | null
 }
 
 export default function ReviewForm({
@@ -22,9 +23,17 @@ export default function ReviewForm({
   issueNumber,
   rating,
   existingReview,
+  error,
 }: ReviewFormProps) {
   const [reviewText, setReviewText] = useState(existingReview?.review_text || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      setReviewText(existingReview?.review_text || '')
+      setIsSubmitting(false)
+    }
+  }, [isOpen, existingReview])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,8 +68,14 @@ export default function ReviewForm({
       title={existingReview ? 'Edit Review' : 'Write a Review?'}
       onClose={onClose}
       overlayClassName="review-modal__overlay"
+      data-testid="modal"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
         <div className="space-y-2">
           <p className="text-sm text-stone-300">
             {issueNumber

@@ -42,7 +42,12 @@ export default function ThreadDetailView() {
         }
 
         // Fetch reviews for this thread
-        await getThreadReviews(Number(id))
+        try {
+          await getThreadReviews(Number(id))
+        } catch (reviewError: unknown) {
+          console.error('Failed to fetch reviews:', getApiErrorDetail(reviewError))
+          // Don't let review failures break the entire page
+        }
       } catch (err: unknown) {
         setError(getApiErrorDetail(err))
       } finally {

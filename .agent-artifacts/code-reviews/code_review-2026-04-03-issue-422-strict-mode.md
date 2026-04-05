@@ -91,10 +91,10 @@ The added `if (!metrics)` guard returning a `LoadingSpinner` is a real bug fix e
 
 Applied the requested fixes:
 
-- removed the stale `src/components/three-shim.d.ts` include from [frontend/tsconfig.test.json](/mnt/extra/josh/code/comic-pile/frontend/tsconfig.test.json)
-- updated [frontend/src/components/Dice3D.tsx](/mnt/extra/josh/code/comic-pile/frontend/src/components/Dice3D.tsx) to import `Dice3DProps`, `DiceSide`, and `isDiceSide` from [frontend/src/components/diceTypes.ts](/mnt/extra/josh/code/comic-pile/frontend/src/components/diceTypes.ts) instead of maintaining local duplicates
+- removed the stale `src/components/three-shim.d.ts` include from [frontend/tsconfig.test.json](frontend/tsconfig.test.json)
+- updated [frontend/src/components/Dice3D.tsx](frontend/src/components/Dice3D.tsx) to import `Dice3DProps`, `DiceSide`, and `isDiceSide` from [frontend/src/components/diceTypes.ts](frontend/src/components/diceTypes.ts) instead of maintaining local duplicates
 - renamed the local flattened config alias in `Dice3D.tsx` from `DiceRenderConfig` to `ResolvedDiceConfig` to avoid colliding with the structured config type exported from `diceTypes.ts`
-- cleaned the touched indentation in `handleSimpleMigrationComplete()` in [frontend/src/pages/RollPage/index.tsx](/mnt/extra/josh/code/comic-pile/frontend/src/pages/RollPage/index.tsx)
+- cleaned the touched indentation in `handleSimpleMigrationComplete()` in [frontend/src/pages/RollPage/index.tsx](frontend/src/pages/RollPage/index.tsx)
 
 Validation rerun:
 

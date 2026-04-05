@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { reviewsApi } from '../services/api-reviews'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { Review, ReviewCreatePayload, ReviewUpdatePayload } from '../types'
 
 export function useReviews() {
   const [reviews, setReviews] = useState<Review[]>([])
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
@@ -14,6 +15,7 @@ export function useReviews() {
     try {
       const response = await reviewsApi.listReviews(params)
       setReviews(response.reviews)
+      setNextPageToken(response.next_page_token || null)
     } catch (error: unknown) {
       setIsError(true)
       console.error('Failed to fetch reviews:', getApiErrorDetail(error))
@@ -23,7 +25,7 @@ export function useReviews() {
     }
   }
 
-  return { reviews, list, isPending, isError }
+  return { reviews, nextPageToken, list, isPending, isError }
 }
 
 export function useThreadReviews() {
@@ -31,7 +33,7 @@ export function useThreadReviews() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const getThreadReviews = async (threadId: number) => {
+  const getThreadReviews = useCallback(async (threadId: number) => {
     if (!threadId) return
     setIsPending(true)
     setIsError(false)
@@ -45,7 +47,7 @@ export function useThreadReviews() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { reviews, getThreadReviews, isPending, isError }
 }

@@ -72,6 +72,7 @@ export default function RollPage() {
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
 const [showReviewForm, setShowReviewForm] = useState(false)
+const [reviewSaveError, setReviewSaveError] = useState<string | null>(null)
 const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
 
 const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
@@ -424,9 +425,13 @@ useEffect(() => {
           // Import and use the reviewsApi
           const { reviewsApi } = await import('../../services/api-reviews')
           await reviewsApi.createOrUpdateReview(reviewData)
+          setReviewSaveError(null)
         } catch (reviewError) {
           console.error('Failed to save review:', reviewError)
-          // Don't fail the whole operation if review fails, just log it
+          setReviewSaveError(getApiErrorDetail(reviewError))
+          // Don't clear the state if review fails - preserve the draft
+          setIsRolling(false)
+          return
         }
       }
 
@@ -437,6 +442,7 @@ useEffect(() => {
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setShowReviewForm(false)
+      setReviewSaveError(null)
       setPendingRatingAction(null)
       setErrorMessage('')
       const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
@@ -809,12 +815,14 @@ useEffect(() => {
             onClose={() => {
               setShowReviewForm(false)
               setPendingRatingAction(null)
+              setReviewSaveError(null)
             }}
             onSubmit={handleReviewSubmit}
             threadId={activeRatingThread.id}
             threadTitle={activeRatingThread.title}
             issueNumber={activeRatingThread.issue_number || undefined}
             rating={rating}
+            error={reviewSaveError}
           />
         )}
       </div>
