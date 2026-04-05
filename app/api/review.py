@@ -36,15 +36,21 @@ async def _find_existing_review(
     db: AsyncSession, user_id: int, thread_id: int, issue_id: int | None
 ) -> Review | None:
     """Find existing review for user/thread/issue combination."""
+    # Build the base query conditions
+    conditions = [
+        Review.user_id == user_id,
+        Review.thread_id == thread_id,
+    ]
+
+    # Add issue_id condition - handle NULL values properly
+    if issue_id is None:
+        conditions.append(Review.issue_id.is_(None))
+    else:
+        conditions.append(Review.issue_id == issue_id)
+
     query = (
         select(Review)
-        .where(
-            and_(
-                Review.user_id == user_id,
-                Review.thread_id == thread_id,
-                Review.issue_id.is_(issue_id),
-            )
-        )
+        .where(and_(*conditions))
         .options(selectinload(Review.thread), selectinload(Review.issue))
     )
     result = await db.execute(query)
