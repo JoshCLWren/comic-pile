@@ -40,6 +40,7 @@ from app.api import (
     thread,
     undo,
 )
+from app.api.review import router as review_router
 from app.config import get_app_settings, get_database_settings
 from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
@@ -387,6 +388,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         )
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
+    app.include_router(review.router, prefix="/api/reviews", tags=["reviews"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])

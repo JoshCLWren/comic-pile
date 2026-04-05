@@ -35,6 +35,7 @@ import {
 } from './utils'
 import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
+import ReviewForm from '../../components/ReviewForm'
 
 export default function RollPage() {
   const state = useRollPageState()
@@ -70,6 +71,8 @@ export default function RollPage() {
   } = state
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+const [showReviewForm, setShowReviewForm] = useState(false)
+const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
 
 const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
 const { activeCollectionId = null } = useCollections()
@@ -396,15 +399,45 @@ useEffect(() => {
       setShowSimpleMigration(true)
       return
     }
+    
+    // Show review form instead of immediately submitting rating
+    setPendingRatingAction({ finishSession })
+    setShowReviewForm(true)
+  }
+
+  async function handleReviewSubmit(reviewData: any) {
     try {
       if (!activeRatingThread) return
-      await rateMutation.mutate({ thread_id: activeRatingThread.id, rating, finish_session: finishSession })
+      const finishSession = pendingRatingAction?.finishSession || false
+      
+      // Submit the rating with review data
+      await rateMutation.mutate({ 
+        thread_id: activeRatingThread.id, 
+        rating, 
+        finish_session: finishSession,
+        issue_number: activeRatingThread.issue_number || undefined
+      })
+      
+      // Submit the review if text was provided
+      if (reviewData.review_text?.trim()) {
+        try {
+          // Import and use the reviewsApi
+          const { reviewsApi } = await import('../../services/api-reviews')
+          await reviewsApi.createOrUpdateReview(reviewData)
+        } catch (reviewError) {
+          console.error('Failed to save review:', reviewError)
+          // Don't fail the whole operation if review fails, just log it
+        }
+      }
+
       suppressPendingAutoOpenRef.current = true
       setIsRolling(false)
       setIsRatingView(false)
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
+      setShowReviewForm(false)
+      setPendingRatingAction(null)
       setErrorMessage('')
       const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
       if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
@@ -413,6 +446,11 @@ useEffect(() => {
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
     }
+  }
+
+  function handleReviewSkip() {
+    // Submit the rating without a review
+    handleReviewSubmit({})
   }
 
   async function handleSnooze() {
@@ -767,6 +805,21 @@ useEffect(() => {
             </button>
           </div>
         </Modal>
+
+        {showReviewForm && activeRatingThread && (
+          <ReviewForm
+            isOpen={showReviewForm}
+            onClose={() => {
+              setShowReviewForm(false)
+              setPendingRatingAction(null)
+            }}
+            onSubmit={handleReviewSubmit}
+            threadId={activeRatingThread.id}
+            threadTitle={activeRatingThread.title}
+            issueNumber={activeRatingThread.issue_number || undefined}
+            rating={rating}
+          />
+        )}
       </div>
     </div>
   )
