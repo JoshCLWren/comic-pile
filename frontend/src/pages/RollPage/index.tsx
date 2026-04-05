@@ -448,10 +448,7 @@ useEffect(() => {
     }
   }
 
-  function handleReviewSkip() {
-    // Submit the rating without a review
-    handleReviewSubmit({})
-  }
+  
 
   async function handleSnooze() {
     try {

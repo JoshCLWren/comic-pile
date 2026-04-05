@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import TypedDict
 
@@ -31,7 +31,7 @@ class PaginatedResponse(TypedDict):
 
 
 async def _find_existing_review(
-    user_id: int, thread_id: int, issue_id: int | None
+    db: AsyncSession, user_id: int, thread_id: int, issue_id: int | None
 ) -> Review | None:
     """Find existing review for user/thread/issue combination."""
     query = select(Review).where(
@@ -41,7 +41,7 @@ async def _find_existing_review(
             Review.issue_id == issue_id,
         )
     )
-    result = await query.execute()
+    result = await db.execute(query)
     return result.scalar_one_or_none()
 
 
@@ -125,7 +125,7 @@ async def create_review(
         )
 
     # Check for existing review
-    existing_review = await _find_existing_review(user_id, thread_id, issue_id)
+    existing_review = await _find_existing_review(db, user_id, thread_id, issue_id)
     if existing_review:
         # Update existing review
         existing_review.rating = review_data.rating
@@ -179,7 +179,7 @@ async def list_reviews(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid page_token",
-            )
+            ) from None
 
     # Get page of reviews
     reviews_query = base_query.limit(page_size + 1)  # +1 to check if more exist
