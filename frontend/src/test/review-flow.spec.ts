@@ -311,7 +311,9 @@ console.log('Input elements found:', allInputs.length);
     const saveButton = authenticatedWithThreadsPage.locator('button:has-text("Save Review")');
     await expect(saveButton).toBeVisible();
     
+    // Wait for both rating API and review API responses
     await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
       authenticatedWithThreadsPage.waitForResponse((response) =>
         response.url().includes('/v1/reviews/') && response.request().method() === 'POST'
       ),
@@ -392,7 +394,12 @@ console.log('Input elements found:', allInputs.length);
     // Skip writing a review
     const skipButton = authenticatedWithThreadsPage.locator('button:has-text("Skip")');
     await expect(skipButton).toBeVisible();
-    await skipButton.click();
+    
+    // Wait for rating API response when clicking Skip
+    await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
+      skipButton.click(),
+    ]);
     
     // Verify modal closes
     await expect(reviewModal).not.toBeVisible({ timeout: 10000 });
@@ -445,7 +452,9 @@ console.log('Input elements found:', allInputs.length);
     const saveButton = authenticatedWithThreadsPage.locator('button:has-text("Save Review")');
     await expect(saveButton).toBeVisible();
     
+    // Wait for both rating API and review API responses
     await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
       authenticatedWithThreadsPage.waitForResponse((response) =>
         response.url().includes('/v1/reviews/') && response.request().method() === 'POST'
       ),
@@ -475,7 +484,10 @@ console.log('Input elements found:', allInputs.length);
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     
     // Submit the rating
-    await submitButton.click({ force: true });
+    await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
+      submitButton.click({ force: true }),
+    ]);
     
     // Verify edit modal appears with existing review
     await expect(reviewModal).toBeVisible({ timeout: 15000 });
@@ -572,6 +584,9 @@ console.log('Input elements found:', allInputs.length);
     const saveButton = authenticatedWithThreadsPage.locator('button:has-text("Save Review")');
     await expect(saveButton).toBeVisible();
     await saveButton.click();
+    
+    // Wait for rating API response (this should succeed even though review fails)
+    await authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/'), { timeout: 10000 });
     
     // Wait for potential error message to appear
     await authenticatedWithThreadsPage.waitForTimeout(3000);
@@ -793,7 +808,9 @@ for (let i = 0; i < threadCount; i++) {
     const saveButton = authenticatedWithThreadsPage.locator('button:has-text("Save Review")');
     await expect(saveButton).toBeVisible();
     
+    // Wait for both rating API and review API responses
     await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
       authenticatedWithThreadsPage.waitForResponse((response) =>
         response.url().includes('/v1/reviews/') && response.request().method() === 'POST'
       ),
@@ -914,14 +931,25 @@ for (let i = 0; i < threadCount; i++) {
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
     
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
+
+    // Submit the rating
+    const submitButtonAgain = authenticatedWithThreadsPage.locator(SELECTORS.rate.submitButton);
+    await expect(submitButtonAgain).toBeVisible();
     
     await Promise.all([
-      authenticatedWithThreadsPage.waitForResponse((response) =>
-        response.url().includes('/v1/rate/') && response.request().method() === 'POST'
-      ),
-      submitButton.click(),
+      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
+      submitButtonAgain.click({ force: true }),
     ]);
-    
+
+    // Wait for review modal to appear
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
+
+    // Click Skip button
+    await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
+      authenticatedWithThreadsPage.click('button:has-text("Skip")'),
+    ]);
+
     // Verify review modal is fresh (no pre-filled text)
     await expect(reviewModal).toBeVisible({ timeout: 10000 });
     await expect(textarea).toHaveValue('');
