@@ -407,16 +407,24 @@ useEffect(() => {
   }
 
   async function handleReviewSubmit(reviewData: any) {
-    try {
-      if (!activeRatingThread) return
-      const finishSession = pendingRatingAction?.finishSession || false
-      
-      // Always close the review form and return to roll view first
+    if (!activeRatingThread) return
+    
+    // Function to return to roll view - batch all state updates together
+    const returnToRollView = () => {
       setShowReviewForm(false)
       setIsRatingView(false)
       setPendingRatingAction(null)
+      setIsRolling(false)
+      setRolledResult(null)
+      setSelectedThreadId(null)
+      setActiveRatingThread(null)
+      setErrorMessage('')
+    }
+
+    try {
+      const finishSession = pendingRatingAction?.finishSession || false
       
-      // Submit the rating with review data
+      // Submit the rating with review data first
       await rateMutation.mutate({ 
         thread_id: activeRatingThread.id, 
         rating, 
@@ -438,22 +446,18 @@ useEffect(() => {
         }
       }
 
-      suppressPendingAutoOpenRef.current = true
-      setIsRolling(false)
-      setRolledResult(null)
-      setSelectedThreadId(null)
-      setActiveRatingThread(null)
-      setErrorMessage('')
+      // Refresh data
       const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
       if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
         setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
       }
+      
+      // Return to roll view after all operations complete
+      returnToRollView()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
       // Ensure we return to roll view even if rating fails
-      setShowReviewForm(false)
-      setIsRatingView(false)
-      setPendingRatingAction(null)
+      returnToRollView()
     }
   }
 
@@ -670,7 +674,8 @@ useEffect(() => {
             {!isRatingView ? (
               <div id="main-die-3d" onClick={handleRoll} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-label="Roll the dice"
                 className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 mx-auto`}
-                style={{ width: '200px', height: '200px' }}>
+                style={{ width: '200px', height: '200px' }}
+                data-testid="main-die-3d">
                 <div className="w-full h-full main-die-optical-center">
                   <LazyDice3D sides={displayDie} value={rolledResult || 1} isRolling={isRolling} showValue={false} color={0xffffff}
                     onRollComplete={() => setDiceState('rolled')} />
