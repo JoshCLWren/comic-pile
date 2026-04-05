@@ -51,7 +51,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     await expect(page.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
     await Promise.all([
       page.waitForResponse(r => r.url().includes('/api/rate/')),
-      page.click('button[type="submit"]'), // Save Review button
+      page.click('button:has-text("Skip")'), // Save Review button
     ]);
 
     // Wait for roll view to return
@@ -142,7 +142,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     await expect(page.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
     await Promise.all([
       page.waitForResponse(r => r.url().includes('/api/rate/')),
-      page.click('button[type="submit"]'), // Save Review button
+      page.click('button:has-text("Skip")'), // Save Review button
     ]);
 
     // Wait for roll view to return
