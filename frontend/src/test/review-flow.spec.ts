@@ -281,9 +281,14 @@ console.log('Input elements found:', allInputs.length);
     // Submit the rating
     const submitButton = authenticatedWithThreadsPage.locator(SELECTORS.rate.submitButton);
     await expect(submitButton).toBeVisible();
-    await submitButton.click({ force: true });
     
-    // Wait for review modal to appear (indicates rating was successful)
+    // Wait for rating API response when clicking submit
+    await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
+      submitButton.click({ force: true }),
+    ]);
+    
+    // Wait for review modal
     const reviewModal = authenticatedWithThreadsPage.locator('[data-testid="modal"]');
     await expect(reviewModal).toBeVisible({ timeout: 15000 });
     await expect(authenticatedWithThreadsPage.getByText('Write a Review?')).toBeVisible();
@@ -580,7 +585,7 @@ console.log('Input elements found:', allInputs.length);
     await expect(textarea).toBeVisible();
     await textarea.fill('This review should fail');
     
-    // Try to save the review
+    // Try to save the review - this will fail due to mocked network error
     const saveButton = authenticatedWithThreadsPage.locator('button:has-text("Save Review")');
     await expect(saveButton).toBeVisible();
     await saveButton.click();
@@ -752,7 +757,7 @@ for (let i = 0; i < threadCount; i++) {
     await authenticatedWithThreadsPage.getByText('🎲Roll').click();
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
     
-// Set a rating
+    // Set a rating
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     
     // Submit the rating
