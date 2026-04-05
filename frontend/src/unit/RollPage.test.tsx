@@ -513,7 +513,13 @@ describe('Rating View', () => {
     // 2. Submit rating
     await user.click(screen.getByText('Save & Continue'))
 
-    // 3. Verify refetchThreads was called
+    // 3. Wait for ReviewForm modal to appear and click Skip
+    await waitFor(() => {
+      expect(screen.getByText('Write a Review?')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Skip'))
+
+    // 4. Verify refetchThreads was called
     await waitFor(() => {
       expect(mockRefetchThreads).toHaveBeenCalled()
     })
@@ -555,6 +561,12 @@ describe('Rating View', () => {
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
     await user.click(screen.getByText('Save & Continue'))
+
+    // Wait for ReviewForm modal to appear and click Skip
+    await waitFor(() => {
+      expect(screen.getByText('Write a Review?')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Skip'))
 
     await waitFor(() => {
       expect(screen.queryByText('How was it?')).not.toBeInTheDocument()
@@ -598,6 +610,12 @@ describe('Rating View', () => {
     await user.click(screen.getByText('Read Now'))
     await user.click(screen.getByText('Save & Continue'))
 
+    // Wait for ReviewForm modal to appear and click Skip
+    await waitFor(() => {
+      expect(screen.getByText('Write a Review?')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Skip'))
+
     await waitFor(() => {
       expect(screen.queryByText('How was it?')).not.toBeInTheDocument()
     })
@@ -628,7 +646,13 @@ describe('Rating View', () => {
     // 2. Submit rating (Save & Complete when it's the last issue)
     await user.click(screen.getByText('Save & Complete'))
 
-    // 3. Verify the UI never auto-finishes the session for the last issue.
+    // 3. Wait for ReviewForm modal to appear and click Skip
+    await waitFor(() => {
+      expect(screen.getByText('Write a Review?')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Skip'))
+
+    // 4. Verify the UI never auto-finishes the session for the last issue.
     await waitFor(() => {
       expect(mockRate).toHaveBeenCalledWith(expect.objectContaining({
         rating: 3,
