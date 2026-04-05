@@ -388,7 +388,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         )
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
-    app.include_router(router, prefix="/api", tags=["reviews"])
+    app.include_router(router, prefix="/api/v1/reviews", tags=["reviews"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])

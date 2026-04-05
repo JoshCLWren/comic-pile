@@ -15,7 +15,7 @@ from app.models import Issue, Review, Thread
 from app.models.user import User
 from app.schemas.review import ReviewCreate, ReviewListResponse, ReviewResponse, ReviewUpdate
 
-router = APIRouter(prefix="/api/v1", tags=["reviews"])
+router = APIRouter(tags=["reviews"])
 
 
 class PaginateParams(TypedDict):
@@ -92,7 +92,7 @@ async def _create_or_update_review_response(review: Review, db: AsyncSession) ->
     )
 
 
-@router.post("/", response_model=ReviewResponse)
+@router.post("/", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
 async def create_review(
     review_data: ReviewCreate,
     current_user: Annotated[User, Depends(get_current_user)],

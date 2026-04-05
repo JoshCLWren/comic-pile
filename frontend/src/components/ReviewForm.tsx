@@ -57,9 +57,22 @@ export default function ReviewForm({
     }
   }
 
-  const handleSkip = () => {
+  const handleSkip = async () => {
     setReviewText('')
-    onClose()
+    setIsSubmitting(true)
+    try {
+      const reviewData: ReviewCreatePayload = {
+        thread_id: threadId,
+        rating,
+        ...(issueNumber && { issue_number: issueNumber }),
+      }
+      await onSubmit(reviewData)
+      onClose()
+    } catch (error) {
+      console.error('Failed to submit rating:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (

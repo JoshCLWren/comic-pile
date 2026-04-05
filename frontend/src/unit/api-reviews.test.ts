@@ -33,20 +33,20 @@ it('calls list reviews endpoint with expected paths', () => {
   reviewsApi.listReviews()
   reviewsApi.listReviews({ page_size: 10, page_token: 'abc123' })
 
-  expect(get).toHaveBeenCalledWith('/reviews/', { params: { page_size: 20 } })
-  expect(get).toHaveBeenCalledWith('/reviews/', { params: { page_size: 10, page_token: 'abc123' } })
+  expect(get).toHaveBeenCalledWith('/v1/reviews/', { params: { page_size: 20 } })
+  expect(get).toHaveBeenCalledWith('/v1/reviews/', { params: { page_size: 10, page_token: 'abc123' } })
 })
 
 it('calls get thread reviews endpoint with expected paths', () => {
   reviewsApi.getThreadReviews(42)
 
-  expect(get).toHaveBeenCalledWith('/reviews/threads/42/reviews')
+  expect(get).toHaveBeenCalledWith('/v1/reviews/threads/42/reviews')
 })
 
 it('calls get review endpoint with expected paths', () => {
   reviewsApi.getReview(123)
 
-  expect(get).toHaveBeenCalledWith('/reviews/123')
+  expect(get).toHaveBeenCalledWith('/v1/reviews/123')
 })
 
 it('calls create or update review endpoint with expected data', () => {
@@ -59,7 +59,7 @@ it('calls create or update review endpoint with expected data', () => {
 
   reviewsApi.createOrUpdateReview(reviewData)
 
-  expect(post).toHaveBeenCalledWith('/reviews/', reviewData)
+  expect(post).toHaveBeenCalledWith('/v1/reviews/', reviewData)
 })
 
 it('calls update review endpoint with expected data', () => {
@@ -69,11 +69,11 @@ it('calls update review endpoint with expected data', () => {
 
   reviewsApi.updateReview(123, updateData)
 
-  expect(put).toHaveBeenCalledWith('/reviews/123', updateData)
+  expect(put).toHaveBeenCalledWith('/v1/reviews/123', updateData)
 })
 
 it('calls delete review endpoint with expected paths', () => {
   reviewsApi.deleteReview(123)
 
-  expect(del).toHaveBeenCalledWith('/reviews/123')
+  expect(del).toHaveBeenCalledWith('/v1/reviews/123')
 })
