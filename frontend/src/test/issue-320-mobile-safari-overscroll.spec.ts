@@ -12,6 +12,7 @@ test.describe('Issue #320: Mobile Safari Overscroll Prevention', () => {
 
   test('overscroll-prevention CSS is loaded in stylesheets', async ({ page }) => {
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     const hasOverscrollBehavior = await page.evaluate(() => {
       const stylesheets = Array.from(document.styleSheets);
