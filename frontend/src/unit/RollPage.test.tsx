@@ -446,7 +446,13 @@ describe('Rating View', () => {
 
     await user.click(screen.getByText('Save & Continue'))
 
-    // 3. Wait for rating view to close and roll view to return
+    // 3. Wait for ReviewForm modal to appear and click Skip
+    await waitFor(() => {
+      expect(screen.getByText('Write a Review?')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Skip'))
+
+    // 4. Wait for rating view to close and roll view to return
     await waitFor(() => {
       expect(screen.queryByText('How was it?')).not.toBeInTheDocument()
     })

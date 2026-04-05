@@ -1,5 +1,8 @@
 """Review API endpoints."""
 
+import base64
+import json
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,7 +10,6 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from typing_extensions import TypedDict
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -18,18 +20,16 @@ from app.schemas.review import ReviewCreate, ReviewListResponse, ReviewResponse,
 router = APIRouter(tags=["reviews"])
 
 
-class PaginateParams(TypedDict):
-    """Parameters for pagination."""
+def _encode_page_token(created_at: datetime, review_id: int) -> str:
+    """Encode created_at and id into a page token."""
+    payload = json.dumps({"ts": created_at.isoformat(), "id": review_id})
+    return base64.urlsafe_b64encode(payload.encode()).decode()
 
-    page_size: int
-    page_token: str | None
 
-
-class PaginatedResponse(TypedDict):
-    """Paginated response type."""
-
-    reviews: list[ReviewResponse]
-    next_page_token: str | None
+def _decode_page_token(token: str) -> tuple[datetime, int]:
+    """Decode page token into (created_at, id). Raises ValueError on invalid token."""
+    payload = json.loads(base64.urlsafe_b64decode(token.encode()))
+    return datetime.fromisoformat(payload["ts"]), payload["id"]
 
 
 async def _find_existing_review(
@@ -42,7 +42,7 @@ async def _find_existing_review(
             and_(
                 Review.user_id == user_id,
                 Review.thread_id == thread_id,
-                Review.issue_id == issue_id,
+                Review.issue_id.is_(issue_id),
             )
         )
         .options(selectinload(Review.thread), selectinload(Review.issue))

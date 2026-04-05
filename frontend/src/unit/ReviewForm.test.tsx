@@ -178,7 +178,7 @@ describe('ReviewForm', () => {
     expect(screen.getByText('11/2000 characters')).toBeInTheDocument()
   })
 
-  it('should handle skip button click', () => {
+  it('should handle skip button click', async () => {
     render(
       <ReviewForm
         isOpen={true}
@@ -195,7 +195,9 @@ describe('ReviewForm', () => {
       fireEvent.click(skipButton)
     })
 
-    expect(mockOnClose).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(mockOnClose).toHaveBeenCalled()
+    })
   })
 
   it('should submit review with text content', async () => {
