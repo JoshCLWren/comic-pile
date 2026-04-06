@@ -20,7 +20,7 @@ class ReviewCreate(BaseModel):
     """Schema for creating a new review."""
 
     thread_id: int = Field(..., gt=0)
-    rating: float = Field(..., ge=0.5, le=5.0)
+    rating: float = Field(..., ge=0.5, le=5.0, multiple_of=0.5)
     issue_number: str | None = Field(
         None,
         description="Issue number (if reviewing a specific issue)",
@@ -34,7 +34,7 @@ class ReviewCreate(BaseModel):
 class ReviewUpdate(BaseModel):
     """Schema for updating an existing review."""
 
-    rating: float | None = Field(None, ge=0.5, le=5.0)
+    rating: float | None = Field(None, ge=0.5, le=5.0, multiple_of=0.5)
     review_text: ReviewText | None = Field(
         None,
         description="Review text content",

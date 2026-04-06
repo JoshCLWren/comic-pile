@@ -23,9 +23,10 @@ import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
+import { reviewsApi } from '../../services/api-reviews'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
-import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
+import type { Thread, RollResponse, SessionThread, Collection, ReviewCreatePayload } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -71,11 +72,11 @@ export default function RollPage() {
   } = state
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
-const [showReviewForm, setShowReviewForm] = useState(false)
-const [reviewSaveError, setReviewSaveError] = useState<string | null>(null)
-const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
+  const [showReviewForm, setShowReviewForm] = useState(false)
+  const [reviewSaveError, setReviewSaveError] = useState<string | null>(null)
+  const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
 
-const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
 const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
@@ -406,7 +407,7 @@ useEffect(() => {
     setShowReviewForm(true)
   }
 
-  async function handleReviewSubmit(reviewData: any) {
+  async function handleReviewSubmit(reviewData: ReviewCreatePayload) {
     if (!activeRatingThread) return
     
     // Function to return to roll view - batch all state updates together
@@ -436,14 +437,11 @@ useEffect(() => {
       let reviewSaveError = null
       if (reviewData.review_text?.trim()) {
         try {
-          // Import and use the reviewsApi
-          const { reviewsApi } = await import('../../services/api-reviews')
           await reviewsApi.createOrUpdateReview(reviewData)
           setReviewSaveError(null)
         } catch (reviewError) {
           console.error('Failed to save review:', reviewError)
-          // Don't block the flow if review fails - rating was already saved
-          reviewSaveError = getApiErrorDetail(reviewError)
+          reviewSaveError = 'Your rating was saved. The review text failed to save — try again or skip.'
           setReviewSaveError(reviewSaveError)
         }
       }

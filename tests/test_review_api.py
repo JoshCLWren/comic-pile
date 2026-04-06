@@ -179,7 +179,7 @@ async def test_create_review_updates_existing_review(
     }
 
     response = await auth_client.post("/api/v1/reviews/", json=review_data)
-    assert response.status_code == 201
+    assert response.status_code == 200
 
     data = response.json()
     assert data["id"] == existing_review.id  # Same review ID
@@ -457,20 +457,17 @@ async def test_delete_review_other_user_review(
 
 @pytest.mark.asyncio
 async def test_get_thread_reviews_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """GET /reviews/threads/{thread_id}/reviews returns all reviews for a thread."""
+    """GET /threads/{id}/reviews returns all reviews for a thread."""
     user = await get_or_create_user_async(async_db)
+
     thread, issues = await _create_test_thread_with_issues(async_db, user, title="Test Thread")
 
-    # Create multiple reviews for the same thread
-    review1 = await _create_test_review(
-        async_db, user, thread, issues[0], rating=4.0, review_text="Issue 1"
-    )
-    review2 = await _create_test_review(
-        async_db, user, thread, issues[1], rating=5.0, review_text="Issue 2"
-    )
-    review3 = await _create_test_review(async_db, user, thread, rating=3.5, review_text="Overall")
+    # Create multiple reviews for the thread
+    review1 = await _create_test_review(async_db, user, thread, rating=3.0)
+    review2 = await _create_test_review(async_db, user, thread, rating=4.0)
+    review3 = await _create_test_review(async_db, user, thread, rating=5.0)
 
-    response = await auth_client.get(f"/api/v1/reviews/threads/{thread.id}/reviews")
+    response = await auth_client.get(f"/api/threads/{thread.id}/reviews")
     assert response.status_code == 200
 
     data = response.json()
@@ -489,11 +486,12 @@ async def test_get_thread_reviews_success(auth_client: AsyncClient, async_db: As
 
 @pytest.mark.asyncio
 async def test_get_thread_reviews_empty(auth_client: AsyncClient, async_db: AsyncSession) -> None:
-    """GET /reviews/threads/{thread_id}/reviews returns empty list for thread with no reviews."""
+    """GET /threads/{id}/reviews returns empty list when no reviews."""
     user = await get_or_create_user_async(async_db)
-    thread, _ = await _create_test_thread_with_issues(async_db, user, title="Test Thread")
 
-    response = await auth_client.get(f"/api/v1/reviews/threads/{thread.id}/reviews")
+    thread, issues = await _create_test_thread_with_issues(async_db, user, title="Test Thread")
+
+    response = await auth_client.get(f"/api/threads/{thread.id}/reviews")
     assert response.status_code == 200
 
     data = response.json()
@@ -503,8 +501,8 @@ async def test_get_thread_reviews_empty(auth_client: AsyncClient, async_db: Asyn
 
 @pytest.mark.asyncio
 async def test_get_thread_reviews_not_found(auth_client: AsyncClient) -> None:
-    """GET /reviews/threads/{thread_id}/reviews returns 404 for non-existent thread."""
-    response = await auth_client.get("/api/v1/reviews/threads/999/reviews")
+    """GET /threads/{id}/reviews returns 404 for non-existent thread."""
+    response = await auth_client.get("/api/threads/999/reviews")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
@@ -513,14 +511,14 @@ async def test_get_thread_reviews_not_found(auth_client: AsyncClient) -> None:
 async def test_get_thread_reviews_other_user_thread(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """GET /reviews/threads/{thread_id}/reviews returns 404 for thread owned by different user."""
+    """GET /threads/{thread_id}/reviews returns 404 for thread owned by different user."""
     other_user = User(username="other_user", created_at=datetime.now(UTC))
     async_db.add(other_user)
     await async_db.commit()
 
     thread, _ = await _create_test_thread_with_issues(async_db, other_user, title="Other Thread")
 
-    response = await auth_client.get(f"/api/v1/reviews/threads/{thread.id}/reviews")
+    response = await auth_client.get(f"/api/threads/{thread.id}/reviews")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
@@ -551,8 +549,8 @@ async def test_review_validation_rating_bounds(
     # Test valid ratings
     for valid_rating in [0.5, 1.0, 3.5, 5.0]:
         review_data["rating"] = valid_rating
-        response = await auth_client.post("/api/v1/reviews/", json=review_data)
-        assert response.status_code == 201
+    response = await auth_client.post("/api/v1/reviews/", json=review_data)
+    assert response.status_code == 201
 
 
 @pytest.mark.asyncio

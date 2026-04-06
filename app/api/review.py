@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,36 +74,32 @@ async def _get_issue_id(db: AsyncSession, thread_id: int, issue_number: str | No
 
 
 async def _create_or_update_review_response(review: Review, db: AsyncSession) -> ReviewResponse:
-    """Create ReviewResponse from Review with thread details."""
-    # Re-query the review with relationships loaded to ensure we have the data
-    result = await db.execute(
-        select(Review)
-        .where(Review.id == review.id)
-        .options(selectinload(Review.thread), selectinload(Review.issue))
-    )
-    refreshed_review = result.scalar_one()
+    """Create ReviewResponse from Review with thread details.
 
+    Note: This function expects the review to have thread and issue relationships
+    already loaded via selectinload. Callers must ensure these are loaded.
+    """
     return ReviewResponse(
-        id=refreshed_review.id,
-        user_id=refreshed_review.user_id,
-        thread_id=refreshed_review.thread_id,
-        rating=refreshed_review.rating,
-        review_text=refreshed_review.review_text,
-        issue_id=refreshed_review.issue_id,
-        issue_number=refreshed_review.issue.issue_number if refreshed_review.issue else None,
-        thread_title=refreshed_review.thread.title,
-        thread_format=refreshed_review.thread.format,
-        created_at=refreshed_review.created_at,
-        updated_at=refreshed_review.updated_at,
+        id=review.id,
+        user_id=review.user_id,
+        thread_id=review.thread_id,
+        rating=review.rating,
+        review_text=review.review_text,
+        issue_id=review.issue_id,
+        issue_number=review.issue.issue_number if review.issue else None,
+        thread_title=review.thread.title,
+        thread_format=review.thread.format,
+        created_at=review.created_at,
+        updated_at=review.updated_at,
     )
 
 
-@router.post("/", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ReviewResponse)
 async def create_review(
     review_data: ReviewCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> ReviewResponse:
+) -> Response:
     """Create a new review or update existing review.
 
     Users can have one review per thread/issue combination.
@@ -148,7 +144,12 @@ async def create_review(
         existing_review.rating = review_data.rating
         existing_review.review_text = review_data.review_text
         await db.commit()
-        return await _create_or_update_review_response(existing_review, db)
+        response_data = await _create_or_update_review_response(existing_review, db)
+        return Response(
+            content=response_data.model_dump_json(),
+            media_type="application/json",
+            status_code=status.HTTP_200_OK,
+        )
 
     # Create new review
     review = Review(
@@ -162,7 +163,18 @@ async def create_review(
 
     try:
         await db.commit()
-        return await _create_or_update_review_response(review, db)
+        result = await db.execute(
+            select(Review)
+            .where(Review.id == review.id)
+            .options(selectinload(Review.thread), selectinload(Review.issue))
+        )
+        refreshed_review = result.scalar_one()
+        response_data = await _create_or_update_review_response(refreshed_review, db)
+        return Response(
+            content=response_data.model_dump_json(),
+            media_type="application/json",
+            status_code=status.HTTP_201_CREATED,
+        )
     except IntegrityError:
         # Handle race condition - another review was created with the same user_id/thread_id/issue_id
         await db.rollback()
@@ -173,7 +185,12 @@ async def create_review(
             existing_review.rating = review_data.rating
             existing_review.review_text = review_data.review_text
             await db.commit()
-            return await _create_or_update_review_response(existing_review, db)
+            response_data = await _create_or_update_review_response(existing_review, db)
+            return Response(
+                content=response_data.model_dump_json(),
+                media_type="application/json",
+                status_code=status.HTTP_200_OK,
+            )
         else:
             # This shouldn't happen, but handle it gracefully
             raise HTTPException(
@@ -212,10 +229,14 @@ async def list_reviews(
 
     # Apply pagination
     if page_token:
-        # Parse page_token to get ID to start from
+        # Decode page_token to get (created_at, id) cursor
         try:
-            last_id = int(page_token)
-            base_query = base_query.where(Review.id < last_id)
+            last_created_at, last_id = _decode_page_token(page_token)
+            # Use keyset pagination on (created_at, id) for stable ordering
+            base_query = base_query.where(
+                (Review.created_at < last_created_at)
+                | ((Review.created_at == last_created_at) & (Review.id < last_id))
+            )
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -238,7 +259,7 @@ async def list_reviews(
     next_page_token = None
     if len(reviews_list) > page_size:
         last_review = reviews_list[page_size - 1]
-        next_page_token = str(last_review.id)
+        next_page_token = _encode_page_token(last_review.created_at, last_review.id)
 
     return ReviewListResponse(reviews=review_responses, next_page_token=next_page_token)
 
@@ -263,7 +284,9 @@ async def get_review(
         HTTPException: If review not found or not owned by user
     """
     result = await db.execute(
-        select(Review).where(and_(Review.id == review_id, Review.user_id == current_user.id))
+        select(Review)
+        .where(and_(Review.id == review_id, Review.user_id == current_user.id))
+        .options(selectinload(Review.thread), selectinload(Review.issue))
     )
     review = result.scalar_one_or_none()
     if not review:
@@ -297,7 +320,9 @@ async def update_review(
         HTTPException: If review not found or not owned by user
     """
     result = await db.execute(
-        select(Review).where(and_(Review.id == review_id, Review.user_id == current_user.id))
+        select(Review)
+        .where(and_(Review.id == review_id, Review.user_id == current_user.id))
+        .options(selectinload(Review.thread), selectinload(Review.issue))
     )
     review = result.scalar_one_or_none()
     if not review:
@@ -343,50 +368,3 @@ async def delete_review(
 
     await db.delete(review)
     await db.commit()
-
-
-@router.get("/threads/{thread_id}/reviews", response_model=list[ReviewResponse])
-async def get_thread_reviews(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> list[ReviewResponse]:
-    """Get all reviews for a specific thread.
-
-    Args:
-        thread_id: ID of the thread
-        current_user: The authenticated user
-        db: Database session
-
-    Returns:
-        List of reviews for the thread
-
-    Raises:
-        HTTPException: If thread not found or not owned by user
-    """
-    # Verify thread exists and belongs to user
-    thread_result = await db.execute(
-        select(Thread).where(and_(Thread.id == thread_id, Thread.user_id == current_user.id))
-    )
-    thread = thread_result.scalar_one_or_none()
-    if not thread:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found or does not belong to user",
-        )
-
-    # Get all reviews for the thread
-    result = await db.execute(
-        select(Review)
-        .where(and_(Review.thread_id == thread_id, Review.user_id == current_user.id))
-        .order_by(Review.created_at.desc())
-    )
-    reviews = result.scalars().all()
-
-    # Convert to response objects
-    review_responses = []
-    for review in reviews:
-        response = await _create_or_update_review_response(review, db)
-        review_responses.append(response)
-
-    return review_responses

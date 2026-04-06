@@ -9,7 +9,7 @@ export function useReviews() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const list = async (params?: { page_size?: number; page_token?: string | null }) => {
+  const list = useCallback(async (params?: { page_size?: number; page_token?: string | null }) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -23,7 +23,7 @@ export function useReviews() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { reviews, nextPageToken, list, isPending, isError }
 }
@@ -57,7 +57,7 @@ export function useReview() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const getReview = async (id: number | null) => {
+  const getReview = useCallback(async (id: number | null) => {
     if (!id) return
     setIsPending(true)
     setIsError(false)
@@ -71,7 +71,7 @@ export function useReview() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { review, getReview, isPending, isError }
 }
@@ -80,7 +80,7 @@ export function useCreateOrUpdateReview() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const createOrUpdateReview = async (data: ReviewCreatePayload) => {
+  const createOrUpdateReview = useCallback(async (data: ReviewCreatePayload) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -93,7 +93,7 @@ export function useCreateOrUpdateReview() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { createOrUpdateReview, isPending, isError }
 }
@@ -102,7 +102,7 @@ export function useUpdateReview() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const updateReview = async (id: number, data: ReviewUpdatePayload) => {
+  const updateReview = useCallback(async (id: number, data: ReviewUpdatePayload) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -115,7 +115,7 @@ export function useUpdateReview() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { updateReview, isPending, isError }
 }
@@ -124,7 +124,7 @@ export function useDeleteReview() {
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
 
-  const deleteReview = async (id: number) => {
+  const deleteReview = useCallback(async (id: number) => {
     setIsPending(true)
     setIsError(false)
     try {
@@ -136,7 +136,7 @@ export function useDeleteReview() {
     } finally {
       setIsPending(false)
     }
-  }
+  }, [])
 
   return { deleteReview, isPending, isError }
 }
