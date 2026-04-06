@@ -9,14 +9,16 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.api.review import _create_or_update_review_response
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
-from app.models import Event, Issue, Thread
+from app.models import Event, Issue, Review, Thread
 from app.models.user import User
 from app.schemas import (
     MigrateToIssuesRequest,
@@ -27,6 +29,7 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
+from app.schemas.review import ReviewResponse
 from app.schemas.migration import MigrateToIssuesSimpleRequest
 from comic_pile.session import get_current_die, get_or_create
 
@@ -755,11 +758,48 @@ async def move_thread_to_collection(
             )
 
     thread.collection_id = collection_id
-
     response = await thread_to_response(thread, db)
+
     await db.commit()
 
     return response
+
+
+@router.get("/{thread_id}/reviews", response_model=list[ReviewResponse])
+async def get_thread_reviews(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> list[ReviewResponse]:
+    """Get all reviews for a specific thread.
+
+    Args:
+        thread_id: ID of the thread
+        current_user: The authenticated user
+        db: Database session
+
+    Returns:
+        List of reviews for the thread
+
+    Raises:
+        HTTPException: If thread not found or not owned by user
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    result = await db.execute(
+        select(Review)
+        .where(and_(Review.thread_id == thread_id, Review.user_id == current_user.id))
+        .options(selectinload(Review.thread), selectinload(Review.issue))
+        .order_by(Review.created_at.desc())
+    )
+    reviews = result.scalars().all()
+
+    return [await _create_or_update_review_response(review, db) for review in reviews]
 
 
 @router.put("/{thread_id}/test-backdate", response_model=ThreadResponse)

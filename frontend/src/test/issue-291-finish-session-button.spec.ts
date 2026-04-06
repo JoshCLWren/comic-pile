@@ -40,12 +40,16 @@ test.describe('Issue 291: Finish Session Button', () => {
 
     const finishSessionButton = authenticatedWithThreadsPage.locator('button:has-text("Finish Session")');
     
+    await finishSessionButton.click();
+    
+    // Review form now appears - submit it (empty is fine)
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
     await Promise.all([
       authenticatedWithThreadsPage.waitForResponse((response) =>
         response.url().includes('/api/rate/') && 
         response.request().method() === 'POST'
       ),
-      finishSessionButton.click(),
+      authenticatedWithThreadsPage.click('button:has-text("Skip")'), // Skip button (doesn't require text)
     ]);
 
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
@@ -84,6 +88,10 @@ test.describe('Issue 291: Finish Session Button', () => {
     });
 
     await finishSessionButton.click();
+    
+    // Review form now appears - submit it (empty is fine)
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
+    await authenticatedWithThreadsPage.click('button:has-text("Skip")'); // Skip button (doesn't require text)
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     expect(requestData).toBeTruthy();

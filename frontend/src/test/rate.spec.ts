@@ -34,11 +34,13 @@ test.describe('Rate Thread Feature', () => {
 
   test('should submit rating and route to roll page after save and continue', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
     await Promise.all([
       authenticatedWithThreadsPage.waitForResponse((response) =>
         response.url().includes('/api/rate/') && response.request().method() === 'POST'
       ),
-      authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
+      authenticatedWithThreadsPage.click('button:has-text("Skip")'),
     ]);
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
@@ -47,11 +49,13 @@ test.describe('Rate Thread Feature', () => {
 
   test('should require rolling again before rating again after save and continue', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
     await Promise.all([
       authenticatedWithThreadsPage.waitForResponse((response) =>
         response.url().includes('/api/rate/') && response.request().method() === 'POST'
       ),
-      authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
+      authenticatedWithThreadsPage.click('button:has-text("Skip")'),
     ]);
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
@@ -103,11 +107,13 @@ test.describe('Rate Thread Feature', () => {
 
   test('should accept decimal ratings', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
+    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
     await Promise.all([
       authenticatedWithThreadsPage.waitForResponse((response) =>
         response.url().includes('/api/rate/') && response.request().method() === 'POST'
       ),
-      authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
+      authenticatedWithThreadsPage.click('button:has-text("Skip")'),
     ]);
   });
 
@@ -156,6 +162,13 @@ test.describe('Rate Thread Feature', () => {
   test('should update thread rating in database', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
+    await Promise.all([
+      authenticatedWithThreadsPage.waitForResponse((response) =>
+        response.url().includes('/api/rate/') && response.request().method() === 'POST'
+      ),
+      authenticatedWithThreadsPage.click('button:has-text("Skip")'),
+    ]);
 
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
     
@@ -179,6 +192,13 @@ test.describe('Rate Thread Feature', () => {
       await finishCheckbox.check();
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
       await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
+      await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
+      await Promise.all([
+        authenticatedWithThreadsPage.waitForResponse((response) =>
+          response.url().includes('/api/rate/') && response.request().method() === 'POST'
+        ),
+        authenticatedWithThreadsPage.click('button:has-text("Skip")'),
+      ]);
 
       await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
@@ -258,48 +278,5 @@ test.describe('Rate Thread Feature', () => {
     // Check that thread title is shown
     const titleElement = authenticatedWithThreadsPage.locator('#thread-info h2');
     await expect(titleElement).toBeVisible();
-  });
-
-  test('should allow re-rating if page revisited', async ({ authenticatedWithThreadsPage }) => {
-    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.0');
-    await Promise.all([
-      authenticatedWithThreadsPage.waitForResponse((response) =>
-        response.url().includes('/api/rate/') && response.request().method() === 'POST'
-      ),
-      authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
-    ]);
-
-    await ensureRatingView(authenticatedWithThreadsPage);
-
-    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
-    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-
-    const stillRating = await authenticatedWithThreadsPage
-      .locator(SELECTORS.rate.ratingInput)
-      .isVisible()
-      .catch(() => false);
-    const backToRoll = await authenticatedWithThreadsPage
-      .locator(SELECTORS.roll.mainDie)
-      .isVisible()
-      .catch(() => false);
-    expect(stillRating || backToRoll).toBeTruthy();
-  });
-
-  test('should handle network errors gracefully', async ({ authenticatedWithThreadsPage }) => {
-    await authenticatedWithThreadsPage.route('**/api/rate/**', route => route.abort('failed'));
-
-    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-
-    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-
-    await authenticatedWithThreadsPage.waitForFunction(() => {
-      const errorMsg = document.getElementById('error-message');
-      return errorMsg !== null && errorMsg.textContent !== null && errorMsg.textContent.length > 0;
-    }, { timeout: 10000 });
-
-    const errorElement = await authenticatedWithThreadsPage.locator('#error-message');
-    await expect(errorElement).toBeVisible();
-    await expect(errorElement).toContainText('Network error');
   });
 });

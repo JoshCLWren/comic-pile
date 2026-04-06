@@ -23,9 +23,10 @@ import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
+import { reviewsApi } from '../../services/api-reviews'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
-import type { Thread, RollResponse, SessionThread, Collection } from '../../types'
+import type { Thread, RollResponse, SessionThread, Collection, ReviewCreatePayload, Review } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -35,6 +36,7 @@ import {
 } from './utils'
 import { RatingView } from './components/RatingView'
 import { ThreadPool } from './components/ThreadPool'
+import ReviewForm from '../../components/ReviewForm'
 
 export default function RollPage() {
   const state = useRollPageState()
@@ -70,9 +72,13 @@ export default function RollPage() {
   } = state
 
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null)
+  const [showReviewForm, setShowReviewForm] = useState(false)
+  const [reviewSaveError, setReviewSaveError] = useState<string | null>(null)
+  const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
+  const [existingReview, setExistingReview] = useState<Review | null>(null)
 
-const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-const { activeCollectionId = null } = useCollections()
+  const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
+  const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
@@ -142,7 +148,7 @@ useEffect(() => {
     setIsActionSheetOpen(true)
   }
 
-const enterRatingView = useCallback((threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
+const enterRatingView = useCallback(async (threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
   if (threadId) setSelectedThreadId(threadId)
   if (result !== null) setRolledResult(result)
 
@@ -172,6 +178,31 @@ const enterRatingView = useCallback((threadId: number | null, result: number | n
   setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
   setIsRatingView(true)
   suppressPendingAutoOpenRef.current = false
+
+  // Fetch existing review if re-rating a thread
+  if (threadId) {
+    try {
+      const token = localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
+      if (token) {
+        const reviewsResponse = await fetch('/api/v1/reviews/', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+        if (reviewsResponse.ok) {
+          const reviewsData = await reviewsResponse.json()
+          const existing = reviewsData.reviews?.find((r: Review) => 
+            r.thread_id === threadId && 
+            (!ratingThread?.issue_number || r.issue_number === ratingThread.issue_number)
+          )
+          setExistingReview(existing || null)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch existing review:', error)
+      setExistingReview(null)
+    }
+  } else {
+    setExistingReview(null)
+  }
 }, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
 
 const handleMigrationComplete = useCallback((migratedThread: Thread) => {
@@ -396,24 +427,73 @@ useEffect(() => {
       setShowSimpleMigration(true)
       return
     }
-    try {
-      if (!activeRatingThread) return
-      await rateMutation.mutate({ thread_id: activeRatingThread.id, rating, finish_session: finishSession })
-      suppressPendingAutoOpenRef.current = true
-      setIsRolling(false)
+    
+    // Show review form instead of immediately submitting rating
+    setPendingRatingAction({ finishSession })
+    setShowReviewForm(true)
+  }
+
+  async function handleReviewSubmit(reviewData: ReviewCreatePayload) {
+    if (!activeRatingThread) return
+    
+    // Function to return to roll view - batch all state updates together
+    const returnToRollView = () => {
+      setShowReviewForm(false)
       setIsRatingView(false)
+      setPendingRatingAction(null)
+      setIsRolling(false)
       setRolledResult(null)
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
+    }
+
+    try {
+      const finishSession = pendingRatingAction?.finishSession || false
+      
+      // Submit the rating with review data first
+      await rateMutation.mutate({ 
+        thread_id: activeRatingThread.id, 
+        rating, 
+        finish_session: finishSession,
+        issue_number: activeRatingThread.issue_number || undefined
+      })
+      
+      // Submit the review if text was provided
+      let reviewSaveError = null
+      if (reviewData.review_text?.trim()) {
+        try {
+          await reviewsApi.createOrUpdateReview(reviewData)
+          setReviewSaveError(null)
+        } catch (reviewError) {
+          console.error('Failed to save review:', reviewError)
+          reviewSaveError = 'Your rating was saved. The review text failed to save — try again or skip.'
+          setReviewSaveError(reviewSaveError)
+        }
+      }
+
+      // Refresh data
       const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
       if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
         setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
+        returnToRollView()
+        return
       }
+      
+      // If review save failed, keep modal open so user can see error and retry
+      if (reviewSaveError) {
+        return
+      }
+      
+      // Return to roll view after all operations complete successfully
+      returnToRollView()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
+      // Keep the modal open on rating error so user can see the error and retry
     }
   }
+
+  
 
   async function handleSnooze() {
     try {
@@ -626,7 +706,8 @@ useEffect(() => {
             {!isRatingView ? (
               <div id="main-die-3d" onClick={handleRoll} onKeyDown={handleKeyDown} role="button" tabIndex={0} aria-label="Roll the dice"
                 className={`dice-state-${diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 mx-auto`}
-                style={{ width: '200px', height: '200px' }}>
+                style={{ width: '200px', height: '200px' }}
+                data-testid="main-die-3d">
                 <div className="w-full h-full main-die-optical-center">
                   <LazyDice3D sides={displayDie} value={rolledResult || 1} isRolling={isRolling} showValue={false} color={0xffffff}
                     onRollComplete={() => setDiceState('rolled')} />
@@ -767,6 +848,27 @@ useEffect(() => {
             </button>
           </div>
         </Modal>
+
+        {showReviewForm && activeRatingThread && (
+          <ReviewForm
+            isOpen={showReviewForm}
+            onClose={() => {
+              setShowReviewForm(false)
+              setIsRatingView(false)
+              setPendingRatingAction(null)
+              setReviewSaveError(null)
+              setErrorMessage('')
+              setExistingReview(null)
+            }}
+            onSubmit={handleReviewSubmit}
+            threadId={activeRatingThread.id}
+            threadTitle={activeRatingThread.title}
+            issueNumber={activeRatingThread.issue_number || undefined}
+            rating={rating}
+            error={reviewSaveError}
+            existingReview={existingReview}
+          />
+        )}
       </div>
     </div>
   )

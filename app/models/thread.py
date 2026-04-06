@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from app.models.dependency import Dependency
     from app.models.event import Event
     from app.models.user import User
+    from app.models.review import Review
 
 
 class Thread(Base):
@@ -106,6 +107,9 @@ class Thread(Base):
         lazy="select",
         order_by="Issue.position",
         foreign_keys="[Issue.thread_id]",
+    )
+    reviews: Mapped[list["Review"]] = relationship(
+        "Review", back_populates="thread", cascade="all, delete-orphan", lazy="raise"
     )
     next_unread_issue: Mapped["Issue | None"] = relationship(
         "Issue", foreign_keys=[next_unread_issue_id], lazy="raise"

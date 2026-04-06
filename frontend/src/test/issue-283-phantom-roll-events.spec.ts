@@ -47,6 +47,13 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     await page.fill('#rating-input', '4');
     await page.click('button:has-text("Save & Continue")');
 
+    // Review form now appears - submit it (empty is fine)
+    await expect(page.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/rate/')),
+      page.click('button:has-text("Skip")'), // Save Review button
+    ]);
+
     // Wait for roll view to return
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
     await page.waitForLoadState('networkidle');
@@ -130,6 +137,13 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     // Rate the thread
     await page.fill('#rating-input', '5');
     await page.click('button:has-text("Save & Continue")');
+
+    // Review form now appears - submit it (empty is fine)
+    await expect(page.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/rate/')),
+      page.click('button:has-text("Skip")'), // Save Review button
+    ]);
 
     // Wait for roll view to return
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
@@ -230,6 +244,14 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
       // Rate
       await page.fill('#rating-input', '3');
       await page.click('button:has-text("Save & Continue")');
+      
+    // Review form now appears - submit it (empty is fine)
+    await expect(page.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
+    await Promise.all([
+      page.waitForResponse(r => r.url().includes('/api/rate/')),
+      page.click('button:has-text("Skip")'), // Skip button (doesn't require text)
+    ]);
+      
       await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
       await page.waitForLoadState('networkidle');
 

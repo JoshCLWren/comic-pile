@@ -420,6 +420,68 @@ export interface FlowchartDependency {
 }
 
 /**
+ * A user-written review for a thread or issue
+ */
+export interface Review {
+  /** Unique identifier for the review */
+  id: number;
+  /** ID of the user who wrote the review */
+  user_id: number;
+  /** ID of the thread being reviewed */
+  thread_id: number;
+  /** Rating given (0.5-5.0) */
+  rating: number;
+  /** Review text content */
+  review_text: string | null;
+  /** ID of the specific issue being reviewed (null if thread-level review) */
+  issue_id: number | null;
+  /** Issue number (null if thread-level review) */
+  issue_number: string | null;
+  /** Title of the thread being reviewed */
+  thread_title: string;
+  /** Format of the comic */
+  thread_format: string;
+  /** ISO 8601 timestamp when the review was created */
+  created_at: string;
+  /** ISO 8601 timestamp when the review was last updated */
+  updated_at: string;
+}
+
+/**
+ * Response from review list endpoint with pagination
+ */
+export interface ReviewListResponse {
+  /** Array of reviews for the current page */
+  reviews: Review[];
+  /** Token for fetching next page (null if no more pages) */
+  next_page_token: string | null;
+}
+
+/**
+ * Payload for creating a new review
+ */
+export interface ReviewCreatePayload {
+  /** ID of the thread to review */
+  thread_id: number;
+  /** Rating (0.5-5.0) */
+  rating: number;
+  /** Issue number (if reviewing specific issue) */
+  issue_number?: string;
+  /** Review text content */
+  review_text?: string;
+}
+
+/**
+ * Payload for updating an existing review
+ */
+export interface ReviewUpdatePayload {
+  /** Rating (0.5-5.0) */
+  rating?: number;
+  /** Review text content */
+  review_text?: string;
+}
+
+/**
  * Result of laying out a dependency graph
  */
 export interface GraphLayout {
