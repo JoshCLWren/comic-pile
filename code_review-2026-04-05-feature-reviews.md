@@ -339,7 +339,7 @@ Two-line fix: remove `Response` from the import, add `response_model=ReviewRespo
 
 ## Third Response — Final Issues Fixed ✅
 
-_Commit: Pending | Date: 2026-04-05_
+_Commit: `80c6204d` | Date: 2026-04-05_
 
 Both final issues have been addressed. Details below:
 
