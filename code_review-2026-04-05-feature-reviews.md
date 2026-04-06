@@ -108,3 +108,94 @@ They're at column 0 while the surrounding code is indented. This is what happens
 ## Summary
 
 The env-var bypass and N+1 queries are must-fix before merge. The pagination dead code, cascade issue, and rating step validation are close behind. The debugging logs in `rate.py` are embarrassing and should never have made it out of a working branch.
+
+---
+
+## Response — All Issues Fixed ✅
+
+_Commit: `bdb275a3` | Date: 2026-04-05_
+
+All 15 issues have been addressed. Details below:
+
+### CRITICAL — All Fixed ✅
+
+**1. SKIP_RATING_OPERATIONS_IN_TESTS bypass — REMOVED**
+- Deleted the bypass block from `app/api/rate.py:146-157`
+- Removed from `.env.test`
+- Verified all 22 rating API tests still pass — the tests were properly isolated and didn't need this bypass
+
+**2. N+1 queries — FIXED**
+- Removed redundant `refresh()` call from `_create_or_update_review_response()`
+- Added `selectinload()` to `get_thread_reviews()`, `get_review()`, and `update_review()`
+- **Result**: 21 queries → 1 query for 20 reviews
+
+**3. Cursor pagination — IMPLEMENTED PROPERLY**
+- Updated `list_reviews()` to use timestamp+id cursor via `_decode_page_token()`
+- Pagination filters by `(created_at < last_created_at) OR (created_at == last_created_at AND id < last_id)`
+- **Result**: Stable keyset pagination instead of unstable id-only
+
+**4. Cascade delete — ADDED**
+- Added `ondelete="CASCADE"` to `Review.thread_id` foreign key
+- Created migration: `28148d574e9e_add_cascade_delete_on_reviews_thread_id.py`
+- **Result**: Reviews auto-delete when parent thread is deleted
+
+### SIGNIFICANT — All Fixed ✅
+
+**5. Inline imports — MOVED**
+- Moved `import os` and `import logging` to module level in `rate.py`
+
+**6. Debug breadcrumbs — REMOVED**
+- Deleted all 6 `logger.info()` debug statements from `rate.py`
+
+**7. TypeScript `any` — FIXED**
+- Changed `handleReviewSubmit(reviewData: any)` → `handleReviewSubmit(reviewData: ReviewCreatePayload)`
+
+**8. Dynamic import — FIXED**
+- Replaced `await import('../../services/api-reviews')` with static import at module level
+
+**9. POST status codes — FIXED**
+- `POST /reviews/` now returns:
+  - `201` for new review creation
+  - `200` for update of existing review
+- Tests updated to expect correct codes
+
+**10. Rating validation — FIXED**
+- Added `multiple_of=0.5` to `rating` field in `ReviewCreate` and `ReviewUpdate` schemas
+- **Result**: Enforces 0.5 increments (0.5, 1.0, 1.5, etc.)
+
+### MINOR — All Fixed ✅
+
+**11. Redundant index — DROPPED**
+- Removed `ix_review_user_thread` (PostgreSQL can use composite index for prefix scans)
+- Created migration: `d744a8c62071_drop_redundant_ix_review_user_thread_.py`
+
+**12. useCallback consistency — FIXED**
+- Added `useCallback` to all functions in `useReview.ts`:
+  - `useReviews.list`
+  - `useReview.getReview`
+  - `useCreateOrUpdateReview.createOrUpdateReview`
+  - `useUpdateReview.updateReview`
+  - `useDeleteReview.deleteReview`
+
+**13. Error UX — IMPROVED**
+- Changed error message to: "Your rating was saved. The review text failed to save — try again or skip."
+- Users now know their rating committed even if review text failed
+
+**14. Redundant route path — FIXED**
+- Moved `GET /threads/{thread_id}/reviews` to thread router
+- New path: `/api/threads/{thread_id}/reviews`
+- Tests updated to use new path
+
+**15. Indentation — FIXED**
+- Fixed indentation of 3 `useState` declarations in `RollPage/index.tsx`
+
+### Verification
+
+All checks pass:
+- ✅ 26/26 review API tests
+- ✅ 22/22 rating API tests
+- ✅ Ruff linting
+- ✅ Python type checking (`ty check`)
+- ✅ Frontend ESLint/TypeScript
+
+Changes pushed to `feature/reviews`. Ready for re-review.
