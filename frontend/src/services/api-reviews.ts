@@ -44,5 +44,5 @@ export const reviewsApi = {
    * Get all reviews for a specific thread.
    */
   getThreadReviews: (threadId: number) =>
-    api.get<Review[]>(`/v1/reviews/threads/${threadId}/reviews`),
+    api.get<Review[]>(`/threads/${threadId}/reviews`),
 }

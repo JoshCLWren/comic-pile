@@ -5,17 +5,42 @@ test.describe('Review Editing E2E Tests', () => {
   test('should edit existing review', async ({ authenticatedWithThreadsPage }) => {
     const page = authenticatedWithThreadsPage;
     
+    const token = await page.evaluate(() => 
+      localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
+    );
+    
+    if (!token) {
+      throw new Error('No auth token found');
+    }
+    
+    // Get list of threads
+    const threadsResponse = await page.request.get('/api/threads/', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    expect(threadsResponse.ok()).toBeTruthy();
+    const threadsData = await threadsResponse.json();
+    const threads = threadsData.threads ?? threadsData;
+    expect(threads.length).toBeGreaterThan(0);
+    
+    // Use the first thread for testing
+    const threadId = threads[0].id;
+    const threadTitle = threads[0].title;
+    console.log('Testing with thread:', threadTitle, 'ID:', threadId);
+    
+    // First, set the thread as pending and create a review
+    const setPendingResponse = await page.request.post(`/api/threads/${threadId}/set-pending`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    expect(setPendingResponse.status()).toBe(200);
+    
+    // Navigate to home page - rating modal should appear
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    let mainDie = page.locator(SELECTORS.roll.mainDie);
-    await expect(mainDie).toBeVisible();
-    await mainDie.click();
-    
     await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
-    
-    const rolledTitle = await page.locator('h2, h1').first().textContent();
-    console.log('Rolled:', rolledTitle);
     
     await setRangeInput(page, SELECTORS.rate.ratingInput, '4.0');
     
@@ -38,25 +63,28 @@ test.describe('Review Editing E2E Tests', () => {
     
     await expect(reviewModal).not.toBeVisible();
     
-    const token = await page.evaluate(() => 
-      localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
-    );
-    
+    // Verify the review was created
     const reviewsResponse = await page.request.get('/api/v1/reviews/', {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     const reviewsData = await reviewsResponse.json();
-    const latestReview = reviewsData.reviews?.[0];
+    const latestReview = reviewsData.reviews?.find((r: any) => r.thread_id === threadId);
     
     expect(latestReview).toBeDefined();
     expect(latestReview.review_text).toBe('Original review');
     
-    await page.goto(`/thread/${latestReview.thread_id}`);
-    await page.waitForLoadState('networkidle');
+    // Now set the same thread as pending again to test editing
+    const setPendingResponse2 = await page.request.post(`/api/threads/${threadId}/set-pending`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    expect(setPendingResponse2.status()).toBe(200);
     
-    const rollButton = page.getByText('🎲Roll');
-    await expect(rollButton).toBeVisible();
-    await rollButton.click();
+    // Navigate to home page - rating modal should appear again
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
     
     await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
     

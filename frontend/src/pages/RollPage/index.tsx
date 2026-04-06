@@ -26,7 +26,7 @@ import { threadsApi, dependenciesApi } from '../../services/api'
 import { reviewsApi } from '../../services/api-reviews'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
-import type { Thread, RollResponse, SessionThread, Collection, ReviewCreatePayload } from '../../types'
+import type { Thread, RollResponse, SessionThread, Collection, ReviewCreatePayload, Review } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -75,6 +75,7 @@ export default function RollPage() {
   const [showReviewForm, setShowReviewForm] = useState(false)
   const [reviewSaveError, setReviewSaveError] = useState<string | null>(null)
   const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
+  const [existingReview, setExistingReview] = useState<Review | null>(null)
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   const { activeCollectionId = null } = useCollections()
@@ -147,7 +148,7 @@ useEffect(() => {
     setIsActionSheetOpen(true)
   }
 
-const enterRatingView = useCallback((threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
+const enterRatingView = useCallback(async (threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
   if (threadId) setSelectedThreadId(threadId)
   if (result !== null) setRolledResult(result)
 
@@ -177,6 +178,31 @@ const enterRatingView = useCallback((threadId: number | null, result: number | n
   setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
   setIsRatingView(true)
   suppressPendingAutoOpenRef.current = false
+
+  // Fetch existing review if re-rating a thread
+  if (threadId) {
+    try {
+      const token = localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
+      if (token) {
+        const reviewsResponse = await fetch('/api/v1/reviews/', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+        if (reviewsResponse.ok) {
+          const reviewsData = await reviewsResponse.json()
+          const existing = reviewsData.reviews?.find((r: Review) => 
+            r.thread_id === threadId && 
+            (!ratingThread?.issue_number || r.issue_number === ratingThread.issue_number)
+          )
+          setExistingReview(existing || null)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch existing review:', error)
+      setExistingReview(null)
+    }
+  } else {
+    setExistingReview(null)
+  }
 }, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
 
 const handleMigrationComplete = useCallback((migratedThread: Thread) => {
@@ -832,6 +858,7 @@ useEffect(() => {
               setPendingRatingAction(null)
               setReviewSaveError(null)
               setErrorMessage('')
+              setExistingReview(null)
             }}
             onSubmit={handleReviewSubmit}
             threadId={activeRatingThread.id}
@@ -839,6 +866,7 @@ useEffect(() => {
             issueNumber={activeRatingThread.issue_number || undefined}
             rating={rating}
             error={reviewSaveError}
+            existingReview={existingReview}
           />
         )}
       </div>
