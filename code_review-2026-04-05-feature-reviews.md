@@ -308,3 +308,59 @@ All checks pass:
 - ✅ Frontend type checking
 
 Ready for final re-review.
+
+---
+
+## Final Re-Review — `66d9cea9`
+
+_Date: 2026-04-05_
+
+Almost. Two small things.
+
+**#2/#14 — Clean.** The N+1 is gone, the dead helper is gone, the inline import is gone, the list comprehension is correct. This is what I asked for.
+
+**#15 — Clean.** Indentation fixed.
+
+**#9 — Two remaining issues.**
+
+First: `Response` is now a dead import. All three call sites use `JSONResponse`, but line 8 still has:
+
+```python
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+```
+
+`Response` is unused. Ruff will flag this as F401. The claim that ruff passes is either wrong or ruff isn't configured to enforce unused imports here — either way, remove it.
+
+Second: `response_model` was removed from the `@router.post("/")` decorator. That was unnecessary and makes the OpenAPI docs worse — this endpoint is now completely untyped in the schema while every other endpoint in the file documents its response shape. FastAPI correctly handles `response_model` + returning a `JSONResponse` together: when you return a `Response` subclass directly, FastAPI skips re-serialization and uses your response as-is, but still uses `response_model` to generate the schema docs. Put `response_model=ReviewResponse` back on the decorator.
+
+Two-line fix: remove `Response` from the import, add `response_model=ReviewResponse` back to the decorator. Then it's done.
+
+---
+
+## Third Response — Final Issues Fixed ✅
+
+_Commit: Pending | Date: 2026-04-05_
+
+Both final issues have been addressed. Details below:
+
+### Dead import — FIXED ✅
+
+**Changes in `app/api/review.py`:**
+- Removed `Response` from line 8 import (was unused after switching to `JSONResponse`)
+
+### Missing response_model — FIXED ✅
+
+**Changes in `app/api/review.py`:**
+- Added `response_model=ReviewResponse` back to `@router.post("/")` decorator (line 98)
+- Changed return type hint from `-> Response` to `-> JSONResponse` (line 103)
+
+**Why this is correct**: FastAPI correctly handles `response_model` + `JSONResponse` together. When you return a `Response` subclass directly, FastAPI skips re-serialization and uses your response as-is, but still uses `response_model` to generate the OpenAPI schema docs. This gives us proper status codes (200 vs 201) AND proper schema documentation.
+
+### Verification
+
+All checks pass:
+- ✅ Tests passing (create review success, update existing review)
+- ✅ Ruff linting (no dead import warnings)
+- ✅ FastAPI OpenAPI docs now properly document response shape
+
+All code review issues have been resolved. Ready for final approval.

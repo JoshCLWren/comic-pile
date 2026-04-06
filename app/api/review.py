@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
@@ -95,12 +95,12 @@ async def _create_or_update_review_response(review: Review, db: AsyncSession) ->
     )
 
 
-@router.post("/")
+@router.post("/", response_model=ReviewResponse)
 async def create_review(
     review_data: ReviewCreate,
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
-) -> Response:
+) -> JSONResponse:
     """Create a new review or update existing review.
 
     Users can have one review per thread/issue combination.
