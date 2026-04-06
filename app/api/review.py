@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,7 +95,7 @@ async def _create_or_update_review_response(review: Review, db: AsyncSession) ->
     )
 
 
-@router.post("/", response_model=ReviewResponse)
+@router.post("/")
 async def create_review(
     review_data: ReviewCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -145,9 +146,8 @@ async def create_review(
         existing_review.review_text = review_data.review_text
         await db.commit()
         response_data = await _create_or_update_review_response(existing_review, db)
-        return Response(
-            content=response_data.model_dump_json(),
-            media_type="application/json",
+        return JSONResponse(
+            content=response_data.model_dump(mode="json"),
             status_code=status.HTTP_200_OK,
         )
 
@@ -170,9 +170,8 @@ async def create_review(
         )
         refreshed_review = result.scalar_one()
         response_data = await _create_or_update_review_response(refreshed_review, db)
-        return Response(
-            content=response_data.model_dump_json(),
-            media_type="application/json",
+        return JSONResponse(
+            content=response_data.model_dump(mode="json"),
             status_code=status.HTTP_201_CREATED,
         )
     except IntegrityError:
@@ -186,9 +185,8 @@ async def create_review(
             existing_review.review_text = review_data.review_text
             await db.commit()
             response_data = await _create_or_update_review_response(existing_review, db)
-            return Response(
-                content=response_data.model_dump_json(),
-                media_type="application/json",
+            return JSONResponse(
+                content=response_data.model_dump(mode="json"),
                 status_code=status.HTTP_200_OK,
             )
         else:

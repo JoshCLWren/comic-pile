@@ -77,7 +77,7 @@ export default function RollPage() {
   const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
-const { activeCollectionId = null } = useCollections()
+  const { activeCollectionId = null } = useCollections()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()

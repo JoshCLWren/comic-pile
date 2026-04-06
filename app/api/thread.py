@@ -12,7 +12,9 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.api.review import _create_or_update_review_response
 from app.auth import get_current_user
 from app.database import get_db
 from app.middleware import limiter
@@ -763,32 +765,6 @@ async def move_thread_to_collection(
     return response
 
 
-async def _create_review_response(review: Review, db: AsyncSession) -> ReviewResponse:
-    """Create ReviewResponse from Review with thread details."""
-    from sqlalchemy.orm import selectinload
-
-    result = await db.execute(
-        select(Review)
-        .where(Review.id == review.id)
-        .options(selectinload(Review.thread), selectinload(Review.issue))
-    )
-    refreshed_review = result.scalar_one()
-
-    return ReviewResponse(
-        id=refreshed_review.id,
-        user_id=refreshed_review.user_id,
-        thread_id=refreshed_review.thread_id,
-        rating=refreshed_review.rating,
-        review_text=refreshed_review.review_text,
-        issue_id=refreshed_review.issue_id,
-        issue_number=refreshed_review.issue.issue_number if refreshed_review.issue else None,
-        thread_title=refreshed_review.thread.title,
-        thread_format=refreshed_review.thread.format,
-        created_at=refreshed_review.created_at,
-        updated_at=refreshed_review.updated_at,
-    )
-
-
 @router.get("/{thread_id}/reviews", response_model=list[ReviewResponse])
 async def get_thread_reviews(
     thread_id: int,
@@ -818,16 +794,12 @@ async def get_thread_reviews(
     result = await db.execute(
         select(Review)
         .where(and_(Review.thread_id == thread_id, Review.user_id == current_user.id))
+        .options(selectinload(Review.thread), selectinload(Review.issue))
         .order_by(Review.created_at.desc())
     )
     reviews = result.scalars().all()
 
-    review_responses = []
-    for review in reviews:
-        response = await _create_review_response(review, db)
-        review_responses.append(response)
-
-    return review_responses
+    return [await _create_or_update_review_response(review, db) for review in reviews]
 
 
 @router.put("/{thread_id}/test-backdate", response_model=ThreadResponse)
