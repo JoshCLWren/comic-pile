@@ -433,6 +433,7 @@ useEffect(() => {
       })
       
       // Submit the review if text was provided
+      let reviewSaveError = null
       if (reviewData.review_text?.trim()) {
         try {
           // Import and use the reviewsApi
@@ -442,7 +443,8 @@ useEffect(() => {
         } catch (reviewError) {
           console.error('Failed to save review:', reviewError)
           // Don't block the flow if review fails - rating was already saved
-          setReviewSaveError(getApiErrorDetail(reviewError))
+          reviewSaveError = getApiErrorDetail(reviewError)
+          setReviewSaveError(reviewSaveError)
         }
       }
 
@@ -450,14 +452,20 @@ useEffect(() => {
       const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
       if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
         setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
+        returnToRollView()
+        return
       }
       
-      // Return to roll view after all operations complete
+      // If review save failed, keep modal open so user can see error and retry
+      if (reviewSaveError) {
+        return
+      }
+      
+      // Return to roll view after all operations complete successfully
       returnToRollView()
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
-      // Ensure we return to roll view even if rating fails
-      returnToRollView()
+      // Keep the modal open on rating error so user can see the error and retry
     }
   }
 
