@@ -1,6 +1,7 @@
 # Global ARGs (available to all stages when redeclared)
 ARG USER_ID=1000
 ARG GROUP_ID=1000
+ARG BUILD_TIMESTAMP=unknown
 
 # ============================
 # Python dependency stage
@@ -41,9 +42,9 @@ RUN npm ci
 # Copy source files - this layer invalidates when any source changes
 COPY frontend/ ./
 
-# Build with explicit cache bust by touching a file that changes each build
-# This ensures npm run build always executes when source changes
-RUN echo "Build timestamp: $(date -u +%s)" > /tmp/build-stamp && npm run build
+# Force cache invalidation by using build arg
+ARG BUILD_TIMESTAMP
+RUN echo "Build timestamp: ${BUILD_TIMESTAMP:-$(date -u +%s)}" && npm run build
 
 # Vite writes to /app/static/react based on outDir in vite config
 
