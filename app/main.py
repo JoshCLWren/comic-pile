@@ -421,7 +421,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(snooze.router, prefix="/api/snooze", tags=["snooze"])
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
-    app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     if app_settings.environment != "production":
         app.include_router(test.router, prefix="/api", tags=["test"])
 
