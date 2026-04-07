@@ -39,7 +39,11 @@ class Review(Base):
     )
 
     __table_args__ = (
-        Index("ix_review_user_thread_issue", "user_id", "thread_id", "issue_id"),
+        # NULLS NOT DISTINCT unique index — enforced via raw SQL in migrations
+        # (4882a6a20f35) because SQLAlchemy has no native NULLS NOT DISTINCT support.
+        # The index name in the DB is uq_review_user_thread_issue; alembic check will
+        # flag this as a difference and should not be used as a CI gate for this table.
+        Index("uq_review_user_thread_issue", "user_id", "thread_id", "issue_id", unique=True),
         Index("ix_review_created_at", "created_at"),
         Index("ix_review_thread_id", "thread_id"),
     )
