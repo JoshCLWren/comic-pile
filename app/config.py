@@ -236,8 +236,12 @@ class GitHubSettings(BaseSettings):
 
     @property
     def is_configured(self) -> bool:
-        """Return True if all GitHub settings are set."""
-        return bool(self.github_token and self.github_repo_owner and self.github_repo_name)
+        """Return True if all GitHub settings are set with non-whitespace values."""
+        return bool(
+            self.github_token.strip()
+            and self.github_repo_owner.strip()
+            and self.github_repo_name.strip()
+        )
 
 
 class Settings(BaseSettings):

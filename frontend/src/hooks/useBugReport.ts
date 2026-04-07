@@ -10,6 +10,7 @@ export function useBugReport() {
   const submit = useCallback(async (title: string, description: string, screenshotBlob: Blob | null) => {
     setIsSubmitting(true)
     setError(null)
+    setIssueUrl(null)
     try {
       const formData = new FormData()
       formData.append('title', title)

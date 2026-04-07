@@ -360,7 +360,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         # FormData objects are not directly JSON serializable
         body_for_log: object
         if hasattr(exc.body, "__class__") and exc.body.__class__.__name__ == "FormData":
-            body_for_log = dict(exc.body)
+            body_for_log = {k: v if isinstance(v, str) else f"<{type(v).__name__}>" for k, v in exc.body.multi_items()}
         else:
             body_for_log = exc.body
 
@@ -392,7 +392,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         # FormData objects are not directly JSON serializable
         body_content: object
         if hasattr(exc.body, "__class__") and exc.body.__class__.__name__ == "FormData":
-            body_content = dict(exc.body)
+            body_content = {k: v if isinstance(v, str) else f"<{type(v).__name__}>" for k, v in exc.body.multi_items()}
         else:
             body_content = exc.body
 

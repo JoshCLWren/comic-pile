@@ -19,8 +19,10 @@ export default function BugReportModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [activeBlob, setActiveBlob] = useState<Blob | null>(screenshotBlob)
 
   useEffect(() => {
+    setActiveBlob(screenshotBlob)
     if (screenshotBlob) {
       const url = URL.createObjectURL(screenshotBlob)
       setScreenshotUrl(url)
@@ -43,7 +45,7 @@ export default function BugReportModal({
     setError(null)
 
     try {
-      await onSubmit(title.trim(), description.trim(), screenshotBlob)
+      await onSubmit(title.trim(), description.trim(), activeBlob)
       setTitle('')
       setDescription('')
       onClose()
@@ -60,6 +62,7 @@ export default function BugReportModal({
       URL.revokeObjectURL(screenshotUrl)
       setScreenshotUrl(null)
     }
+    setActiveBlob(null)
   }
 
   return (

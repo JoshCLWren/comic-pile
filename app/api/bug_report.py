@@ -39,6 +39,14 @@ async def create_bug_report(
     Raises:
         HTTPException: If validation fails or GitHub integration not configured
     """
+    title = title.strip()
+    description = description.strip()
+    if not title or not description:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Title and description must not be blank",
+        )
+
     github_settings = get_github_settings()
     if not github_settings.is_configured:
         raise HTTPException(
@@ -66,12 +74,18 @@ async def create_bug_report(
         screenshot_bytes = content
         screenshot_filename = screenshot.filename
 
-    issue_url = await create_bug_report_issue(
-        title=title,
-        description=description,
-        username=current_user.username,
-        screenshot_bytes=screenshot_bytes,
-        screenshot_filename=screenshot_filename,
-    )
+    try:
+        issue_url = await create_bug_report_issue(
+            title=title,
+            description=description,
+            username=current_user.username,
+            screenshot_bytes=screenshot_bytes,
+            screenshot_filename=screenshot_filename,
+        )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(e),
+        ) from e
 
     return BugReportResponse(issue_url=issue_url)
