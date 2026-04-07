@@ -23,7 +23,7 @@ async def create_bug_report(
     title: Annotated[str, Form(max_length=MAX_TITLE_LENGTH)],
     description: Annotated[str, Form(max_length=MAX_DESCRIPTION_LENGTH)],
     current_user: Annotated[User, Depends(get_current_user)],
-    screenshot: Annotated[UploadFile | None, File(None)] = None,
+    screenshot: Annotated[UploadFile, File()] | None = None,
 ) -> BugReportResponse:
     """Create a bug report issue on GitHub.
 
