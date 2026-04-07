@@ -532,3 +532,7 @@ export interface RollResponse {
   /** Last rolled result for active thread context (when present) */
   last_rolled_result?: number | null;
 }
+
+export interface BugReportResponse {
+  issue_url: string
+}
