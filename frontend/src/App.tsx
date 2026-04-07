@@ -2,8 +2,10 @@ import { lazy, Suspense, createContext, useContext, useState, useEffect } from '
 import type { ReactNode } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Navigation from './components/Navigation'
+import BugReportButton from './components/BugReportButton'
 import api, { clearAccessToken, setAccessToken } from './services/api'
 import type { AuthUser } from './types'
+import { useBugReport } from './hooks/useBugReport'
 import { ToastProvider } from './contexts/ToastContext'
 import { CacheProvider } from './contexts/CacheContext'
 import './index.css'
@@ -176,7 +178,13 @@ function PublicLayout({ children }: { children: ReactNode }) {
   )
 }
 
+function BugReportConnected() {
+  const { submit } = useBugReport()
+  return <BugReportButton onSubmit={submit} />
+}
+
 function AppRoutes() {
+  const { isAuthenticated } = useAuth()
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
       <Routes>
@@ -285,6 +293,7 @@ function AppRoutes() {
           }
         />
         </Routes>
+      {isAuthenticated && <BugReportConnected />}
     </Suspense>
   )
 }

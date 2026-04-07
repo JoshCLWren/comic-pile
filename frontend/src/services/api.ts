@@ -8,6 +8,7 @@ import type {
   AnalyticsMetrics,
   AuthTokens,
   BlockingInfoResponse,
+  BugReportResponse,
   Collection,
   CollectionCreate,
   CollectionListResponse,
@@ -312,4 +313,11 @@ export const collectionsApi = {
 export const migrationApi = {
   migrateThread: (threadId: number, data: { last_issue_read: number; total_issues: number }) =>
     api.post<Thread, { last_issue_read: number; total_issues: number }>(`/threads/${threadId}:migrateToIssues`, data),
+}
+
+export const bugReportsApi = {
+  create: (data: FormData) =>
+    api.post<BugReportResponse>('/bug-reports/', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 }

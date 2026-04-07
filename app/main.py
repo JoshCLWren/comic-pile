@@ -28,6 +28,7 @@ from app.api import (
     admin,
     analytics,
     auth,
+    bug_report,
     collection,
     dependency,
     issue,
@@ -355,6 +356,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
                 }
             )
 
+        # Convert exc.body to a JSON-serializable format for logging
+        # FormData objects are not directly JSON serializable
+        body_for_log: object
+        if hasattr(exc.body, "__class__") and exc.body.__class__.__name__ == "FormData":
+            body_for_log = {k: v if isinstance(v, str) else f"<{type(v).__name__}>" for k, v in exc.body.multi_items()}
+        else:
+            body_for_log = exc.body
+
         error_data = {
             "timestamp": datetime.now(UTC).isoformat(),
             "method": request.method,
@@ -362,7 +371,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             "query_params": str(request.url.query) if request.url.query else None,
             "status_code": 422,
             "validation_errors": errors,
-            "body": exc.body,
+            "body": body_for_log,
             "client_host": request.client.host if request.client else None,
             "level": "WARNING",
         }
@@ -378,12 +387,21 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             f"Validation Error: {errors}",
             extra=error_data,
         )
+
+        # Convert exc.body to a JSON-serializable format
+        # FormData objects are not directly JSON serializable
+        body_content: object
+        if hasattr(exc.body, "__class__") and exc.body.__class__.__name__ == "FormData":
+            body_content = {k: v if isinstance(v, str) else f"<{type(v).__name__}>" for k, v in exc.body.multi_items()}
+        else:
+            body_content = exc.body
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
                 "detail": "Validation failed",
                 "errors": errors,
-                "body": exc.body,
+                "body": body_content,
             },
         )
 
@@ -391,6 +409,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(router, prefix="/api/v1/reviews", tags=["reviews"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
     app.include_router(analytics.router, prefix="/api", tags=["analytics"])
+    app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(collection.router, prefix="/api/v1/collections", tags=["collections"])

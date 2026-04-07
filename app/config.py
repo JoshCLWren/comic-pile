@@ -213,6 +213,37 @@ class RatingSettings(BaseSettings):
         return v
 
 
+class GitHubSettings(BaseSettings):
+    """GitHub integration settings for bug reporting."""
+
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env"], extra="ignore")
+
+    github_token: str = Field(
+        default="",
+        description="GitHub personal access token with repo scope",
+        json_schema_extra={"env": "GITHUB_TOKEN"},
+    )
+    github_repo_owner: str = Field(
+        default="",
+        description="GitHub repository owner",
+        json_schema_extra={"env": "GITHUB_REPO_OWNER"},
+    )
+    github_repo_name: str = Field(
+        default="",
+        description="GitHub repository name",
+        json_schema_extra={"env": "GITHUB_REPO_NAME"},
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        """Return True if all GitHub settings are set with non-whitespace values."""
+        return bool(
+            self.github_token.strip()
+            and self.github_repo_owner.strip()
+            and self.github_repo_name.strip()
+        )
+
+
 class Settings(BaseSettings):
     """Main settings class that aggregates all configuration groups."""
 
@@ -243,6 +274,11 @@ class Settings(BaseSettings):
     def rating(self) -> RatingSettings:
         """Get rating settings."""
         return get_rating_settings()
+
+    @property
+    def github(self) -> GitHubSettings:
+        """Get GitHub settings."""
+        return get_github_settings()
 
 
 # Cached settings instances to avoid re-reading environment on every access
@@ -277,6 +313,12 @@ def get_rating_settings() -> RatingSettings:
 
 
 @lru_cache
+def get_github_settings() -> GitHubSettings:
+    """Get cached GitHub settings instance."""
+    return GitHubSettings()
+
+
+@lru_cache
 def get_settings() -> Settings:
     """Get cached main settings instance."""
     return Settings()
@@ -289,4 +331,5 @@ def clear_settings_cache() -> None:
     get_app_settings.cache_clear()
     get_session_settings.cache_clear()
     get_rating_settings.cache_clear()
+    get_github_settings.cache_clear()
     get_settings.cache_clear()
