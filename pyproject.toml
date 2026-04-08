@@ -21,6 +21,7 @@ dependencies = [
     "email-validator>=2.3.0",
     "pydantic-settings>=2.12.0",
     "filelock>=3.25.2",
+    "PyGithub>=2.0.0",
     "pytest-xdist>=3.0.0",
 ]
 
