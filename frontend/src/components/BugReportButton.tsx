@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import html2canvas from 'html2canvas'
+import { toBlob } from 'html-to-image'
 import BugReportModal from './BugReportModal'
 
 interface BugReportButtonProps {
@@ -12,19 +12,15 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
 
   const handleClick = async () => {
     try {
-      const canvas = await html2canvas(document.body, {
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#110e0a',
-      })
-      
-      canvas.toBlob((blob: Blob | null) => {
+      const blob = await toBlob(document.body)
+      if (blob !== null) {
         setScreenshotBlob(blob)
         setIsModalOpen(true)
-      }, 'image/png')
+      } else {
+        setScreenshotBlob(null)
+      }
     } catch (error) {
       console.error('Failed to capture screenshot:', error)
-      // Open modal without screenshot if capture fails
       setScreenshotBlob(null)
       setIsModalOpen(true)
     }
