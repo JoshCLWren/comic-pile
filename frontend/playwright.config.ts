@@ -37,6 +37,11 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+      testMatch: '**/bug-report-button.spec.ts',
+    },
   ],
   webServer: {
     command: process.env.REUSE_EXISTING_SERVER
