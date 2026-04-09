@@ -187,7 +187,7 @@ jobs:
           exit 1
 
       - name: Run E2E API tests
-        run: pytest tests_e2e/test_api_workflows.py -n 4 -v --no-cov
+        run: pytest tests_e2e/test_api_workflows.py -v --no-cov
 
   test-e2e-dice-ladder:
     name: E2E Dice Ladder
@@ -238,7 +238,7 @@ jobs:
           exit 1
 
       - name: Run E2E dice ladder tests
-        run: pytest tests_e2e/test_dice_ladder_e2e.py -n 4 --no-cov -v
+        run: pytest tests_e2e/test_dice_ladder_e2e.py --no-cov -v
 
   test-e2e-playwright:
     name: E2E Playwright Tests (Shard ${{ matrix.shardIndex }}/${{ matrix.totalShards }})
