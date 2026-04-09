@@ -11,6 +11,14 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null)
 
   const handleClick = async () => {
+    // Safari/iOS cannot render DOM to canvas via SVG foreignObject (html-to-image's
+    // technique), producing a black image. Skip capture and open modal without screenshot.
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+    if (isSafari) {
+      setScreenshotBlob(null)
+      setIsModalOpen(true)
+      return
+    }
     try {
       const blob = await toBlob(document.body, { skipFonts: true })
       setScreenshotBlob(blob)
