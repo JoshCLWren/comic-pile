@@ -37,7 +37,7 @@ describe('useBugReport', () => {
     const { result } = renderHook(() => useBugReport())
 
     act(() => {
-      result.current.submit('Test title', 'Test description', null)
+      result.current.submit('Test title', 'Test description', null, null)
     })
 
     expect(result.current.isSubmitting).toBe(true)
@@ -50,7 +50,7 @@ describe('useBugReport', () => {
     const { result } = renderHook(() => useBugReport())
 
     await act(async () => {
-      await result.current.submit('Test title', 'Test description', null)
+      await result.current.submit('Test title', 'Test description', null, null)
     })
 
     await waitFor(() => {
@@ -69,7 +69,7 @@ describe('useBugReport', () => {
     let thrownError: Error | null = null
     await act(async () => {
       try {
-        await result.current.submit('Test title', 'Test description', null)
+        await result.current.submit('Test title', 'Test description', null, null)
       } catch (err) {
         thrownError = err as Error
       }
@@ -92,7 +92,7 @@ describe('useBugReport', () => {
     const blob = new Blob(['test'], { type: 'image/png' })
 
     await act(async () => {
-      await result.current.submit('Test title', 'Test description', blob)
+      await result.current.submit('Test title', 'Test description', blob, null)
     })
 
     expect(bugReportsApiMock.create).toHaveBeenCalledWith(expect.any(FormData))
@@ -110,12 +110,54 @@ describe('useBugReport', () => {
     const { result } = renderHook(() => useBugReport())
 
     await act(async () => {
-      await result.current.submit('Test title', 'Test description', null)
+      await result.current.submit('Test title', 'Test description', null, null)
     })
 
     expect(bugReportsApiMock.create).toHaveBeenCalledWith(expect.any(FormData))
     const formDataCall = bugReportsApiMock.create.mock.calls[0][0] as FormData
     expect(formDataCall.get('screenshot')).toBeNull()
+  })
+
+  it('should include diagnostics in FormData when provided', async () => {
+    const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
+    bugReportsApiMock.create.mockResolvedValue(mockResponse)
+
+    const { result } = renderHook(() => useBugReport())
+
+    const diagnosticData = {
+      timestamp: '2024-01-01T00:00:00.000Z',
+      url: 'http://test.com',
+      userAgent: 'test-agent',
+      screen: { width: 1920, height: 1080, pixelRatio: 1 },
+      viewport: { width: 1920, height: 1080 },
+      scroll: { x: 0, y: 0 },
+      performance: { domContentLoaded: 1000, loadComplete: 2000 },
+      errors: [{ message: 'test error', timestamp: '2024-01-01T00:00:00.000Z' }],
+    }
+
+    await act(async () => {
+      await result.current.submit('Test title', 'Test description', null, diagnosticData)
+    })
+
+    expect(bugReportsApiMock.create).toHaveBeenCalledWith(expect.any(FormData))
+    const formDataCall = bugReportsApiMock.create.mock.calls[0][0] as FormData
+    const diagnostics = formDataCall.get('diagnostics') as string
+    expect(diagnostics).toBe(JSON.stringify(diagnosticData))
+  })
+
+  it('should not include diagnostics in FormData when null', async () => {
+    const mockResponse = { issue_url: 'https://github.com/test/issues/1' }
+    bugReportsApiMock.create.mockResolvedValue(mockResponse)
+
+    const { result } = renderHook(() => useBugReport())
+
+    await act(async () => {
+      await result.current.submit('Test title', 'Test description', null, null)
+    })
+
+    expect(bugReportsApiMock.create).toHaveBeenCalledWith(expect.any(FormData))
+    const formDataCall = bugReportsApiMock.create.mock.calls[0][0] as FormData
+    expect(formDataCall.get('diagnostics')).toBeNull()
   })
 
   it('should reset error and issueUrl on reset()', async () => {
@@ -126,7 +168,7 @@ describe('useBugReport', () => {
 
     await act(async () => {
       try {
-        await result.current.submit('Test title', 'Test description', null)
+        await result.current.submit('Test title', 'Test description', null, null)
       } catch {
         // Expected error
       }

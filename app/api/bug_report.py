@@ -1,5 +1,6 @@
 """Bug report API endpoints."""
 
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -24,6 +25,7 @@ async def create_bug_report(
     description: Annotated[str, Form(max_length=MAX_DESCRIPTION_LENGTH)],
     current_user: Annotated[User, Depends(get_current_user)],
     screenshot: Annotated[UploadFile, File()] | None = None,
+    diagnostics: str | None = Form(None),
 ) -> BugReportResponse:
     """Create a bug report issue on GitHub.
 
@@ -32,6 +34,7 @@ async def create_bug_report(
         description: Bug report description (max 2000 chars)
         current_user: The authenticated user
         screenshot: Optional screenshot file (PNG/JPEG, max 5MB)
+        diagnostics: Optional JSON string with diagnostic information
 
     Returns:
         Created bug report issue URL
@@ -74,6 +77,16 @@ async def create_bug_report(
         screenshot_bytes = content
         screenshot_filename = screenshot.filename
 
+    diagnostics_data = None
+    if diagnostics:
+        try:
+            diagnostics_data = json.loads(diagnostics)
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid diagnostics JSON: {e}",
+            ) from e
+
     try:
         issue_url = await create_bug_report_issue(
             title=title,
@@ -81,6 +94,7 @@ async def create_bug_report(
             username=current_user.username,
             screenshot_bytes=screenshot_bytes,
             screenshot_filename=screenshot_filename,
+            diagnostics_data=diagnostics_data,
         )
     except RuntimeError as e:
         raise HTTPException(
