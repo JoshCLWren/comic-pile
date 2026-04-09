@@ -12,7 +12,7 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
 
   const handleClick = async () => {
     try {
-      const blob = await toBlob(document.body)
+      const blob = await toBlob(document.body, { skipFonts: true })
       if (blob !== null) {
         setScreenshotBlob(blob)
         setIsModalOpen(true)
