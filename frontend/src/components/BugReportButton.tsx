@@ -13,15 +13,11 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const handleClick = async () => {
     try {
       const blob = await toBlob(document.body, { skipFonts: true })
-      if (blob !== null) {
-        setScreenshotBlob(blob)
-        setIsModalOpen(true)
-      } else {
-        setScreenshotBlob(null)
-      }
+      setScreenshotBlob(blob)
     } catch (error) {
       console.error('Failed to capture screenshot:', error)
       setScreenshotBlob(null)
+    } finally {
       setIsModalOpen(true)
     }
   }
