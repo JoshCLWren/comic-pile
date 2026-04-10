@@ -17,14 +17,13 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const handleClick = async () => {
     const diagnostics = collectDiagnostics()
     setDiagnosticData(diagnostics)
+    setIsModalOpen(true)
     try {
       const blob = await captureScreenshot()
       setScreenshotBlob(blob)
     } catch (error) {
       console.error('Failed to capture screenshot:', error)
       setScreenshotBlob(null)
-    } finally {
-      setIsModalOpen(true)
     }
   }
 
