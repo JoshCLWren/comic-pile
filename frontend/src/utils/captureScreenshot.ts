@@ -182,7 +182,7 @@ function injectOklchFallbacks(): HTMLStyleElement | null {
  */
 function shouldExclude(node: Node): boolean {
   return (
-    node instanceof HTMLElement &&
+    node instanceof Element &&
     node.closest('[data-exclude-from-screenshot="true"]') !== null
   )
 }
