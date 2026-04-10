@@ -83,12 +83,16 @@ export async function captureScreenshot(): Promise<Blob | null> {
   try {
     const canvas = await html2canvas(document.body, {
       useCORS: true,
-      allowTaint: true,
+      allowTaint: false,
       scale: Math.min(window.devicePixelRatio ?? 1, 2),
       logging: false,
     })
     return new Promise<Blob | null>(resolve => {
-      canvas.toBlob(blob => resolve(blob), 'image/png')
+      try {
+        canvas.toBlob(blob => resolve(blob), 'image/png')
+      } catch {
+        resolve(null)
+      }
     })
   } catch {
     return null
