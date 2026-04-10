@@ -176,7 +176,23 @@ function injectOklchFallbacks(): HTMLStyleElement | null {
 }
 
 /**
+ * Returns true for any node (or descendant of a node) that should be excluded
+ * from screenshots. Using closest() ensures children of excluded containers
+ * are filtered even when the capture library visits them individually.
+ */
+function shouldExclude(node: Node): boolean {
+  return (
+    node instanceof HTMLElement &&
+    node.closest('[data-exclude-from-screenshot="true"]') !== null
+  )
+}
+
+/**
  * Capture the current page as a PNG Blob.
+ *
+ * Both capture paths filter out elements marked with
+ * data-exclude-from-screenshot="true" (e.g. modal overlays) so the screenshot
+ * always shows the underlying page regardless of UI state at capture time.
  *
  * Strategy:
  *  1. Probe whether this browser supports SVG foreignObject rendering (cached).
@@ -191,7 +207,10 @@ export async function captureScreenshot(): Promise<Blob | null> {
 
   if (canUseForeignObject) {
     try {
-      const blob = await toBlob(document.body, { skipFonts: true })
+      const blob = await toBlob(document.body, {
+        skipFonts: true,
+        filter: (node) => !shouldExclude(node),
+      })
       if (blob !== null && !(await blobLooksBlankOrBlack(blob))) {
         return blob
       }
@@ -216,6 +235,7 @@ export async function captureScreenshot(): Promise<Blob | null> {
       allowTaint: false,
       scale: Math.min(window.devicePixelRatio ?? 1, 2),
       logging: false,
+      ignoreElements: shouldExclude,
     })
     return new Promise<Blob | null>(resolve => {
       try {
