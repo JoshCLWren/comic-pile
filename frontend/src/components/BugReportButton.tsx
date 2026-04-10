@@ -1,16 +1,31 @@
 import { useState } from 'react'
 import { toBlob } from 'html-to-image'
 import BugReportModal from './BugReportModal'
+import { useDiagnostics } from '../hooks/useDiagnostics'
+import type { DiagnosticData } from '../hooks/useDiagnostics'
 
 interface BugReportButtonProps {
-  onSubmit: (title: string, description: string, screenshotBlob: Blob | null) => Promise<void>
+  onSubmit: (title: string, description: string, screenshotBlob: Blob | null, diagnosticData: DiagnosticData | null) => Promise<void>
 }
 
 export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null)
+  const [diagnosticData, setDiagnosticData] = useState<DiagnosticData | null>(null)
+  const { collectDiagnostics } = useDiagnostics()
 
   const handleClick = async () => {
+    const diagnostics = collectDiagnostics()
+    setDiagnosticData(diagnostics)
+
+    // Safari/iOS cannot render DOM to canvas via SVG foreignObject (html-to-image's
+    // technique), producing a black image. Skip capture and open modal without screenshot.
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+    if (isSafari) {
+      setScreenshotBlob(null)
+      setIsModalOpen(true)
+      return
+    }
     try {
       const blob = await toBlob(document.body, { skipFonts: true })
       setScreenshotBlob(blob)
@@ -25,10 +40,11 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const handleClose = () => {
     setIsModalOpen(false)
     setScreenshotBlob(null)
+    setDiagnosticData(null)
   }
 
   const handleSubmit = async (title: string, description: string, screenshotBlob: Blob | null) => {
-    await onSubmit(title, description, screenshotBlob)
+    await onSubmit(title, description, screenshotBlob, diagnosticData)
     handleClose()
   }
 
@@ -55,6 +71,7 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
         onClose={handleClose}
         screenshotBlob={screenshotBlob}
         onSubmit={handleSubmit}
+        diagnosticData={diagnosticData}
       />
     </>
   )
