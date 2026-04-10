@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { toBlob } from 'html-to-image'
 import BugReportModal from './BugReportModal'
 import { useDiagnostics } from '../hooks/useDiagnostics'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
+import { captureScreenshot } from '../utils/captureScreenshot'
 
 interface BugReportButtonProps {
   onSubmit: (title: string, description: string, screenshotBlob: Blob | null, diagnosticData: DiagnosticData | null) => Promise<void>
@@ -17,17 +17,8 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const handleClick = async () => {
     const diagnostics = collectDiagnostics()
     setDiagnosticData(diagnostics)
-
-    // Safari/iOS cannot render DOM to canvas via SVG foreignObject (html-to-image's
-    // technique), producing a black image. Skip capture and open modal without screenshot.
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-    if (isSafari) {
-      setScreenshotBlob(null)
-      setIsModalOpen(true)
-      return
-    }
     try {
-      const blob = await toBlob(document.body, { skipFonts: true })
+      const blob = await captureScreenshot()
       setScreenshotBlob(blob)
     } catch (error) {
       console.error('Failed to capture screenshot:', error)
