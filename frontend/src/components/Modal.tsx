@@ -80,7 +80,7 @@ export default function Modal({
   if (!isOpen) return null
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center px-4 ${overlayClassName || ''}`}>
+    <div data-exclude-from-screenshot="true" className={`fixed inset-0 z-50 flex items-center justify-center px-4 ${overlayClassName || ''}`}>
       <div className="absolute inset-0 bg-[#110e0a]/80" onClick={onClose} aria-hidden="true"></div>
       <div
         ref={modalRef}

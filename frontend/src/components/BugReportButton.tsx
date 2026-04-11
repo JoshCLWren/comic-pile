@@ -17,6 +17,9 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const handleClick = async () => {
     const diagnostics = collectDiagnostics()
     setDiagnosticData(diagnostics)
+    // Open modal immediately for responsive UX. The modal is marked with
+    // data-exclude-from-screenshot so it's filtered out of the capture
+    // regardless of when React commits the render.
     setIsModalOpen(true)
     try {
       const blob = await captureScreenshot()
