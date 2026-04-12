@@ -185,3 +185,5 @@ scripts/clone_prod_users.sh
 
 # Dogfood/test output
 dogfood-output/
+.opencode_handoff/
+.playwright-mcp/

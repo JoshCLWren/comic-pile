@@ -128,11 +128,27 @@ async function blobLooksBlankOrBlack(
 }
 
 /**
+ * Walk all CSS rules recursively, yielding every CSSRule including those
+ * nested inside @layer, @media, @supports, etc.
+ */
+function* iterateCSSRules(rules: CSSRuleList): Generator<CSSRule> {
+  for (const rule of Array.from(rules)) {
+    yield rule
+    if ('cssRules' in rule && rule.cssRules) {
+      yield* iterateCSSRules(rule.cssRules as CSSRuleList)
+    }
+  }
+}
+
+/**
  * Inject a <style> override that replaces CSS custom properties containing
  * oklch() values with their sRGB equivalents before calling html2canvas.
  *
  * html2canvas renders via Canvas 2D API which cannot parse oklch; the canvas
  * fillStyle serialisation trick converts them to hex for free.
+ *
+ * Recurses into @layer/@media/@supports blocks because Tailwind v4 defines
+ * its :root variables inside `@layer theme { :root, :host { ... } }`.
  */
 function injectOklchFallbacks(): HTMLStyleElement | null {
   const tmp = document.createElement('canvas')
@@ -145,7 +161,7 @@ function injectOklchFallbacks(): HTMLStyleElement | null {
 
   for (const sheet of Array.from(document.styleSheets)) {
     try {
-      for (const rule of Array.from(sheet.cssRules)) {
+      for (const rule of iterateCSSRules(sheet.cssRules)) {
         if (
           rule instanceof CSSStyleRule &&
           (rule.selectorText === ':root' ||
