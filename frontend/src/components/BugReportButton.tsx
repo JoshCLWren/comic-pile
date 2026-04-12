@@ -3,41 +3,45 @@ import BugReportModal from './BugReportModal'
 import { useDiagnostics } from '../hooks/useDiagnostics'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 import { captureScreenshot } from '../utils/captureScreenshot'
+import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
 
 interface BugReportButtonProps {
-  onSubmit: (title: string, description: string, screenshotBlob: Blob | null, diagnosticData: DiagnosticData | null) => Promise<void>
+  onSubmit: (title: string, description: string, screenshotBlob: Blob | null, diagnosticData: DiagnosticData | null, screenshotDiagnostics?: ScreenshotDiagnostics) => Promise<void>
 }
 
 export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null)
   const [diagnosticData, setDiagnosticData] = useState<DiagnosticData | null>(null)
+  const [screenshotDiagnostics, setScreenshotDiagnostics] = useState<ScreenshotDiagnostics | null>(null)
   const { collectDiagnostics } = useDiagnostics()
 
   const handleClick = async () => {
     const diagnostics = collectDiagnostics()
     setDiagnosticData(diagnostics)
-    // Open modal immediately for responsive UX. The modal is marked with
-    // data-exclude-from-screenshot so it's filtered out of the capture
-    // regardless of when React commits the render.
-    setIsModalOpen(true)
+
     try {
-      const blob = await captureScreenshot()
-      setScreenshotBlob(blob)
+      const result = await captureScreenshot()
+      setScreenshotBlob(result.blob)
+      setScreenshotDiagnostics(result.diagnostics)
     } catch (error) {
       console.error('Failed to capture screenshot:', error)
       setScreenshotBlob(null)
-    }
+      setScreenshotDiagnostics(null)
+    } finally {
+      setIsModalOpen(true)
+}
   }
 
   const handleClose = () => {
     setIsModalOpen(false)
     setScreenshotBlob(null)
     setDiagnosticData(null)
+    setScreenshotDiagnostics(null)
   }
 
   const handleSubmit = async (title: string, description: string, screenshotBlob: Blob | null) => {
-    await onSubmit(title, description, screenshotBlob, diagnosticData)
+    await onSubmit(title, description, screenshotBlob, diagnosticData, screenshotDiagnostics ?? undefined)
     handleClose()
   }
 
@@ -56,7 +60,7 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
         >
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
         </svg>
-        <span className="text-sm font-semibold">Report Bug</span>
+        <span className="text-sm font-semibold">🎯 NEW</span>
       </button>
 
       <BugReportModal
