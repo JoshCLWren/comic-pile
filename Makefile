@@ -306,6 +306,13 @@ deploy-prod:  ## Deploy to Railway production
 	@bash scripts/check_frontend_assets.sh $(PROD_BASE_URL)
 
 prod-migrate:  ## Run Alembic migrations in Railway production app service
+	@echo "Pre-flight: checking for multiple Alembic heads..."
+	@HEADS=$$(uv run alembic heads 2>/dev/null | grep -c "(head)"); \
+	if [ "$$HEADS" -ne 1 ]; then \
+		echo "ERROR: $$HEADS Alembic heads detected. Resolve merge before deploying."; \
+		uv run alembic heads 2>/dev/null; \
+		exit 1; \
+	fi
 	@echo "Running production migrations on Railway ($(RAILWAY_APP_SERVICE)/$(RAILWAY_PROD_ENV))..."
 	@railway ssh --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) $(PROD_MIGRATE_CMD)
 	@echo "Verifying production migration revision..."

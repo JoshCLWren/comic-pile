@@ -79,6 +79,66 @@ jobs:
       - name: Run frontend typecheck
         run: cd frontend && npm run typecheck
 
+  migration-health:
+    name: Migration Health
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image-tag }}
+    needs: build
+    timeout-minutes: 10
+    env:
+      CI: true
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Remove .env files
+        run: rm -f .env .env.test .env.backup .envrc 2>/dev/null || true
+
+      - name: Wait for PostgreSQL
+        run: |
+          i=1
+          while [ $i -le 30 ]; do
+            if pg_isready -h postgres -p 5432 -U postgres; then exit 0; fi
+            sleep 2; i=$((i + 1))
+          done
+          exit 1
+
+      - name: Check single Alembic head
+        run: |
+          HEADS=$(alembic heads 2>/dev/null | grep -c "(head)")
+          if [ "$HEADS" -ne 1 ]; then
+            echo "ERROR: $HEADS Alembic heads detected — resolve before merging"
+            alembic heads
+            exit 1
+          fi
+          echo "Single head confirmed: $(alembic heads 2>/dev/null)"
+
+      - name: Apply all migrations from scratch
+        run: alembic upgrade head
+
+      # Note: alembic check is intentionally omitted. The reviews table uses a
+      # NULLS NOT DISTINCT unique index (uq_review_user_thread_issue) applied via
+      # raw SQL in migration 4882a6a20f35. SQLAlchemy has no native representation
+      # for this, so alembic check always reports a false-positive difference.
+      # Single-head enforcement + clean upgrade-from-scratch is the effective gate.
+
   test-unit:
     name: Backend Tests
     runs-on: ubuntu-latest
