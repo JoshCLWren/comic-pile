@@ -1,16 +1,49 @@
 import { toBlob } from 'html-to-image'
 
-/**
- * Probe whether this browser can render SVG <foreignObject> content.
- *
- * Renders a 16×16 green div via foreignObject to a canvas and samples the
- * centre pixel. Returns true only when the pixel is actually green — meaning
- * foreignObject rendering works correctly on this device right now.
- *
- * This is the same technique used internally by html2canvas. UA sniffing is
- * intentionally avoided: Safari behaviour varies across iOS versions,
- * WKWebView vs Safari, and DOM/CSS complexity.
- */
+export interface ScreenshotDiagnostics {
+  timestamp: string
+  userAgent: string
+  target: { id: string; tag: string; children: number; rect: DOMRect }
+  environment: { pixelRatio: number; devicePixelRatio: number; canUseForeignObject: boolean }
+  captureAttempts: Array<{ method: string; success: boolean; error?: string; size?: number; blank?: boolean }>
+  ancestorChain: Array<{ tag: string; id: string; className: string; transform: string; filter: string; backdropFilter: string }>
+}
+
+const diagnostics: ScreenshotDiagnostics = {
+  timestamp: new Date().toISOString(),
+  userAgent: navigator.userAgent,
+  target: { id: '', tag: '', children: 0, rect: new DOMRect() },
+  environment: { pixelRatio: 0, devicePixelRatio: 0, canUseForeignObject: false },
+  captureAttempts: [],
+  ancestorChain: [],
+}
+
+function debugLog(message: string, data?: unknown) {
+  console.log(`[SCREENSHOT] ${message}`, data ?? '')
+}
+
+function logAncestorChain(el: HTMLElement | null) {
+  const chain = []
+  let current: HTMLElement | null = el
+
+  while (current && current !== document.body) {
+    const style = getComputedStyle(current)
+    const info = {
+      tag: current.tagName,
+      id: current.id,
+      className: current.className,
+      transform: style.transform,
+      filter: style.filter,
+      backdropFilter: (style as CSSStyleDeclaration & { backdropFilter?: string }).backdropFilter ?? 'n/a',
+    }
+    chain.push(info)
+    current = current.parentElement
+  }
+
+  diagnostics.ancestorChain = chain
+  return chain
+}
+
 async function supportsForeignObjectRendering(): Promise<boolean> {
   try {
     const size = 16
@@ -65,7 +98,6 @@ async function supportsForeignObjectRendering(): Promise<boolean> {
 
 let foreignObjectSupportPromise: Promise<boolean> | null = null
 
-/** Returns cached foreignObject support for this page session. */
 function getForeignObjectSupport(): Promise<boolean> {
   if (!foreignObjectSupportPromise) {
     foreignObjectSupportPromise = supportsForeignObjectRendering()
@@ -73,19 +105,23 @@ function getForeignObjectSupport(): Promise<boolean> {
   return foreignObjectSupportPromise
 }
 
-/**
- * Returns true if the blob appears to be blank, black, or nearly uniform —
- * indicating a failed/silent render rather than real content.
- *
- * Downsamples to sampleSize×sampleSize before pixel inspection so it runs
- * quickly regardless of the blob's original dimensions.
- */
 async function blobLooksBlankOrBlack(
   blob: Blob,
   { sampleSize = 8, uniformTolerance = 8 }: { sampleSize?: number; uniformTolerance?: number } = {}
 ): Promise<boolean> {
   try {
-    const bitmap = await createImageBitmap(blob)
+    const img = new Image()
+    const url = URL.createObjectURL(blob)
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error('blob decode failed'))
+        img.src = url
+      })
+    } finally {
+      URL.revokeObjectURL(url)
+    }
 
     const canvas = document.createElement('canvas')
     canvas.width = sampleSize
@@ -94,7 +130,7 @@ async function blobLooksBlankOrBlack(
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return true
 
-    ctx.drawImage(bitmap, 0, 0, sampleSize, sampleSize)
+    ctx.drawImage(img, 0, 0, sampleSize, sampleSize)
     const data = ctx.getImageData(0, 0, sampleSize, sampleSize).data
 
     let blackish = 0
@@ -121,16 +157,14 @@ async function blobLooksBlankOrBlack(
     const almostAllTransparent = transparentish / total > 0.98
     const nearlyUniform = max - min <= uniformTolerance
 
+    debugLog('blob validation', { blackish: `${blackish}/${total}`, transparentish: `${transparentish}/${total}`, min, max, almostAllBlack, almostAllTransparent, nearlyUniform })
+
     return almostAllBlack || almostAllTransparent || nearlyUniform
   } catch {
     return true
   }
 }
 
-/**
- * Walk all CSS rules recursively, yielding every CSSRule including those
- * nested inside @layer, @media, @supports, etc.
- */
 function* iterateCSSRules(rules: CSSRuleList): Generator<CSSRule> {
   for (const rule of Array.from(rules)) {
     yield rule
@@ -140,16 +174,6 @@ function* iterateCSSRules(rules: CSSRuleList): Generator<CSSRule> {
   }
 }
 
-/**
- * Inject a <style> override that replaces CSS custom properties containing
- * oklch() values with their sRGB equivalents before calling html2canvas.
- *
- * html2canvas renders via Canvas 2D API which cannot parse oklch; the canvas
- * fillStyle serialisation trick converts them to hex for free.
- *
- * Recurses into @layer/@media/@supports blocks because Tailwind v4 defines
- * its :root variables inside `@layer theme { :root, :host { ... } }`.
- */
 function injectOklchFallbacks(): HTMLStyleElement | null {
   const tmp = document.createElement('canvas')
   tmp.width = 1
@@ -191,80 +215,158 @@ function injectOklchFallbacks(): HTMLStyleElement | null {
   return style
 }
 
-/**
- * Returns true for any node (or descendant of a node) that should be excluded
- * from screenshots. Using closest() ensures children of excluded containers
- * are filtered even when the capture library visits them individually.
- */
-function shouldExclude(node: Node): boolean {
-  return (
-    node instanceof Element &&
-    node.closest('[data-exclude-from-screenshot="true"]') !== null
-  )
-}
+export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnostics: ScreenshotDiagnostics }> {
+  debugLog('Starting capture')
 
-/**
- * Capture the current page as a PNG Blob.
- *
- * Both capture paths filter out elements marked with
- * data-exclude-from-screenshot="true" (e.g. modal overlays) so the screenshot
- * always shows the underlying page regardless of UI state at capture time.
- *
- * Strategy:
- *  1. Probe whether this browser supports SVG foreignObject rendering (cached).
- *  2. If yes, try html-to-image toBlob and validate the result isn't blank/black.
- *  3. Fall back to html2canvas (Canvas 2D, no foreignObject) with oklch CSS
- *     variable normalisation. This path always runs on Safari/iOS.
- *
- * Returns null only if all approaches fail.
- */
-export async function captureScreenshot(): Promise<Blob | null> {
-  const canUseForeignObject = await getForeignObjectSupport()
+  // Reset diagnostics
+  diagnostics.timestamp = new Date().toISOString()
+  diagnostics.captureAttempts = []
 
-  if (canUseForeignObject) {
-    try {
-      const blob = await toBlob(document.body, {
-        skipFonts: true,
-        filter: (node) => !shouldExclude(node),
-      })
-      if (blob !== null && !(await blobLooksBlankOrBlack(blob))) {
-        return blob
-      }
-    } catch {
-      // fall through to html2canvas
-    }
+  // Capture from #root instead of document.body for better Safari compatibility
+  const target = document.getElementById('root') ?? document.body
+  diagnostics.target = {
+    id: target.id,
+    tag: target.tagName,
+    children: target.children.length,
+    rect: target.getBoundingClientRect(),
   }
 
-  // html2canvas fallback — Canvas 2D rendering, no foreignObject dependency.
-  // Dynamically imported so it doesn't bloat the main bundle on Chrome/Firefox.
+  const pixelRatio = 1
+  const canUseForeignObject = await getForeignObjectSupport()
+  diagnostics.environment = { pixelRatio, devicePixelRatio: window.devicePixelRatio, canUseForeignObject }
+
+  // Log ancestor chain to detect problematic styles
+  logAncestorChain(target)
+
+  debugLog('Target', diagnostics.target)
+  debugLog('Environment', diagnostics.environment)
+
+  // Add screenshot-mode class to strip problematic CSS
+  document.documentElement.classList.add('screenshot-mode')
+
+  // Force solid background to prevent transparency issues
+  const prevBackground = target.style.backgroundColor
+  target.style.backgroundColor = '#111827'
+
+  try {
+    debugLog('Trying html-to-image')
+    const blob = await toBlob(target, {
+      skipFonts: true,
+      cacheBust: true,
+      pixelRatio,
+      filter: node => {
+        const excluded = node instanceof HTMLElement && node.closest('[data-exclude-from-screenshot="true"]') !== null
+        return !excluded
+      },
+    })
+
+    diagnostics.captureAttempts.push({
+      method: 'html-to-image',
+      success: blob !== null,
+      size: blob?.size,
+    })
+
+    debugLog('html-to-image result', { success: blob !== null, size: blob?.size })
+
+    if (blob !== null) {
+      const isBlank = await blobLooksBlankOrBlack(blob)
+      diagnostics.captureAttempts[0].blank = isBlank
+      debugLog('Blob validation', { isBlank })
+
+      if (!isBlank) {
+        debugLog('Using html-to-image blob', { size: blob.size })
+        return { blob, diagnostics }
+      }
+      debugLog('html-to-image blob is blank')
+    } else {
+      debugLog('html-to-image returned null')
+    }
+  } catch (error) {
+    diagnostics.captureAttempts.push({
+      method: 'html-to-image',
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    debugLog('html-to-image ERROR', { error: String(error) })
+  } finally {
+    document.documentElement.classList.remove('screenshot-mode')
+    target.style.backgroundColor = prevBackground
+  }
+
+  debugLog('Trying html2canvas fallback')
   let html2canvas: typeof import('html2canvas').default
   try {
     html2canvas = (await import('html2canvas')).default
-  } catch {
-    return null
+    debugLog('html2canvas imported successfully')
+  } catch (error) {
+    diagnostics.captureAttempts.push({
+      method: 'html2canvas-import',
+      success: false,
+      error: String(error),
+    })
+    debugLog('Failed to import html2canvas', { error: String(error) })
+    return { blob: null, diagnostics }
   }
 
+  // Add screenshot-mode for html2canvas too
+  document.documentElement.classList.add('screenshot-mode')
+
   const overrideStyle = injectOklchFallbacks()
+  debugLog('oklch fallback injected', { injected: overrideStyle !== null })
+
+  // Force solid background for html2canvas
+  const prevBackgroundH2c = target.style.backgroundColor
+  target.style.backgroundColor = '#111827'
+
   try {
-    const canvas = await html2canvas(document.body, {
+    debugLog('html2canvas starting')
+
+    const canvas = await html2canvas(target, {
       useCORS: true,
       allowTaint: false,
-      scale: Math.min(window.devicePixelRatio ?? 1, 2),
+      scale: 1,
       logging: false,
-      ignoreElements: shouldExclude,
+      backgroundColor: '#111827',
+      ignoreElements: (element) => {
+        const excluded = element instanceof HTMLElement && element.closest('[data-exclude-from-screenshot="true"]') !== null
+        return excluded
+      },
     })
-    return new Promise<Blob | null>(resolve => {
+
+    diagnostics.captureAttempts.push({
+      method: 'html2canvas',
+      success: true,
+      size: canvas.width * canvas.height * 4,
+    })
+
+    debugLog('html2canvas canvas created', { width: canvas.width, height: canvas.height })
+
+    const blob = await new Promise<Blob | null>((resolve) => {
       try {
-        canvas.toBlob(blob => resolve(blob), 'image/png')
-      } catch {
+        canvas.toBlob((result) => resolve(result), 'image/png')
+      } catch (e) {
+        debugLog('canvas.toBlob error', { error: String(e) })
         resolve(null)
       }
     })
-  } catch {
-    return null
-  } finally {
-    if (overrideStyle) {
-      document.head.removeChild(overrideStyle)
+
+    if (blob) {
+      debugLog('html2canvas blob created', { size: blob.size, type: blob.type })
     }
+
+    return { blob, diagnostics }
+  } catch (error) {
+    diagnostics.captureAttempts.push({
+      method: 'html2canvas',
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    debugLog('html2canvas ERROR', { error: String(error) })
+    return { blob: null, diagnostics }
+  } finally {
+    document.documentElement.classList.remove('screenshot-mode')
+    overrideStyle?.remove()
+    target.style.backgroundColor = prevBackgroundH2c
+    debugLog('Cleaned up html2canvas')
   }
 }

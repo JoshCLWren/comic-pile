@@ -30,6 +30,7 @@ from app.api import (
     auth,
     bug_report,
     collection,
+    debug,
     dependency,
     issue,
     queue,
@@ -360,7 +361,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         # FormData objects are not directly JSON serializable
         body_for_log: object
         if hasattr(exc.body, "__class__") and exc.body.__class__.__name__ == "FormData":
-            body_for_log = {k: v if isinstance(v, str) else f"<{type(v).__name__}>" for k, v in exc.body.multi_items()}
+            body_for_log = {
+                k: v if isinstance(v, str) else f"<{type(v).__name__}>"
+                for k, v in exc.body.multi_items()
+            }
         else:
             body_for_log = exc.body
 
@@ -392,7 +396,10 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         # FormData objects are not directly JSON serializable
         body_content: object
         if hasattr(exc.body, "__class__") and exc.body.__class__.__name__ == "FormData":
-            body_content = {k: v if isinstance(v, str) else f"<{type(v).__name__}>" for k, v in exc.body.multi_items()}
+            body_content = {
+                k: v if isinstance(v, str) else f"<{type(v).__name__}>"
+                for k, v in exc.body.multi_items()
+            }
         else:
             body_content = exc.body
 
@@ -413,6 +420,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(collection.router, prefix="/api/v1/collections", tags=["collections"])
+    app.include_router(debug.router, prefix="/api", tags=["debug"])
     app.include_router(issue.router, tags=["issues"])
     app.include_router(rate.router, prefix="/api/rate", tags=["rate"])
     app.include_router(queue.router, prefix="/api/queue", tags=["queue"])

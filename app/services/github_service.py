@@ -15,6 +15,7 @@ async def create_bug_report_issue(
     screenshot_bytes: bytes | None = None,
     screenshot_filename: str | None = None,
     diagnostics_data: dict | None = None,
+    screenshot_diagnostics_data: dict | None = None,
 ) -> str:
     """Create a GitHub issue for a bug report. Returns the issue HTML URL."""
     settings = get_github_settings()
@@ -81,6 +82,48 @@ async def create_bug_report_issue(
 **Console Errors (last {len(errors)}):**
 {errors_str}
 </details>"""
+
+    if screenshot_diagnostics_data:
+        target = screenshot_diagnostics_data.get("target", {})
+        env = screenshot_diagnostics_data.get("environment", {})
+        attempts = screenshot_diagnostics_data.get("captureAttempts", [])
+        ancestor = screenshot_diagnostics_data.get("ancestorChain", [])
+        body += f"""
+
+<details>
+<summary>Screenshot Diagnostics</summary>
+
+**Target:** {target.get("tag", "unknown")}#{target.get("id", "")} (children: {target.get("children", 0)})
+**Pixel Ratio:** {env.get("pixelRatio", "unknown")} (device: {env.get("devicePixelRatio", "unknown")})
+**ForeignObject Support:** {env.get("canUseForeignObject", "unknown")}
+
+**Capture Attempts:**
+"""
+        for attempt in attempts:
+            method = attempt.get("method", "unknown")
+            success = attempt.get("success", False)
+            size = attempt.get("size", "N/A")
+            error = attempt.get("error", "")
+            blank = attempt.get("blank")
+            body += f"- {method}: success={success}, size={size}"
+            if error:
+                body += f", error={error}"
+            if blank is not None:
+                body += f", blank={blank}"
+            body += "\n"
+
+        body += """
+**Ancestor Chain:**
+"""
+        for i, ancestor_info in enumerate(ancestor):
+            tag = ancestor_info.get("tag", "?")
+            id_ = ancestor_info.get("id", "")
+            transform = ancestor_info.get("transform", "none")
+            filter_ = ancestor_info.get("filter", "none")
+            backdrop = ancestor_info.get("backdropFilter", "none")
+            body += f"- {i}: {tag}#{id_} transform={transform} filter={filter_} backdrop-filter={backdrop}\n"
+
+        body += "</details>"
 
     if screenshot_bytes:
         ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
