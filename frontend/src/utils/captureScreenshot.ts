@@ -3,7 +3,7 @@ import { toBlob } from 'html-to-image'
 export interface ScreenshotDiagnostics {
   timestamp: string
   userAgent: string
-  target: { id: string; tag: string; children: number; rect: DOMRect }
+  target: { id: string; tag: string; children: number; rect: { x: number; y: number; width: number; height: number; top: number; right: number; bottom: number; left: number } }
   environment: { pixelRatio: number; devicePixelRatio: number; canUseForeignObject: boolean }
   captureAttempts: Array<{ method: string; success: boolean; error?: string; size?: number; blank?: boolean }>
   ancestorChain: Array<{ tag: string; id: string; className: string; transform: string; filter: string; backdropFilter: string }>
@@ -12,7 +12,7 @@ export interface ScreenshotDiagnostics {
 const diagnostics: ScreenshotDiagnostics = {
   timestamp: new Date().toISOString(),
   userAgent: navigator.userAgent,
-  target: { id: '', tag: '', children: 0, rect: new DOMRect() },
+  target: { id: '', tag: '', children: 0, rect: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } },
   environment: { pixelRatio: 0, devicePixelRatio: 0, canUseForeignObject: false },
   captureAttempts: [],
   ancestorChain: [],
@@ -224,11 +224,21 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
 
   // Capture from #root instead of document.body for better Safari compatibility
   const target = document.getElementById('root') ?? document.body
+  const targetRect = target.getBoundingClientRect()
   diagnostics.target = {
     id: target.id,
     tag: target.tagName,
     children: target.children.length,
-    rect: target.getBoundingClientRect(),
+    rect: {
+      x: targetRect.x,
+      y: targetRect.y,
+      width: targetRect.width,
+      height: targetRect.height,
+      top: targetRect.top,
+      right: targetRect.right,
+      bottom: targetRect.bottom,
+      left: targetRect.left,
+    },
   }
 
   const pixelRatio = 1

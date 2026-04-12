@@ -92,12 +92,18 @@ async def create_bug_report(
     screenshot_diagnostics_data = None
     if screenshot_diagnostics:
         try:
-            screenshot_diagnostics_data = json.loads(screenshot_diagnostics)
+            parsed = json.loads(screenshot_diagnostics)
         except json.JSONDecodeError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid screenshot_diagnostics JSON: {e}",
             ) from e
+        if not isinstance(parsed, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="screenshot_diagnostics must be a JSON object",
+            )
+        screenshot_diagnostics_data = parsed
 
     try:
         issue_url = await create_bug_report_issue(
