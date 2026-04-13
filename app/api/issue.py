@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -361,6 +361,7 @@ async def create_issues(
     new_issues_count = len(new_issue_numbers)
 
     if request.insert_after_issue_id is not None:
+        await db.execute(text("SET CONSTRAINTS uq_issue_thread_position DEFERRED"))
         await db.execute(
             update(Issue)
             .where(Issue.thread_id == thread_id, Issue.position > insert_position)

@@ -12,6 +12,8 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    func,
+    select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -89,7 +91,7 @@ class Thread(Base):
         back_populates="source_thread",
         cascade="all",
         passive_deletes=True,
-        lazy="select",
+        lazy="raise",
     )
     dependencies_in: Mapped[list["Dependency"]] = relationship(
         "Dependency",
@@ -97,7 +99,7 @@ class Thread(Base):
         back_populates="target_thread",
         cascade="all",
         passive_deletes=True,
-        lazy="select",
+        lazy="raise",
     )
     issues: Mapped[list["Issue"]] = relationship(
         "Issue",
@@ -139,8 +141,6 @@ class Thread(Base):
             Number of unread issues
         """
         if self.uses_issue_tracking():
-            from sqlalchemy import func, select
-
             result = await db.execute(
                 select(func.count())
                 .select_from(Issue)
@@ -164,8 +164,6 @@ class Thread(Base):
         """
         if not self.uses_issue_tracking() or self.total_issues is None:
             return None
-
-        from sqlalchemy import func, select
 
         result = await db.execute(
             select(func.count())
@@ -204,8 +202,6 @@ class Thread(Base):
         Raises:
             ValueError: If last_issue_read < 0 or > total_issues
         """
-        from sqlalchemy import select
-
         if last_issue_read < 0:
             raise ValueError("last_issue_read must be >= 0")
         if last_issue_read > total_issues:
