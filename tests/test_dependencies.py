@@ -347,8 +347,8 @@ async def test_issue_dependency_blocks_by_next_unread_issue(async_db):
 
 
 @pytest.mark.asyncio
-async def test_future_issue_dependency_does_not_block_current_reads(async_db):
-    """Thread should not be blocked by dependencies on future unread issues."""
+async def test_dep_on_future_issue_blocks_thread_before_reaching_it(async_db):
+    """Dependency on a future issue should block the thread even when next-unread is before it."""
     user = User(username="future_dep_user", created_at=datetime.now(UTC))
     async_db.add(user)
     await async_db.flush()
@@ -406,7 +406,6 @@ async def test_future_issue_dependency_does_not_block_current_reads(async_db):
     source_thread.next_unread_issue_id = source_issue_1.id
     target_thread.next_unread_issue_id = target_issue_1.id
 
-    # Add dependency from source issue 1 to target issue 2 (future issue)
     async_db.add(
         Dependency(
             source_issue_id=source_issue_1.id,
@@ -415,19 +414,23 @@ async def test_future_issue_dependency_does_not_block_current_reads(async_db):
     )
     await async_db.commit()
 
-    # Target thread should NOT be blocked since the dependency is on issue 2, not the next unread issue 1
     blocked = await get_blocked_thread_ids(user.id, async_db)
-    assert target_thread.id not in blocked
+    assert target_thread.id in blocked
 
-    # Now mark issue 1 as read, next unread becomes issue 2
     target_issue_1.status = "read"
     target_issue_1.read_at = datetime.now(UTC)
     target_thread.next_unread_issue_id = target_issue_2.id
     await async_db.commit()
 
-    # Now target thread SHOULD be blocked since next unread issue 2 has unread prerequisite
     blocked_after = await get_blocked_thread_ids(user.id, async_db)
     assert target_thread.id in blocked_after
+
+    source_issue_1.status = "read"
+    source_issue_1.read_at = datetime.now(UTC)
+    await async_db.commit()
+
+    blocked_unblocked = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id not in blocked_unblocked
 
 
 @pytest.mark.asyncio
@@ -480,3 +483,146 @@ async def test_validate_position_dependency_consistency_warns_on_conflict(async_
     assert "issue #2" in warnings[0]
     assert "issue #1" in warnings[0]
     assert "Position is canonical" in warnings[0]
+
+
+@pytest.mark.asyncio
+async def test_dep_blocks_anticipatorily_before_dep_target(async_db):
+    """Dep on issue #3 should block thread when next_unread is issue #1."""
+    user = User(username="anticipatory_dep_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    source_thread = Thread(
+        title="Source",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+    )
+    target_thread = Thread(
+        title="Target",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue_1 = Issue(
+        thread_id=source_thread.id, issue_number="1", position=1, status="unread"
+    )
+    source_issue_2 = Issue(
+        thread_id=source_thread.id, issue_number="2", position=2, status="unread"
+    )
+    source_issue_3 = Issue(
+        thread_id=source_thread.id, issue_number="3", position=3, status="unread"
+    )
+    target_issue_1 = Issue(
+        thread_id=target_thread.id, issue_number="1", position=1, status="unread"
+    )
+    target_issue_2 = Issue(
+        thread_id=target_thread.id, issue_number="2", position=2, status="unread"
+    )
+    target_issue_3 = Issue(
+        thread_id=target_thread.id, issue_number="3", position=3, status="unread"
+    )
+    async_db.add_all(
+        [
+            source_issue_1,
+            source_issue_2,
+            source_issue_3,
+            target_issue_1,
+            target_issue_2,
+            target_issue_3,
+        ]
+    )
+    await async_db.flush()
+
+    source_thread.next_unread_issue_id = source_issue_1.id
+    target_thread.next_unread_issue_id = target_issue_1.id
+
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue_3.id,
+            target_issue_id=target_issue_3.id,
+        )
+    )
+    await async_db.commit()
+
+    blocked = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id in blocked
+
+    source_issue_3.status = "read"
+    source_issue_3.read_at = datetime.now(UTC)
+    await async_db.commit()
+
+    blocked_after = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id not in blocked_after
+
+
+@pytest.mark.asyncio
+async def test_dep_does_not_block_when_next_unread_past_dep_target(async_db):
+    """Dep on issue #2 should NOT block when next_unread is already issue #3."""
+    user = User(username="past_dep_user", created_at=datetime.now(UTC))
+    async_db.add(user)
+    await async_db.flush()
+
+    source_thread = Thread(
+        title="Source",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+    )
+    target_thread = Thread(
+        title="Target",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+        reading_progress="not_started",
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue_1 = Issue(
+        thread_id=source_thread.id, issue_number="1", position=1, status="unread"
+    )
+    source_issue_2 = Issue(
+        thread_id=source_thread.id, issue_number="2", position=2, status="unread"
+    )
+    target_issue_1 = Issue(thread_id=target_thread.id, issue_number="1", position=1, status="read")
+    target_issue_2 = Issue(thread_id=target_thread.id, issue_number="2", position=2, status="read")
+    target_issue_3 = Issue(
+        thread_id=target_thread.id, issue_number="3", position=3, status="unread"
+    )
+    async_db.add_all(
+        [source_issue_1, source_issue_2, target_issue_1, target_issue_2, target_issue_3]
+    )
+    await async_db.flush()
+
+    source_thread.next_unread_issue_id = source_issue_1.id
+    target_thread.next_unread_issue_id = target_issue_3.id
+
+    async_db.add(
+        Dependency(
+            source_issue_id=source_issue_1.id,
+            target_issue_id=target_issue_2.id,
+        )
+    )
+    await async_db.commit()
+
+    blocked = await get_blocked_thread_ids(user.id, async_db)
+    assert target_thread.id not in blocked
