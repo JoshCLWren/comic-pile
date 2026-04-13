@@ -26,6 +26,7 @@ async def create_bug_report(
     current_user: Annotated[User, Depends(get_current_user)],
     screenshot: Annotated[UploadFile, File()] | None = None,
     diagnostics: str | None = Form(None),
+    screenshot_diagnostics: str | None = Form(None),
 ) -> BugReportResponse:
     """Create a bug report issue on GitHub.
 
@@ -35,6 +36,7 @@ async def create_bug_report(
         current_user: The authenticated user
         screenshot: Optional screenshot file (PNG/JPEG, max 5MB)
         diagnostics: Optional JSON string with diagnostic information
+        screenshot_diagnostics: Optional JSON string with screenshot capture diagnostics
 
     Returns:
         Created bug report issue URL
@@ -87,6 +89,22 @@ async def create_bug_report(
                 detail=f"Invalid diagnostics JSON: {e}",
             ) from e
 
+    screenshot_diagnostics_data = None
+    if screenshot_diagnostics:
+        try:
+            parsed = json.loads(screenshot_diagnostics)
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid screenshot_diagnostics JSON: {e}",
+            ) from e
+        if not isinstance(parsed, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="screenshot_diagnostics must be a JSON object",
+            )
+        screenshot_diagnostics_data = parsed
+
     try:
         issue_url = await create_bug_report_issue(
             title=title,
@@ -95,6 +113,7 @@ async def create_bug_report(
             screenshot_bytes=screenshot_bytes,
             screenshot_filename=screenshot_filename,
             diagnostics_data=diagnostics_data,
+            screenshot_diagnostics_data=screenshot_diagnostics_data,
         )
     except RuntimeError as e:
         raise HTTPException(

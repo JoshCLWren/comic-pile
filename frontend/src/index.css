@@ -1,2 +1,14 @@
 @import "tailwindcss";
 @import "./styles.css";
+
+/* Strip problematic CSS during screenshot capture for Safari compatibility */
+.screenshot-mode [data-exclude-from-screenshot="true"] {
+  display: none !important;
+}
+
+.screenshot-mode *,
+.screenshot-mode *::before,
+.screenshot-mode *::after {
+  backdrop-filter: none !important;
+  filter: none !important;
+}

@@ -2,13 +2,20 @@ import { useState, useCallback } from 'react'
 import { bugReportsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { DiagnosticData } from './useDiagnostics'
+import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
 
 export function useBugReport() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [issueUrl, setIssueUrl] = useState<string | null>(null)
 
-  const submit = useCallback(async (title: string, description: string, screenshotBlob: Blob | null, diagnosticData: DiagnosticData | null) => {
+  const submit = useCallback(async (
+    title: string,
+    description: string,
+    screenshotBlob: Blob | null,
+    diagnosticData: DiagnosticData | null,
+    screenshotDiagnostics?: ScreenshotDiagnostics
+  ) => {
     setIsSubmitting(true)
     setError(null)
     setIssueUrl(null)
@@ -21,6 +28,9 @@ export function useBugReport() {
       }
       if (diagnosticData) {
         formData.append('diagnostics', JSON.stringify(diagnosticData))
+      }
+      if (screenshotDiagnostics) {
+        formData.append('screenshot_diagnostics', JSON.stringify(screenshotDiagnostics))
       }
       const response = await bugReportsApi.create(formData)
       setIssueUrl(response.issue_url)
