@@ -1,9 +1,9 @@
 """Regression tests for fix_stale_blocked_flags script.
 
 Verifies that refresh_user_blocked_status (the core of the script) correctly
-recalculates stale is_blocked flags after the PR #299 logic change:
-- Threads stamped is_blocked=True by the old broad logic must be cleared when
-  the dependency only touches a future issue (not next_unread_issue_id).
+recalculates stale is_blocked flags after the position-based blocking logic:
+- Threads stamped is_blocked=True by the old exact-match logic must be cleared when
+  the dependency's target issue is before next_unread_issue (i.e., already past).
 - Threads that are genuinely blocked must remain blocked after recalculation.
 """
 
@@ -19,11 +19,12 @@ from comic_pile.queue import get_roll_pool
 
 @pytest.mark.asyncio
 async def test_stale_blocked_flag_cleared_after_refresh(async_db: AsyncSession) -> None:
-    """Stale is_blocked=True flags must be cleared when the dep is on a future issue.
+    """Stale is_blocked=True flags must be cleared when next_unread is past the dep target.
 
-    Regression: old logic blocked any thread with a dependency on any of its
-    issues. New logic only blocks when the dependency is on next_unread_issue_id.
-    Threads already stamped True in the DB were not re-evaluated after deploy.
+    Regression: old exact-match logic only blocked when dep target was exactly
+    next_unread_issue_id. Position-based logic blocks when dep target position
+    >= next_unread position. When next_unread has moved past the dep target,
+    the block should be cleared.
     """
     user = User(username="stale_flag_user", created_at=datetime.now(UTC))
     async_db.add(user)
@@ -37,33 +38,32 @@ async def test_stale_blocked_flag_cleared_after_refresh(async_db: AsyncSession) 
         status="active",
         user_id=user.id,
     )
-    # Stamped blocked by the old logic — dep is on a future issue, not next unread
     target = Thread(
         title="Target",
         format="Comic",
-        issues_remaining=2,
+        issues_remaining=3,
         queue_position=2,
         status="active",
         user_id=user.id,
-        is_blocked=True,  # stale flag
+        is_blocked=True,
     )
     async_db.add_all([source, target])
     await async_db.flush()
 
     source_issue = Issue(thread_id=source.id, issue_number="1", position=1, status="unread")
-    target_issue_1 = Issue(thread_id=target.id, issue_number="1", position=1, status="unread")
-    target_issue_2 = Issue(thread_id=target.id, issue_number="2", position=2, status="unread")
-    async_db.add_all([source_issue, target_issue_1, target_issue_2])
+    target_issue_1 = Issue(thread_id=target.id, issue_number="1", position=1, status="read")
+    target_issue_2 = Issue(thread_id=target.id, issue_number="2", position=2, status="read")
+    target_issue_3 = Issue(thread_id=target.id, issue_number="3", position=3, status="unread")
+    async_db.add_all([source_issue, target_issue_1, target_issue_2, target_issue_3])
     await async_db.flush()
 
     source.next_unread_issue_id = source_issue.id
-    target.next_unread_issue_id = target_issue_1.id  # next unread is #1
-    # dependency only touches issue #2 — should NOT block reading issue #1
+    target.next_unread_issue_id = target_issue_3.id
     async_db.add(Dependency(source_issue_id=source_issue.id, target_issue_id=target_issue_2.id))
     await async_db.commit()
 
     await async_db.refresh(target)
-    assert target.is_blocked is True  # stale flag still set before refresh
+    assert target.is_blocked is True
 
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()

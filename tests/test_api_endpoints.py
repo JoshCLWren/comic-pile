@@ -359,7 +359,7 @@ async def test_get_session_current_creates_session(
 
     final_count_result = await async_db.execute(select(func.count()).select_from(SessionModel))
     final_count = final_count_result.scalar()
-    assert final_count == initial_count + 1
+    assert final_count == (initial_count or 0) + 1
 
 
 @pytest.mark.asyncio

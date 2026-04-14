@@ -34,6 +34,13 @@ class Issue(Base):
     # Indexes for performance
     __table_args__ = (
         UniqueConstraint("thread_id", "issue_number", name="uq_issue_thread_number"),
+        UniqueConstraint(
+            "thread_id",
+            "position",
+            name="uq_issue_thread_position",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         Index("ix_issue_thread_id", "thread_id"),
         Index("ix_issue_thread_is_read", "thread_id", "status"),
         Index("ix_issue_thread_position", "thread_id", "position"),

@@ -352,7 +352,7 @@ async def test_duplicate_dependency_returns_400(auth_client, async_db, test_user
 async def test_issue_dependency_blocks_when_target_not_next_unread(
     auth_client, async_db, test_username
 ):
-    """Issue dependency should block thread even when target is not next_unread_issue (issue #270)."""
+    """Issue dependency on a future issue should block thread anticipatorily (issue #270)."""
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
 
@@ -421,12 +421,10 @@ async def test_issue_dependency_blocks_when_target_not_next_unread(
 
     blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_resp.status_code == 200
-    # New behavior: should NOT be blocked since dependency is on issue 3, not next unread issue 1
-    assert target_thread.id not in blocked_resp.json(), (
-        "Thread should NOT be blocked when dependency is on future issue, not next unread"
+    assert target_thread.id in blocked_resp.json(), (
+        "Thread should be blocked when dependency target position >= next_unread position"
     )
 
-    # Read issues 1 and 2 so that issue 3 (which has the dep) becomes next unread
     target_issue_1.status = "read"
     target_issue_1.read_at = datetime.now(UTC)
     target_issue_2.status = "read"
@@ -435,11 +433,10 @@ async def test_issue_dependency_blocks_when_target_not_next_unread(
     await async_db.commit()
     await async_db.refresh(target_thread)
 
-    # Now it SHOULD be blocked since next unread issue 3 has unread prerequisite
     blocked_after = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_after.status_code == 200
     assert target_thread.id in blocked_after.json(), (
-        "Thread should be blocked when next unread issue has unread prerequisite"
+        "Thread should remain blocked when next unread issue has unread prerequisite"
     )
 
     info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
@@ -538,9 +535,8 @@ async def test_issue_dependency_blocking_multiple_issues_same_thread(
 
     blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_resp.status_code == 200
-    # New behavior: should NOT be blocked since dependencies are on issues 3 and 5, not next unread issue 1
-    assert target_thread.id not in blocked_resp.json(), (
-        "Thread should NOT be blocked when dependencies are on future issues, not next unread"
+    assert target_thread.id in blocked_resp.json(), (
+        "Thread should be blocked when dependency target positions >= next_unread position"
     )
 
     # Now read issue 1, making next unread issue 2
@@ -550,11 +546,11 @@ async def test_issue_dependency_blocking_multiple_issues_same_thread(
     await async_db.commit()
     await async_db.refresh(target_thread)
 
-    # Now it SHOULD be blocked since next unread issue 3 has unread prerequisite
+    # Still blocked after advancing next_unread
     blocked_after = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_after.status_code == 200
     assert target_thread.id in blocked_after.json(), (
-        "Thread should be blocked when next unread issue has unread prerequisite"
+        "Thread should remain blocked when next unread issue has unread prerequisite"
     )
 
     info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")

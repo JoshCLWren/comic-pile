@@ -20,7 +20,7 @@ class Review(Base):
     __tablename__ = "reviews"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     thread_id: Mapped[int] = mapped_column(
         ForeignKey("threads.id", ondelete="CASCADE"), nullable=False
     )

@@ -19,8 +19,12 @@ class Snapshot(Base):
     __tablename__ = "snapshots"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=False)
-    event_id: Mapped[int] = mapped_column(ForeignKey("events.id"), nullable=True)
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), nullable=True
+    )
     thread_states: Mapped[dict] = mapped_column(JSON, nullable=False)
     session_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -35,4 +39,4 @@ class Snapshot(Base):
     )
 
     session: Mapped["Session"] = relationship("Session", back_populates="snapshots", lazy="raise")
-    event: Mapped["Event"] = relationship("Event", back_populates="snapshots", lazy="raise")
+    event: Mapped["Event | None"] = relationship("Event", back_populates="snapshots", lazy="raise")
