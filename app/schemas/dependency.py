@@ -19,11 +19,9 @@ class DependencyResponse(BaseModel):
     """Schema for dependency payload."""
 
     id: int
-    source_thread_id: int | None
-    target_thread_id: int | None
-    source_issue_id: int | None
-    target_issue_id: int | None
-    is_issue_level: bool = False
+    source_issue_id: int | None = None
+    target_issue_id: int | None = None
+    is_issue_level: bool = True
     created_at: datetime
     note: str | None = None
     source_label: str | None = None

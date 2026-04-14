@@ -51,10 +51,6 @@ async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[
             issue_ids.add(dep.source_issue_id)
         if dep.target_issue_id is not None:
             issue_ids.add(dep.target_issue_id)
-        if dep.source_thread_id is not None:
-            thread_ids.add(dep.source_thread_id)
-        if dep.target_thread_id is not None:
-            thread_ids.add(dep.target_thread_id)
 
     # Bulk fetch issues
     issue_map: dict[int, Issue] = {}
@@ -87,10 +83,6 @@ async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[
                 source_thread = thread_map.get(source_issue.thread_id)
                 if source_thread:
                     source_label = f"{source_thread.title} #{source_issue.issue_number}"
-        elif dep.source_thread_id is not None:
-            source_thread = thread_map.get(dep.source_thread_id)
-            if source_thread:
-                source_label = source_thread.title
 
         if dep.target_issue_id is not None:
             target_issue = issue_map.get(dep.target_issue_id)
@@ -99,19 +91,13 @@ async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[
                 target_thread = thread_map.get(target_issue.thread_id)
                 if target_thread:
                     target_label = f"{target_thread.title} #{target_issue.issue_number}"
-        elif dep.target_thread_id is not None:
-            target_thread = thread_map.get(dep.target_thread_id)
-            if target_thread:
-                target_label = target_thread.title
 
         response = DependencyResponse.model_validate(dep, from_attributes=True)
         response.source_label = source_label
         response.target_label = target_label
         response.source_issue_thread_id = source_issue_thread_id
         response.target_issue_thread_id = target_issue_thread_id
-        response.is_issue_level = (
-            dep.source_issue_id is not None and dep.target_issue_id is not None
-        )
+        response.is_issue_level = True
         responses.append(response)
 
     return responses
@@ -146,13 +132,13 @@ async def list_thread_dependencies(
 
     blocking_result = await db.execute(
         select(Dependency)
-        .outerjoin(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .where((Dependency.source_thread_id == thread_id) | (source_issue.c.thread_id == thread_id))
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .where(source_issue.c.thread_id == thread_id)
     )
     blocked_by_result = await db.execute(
         select(Dependency)
-        .outerjoin(target_issue, Dependency.target_issue_id == target_issue.c.id)
-        .where((Dependency.target_thread_id == thread_id) | (target_issue.c.thread_id == thread_id))
+        .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
+        .where(target_issue.c.thread_id == thread_id)
     )
 
     blocking_deps = blocking_result.scalars().all()
@@ -308,31 +294,13 @@ async def create_dependency(
         )
 
     if dependency_data.source_type == "thread":
-        source_thread = await db.get(Thread, dependency_data.source_id)
-        target_thread = await db.get(Thread, dependency_data.target_id)
-
-        if (
-            not source_thread
-            or source_thread.user_id != current_user.id
-            or not target_thread
-            or target_thread.user_id != current_user.id
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Thread not found",
-            )
-
-        if await detect_circular_dependency(
-            dependency_data.source_id, dependency_data.target_id, "thread", db
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot create dependency: would create circular dependency",
-            )
-
-        dependency = Dependency(
-            source_thread_id=dependency_data.source_id,
-            target_thread_id=dependency_data.target_id,
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Thread-level dependencies are no longer supported. "
+                "Create an issue-level dependency instead: use the last issue "
+                "of the source thread and the first issue of the target thread."
+            ),
         )
     else:
         source_issue = await db.get(Issue, dependency_data.source_id)
@@ -369,21 +337,12 @@ async def create_dependency(
             target_issue_id=dependency_data.target_id,
         )
 
-    # Pre-insert check for duplicates
-    if dependency_data.source_type == "thread":
-        existing = await db.execute(
-            select(Dependency).where(
-                Dependency.source_thread_id == dependency_data.source_id,
-                Dependency.target_thread_id == dependency_data.target_id,
-            )
+    existing = await db.execute(
+        select(Dependency).where(
+            Dependency.source_issue_id == dependency_data.source_id,
+            Dependency.target_issue_id == dependency_data.target_id,
         )
-    else:
-        existing = await db.execute(
-            select(Dependency).where(
-                Dependency.source_issue_id == dependency_data.source_id,
-                Dependency.target_issue_id == dependency_data.target_id,
-            )
-        )
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -531,16 +490,12 @@ async def _is_dependency_owned_by_user(
     Args:
         dependency: Dependency row to validate ownership for.
         user_id: Authenticated user ID to compare against.
-        db: Database session used for related Thread/Issue lookups.
+        db: Database session used for related Issue lookups.
 
     Returns:
         True when the dependency belongs to the user; otherwise False.
-        For thread dependencies, ownership is checked through source_thread_id.
-        For issue dependencies, ownership is checked through source_issue_id -> thread.user_id.
+        Ownership is checked through source_issue_id -> thread.user_id.
     """
-    if dependency.source_thread_id is not None:
-        source_thread = await db.get(Thread, dependency.source_thread_id)
-        return bool(source_thread and source_thread.user_id == user_id)
     if dependency.source_issue_id is not None:
         source_issue = await db.get(Issue, dependency.source_issue_id)
         if not source_issue:

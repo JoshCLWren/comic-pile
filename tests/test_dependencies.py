@@ -19,13 +19,10 @@ from comic_pile.queue import get_roll_pool
 
 @pytest.mark.asyncio
 async def test_get_blocked_thread_ids_and_explanations(async_db):
-    """Blocked set and explanations should reflect unsatisfied source thread."""
+    """Blocked set and explanations should reflect unsatisfied source issue."""
     user = User(username="dep_user", created_at=datetime.now(UTC))
     async_db.add(user)
     await async_db.flush()
-    # Ensure the SQL sequence for users.id is in sync with the current max(id)
-    # to avoid UniqueViolationError when autoincrement assigns the next id
-    # in environments where tests are run in a shared/test database fixture.
     await async_db.execute(
         text(
             "SELECT setval(pg_get_serial_sequence('users','id'), COALESCE((SELECT MAX(id) FROM users), 1), true)"
@@ -39,6 +36,7 @@ async def test_get_blocked_thread_ids_and_explanations(async_db):
         queue_position=1,
         status="active",
         user_id=user.id,
+        total_issues=1,
     )
     b = Thread(
         title="B",
@@ -47,11 +45,20 @@ async def test_get_blocked_thread_ids_and_explanations(async_db):
         queue_position=2,
         status="active",
         user_id=user.id,
+        total_issues=1,
     )
     async_db.add_all([a, b])
     await async_db.flush()
 
-    async_db.add(Dependency(source_thread_id=a.id, target_thread_id=b.id))
+    issue_a1 = Issue(thread_id=a.id, issue_number="1", position=1, status="unread")
+    issue_b1 = Issue(thread_id=b.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([issue_a1, issue_b1])
+    await async_db.flush()
+
+    a.next_unread_issue_id = issue_a1.id
+    b.next_unread_issue_id = issue_b1.id
+
+    async_db.add(Dependency(source_issue_id=issue_a1.id, target_issue_id=issue_b1.id))
     await async_db.commit()
 
     blocked = await get_blocked_thread_ids(user.id, async_db)
@@ -59,7 +66,7 @@ async def test_get_blocked_thread_ids_and_explanations(async_db):
 
     reasons = await get_blocking_explanations(b.id, user.id, async_db)
     assert reasons
-    assert "Blocked by A" in reasons[0]
+    assert "issue #1" in reasons[0].lower()
 
 
 @pytest.mark.asyncio
@@ -96,16 +103,26 @@ async def test_circular_dependency_detected(async_db):
     async_db.add_all([a, b, c])
     await async_db.flush()
 
+    issue_a = Issue(thread_id=a.id, issue_number="1", position=1, status="unread")
+    issue_b = Issue(thread_id=b.id, issue_number="1", position=1, status="unread")
+    issue_c = Issue(thread_id=c.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([issue_a, issue_b, issue_c])
+    await async_db.flush()
+
+    a.next_unread_issue_id = issue_a.id
+    b.next_unread_issue_id = issue_b.id
+    c.next_unread_issue_id = issue_c.id
+
     async_db.add_all(
         [
-            Dependency(source_thread_id=a.id, target_thread_id=b.id),
-            Dependency(source_thread_id=b.id, target_thread_id=c.id),
+            Dependency(source_issue_id=issue_a.id, target_issue_id=issue_b.id),
+            Dependency(source_issue_id=issue_b.id, target_issue_id=issue_c.id),
         ]
     )
     await async_db.commit()
 
-    assert await detect_circular_dependency(c.id, a.id, "thread", async_db) is True
-    assert await detect_circular_dependency(a.id, c.id, "thread", async_db) is False
+    assert await detect_circular_dependency(issue_c.id, issue_a.id, "issue", async_db) is True
+    assert await detect_circular_dependency(issue_a.id, issue_c.id, "issue", async_db) is False
 
 
 @pytest.mark.asyncio
@@ -142,7 +159,15 @@ async def test_roll_pool_excludes_blocked_threads(async_db):
     async_db.add_all([a, b, c])
     await async_db.flush()
 
-    async_db.add(Dependency(source_thread_id=a.id, target_thread_id=b.id))
+    issue_a = Issue(thread_id=a.id, issue_number="1", position=1, status="unread")
+    issue_b = Issue(thread_id=b.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([issue_a, issue_b])
+    await async_db.flush()
+
+    a.next_unread_issue_id = issue_a.id
+    b.next_unread_issue_id = issue_b.id
+
+    async_db.add(Dependency(source_issue_id=issue_a.id, target_issue_id=issue_b.id))
     await async_db.commit()
 
     await refresh_user_blocked_status(user.id, async_db)
@@ -151,6 +176,9 @@ async def test_roll_pool_excludes_blocked_threads(async_db):
     pool = await get_roll_pool(user.id, async_db)
     assert [t.id for t in pool] == [a.id, c.id]
 
+    issue_a.status = "read"
+    issue_a.read_at = datetime.now(UTC)
+    a.next_unread_issue_id = None
     a.status = "completed"
     await async_db.commit()
 
@@ -164,7 +192,7 @@ async def test_roll_pool_excludes_blocked_threads(async_db):
 @pytest.mark.asyncio
 async def test_circular_dependency_detects_self_reference(async_db):
     """Self-dependency should always be treated as circular."""
-    assert await detect_circular_dependency(123, 123, "thread", async_db) is True
+    assert await detect_circular_dependency(123, 123, "issue", async_db) is True
 
 
 @pytest.mark.asyncio
@@ -215,17 +243,29 @@ async def test_circular_dependency_handles_revisited_nodes(async_db):
     async_db.add_all([t1, t2, t3, t4])
     await async_db.flush()
 
+    issue_t1 = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    issue_t2 = Issue(thread_id=t2.id, issue_number="1", position=1, status="unread")
+    issue_t3 = Issue(thread_id=t3.id, issue_number="1", position=1, status="unread")
+    issue_t4 = Issue(thread_id=t4.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([issue_t1, issue_t2, issue_t3, issue_t4])
+    await async_db.flush()
+
+    t1.next_unread_issue_id = issue_t1.id
+    t2.next_unread_issue_id = issue_t2.id
+    t3.next_unread_issue_id = issue_t3.id
+    t4.next_unread_issue_id = issue_t4.id
+
     async_db.add_all(
         [
-            Dependency(source_thread_id=t1.id, target_thread_id=t2.id),
-            Dependency(source_thread_id=t1.id, target_thread_id=t3.id),
-            Dependency(source_thread_id=t2.id, target_thread_id=t4.id),
-            Dependency(source_thread_id=t3.id, target_thread_id=t4.id),
+            Dependency(source_issue_id=issue_t1.id, target_issue_id=issue_t2.id),
+            Dependency(source_issue_id=issue_t1.id, target_issue_id=issue_t3.id),
+            Dependency(source_issue_id=issue_t2.id, target_issue_id=issue_t4.id),
+            Dependency(source_issue_id=issue_t3.id, target_issue_id=issue_t4.id),
         ]
     )
     await async_db.commit()
 
-    assert await detect_circular_dependency(999999, t1.id, "thread", async_db) is False
+    assert await detect_circular_dependency(999999, issue_t1.id, "issue", async_db) is False
 
 
 @pytest.mark.asyncio
@@ -254,7 +294,15 @@ async def test_update_thread_blocked_status_updates_target(async_db):
     async_db.add_all([source, target])
     await async_db.flush()
 
-    async_db.add(Dependency(source_thread_id=source.id, target_thread_id=target.id))
+    source_issue = Issue(thread_id=source.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=target.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    source.next_unread_issue_id = source_issue.id
+    target.next_unread_issue_id = target_issue.id
+
+    async_db.add(Dependency(source_issue_id=source_issue.id, target_issue_id=target_issue.id))
     await async_db.commit()
 
     await update_thread_blocked_status(target.id, user.id, async_db)

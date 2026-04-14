@@ -9,7 +9,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_session_settings
-from app.models import Event, Session, Snapshot, Thread
+from app.models import Event, Issue, Session, Snapshot, Thread
 
 
 logger = logging.getLogger(__name__)
@@ -58,10 +58,18 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
 
     thread_states = {}
     for thread in threads:
+        issues_result = await db.execute(
+            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+        )
+        issues = issues_result.scalars().all()
+
         thread_states[thread.id] = {
             "title": thread.title,
             "format": thread.format,
             "issues_remaining": thread.issues_remaining,
+            "total_issues": thread.total_issues,
+            "next_unread_issue_id": thread.next_unread_issue_id,
+            "reading_progress": thread.reading_progress,
             "last_rating": thread.last_rating,
             "last_activity_at": thread.last_activity_at.isoformat()
             if thread.last_activity_at
@@ -74,6 +82,16 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
             "is_test": thread.is_test,
             "created_at": thread.created_at.isoformat(),
             "user_id": thread.user_id,
+            "issue_states": [
+                {
+                    "id": issue.id,
+                    "number": issue.issue_number,
+                    "status": issue.status,
+                    "read_at": issue.read_at.isoformat() if issue.read_at else None,
+                    "position": issue.position,
+                }
+                for issue in issues
+            ],
         }
 
     session_state = {

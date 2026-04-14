@@ -11,24 +11,12 @@ from app.models.thread import Thread
 
 
 async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
-    """Return thread IDs blocked by unsatisfied dependencies for a user."""
-    source = Thread.__table__.alias("source_thread")
-    target = Thread.__table__.alias("target_thread")
-
-    result = await db.execute(
-        select(Dependency.target_thread_id)
-        .join(source, Dependency.source_thread_id == source.c.id)
-        .join(target, Dependency.target_thread_id == target.c.id)
-        .where(source.c.user_id == user_id)
-        .where(target.c.user_id == user_id)
-        .where(source.c.status != "completed")
-    )
-    blocked_by_threads = {row[0] for row in result.all()}
-
+    """Return thread IDs blocked by unsatisfied issue-level dependencies for a user."""
     source_issue = Issue.__table__.alias("source_issue")
     dep_target_issue = Issue.__table__.alias("dep_target_issue")
     target_next_unread = Issue.__table__.alias("target_next_unread")
     target_thread = Thread.__table__.alias("target_thread")
+    source = Thread.__table__.alias("source_thread")
 
     issue_result = await db.execute(
         select(target_thread.c.id)
@@ -50,26 +38,11 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
         .where(target_thread.c.next_unread_issue_id.isnot(None))
         .distinct()
     )
-    blocked_by_issues = {row[0] for row in issue_result.all()}
-    return blocked_by_threads | blocked_by_issues
+    return {row[0] for row in issue_result.all()}
 
 
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[str]:
     """Human-readable reasons a thread is blocked."""
-    source = Thread.__table__.alias("source_thread")
-    target = Thread.__table__.alias("target_thread")
-
-    thread_result = await db.execute(
-        select(source.c.id, source.c.title)
-        .join(Dependency, Dependency.source_thread_id == source.c.id)
-        .join(target, Dependency.target_thread_id == target.c.id)
-        .where(target.c.id == thread_id)
-        .where(source.c.user_id == user_id)
-        .where(target.c.user_id == user_id)
-        .where(source.c.status != "completed")
-    )
-    thread_reasons = [f"Blocked by {title} (thread #{sid})" for sid, title in thread_result.all()]
-
     source_issue = Issue.__table__.alias("source_issue")
     dep_target_issue = Issue.__table__.alias("dep_target_issue")
     target_next_unread = Issue.__table__.alias("target_next_unread")
@@ -103,11 +76,10 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         .where(target_thread.c.next_unread_issue_id.isnot(None))
         .distinct()
     )
-    issue_reasons = [
+    return [
         f"Blocked by issue #{issue_number} in {thread_title} (thread #{thread_id_val})"
         for thread_id_val, thread_title, _issue_id, issue_number in issue_result.all()
     ]
-    return thread_reasons + issue_reasons
 
 
 async def validate_position_dependency_consistency(
@@ -165,9 +137,7 @@ async def detect_circular_dependency(
     if source_id == target_id:
         return True
 
-    if dependency_type == "thread":
-        result = await db.execute(select(Dependency.source_thread_id, Dependency.target_thread_id))
-    elif dependency_type == "issue":
+    if dependency_type == "issue":
         result = await db.execute(select(Dependency.source_issue_id, Dependency.target_issue_id))
     else:
         return False

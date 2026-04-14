@@ -21,6 +21,7 @@ async def test_dependency_api_lifecycle(auth_client, async_db, test_username):
         queue_position=1,
         status="active",
         user_id=user.id,
+        total_issues=2,
     )
     t2 = Thread(
         title="Target",
@@ -29,19 +30,29 @@ async def test_dependency_api_lifecycle(auth_client, async_db, test_username):
         queue_position=2,
         status="active",
         user_id=user.id,
+        total_issues=2,
     )
     async_db.add_all([t1, t2])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=t2.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    t1.next_unread_issue_id = source_issue.id
+    t2.next_unread_issue_id = target_issue.id
     await async_db.commit()
-    await async_db.refresh(t1)
-    await async_db.refresh(t2)
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
 
     create_resp = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t2.id,
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
         },
     )
     assert create_resp.status_code == 201
@@ -75,18 +86,26 @@ async def test_dependency_rejects_self(auth_client, async_db, test_username):
         queue_position=1,
         status="active",
         user_id=user.id,
+        total_issues=2,
     )
     async_db.add(t1)
+    await async_db.flush()
+
+    issue = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+
+    t1.next_unread_issue_id = issue.id
     await async_db.commit()
-    await async_db.refresh(t1)
+    await async_db.refresh(issue)
 
     resp = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t1.id,
+            "source_type": "issue",
+            "source_id": issue.id,
+            "target_type": "issue",
+            "target_id": issue.id,
         },
     )
     assert resp.status_code == 400
@@ -94,7 +113,7 @@ async def test_dependency_rejects_self(auth_client, async_db, test_username):
 
 @pytest.mark.asyncio
 async def test_duplicate_thread_dependency_returns_400(auth_client, async_db, test_username):
-    """Creating duplicate thread dependency should return 400, not 500 (issue #255)."""
+    """Creating duplicate issue dependency should return 400, not 500 (issue #255)."""
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
 
@@ -105,6 +124,7 @@ async def test_duplicate_thread_dependency_returns_400(auth_client, async_db, te
         queue_position=1,
         status="active",
         user_id=user.id,
+        total_issues=2,
     )
     t2 = Thread(
         title="Target",
@@ -113,19 +133,29 @@ async def test_duplicate_thread_dependency_returns_400(auth_client, async_db, te
         queue_position=2,
         status="active",
         user_id=user.id,
+        total_issues=2,
     )
     async_db.add_all([t1, t2])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=t2.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    t1.next_unread_issue_id = source_issue.id
+    t2.next_unread_issue_id = target_issue.id
     await async_db.commit()
-    await async_db.refresh(t1)
-    await async_db.refresh(t2)
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
 
     create_resp1 = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t2.id,
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
         },
     )
     assert create_resp1.status_code == 201
@@ -133,10 +163,10 @@ async def test_duplicate_thread_dependency_returns_400(auth_client, async_db, te
     create_resp2 = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t2.id,
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
         },
     )
     assert create_resp2.status_code == 400
@@ -145,8 +175,8 @@ async def test_duplicate_thread_dependency_returns_400(auth_client, async_db, te
     # Verify exactly one dependency exists in the database
     result = await async_db.execute(
         select(Dependency).where(
-            Dependency.source_thread_id == t1.id,
-            Dependency.target_thread_id == t2.id,
+            Dependency.source_issue_id == source_issue.id,
+            Dependency.target_issue_id == target_issue.id,
         )
     )
     deps = result.scalars().all()
@@ -573,6 +603,7 @@ async def test_delete_dependency_clears_blocked_flag(auth_client, async_db, test
         queue_position=1,
         status="active",
         user_id=user.id,
+        total_issues=1,
     )
     t2 = Thread(
         title="Dependent Thread",
@@ -581,19 +612,29 @@ async def test_delete_dependency_clears_blocked_flag(auth_client, async_db, test
         queue_position=2,
         status="active",
         user_id=user.id,
+        total_issues=1,
     )
     async_db.add_all([t1, t2])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=t2.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    t1.next_unread_issue_id = source_issue.id
+    t2.next_unread_issue_id = target_issue.id
     await async_db.commit()
-    await async_db.refresh(t1)
-    await async_db.refresh(t2)
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
 
     create_dep_resp = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t2.id,
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
         },
     )
     assert create_dep_resp.status_code == 201
@@ -849,17 +890,26 @@ async def test_update_dependency_note_success(auth_client, async_db, test_userna
         user_id=user.id,
     )
     async_db.add_all([t1, t2])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=t2.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    t1.next_unread_issue_id = source_issue.id
+    t2.next_unread_issue_id = target_issue.id
     await async_db.commit()
-    await async_db.refresh(t1)
-    await async_db.refresh(t2)
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
 
     create_resp = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t2.id,
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
         },
     )
     assert create_resp.status_code == 201
@@ -901,17 +951,26 @@ async def test_update_dependency_note_too_long_returns_422(auth_client, async_db
         user_id=user.id,
     )
     async_db.add_all([t1, t2])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=t2.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    t1.next_unread_issue_id = source_issue.id
+    t2.next_unread_issue_id = target_issue.id
     await async_db.commit()
-    await async_db.refresh(t1)
-    await async_db.refresh(t2)
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
 
     create_resp = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t2.id,
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
         },
     )
     assert create_resp.status_code == 201
@@ -948,17 +1007,26 @@ async def test_update_dependency_note_clears_note(auth_client, async_db, test_us
         user_id=user.id,
     )
     async_db.add_all([t1, t2])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=t2.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    t1.next_unread_issue_id = source_issue.id
+    t2.next_unread_issue_id = target_issue.id
     await async_db.commit()
-    await async_db.refresh(t1)
-    await async_db.refresh(t2)
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
 
     create_resp = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t2.id,
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
         },
     )
     assert create_resp.status_code == 201
@@ -1000,17 +1068,26 @@ async def test_dependency_note_in_list_endpoint(auth_client, async_db, test_user
         user_id=user.id,
     )
     async_db.add_all([t1, t2])
+    await async_db.flush()
+
+    source_issue = Issue(thread_id=t1.id, issue_number="1", position=1, status="unread")
+    target_issue = Issue(thread_id=t2.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    t1.next_unread_issue_id = source_issue.id
+    t2.next_unread_issue_id = target_issue.id
     await async_db.commit()
-    await async_db.refresh(t1)
-    await async_db.refresh(t2)
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
 
     create_resp = await auth_client.post(
         "/api/v1/dependencies/",
         json={
-            "source_type": "thread",
-            "source_id": t1.id,
-            "target_type": "thread",
-            "target_id": t2.id,
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
         },
     )
     assert create_resp.status_code == 201
