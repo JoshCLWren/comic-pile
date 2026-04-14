@@ -9,8 +9,8 @@ import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, Thr
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/ToastContext'
 
-function getDefaultDependencyMode(thread: Thread | null): 'thread' | 'issue' {
-  return thread?.next_unread_issue_id ? 'issue' : 'thread'
+function getDefaultDependencyMode(_thread: Thread | null): 'thread' | 'issue' {
+  return 'issue'
 }
 
 function groupByThread(deps: Dependency[], labelKey: 'source_label' | 'target_label'): Map<string, Dependency[]> {
@@ -702,35 +702,9 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
             Dependency type
           </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setDependencyMode('issue')}
-              className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
-                dependencyMode === 'issue'
-                  ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
-                  : 'bg-white/5 border-white/10 text-stone-400'
-              }`}
-            >
-              Issue Level
-            </button>
-            <button
-              type="button"
-              onClick={() => setDependencyMode('thread')}
-              className={`py-2 rounded-xl border text-xs font-black uppercase tracking-widest ${
-                dependencyMode === 'thread'
-                  ? 'bg-amber-600/20 border-amber-500/40 text-amber-300'
-                  : 'bg-white/5 border-white/10 text-stone-400'
-              }`}
-            >
-              Thread Level
-            </button>
-          </div>
-          {dependencyMode === 'issue' && (
-            <p className="text-xs text-stone-500">
-              Uses each thread&apos;s next unread issue.
-            </p>
-          )}
+          <p className="text-xs text-stone-500">
+            Issue-level: uses each thread&apos;s next unread issue.
+          </p>
         </div>
 
         <div className="space-y-2">
