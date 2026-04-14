@@ -794,6 +794,7 @@ async def mark_issue_read(
         timestamp=datetime.now(UTC),
         thread_id=thread_id,
         issue_id=issue_id,
+        issue_number=issue.issue_number,
     )
     db.add(event)
 
@@ -863,6 +864,7 @@ async def mark_issue_unread(
         timestamp=datetime.now(UTC),
         thread_id=thread_id,
         issue_id=issue_id,
+        issue_number=issue.issue_number,
     )
     db.add(event)
 

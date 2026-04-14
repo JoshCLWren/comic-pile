@@ -1130,6 +1130,7 @@ async def test_mark_issue_read_creates_event(
     assert event is not None
     assert event.type == "issue_read"
     assert event.issue_id == issue.id
+    assert event.issue_number == "1"
 
 
 @pytest.mark.asyncio
@@ -1177,6 +1178,7 @@ async def test_mark_issue_unread_creates_event(
     assert event is not None
     assert event.type == "issue_unread"
     assert event.issue_id == issue.id
+    assert event.issue_number == "1"
 
 
 @pytest.mark.asyncio
