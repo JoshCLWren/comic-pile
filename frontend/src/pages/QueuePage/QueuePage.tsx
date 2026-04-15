@@ -654,6 +654,7 @@ export default function QueuePage() {
         </>
       )}
 
+      {completedThreads.length > 0 && (
       <section className="space-y-4">
         <header className="flex items-center justify-between px-2">
           <div>
@@ -664,35 +665,33 @@ export default function QueuePage() {
             type="button"
             onClick={() => openReactivateModal(null)}
             className="h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+            disabled={!threads || threads.length === 0}
           >
             Reactivate
           </button>
         </header>
-        {completedThreads.length === 0 ? (
-          <div className="text-center text-stone-500">No completed threads yet</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {completedThreads.map((thread) => (
-              <div key={thread.id} className="glass-card p-4 space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
-                    <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">{thread.format}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openReactivateModal(thread)}
-                    className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
-                  >
-                    Reactivate
-                  </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {completedThreads.map((thread) => (
+            <div key={thread.id} className="glass-card p-4 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-stone-300 truncate">{thread.title}</p>
+                  <p className="text-[8px] font-black text-stone-500 uppercase tracking-widest">{thread.format}</p>
                 </div>
-                {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
+                <button
+                  type="button"
+                  onClick={() => openReactivateModal(thread)}
+                  className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+                >
+                  Reactivate
+                </button>
               </div>
-            ))}
-          </div>
-        )}
+              {thread.notes && <p className="text-xs text-stone-500">{thread.notes}</p>}
+            </div>
+          ))}
+        </div>
       </section>
+      )}
 
   {/* Create Thread Modal */}
   <Modal isOpen={isCreateOpen} title="Create Thread" onClose={() => setIsCreateOpen(false)}>
