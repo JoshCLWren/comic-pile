@@ -565,6 +565,44 @@ test.describe('Roll Dice Feature', () => {
       })
       const thread3 = await thread3Response.json()
 
+      // Create issues for all threads
+      await authenticatedPage.request.post(`/api/v1/threads/${thread1.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      await authenticatedPage.request.post(`/api/v1/threads/${thread2.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      await authenticatedPage.request.post(`/api/v1/threads/${thread3.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      // Get issue IDs for thread1 and thread2
+      const thread1IssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${thread1.id}/issues`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      const thread1IssuesData = await thread1IssuesResponse.json()
+      const thread1LastIssue = thread1IssuesData.issues[thread1IssuesData.issues.length - 1]
+
+      const thread2IssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${thread2.id}/issues`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      const thread2IssuesData = await thread2IssuesResponse.json()
+      const thread2FirstIssue = thread2IssuesData.issues[0]
+
       // Create a dependency that blocks thread2
       await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
@@ -572,10 +610,10 @@ test.describe('Roll Dice Feature', () => {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         data: {
-          source_type: 'thread',
-          source_id: thread1.id,
-          target_type: 'thread',
-          target_id: thread2.id,
+          source_type: 'issue',
+          source_id: thread1LastIssue.id,
+          target_type: 'issue',
+          target_id: thread2FirstIssue.id,
         },
       })
 
@@ -643,6 +681,19 @@ test.describe('Roll Dice Feature', () => {
         data: { issue_range: '1-10' },
       })
 
+      // Get issue IDs for unblockedThread and blockedThread
+      const unblockedIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${unblockedThread.id}/issues`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      const unblockedIssuesData = await unblockedIssuesResponse.json()
+      const unblockedLastIssue = unblockedIssuesData.issues[unblockedIssuesData.issues.length - 1]
+
+      const blockedIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${blockedThread.id}/issues`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      const blockedIssuesData = await blockedIssuesResponse.json()
+      const blockedFirstIssue = blockedIssuesData.issues[0]
+
       // Block the second thread
       await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
@@ -650,10 +701,10 @@ test.describe('Roll Dice Feature', () => {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         data: {
-          source_type: 'thread',
-          source_id: unblockedThread.id,
-          target_type: 'thread',
-          target_id: blockedThread.id,
+          source_type: 'issue',
+          source_id: unblockedLastIssue.id,
+          target_type: 'issue',
+          target_id: blockedFirstIssue.id,
         },
       })
 
@@ -718,6 +769,36 @@ test.describe('Roll Dice Feature', () => {
       })
       const blockerThread = await blockerThreadResponse.json()
 
+      // Create issues for both threads
+      await authenticatedPage.request.post(`/api/v1/threads/${blockedThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      await authenticatedPage.request.post(`/api/v1/threads/${blockerThread.id}/issues`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        data: { issue_range: '1-5' },
+      })
+
+      // Get issue IDs for blockerThread and blockedThread
+      const blockerIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${blockerThread.id}/issues`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      const blockerIssuesData = await blockerIssuesResponse.json()
+      const blockerLastIssue = blockerIssuesData.issues[blockerIssuesData.issues.length - 1]
+
+      const blockedIssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${blockedThread.id}/issues`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      const blockedIssuesData = await blockedIssuesResponse.json()
+      const blockedFirstIssue = blockedIssuesData.issues[0]
+
       // Create the blocking dependency
       await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
@@ -725,10 +806,10 @@ test.describe('Roll Dice Feature', () => {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         data: {
-          source_type: 'thread',
-          source_id: blockerThread.id,
-          target_type: 'thread',
-          target_id: blockedThread.id,
+          source_type: 'issue',
+          source_id: blockerLastIssue.id,
+          target_type: 'issue',
+          target_id: blockedFirstIssue.id,
         },
       })
 
