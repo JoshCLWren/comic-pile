@@ -97,6 +97,8 @@ async def enrich_dependencies(deps: list[Dependency], db: AsyncSession) -> list[
         response.target_label = target_label
         response.source_issue_thread_id = source_issue_thread_id
         response.target_issue_thread_id = target_issue_thread_id
+        response.source_thread_id = source_issue_thread_id
+        response.target_thread_id = target_issue_thread_id
         response.is_issue_level = True
         responses.append(response)
 

@@ -71,6 +71,7 @@ async def migrate_thread_deps_to_issue_deps() -> None:
         affected_user_ids: set[int] = set()
         migrated = 0
         skipped = 0
+        deleted = 0
 
         for row in thread_dep_rows:
             dep_id: int = row[0]
@@ -87,10 +88,11 @@ async def migrate_thread_deps_to_issue_deps() -> None:
                 source_title = source_thread.title if source_thread else "unknown"
                 target_title = target_thread.title if target_thread else "unknown"
                 print(
-                    f"  SKIP dep #{dep_id}: {source_title} -> {target_title} "
+                    f"  DELETE dep #{dep_id}: {source_title} -> {target_title} "
                     "(one or both threads have no issues)"
                 )
-                skipped += 1
+                await db.execute(text("DELETE FROM dependencies WHERE id = :id"), {"id": dep_id})
+                deleted += 1
                 continue
 
             existing = await db.execute(
@@ -144,7 +146,7 @@ async def migrate_thread_deps_to_issue_deps() -> None:
 
         await db.commit()
 
-        print(f"\nMigration complete: {migrated} migrated, {skipped} skipped.")
+        print(f"\nMigration complete: {migrated} migrated, {skipped} skipped, {deleted} deleted.")
 
 
 if __name__ == "__main__":

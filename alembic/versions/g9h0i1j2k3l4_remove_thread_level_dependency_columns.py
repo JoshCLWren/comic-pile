@@ -29,6 +29,9 @@ def upgrade() -> None:
     op.drop_column("dependencies", "source_thread_id")
     op.drop_column("dependencies", "target_thread_id")
 
+    op.alter_column("dependencies", "source_issue_id", existing_type=sa.Integer(), nullable=False)
+    op.alter_column("dependencies", "target_issue_id", existing_type=sa.Integer(), nullable=False)
+
     op.execute(
         text(
             "ALTER TABLE dependencies ADD CONSTRAINT ck_dependency_exactly_one_type "
@@ -40,6 +43,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Restore thread-level dependency columns and constraints."""
     op.execute(text("ALTER TABLE dependencies DROP CONSTRAINT ck_dependency_exactly_one_type"))
+
+    op.alter_column("dependencies", "source_issue_id", existing_type=sa.Integer(), nullable=True)
+    op.alter_column("dependencies", "target_issue_id", existing_type=sa.Integer(), nullable=True)
 
     op.add_column(
         "dependencies",

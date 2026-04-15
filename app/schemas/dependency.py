@@ -21,6 +21,8 @@ class DependencyResponse(BaseModel):
     id: int
     source_issue_id: int | None = None
     target_issue_id: int | None = None
+    source_thread_id: int | None = None
+    target_thread_id: int | None = None
     is_issue_level: bool = True
     created_at: datetime
     note: str | None = None

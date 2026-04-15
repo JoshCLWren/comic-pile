@@ -86,15 +86,41 @@ test('renders flowchart with nodes and edges when toggled', async ({ authenticat
       total_issues: 5,
     })
 
-    // Create dependency via API
+    if (!sourceResult?.id || !targetResult?.id) {
+      throw new Error('Failed to create threads')
+    }
+
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+    // Create issues for both threads
+    await authenticatedPage.request.post(`/api/v1/threads/${sourceResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-5' },
+    })
+
+    await authenticatedPage.request.post(`/api/v1/threads/${targetResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-5' },
+    })
+
+    // Get issue IDs
+    const sourceIssueId = await getIssueIdByNumber(authenticatedPage, sourceResult.id, '1', token)
+    const targetIssueId = await getIssueIdByNumber(authenticatedPage, targetResult.id, '1', token)
+
+    // Create dependency via API using issue-level
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
-        source_type: 'thread',
-        source_id: sourceResult?.id,
-        target_type: 'thread',
-        target_id: targetResult?.id,
+        source_type: 'issue',
+        source_id: sourceIssueId,
+        target_type: 'issue',
+        target_id: targetIssueId,
       },
     })
     expect(depResponse.ok()).toBe(true)
@@ -152,14 +178,40 @@ test('flowchart zoom controls work', async ({ authenticatedPage }) => {
       total_issues: 3,
     })
 
+    if (!sourceResult?.id || !targetResult?.id) {
+      throw new Error('Failed to create threads')
+    }
+
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+    // Create issues for both threads
+    await authenticatedPage.request.post(`/api/v1/threads/${sourceResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-3' },
+    })
+
+    await authenticatedPage.request.post(`/api/v1/threads/${targetResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-3' },
+    })
+
+    // Get issue IDs
+    const sourceIssueId = await getIssueIdByNumber(authenticatedPage, sourceResult.id, '1', token)
+    const targetIssueId = await getIssueIdByNumber(authenticatedPage, targetResult.id, '1', token)
+
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
-        source_type: 'thread',
-        source_id: sourceResult?.id,
-        target_type: 'thread',
-        target_id: targetResult?.id,
+        source_type: 'issue',
+        source_id: sourceIssueId,
+        target_type: 'issue',
+        target_id: targetIssueId,
       },
     })
     expect(depResponse.ok()).toBe(true)
@@ -209,14 +261,40 @@ test('flowchart shows tooltip on node hover', async ({ authenticatedPage }) => {
       total_issues: 3,
     })
 
+    if (!sourceResult?.id || !targetResult?.id) {
+      throw new Error('Failed to create threads')
+    }
+
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+    // Create issues for both threads
+    await authenticatedPage.request.post(`/api/v1/threads/${sourceResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-3' },
+    })
+
+    await authenticatedPage.request.post(`/api/v1/threads/${targetResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-3' },
+    })
+
+    // Get issue IDs
+    const sourceIssueId = await getIssueIdByNumber(authenticatedPage, sourceResult.id, '1', token)
+    const targetIssueId = await getIssueIdByNumber(authenticatedPage, targetResult.id, '1', token)
+
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
-        source_type: 'thread',
-        source_id: sourceResult?.id,
-        target_type: 'thread',
-        target_id: targetResult?.id,
+        source_type: 'issue',
+        source_id: sourceIssueId,
+        target_type: 'issue',
+        target_id: targetIssueId,
       },
     })
     expect(depResponse.ok()).toBe(true)
@@ -259,14 +337,40 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       total_issues: 3,
     })
 
+    if (!sourceResult?.id || !targetResult?.id) {
+      throw new Error('Failed to create threads')
+    }
+
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+    // Create issues for both threads
+    await authenticatedPage.request.post(`/api/v1/threads/${sourceResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-3' },
+    })
+
+    await authenticatedPage.request.post(`/api/v1/threads/${targetResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-3' },
+    })
+
+    // Get issue IDs
+    const sourceIssueId = await getIssueIdByNumber(authenticatedPage, sourceResult.id, '1', token)
+    const targetIssueId = await getIssueIdByNumber(authenticatedPage, targetResult.id, '1', token)
+
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
-        source_type: 'thread',
-        source_id: sourceResult?.id,
-        target_type: 'thread',
-        target_id: targetResult?.id,
+        source_type: 'issue',
+        source_id: sourceIssueId,
+        target_type: 'issue',
+        target_id: targetIssueId,
       },
     })
     expect(depResponse.ok()).toBe(true)
@@ -305,14 +409,40 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       total_issues: 3,
     })
 
+    if (!sourceResult?.id || !targetResult?.id) {
+      throw new Error('Failed to create threads')
+    }
+
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+
+    // Create issues for both threads
+    await authenticatedPage.request.post(`/api/v1/threads/${sourceResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-3' },
+    })
+
+    await authenticatedPage.request.post(`/api/v1/threads/${targetResult.id}/issues`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      data: { issue_range: '1-3' },
+    })
+
+    // Get issue IDs
+    const sourceIssueId = await getIssueIdByNumber(authenticatedPage, sourceResult.id, '1', token)
+    const targetIssueId = await getIssueIdByNumber(authenticatedPage, targetResult.id, '1', token)
+
     const depResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
-        source_type: 'thread',
-        source_id: sourceResult?.id,
-        target_type: 'thread',
-        target_id: targetResult?.id,
+        source_type: 'issue',
+        source_id: sourceIssueId,
+        target_type: 'issue',
+        target_id: targetIssueId,
       },
     })
     expect(depResponse.ok()).toBe(true)
@@ -767,7 +897,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       await expect(issueEdge).toHaveClass(/edge--issue-level/)
     })
 
-    test('mixed thread-level and issue-level dependencies render correctly', async ({ authenticatedPage }) => {
+    test('multiple issue-level dependencies render correctly', async ({ authenticatedPage }) => {
       const threadA = await createThread(authenticatedPage, {
         title: 'Thread Alpha',
         format: 'Comics',
@@ -812,18 +942,12 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         data: { issue_range: '1-10' },
       })
 
-      // Thread-level dependency: Alpha blocks Beta
-      await authenticatedPage.request.post('/api/v1/dependencies/', {
+      await authenticatedPage.request.post(`/api/v1/threads/${threadC.id}/issues`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        data: {
-          source_type: 'thread',
-          source_id: threadA.id,
-          target_type: 'thread',
-          target_id: threadB.id,
-        },
+        data: { issue_range: '1-10' },
       })
 
       // Issue-level dependency: Alpha #5 blocks Beta #3
@@ -843,6 +967,23 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         },
       })
 
+      // Issue-level dependency: Beta #7 blocks Gamma #2
+      const issue7Id = await getIssueIdByNumber(authenticatedPage, threadB.id, '7', token)
+      const issue2Id = await getIssueIdByNumber(authenticatedPage, threadC.id, '2', token)
+
+      await authenticatedPage.request.post('/api/v1/dependencies/', {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        data: {
+          source_type: 'issue',
+          source_id: issue7Id,
+          target_type: 'issue',
+          target_id: issue2Id,
+        },
+      })
+
       await authenticatedPage.goto('/queue')
       await authenticatedPage.waitForLoadState('networkidle')
 
@@ -853,12 +994,15 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       await betaCard.locator('button[aria-label="Manage dependencies"]').click()
       await openFlowchartView(authenticatedPage)
 
-      // Should have both thread nodes
+      // Should have all three thread nodes
       await expect(
         authenticatedPage.locator(`[data-testid="flowchart-node-${threadA.id}"]`),
       ).toBeVisible()
       await expect(
         authenticatedPage.locator(`[data-testid="flowchart-node-${threadB.id}"]`),
+      ).toBeVisible()
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node-${threadC.id}"]`),
       ).toBeVisible()
 
       // Should have issue nodes
@@ -868,14 +1012,20 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       await expect(
         authenticatedPage.locator(`[data-testid="flowchart-node--${issue3Id}"]`),
       ).toBeVisible()
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue7Id}"]`),
+      ).toBeVisible()
+      await expect(
+        authenticatedPage.locator(`[data-testid="flowchart-node--${issue2Id}"]`),
+      ).toBeVisible()
 
-      // Should have both thread-level and issue-level edges
+      // Should have issue-level edges
       const allEdges = await authenticatedPage.locator('.flowchart-edge, .flowchart-edge-blocking').count()
       const issueEdges = await authenticatedPage.locator('.edge--issue-level').count()
 
       expect(allEdges).toBeGreaterThan(0)
       expect(issueEdges).toBeGreaterThan(0)
-      expect(allEdges).toBeGreaterThan(issueEdges)
+      expect(allEdges).toBe(issueEdges)
     })
   })
 })

@@ -58,18 +58,10 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
 
     thread_states = {}
     for thread in threads:
-        issues_result = await db.execute(
-            select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
-        )
-        issues = issues_result.scalars().all()
-
         thread_states[thread.id] = {
             "title": thread.title,
             "format": thread.format,
             "issues_remaining": thread.issues_remaining,
-            "total_issues": thread.total_issues,
-            "next_unread_issue_id": thread.next_unread_issue_id,
-            "reading_progress": thread.reading_progress,
             "last_rating": thread.last_rating,
             "last_activity_at": thread.last_activity_at.isoformat()
             if thread.last_activity_at
@@ -82,7 +74,15 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
             "is_test": thread.is_test,
             "created_at": thread.created_at.isoformat(),
             "user_id": thread.user_id,
-            "issue_states": [
+        }
+
+        if thread.uses_issue_tracking():
+            issues_result = await db.execute(
+                select(Issue).where(Issue.thread_id == thread.id).order_by(Issue.position)
+            )
+            issues = issues_result.scalars().all()
+
+            thread_states[thread.id]["issue_states"] = [
                 {
                     "id": issue.id,
                     "number": issue.issue_number,
@@ -91,8 +91,15 @@ async def create_session_start_snapshot(db: AsyncSession, session: Session) -> N
                     "position": issue.position,
                 }
                 for issue in issues
-            ],
-        }
+            ]
+            thread_states[thread.id]["total_issues"] = thread.total_issues
+            thread_states[thread.id]["next_unread_issue_id"] = thread.next_unread_issue_id
+            thread_states[thread.id]["reading_progress"] = thread.reading_progress
+        else:
+            thread_states[thread.id]["issue_states"] = None
+            thread_states[thread.id]["total_issues"] = None
+            thread_states[thread.id]["next_unread_issue_id"] = None
+            thread_states[thread.id]["reading_progress"] = None
 
     session_state = {
         "start_die": session.start_die,
