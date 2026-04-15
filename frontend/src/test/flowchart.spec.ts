@@ -152,15 +152,19 @@ test('renders flowchart with nodes and edges when toggled', async ({ authenticat
       ).toBeVisible()
     }
 
-    // Should have an edge between them (SVG paths with fill:none may not pass
+    // Should have issue nodes for the specific issues
+    await expect(
+      authenticatedPage.locator(`[data-testid="flowchart-node--${sourceIssueId}"]`),
+    ).toBeVisible()
+    await expect(
+      authenticatedPage.locator(`[data-testid="flowchart-node--${targetIssueId}"]`),
+    ).toBeVisible()
+
+    // Should have an issue-level edge between the issue nodes (SVG paths with fill:none may not pass
     // Playwright's visibility check, so assert the element is attached to the DOM)
-    if (sourceResult?.id && targetResult?.id) {
-      await expect(
-        authenticatedPage.locator(
-          `[data-testid="flowchart-edge-${sourceResult.id}-${targetResult.id}"]`,
-        ),
-      ).toBeAttached()
-    }
+    await expect(
+      authenticatedPage.locator('.edge--issue-level'),
+    ).toBeAttached()
   })
 
 test('flowchart zoom controls work', async ({ authenticatedPage }) => {
