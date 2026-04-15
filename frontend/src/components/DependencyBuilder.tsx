@@ -128,7 +128,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
       // Issue-level deps → issue nodes + direct edges between them
       const issueOnlyDeps = allDeps.filter(
-        (dep) => dep.source_thread_id == null || dep.target_thread_id == null
+        (dep) => dep.source_issue_id != null && dep.target_issue_id != null
       )
       const issueNodeMap = new Map<number, FlowchartNode>()
       const issueEdges: FlowchartDependency[] = []
