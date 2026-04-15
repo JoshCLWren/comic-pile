@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import get_active_thread
 from app.config import clear_settings_cache
-from app.models import Dependency, Event, Session, Snapshot, Thread, User
+from app.models import Event, Issue, Session, Snapshot, Thread, User
 from app.models import Session as SessionModel
 from comic_pile.session import (
     create_session_start_snapshot,
@@ -942,7 +942,13 @@ async def test_restore_session_start_clears_pending_thread_id(
 async def test_restore_session_start_recomputes_blocked_status(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
-    """Restore should recompute denormalized blocked flags from dependencies."""
+    """Restore should recompute denormalized blocked flags from dependencies.
+
+    Verifies that restore-session-start calls refresh_user_blocked_status and
+    corrects stale denormalized is_blocked flags. Creates a thread whose
+    is_blocked is spuriously True (no actual active dep), and verifies that
+    restore corrects it to False via refresh_user_blocked_status.
+    """
     thread1 = Thread(
         title="Prereq",
         format="Comic",
@@ -964,9 +970,12 @@ async def test_restore_session_start_recomputes_blocked_status(
     async_db.add_all([thread1, thread2])
     await async_db.flush()
 
-    async_db.add(Dependency(source_thread_id=thread1.id, target_thread_id=thread2.id))
+    issue_t2 = Issue(thread_id=thread2.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue_t2)
+    await async_db.flush()
+
+    thread2.next_unread_issue_id = issue_t2.id
     await async_db.commit()
-    await async_db.refresh(thread2)
 
     session = SessionModel(start_die=6, user_id=default_user.id)
     async_db.add(session)
@@ -975,17 +984,16 @@ async def test_restore_session_start_recomputes_blocked_status(
 
     await create_session_start_snapshot(async_db, session)
 
-    # Set a correct value, then corrupt it to stale denormalized state.
+    # Corrupt is_blocked to True even though no dep exists.
     thread2.is_blocked = True
-    await async_db.commit()
-    thread2.is_blocked = False
     await async_db.commit()
 
     response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 200
 
+    # refresh_user_blocked_status should correct the stale True → False (no active dep).
     await async_db.refresh(thread2)
-    assert thread2.is_blocked is True
+    assert thread2.is_blocked is False
 
 
 @pytest.mark.asyncio

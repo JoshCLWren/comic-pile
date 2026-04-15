@@ -494,6 +494,7 @@ async def test_reactivate_completed_thread_refreshes_blocked_flags(
     async_db.add_all([active_thread, dependent_thread, completed_source])
     await async_db.flush()
 
+    dep_issue_1 = Issue(thread_id=dependent_thread.id, issue_number="1", position=1, status="unread")
     async_db.add_all(
         [
             Issue(
@@ -510,16 +511,16 @@ async def test_reactivate_completed_thread_refreshes_blocked_flags(
                 status="read",
                 read_at=datetime.now(UTC),
             ),
-            Dependency(
-                source_thread_id=completed_source.id,
-                target_thread_id=dependent_thread.id,
-            ),
+            dep_issue_1,
         ]
     )
+    await async_db.flush()
+    dependent_thread.next_unread_issue_id = dep_issue_1.id
     await async_db.commit()
 
     assert dependent_thread.is_blocked is False
 
+    # Add issue 3 to the source thread — transitions it from completed to active
     response = await auth_client.post(
         f"/api/v1/threads/{completed_source.id}/issues", json={"issue_range": "3"}
     )
@@ -530,4 +531,23 @@ async def test_reactivate_completed_thread_refreshes_blocked_flags(
 
     assert completed_source.status == "active"
     assert completed_source.next_unread_issue_id is not None
+
+    # Create an issue-level dep on newly-added issue 3; verify blocking is refreshed
+    source_issue_3_result = await async_db.execute(
+        select(Issue).where(
+            Issue.thread_id == completed_source.id,
+            Issue.issue_number == "3",
+        )
+    )
+    source_issue_3 = source_issue_3_result.scalar_one()
+    async_db.add(Dependency(source_issue_id=source_issue_3.id, target_issue_id=dep_issue_1.id))
+    await async_db.commit()
+
+    # The dep-creation endpoint calls refresh_user_blocked_status; simulate via direct call
+    from comic_pile.dependencies import refresh_user_blocked_status
+
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+    await async_db.refresh(dependent_thread)
+
     assert dependent_thread.is_blocked is True

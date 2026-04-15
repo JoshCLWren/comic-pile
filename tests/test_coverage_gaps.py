@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Collection, Dependency, Event, Session as SessionModel, Thread, User
+from app.models import Collection, Dependency, Event, Issue, Session as SessionModel, Thread, User
 from comic_pile.dependencies import (
     detect_circular_dependency,
 )
@@ -94,21 +94,31 @@ async def test_detect_circular_dependency_with_multiple_dependencies(
     async_db.add_all([source_thread, middle_thread, target_thread])
     await async_db.flush()
 
+    issue_source = Issue(thread_id=source_thread.id, issue_number="1", position=1, status="unread")
+    issue_middle = Issue(thread_id=middle_thread.id, issue_number="1", position=1, status="unread")
+    issue_target = Issue(thread_id=target_thread.id, issue_number="1", position=1, status="unread")
+    async_db.add_all([issue_source, issue_middle, issue_target])
+    await async_db.flush()
+
+    source_thread.next_unread_issue_id = issue_source.id
+    middle_thread.next_unread_issue_id = issue_middle.id
+    target_thread.next_unread_issue_id = issue_target.id
+
     async_db.add_all(
         [
-            Dependency(source_thread_id=source_thread.id, target_thread_id=middle_thread.id),
-            Dependency(source_thread_id=middle_thread.id, target_thread_id=target_thread.id),
+            Dependency(source_issue_id=issue_source.id, target_issue_id=issue_middle.id),
+            Dependency(source_issue_id=issue_middle.id, target_issue_id=issue_target.id),
         ]
     )
     await async_db.commit()
 
     result = await detect_circular_dependency(
-        source_thread.id, target_thread.id, "thread", async_db
+        issue_source.id, issue_target.id, "issue", async_db
     )
     assert result is False
 
     result_cycle = await detect_circular_dependency(
-        target_thread.id, source_thread.id, "thread", async_db
+        issue_target.id, issue_source.id, "issue", async_db
     )
     assert result_cycle is True
 
@@ -271,5 +281,5 @@ async def test_detect_circular_dependency_empty_graph(
     async_db: AsyncSession, default_user: User
 ) -> None:
     """Test detect_circular_dependency with no dependencies returns False (dependencies.py:161-165)."""
-    result = await detect_circular_dependency(1, 2, "thread", async_db)
+    result = await detect_circular_dependency(1, 2, "issue", async_db)
     assert result is False

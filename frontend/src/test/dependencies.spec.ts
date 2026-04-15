@@ -7,12 +7,14 @@ test.describe('Dependencies', () => {
       title: 'Source Thread',
       format: 'Comics',
       issues_remaining: 3,
+      total_issues: 3,
     })
 
     await createThread(authenticatedPage, {
       title: 'Target Thread',
       format: 'Comics',
       issues_remaining: 3,
+      total_issues: 3,
     })
 
     await authenticatedPage.goto('/queue')
@@ -24,7 +26,10 @@ test.describe('Dependencies', () => {
     await authenticatedPage.fill('input#search-prereq-thread', 'Source')
     await authenticatedPage.waitForSelector('button:has-text("Source Thread")', { state: 'visible' })
     await authenticatedPage.click('button:has-text("Source Thread")')
-    await authenticatedPage.click('button:has-text("Block")')
+
+    // Wait for issue dropdowns to load then click the issue-level block button
+    await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 10000 })
+    await authenticatedPage.click('button:has-text("Block issue")')
 
     await authenticatedPage.waitForResponse(
       (response) => response.url().includes('/api/v1/dependencies/') && response.request().method() === 'POST' && response.status() < 300
@@ -46,12 +51,14 @@ test.describe('Dependencies', () => {
       title: 'A Prequel',
       format: 'Comics',
       issues_remaining: 2,
+      total_issues: 2,
     })
 
     await createThread(authenticatedPage, {
       title: 'B Main Story',
       format: 'Comics',
       issues_remaining: 2,
+      total_issues: 2,
     })
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
@@ -61,20 +68,24 @@ test.describe('Dependencies', () => {
 	const response = await threadsResponse.json()
 	const threads = response.threads ?? response
 
-	const source = threads.find((thread: { title: string; id: number }) => thread.title === 'A Prequel')
-	const target = threads.find((thread: { title: string; id: number }) => thread.title === 'B Main Story')
+	const source = threads.find((thread: { title: string; id: number; next_unread_issue_id: number | null }) => thread.title === 'A Prequel')
+	const target = threads.find((thread: { title: string; id: number; next_unread_issue_id: number | null }) => thread.title === 'B Main Story')
 
     if (!source || !target) {
       throw new Error(`Failed to find expected threads: source=${source?.id}, target=${target?.id}`)
     }
 
+    if (!source.next_unread_issue_id || !target.next_unread_issue_id) {
+      throw new Error(`Threads missing next_unread_issue_id: source=${source.next_unread_issue_id}, target=${target.next_unread_issue_id}`)
+    }
+
     await authenticatedPage.request.post('/api/v1/dependencies/', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       data: {
-        source_type: 'thread',
-        source_id: source.id,
-        target_type: 'thread',
-        target_id: target.id,
+        source_type: 'issue',
+        source_id: source.next_unread_issue_id,
+        target_type: 'issue',
+        target_id: target.next_unread_issue_id,
       },
     })
 
@@ -139,8 +150,6 @@ test.describe('Dependencies', () => {
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Comic' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
-      await authenticatedPage.click('button:has-text("Issue Level")')
-
       await authenticatedPage.fill('input#search-prereq-thread', 'Prerequisite')
       await authenticatedPage.waitForSelector('button:has-text("Prerequisite Comic")', { state: 'visible' })
       await authenticatedPage.click('button:has-text("Prerequisite Comic")')
@@ -169,8 +178,6 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Series' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-
-      await authenticatedPage.click('button:has-text("Issue Level")')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Source')
       await authenticatedPage.waitForSelector('button:has-text("Source Series")', { state: 'visible' })
@@ -236,8 +243,6 @@ test.describe('Dependencies', () => {
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Main Series' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
-      await authenticatedPage.click('button:has-text("Issue Level")')
-
       await authenticatedPage.fill('input#search-prereq-thread', 'Prequel')
       await authenticatedPage.waitForSelector('button:has-text("Prequel Series")', { state: 'visible' })
       await authenticatedPage.click('button:has-text("Prequel Series")')
@@ -273,8 +278,6 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Comic' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-
-      await authenticatedPage.click('button:has-text("Issue Level")')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Source')
       await authenticatedPage.waitForSelector('button:has-text("Source Comic")', { state: 'visible' })
@@ -316,8 +319,6 @@ test.describe('Dependencies', () => {
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Dependent Series' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
-      await authenticatedPage.click('button:has-text("Issue Level")')
-
       await authenticatedPage.fill('input#search-prereq-thread', 'Required')
       await authenticatedPage.waitForSelector('button:has-text("Required Series")', { state: 'visible' })
       await authenticatedPage.click('button:has-text("Required Series")')
@@ -352,8 +353,6 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Loading Target' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-
-      await authenticatedPage.click('button:has-text("Issue Level")')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Loading')
       await authenticatedPage.waitForSelector('button:has-text("Loading Source")', { state: 'visible' })
@@ -392,8 +391,6 @@ test.describe('Dependencies', () => {
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Issue Target' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
-      await authenticatedPage.click('button:has-text("Issue Level")')
-
       await authenticatedPage.fill('input#search-prereq-thread', 'Issue Source')
       await authenticatedPage.waitForSelector('button:has-text("Issue Source")', { state: 'visible' })
       await authenticatedPage.click('button:has-text("Issue Source")')
@@ -427,8 +424,6 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'No Issues Target' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-
-      await authenticatedPage.click('button:has-text("Issue Level")')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'No Issues')
       await authenticatedPage.waitForSelector('button:has-text("No Issues Source")', { state: 'visible' })
@@ -496,8 +491,6 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'All Read Target' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
-
-      await authenticatedPage.click('button:has-text("Issue Level")')
 
       await authenticatedPage.fill('input#search-prereq-thread', 'All Read')
       await authenticatedPage.waitForSelector('button:has-text("All Read Source")', { state: 'visible' })

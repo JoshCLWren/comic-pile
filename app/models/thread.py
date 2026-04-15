@@ -23,7 +23,6 @@ from app.models.issue import Issue
 
 if TYPE_CHECKING:
     from app.models.collection import Collection
-    from app.models.dependency import Dependency
     from app.models.event import Event
     from app.models.user import User
     from app.models.review import Review
@@ -84,22 +83,6 @@ class Thread(Base):
     )
     events: Mapped[list["Event"]] = relationship(
         "Event", back_populates="thread", cascade="all, delete-orphan", lazy="raise"
-    )
-    dependencies_out: Mapped[list["Dependency"]] = relationship(
-        "Dependency",
-        foreign_keys="Dependency.source_thread_id",
-        back_populates="source_thread",
-        cascade="all",
-        passive_deletes=True,
-        lazy="raise",
-    )
-    dependencies_in: Mapped[list["Dependency"]] = relationship(
-        "Dependency",
-        foreign_keys="Dependency.target_thread_id",
-        back_populates="target_thread",
-        cascade="all",
-        passive_deletes=True,
-        lazy="raise",
     )
     issues: Mapped[list["Issue"]] = relationship(
         "Issue",

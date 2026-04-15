@@ -26,16 +26,29 @@ test.describe('Issue #287: Override Validation', () => {
     });
 
     // Create dependency to block the first thread
+    // Get issue IDs for both threads
+    const blockerIssuesResponse = await request.get(`/api/v1/threads/${blockerThread.id}/issues`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const blockerIssuesData = await blockerIssuesResponse.json();
+    const blockerLastIssue = blockerIssuesData.issues[blockerIssuesData.issues.length - 1];
+
+    const blockedIssuesResponse = await request.get(`/api/v1/threads/${blockedThread.id}/issues`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const blockedIssuesData = await blockedIssuesResponse.json();
+    const blockedFirstIssue = blockedIssuesData.issues[0];
+
     const depResponse = await request.post('/api/v1/dependencies/', {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
       data: {
-        source_type: 'thread',
-        source_id: blockerThread.id,
-        target_type: 'thread',
-        target_id: blockedThread.id,
+        source_type: 'issue',
+        source_id: blockerLastIssue.id,
+        target_type: 'issue',
+        target_id: blockedFirstIssue.id,
       },
     });
     expect(depResponse.ok()).toBeTruthy();
