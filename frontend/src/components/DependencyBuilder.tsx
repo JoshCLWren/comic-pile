@@ -427,12 +427,15 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setError('')
     try {
       if (dependencyMode === 'issue') {
-        await dependenciesApi.createDependency({
+        const result = await dependenciesApi.createDependency({
           sourceType: 'issue',
           sourceId: sourceIssueId!,
           targetType: 'issue',
           targetId: targetIssueId!,
         })
+        if (result.warning) {
+          toast.showToast(result.warning, 'warning')
+        }
       } else {
         await dependenciesApi.createDependency({
           sourceType: 'thread',
@@ -1023,6 +1026,17 @@ function DependencyRow({
             className="text-stone-500 hover:text-stone-300 text-[10px] font-black uppercase tracking-widest"
           >
             Edit note
+          </button>
+        </div>
+      ) : dependency.warning ? (
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-amber-400 italic flex-1">{dependency.warning}</p>
+          <button
+            type="button"
+            onClick={() => onEditNote(dependency)}
+            className="text-stone-600 hover:text-stone-400 text-[10px] font-black uppercase tracking-widest"
+          >
+            + Add note
           </button>
         </div>
       ) : (

@@ -1103,3 +1103,210 @@ async def test_dependency_note_in_list_endpoint(auth_client, async_db, test_user
     data = list_resp.json()
     assert len(data["blocked_by"]) == 1
     assert data["blocked_by"][0]["note"] == "Note visible in list"
+
+
+@pytest.mark.asyncio
+async def test_dependency_rejects_already_read_target(auth_client, async_db, test_username):
+    """POST /api/v1/dependencies/ returns 400 when target issue is behind next-unread."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    source_thread = Thread(
+        title="Prereq Series",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    target_thread = Thread(
+        title="Planetary",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue_1 = Issue(
+        thread_id=target_thread.id,
+        issue_number="8",
+        position=1,
+        status="read",
+        read_at=datetime.now(UTC),
+    )
+    target_issue_2 = Issue(
+        thread_id=target_thread.id,
+        issue_number="9",
+        position=2,
+        status="unread",
+    )
+    async_db.add_all([source_issue, target_issue_1, target_issue_2])
+    await async_db.flush()
+
+    target_thread.next_unread_issue_id = target_issue_2.id
+    await async_db.commit()
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue_1)
+
+    resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue_1.id,
+        },
+    )
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert "already been read" in detail
+    assert "#8" in detail
+    assert "#9" in detail
+
+
+@pytest.mark.asyncio
+async def test_dependency_exact_next_unread_no_warning(auth_client, async_db, test_username):
+    """POST /api/v1/dependencies/ returns 201 with no warning for exact next-unread target."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    source_thread = Thread(
+        title="Exact Source",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    target_thread = Thread(
+        title="Exact Target",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue = Issue(
+        thread_id=source_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    target_issue = Issue(
+        thread_id=target_thread.id,
+        issue_number="1",
+        position=1,
+        status="unread",
+    )
+    async_db.add_all([source_issue, target_issue])
+    await async_db.flush()
+
+    target_thread.next_unread_issue_id = target_issue.id
+    await async_db.commit()
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue)
+
+    resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data.get("warning") is None
+
+
+@pytest.mark.asyncio
+async def test_dependency_future_target_returns_warning(auth_client, async_db, test_username):
+    """POST /api/v1/dependencies/ returns 201 with warning when target is ahead of next-unread."""
+    user_result = await async_db.execute(select(User).where(User.username == test_username))
+    user = user_result.scalar_one()
+
+    source_thread = Thread(
+        title="Stormwatch Vol. 2",
+        format="Comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=1,
+    )
+    target_thread = Thread(
+        title="Planetary",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=3,
+    )
+    async_db.add_all([source_thread, target_thread])
+    await async_db.flush()
+
+    source_issue = Issue(
+        thread_id=source_thread.id,
+        issue_number="11",
+        position=1,
+        status="unread",
+    )
+    target_issue_1 = Issue(
+        thread_id=target_thread.id,
+        issue_number="8",
+        position=1,
+        status="unread",
+    )
+    target_issue_2 = Issue(
+        thread_id=target_thread.id,
+        issue_number="9",
+        position=2,
+        status="unread",
+    )
+    target_issue_3 = Issue(
+        thread_id=target_thread.id,
+        issue_number="10",
+        position=3,
+        status="unread",
+    )
+    async_db.add_all([source_issue, target_issue_1, target_issue_2, target_issue_3])
+    await async_db.flush()
+
+    target_thread.next_unread_issue_id = target_issue_1.id
+    await async_db.commit()
+    await async_db.refresh(source_issue)
+    await async_db.refresh(target_issue_3)
+
+    resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue_3.id,
+        },
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["warning"] is not None
+    assert "#10" in data["warning"]
+    assert "#8" in data["warning"]
+    assert "2 issues" in data["warning"]
