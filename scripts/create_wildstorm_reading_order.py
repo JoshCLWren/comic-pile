@@ -31,6 +31,37 @@ from comic_pile_api import (
     migrate_thread,
 )
 
+stormwatch_chain: list[tuple[str, str]] = [
+    ("Stormwatch Vol. 1", "37"),
+    ("Stormwatch Vol. 1", "43"),
+    ("Stormwatch Vol. 1", "48"),
+    ("Stormwatch Vol. 2", "1"),
+    ("Stormwatch Vol. 2", "4"),
+    ("WildC.A.T.s/Aliens", "1"),
+    ("Stormwatch Vol. 2", "10"),
+]
+
+planetary_authority_chain: list[tuple[str, str]] = [
+    ("Planetary", "1"),
+    ("The Authority", "1"),
+    ("Planetary", "6"),
+    ("The Authority", "5"),
+    ("Planetary/The Authority: Ruling the World", "1"),
+    ("Planetary", "10"),
+    ("The Authority", "9"),
+]
+
+planetary_late_chain: list[tuple[str, str]] = [
+    ("Planetary", "13"),
+    ("Planetary", "16"),
+    ("Planetary/JLA: Terra Occulta", "1"),
+    ("Planetary", "17"),
+    ("Planetary/Batman: Night on Earth", "1"),
+    ("Planetary", "21"),
+    ("Planetary", "24"),
+    ("Planetary", "27"),
+]
+
 
 def main() -> int:
     """Main entry point."""
@@ -112,16 +143,6 @@ def main() -> int:
 
     created_count = 0
 
-    stormwatch_chain = [
-        ("Stormwatch Vol. 1", "37"),
-        ("Stormwatch Vol. 1", "43"),
-        ("Stormwatch Vol. 1", "48"),
-        ("Stormwatch Vol. 2", "1"),
-        ("Stormwatch Vol. 2", "4"),
-        ("WildC.A.T.s/Aliens", "1"),
-        ("Stormwatch Vol. 2", "10"),
-    ]
-
     for i in range(len(stormwatch_chain) - 1):
         source_title, source_issue = stormwatch_chain[i]
         target_title, target_issue = stormwatch_chain[i + 1]
@@ -137,16 +158,6 @@ def main() -> int:
                 created_count += 1
                 print(f"  ✅ {source_title} #{source_issue} → {target_title} #{target_issue}")
 
-    planetary_authority_chain = [
-        ("Planetary", "1"),
-        ("The Authority", "1"),
-        ("Planetary", "6"),
-        ("The Authority", "5"),
-        ("Planetary/The Authority: Ruling the World", "1"),
-        ("Planetary", "10"),
-        ("The Authority", "9"),
-    ]
-
     for i in range(len(planetary_authority_chain) - 1):
         source_title, source_issue = planetary_authority_chain[i]
         target_title, target_issue = planetary_authority_chain[i + 1]
@@ -161,17 +172,6 @@ def main() -> int:
             if create_dependency(token, source_issue_id, target_issue_id):
                 created_count += 1
                 print(f"  ✅ {source_title} #{source_issue} → {target_title} #{target_issue}")
-
-    planetary_late_chain = [
-        ("Planetary", "13"),
-        ("Planetary", "16"),
-        ("Planetary/JLA: Terra Occulta", "1"),
-        ("Planetary", "17"),
-        ("Planetary/Batman: Night on Earth", "1"),
-        ("Planetary", "21"),
-        ("Planetary", "24"),
-        ("Planetary", "27"),
-    ]
 
     for i in range(len(planetary_late_chain) - 1):
         source_title, source_issue = planetary_late_chain[i]

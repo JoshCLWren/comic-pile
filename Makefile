@@ -4,6 +4,7 @@
 .PHONY: dev test seed migrate worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
 .PHONY: test-e2e-prod-smoke check-prod-assets
+.PHONY: verify-reading-order
 
 # Configuration
 PREFIX ?= /usr/local
@@ -384,3 +385,7 @@ test-e2e-browser-docker:  ## Run Python Playwright tests with Docker (starts and
 test-e2e-browser-quick:  ## Run Python Playwright tests (Docker must already be running)
 	@echo "Running Python Playwright tests (assumes Docker is running)..."
 	@pytest tests_e2e/test_browser_ui.py -v --no-cov
+
+verify-reading-order:  ## Verify Wildstorm reading order dependencies
+	@echo "Verifying Wildstorm reading order..."
+	@cd scripts && python verify_wildstorm_reading_order.py

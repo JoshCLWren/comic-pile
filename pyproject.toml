@@ -119,7 +119,7 @@ python-version = "3.13"
 
 [tool.ty.src]
 include = ["app", "comic_pile", "tests"]
-exclude = ["scripts/**", "alembic/versions/**"]
+exclude = ["scripts/**", "alembic/versions/**", "tests/test_scripts_verify_reading_order.py"]
 
 [tool.ty.terminal]
 error-on-warning = true
