@@ -1028,17 +1028,6 @@ function DependencyRow({
             Edit note
           </button>
         </div>
-      ) : dependency.warning ? (
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-amber-400 italic flex-1">{dependency.warning}</p>
-          <button
-            type="button"
-            onClick={() => onEditNote(dependency)}
-            className="text-stone-600 hover:text-stone-400 text-[10px] font-black uppercase tracking-widest"
-          >
-            + Add note
-          </button>
-        </div>
       ) : (
         <button
           type="button"
