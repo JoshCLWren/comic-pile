@@ -268,6 +268,7 @@ class VerificationResult(TypedDict):
     present: list[DepEdge]
     missing: list[DepEdge]
     unexpected: list[DepEdge]
+    not_found: list[DepEdge]
 
 
 def verify_reading_order(
@@ -287,10 +288,11 @@ def verify_reading_order(
         base_url: API base URL (defaults to module-level API_BASE).
 
     Returns:
-        Dictionary with three lists of DepEdge tuples:
+        Dictionary with four lists of DepEdge tuples:
         - present: edges that exist as expected
         - missing: edges that should exist but don't
         - unexpected: edges that exist but aren't in the spec
+        - not_found: edges referencing issue numbers not present in the database
 
     Raises:
         ValueError: If a thread title in a chain doesn't exist in the database.
@@ -316,6 +318,7 @@ def verify_reading_order(
             issue_id_to_label[issue_id] = (title, issue_number)
 
     expected_edges: dict[DepEdge, tuple[int, int]] = {}
+    not_found_edges: list[DepEdge] = []
     for chain in spec_chains:
         for i in range(len(chain) - 1):
             src_title, src_issue = chain[i]
@@ -323,7 +326,9 @@ def verify_reading_order(
             edge = DepEdge(src_title, src_issue, tgt_title, tgt_issue)
             src_id = title_to_issues[src_title].get(src_issue)
             tgt_id = title_to_issues[tgt_title].get(tgt_issue)
-            if src_id is not None and tgt_id is not None:
+            if src_id is None or tgt_id is None:
+                not_found_edges.append(edge)
+            else:
                 expected_edges[edge] = (src_id, tgt_id)
 
     actual_edge_ids: set[tuple[int, int]] = set()
@@ -372,4 +377,9 @@ def verify_reading_order(
         if s in issue_id_to_label and t in issue_id_to_label
     )
 
-    return {"present": present, "missing": missing, "unexpected": unexpected}
+    return {
+        "present": present,
+        "missing": missing,
+        "unexpected": unexpected,
+        "not_found": sorted(not_found_edges),
+    }

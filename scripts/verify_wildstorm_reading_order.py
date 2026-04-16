@@ -34,6 +34,7 @@ def print_report(result: VerificationResult) -> None:
     present = result["present"]
     missing = result["missing"]
     unexpected = result["unexpected"]
+    not_found = result["not_found"]
 
     print("\n" + "=" * 70)
     print("Verification Report")
@@ -60,13 +61,21 @@ def print_report(result: VerificationResult) -> None:
                 f"   {edge.source_title} #{edge.source_issue} → {edge.target_title} #{edge.target_issue}"
             )
 
+    if not_found:
+        print(f"\n🔍 Not found in DB ({len(not_found)}):")
+        for edge in not_found:
+            print(
+                f"   {edge.source_title} #{edge.source_issue} → {edge.target_title} #{edge.target_issue}"
+            )
+
     print("\n" + "=" * 70)
-    total = len(present) + len(missing) + len(unexpected)
+    total = len(present) + len(missing) + len(unexpected) + len(not_found)
     print(
-        f"Total: {total} edges | ✅ {len(present)} present | ❌ {len(missing)} missing | ⚠️  {len(unexpected)} unexpected"
+        f"Total: {total} edges | ✅ {len(present)} present | ❌ {len(missing)} missing"
+        f" | ⚠️  {len(unexpected)} unexpected | 🔍 {len(not_found)} not found"
     )
 
-    if not missing and not unexpected:
+    if not missing and not unexpected and not not_found:
         print("🎉 All dependencies verified successfully!")
     print("=" * 70)
 
@@ -93,7 +102,7 @@ def main() -> int:
     result = verify_reading_order(chains, token)
     print_report(result)
 
-    return 1 if result["missing"] or result["unexpected"] else 0
+    return 1 if result["missing"] or result["unexpected"] or result["not_found"] else 0
 
 
 if __name__ == "__main__":

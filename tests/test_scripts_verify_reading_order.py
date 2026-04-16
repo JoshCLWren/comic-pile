@@ -135,6 +135,7 @@ class TestVerifyReadingOrderAllPresent:
         assert len(result["present"]) == 6
         assert len(result["missing"]) == 0
         assert len(result["unexpected"]) == 0
+        assert len(result["not_found"]) == 0
 
     @patch("comic_pile_api.requests.get")
     def test_present_edges_have_correct_labels(self, mock_get: MagicMock) -> None:
@@ -156,6 +157,7 @@ class TestVerifyReadingOrderAllPresent:
         assert result["present"] == []
         assert result["missing"] == []
         assert result["unexpected"] == []
+        assert result["not_found"] == []
 
 
 class TestVerifyReadingOrderOneMissing:
@@ -310,3 +312,80 @@ class TestVerifyReadingOrderThreadNotFound:
 
         with pytest.raises(ValueError, match="Thread not found: The Authority"):
             verify_reading_order(chain_with_missing, "fake-token")
+
+
+class TestVerifyReadingOrderIssueNotFound:
+    """Test case where a spec edge references an issue number not in the DB."""
+
+    @patch("comic_pile_api.requests.get")
+    def test_nonexistent_source_issue_reported_as_not_found(self, mock_get: MagicMock) -> None:
+        """Verify edge with nonexistent source issue appears in not_found."""
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, FULL_DEPS)
+
+        chain = [
+            ("Stormwatch Vol. 1", "99"),
+            ("Stormwatch Vol. 2", "1"),
+        ]
+
+        result = verify_reading_order([chain], "fake-token")
+
+        assert len(result["not_found"]) == 1
+        assert result["not_found"][0] == DepEdge(
+            "Stormwatch Vol. 1", "99", "Stormwatch Vol. 2", "1"
+        )
+        assert len(result["present"]) == 0
+        assert len(result["missing"]) == 0
+
+    @patch("comic_pile_api.requests.get")
+    def test_nonexistent_target_issue_reported_as_not_found(self, mock_get: MagicMock) -> None:
+        """Verify edge with nonexistent target issue appears in not_found."""
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, FULL_DEPS)
+
+        chain = [
+            ("Stormwatch Vol. 1", "37"),
+            ("Stormwatch Vol. 1", "99"),
+        ]
+
+        result = verify_reading_order([chain], "fake-token")
+
+        assert len(result["not_found"]) == 1
+        assert result["not_found"][0] == DepEdge(
+            "Stormwatch Vol. 1", "37", "Stormwatch Vol. 1", "99"
+        )
+
+    @patch("comic_pile_api.requests.get")
+    def test_both_issues_nonexistent(self, mock_get: MagicMock) -> None:
+        """Verify edge with both nonexistent issues appears in not_found."""
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, FULL_DEPS)
+
+        chain = [
+            ("Stormwatch Vol. 1", "77"),
+            ("Stormwatch Vol. 2", "99"),
+        ]
+
+        result = verify_reading_order([chain], "fake-token")
+
+        assert len(result["not_found"]) == 1
+        assert result["not_found"][0] == DepEdge(
+            "Stormwatch Vol. 1", "77", "Stormwatch Vol. 2", "99"
+        )
+
+    @patch("comic_pile_api.requests.get")
+    def test_mixed_found_and_not_found_in_chain(self, mock_get: MagicMock) -> None:
+        """Verify chain with some valid and some nonexistent issues splits correctly."""
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, FULL_DEPS)
+
+        chain = [
+            ("Stormwatch Vol. 1", "37"),
+            ("Stormwatch Vol. 1", "43"),
+            ("Stormwatch Vol. 1", "99"),
+            ("Stormwatch Vol. 2", "1"),
+        ]
+
+        result = verify_reading_order([chain], "fake-token")
+
+        assert len(result["present"]) == 1
+        assert result["present"][0] == DepEdge("Stormwatch Vol. 1", "37", "Stormwatch Vol. 1", "43")
+        assert len(result["not_found"]) == 2
+        assert DepEdge("Stormwatch Vol. 1", "43", "Stormwatch Vol. 1", "99") in result["not_found"]
+        assert DepEdge("Stormwatch Vol. 1", "99", "Stormwatch Vol. 2", "1") in result["not_found"]
