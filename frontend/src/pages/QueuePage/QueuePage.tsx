@@ -665,7 +665,6 @@ export default function QueuePage() {
             type="button"
             onClick={() => openReactivateModal(null)}
             className="h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
-            disabled={!threads || threads.length === 0}
           >
             Reactivate
           </button>
