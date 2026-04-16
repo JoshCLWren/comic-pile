@@ -30,6 +30,7 @@ class DependencyResponse(BaseModel):
     target_label: str | None = None
     source_issue_thread_id: int | None = None
     target_issue_thread_id: int | None = None
+    warning: str | None = None
 
 
 class DependencyNoteUpdate(BaseModel):

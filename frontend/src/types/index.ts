@@ -323,6 +323,8 @@ export interface Dependency {
   target_issue_thread_id?: number | null;
   /** Optional note explaining why this dependency exists */
   note?: string | null;
+  /** Warning message when target issue is ahead of next-unread position */
+  warning?: string | null;
 }
 
 /**

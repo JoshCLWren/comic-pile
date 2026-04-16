@@ -427,12 +427,15 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setError('')
     try {
       if (dependencyMode === 'issue') {
-        await dependenciesApi.createDependency({
+        const result = await dependenciesApi.createDependency({
           sourceType: 'issue',
           sourceId: sourceIssueId!,
           targetType: 'issue',
           targetId: targetIssueId!,
         })
+        if (result.warning) {
+          toast.showToast(result.warning, 'warning')
+        }
       } else {
         await dependenciesApi.createDependency({
           sourceType: 'thread',

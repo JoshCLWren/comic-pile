@@ -334,6 +334,29 @@ async def create_dependency(
                 detail="Cannot create dependency: would create circular dependency",
             )
 
+        warning: str | None = None
+        if target_thread.next_unread_issue_id is not None:
+            next_unread_issue = await db.get(Issue, target_thread.next_unread_issue_id)
+            if next_unread_issue is not None and target_issue.position < next_unread_issue.position:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Target issue #{target_issue.issue_number} has already been read"
+                        f" in {target_thread.title} (current next unread:"
+                        f" #{next_unread_issue.issue_number}). This dependency would"
+                        f" never activate. Did you mean to target issue"
+                        f" #{next_unread_issue.issue_number}?"
+                    ),
+                )
+            if next_unread_issue is not None and target_issue.position > next_unread_issue.position:
+                issues_ahead = target_issue.position - next_unread_issue.position
+                issue_word = "issue" if issues_ahead == 1 else "issues"
+                warning = (
+                    f"Target issue #{target_issue.issue_number} is not yet the next"
+                    f" unread (current next unread: #{next_unread_issue.issue_number})."
+                    f" This dependency will activate in {issues_ahead} {issue_word}."
+                )
+
         dependency = Dependency(
             source_issue_id=dependency_data.source_id,
             target_issue_id=dependency_data.target_id,
@@ -365,7 +388,9 @@ async def create_dependency(
     await db.commit()
     await db.refresh(dependency)
 
-    return (await enrich_dependencies([dependency], db))[0]
+    response = (await enrich_dependencies([dependency], db))[0]
+    response.warning = warning
+    return response
 
 
 @router.get("/dependencies/{dependency_id}", response_model=DependencyResponse)
