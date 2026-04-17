@@ -1,4 +1,4 @@
-"""Tests for scripts/comic_pile_api.py verify_reading_order()."""
+"""Tests for scripts/comic_pile_api.py verify_reading_order() and create_wildstorm_reading_order.py flags."""
 
 import importlib.util
 import sys
@@ -25,6 +25,14 @@ _comic_pile_api = _load_script_module("comic_pile_api")
 sys.modules["comic_pile_api"] = _comic_pile_api
 DepEdge = _comic_pile_api.DepEdge
 verify_reading_order = _comic_pile_api.verify_reading_order
+
+_wildstorm_chains = _load_script_module("wildstorm_chains")
+sys.modules["wildstorm_chains"] = _wildstorm_chains
+
+_create_module = _load_script_module("create_wildstorm_reading_order")
+run_verify = _create_module.run_verify
+run_fix = _create_module.run_fix
+_parse_args = _create_module._parse_args
 
 
 def _mock_response(json_data: dict | list, status_code: int = 200) -> MagicMock:
@@ -389,3 +397,163 @@ class TestVerifyReadingOrderIssueNotFound:
         assert len(result["not_found"]) == 2
         assert DepEdge("Stormwatch Vol. 1", "43", "Stormwatch Vol. 1", "99") in result["not_found"]
         assert DepEdge("Stormwatch Vol. 1", "99", "Stormwatch Vol. 2", "1") in result["not_found"]
+
+
+MINI_CHAINS: list[list[tuple[str, str]]] = [
+    [
+        ("Stormwatch Vol. 1", "37"),
+        ("Stormwatch Vol. 1", "43"),
+        ("Stormwatch Vol. 1", "48"),
+    ],
+]
+
+
+class TestArgParsing:
+    """Tests for command-line argument parsing."""
+
+    def test_no_flags_defaults(self) -> None:
+        """Verify no flags means neither verify nor fix."""
+        args = _parse_args([])
+        assert args.verify is False
+        assert args.fix is False
+
+    def test_verify_flag(self) -> None:
+        """Verify --verify flag sets verify=True."""
+        args = _parse_args(["--verify"])
+        assert args.verify is True
+        assert args.fix is False
+
+    def test_fix_flag(self) -> None:
+        """Verify --fix flag sets fix=True."""
+        args = _parse_args(["--fix"])
+        assert args.verify is False
+        assert args.fix is True
+
+    def test_verify_and_fix_mutually_exclusive(self) -> None:
+        """Verify --verify and --fix cannot be used together."""
+        with pytest.raises(SystemExit):
+            _parse_args(["--verify", "--fix"])
+
+
+class TestRunVerify:
+    """Tests for the --verify flag behaviour."""
+
+    @patch("comic_pile_api.requests.post")
+    @patch("comic_pile_api.requests.get")
+    def test_verify_returns_zero_when_all_present(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
+        """Verify --verify returns 0 when all deps are present."""
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, FULL_DEPS)
+        mock_post.return_value = MagicMock()
+
+        exit_code = run_verify("fake-token", MINI_CHAINS)
+
+        assert exit_code == 0
+        mock_post.assert_not_called()
+
+    @patch("comic_pile_api.requests.post")
+    @patch("comic_pile_api.requests.get")
+    def test_verify_returns_one_when_missing(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
+        """Verify --verify returns 1 when deps are missing."""
+        partial_deps = {
+            1: {
+                "blocking": [
+                    {"source_issue_id": 101, "target_issue_id": 102},
+                ],
+                "blocked_by": [],
+            },
+            2: {"blocking": [], "blocked_by": []},
+            3: {"blocking": [], "blocked_by": []},
+        }
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, partial_deps)
+        mock_post.return_value = MagicMock()
+
+        exit_code = run_verify("fake-token", MINI_CHAINS)
+
+        assert exit_code == 1
+        mock_post.assert_not_called()
+
+    @patch("comic_pile_api.requests.post")
+    @patch("comic_pile_api.requests.get")
+    def test_verify_does_not_create_deps(self, mock_get: MagicMock, mock_post: MagicMock) -> None:
+        """Verify --verify never calls create_dependency (no POST to dependencies endpoint)."""
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, FULL_DEPS)
+        mock_post.return_value = MagicMock()
+
+        run_verify("fake-token", MINI_CHAINS)
+
+        mock_post.assert_not_called()
+
+
+class TestRunFix:
+    """Tests for the --fix flag behaviour."""
+
+    @patch("comic_pile_api.requests.post")
+    @patch("comic_pile_api.requests.get")
+    def test_fix_creates_only_missing_deps(self, mock_get: MagicMock, mock_post: MagicMock) -> None:
+        """Verify --fix creates only the missing dependencies, not present ones."""
+        partial_deps = {
+            1: {
+                "blocking": [
+                    {"source_issue_id": 101, "target_issue_id": 102},
+                ],
+                "blocked_by": [],
+            },
+            2: {"blocking": [], "blocked_by": []},
+            3: {"blocking": [], "blocked_by": []},
+        }
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, partial_deps)
+        dep_response = MagicMock()
+        dep_response.status_code = 201
+        mock_post.return_value = dep_response
+
+        exit_code = run_fix("fake-token", MINI_CHAINS)
+
+        assert exit_code == 0
+        dep_calls = [call for call in mock_post.call_args_list if "/dependencies/" in str(call)]
+        assert len(dep_calls) == 1
+
+    @patch("comic_pile_api.requests.post")
+    @patch("comic_pile_api.requests.get")
+    def test_fix_noop_when_all_present(self, mock_get: MagicMock, mock_post: MagicMock) -> None:
+        """Verify --fix does nothing when all deps are already present."""
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, FULL_DEPS)
+        dep_response = MagicMock()
+        dep_response.status_code = 201
+        mock_post.return_value = dep_response
+
+        exit_code = run_fix("fake-token", MINI_CHAINS)
+
+        assert exit_code == 0
+        dep_calls = [call for call in mock_post.call_args_list if "/dependencies/" in str(call)]
+        assert len(dep_calls) == 0
+
+    @patch("comic_pile_api.requests.post")
+    @patch("comic_pile_api.requests.get")
+    def test_fix_does_not_recreate_present_deps(
+        self, mock_get: MagicMock, mock_post: MagicMock
+    ) -> None:
+        """Verify --fix only creates the missing edges, not the already-present one."""
+        partial_deps = {
+            1: {
+                "blocking": [
+                    {"source_issue_id": 101, "target_issue_id": 103},
+                ],
+                "blocked_by": [],
+            },
+            2: {"blocking": [], "blocked_by": []},
+            3: {"blocking": [], "blocked_by": []},
+        }
+        mock_get.side_effect = _make_get_handler(THREADS, ISSUES, partial_deps)
+        dep_response = MagicMock()
+        dep_response.status_code = 201
+        mock_post.return_value = dep_response
+
+        exit_code = run_fix("fake-token", MINI_CHAINS)
+
+        assert exit_code == 0
+        dep_calls = [call for call in mock_post.call_args_list if "/dependencies/" in str(call)]
+        assert len(dep_calls) == 2
