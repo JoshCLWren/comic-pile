@@ -218,9 +218,12 @@ function injectOklchFallbacks(): HTMLStyleElement | null {
 export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnostics: ScreenshotDiagnostics }> {
   debugLog('Starting capture')
 
-  // Reset diagnostics
   diagnostics.timestamp = new Date().toISOString()
+  diagnostics.userAgent = navigator.userAgent
+  diagnostics.target = { id: '', tag: '', children: 0, rect: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } }
+  diagnostics.environment = { pixelRatio: 0, devicePixelRatio: 0, canUseForeignObject: false }
   diagnostics.captureAttempts = []
+  diagnostics.ancestorChain = []
 
   // Capture from #root instead of document.body for better Safari compatibility
   const target = document.getElementById('root') ?? document.body
@@ -245,7 +248,6 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
   const canUseForeignObject = await getForeignObjectSupport()
   diagnostics.environment = { pixelRatio, devicePixelRatio: window.devicePixelRatio, canUseForeignObject }
 
-  // Log ancestor chain to detect problematic styles
   logAncestorChain(target)
 
   debugLog('Target', diagnostics.target)
@@ -258,17 +260,21 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
   const prevBackground = target.style.backgroundColor
   target.style.backgroundColor = '#111827'
 
+  let overrideStyle: HTMLStyleElement | null = null
+
   try {
-    debugLog('Trying html-to-image')
-    const blob = await toBlob(target, {
+    const toBlobOptions = {
       skipFonts: true,
       cacheBust: true,
       pixelRatio,
-      filter: node => {
+      filter: (node: unknown) => {
         const excluded = node instanceof HTMLElement && node.closest('[data-exclude-from-screenshot="true"]') !== null
         return !excluded
       },
-    })
+    }
+
+    debugLog('Trying html-to-image')
+    const blob = await toBlob(target, toBlobOptions)
 
     diagnostics.captureAttempts.push({
       method: 'html-to-image',
@@ -287,48 +293,55 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
         debugLog('Using html-to-image blob', { size: blob.size })
         return { blob, diagnostics }
       }
-      debugLog('html-to-image blob is blank')
+
+      debugLog('html-to-image blob is blank, retrying once')
+      const retryBlob = await toBlob(target, toBlobOptions)
+
+      if (retryBlob !== null) {
+        const retryIsBlank = await blobLooksBlankOrBlack(retryBlob)
+        diagnostics.captureAttempts.push({
+          method: 'html-to-image-retry',
+          success: true,
+          size: retryBlob.size,
+          blank: retryIsBlank,
+        })
+
+        if (!retryIsBlank) {
+          debugLog('Retry succeeded', { size: retryBlob.size })
+          return { blob: retryBlob, diagnostics }
+        }
+        debugLog('Retry blob also blank')
+      } else {
+        diagnostics.captureAttempts.push({
+          method: 'html-to-image-retry',
+          success: false,
+        })
+        debugLog('Retry returned null')
+      }
     } else {
       debugLog('html-to-image returned null')
     }
-  } catch (error) {
-    diagnostics.captureAttempts.push({
-      method: 'html-to-image',
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    debugLog('html-to-image ERROR', { error: String(error) })
-  } finally {
-    document.documentElement.classList.remove('screenshot-mode')
-    target.style.backgroundColor = prevBackground
-  }
 
-  debugLog('Trying html2canvas fallback')
-  let html2canvas: typeof import('html2canvas').default
-  try {
-    html2canvas = (await import('html2canvas')).default
-    debugLog('html2canvas imported successfully')
-  } catch (error) {
-    diagnostics.captureAttempts.push({
-      method: 'html2canvas-import',
-      success: false,
-      error: String(error),
-    })
-    debugLog('Failed to import html2canvas', { error: String(error) })
-    return { blob: null, diagnostics }
-  }
+    // Fallback to html2canvas if html-to-image fails or returns blank
+    debugLog('Trying html2canvas fallback')
+    let html2canvas: typeof import('html2canvas').default
+    try {
+      html2canvas = (await import('html2canvas')).default
+      debugLog('html2canvas imported successfully')
+    } catch (error) {
+      diagnostics.captureAttempts.push({
+        method: 'html2canvas-import',
+        success: false,
+        error: String(error),
+      })
+      debugLog('Failed to import html2canvas', { error: String(error) })
+      return { blob: null, diagnostics }
+    }
 
-  // Add screenshot-mode for html2canvas too
-  document.documentElement.classList.add('screenshot-mode')
+    // Inject hex fallbacks for oklch() values that html2canvas can't parse
+    overrideStyle = injectOklchFallbacks()
+    debugLog('oklch fallback injected', { injected: overrideStyle !== null })
 
-  const overrideStyle = injectOklchFallbacks()
-  debugLog('oklch fallback injected', { injected: overrideStyle !== null })
-
-  // Force solid background for html2canvas
-  const prevBackgroundH2c = target.style.backgroundColor
-  target.style.backgroundColor = '#111827'
-
-  try {
     debugLog('html2canvas starting')
 
     const canvas = await html2canvas(target, {
@@ -337,7 +350,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
       scale: 1,
       logging: false,
       backgroundColor: '#111827',
-      ignoreElements: (element) => {
+      ignoreElements: (element: Element) => {
         const excluded = element instanceof HTMLElement && element.closest('[data-exclude-from-screenshot="true"]') !== null
         return excluded
       },
@@ -351,7 +364,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
 
     debugLog('html2canvas canvas created', { width: canvas.width, height: canvas.height })
 
-    const blob = await new Promise<Blob | null>((resolve) => {
+    const h2cBlob = await new Promise<Blob | null>((resolve) => {
       try {
         canvas.toBlob((result) => resolve(result), 'image/png')
       } catch (e) {
@@ -360,11 +373,11 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
       }
     })
 
-    if (blob) {
-      debugLog('html2canvas blob created', { size: blob.size, type: blob.type })
+    if (h2cBlob) {
+      debugLog('html2canvas blob created', { size: h2cBlob.size, type: h2cBlob.type })
     }
 
-    return { blob, diagnostics }
+    return { blob: h2cBlob, diagnostics }
   } catch (error) {
     diagnostics.captureAttempts.push({
       method: 'html2canvas',
@@ -375,8 +388,8 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
     return { blob: null, diagnostics }
   } finally {
     document.documentElement.classList.remove('screenshot-mode')
+    target.style.backgroundColor = prevBackground
     overrideStyle?.remove()
-    target.style.backgroundColor = prevBackgroundH2c
-    debugLog('Cleaned up html2canvas')
+    debugLog('Cleaned up screenshot mode')
   }
 }
