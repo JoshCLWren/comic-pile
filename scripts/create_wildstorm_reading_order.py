@@ -100,28 +100,28 @@ def _print_verification_report(result: VerificationResult) -> None:
     not_found = result["not_found"]
 
     if present:
-        print(f"  Present ({len(present)}):")
+        print(f"  ✅ Present ({len(present)}):")
         for edge in present:
             print(
                 f"    {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
             )
 
     if missing:
-        print(f"  Missing ({len(missing)}):")
+        print(f"  ❌ Missing ({len(missing)}):")
         for edge in missing:
             print(
                 f"    {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
             )
 
     if unexpected:
-        print(f"  Unexpected ({len(unexpected)}):")
+        print(f"  ⚠️ Unexpected ({len(unexpected)}):")
         for edge in unexpected:
             print(
                 f"    {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
             )
 
     if not_found:
-        print(f"  Not found in DB ({len(not_found)}):")
+        print(f"  🔍 Not found in DB ({len(not_found)}):")
         for edge in not_found:
             print(
                 f"    {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
@@ -149,7 +149,7 @@ def run_verify(token: str, chains: list[list[tuple[str, str]]]) -> int:
     _print_verification_report(result)
 
     if not result["missing"] and not result["unexpected"] and not result["not_found"]:
-        print("\nAll dependencies verified successfully!")
+        print("\n🎉 All dependencies verified successfully!")
         return 0
     return 1
 
@@ -170,11 +170,11 @@ def run_fix(token: str, chains: list[list[tuple[str, str]]]) -> int:
     if not result["missing"]:
         _print_verification_report(result)
         if not result["unexpected"] and not result["not_found"]:
-            print("\nAll dependencies verified successfully!")
+            print("\n🎉 All dependencies verified successfully!")
         return 0 if not result["unexpected"] and not result["not_found"] else 1
 
-    print(f"  Found {len(result['missing'])} missing dependencies")
-    print("\nFetching issue IDs for fix...")
+    print(f"  ❌ Found {len(result['missing'])} missing dependencies")
+    print("\n🔧 Fetching issue IDs for fix...")
 
     all_threads = get_all_threads(token)
 
@@ -201,18 +201,18 @@ def run_fix(token: str, chains: list[list[tuple[str, str]]]) -> int:
             if create_dependency(token, source_issue_id, target_issue_id):
                 fixed_count += 1
                 print(
-                    f"  Fixed: {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
+                    f"  ✅ Fixed: {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
                 )
             else:
                 print(
-                    f"  Skipped (already exists): {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
+                    f"  ⚠️ Skipped (already exists): {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
                 )
         else:
             print(
-                f"  Cannot fix (issue not in DB): {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
+                f"  🔍 Cannot fix (issue not in DB): {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
             )
 
-    print(f"\nFixed {fixed_count} dependencies")
+    print(f"\n✅ Fixed {fixed_count} dependencies")
     return 0 if fixed_count == len(result["missing"]) else 1
 
 
@@ -226,14 +226,14 @@ def run_create(token: str, chains: list[list[tuple[str, str]]]) -> int:
     Returns:
         Exit code: 0 on success.
     """
-    print("\nChecking existing threads...")
+    print("\n📖 Checking existing threads...")
     existing_threads = get_all_threads(token)
 
     if "Planetary" in existing_threads:
         planetary_thread = existing_threads["Planetary"]
         next_unread = planetary_thread.get("next_unread_issue_number", "1")
         issues_read = int(next_unread) - 1 if next_unread else 0
-        print(f"Planetary exists: next unread is #{next_unread} (read #1-{issues_read})")
+        print(f"📖 Planetary exists: next unread is #{next_unread} (read #1-{issues_read})")
 
     thread_specs = {
         "Stormwatch Vol. 1": ThreadSpec("Stormwatch Vol. 1", 50, []),
@@ -251,16 +251,16 @@ def run_create(token: str, chains: list[list[tuple[str, str]]]) -> int:
         "Planetary/Batman: Night on Earth": ThreadSpec("Planetary/Batman: Night on Earth", 1, []),
     }
 
-    print("\nCreating/migrating threads...")
+    print("\n📝 Creating/migrating threads...")
     print("=" * 70)
 
     thread_ids: dict[str, int] = {}
     for title, spec in thread_specs.items():
         if title in existing_threads:
             thread_id = existing_threads[title]["id"]
-            print(f"  Using existing: {title}")
+            print(f"  ✅ Using existing: {title}")
         else:
-            print(f"  Creating: {title}")
+            print(f"  📚 Creating: {title}")
             thread_id = create_thread(token, title, spec.total_issues)
 
         thread_ids[title] = thread_id
@@ -275,7 +275,7 @@ def run_create(token: str, chains: list[list[tuple[str, str]]]) -> int:
                 else:
                     print(f"  Migration issue for {title}: {e}")
 
-    print("\nFetching issue IDs...")
+    print("\n🔗 Fetching issue IDs...")
     print("=" * 70)
 
     thread_issue_ids: dict[str, dict[str, int]] = {}
@@ -285,7 +285,7 @@ def run_create(token: str, chains: list[list[tuple[str, str]]]) -> int:
         thread_issue_ids[title] = issues
         print(f"  {title}: {len(issues)} issues")
 
-    print("\nCreating dependencies...")
+    print("\n🔗 Creating dependencies...")
     print("=" * 70)
 
     created_count = 0
@@ -302,12 +302,12 @@ def run_create(token: str, chains: list[list[tuple[str, str]]]) -> int:
 
                 if create_dependency(token, source_issue_id, target_issue_id):
                     created_count += 1
-                    print(f"  {source_title} #{source_issue} -> {target_title} #{target_issue}")
+                    print(f"  🔗 {source_title} #{source_issue} -> {target_title} #{target_issue}")
 
     print("\n" + "=" * 70)
-    print("Summary")
+    print("📊 Summary")
     print("=" * 70)
-    print(f"Dependencies created: {created_count}")
+    print(f"🔐 Dependencies created: {created_count}")
 
     chain_names = list(load_chains().keys())
     print("\nReading structure:")
@@ -315,7 +315,7 @@ def run_create(token: str, chains: list[list[tuple[str, str]]]) -> int:
     print(f"  {chain_names[1]}: Interleaved with hard blocks")
     print(f"  {chain_names[2]}: Crossovers + endgame (#24-26)")
     print("=" * 70)
-    print("\nWarren Ellis Wildstorm reading order complete!")
+    print("\n🎉 Warren Ellis Wildstorm reading order complete!")
     print("=" * 70)
 
     return 0

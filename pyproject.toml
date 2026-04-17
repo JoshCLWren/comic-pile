@@ -23,6 +23,7 @@ dependencies = [
     "filelock>=3.25.2",
     "PyGithub>=2.0.0",
     "pytest-xdist>=3.0.0",
+    "pyyaml>=6.0.0",
 ]
 
 [project.optional-dependencies]

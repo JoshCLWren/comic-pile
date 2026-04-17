@@ -45,8 +45,4 @@ def load_chains_as_list() -> list[list[tuple[str, str]]]:
         List of chains in YAML definition order, each a list of
         (title, issue_number) tuples.
     """
-    chain_dict = load_chains()
-    with YAML_PATH.open("r") as f:
-        data = yaml.safe_load(f)
-    ordered_names = [chain_def["name"] for chain_def in data["chains"]]
-    return [chain_dict[name] for name in ordered_names]
+    return list(load_chains().values())

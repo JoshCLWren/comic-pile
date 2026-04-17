@@ -38,28 +38,28 @@ def print_report(result: VerificationResult) -> None:
     print("=" * 70)
 
     if present:
-        print(f"\n  Present ({len(present)}):")
+        print(f"\n  ✅ Present ({len(present)}):")
         for edge in present:
             print(
                 f"   {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
             )
 
     if missing:
-        print(f"\n  Missing ({len(missing)}):")
+        print(f"\n  ❌ Missing ({len(missing)}):")
         for edge in missing:
             print(
                 f"   {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
             )
 
     if unexpected:
-        print(f"\n  Unexpected ({len(unexpected)}):")
+        print(f"\n  ⚠️ Unexpected ({len(unexpected)}):")
         for edge in unexpected:
             print(
                 f"   {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
             )
 
     if not_found:
-        print(f"\n  Not found in DB ({len(not_found)}):")
+        print(f"\n  🔍 Not found in DB ({len(not_found)}):")
         for edge in not_found:
             print(
                 f"   {edge.source_title} #{edge.source_issue} -> {edge.target_title} #{edge.target_issue}"
@@ -73,13 +73,13 @@ def print_report(result: VerificationResult) -> None:
     )
 
     if not missing and not unexpected and not not_found:
-        print("All dependencies verified successfully!")
+        print("🎉 All dependencies verified successfully!")
     print("=" * 70)
 
 
 def main() -> int:
     """Main entry point."""
-    print("Verifying Warren Ellis Wildstorm Reading Order")
+    print("🔍 Verifying Warren Ellis Wildstorm Reading Order")
     print("=" * 70)
 
     username = os.environ.get("COMIC_PILE_USERNAME")
