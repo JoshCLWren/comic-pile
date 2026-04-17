@@ -1,0 +1,34 @@
+chains:
+  - name: stormwatch
+    description: "Stormwatch (1996-1998) with WildC.A.T.s/Aliens crossover"
+    edges:
+      - ["Stormwatch Vol. 1", "37"]
+      - ["Stormwatch Vol. 1", "43"]
+      - ["Stormwatch Vol. 1", "48"]
+      - ["Stormwatch Vol. 2", "1"]
+      - ["Stormwatch Vol. 2", "4"]
+      - ["WildC.A.T.s/Aliens", "1"]
+      - ["Stormwatch Vol. 2", "10"]
+
+  - name: planetary_authority
+    description: "Planetary and The Authority interleaved (1999-2000)"
+    edges:
+      - ["Planetary", "1"]
+      - ["The Authority", "1"]
+      - ["Planetary", "6"]
+      - ["The Authority", "5"]
+      - ["Planetary/The Authority: Ruling the World", "1"]
+      - ["Planetary", "10"]
+      - ["The Authority", "9"]
+
+  - name: planetary_late
+    description: "Planetary mid-run and DC crossovers (2003-2009)"
+    edges:
+      - ["Planetary", "13"]
+      - ["Planetary", "16"]
+      - ["Planetary/JLA: Terra Occulta", "1"]
+      - ["Planetary", "17"]
+      - ["Planetary/Batman: Night on Earth", "1"]
+      - ["Planetary", "21"]
+      - ["Planetary", "24"]
+      - ["Planetary", "27"]
