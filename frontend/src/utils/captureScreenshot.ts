@@ -218,11 +218,13 @@ function injectOklchFallbacks(): HTMLStyleElement | null {
 export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnostics: ScreenshotDiagnostics }> {
   debugLog('Starting capture')
 
-  // Reset diagnostics
   diagnostics.timestamp = new Date().toISOString()
+  diagnostics.userAgent = navigator.userAgent
+  diagnostics.target = { id: '', tag: '', children: 0, rect: { x: 0, y: 0, width: 0, height: 0, top: 0, right: 0, bottom: 0, left: 0 } }
+  diagnostics.environment = { pixelRatio: 0, devicePixelRatio: 0, canUseForeignObject: false }
   diagnostics.captureAttempts = []
+  diagnostics.ancestorChain = []
 
-  // Capture from #root instead of document.body for better Safari compatibility
   const target = document.getElementById('root') ?? document.body
   const targetRect = target.getBoundingClientRect()
   diagnostics.target = {
@@ -245,30 +247,29 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
   const canUseForeignObject = await getForeignObjectSupport()
   diagnostics.environment = { pixelRatio, devicePixelRatio: window.devicePixelRatio, canUseForeignObject }
 
-  // Log ancestor chain to detect problematic styles
   logAncestorChain(target)
 
   debugLog('Target', diagnostics.target)
   debugLog('Environment', diagnostics.environment)
 
-  // Add screenshot-mode class to strip problematic CSS
   document.documentElement.classList.add('screenshot-mode')
 
-  // Force solid background to prevent transparency issues
   const prevBackground = target.style.backgroundColor
   target.style.backgroundColor = '#111827'
 
+  const toBlobOptions = {
+    skipFonts: true,
+    cacheBust: true,
+    pixelRatio,
+    filter: (node: unknown) => {
+      const excluded = node instanceof HTMLElement && node.closest('[data-exclude-from-screenshot="true"]') !== null
+      return !excluded
+    },
+  }
+
   try {
     debugLog('Trying html-to-image')
-    const blob = await toBlob(target, {
-      skipFonts: true,
-      cacheBust: true,
-      pixelRatio,
-      filter: node => {
-        const excluded = node instanceof HTMLElement && node.closest('[data-exclude-from-screenshot="true"]') !== null
-        return !excluded
-      },
-    })
+    const blob = await toBlob(target, toBlobOptions)
 
     diagnostics.captureAttempts.push({
       method: 'html-to-image',
@@ -287,7 +288,31 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
         debugLog('Using html-to-image blob', { size: blob.size })
         return { blob, diagnostics }
       }
-      debugLog('html-to-image blob is blank')
+
+      debugLog('html-to-image blob is blank, retrying once')
+      const retryBlob = await toBlob(target, toBlobOptions)
+
+      if (retryBlob !== null) {
+        const retryIsBlank = await blobLooksBlankOrBlack(retryBlob)
+        diagnostics.captureAttempts.push({
+          method: 'html-to-image-retry',
+          success: true,
+          size: retryBlob.size,
+          blank: retryIsBlank,
+        })
+
+        if (!retryIsBlank) {
+          debugLog('Retry succeeded', { size: retryBlob.size })
+          return { blob: retryBlob, diagnostics }
+        }
+        debugLog('Retry blob also blank')
+      } else {
+        diagnostics.captureAttempts.push({
+          method: 'html-to-image-retry',
+          success: false,
+        })
+        debugLog('Retry returned null')
+      }
     } else {
       debugLog('html-to-image returned null')
     }
@@ -318,13 +343,11 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
     return { blob: null, diagnostics }
   }
 
-  // Add screenshot-mode for html2canvas too
   document.documentElement.classList.add('screenshot-mode')
 
   const overrideStyle = injectOklchFallbacks()
   debugLog('oklch fallback injected', { injected: overrideStyle !== null })
 
-  // Force solid background for html2canvas
   const prevBackgroundH2c = target.style.backgroundColor
   target.style.backgroundColor = '#111827'
 
@@ -337,7 +360,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
       scale: 1,
       logging: false,
       backgroundColor: '#111827',
-      ignoreElements: (element) => {
+      ignoreElements: (element: Element) => {
         const excluded = element instanceof HTMLElement && element.closest('[data-exclude-from-screenshot="true"]') !== null
         return excluded
       },

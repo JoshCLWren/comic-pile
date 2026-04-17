@@ -49,7 +49,7 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
     <>
       <button
         onClick={handleClick}
-        className="fixed bottom-4 right-4 z-50 flex items-center justify-center w-8 h-8 bg-stone-800/60 hover:bg-amber-500/80 text-stone-400 hover:text-stone-900 rounded-full shadow-sm transition-all backdrop-blur-sm"
+        className="fixed bottom-20 right-4 z-50 flex items-center justify-center w-8 h-8 bg-stone-800/60 hover:bg-amber-500/80 text-stone-400 hover:text-stone-900 rounded-full shadow-sm transition-all backdrop-blur-sm"
         aria-label="Report a bug"
         title="Report a bug"
       >
