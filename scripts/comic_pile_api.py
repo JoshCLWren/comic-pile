@@ -68,13 +68,28 @@ def get_all_threads(token: str) -> dict[str, dict]:
     Returns:
         Dictionary mapping thread titles to thread info dicts
     """
-    response = requests.get(
-        f"{API_BASE}/api/threads/",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=REQUESTS_TIMEOUT,
-    )
-    response.raise_for_status()
-    return {thread["title"]: thread for thread in response.json()}
+    all_threads: list[dict] = []
+    page_token: str | None = None
+
+    while True:
+        params: dict[str, str | int] = {"page_size": 200}
+        if page_token:
+            params["page_token"] = page_token
+        response = requests.get(
+            f"{API_BASE}/api/threads/",
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+            timeout=REQUESTS_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+        threads = data["threads"] if isinstance(data, dict) else data
+        all_threads.extend(threads)
+        page_token = data.get("next_page_token") if isinstance(data, dict) else None
+        if not page_token:
+            break
+
+    return {thread["title"]: thread for thread in all_threads}
 
 
 def create_thread(token: str, title: str, issues_count: int, format: str = "Comics") -> int:
