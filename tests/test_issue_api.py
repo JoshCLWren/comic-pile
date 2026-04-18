@@ -607,25 +607,6 @@ async def test_create_issues_rejects_duplicate_issue_number_before_insert(
     assert issue_count_result.scalar_one() == 1
 
 
-@pytest.mark.skip(
-    reason="Database constraint violations are caught at application level before insert"
-)
-@pytest.mark.asyncio
-async def test_create_issues_returns_409_on_db_unique_conflict(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """POST /threads/{thread_id}/issues returns 409 when uq_issue_thread_number is hit.
-
-    NOTE: This test is skipped because the application logic now checks for duplicates
-    before attempting to insert, so database constraint violations don't occur in normal
-    operation. The error handling code still exists in the endpoint for edge cases
-    (e.g., race conditions), but is difficult to test without complex mocking.
-    """
-    pass
-
-
 @pytest.mark.asyncio
 async def test_create_issues_thread_not_found(auth_client: AsyncClient) -> None:
     """POST /threads/{thread_id}/issues returns 404 for non-existent thread."""
