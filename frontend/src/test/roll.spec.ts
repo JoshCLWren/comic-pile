@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { test, expect } from './fixtures';
-import { SELECTORS } from './helpers';
+import { SELECTORS, submitRatingAndDismissReviewIfShown } from './helpers';
 
 test.describe('Roll Dice Feature', () => {
   test('should display die selector on home page', async ({ authenticatedPage }) => {
@@ -189,14 +189,9 @@ test.describe('Roll Dice Feature', () => {
 
     // Submit rating to return to roll view
     await authenticatedWithThreadsPage.fill(SELECTORS.rate.ratingInput, '5');
-    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-
-    // Review form now appears - submit it (empty is fine)
-    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
-    await Promise.all([
-      authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
-      authenticatedWithThreadsPage.click('button:has-text("Skip")'), // Skip button (doesn't require text)
-    ]);
+    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+      authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
+    );
 
     // Wait to return to roll view
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 5000 });
@@ -725,14 +720,9 @@ test.describe('Roll Dice Feature', () => {
 
         // Submit rating to reset for next roll
         await authenticatedPage.fill(SELECTORS.rate.ratingInput, '4')
-        await authenticatedPage.click(SELECTORS.rate.submitButton)
-        
-        // Review form now appears - submit it (empty is fine)
-        await expect(authenticatedPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 })
-        await Promise.all([
-          authenticatedPage.waitForResponse(r => r.url().includes('/api/rate/')),
-          authenticatedPage.click('button:has-text("Skip")'), // Skip button (doesn't require text)
-        ])
+        await submitRatingAndDismissReviewIfShown(authenticatedPage, () =>
+          authenticatedPage.click(SELECTORS.rate.submitButton),
+        )
         
         await expect(authenticatedPage.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 5000 })
       }
@@ -1036,14 +1026,9 @@ test.describe('Roll Dice Feature', () => {
       await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
       await authenticatedWithThreadsPage.fill(SELECTORS.rate.ratingInput, '5');
-      await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-
-      // Review form now appears - submit it (empty is fine)
-      await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
-      await Promise.all([
-        authenticatedWithThreadsPage.waitForResponse(r => r.url().includes('/api/rate/')),
-        authenticatedWithThreadsPage.click('button:has-text("Skip")'), // Skip button (doesn't require text)
-      ]);
+      await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+        authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
+      );
 
       await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
       await authenticatedWithThreadsPage.waitForLoadState('networkidle');
