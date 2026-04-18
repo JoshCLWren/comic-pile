@@ -22,6 +22,7 @@ test.describe('Review Modal Behavior E2E Tests', () => {
     
     const reviewModal = page.locator('[data-testid="modal"]');
     await expect(reviewModal).toBeVisible({ timeout: 15000 });
+    await expect(reviewModal).toHaveClass(/modal-card/);
     
     const textarea = page.locator('textarea[placeholder*="Share your thoughts"]');
     await textarea.fill('This review will be cancelled');
