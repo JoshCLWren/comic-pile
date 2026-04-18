@@ -1,9 +1,12 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import BugReportButton from './BugReportButton'
 import { useAuth } from '../App'
 import api from '../services/api'
 import type { AuthUser } from '../types'
+import type { DiagnosticData } from '../hooks/useDiagnostics'
+import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
 
 /**
  * Main navigation component that displays a bottom navigation bar
@@ -12,7 +15,19 @@ import type { AuthUser } from '../types'
  *
  * @returns {JSX.Element|null} The navigation component or null if not authenticated
  */
-export default function Navigation() {
+type BugReportSubmit = (
+  title: string,
+  description: string,
+  screenshotBlob: Blob | null,
+  diagnosticData: DiagnosticData | null,
+  screenshotDiagnostics?: ScreenshotDiagnostics,
+) => Promise<void>
+
+interface NavigationProps {
+  onBugReportSubmit: BugReportSubmit
+}
+
+export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const location = useLocation()
   const { isAuthenticated, logout } = useAuth()
   const navigate = useNavigate()
@@ -89,10 +104,17 @@ export default function Navigation() {
             <span className="text-2xl mb-1" aria-hidden="true">📊</span>
             <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Analytics</span>
           </Link>
-          <Link to="/help" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/help') ? 'active' : 'hover:bg-white/5'}`} aria-label="Help page">
+          <Link
+            to="/help"
+            className={`hidden md:flex nav-item flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/help') ? 'active' : 'hover:bg-white/5'}`}
+            aria-label="Help page"
+          >
             <span className="text-2xl mb-1" aria-hidden="true">❓</span>
             <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Help</span>
           </Link>
+          <div className="md:hidden flex-1 h-full">
+            <BugReportButton onSubmit={onBugReportSubmit} variant="nav" />
+          </div>
         </div>
       </nav>
       <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
