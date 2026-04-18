@@ -14,6 +14,7 @@ import {
  useUpdateThread,
 } from '../hooks/useThread'
 import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
+import { useBugReportRestore } from '../contexts/BugReportRestoreContext'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api'
@@ -50,6 +51,10 @@ vi.mock('../services/api', () => ({
   },
 }))
 
+vi.mock('../contexts/BugReportRestoreContext', () => ({
+  useBugReportRestore: vi.fn(),
+}))
+
 vi.mock('../contexts/CollectionContext', () => ({
   CollectionProvider: ({ children }: { children: ReactNode }) => children,
   useCollections: vi.fn().mockReturnValue({
@@ -79,6 +84,7 @@ const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
 const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
 const mockedUseSession = vi.mocked(useSession) as any
+const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedThreadsApi = vi.mocked(threadsApi) as any
@@ -106,6 +112,11 @@ beforeEach(() => {
   })
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseBugReportRestore.mockReturnValue({
+    setRestoreAction: vi.fn(),
+    clearRestoreAction: vi.fn(),
+    restoreLastView: vi.fn(),
+  })
   mockedThreadsApi.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',
@@ -142,6 +153,34 @@ it('renders queue items and opens create modal', async () => {
   const addButtons = screen.getAllByRole('button', { name: /add thread/i })
   await user.click(addButtons[0])
   expect(screen.getByRole('heading', { name: /create thread/i })).toBeInTheDocument()
+})
+
+it('registers a restore target while the create modal is open', async () => {
+  const user = userEvent.setup()
+  const restoreState = {
+    setRestoreAction: vi.fn(),
+    clearRestoreAction: vi.fn(),
+    restoreLastView: vi.fn(),
+  }
+  mockedUseBugReportRestore.mockReturnValue(restoreState)
+
+  render(
+    <BrowserRouter>
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
+    </BrowserRouter>
+  )
+
+  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+
+  expect(restoreState.setRestoreAction).toHaveBeenCalled()
+
+  await user.click(screen.getByLabelText('Close modal'))
+
+  await waitFor(() => {
+    expect(restoreState.clearRestoreAction).toHaveBeenCalled()
+  })
 })
 
 describe('Action Sheet Snooze/Unsnooze', () => {

@@ -4,6 +4,7 @@ import { useDiagnostics } from '../hooks/useDiagnostics'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 import { captureScreenshot } from '../utils/captureScreenshot'
 import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
+import { useBugReportRestore } from '../contexts/BugReportRestoreContext'
 
 interface BugReportButtonProps {
   onSubmit: (title: string, description: string, screenshotBlob: Blob | null, diagnosticData: DiagnosticData | null, screenshotDiagnostics?: ScreenshotDiagnostics) => Promise<void>
@@ -15,6 +16,7 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const [diagnosticData, setDiagnosticData] = useState<DiagnosticData | null>(null)
   const [screenshotDiagnostics, setScreenshotDiagnostics] = useState<ScreenshotDiagnostics | null>(null)
   const { collectDiagnostics } = useDiagnostics()
+  const { restoreLastView } = useBugReportRestore()
 
   const handleClick = async () => {
     const diagnostics = collectDiagnostics()
@@ -30,7 +32,7 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
       setScreenshotDiagnostics(null)
     } finally {
       setIsModalOpen(true)
-}
+    }
   }
 
   const handleClose = () => {
@@ -43,6 +45,7 @@ export default function BugReportButton({ onSubmit }: BugReportButtonProps) {
   const handleSubmit = async (title: string, description: string, screenshotBlob: Blob | null) => {
     await onSubmit(title, description, screenshotBlob, diagnosticData, screenshotDiagnostics ?? undefined)
     handleClose()
+    restoreLastView()
   }
 
   return (

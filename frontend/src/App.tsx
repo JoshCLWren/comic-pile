@@ -8,6 +8,7 @@ import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { ToastProvider } from './contexts/ToastContext'
 import { CacheProvider } from './contexts/CacheContext'
+import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
 import './index.css'
 
 declare global {
@@ -301,13 +302,15 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <ToastProvider>
-        <CacheProvider>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
-        </CacheProvider>
-      </ToastProvider>
+      <BugReportRestoreProvider>
+        <ToastProvider>
+          <CacheProvider>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </CacheProvider>
+        </ToastProvider>
+      </BugReportRestoreProvider>
     </BrowserRouter>
   )
 }

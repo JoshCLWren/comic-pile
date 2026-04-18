@@ -16,6 +16,7 @@ import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
+import { useBugReportRestore } from '../../contexts/BugReportRestoreContext'
 import { useCollections } from '../../contexts/CollectionContext'
 import { PositionMenuProvider } from '../../contexts/PositionMenuContext'
 import type { Thread } from '../../types'
@@ -29,6 +30,7 @@ export default function QueuePage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { activeCollectionId } = useCollections()
+  const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const { data: threads, isPending, refetch } = useThreads('', activeCollectionId)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
@@ -69,21 +71,6 @@ export default function QueuePage() {
   const [isDependencyBuilderOpen, setIsDependencyBuilderOpen] = useState(false)
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (location.state?.editThreadId && threads) {
-      const thread = threads.find((t) => t.id === location.state.editThreadId)
-      if (thread) {
-        openEditModal(thread)
-        navigate(location.pathname, { replace: true, state: {} })
-      }
-    }
-    // If navigation from RollPage or other page to create a new thread, auto-open create modal
-    if (location.state?.openCreate) {
-      openCreateModal()
-      navigate(location.pathname, { replace: true, state: {} })
-    }
-  }, [location.state, location.pathname, threads, navigate])
 
   async function refreshBlockedState() {
     try {
@@ -264,7 +251,7 @@ export default function QueuePage() {
       }
 
       setCreateForm(DEFAULT_CREATE_STATE)
-      setIsCreateOpen(false)
+      closeCreateModal()
       refetch()
     } catch (error: unknown) {
       console.error('Failed to create thread:', error)
@@ -292,25 +279,10 @@ export default function QueuePage() {
         id: editingThread.id,
         data: updateData,
       })
-      setEditingThread(null)
-      setIsEditOpen(false)
-      refetch()
+      closeEditModal()
     } catch {
       console.error('Failed to update thread')
     }
-  }
-
-  const openEditModal = (thread: Thread) => {
-    setEditingThread(thread)
-    setEditForm({
-      title: thread.title,
-      format: thread.format,
-      issuesRemaining: thread.issues_remaining,
-      notes: thread.notes || '',
-      issues: '',
-      lastIssueRead: 0,
-    })
-    setIsEditOpen(true)
   }
 
   const openReactivateModal = (thread: Thread | null) => {
@@ -360,10 +332,83 @@ export default function QueuePage() {
     setThreadToMigrate(null)
   }, [])
 
-  const openCreateModal = () => {
+  const clearQueueModalState = useCallback(() => {
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.pathname, navigate])
+
+  const openCreateModal = useCallback(() => {
     setCreateForm(DEFAULT_CREATE_STATE)
     setIsCreateOpen(true)
-  }
+    setRestoreAction(() => {
+      setCreateForm(DEFAULT_CREATE_STATE)
+      setIsCreateOpen(true)
+    })
+    navigate(location.pathname, {
+      replace: true,
+      state: {
+        ...(location.state ?? {}),
+        openCreate: true,
+      },
+    })
+  }, [location.pathname, location.state, navigate, setRestoreAction])
+
+  const closeCreateModal = useCallback(() => {
+    setIsCreateOpen(false)
+    clearRestoreAction()
+    clearQueueModalState()
+  }, [clearQueueModalState, clearRestoreAction])
+
+  const openEditModal = useCallback((thread: Thread) => {
+    setEditingThread(thread)
+    setEditForm({
+      title: thread.title,
+      format: thread.format,
+      issuesRemaining: thread.issues_remaining,
+      notes: thread.notes || '',
+      issues: '',
+      lastIssueRead: 0,
+    })
+    setIsEditOpen(true)
+    setRestoreAction(() => {
+      setEditingThread(thread)
+      setEditForm({
+        title: thread.title,
+        format: thread.format,
+        issuesRemaining: thread.issues_remaining,
+        notes: thread.notes || '',
+        issues: '',
+        lastIssueRead: 0,
+      })
+      setIsEditOpen(true)
+    })
+    navigate(location.pathname, {
+      replace: true,
+      state: {
+        ...(location.state ?? {}),
+        editThreadId: thread.id,
+      },
+    })
+  }, [location.pathname, location.state, navigate, setRestoreAction])
+
+  const closeEditModal = useCallback(() => {
+    setEditingThread(null)
+    setIsEditOpen(false)
+    clearRestoreAction()
+    clearQueueModalState()
+    refetch()
+  }, [clearQueueModalState, clearRestoreAction, refetch])
+
+  useEffect(() => {
+    if (location.state?.editThreadId && threads) {
+      const thread = threads.find((t) => t.id === location.state.editThreadId)
+      if (thread && (!isEditOpen || editingThread?.id !== thread.id)) {
+        openEditModal(thread)
+      }
+    }
+    if (location.state?.openCreate && !isCreateOpen) {
+      openCreateModal()
+    }
+  }, [editingThread?.id, isCreateOpen, isEditOpen, location.pathname, location.state, openCreateModal, openEditModal, threads])
 
   const openRepositionModal = (thread: Thread) => {
     setRepositioningThread(thread)
@@ -693,7 +738,7 @@ export default function QueuePage() {
       )}
 
   {/* Create Thread Modal */}
-  <Modal isOpen={isCreateOpen} title="Create Thread" onClose={() => setIsCreateOpen(false)}>
+  <Modal isOpen={isCreateOpen} title="Create Thread" onClose={closeCreateModal}>
   <form className="space-y-4" onSubmit={handleCreateSubmit}>
   <div className="space-y-2">
   <label htmlFor="create-thread-title" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Title</label>
@@ -785,7 +830,7 @@ export default function QueuePage() {
       </Modal>
 
   {/* Edit Thread Modal */}
-  <Modal isOpen={isEditOpen} title="Edit Thread" onClose={() => { setIsEditOpen(false); refetch() }} overlayClassName="edit-modal__overlay">
+  <Modal isOpen={isEditOpen} title="Edit Thread" onClose={closeEditModal} overlayClassName="edit-modal__overlay">
   <div className="space-y-4">
   <form id="edit-thread-form" className="space-y-4" onSubmit={handleEditSubmit}>
   <div className="space-y-2">
