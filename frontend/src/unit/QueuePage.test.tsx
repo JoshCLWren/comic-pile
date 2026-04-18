@@ -13,8 +13,8 @@ import {
  useThreads,
  useUpdateThread,
 } from '../hooks/useThread'
-import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
 import { useBugReportRestore } from '../contexts/BugReportRestoreContext'
+import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api'
@@ -31,6 +31,7 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
   useMoveToPosition: vi.fn(),
+  useShuffleQueue: vi.fn(),
 }))
 
 vi.mock('../hooks/useSession', () => ({
@@ -83,6 +84,7 @@ const mockedUseReactivateThread = vi.mocked(useReactivateThread) as any
 const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
 const mockedUseMoveToPosition = vi.mocked(useMoveToPosition) as any
+const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
@@ -106,6 +108,7 @@ beforeEach(() => {
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSession.mockReturnValue({
     data: { snoozed_threads: [] },
     refetch: vi.fn(),
@@ -181,6 +184,35 @@ it('registers a restore target while the create modal is open', async () => {
   await waitFor(() => {
     expect(restoreState.clearRestoreAction).toHaveBeenCalled()
   })
+})
+
+it('shuffles the queue from the header control', async () => {
+  const mockRefetch = vi.fn()
+  const mockShuffle = { mutate: vi.fn(), isPending: false }
+  mockedUseThreads.mockReturnValue({
+    data: [
+      { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5 },
+      { id: 3, title: 'Spawn', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 7 },
+      { id: 2, title: 'Descender', format: 'Comic', status: 'completed', issues_remaining: 0 },
+    ],
+    isLoading: false,
+    refetch: mockRefetch,
+  })
+  mockedUseShuffleQueue.mockReturnValue(mockShuffle)
+
+  const user = userEvent.setup()
+  render(
+    <BrowserRouter>
+      <ToastProvider>
+        <QueuePage />
+      </ToastProvider>
+    </BrowserRouter>
+  )
+
+  await user.click(screen.getByRole('button', { name: /shuffle queue/i }))
+
+  expect(mockShuffle.mutate).toHaveBeenCalled()
+  expect(mockRefetch).toHaveBeenCalled()
 })
 
 describe('Action Sheet Snooze/Unsnooze', () => {

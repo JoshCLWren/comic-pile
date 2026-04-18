@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { queueApi } from '../services/api'
 
 vi.mock('../services/api', () => ({
@@ -8,6 +8,7 @@ vi.mock('../services/api', () => ({
     moveToPosition: vi.fn(),
     moveToFront: vi.fn(),
     moveToBack: vi.fn(),
+    shuffle: vi.fn(),
   },
 }))
 
@@ -17,6 +18,7 @@ beforeEach(() => {
   mockedQueueApi.moveToPosition.mockResolvedValue(undefined as never)
   mockedQueueApi.moveToFront.mockResolvedValue(undefined as never)
   mockedQueueApi.moveToBack.mockResolvedValue(undefined as never)
+  mockedQueueApi.shuffle.mockResolvedValue(undefined as never)
 })
 
 it('moves queue position', async () => {
@@ -42,4 +44,14 @@ it('moves thread to front and back', async () => {
 
   expect(mockedQueueApi.moveToFront).toHaveBeenCalledWith(8)
   expect(mockedQueueApi.moveToBack).toHaveBeenCalledWith(9)
+})
+
+it('shuffles the queue', async () => {
+  const { result } = renderHook(() => useShuffleQueue())
+
+  await act(async () => {
+    await result.current.mutate()
+  })
+
+  expect(mockedQueueApi.shuffle).toHaveBeenCalled()
 })

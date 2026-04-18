@@ -32,7 +32,7 @@ const renderWithAuth = () => {
   return render(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
-        <Navigation />
+        <Navigation onBugReportSubmit={vi.fn()} />
       </AuthProvider>
     </MemoryRouter>
   )
@@ -43,7 +43,7 @@ const renderWithoutAuth = () => {
   return render(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
-        <Navigation />
+        <Navigation onBugReportSubmit={vi.fn()} />
       </AuthProvider>
     </MemoryRouter>
   )

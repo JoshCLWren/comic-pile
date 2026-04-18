@@ -12,7 +12,7 @@ import {
   useSetDie,
 } from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
 import { useBugReportRestore } from '../contexts/BugReportRestoreContext'
@@ -51,6 +51,10 @@ vi.mock('../hooks/useSnooze', () => ({
 vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
+  useShuffleQueue: vi.fn(),
+}))
+vi.mock('../config/featureFlags', () => ({
+  isReviewsFeatureEnabled: vi.fn(() => true),
 }))
 vi.mock('../contexts/BugReportRestoreContext', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks', async (importOriginal) => {
@@ -78,6 +82,7 @@ const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseRate = vi.mocked(useRate) as any
 const mockedUseCollections = vi.mocked(useCollections) as any
 const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
@@ -151,6 +156,7 @@ beforeEach(() => {
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseCollections.mockReturnValue({
     collections: [],
@@ -332,6 +338,29 @@ describe('Action Sheet', () => {
 
     await waitFor(() => {
       expect(mockRefetchSession).toHaveBeenCalled()
+      expect(mockRefetchThreads).toHaveBeenCalled()
+    })
+  })
+
+  it('shuffles the roll pool from the header control', async () => {
+    const mockShuffle = { mutate: vi.fn(), isPending: false }
+    const mockRefetchThreads = vi.fn()
+    mockedUseShuffleQueue.mockReturnValue(mockShuffle)
+    mockedUseThreads.mockReturnValue({
+      data: [
+        { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
+        { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
+      ],
+      refetch: mockRefetchThreads,
+    })
+
+    const user = userEvent.setup()
+    render(<RollPage />)
+
+    await user.click(screen.getByRole('button', { name: /shuffle/i }))
+
+    await waitFor(() => {
+      expect(mockShuffle.mutate).toHaveBeenCalled()
       expect(mockRefetchThreads).toHaveBeenCalled()
     })
   })

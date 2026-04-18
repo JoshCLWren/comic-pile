@@ -1,6 +1,7 @@
 """Queue management functions."""
 
 import logging
+import random
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
@@ -218,6 +219,36 @@ async def move_to_position(
         logger.debug(
             f"  Position {thread.queue_position}: Thread {thread.id} ('{thread.title[:50]}...')"
         )
+
+
+async def shuffle_queue(user_id: int, db: AsyncSession) -> int:
+    """Randomize the order of active queue threads for a user.
+
+    Args:
+        user_id: The user whose active queue should be shuffled.
+        db: The async database session.
+
+    Returns:
+        Number of active threads that were shuffled.
+    """
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .order_by(Thread.queue_position, Thread.id)
+    )
+    threads = list(result.scalars().all())
+
+    if len(threads) < 2:
+        return len(threads)
+
+    random.shuffle(threads)
+    for position, thread in enumerate(threads, start=1):
+        thread.queue_position = position
+
+    await db.commit()
+    return len(threads)
 
 
 async def get_roll_pool(

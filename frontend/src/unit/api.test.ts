@@ -43,10 +43,12 @@ it('calls queue endpoints with expected paths', () => {
   queueApi.moveToPosition(3, 2)
   queueApi.moveToFront(4)
   queueApi.moveToBack(5)
+  queueApi.shuffle()
 
   expect(put).toHaveBeenCalledWith('/queue/threads/3/position/', { new_position: 2 })
   expect(put).toHaveBeenCalledWith('/queue/threads/4/front/')
   expect(put).toHaveBeenCalledWith('/queue/threads/5/back/')
+  expect(post).toHaveBeenCalledWith('/queue/shuffle/')
 })
 
 it('calls dependency endpoints with expected paths', () => {
