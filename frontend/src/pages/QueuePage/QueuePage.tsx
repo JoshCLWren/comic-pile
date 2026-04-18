@@ -336,21 +336,18 @@ export default function QueuePage() {
     navigate(location.pathname, { replace: true, state: {} })
   }, [location.pathname, navigate])
 
-  const openCreateModal = useCallback(() => {
+  const showCreateModal = useCallback(() => {
     setCreateForm(DEFAULT_CREATE_STATE)
     setIsCreateOpen(true)
     setRestoreAction(() => {
       setCreateForm(DEFAULT_CREATE_STATE)
       setIsCreateOpen(true)
     })
-    navigate(location.pathname, {
-      replace: true,
-      state: {
-        ...(location.state ?? {}),
-        openCreate: true,
-      },
-    })
-  }, [location.pathname, location.state, navigate, setRestoreAction])
+  }, [setRestoreAction])
+
+  const openCreateModal = useCallback(() => {
+    showCreateModal()
+  }, [showCreateModal])
 
   const closeCreateModal = useCallback(() => {
     setIsCreateOpen(false)
@@ -358,7 +355,7 @@ export default function QueuePage() {
     clearQueueModalState()
   }, [clearQueueModalState, clearRestoreAction])
 
-  const openEditModal = useCallback((thread: Thread) => {
+  const showEditModal = useCallback((thread: Thread) => {
     setEditingThread(thread)
     setEditForm({
       title: thread.title,
@@ -381,14 +378,11 @@ export default function QueuePage() {
       })
       setIsEditOpen(true)
     })
-    navigate(location.pathname, {
-      replace: true,
-      state: {
-        ...(location.state ?? {}),
-        editThreadId: thread.id,
-      },
-    })
-  }, [location.pathname, location.state, navigate, setRestoreAction])
+  }, [setRestoreAction])
+
+  const openEditModal = useCallback((thread: Thread) => {
+    showEditModal(thread)
+  }, [showEditModal])
 
   const closeEditModal = useCallback(() => {
     setEditingThread(null)
@@ -402,13 +396,25 @@ export default function QueuePage() {
     if (location.state?.editThreadId && threads) {
       const thread = threads.find((t) => t.id === location.state.editThreadId)
       if (thread && (!isEditOpen || editingThread?.id !== thread.id)) {
-        openEditModal(thread)
+        showEditModal(thread)
       }
+      clearQueueModalState()
+      return
     }
     if (location.state?.openCreate && !isCreateOpen) {
-      openCreateModal()
+      showCreateModal()
+      clearQueueModalState()
     }
-  }, [editingThread?.id, isCreateOpen, isEditOpen, location.pathname, location.state, openCreateModal, openEditModal, threads])
+  }, [
+    clearQueueModalState,
+    editingThread?.id,
+    isCreateOpen,
+    isEditOpen,
+    location.state,
+    showCreateModal,
+    showEditModal,
+    threads,
+  ])
 
   const openRepositionModal = (thread: Thread) => {
     setRepositioningThread(thread)
