@@ -101,7 +101,6 @@ async def import_csv(
 
     for i, thread in enumerate(reversed(imported_threads)):
         thread.queue_position = i + 1
-        await db.flush()
 
     await db.commit()
     return {"imported": imported, "errors": errors}
@@ -387,7 +386,6 @@ async def import_reviews(
 
             thread.review_url = review_url
             thread.last_review_at = review_timestamp
-            await db.flush()
             imported += 1
 
         except Exception as e:

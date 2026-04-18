@@ -571,7 +571,7 @@ async def reactivate_thread(
             default=0,
         )
 
-        new_issues: list[Issue] = []
+        first_issue_number = str(max_numeric_issue_number + 1)
         for i in range(
             max_numeric_issue_number + 1,
             max_numeric_issue_number + request.issues_to_add + 1,
@@ -584,16 +584,18 @@ async def reactivate_thread(
                 position=max_position,
             )
             db.add(new_issue)
-            new_issues.append(new_issue)
-
-        await db.flush()
 
         thread.total_issues = existing_total + request.issues_to_add
         thread.reading_progress = "in_progress"
         thread.issues_remaining = request.issues_to_add
 
-        if new_issues:
-            thread.next_unread_issue_id = new_issues[0].id
+        first_issue = await db.execute(
+            select(Issue).where(
+                Issue.thread_id == thread.id,
+                Issue.issue_number == first_issue_number,
+            )
+        )
+        thread.next_unread_issue_id = first_issue.scalar_one().id
     else:
         thread.issues_remaining = request.issues_to_add
 
@@ -971,8 +973,6 @@ async def migrate_thread_to_issues_simple(
                 )
                 db.add(issue)
 
-            await db.flush()
-
             result = await db.execute(
                 select(Issue)
                 .where(Issue.thread_id == thread_id)
@@ -1008,8 +1008,6 @@ async def migrate_thread_to_issues_simple(
     thread.total_issues = len(all_issues)
     thread.next_unread_issue_id = current_issue.id
     thread.reading_progress = "in_progress"
-
-    await db.flush()
 
     response = await thread_to_response(thread, db)
 

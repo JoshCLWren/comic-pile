@@ -50,7 +50,7 @@ async_engine = create_async_engine(
 AsyncSessionLocal = async_sessionmaker(
     async_engine,
     autocommit=False,
-    autoflush=False,
+    autoflush=True,
     expire_on_commit=False,
 )
 
