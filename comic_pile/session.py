@@ -176,10 +176,10 @@ async def get_or_create(db: AsyncSession, user_id: int) -> Session:
                 new_session = Session(start_die=start_die, user_id=user_id)
                 db.add(new_session)
 
+                await create_session_start_snapshot(db, new_session)
+
                 await db.commit()
                 await db.refresh(new_session)
-
-                await create_session_start_snapshot(db, new_session)
 
                 return new_session
         except OperationalError as e:

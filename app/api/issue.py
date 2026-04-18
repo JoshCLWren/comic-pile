@@ -414,24 +414,44 @@ async def create_issues(
             detail="Internal error: Position conflict with existing issues",
         )
 
-    # Get existing issue count before new issues were added
-    existing_count_result = await db.execute(
-        select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
-    )
-    existing_issue_count = existing_count_result.scalar() or 0
+    try:
+        # Get total issue count (includes newly added issues due to autoflush)
+        total_count_result = await db.execute(
+            select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
+        )
+        total_issue_count = total_count_result.scalar() or 0
 
-    first_unread_result = await db.execute(
-        select(Issue)
-        .where(Issue.thread_id == thread_id, Issue.status == "unread")
-        .order_by(Issue.position)
-        .limit(1)
-    )
-    first_unread_issue = first_unread_result.scalar_one_or_none()
+        first_unread_result = await db.execute(
+            select(Issue)
+            .where(Issue.thread_id == thread_id, Issue.status == "unread")
+            .order_by(Issue.position)
+            .limit(1)
+        )
+        first_unread_issue = first_unread_result.scalar_one_or_none()
+    except IntegrityError as e:
+        await db.rollback()
+        if _is_issue_thread_number_conflict(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Issue number already exists in this thread",
+            ) from e
+        logger.error(
+            "Database integrity error during issue creation",
+            extra={
+                "thread_id": thread_id,
+                "error": str(e),
+                "position_values": position_values,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Database constraint violation",
+        ) from e
 
     # Handle both initial migration and adding to existing migrated threads
     if thread.total_issues is None:
         # Initial thread migration - set up issue tracking from scratch
-        thread.total_issues = existing_issue_count
+        thread.total_issues = total_issue_count
         thread.issues_remaining = await thread.get_issues_remaining(db)
         if first_unread_issue is None:
             thread.next_unread_issue_id = None
@@ -507,7 +527,7 @@ async def create_issues(
 
     return IssueListResponse(
         issues=issue_responses,
-        total_count=existing_issue_count,
+        total_count=total_issue_count,
         page_size=len(issue_responses),
         next_page_token=None,
     )

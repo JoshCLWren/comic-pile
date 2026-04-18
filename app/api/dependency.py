@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -376,7 +377,18 @@ async def create_dependency(
     db.add(dependency)
 
     await refresh_user_blocked_status(current_user.id, db)
-    await db.commit()
+
+    try:
+        await db.commit()
+    except IntegrityError as err:
+        await db.rollback()
+        if "uq_dependency_issue_edge" in str(err.orig):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Dependency already exists",
+            ) from err
+        raise
+
     await db.refresh(dependency)
 
     response = (await enrich_dependencies([dependency], db))[0]
