@@ -10,7 +10,7 @@ import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import CollectionDialog from '../../components/CollectionDialog'
 import CollectionToolbar from '../../components/CollectionToolbar'
-import { useMoveToBack, useMoveToFront, useMoveToPosition } from '../../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
 import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
 import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
@@ -39,6 +39,7 @@ export default function QueuePage() {
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const moveToPositionMutation = useMoveToPosition()
+  const shuffleQueueMutation = useShuffleQueue()
   const snoozeMutation = useSnooze()
   const unsnoozeMutation = useUnsnooze()
 
@@ -171,6 +172,15 @@ export default function QueuePage() {
     moveToBackMutation.mutate(threadId).then(() => refetch()).catch(() => {
       alert('Failed to move thread to back. Please try again.')
     })
+  }
+
+  const handleShuffleQueue = async () => {
+    try {
+      await shuffleQueueMutation.mutate()
+      await refetch()
+    } catch {
+      alert('Failed to shuffle queue. Please try again.')
+    }
   }
 
   const handleDragStart = (threadId: number) => (event: DragEvent<HTMLElement>) => {
@@ -458,13 +468,23 @@ export default function QueuePage() {
             <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
             <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
           </div>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
-          >
-            Add Thread
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleShuffleQueue}
+              disabled={shuffleQueueMutation.isPending || activeThreads.length < 2}
+              className="h-12 px-5 rounded-lg border border-white/10 bg-white/5 text-xs font-black uppercase tracking-widest whitespace-nowrap text-stone-300 hover:bg-white/10 disabled:opacity-50"
+            >
+              Shuffle Queue
+            </button>
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="hidden md:flex h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+            >
+              Add Thread
+            </button>
+          </div>
         </div>
         {collectionsEnabled && <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />}
       </header>

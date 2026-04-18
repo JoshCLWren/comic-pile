@@ -56,3 +56,18 @@ it('keeps focus on a controlled input while typing across parent rerenders', asy
   expect(titleInput).toHaveValue('Saga')
 })
 
+it('uses a translucent modal surface with a softened overlay', () => {
+  const { container } = render(
+    <Modal isOpen title="Translucent Modal" onClose={() => {}}>
+      <p>Modal content</p>
+    </Modal>
+  )
+
+  const dialog = screen.getByRole('dialog', { name: 'Translucent Modal' })
+  const overlay = container.querySelector('[aria-hidden="true"]')
+
+  expect(dialog).toHaveClass('modal-card')
+  expect(dialog.className).toContain('modal-card')
+  expect(overlay).not.toBeNull()
+  expect(overlay).toHaveClass('backdrop-blur-sm')
+})

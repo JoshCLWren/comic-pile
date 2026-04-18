@@ -126,6 +126,33 @@ export async function getAuthToken(page: Page): Promise<string | null> {
   });
 }
 
+export async function submitRatingAndDismissReviewIfShown(
+  page: Page,
+  submitAction: () => Promise<void>,
+): Promise<void> {
+  const rateResponse = page.waitForResponse(
+    (response) => response.url().includes('/api/rate/') && response.request().method() === 'POST',
+  )
+
+  await submitAction()
+
+  const reviewModal = page.locator('[data-testid="modal"]')
+  const reviewModalShown = await reviewModal
+    .waitFor({ state: 'visible', timeout: 1000 })
+    .then(() => true)
+    .catch(() => false)
+
+  if (reviewModalShown) {
+    await Promise.all([
+      rateResponse,
+      page.click('button:has-text("Skip")'),
+    ])
+    return
+  }
+
+  await rateResponse
+}
+
 export async function createThread(
   page: Page,
   threadData: { title: string; format: string; issues_remaining: number; total_issues?: number; issue_range?: string }

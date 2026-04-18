@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { SELECTORS, setRangeInput } from './helpers';
+import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown } from './helpers';
 
 test.describe('Issue 291: Finish Session Button', () => {
   test('should have a "Finish Session" button in rating view', async ({ authenticatedWithThreadsPage }) => {
@@ -40,17 +40,9 @@ test.describe('Issue 291: Finish Session Button', () => {
 
     const finishSessionButton = authenticatedWithThreadsPage.locator('button:has-text("Finish Session")');
     
-    await finishSessionButton.click();
-    
-    // Review form now appears - submit it (empty is fine)
-    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
-    await Promise.all([
-      authenticatedWithThreadsPage.waitForResponse((response) =>
-        response.url().includes('/api/rate/') && 
-        response.request().method() === 'POST'
-      ),
-      authenticatedWithThreadsPage.click('button:has-text("Skip")'), // Skip button (doesn't require text)
-    ]);
+    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+      finishSessionButton.click(),
+    );
 
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
@@ -87,11 +79,9 @@ test.describe('Issue 291: Finish Session Button', () => {
       await route.continue();
     });
 
-    await finishSessionButton.click();
-    
-    // Review form now appears - submit it (empty is fine)
-    await expect(authenticatedWithThreadsPage.locator('[data-testid="modal"]')).toBeVisible({ timeout: 5000 });
-    await authenticatedWithThreadsPage.click('button:has-text("Skip")'); // Skip button (doesn't require text)
+    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+      finishSessionButton.click(),
+    );
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     expect(requestData).toBeTruthy();

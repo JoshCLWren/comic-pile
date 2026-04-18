@@ -20,7 +20,9 @@ interface ThreadPoolProps {
   onReadStale: () => void
   onToggleSnoozed: () => void
   onToggleBlocked: () => void
+  onShuffle: () => void
   unsnoozeIsPending: boolean
+  shuffleIsPending: boolean
 }
 
 export function ThreadPool({
@@ -41,7 +43,9 @@ export function ThreadPool({
   onReadStale,
   onToggleSnoozed,
   onToggleBlocked,
+  onShuffle,
   unsnoozeIsPending,
+  shuffleIsPending,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   return (
@@ -60,6 +64,14 @@ export function ThreadPool({
         <div className="flex-1">
           <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">Roll Pool</p>
         </div>
+        <button
+          type="button"
+          onClick={onShuffle}
+          disabled={shuffleIsPending || pool.length < 2}
+          className="h-8 px-3 rounded-lg border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-50"
+        >
+          Shuffle
+        </button>
       </div>
 
       <div className="space-y-2" data-roll-pool aria-label="Roll pool collection">

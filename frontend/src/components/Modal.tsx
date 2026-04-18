@@ -81,11 +81,11 @@ export default function Modal({
 
   return (
     <div data-exclude-from-screenshot="true" className={`fixed inset-0 z-50 flex items-center justify-center px-4 ${overlayClassName || ''}`}>
-      <div className="absolute inset-0 bg-[#110e0a]/80" onClick={onClose} aria-hidden="true"></div>
+      <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true"></div>
       <div
         ref={modalRef}
         data-testid={testId}
-        className="relative w-full max-w-lg glass-card p-6 max-h-[85vh] flex flex-col"
+        className="relative w-full max-w-lg modal-card p-6 max-h-[85vh] flex flex-col"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"

@@ -21,8 +21,9 @@ import {
   useSetDie,
 } from '../../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
-import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
+import { isReviewsFeatureEnabled } from '../../config/featureFlags'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { reviewsApi } from '../../services/api-reviews'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
@@ -40,6 +41,7 @@ import { ThreadPool } from './components/ThreadPool'
 import ReviewForm from '../../components/ReviewForm'
 
 export default function RollPage() {
+  const reviewsEnabled = isReviewsFeatureEnabled()
   const state = useRollPageState()
   const {
     isRolling, setIsRolling,
@@ -91,15 +93,15 @@ export default function RollPage() {
     }
   }, [isSessionError, sessionError, navigate])
 
-useEffect(() => {
-  const handleTestEditCollection = ((e: CustomEvent<Collection>) => {
-    setEditingCollection(e.detail)
-    setIsCollectionDialogOpen(true)
-  }) as EventListener
+  useEffect(() => {
+    const handleTestEditCollection = ((e: CustomEvent<Collection>) => {
+      setEditingCollection(e.detail)
+      setIsCollectionDialogOpen(true)
+    }) as EventListener
 
-  window.addEventListener('test-edit-collection', handleTestEditCollection)
-  return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
-}, [setIsCollectionDialogOpen])
+    window.addEventListener('test-edit-collection', handleTestEditCollection)
+    return () => window.removeEventListener('test-edit-collection', handleTestEditCollection)
+  }, [setIsCollectionDialogOpen])
 
   const setDieMutation = useSetDie()
   const clearManualDieMutation = useClearManualDie()
@@ -110,6 +112,7 @@ useEffect(() => {
   const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
+  const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
 
   async function handleUnsnooze(threadId: number) {
@@ -118,6 +121,16 @@ useEffect(() => {
       await refetchSession()
     } catch (error) {
       console.error('Unsnooze failed:', error)
+    }
+  }
+
+  async function handleShufflePool() {
+    try {
+      await shuffleQueueMutation.mutate()
+      await refetchThreads()
+    } catch (error) {
+      console.error('Shuffle failed:', error)
+      alert(`Failed to shuffle pool: ${getApiErrorDetail(error)}`)
     }
   }
 
@@ -149,62 +162,61 @@ useEffect(() => {
     setIsActionSheetOpen(true)
   }
 
-const enterRatingView = useCallback(async (threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
-  if (threadId) setSelectedThreadId(threadId)
-  if (result !== null) setRolledResult(result)
+  const enterRatingView = useCallback(async (threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
+    if (threadId) setSelectedThreadId(threadId)
+    if (result !== null) setRolledResult(result)
 
-  const ratingThread = buildRatingThread(threadId, result, threadMetadata, session?.active_thread)
-  if (ratingThread) {
-    setActiveRatingThread(ratingThread)
-  } else if (!threadId && session?.active_thread) {
-    setActiveRatingThread({
-      id: session.active_thread.id, title: session.active_thread.title,
-      format: session.active_thread.format,
-      issues_remaining: session.active_thread.issues_remaining ?? 0,
-      queue_position: session.active_thread.queue_position ?? 0,
-      total_issues: session.active_thread.total_issues ?? null,
-      reading_progress: session.active_thread.reading_progress ?? null,
-      issue_id: session.active_thread.issue_id ?? null,
-      issue_number: session.active_thread.issue_number ?? null,
-      next_issue_id: session.active_thread.next_issue_id ?? null,
-      next_issue_number: session.active_thread.next_issue_number ?? null,
-      last_rolled_result: session.active_thread.last_rolled_result ?? null,
-    })
-  }
+    const ratingThread = buildRatingThread(threadId, result, threadMetadata, session?.active_thread)
+    if (ratingThread) {
+      setActiveRatingThread(ratingThread)
+    } else if (!threadId && session?.active_thread) {
+      setActiveRatingThread({
+        id: session.active_thread.id, title: session.active_thread.title,
+        format: session.active_thread.format,
+        issues_remaining: session.active_thread.issues_remaining ?? 0,
+        queue_position: session.active_thread.queue_position ?? 0,
+        total_issues: session.active_thread.total_issues ?? null,
+        reading_progress: session.active_thread.reading_progress ?? null,
+        issue_id: session.active_thread.issue_id ?? null,
+        issue_number: session.active_thread.issue_number ?? null,
+        next_issue_id: session.active_thread.next_issue_id ?? null,
+        next_issue_number: session.active_thread.next_issue_number ?? null,
+        last_rolled_result: session.active_thread.last_rolled_result ?? null,
+      })
+    }
 
-  setRating(3.0)
-  setErrorMessage('')
-  const die = currentDie || 6
-  const idx = DICE_LADDER.indexOf(die)
-  setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
-  setIsRatingView(true)
-  suppressPendingAutoOpenRef.current = false
+    setRating(3.0)
+    setErrorMessage('')
+    const die = currentDie || 6
+    const idx = DICE_LADDER.indexOf(die)
+    setPredictedDie(idx > 0 ? DICE_LADDER[idx - 1] : DICE_LADDER[0])
+    setIsRatingView(true)
+    suppressPendingAutoOpenRef.current = false
 
-  // Fetch existing review if re-rating a thread
-  if (threadId) {
-    try {
-      const token = localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
-      if (token) {
-        const reviewsResponse = await fetch('/api/v1/reviews/', {
-          headers: { 'Authorization': `Bearer ${token}` },
-        })
-        if (reviewsResponse.ok) {
-          const reviewsData = await reviewsResponse.json()
-          const existing = reviewsData.reviews?.find((r: Review) => 
-            r.thread_id === threadId && 
-            (!ratingThread?.issue_number || r.issue_number === ratingThread.issue_number)
-          )
-          setExistingReview(existing || null)
+    if (reviewsEnabled && threadId) {
+      try {
+        const token = localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
+        if (token) {
+          const reviewsResponse = await fetch('/api/v1/reviews/', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          })
+          if (reviewsResponse.ok) {
+            const reviewsData = await reviewsResponse.json()
+            const existing = reviewsData.reviews?.find((r: Review) => 
+              r.thread_id === threadId && 
+              (!ratingThread?.issue_number || r.issue_number === ratingThread.issue_number)
+            )
+            setExistingReview(existing || null)
+          }
         }
+      } catch (error) {
+        console.error('Failed to fetch existing review:', error)
+        setExistingReview(null)
       }
-    } catch (error) {
-      console.error('Failed to fetch existing review:', error)
+    } else {
       setExistingReview(null)
     }
-  } else {
-    setExistingReview(null)
-  }
-}, [session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
+  }, [reviewsEnabled, session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
 
 const handleMigrationComplete = useCallback((migratedThread: Thread) => {
   refetchThreads()
@@ -428,16 +440,47 @@ useEffect(() => {
       setShowSimpleMigration(true)
       return
     }
-    
-    // Show review form instead of immediately submitting rating
+
+    if (!activeRatingThread) return
+
+    if (!reviewsEnabled) {
+      try {
+        await rateMutation.mutate({
+          thread_id: activeRatingThread.id,
+          rating,
+          finish_session: finishSession,
+          issue_number: activeRatingThread?.issue_number || undefined,
+        })
+
+        const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
+        if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
+          setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
+          return
+        }
+
+        setShowReviewForm(false)
+        setPendingRatingAction(null)
+        setReviewSaveError(null)
+        setExistingReview(null)
+        setIsRolling(false)
+        setIsRatingView(false)
+        setRolledResult(null)
+        setSelectedThreadId(null)
+        setActiveRatingThread(null)
+        setErrorMessage('')
+      } catch (error: unknown) {
+        setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
+      }
+      return
+    }
+
     setPendingRatingAction({ finishSession })
     setShowReviewForm(true)
   }
 
   async function handleReviewSubmit(reviewData: ReviewCreatePayload) {
     if (!activeRatingThread) return
-    
-    // Function to return to roll view - batch all state updates together
+
     const returnToRollView = () => {
       setShowReviewForm(false)
       setIsRatingView(false)
@@ -447,6 +490,8 @@ useEffect(() => {
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
+      setReviewSaveError(null)
+      setExistingReview(null)
     }
 
     try {
@@ -512,8 +557,23 @@ useEffect(() => {
   }
 
   async function handleRefreshThread() {
-    await refetchSession()
-    await refetchThreads()
+    const [latestSession] = await Promise.all([refetchSession(), refetchThreads()])
+    const refreshedThread = latestSession?.active_thread
+
+    if (activeRatingThread && refreshedThread?.id === activeRatingThread.id) {
+      setActiveRatingThread({
+        ...activeRatingThread,
+        issues_remaining: refreshedThread.issues_remaining ?? 0,
+        queue_position: refreshedThread.queue_position ?? activeRatingThread.queue_position,
+        total_issues: refreshedThread.total_issues ?? null,
+        reading_progress: refreshedThread.reading_progress ?? null,
+        issue_id: refreshedThread.issue_id ?? null,
+        issue_number: refreshedThread.issue_number ?? null,
+        next_issue_id: refreshedThread.next_issue_id ?? null,
+        next_issue_number: refreshedThread.next_issue_number ?? null,
+        last_rolled_result: refreshedThread.last_rolled_result ?? activeRatingThread.last_rolled_result,
+      })
+    }
   }
 
   const dieSize = currentDie || 6
@@ -767,7 +827,9 @@ useEffect(() => {
     onReadStale={handleReadStale}
     onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
     onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+    onShuffle={handleShufflePool}
     unsnoozeIsPending={unsnoozeMutation.isPending}
+    shuffleIsPending={shuffleQueueMutation.isPending}
   />
           </div>
         </div>
@@ -852,7 +914,7 @@ useEffect(() => {
           </div>
         </Modal>
 
-        {showReviewForm && activeRatingThread && (
+        {reviewsEnabled && showReviewForm && activeRatingThread && (
           <ReviewForm
             isOpen={showReviewForm}
             onClose={() => {
