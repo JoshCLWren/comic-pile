@@ -130,7 +130,7 @@ test('1. Auth - Navigate to home and verify authentication', async ({ authentica
     }
 
     // Check CollectionToolbar renders only when the feature is enabled
-    const collectionToolbar = authenticatedPage.locator('[aria-label="Roll pool collection"], .collection-toolbar');
+    const collectionToolbar = authenticatedPage.locator('.collection-toolbar');
     if (collectionsEnabled) {
       await expect(collectionToolbar.first()).toBeVisible({ timeout: 5000 });
 
@@ -356,7 +356,7 @@ test('8. Collections - Verify collection switcher and creation', async ({ authen
     await authenticatedPage.goto('/', { waitUntil: 'domcontentloaded' });
 
     // Open collection switcher
-    const collectionSwitcher = authenticatedPage.locator('[aria-label="Roll pool collection"], .collection-switcher, button:has-text("Collection")');
+    const collectionSwitcher = authenticatedPage.locator('.collection-switcher, button:has-text("Collection")');
     const switcherCount = await collectionSwitcher.count();
 
     if (!collectionsEnabled) {

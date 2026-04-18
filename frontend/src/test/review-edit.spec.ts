@@ -1,9 +1,9 @@
 import { test, expect } from './fixtures';
-import { SELECTORS, setRangeInput } from './helpers';
+import { createThread, SELECTORS, setRangeInput } from './helpers';
 
 test.describe('Review Editing E2E Tests', () => {
-  test('should edit existing review', async ({ authenticatedWithThreadsPage }) => {
-    const page = authenticatedWithThreadsPage;
+  test('should edit existing review', async ({ freshUserPage }) => {
+    const page = freshUserPage;
     
     const token = await page.evaluate(() => 
       localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
@@ -13,55 +13,29 @@ test.describe('Review Editing E2E Tests', () => {
       throw new Error('No auth token found');
     }
     
-    // Get list of threads
-    const threadsResponse = await page.request.get('/api/threads/', {
-      headers: { 'Authorization': `Bearer ${token}` },
+    const threadTitle = `Review Edit Thread ${Date.now()}`;
+    const thread = await createThread(page, {
+      title: threadTitle,
+      format: 'issue',
+      issues_remaining: 10,
+      total_issues: 10,
+      issue_range: '1-10',
     });
-    expect(threadsResponse.ok()).toBeTruthy();
-    const threadsData = await threadsResponse.json();
-    const threads = threadsData.threads ?? threadsData;
-    expect(threads.length).toBeGreaterThan(0);
-    
-    // Use the first thread for testing
-    const threadId = threads[0].id;
-    const threadTitle = threads[0].title;
-    console.log('Testing with thread:', threadTitle, 'ID:', threadId);
-    
-    // First, set the thread as pending and create a review
-    const setPendingResponse = await page.request.post(`/api/threads/${threadId}/set-pending`, {
+    const threadId = thread.id;
+
+    const createReviewResponse = await page.request.post('/api/v1/reviews/', {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
+      data: {
+        thread_id: threadId,
+        rating: 4.0,
+        issue_number: '1',
+        review_text: 'Original review',
+      },
     });
-    expect(setPendingResponse.status()).toBe(200);
-    
-    // Navigate to home page - rating modal should appear
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
-    
-    await setRangeInput(page, SELECTORS.rate.ratingInput, '4.0');
-    
-    const submitButton = page.locator('button:has-text("Save & Continue"), button:has-text("Save & Complete")');
-    await expect(submitButton).toBeVisible();
-    await submitButton.click({ force: true });
-    
-    const reviewModal = page.locator('[data-testid="modal"]');
-    await expect(reviewModal).toBeVisible({ timeout: 15000 });
-    
-    const textarea = page.locator('textarea[placeholder*="Share your thoughts"]');
-    await textarea.fill('Original review');
-    
-    const saveButton = page.locator('button:has-text("Save Review")');
-    await Promise.all([
-      page.waitForResponse(r => r.url().includes('/api/rate/')),
-      page.waitForResponse(r => r.url().includes('/v1/reviews/')),
-      saveButton.click(),
-    ]);
-    
-    await expect(reviewModal).not.toBeVisible();
+    expect(createReviewResponse.ok()).toBeTruthy();
     
     // Verify the review was created
     const reviewsResponse = await page.request.get('/api/v1/reviews/', {
@@ -72,19 +46,12 @@ test.describe('Review Editing E2E Tests', () => {
     
     expect(latestReview).toBeDefined();
     expect(latestReview.review_text).toBe('Original review');
-    
-    // Now set the same thread as pending again to test editing
-    const setPendingResponse2 = await page.request.post(`/api/threads/${threadId}/set-pending`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-    expect(setPendingResponse2.status()).toBe(200);
-    
-    // Navigate to home page - rating modal should appear again
+
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+
+    await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 15000 });
+    await page.locator(SELECTORS.roll.mainDie).click();
     
     await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
     
@@ -94,9 +61,11 @@ test.describe('Review Editing E2E Tests', () => {
     await expect(submitButtonAgain).toBeVisible();
     await submitButtonAgain.click({ force: true });
     
+    const reviewModal = page.locator('[data-testid="modal"]');
     await expect(reviewModal).toBeVisible({ timeout: 15000 });
     
     await page.waitForTimeout(1000);
+    const textarea = page.locator('textarea[placeholder*="Share your thoughts"]');
     
     const textareaValue = await textarea.inputValue();
     if (textareaValue === 'Original review') {
