@@ -15,6 +15,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
+import { useBugReportRestore } from '../contexts/BugReportRestoreContext'
 import { ToastProvider } from '../contexts/ToastContext'
 import type { RollResponse } from '../types'
 
@@ -53,8 +54,10 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 vi.mock('../config/featureFlags', () => ({
+  collectionsEnabled: true,
   isReviewsFeatureEnabled: vi.fn(() => true),
 }))
+vi.mock('../contexts/BugReportRestoreContext', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
@@ -83,6 +86,7 @@ const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
 const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseRate = vi.mocked(useRate) as any
 const mockedUseCollections = vi.mocked(useCollections) as any
+const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 
 type MockThread = {
   id: number
@@ -161,6 +165,11 @@ beforeEach(() => {
     setActiveCollectionId: vi.fn(),
     isLoading: false,
   })
+  mockedUseBugReportRestore.mockReturnValue({
+    setRestoreAction: vi.fn(),
+    clearRestoreAction: vi.fn(),
+    restoreLastView: vi.fn(),
+  })
 })
 
 afterEach(() => {
@@ -177,6 +186,26 @@ it('renders roll page content and opens override modal', async () => {
 
   await user.click(screen.getByRole('button', { name: /override/i }))
   expect(screen.getByRole('heading', { name: /override roll/i })).toBeInTheDocument()
+})
+
+it('registers a restore target while the override modal is open', async () => {
+  const user = userEvent.setup()
+  const restoreState = {
+    setRestoreAction: vi.fn(),
+    clearRestoreAction: vi.fn(),
+    restoreLastView: vi.fn(),
+  }
+  mockedUseBugReportRestore.mockReturnValue(restoreState)
+
+  render(<RollPage />)
+
+  await user.click(screen.getByRole('button', { name: /override/i }))
+
+  expect(restoreState.setRestoreAction).toHaveBeenCalled()
+
+  await user.click(screen.getByLabelText('Close modal'))
+
+  expect(restoreState.clearRestoreAction).toHaveBeenCalled()
 })
 
 describe('Action Sheet', () => {
