@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { collectionsEnabled, generateTestUser, SELECTORS } from './helpers';
+import { generateTestUser, getCollectionsEnabled, SELECTORS } from './helpers';
 
 test.describe('QA Comprehensive Test Suite', () => {
   let testUser: ReturnType<typeof generateTestUser>;
@@ -130,6 +130,7 @@ test('1. Auth - Navigate to home and verify authentication', async ({ authentica
     }
 
     // Check CollectionToolbar renders only when the feature is enabled
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
     const collectionToolbar = authenticatedPage.locator('.collection-toolbar');
     if (collectionsEnabled) {
       await expect(collectionToolbar.first()).toBeVisible({ timeout: 5000 });
@@ -354,6 +355,7 @@ test('6. Analytics page - Verify charts and stats', async ({ authenticatedPage }
 
 test('8. Collections - Verify collection switcher and creation', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/', { waitUntil: 'domcontentloaded' });
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     // Open collection switcher
     const collectionSwitcher = authenticatedPage.locator('.collection-switcher, button:has-text("Collection")');

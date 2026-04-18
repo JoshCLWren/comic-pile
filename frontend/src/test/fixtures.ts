@@ -1,5 +1,5 @@
 import { test as base, type APIRequestContext, type Page } from '@playwright/test';
-import { collectionsEnabled } from './helpers';
+import { getCollectionsEnabled } from './helpers';
 
 type TestFixtures = {
   page: Page;
@@ -263,7 +263,7 @@ export const test = base.extend<TestFixtures>({
        // Element may not exist, that's OK
      });
 
-      if (collectionsEnabled) {
+      if (await getCollectionsEnabled(page)) {
         // 3. Wait for collections to finish loading (Loading collections... text should disappear)
         // The CollectionToolbar component shows "Loading collections..." while fetching
         await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 45000 });

@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
-import { collectionsEnabled } from './helpers';
+import { getCollectionsEnabled } from './helpers';
 
 async function createCollection(request: APIRequestContext, token: string, name: string) {
   const response = await request.post('/api/v1/collections/', {
@@ -55,6 +55,7 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     if (!collectionsEnabled) {
       await expect(authenticatedPage.locator('.collection-toolbar')).toHaveCount(0);
@@ -79,6 +80,7 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: threadTitle });
     await expect(threadCard).toBeVisible();
@@ -106,6 +108,7 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: threadTitle });
     await expect(threadCard).toBeVisible();
@@ -134,6 +137,7 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     if (!collectionsEnabled) {
       await expect(authenticatedPage.locator('.collection-toolbar')).toHaveCount(0);
