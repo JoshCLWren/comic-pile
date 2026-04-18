@@ -511,8 +511,23 @@ useEffect(() => {
   }
 
   async function handleRefreshThread() {
-    await refetchSession()
-    await refetchThreads()
+    const [latestSession] = await Promise.all([refetchSession(), refetchThreads()])
+    const refreshedThread = latestSession?.active_thread
+
+    if (activeRatingThread && refreshedThread?.id === activeRatingThread.id) {
+      setActiveRatingThread({
+        ...activeRatingThread,
+        issues_remaining: refreshedThread.issues_remaining ?? 0,
+        queue_position: refreshedThread.queue_position ?? activeRatingThread.queue_position,
+        total_issues: refreshedThread.total_issues ?? null,
+        reading_progress: refreshedThread.reading_progress ?? null,
+        issue_id: refreshedThread.issue_id ?? null,
+        issue_number: refreshedThread.issue_number ?? null,
+        next_issue_id: refreshedThread.next_issue_id ?? null,
+        next_issue_number: refreshedThread.next_issue_number ?? null,
+        last_rolled_result: refreshedThread.last_rolled_result ?? activeRatingThread.last_rolled_result,
+      })
+    }
   }
 
   const dieSize = currentDie || 6

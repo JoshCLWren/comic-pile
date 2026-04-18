@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import type { KeyboardEvent } from 'react'
 import { issuesApi } from '../services/api-issues'
 import type { Issue } from '../types'
 
@@ -27,18 +28,16 @@ export default function IssueCorrectionDialog({
   const [error, setError] = useState<string | null>(null)
   const [allIssues, setAllIssues] = useState<Issue[]>([])
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
-  const keyHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const keyHoldDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [insertPosition, setInsertPosition] = useState<string>('end')
 
-  const fetchIssues = useCallback(async (retryAttempt = 0) => {
-    setIsLoadingIssues(true)
-    setError(null)
-    try {
-      const allIssues: Issue[] = []
-      const seenPageTokens = new Set<string>()
-      let nextPageToken: string | null = null
+  const hasNumericSelection = /^\d+$/.test(selectedIssueNumber.trim())
 
-while (true) {
+  const loadAllIssues = useCallback(async () => {
+    const loadedIssues: Issue[] = []
+    const seenPageTokens = new Set<string>()
+    let nextPageToken: string | null = null
+
+    while (true) {
       const data = await issuesApi.list(threadId, {
         page_size: 100,
         ...(nextPageToken ? { page_token: nextPageToken } : {}),
@@ -48,7 +47,7 @@ while (true) {
         break
       }
 
-      allIssues.push(...(data.issues || []))
+      loadedIssues.push(...(data.issues || []))
 
       if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
         break
@@ -58,8 +57,17 @@ while (true) {
       nextPageToken = data.next_page_token
     }
 
-    setAllIssues(allIssues)
-    setHasLoadedOnce(true)
+    return loadedIssues
+  }, [threadId])
+
+  const fetchIssues = useCallback(async (retryAttempt = 0) => {
+    setIsLoadingIssues(true)
+    setError(null)
+    try {
+      const loadedIssues = await loadAllIssues()
+
+      setAllIssues(loadedIssues)
+      setHasLoadedOnce(true)
     } catch (err) {
       console.error('Failed to load issues:', err)
       if (retryAttempt < 2) {
@@ -70,11 +78,12 @@ while (true) {
     } finally {
       setIsLoadingIssues(false)
     }
-  }, [threadId])
+  }, [loadAllIssues])
 
   useEffect(() => {
-    if (isOpen && currentIssueNumber) {
-      setSelectedIssueNumber(currentIssueNumber)
+    if (isOpen) {
+      setSelectedIssueNumber(currentIssueNumber ?? '')
+      setInsertPosition('end')
       fetchIssues()
     }
   }, [isOpen, currentIssueNumber, fetchIssues])
@@ -93,27 +102,7 @@ while (true) {
   const handleSubmit = useCallback(async () => {
     const targetNumber = selectedIssueNumber.trim()
     if (!targetNumber) {
-      setError('Please enter an issue number')
-      return
-    }
-
-    const targetNum = parseInt(targetNumber, 10)
-    if (isNaN(targetNum)) {
-      setError('Please enter a valid number')
-      return
-    }
-
-    const currentNum = currentIssueNumber !== null && currentIssueNumber !== undefined
-      ? parseInt(currentIssueNumber, 10)
-      : 0
-
-    if (targetNum < 1) {
-      setError('Issue number must be at least 1')
-      return
-    }
-
-    if (totalIssues && targetNum > totalIssues) {
-      setError(`Issue number cannot exceed total issues (${totalIssues})`)
+      setError('Please enter an issue identifier')
       return
     }
 
@@ -121,31 +110,37 @@ while (true) {
     setError(null)
 
     try {
-      const targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
+      let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
       if (!targetIssue) {
-        const availableIssueNumbers = allIssues.map(i => i.issue_number).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
-        setError(`Issue #${targetNumber} not found. Available issues: ${availableIssueNumbers.slice(0, 5).join(', ')}${availableIssueNumbers.length > 5 ? '...' : ''}`)
-        setIsLoading(false)
-        return
+        const insertAfterIssueId =
+          insertPosition !== 'start' && insertPosition !== 'end' ? Number(insertPosition) : null
+        const createdIssues = await issuesApi.create(threadId, targetNumber, {
+          insert_after_issue_id: insertAfterIssueId,
+        })
+        targetIssue = createdIssues.issues.find((issue) => issue.issue_number === targetNumber)
+
+        if (!targetIssue) {
+          throw new Error('Created issue was not returned by the API')
+        }
+
+        if (insertPosition === 'start') {
+          await issuesApi.move(targetIssue.id, null)
+        }
       }
 
-      if (targetNum > currentNum) {
-        const issuesToMarkRead = allIssues.filter(
-          (issue) => {
-            const issueNum = parseInt(issue.issue_number, 10)
-            return issueNum >= currentNum && issueNum < targetNum && issue.status !== 'read'
-          }
-        )
+      const orderedIssues = await loadAllIssues()
+      const targetIndex = orderedIssues.findIndex((issue) => issue.issue_number === targetNumber)
 
-        await Promise.all(issuesToMarkRead.map(issue => issuesApi.markRead(issue.id)))
+      if (targetIndex === -1) {
+        throw new Error('Issue not found after update')
+      }
 
-        if (targetIssue.status === 'read') {
-          await issuesApi.markUnread(targetIssue.id)
-        }
-      } else if (targetNum < currentNum) {
-        if (targetIssue.status === 'read') {
-          await issuesApi.markUnread(targetIssue.id)
-        }
+      const issuesBeforeTarget = orderedIssues.slice(0, targetIndex)
+      const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
+      await Promise.all(unreadBeforeTarget.map((issue) => issuesApi.markRead(issue.id)))
+
+      if (targetIssue.status === 'read') {
+        await issuesApi.markUnread(targetIssue.id)
       }
 
       onSuccess()
@@ -156,13 +151,13 @@ while (true) {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedIssueNumber, currentIssueNumber, totalIssues, allIssues, onSuccess, onClose])
+  }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, onSuccess, onClose])
 
-const adjustIssue = useCallback((delta: number) => {
+  const adjustIssue = useCallback((delta: number) => {
     const currentValue = selectedIssueNumber
 
     if (!currentValue || !/^\d+$/.test(currentValue)) {
-      setError('Please enter a valid number first')
+      setError('Use the text field for annuals or specials')
       return
     }
 
@@ -183,57 +178,12 @@ const adjustIssue = useCallback((delta: number) => {
     }
   }, [selectedIssueNumber, totalIssues])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
       handleSubmit()
     }
   }, [handleSubmit])
-
-  const handleKeyHold = useCallback((delta: number, isStart: boolean) => {
-    if (isStart) {
-      adjustIssue(delta)
-      keyHoldDelayRef.current = setTimeout(() => {
-        keyHoldTimerRef.current = setInterval(() => {
-          adjustIssue(delta)
-        }, 50)
-      }, 300)
-    } else {
-      if (keyHoldTimerRef.current) {
-        clearInterval(keyHoldTimerRef.current)
-        keyHoldTimerRef.current = null
-      }
-      if (keyHoldDelayRef.current) {
-        clearTimeout(keyHoldDelayRef.current)
-        keyHoldDelayRef.current = null
-      }
-    }
-  }, [adjustIssue])
-
-  const handleButtonKeyDown = useCallback((e: React.KeyboardEvent, delta: number) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      handleKeyHold(delta, true)
-    }
-  }, [handleKeyHold])
-
-  const handleButtonKeyUp = useCallback((e: React.KeyboardEvent, delta: number) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      handleKeyHold(delta, false)
-    }
-  }, [handleKeyHold])
-
-  useEffect(() => {
-    return () => {
-      if (keyHoldTimerRef.current) {
-        clearInterval(keyHoldTimerRef.current)
-      }
-      if (keyHoldDelayRef.current) {
-        clearTimeout(keyHoldDelayRef.current)
-      }
-    }
-  }, [])
 
   if (!isOpen) return null
 
@@ -278,76 +228,89 @@ const adjustIssue = useCallback((delta: number) => {
                 What issue are you currently on?
               </label>
 
-            <div className="flex items-center justify-center gap-4">
-<button
-          type="button"
-          onMouseDown={() => handleKeyHold(-1, true)}
-          onMouseUp={() => handleKeyHold(-1, false)}
-          onMouseLeave={() => handleKeyHold(-1, false)}
-          onTouchStart={() => handleKeyHold(-1, true)}
-          onTouchEnd={() => handleKeyHold(-1, false)}
-          onKeyDown={(e) => handleButtonKeyDown(e, -1)}
-          onKeyUp={(e) => handleButtonKeyUp(e, -1)}
-          disabled={isLoading}
-          className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-amber-500"
-          aria-label="Decrease issue number"
-        >
-          −
-        </button>
+              <div className="flex items-center justify-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => adjustIssue(-1)}
+                  disabled={isLoading || !hasNumericSelection}
+                  className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-amber-500"
+                  aria-label="Decrease issue number"
+                >
+                  −
+                </button>
 
-              <div className="flex-1 text-center">
-<input
-              id="issue-number"
-              type="number"
-              min="1"
-              max={totalIssues || undefined}
-              value={selectedIssueNumber}
-              onChange={(e) => setSelectedIssueNumber(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isLoading}
-              className="w-full text-center text-3xl font-black bg-white/5 border border-white/10 rounded-lg py-3 px-4 text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              aria-describedby="issue-range"
-            />
-                {totalIssues && (
-                  <p id="issue-range" className="text-xs text-stone-500 mt-1">
-                    of {totalIssues}
-                  </p>
-                )}
+                <div className="flex-1 text-center">
+                  <input
+                    id="issue-number"
+                    type="text"
+                    inputMode="text"
+                    maxLength={50}
+                    value={selectedIssueNumber}
+                    onChange={(e) => {
+                      setSelectedIssueNumber(e.target.value)
+                      setError(null)
+                    }}
+                    onKeyDown={handleKeyDown}
+                    disabled={isLoading}
+                    className="w-full text-center text-3xl font-black bg-white/5 border border-white/10 rounded-lg py-3 px-4 text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    aria-describedby="issue-range"
+                  />
+                  {totalIssues && (
+                    <p id="issue-range" className="text-xs text-stone-500 mt-1">
+                      of {totalIssues}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => adjustIssue(1)}
+                  disabled={isLoading || !hasNumericSelection}
+                  className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-amber-500"
+                  aria-label="Increase issue number"
+                >
+                  +
+                </button>
               </div>
-
-<button
-            type="button"
-            onMouseDown={() => handleKeyHold(1, true)}
-            onMouseUp={() => handleKeyHold(1, false)}
-            onMouseLeave={() => handleKeyHold(1, false)}
-            onTouchStart={() => handleKeyHold(1, true)}
-            onTouchEnd={() => handleKeyHold(1, false)}
-            onKeyDown={(e) => handleButtonKeyDown(e, 1)}
-            onKeyUp={(e) => handleButtonKeyUp(e, 1)}
-            disabled={isLoading}
-            className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-2xl font-bold text-stone-200 transition-all disabled:opacity-50 active:scale-95 focus:ring-2 focus:ring-amber-500"
-            aria-label="Increase issue number"
-          >
-            +
-          </button>
+              {!allIssues.some((issue) => issue.issue_number === selectedIssueNumber.trim()) && (
+                <div className="mt-4">
+                  <label htmlFor="issue-position" className="block text-xs font-bold text-stone-400 mb-2">
+                    Place new issue
+                  </label>
+                  <select
+                    id="issue-position"
+                    value={insertPosition}
+                    onChange={(event) => setInsertPosition(event.target.value)}
+                    disabled={isLoading}
+                    className="w-full bg-stone-950/80 border border-white/10 rounded-lg py-2 px-3 text-sm text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="end">At the end</option>
+                    <option value="start">At the beginning</option>
+                    {allIssues.map((issue) => (
+                      <option key={issue.id} value={issue.id}>
+                        After {issue.issue_number}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-          </div>
           )}
 
-{error && (
-          <div className="p-3 bg-red-800/20 border border-red-800/50 rounded-lg">
-            <p className="text-sm text-red-400 text-center mb-2">{error}</p>
-            {!isLoadingIssues && !hasLoadedOnce && (
-              <button
-                type="button"
-                onClick={() => fetchIssues()}
-                className="w-full py-2 bg-red-800/40 hover:bg-red-800/60 border border-red-800/60 rounded text-xs font-bold uppercase tracking-wider transition-all"
-              >
-                Retry
-              </button>
-            )}
-          </div>
-        )}
+          {error && (
+            <div className="p-3 bg-red-800/20 border border-red-800/50 rounded-lg">
+              <p className="text-sm text-red-400 text-center mb-2">{error}</p>
+              {!isLoadingIssues && !hasLoadedOnce && (
+                <button
+                  type="button"
+                  onClick={() => fetchIssues()}
+                  className="w-full py-2 bg-red-800/40 hover:bg-red-800/60 border border-red-800/60 rounded text-xs font-bold uppercase tracking-wider transition-all"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3">
             <button
