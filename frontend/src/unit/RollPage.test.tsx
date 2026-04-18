@@ -52,6 +52,9 @@ vi.mock('../hooks/useQueue', () => ({
   useMoveToBack: vi.fn(),
   useShuffleQueue: vi.fn(),
 }))
+vi.mock('../config/featureFlags', () => ({
+  isReviewsFeatureEnabled: vi.fn(() => true),
+}))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
