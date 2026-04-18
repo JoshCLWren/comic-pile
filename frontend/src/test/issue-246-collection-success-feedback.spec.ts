@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { collectionsEnabled } from './helpers';
 
 test.describe('CollectionDialog Success Feedback', () => {
   test('should show success toast after creating collection', async ({ authenticatedWithThreadsPage }) => {
@@ -6,6 +7,11 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
+    if (!collectionsEnabled) {
+      await expect(newButton).toHaveCount(0);
+      return;
+    }
+
     await newButton.click();
 
     const dialog = authenticatedWithThreadsPage.getByRole('dialog');
@@ -28,6 +34,11 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
+    if (!collectionsEnabled) {
+      await expect(newButton).toHaveCount(0);
+      return;
+    }
+
     await newButton.click();
 
     const dialog = authenticatedWithThreadsPage.getByRole('dialog');
@@ -51,6 +62,11 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
+    if (!collectionsEnabled) {
+      await expect(newButton).toHaveCount(0);
+      return;
+    }
+
     await newButton.click();
 
     const dialog = authenticatedWithThreadsPage.getByRole('dialog');
@@ -71,6 +87,11 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
+    if (!collectionsEnabled) {
+      await expect(newButton).toHaveCount(0);
+      return;
+    }
+
     await newButton.click();
 
     const dialog = authenticatedWithThreadsPage.getByRole('dialog');
@@ -97,6 +118,11 @@ test.describe('CollectionDialog Success Feedback', () => {
     await authenticatedWithThreadsPage.waitForLoadState('networkidle');
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
+    if (!collectionsEnabled) {
+      await expect(newButton).toHaveCount(0);
+      return;
+    }
+
     await newButton.click();
 
     const dialog = authenticatedWithThreadsPage.getByRole('dialog');
@@ -123,6 +149,11 @@ test.describe('CollectionDialog Success Feedback', () => {
     const updatedName = `${collectionName} - Updated`;
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
+    if (!collectionsEnabled) {
+      await expect(newButton).toHaveCount(0);
+      return;
+    }
+
     await newButton.click();
 
     const dialog = authenticatedWithThreadsPage.getByRole('dialog');

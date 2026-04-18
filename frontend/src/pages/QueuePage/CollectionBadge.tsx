@@ -1,8 +1,13 @@
 import { useCollections } from '../../contexts/CollectionContext'
+import { collectionsEnabled } from '../../config/featureFlags'
 
 export function CollectionBadge({ collectionId }: { collectionId: number }) {
   const { collections } = useCollections()
   const collection = collections.find(c => c.id === collectionId)
+
+  if (!collectionsEnabled) {
+    return null
+  }
 
   if (!collection) return null
 

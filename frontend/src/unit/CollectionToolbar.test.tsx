@@ -14,6 +14,10 @@ vi.mock('../contexts/CollectionContext', () => ({
   useCollections: () => mockUseCollections(),
 }))
 
+vi.mock('../config/featureFlags', () => ({
+  collectionsEnabled: true,
+}))
+
 it('renders loading state', () => {
   mockUseCollections.mockReturnValue({
     collections: [],

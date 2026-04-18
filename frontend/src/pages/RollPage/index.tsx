@@ -12,6 +12,7 @@ import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
 import { useStaleThreads, useThreads } from '../../hooks/useThread'
 import { useCollections } from '../../contexts/CollectionContext'
+import { collectionsEnabled } from '../../config/featureFlags'
 import {
   useClearManualDie,
   useDismissPending,
@@ -79,7 +80,7 @@ export default function RollPage() {
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   const { activeCollectionId = null } = useCollections()
-  const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
+  const { data: threads, refetch: refetchThreads } = useThreads('', collectionsEnabled ? activeCollectionId : null)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
 
@@ -697,7 +698,7 @@ useEffect(() => {
           </Tooltip>
         </div>
       </header>
-      <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
+      {collectionsEnabled && <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />}
 
       <div className="flex-1 flex flex-col min-h-0">
         <div className="glass-card flex-1 flex flex-col relative">
@@ -773,7 +774,9 @@ useEffect(() => {
 
         <div id="explosion-layer" className="explosion-wrap"></div>
 
-        {isCollectionDialogOpen && <CollectionDialog collection={editingCollection} onClose={() => { setIsCollectionDialogOpen(false); setEditingCollection(null) }} />}
+        {collectionsEnabled && isCollectionDialogOpen && (
+          <CollectionDialog collection={editingCollection} onClose={() => { setIsCollectionDialogOpen(false); setEditingCollection(null) }} />
+        )}
 
         {showMigrationDialog && threadToMigrate && (
           <MigrationDialog thread={threadToMigrate} onComplete={handleMigrationComplete} onSkip={handleMigrationSkip} onClose={handleMigrationClose} />

@@ -17,6 +17,8 @@ type TestUser = {
   accessToken?: string;
 };
 
+export const collectionsEnabled = process.env.VITE_ENABLE_COLLECTIONS === 'true'
+
 function isAuthResponse(data: unknown): data is { access_token: string } {
   return (
     typeof data === 'object' &&
@@ -227,7 +229,9 @@ export async function setupAuthenticatedPage(
 
   // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 }).catch(() => {});
+  if (collectionsEnabled) {
+    await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 }).catch(() => {});
+  }
 
   return testUser;
 }
