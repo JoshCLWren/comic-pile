@@ -6,6 +6,8 @@ import BugReportButton from './components/BugReportButton'
 import api, { clearAccessToken, setAccessToken } from './services/api'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
+import type { DiagnosticData } from './hooks/useDiagnostics'
+import type { ScreenshotDiagnostics } from './utils/captureScreenshot'
 import { ToastProvider } from './contexts/ToastContext'
 import { CacheProvider } from './contexts/CacheContext'
 import './index.css'
@@ -15,6 +17,14 @@ declare global {
     __COMIC_PILE_ACCESS_TOKEN?: string
   }
 }
+
+type BugReportSubmit = (
+  title: string,
+  description: string,
+  screenshotBlob: Blob | null,
+  diagnosticData: DiagnosticData | null,
+  screenshotDiagnostics?: ScreenshotDiagnostics,
+) => Promise<void>
 
 const RollPage = lazy(() => import('./pages/RollPage'))
 const QueuePage = lazy(() => import('./pages/QueuePage'))
@@ -156,34 +166,54 @@ function PublicRoute({ children }: { children: ReactNode }) {
   return children
 }
 
-function AuthenticatedLayout({ children }: { children: ReactNode }) {
+function AuthenticatedLayout({
+  children,
+  onBugReportSubmit,
+}: {
+  children: ReactNode
+  onBugReportSubmit: BugReportSubmit
+}) {
   return (
     <div className="flex min-h-screen">
       <main className="flex-1 container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
         {children}
       </main>
-      <Navigation />
+      <Navigation onBugReportSubmit={onBugReportSubmit} />
     </div>
   )
 }
 
-function PublicLayout({ children }: { children: ReactNode }) {
+function PublicLayout({
+  children,
+  onBugReportSubmit,
+}: {
+  children: ReactNode
+  onBugReportSubmit: BugReportSubmit
+}) {
   return (
     <div className="min-h-screen">
       <main className="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
         {children}
       </main>
-      <Navigation />
+      <Navigation onBugReportSubmit={onBugReportSubmit} />
     </div>
   )
 }
 
-function BugReportConnected() {
-  const { submit } = useBugReport()
-  return <BugReportButton onSubmit={submit} />
+function BugReportConnected({
+  onSubmit,
+}: {
+  onSubmit: BugReportSubmit
+}) {
+  return (
+    <div className="hidden md:block">
+      <BugReportButton onSubmit={onSubmit} />
+    </div>
+  )
 }
 
 function AppRoutes() {
+  const { submit } = useBugReport()
   const { isAuthenticated } = useAuth()
   return (
     <Suspense fallback={<div className="text-center text-stone-500">Loading page...</div>}>
@@ -192,7 +222,7 @@ function AppRoutes() {
           path="/login"
           element={
             <PublicRoute>
-              <PublicLayout>
+              <PublicLayout onBugReportSubmit={submit}>
                 <LoginPage />
               </PublicLayout>
             </PublicRoute>
@@ -202,7 +232,7 @@ function AppRoutes() {
           path="/register"
           element={
             <PublicRoute>
-              <PublicLayout>
+              <PublicLayout onBugReportSubmit={submit}>
                 <RegisterPage />
               </PublicLayout>
             </PublicRoute>
@@ -216,7 +246,7 @@ function AppRoutes() {
           path="/"
           element={
             <ProtectedRoute>
-              <AuthenticatedLayout>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
                 <RollPage />
               </AuthenticatedLayout>
             </ProtectedRoute>
@@ -226,7 +256,7 @@ function AppRoutes() {
           path="/queue"
           element={
             <ProtectedRoute>
-              <AuthenticatedLayout>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
                 <QueuePage />
               </AuthenticatedLayout>
             </ProtectedRoute>
@@ -236,7 +266,7 @@ function AppRoutes() {
           path="/thread/:id"
           element={
             <ProtectedRoute>
-              <AuthenticatedLayout>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
                 <ThreadDetailView />
               </AuthenticatedLayout>
             </ProtectedRoute>
@@ -246,7 +276,7 @@ function AppRoutes() {
           path="/history"
           element={
             <ProtectedRoute>
-              <AuthenticatedLayout>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
                 <HistoryPage />
               </AuthenticatedLayout>
             </ProtectedRoute>
@@ -256,7 +286,7 @@ function AppRoutes() {
           path="/sessions/:id"
           element={
             <ProtectedRoute>
-              <AuthenticatedLayout>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
                 <SessionPage />
               </AuthenticatedLayout>
             </ProtectedRoute>
@@ -266,7 +296,7 @@ function AppRoutes() {
           path="/analytics"
           element={
             <ProtectedRoute>
-              <AuthenticatedLayout>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
                 <AnalyticsPage />
               </AuthenticatedLayout>
             </ProtectedRoute>
@@ -276,7 +306,7 @@ function AppRoutes() {
           path="/help"
           element={
             <ProtectedRoute>
-              <AuthenticatedLayout>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
                 <HelpPage />
               </AuthenticatedLayout>
             </ProtectedRoute>
@@ -286,14 +316,14 @@ function AppRoutes() {
           path="/glossary"
           element={
             <ProtectedRoute>
-              <AuthenticatedLayout>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
                 <HelpPage />
               </AuthenticatedLayout>
             </ProtectedRoute>
           }
         />
         </Routes>
-      {isAuthenticated && <BugReportConnected />}
+      {isAuthenticated && <BugReportConnected onSubmit={submit} />}
     </Suspense>
   )
 }

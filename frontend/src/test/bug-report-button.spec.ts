@@ -18,7 +18,7 @@ test.describe('Bug Report Button - Firefox', () => {
       if (msg.type() === 'error') consoleErrors.push(msg.text())
     })
 
-    const button = authenticatedPage.locator('[aria-label="Report a bug"]')
+    const button = authenticatedPage.getByRole('button', { name: /report a bug/i }).last()
     await expect(button).toBeVisible()
     await button.click()
 
@@ -33,5 +33,19 @@ test.describe('Bug Report Button - Firefox', () => {
       e.includes("Cannot read properties of undefined (reading 'trim')")
     )
     expect(trimCrashes, 'Font-processing trim crash should not occur').toHaveLength(0)
+  })
+
+  test('moves the bug report entry point into the mobile nav', async ({ authenticatedPage }) => {
+    await authenticatedPage.setViewportSize({ width: 390, height: 844 })
+    await authenticatedPage.reload({ waitUntil: 'domcontentloaded' })
+
+    await expect(authenticatedPage.getByRole('link', { name: /help page/i })).toHaveCount(0)
+
+    const button = authenticatedPage.getByRole('navigation', { name: /main navigation/i }).getByLabel('Report a bug')
+    await expect(button).toBeVisible()
+    await button.click()
+
+    const modal = authenticatedPage.getByRole('dialog', { name: 'Report a Bug' })
+    await expect(modal).toBeVisible({ timeout: 10000 })
   })
 })
