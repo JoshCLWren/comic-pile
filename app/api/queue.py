@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,7 @@ from app.middleware import limiter
 from app.models import Event, Thread, User
 from app.schemas import ThreadResponse
 from app.api.thread import thread_to_response
-from comic_pile.queue import move_to_back, move_to_front, move_to_position
+from comic_pile.queue import move_to_back, move_to_front, move_to_position, shuffle_queue
 
 logger = logging.getLogger(__name__)
 
@@ -210,3 +210,34 @@ async def move_thread_back(
         clear_cache()
 
     return await thread_to_response(thread, db)
+
+
+@router.post("/shuffle/", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def shuffle_threads(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Randomize all active queue positions for the authenticated user.
+
+    Args:
+        request: FastAPI request object for rate limiting.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        Empty response with HTTP 204 status.
+    """
+    logger.info(
+        "API shuffle_threads: user_id=%s, request_url=%s",
+        current_user.id,
+        request.url,
+    )
+
+    await shuffle_queue(current_user.id, db)
+
+    if clear_cache:
+        clear_cache()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

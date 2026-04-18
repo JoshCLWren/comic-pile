@@ -65,3 +65,24 @@ export function useMoveToBack() {
 
   return { mutate, isPending, isError }
 }
+
+export function useShuffleQueue() {
+  const [isPending, setIsPending] = useState(false)
+  const [isError, setIsError] = useState(false)
+
+  const mutate = useCallback(async () => {
+    try {
+      setIsPending(true)
+      setIsError(false)
+      await queueApi.shuffle()
+    } catch (error: unknown) {
+      setIsError(true)
+      console.error('Failed to shuffle queue:', getApiErrorDetail(error))
+      throw error
+    } finally {
+      setIsPending(false)
+    }
+  }, [])
+
+  return { mutate, isPending, isError }
+}

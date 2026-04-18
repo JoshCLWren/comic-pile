@@ -263,6 +263,7 @@ export const queueApi = {
     api.put<void, { new_position: number }>(`/queue/threads/${id}/position/`, { new_position: position }),
   moveToFront: (id: number) => api.put<void>(`/queue/threads/${id}/front/`),
   moveToBack: (id: number) => api.put<void>(`/queue/threads/${id}/back/`),
+  shuffle: () => api.post<void>('/queue/shuffle/'),
 }
 
 export const undoApi = {

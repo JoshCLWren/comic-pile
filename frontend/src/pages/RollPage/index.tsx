@@ -20,7 +20,7 @@ import {
   useSetDie,
 } from '../../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
-import { useMoveToBack, useMoveToFront } from '../../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQueue'
 import { useRate } from '../../hooks'
 import { threadsApi, dependenciesApi } from '../../services/api'
 import { reviewsApi } from '../../services/api-reviews'
@@ -109,6 +109,7 @@ useEffect(() => {
   const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
+  const shuffleQueueMutation = useShuffleQueue()
   const rateMutation = useRate()
 
   async function handleUnsnooze(threadId: number) {
@@ -117,6 +118,16 @@ useEffect(() => {
       await refetchSession()
     } catch (error) {
       console.error('Unsnooze failed:', error)
+    }
+  }
+
+  async function handleShufflePool() {
+    try {
+      await shuffleQueueMutation.mutate()
+      await refetchThreads()
+    } catch (error) {
+      console.error('Shuffle failed:', error)
+      alert(`Failed to shuffle pool: ${getApiErrorDetail(error)}`)
     }
   }
 
@@ -781,7 +792,9 @@ useEffect(() => {
     onReadStale={handleReadStale}
     onToggleSnoozed={() => setSnoozedExpanded(!snoozedExpanded)}
     onToggleBlocked={() => setBlockedExpanded(!blockedExpanded)}
+    onShuffle={handleShufflePool}
     unsnoozeIsPending={unsnoozeMutation.isPending}
+    shuffleIsPending={shuffleQueueMutation.isPending}
   />
           </div>
         </div>
