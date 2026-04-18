@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext } from '@playwright/test';
+import { getCollectionsEnabled } from './helpers';
 
 async function createCollection(request: APIRequestContext, token: string, name: string) {
   const response = await request.post('/api/v1/collections/', {
@@ -54,6 +55,13 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
+
+    if (!collectionsEnabled) {
+      await expect(authenticatedPage.locator('.collection-toolbar')).toHaveCount(0);
+      await expect(authenticatedPage.getByLabel('Filter by collection')).toHaveCount(0);
+      return;
+    }
 
     const selector = authenticatedPage.getByLabel('Filter by collection');
     await expect(selector).toBeVisible();
@@ -72,9 +80,16 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: threadTitle });
     await expect(threadCard).toBeVisible();
+
+    if (!collectionsEnabled) {
+      await expect(threadCard.locator('[data-testid="collection-badge"]')).toHaveCount(0);
+      return;
+    }
+
     await expect(threadCard.locator('[data-testid="collection-badge"]')).toHaveText(collectionName);
   });
 
@@ -93,9 +108,16 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/queue');
     await authenticatedPage.waitForLoadState('networkidle');
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: threadTitle });
     await expect(threadCard).toBeVisible();
+
+    if (!collectionsEnabled) {
+      await expect(threadCard.locator('[data-testid="collection-badge"]')).toHaveCount(0);
+      return;
+    }
+
     await expect(threadCard.locator('[data-testid="collection-badge"]')).toHaveCount(0);
   });
 
@@ -115,6 +137,12 @@ test.describe('Collections', () => {
 
     await authenticatedPage.goto('/');
     await authenticatedPage.waitForLoadState('networkidle');
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
+
+    if (!collectionsEnabled) {
+      await expect(authenticatedPage.locator('.collection-toolbar')).toHaveCount(0);
+      return;
+    }
 
     const selector = authenticatedPage.getByLabel('Filter by collection');
 

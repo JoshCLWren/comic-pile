@@ -1,32 +1,47 @@
 import { test, expect } from './fixtures'
+import { getCollectionsEnabled } from './helpers'
 
 test.describe('Collection Toolbar', () => {
   test('should display collection toolbar on Roll page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/')
     await authenticatedPage.waitForLoadState('networkidle')
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
-    const toolbar = authenticatedPage.locator('.collection-toolbar').first()
-    await expect(toolbar).toBeVisible()
+    if (collectionsEnabled) {
+      const toolbar = authenticatedPage.locator('.collection-toolbar').first()
+      await expect(toolbar).toBeVisible()
 
-    const selector = authenticatedPage.getByLabel('Filter by collection')
-    await expect(selector).toBeVisible()
+      const selector = authenticatedPage.getByLabel('Filter by collection')
+      await expect(selector).toBeVisible()
 
-    const newButton = authenticatedPage.getByRole('button', { name: /new collection/i })
-    await expect(newButton).toBeVisible()
+      const newButton = authenticatedPage.getByRole('button', { name: /new collection/i })
+      await expect(newButton).toBeVisible()
+      return
+    }
+
+    await expect(authenticatedPage.locator('.collection-toolbar')).toHaveCount(0)
+    await expect(authenticatedPage.getByLabel('Filter by collection')).toHaveCount(0)
   })
 
   test('should display collection toolbar on Queue page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
-    const toolbar = authenticatedPage.locator('.collection-toolbar').first()
-    await expect(toolbar).toBeVisible()
+    if (collectionsEnabled) {
+      const toolbar = authenticatedPage.locator('.collection-toolbar').first()
+      await expect(toolbar).toBeVisible()
 
-    const selector = authenticatedPage.getByLabel('Filter by collection')
-    await expect(selector).toBeVisible()
+      const selector = authenticatedPage.getByLabel('Filter by collection')
+      await expect(selector).toBeVisible()
 
-    const newButton = authenticatedPage.getByRole('button', { name: /new collection/i })
-    await expect(newButton).toBeVisible()
+      const newButton = authenticatedPage.getByRole('button', { name: /new collection/i })
+      await expect(newButton).toBeVisible()
+      return
+    }
+
+    await expect(authenticatedPage.locator('.collection-toolbar')).toHaveCount(0)
+    await expect(authenticatedPage.getByLabel('Filter by collection')).toHaveCount(0)
   })
 
   test('should allow switching collections from toolbar on Roll page', async ({ authenticatedPage, request }) => {
@@ -51,6 +66,12 @@ test.describe('Collection Toolbar', () => {
 
     await authenticatedPage.goto('/')
     await authenticatedPage.waitForLoadState('networkidle')
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
+
+    if (!collectionsEnabled) {
+      await expect(authenticatedPage.locator('.collection-toolbar')).toHaveCount(0)
+      return
+    }
 
     const selector = authenticatedPage.getByLabel('Filter by collection')
     await selector.selectOption(String(collectionId))
@@ -82,6 +103,12 @@ test.describe('Collection Toolbar', () => {
 
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
+
+    if (!collectionsEnabled) {
+      await expect(authenticatedPage.locator('.collection-toolbar')).toHaveCount(0)
+      return
+    }
 
     const selector = authenticatedPage.getByLabel('Filter by collection')
     await selector.selectOption(String(collectionId))
@@ -94,22 +121,34 @@ test.describe('Collection Toolbar', () => {
   test('should open collection dialog from toolbar on Roll page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/')
     await authenticatedPage.waitForLoadState('networkidle')
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
-    const newButton = authenticatedPage.getByRole('button', { name: /new collection/i })
-    await newButton.click()
+    if (collectionsEnabled) {
+      const newButton = authenticatedPage.getByRole('button', { name: /new collection/i })
+      await newButton.click()
 
-    const dialog = authenticatedPage.locator('[role="dialog"]')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
+      const dialog = authenticatedPage.locator('[role="dialog"]')
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      return
+    }
+
+    await expect(authenticatedPage.locator('[role="dialog"]')).toHaveCount(0)
   })
 
   test('should open collection dialog from toolbar on Queue page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue')
     await authenticatedPage.waitForLoadState('networkidle')
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
-    const newButton = authenticatedPage.getByRole('button', { name: /new collection/i })
-    await newButton.click()
+    if (collectionsEnabled) {
+      const newButton = authenticatedPage.getByRole('button', { name: /new collection/i })
+      await newButton.click()
 
-    const dialog = authenticatedPage.locator('[role="dialog"]')
-    await expect(dialog).toBeVisible({ timeout: 5000 })
+      const dialog = authenticatedPage.locator('[role="dialog"]')
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      return
+    }
+
+    await expect(authenticatedPage.locator('[role="dialog"]')).toHaveCount(0)
   })
 })

@@ -18,6 +18,7 @@ import { dependenciesApi, threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/BugReportRestoreContext'
 import { useCollections } from '../../contexts/CollectionContext'
+import { collectionsEnabled } from '../../config/featureFlags'
 import { PositionMenuProvider } from '../../contexts/PositionMenuContext'
 import type { Thread } from '../../types'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -31,7 +32,7 @@ export default function QueuePage() {
   const location = useLocation()
   const { activeCollectionId } = useCollections()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { data: threads, isPending, refetch } = useThreads('', activeCollectionId)
+  const { data: threads, isPending, refetch } = useThreads('', collectionsEnabled ? activeCollectionId : null)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -536,7 +537,7 @@ export default function QueuePage() {
             </button>
           </div>
         </div>
-        <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
+        {collectionsEnabled && <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />}
       </header>
 
       {/* Mobile FAB for Add Thread */}
@@ -1067,7 +1068,7 @@ export default function QueuePage() {
         }}
       />
 
-      {isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
+      {collectionsEnabled && isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
 
       {showMigrationDialog && threadToMigrate && (
         <MigrationDialog

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useCollections } from '../contexts/CollectionContext'
 import { useToast } from '../contexts/ToastContext'
+import { collectionsEnabled } from '../config/featureFlags'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 import './CollectionDialog.css'
 
@@ -16,6 +17,14 @@ interface CollectionDialogProps {
  * @returns {JSX.Element | null} The dialog or null when closed
  */
 export default function CollectionDialog({ collection, onClose }: CollectionDialogProps) {
+  if (!collectionsEnabled) {
+    return null
+  }
+
+  return <CollectionDialogContent collection={collection} onClose={onClose} />
+}
+
+function CollectionDialogContent({ collection, onClose }: CollectionDialogProps) {
   const { createCollection, updateCollection } = useCollections()
   const { showToast } = useToast()
   const isEditMode = !!collection

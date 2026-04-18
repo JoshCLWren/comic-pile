@@ -54,6 +54,7 @@ vi.mock('../hooks/useQueue', () => ({
   useShuffleQueue: vi.fn(),
 }))
 vi.mock('../config/featureFlags', () => ({
+  collectionsEnabled: true,
   isReviewsFeatureEnabled: vi.fn(() => true),
 }))
 vi.mock('../contexts/BugReportRestoreContext', () => ({ useBugReportRestore: vi.fn() }))

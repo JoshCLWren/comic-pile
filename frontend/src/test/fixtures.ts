@@ -1,4 +1,5 @@
 import { test as base, type APIRequestContext, type Page } from '@playwright/test';
+import { getCollectionsEnabled } from './helpers';
 
 type TestFixtures = {
   page: Page;
@@ -262,11 +263,13 @@ export const test = base.extend<TestFixtures>({
        // Element may not exist, that's OK
      });
 
-      // 3. Wait for collections to finish loading (Loading collections... text should disappear)
-      // The CollectionToolbar component shows "Loading collections..." while fetching
-      await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 45000 });
-      // 4. Wait for the collection toolbar dropdown to be visible (with extended timeout for CI)
-      await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 60000 });
+      if (await getCollectionsEnabled(page)) {
+        // 3. Wait for collections to finish loading (Loading collections... text should disappear)
+        // The CollectionToolbar component shows "Loading collections..." while fetching
+        await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 45000 });
+        // 4. Wait for the collection toolbar dropdown to be visible (with extended timeout for CI)
+        await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 60000 });
+      }
 
   // 6. Wait for the roll page to be ready (die button is always present on home route)
      await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 10000 }).catch(() => {

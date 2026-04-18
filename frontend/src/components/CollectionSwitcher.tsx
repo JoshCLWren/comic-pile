@@ -1,4 +1,5 @@
 import { useCollections } from '../contexts/CollectionContext'
+import { collectionsEnabled } from '../config/featureFlags'
 import './CollectionSwitcher.css'
 
 /**
@@ -9,6 +10,10 @@ import './CollectionSwitcher.css'
  */
 export default function CollectionSwitcher() {
   const { collections, activeCollectionId, setActiveCollectionId, isLoading } = useCollections()
+
+  if (!collectionsEnabled) {
+    return null
+  }
 
   const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const value = event.target.value

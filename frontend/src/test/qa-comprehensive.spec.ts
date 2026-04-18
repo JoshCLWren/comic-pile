@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, SELECTORS } from './helpers';
+import { generateTestUser, getCollectionsEnabled, SELECTORS } from './helpers';
 
 test.describe('QA Comprehensive Test Suite', () => {
   let testUser: ReturnType<typeof generateTestUser>;
@@ -129,15 +129,20 @@ test('1. Auth - Navigate to home and verify authentication', async ({ authentica
       }
     }
 
-    // Check CollectionToolbar renders
-    const collectionToolbar = authenticatedPage.locator('[aria-label="Roll pool collection"], .collection-toolbar');
-    await expect(collectionToolbar.first()).toBeVisible({ timeout: 5000 });
+    // Check CollectionToolbar renders only when the feature is enabled
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
+    const collectionToolbar = authenticatedPage.locator('.collection-toolbar');
+    if (collectionsEnabled) {
+      await expect(collectionToolbar.first()).toBeVisible({ timeout: 5000 });
 
-    // Check for New collection button
-    const newCollectionButton = authenticatedPage.locator('button:has-text("New collection"), button:has-text("Create collection")');
-    const newCollectionCount = await newCollectionButton.count();
-    if (newCollectionCount > 0) {
-      await expect(newCollectionButton.first()).toBeVisible();
+      // Check for New collection button
+      const newCollectionButton = authenticatedPage.locator('button:has-text("New collection"), button:has-text("Create collection")');
+      const newCollectionCount = await newCollectionButton.count();
+      if (newCollectionCount > 0) {
+        await expect(newCollectionButton.first()).toBeVisible();
+      }
+    } else {
+      await expect(collectionToolbar).toHaveCount(0);
     }
   });
 
@@ -350,10 +355,16 @@ test('6. Analytics page - Verify charts and stats', async ({ authenticatedPage }
 
 test('8. Collections - Verify collection switcher and creation', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/', { waitUntil: 'domcontentloaded' });
+    const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     // Open collection switcher
-    const collectionSwitcher = authenticatedPage.locator('[aria-label="Roll pool collection"], .collection-switcher, button:has-text("Collection")');
+    const collectionSwitcher = authenticatedPage.locator('.collection-switcher, button:has-text("Collection")');
     const switcherCount = await collectionSwitcher.count();
+
+    if (!collectionsEnabled) {
+      await expect(collectionSwitcher).toHaveCount(0);
+      return;
+    }
 
     if (switcherCount > 0) {
       await collectionSwitcher.first().click();

@@ -17,6 +17,14 @@ type TestUser = {
   accessToken?: string;
 };
 
+export async function getCollectionsEnabled(page: Page): Promise<boolean> {
+  const runtimeFlag = await page.locator('#root').getAttribute('data-collections-enabled')
+  if (runtimeFlag !== null) {
+    return runtimeFlag === 'true'
+  }
+  return process.env.VITE_ENABLE_COLLECTIONS === 'true'
+}
+
 function isAuthResponse(data: unknown): data is { access_token: string } {
   return (
     typeof data === 'object' &&
@@ -254,7 +262,9 @@ export async function setupAuthenticatedPage(
 
   // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 }).catch(() => {});
+  if (await getCollectionsEnabled(page)) {
+    await page.waitForSelector('[aria-label="Roll pool collection"]', { state: 'visible', timeout: 10000 }).catch(() => {});
+  }
 
   return testUser;
 }
