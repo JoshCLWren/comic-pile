@@ -374,18 +374,21 @@ async def create_dependency(
             detail="Dependency already exists",
         )
 
-    try:
-        db.add(dependency)
-        await db.flush()
-    except IntegrityError as err:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Dependency already exists",
-        ) from err
+    db.add(dependency)
 
     await refresh_user_blocked_status(current_user.id, db)
-    await db.commit()
+
+    try:
+        await db.commit()
+    except IntegrityError as err:
+        await db.rollback()
+        if "uq_dependency_issue_edge" in str(err.orig):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Dependency already exists",
+            ) from err
+        raise
+
     await db.refresh(dependency)
 
     response = (await enrich_dependencies([dependency], db))[0]
@@ -435,7 +438,6 @@ async def update_dependency_note(
         )
 
     dependency.note = data.note
-    await db.flush()
     await db.commit()
     await db.refresh(dependency)
 
@@ -462,7 +464,6 @@ async def delete_dependency(
         )
 
     await db.delete(dependency)
-    await db.flush()
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     return {"message": "Dependency deleted"}

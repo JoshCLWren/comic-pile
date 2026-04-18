@@ -242,7 +242,6 @@ async def rate_thread(
                             position=i,
                         )
                     )
-                await db.flush()
                 result = await db.execute(
                     select(Issue)
                     .where(Issue.thread_id == thread.id)
@@ -279,7 +278,6 @@ async def rate_thread(
         thread.total_issues = len(all_issues)
         thread.next_unread_issue_id = current_issue.id
         thread.reading_progress = "in_progress"
-        await db.flush()
 
     rating_min, rating_max, rating_threshold = _get_rating_limits()
 
@@ -309,8 +307,6 @@ async def rate_thread(
                 rated_issue_id = issue.id
                 rated_issue_number = issue.issue_number
                 issues_read = 1
-
-                await db.flush()
 
                 next_result = await db.execute(
                     select(Issue)
@@ -386,7 +382,6 @@ async def rate_thread(
     current_session.pending_thread_id = None
     current_session.pending_thread_updated_at = None
 
-    await db.flush()
     await db.refresh(event)
     event_id = event.id
     await snapshot_thread_states(db, current_session_id, event_id, user_id, commit=False)

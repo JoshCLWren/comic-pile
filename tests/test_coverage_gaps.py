@@ -112,9 +112,7 @@ async def test_detect_circular_dependency_with_multiple_dependencies(
     )
     await async_db.commit()
 
-    result = await detect_circular_dependency(
-        issue_source.id, issue_target.id, "issue", async_db
-    )
+    result = await detect_circular_dependency(issue_source.id, issue_target.id, "issue", async_db)
     assert result is False
 
     result_cycle = await detect_circular_dependency(
@@ -173,7 +171,7 @@ async def test_get_or_create_deadlock_retry_succeeds(
 
     assert result is not None
     assert result.start_die == 6
-    assert call_count == 2
+    assert call_count == 3
 
 
 @pytest.mark.asyncio

@@ -415,7 +415,19 @@ async def create_issues(
         )
 
     try:
-        await db.flush()
+        # Get total issue count (includes newly added issues due to autoflush)
+        total_count_result = await db.execute(
+            select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
+        )
+        total_issue_count = total_count_result.scalar() or 0
+
+        first_unread_result = await db.execute(
+            select(Issue)
+            .where(Issue.thread_id == thread_id, Issue.status == "unread")
+            .order_by(Issue.position)
+            .limit(1)
+        )
+        first_unread_issue = first_unread_result.scalar_one_or_none()
     except IntegrityError as e:
         await db.rollback()
         if _is_issue_thread_number_conflict(e):
@@ -436,24 +448,10 @@ async def create_issues(
             detail="Internal error: Database constraint violation",
         ) from e
 
-    # Get existing issue count before new issues were added
-    existing_count_result = await db.execute(
-        select(func.count()).select_from(Issue).where(Issue.thread_id == thread_id)
-    )
-    existing_issue_count = existing_count_result.scalar() or 0
-
-    first_unread_result = await db.execute(
-        select(Issue)
-        .where(Issue.thread_id == thread_id, Issue.status == "unread")
-        .order_by(Issue.position)
-        .limit(1)
-    )
-    first_unread_issue = first_unread_result.scalar_one_or_none()
-
     # Handle both initial migration and adding to existing migrated threads
     if thread.total_issues is None:
         # Initial thread migration - set up issue tracking from scratch
-        thread.total_issues = existing_issue_count
+        thread.total_issues = total_issue_count
         thread.issues_remaining = await thread.get_issues_remaining(db)
         if first_unread_issue is None:
             thread.next_unread_issue_id = None
@@ -505,11 +503,31 @@ async def create_issues(
     issue_responses = [issue_to_response(issue) for issue in new_issues]
 
     await refresh_user_blocked_status(current_user.id, db)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        if _is_issue_thread_number_conflict(e):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Issue number already exists in this thread",
+            ) from e
+        logger.error(
+            "Database integrity error during issue creation",
+            extra={
+                "thread_id": thread_id,
+                "error": str(e),
+                "position_values": position_values,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal error: Database constraint violation",
+        ) from e
 
     return IssueListResponse(
         issues=issue_responses,
-        total_count=existing_issue_count,
+        total_count=total_issue_count,
         page_size=len(issue_responses),
         next_page_token=None,
     )
@@ -585,7 +603,6 @@ async def move_issue(
 
     if request.after_issue_id == issue_id:
         _recalculate_next_unread_issue_id(thread, thread_issues)
-        await db.flush()
         await refresh_user_blocked_status(current_user.id, db)
         await db.commit()
         return
@@ -616,7 +633,6 @@ async def move_issue(
     _assign_issue_positions(reordered_issues)
     _recalculate_next_unread_issue_id(thread, reordered_issues)
 
-    await db.flush()
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
@@ -662,7 +678,6 @@ async def reorder_issues(
     _assign_issue_positions(reordered_issues)
     _recalculate_next_unread_issue_id(thread, reordered_issues)
 
-    await db.flush()
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
@@ -720,7 +735,6 @@ async def delete_issue(
         )
     )
 
-    await db.flush()
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
 
@@ -765,8 +779,6 @@ async def mark_issue_read(
     issue.read_at = datetime.now(UTC)
 
     thread_id = thread.id
-
-    await db.flush()
 
     next_unread_result = await db.execute(
         select(Issue)
@@ -845,8 +857,6 @@ async def mark_issue_unread(
 
     thread_id = thread.id
     thread_was_completed = thread.status == "completed"
-
-    await db.flush()
 
     if thread.next_unread_issue_id is None or await should_update_next_unread(
         issue.id, thread.next_unread_issue_id, db
