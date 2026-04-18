@@ -10,6 +10,7 @@ import type { DiagnosticData } from './hooks/useDiagnostics'
 import type { ScreenshotDiagnostics } from './utils/captureScreenshot'
 import { ToastProvider } from './contexts/ToastContext'
 import { CacheProvider } from './contexts/CacheContext'
+import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
 import './index.css'
 
 declare global {
@@ -331,13 +332,15 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <ToastProvider>
-        <CacheProvider>
-          <AuthProvider>
-            <AppRoutes />
-          </AuthProvider>
-        </CacheProvider>
-      </ToastProvider>
+      <BugReportRestoreProvider>
+        <ToastProvider>
+          <CacheProvider>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </CacheProvider>
+        </ToastProvider>
+      </BugReportRestoreProvider>
     </BrowserRouter>
   )
 }

@@ -12,6 +12,7 @@ import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
 import { useStaleThreads, useThreads } from '../../hooks/useThread'
 import { useCollections } from '../../contexts/CollectionContext'
+import { useBugReportRestore } from '../../contexts/BugReportRestoreContext'
 import {
   useClearManualDie,
   useDismissPending,
@@ -81,6 +82,7 @@ export default function RollPage() {
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   const { activeCollectionId = null } = useCollections()
+  const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const { data: threads, refetch: refetchThreads } = useThreads('', activeCollectionId)
   const { data: staleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
@@ -315,6 +317,63 @@ case 'read': {
   const activeThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && !t.is_blocked && !snoozedIds.has(t.id)) ?? [], [threads, snoozedIds])
   const blockedThreads = useMemo(() => threads?.filter((t) => t.status === 'active' && t.is_blocked) ?? [], [threads])
   const displayDie = isDiceSide(currentDie) ? currentDie : 6
+
+  useEffect(() => {
+    if (showReviewForm) {
+      setRestoreAction(() => {
+        setShowReviewForm(true)
+      })
+      return
+    }
+    if (showSimpleMigration) {
+      setRestoreAction(() => {
+        setShowSimpleMigration(true)
+      })
+      return
+    }
+    if (showMigrationDialog && threadToMigrate) {
+      setRestoreAction(() => {
+        setShowMigrationDialog(true)
+      })
+      return
+    }
+    if (isCollectionDialogOpen) {
+      setRestoreAction(() => {
+        setIsCollectionDialogOpen(true)
+      })
+      return
+    }
+    if (isOverrideOpen) {
+      setRestoreAction(() => {
+        setIsOverrideOpen(true)
+      })
+      return
+    }
+    if (isActionSheetOpen && selectedThread) {
+      setRestoreAction(() => {
+        setIsActionSheetOpen(true)
+      })
+      return
+    }
+    clearRestoreAction()
+  }, [
+    clearRestoreAction,
+    isActionSheetOpen,
+    isCollectionDialogOpen,
+    isOverrideOpen,
+    selectedThread,
+    setIsActionSheetOpen,
+    setIsCollectionDialogOpen,
+    setIsOverrideOpen,
+    setRestoreAction,
+    setShowMigrationDialog,
+    setShowSimpleMigration,
+    showMigrationDialog,
+    showReviewForm,
+    showSimpleMigration,
+    threadToMigrate,
+  ])
+
 
 useEffect(() => {
   const fetchBlockingReasons = async () => {
