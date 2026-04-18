@@ -250,6 +250,16 @@ body {
   border-radius: 0.75rem;
 }
 
+.modal-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 0.5rem;
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
 .dice-state-idle {
   opacity: 0.7;
   filter: brightness(0.8);
