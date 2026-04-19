@@ -337,14 +337,17 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
-        """Handle validation errors with detailed logging.
+        """Handle validation errors with environment-aware sanitization.
+
+        In production: Returns generic error messages to prevent information disclosure.
+        In development/test: Returns detailed error messages for debugging.
 
         Args:
             request: FastAPI request object.
             exc: Validation error that was raised.
 
         Returns:
-            JSON response with 422 status code and validation errors.
+            JSON response with 422 status code and sanitized validation errors.
         """
         errors = []
         for error in exc.errors():
@@ -391,6 +394,14 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             f"Validation Error: {errors}",
             extra=error_data,
         )
+
+        if app_settings.environment == "production":
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={
+                    "detail": "Validation failed",
+                },
+            )
 
         # Convert exc.body to a JSON-serializable format
         # FormData objects are not directly JSON serializable
