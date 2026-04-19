@@ -21,39 +21,54 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # First, fix any existing duplicate (thread_id, position) combinations
-    # by renumbering positions within each thread to be sequential
     connection = op.get_bind()
 
-    # For each thread, renumber issues sequentially to eliminate duplicates
-    # This ensures the unique constraint can be created successfully
-    connection.execute(
-        sa.text("""
-        WITH ranked_issues AS (
-            SELECT 
-                id,
-                thread_id,
-                position,
-                ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY id) AS new_position
-            FROM issues
-        )
-        UPDATE issues i
-        SET position = ri.new_position
-        FROM ranked_issues ri
-        WHERE i.id = ri.id
-        AND i.position != ri.new_position
-    """)
-    )
+    # Acquire advisory lock to prevent concurrent issue modifications during migration
+    connection.execute(sa.text("SELECT pg_advisory_lock(1608198843946057679)"))
 
-    # Now create the unique constraint as DEFERRABLE INITIALLY DEFERRED
-    # This matches the model declaration in app/models/issue.py
-    op.create_unique_constraint(
-        "uq_issue_thread_position",
-        "issues",
-        ["thread_id", "position"],
-        deferrable="DEFERRABLE",
-        initially="DEFERRED",
-    )
+    try:
+        # Fix any existing duplicate (thread_id, position) combinations
+        # Only affects threads that actually have duplicates (well-formed threads untouched)
+        # Preserves existing reading order by ordering by position, not id
+        connection.execute(
+            sa.text("""
+            WITH duplicate_threads AS (
+                -- Find threads that have duplicate positions
+                SELECT thread_id
+                FROM issues
+                GROUP BY thread_id, position
+                HAVING COUNT(*) > 1
+            ),
+            ranked_issues AS (
+                -- Renumber positions within affected threads, preserving order
+                SELECT 
+                    id,
+                    thread_id,
+                    position,
+                    ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY position, id) AS new_position
+                FROM issues
+                WHERE thread_id IN (SELECT thread_id FROM duplicate_threads)
+            )
+            UPDATE issues i
+            SET position = ri.new_position
+            FROM ranked_issues ri
+            WHERE i.id = ri.id
+            AND i.position != ri.new_position
+        """)
+        )
+
+        # Create the unique constraint as DEFERRABLE INITIALLY DEFERRED
+        # This matches the model declaration in app/models/issue.py
+        op.create_unique_constraint(
+            "uq_issue_thread_position",
+            "issues",
+            ["thread_id", "position"],
+            deferrable=True,
+            initially="DEFERRED",
+        )
+    finally:
+        # Release advisory lock
+        connection.execute(sa.text("SELECT pg_advisory_unlock(1608198843946057679)"))
 
 
 def downgrade() -> None:
