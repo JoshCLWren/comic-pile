@@ -97,7 +97,7 @@ class AppSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
-    environment: Literal["development", "production", "test"] = Field(
+    environment: Literal["development", "staging", "production", "test"] = Field(
         default="development",
         description="Application environment",
         json_schema_extra={"env": "ENVIRONMENT"},
