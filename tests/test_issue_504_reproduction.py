@@ -10,21 +10,19 @@ from tests.conftest import get_or_create_user_async
 
 
 @pytest.mark.asyncio
-async def test_create_issue_with_invalid_range_reproduces_504(
+async def test_insert_after_issue_id_does_not_500_after_uq_constraint_migration(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """Reproduce issue #504: Creating issue with 'esadfas3' range causes 500 error.
-    
-    This test simulates the exact curl request from the bug report:
-    curl 'https://app-production-72b9.up.railway.app/api/v1/threads/377/issues' \
-      -X POST \
-      --data-raw '{"issue_range":"esadfas3","insert_after_issue_id":10882}'
+    """Test that insert_after_issue_id works correctly after uq_issue_thread_position migration.
+
+    This test exercises the positional-insert path with a valid-but-unusual issue_range
+    to ensure the deferred unique constraint migration doesn't cause 500 errors.
     """
     user = await get_or_create_user_async(async_db)
 
-    # Create thread with some existing issues
+    # Create thread with existing issues to test positional-insert behavior
     thread = Thread(
-        title="Test Thread for Issue #504",
+        title="Test Thread for Deferred Constraint Migration",
         format="Comic",
         issues_remaining=5,
         queue_position=1,
@@ -39,50 +37,49 @@ async def test_create_issue_with_invalid_range_reproduces_504(
     await async_db.commit()
     await async_db.refresh(thread)
 
-    # Create some existing issues to have an insert_after_issue_id
-    issue1 = Issue(
+    # Create existing issues to test insert_after_issue_id with positional logic
+    existing_issue_1 = Issue(
         thread_id=thread.id,
         issue_number="1",
         position=1,
         status="read",
         read_at=datetime.now(UTC),
     )
-    async_db.add(issue1)
+    async_db.add(existing_issue_1)
     await async_db.flush()
 
-    issue2 = Issue(
+    existing_issue_2 = Issue(
         thread_id=thread.id,
         issue_number="2",
         position=2,
         status="unread",
     )
-    async_db.add(issue2)
+    async_db.add(existing_issue_2)
     await async_db.flush()
     await async_db.commit()
-    await async_db.refresh(issue2)
+    await async_db.refresh(existing_issue_2)
 
-    # Test 1: Try creating with valid unusual range (this should work)
-    response1 = await auth_client.post(
+    # Test 1: Create issue with valid-but-unusual range using insert_after_issue_id
+    # This exercises the positional-insert path after the deferred constraint migration
+    create_response = await auth_client.post(
         f"/api/v1/threads/{thread.id}/issues",
         json={
             "issue_range": "esadfas3",
-            "insert_after_issue_id": issue2.id,
+            "insert_after_issue_id": existing_issue_2.id,
         },
     )
-    print(f"Test 1 - Response status: {response1.status_code}")
-    print(f"Test 1 - Response body: {response1.text}")
-    assert response1.status_code != 500, f"Got 500 error: {response1.text}"
+    assert create_response.status_code == 201, (
+        f"Expected 201, got {create_response.status_code}: {create_response.text}"
+    )
 
-    # Test 2: Try creating duplicate issue number (should get 409)
-    response2 = await auth_client.post(
+    # Test 2: Verify duplicate issue number detection still works (should get 409)
+    duplicate_response = await auth_client.post(
         f"/api/v1/threads/{thread.id}/issues",
         json={
             "issue_range": "1",  # This already exists
-            "insert_after_issue_id": issue2.id,
+            "insert_after_issue_id": existing_issue_2.id,
         },
     )
-    print(f"Test 2 - Response status: {response2.status_code}")
-    print(f"Test 2 - Response body: {response2.text}")
-    assert response2.status_code == 409, (
-        f"Expected 409, got {response2.status_code}: {response2.text}"
+    assert duplicate_response.status_code == 409, (
+        f"Expected 409, got {duplicate_response.status_code}: {duplicate_response.text}"
     )
