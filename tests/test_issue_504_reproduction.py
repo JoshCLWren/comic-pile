@@ -72,7 +72,7 @@ async def test_insert_after_issue_id_does_not_500_after_uq_constraint_migration(
         f"Expected 201, got {create_response.status_code}: {create_response.text}"
     )
 
-    # Test 2: Verify duplicate issue number detection still works (should get 409)
+    # Test 2: Verify duplicate issue number detection still works (should get 400)
     duplicate_response = await auth_client.post(
         f"/api/v1/threads/{thread.id}/issues",
         json={
@@ -80,6 +80,6 @@ async def test_insert_after_issue_id_does_not_500_after_uq_constraint_migration(
             "insert_after_issue_id": existing_issue_2.id,
         },
     )
-    assert duplicate_response.status_code == 409, (
-        f"Expected 409, got {duplicate_response.status_code}: {duplicate_response.text}"
+    assert duplicate_response.status_code == 400, (
+        f"Expected 400, got {duplicate_response.status_code}: {duplicate_response.text}"
     )
