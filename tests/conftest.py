@@ -37,7 +37,7 @@ if not os.getenv("SECRET_KEY"):
 
 TRUNCATE_TEST_DATA_SQL = text(
     "TRUNCATE TABLE sessions, events, threads, issues, snapshots, dependencies, "
-    "revoked_tokens, users RESTART IDENTITY CASCADE;"
+    "revoked_tokens, failed_login_attempts, users RESTART IDENTITY CASCADE;"
 )
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
 
@@ -100,6 +100,7 @@ def _has_schema_drift(conn: Connection) -> bool:
         "events",
         "snapshots",
         "revoked_tokens",
+        "failed_login_attempts",
     }
 
     for table_name in required_table_names:
@@ -328,6 +329,7 @@ async def async_db(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemyAsyncSessi
     async with db_engine.connect() as connection:
         # Ensure a clean state for tables that may have been left with committed data from async_db_committed tests
         transaction = await connection.begin()
+        await connection.execute(text("TRUNCATE TABLE failed_login_attempts CASCADE"))
         await connection.execute(text("TRUNCATE TABLE users CASCADE"))
         session = SQLAlchemyAsyncSession(
             bind=connection,
@@ -374,6 +376,7 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await session.execute(text("DELETE FROM snapshots"))
         await session.execute(text("DELETE FROM dependencies"))
         await session.execute(text("DELETE FROM revoked_tokens"))
+        await session.execute(text("DELETE FROM failed_login_attempts"))
         await session.execute(text("DELETE FROM users"))
         await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_id"))
         await session.execute(text("DROP INDEX IF EXISTS ix_issue_thread_is_read"))
@@ -389,6 +392,7 @@ async def async_db_committed(db_engine: AsyncEngine) -> AsyncIterator[SQLAlchemy
         await cleanup_session.execute(text("DELETE FROM snapshots"))
         await cleanup_session.execute(text("DELETE FROM dependencies"))
         await cleanup_session.execute(text("DELETE FROM revoked_tokens"))
+        await cleanup_session.execute(text("DELETE FROM failed_login_attempts"))
         await cleanup_session.execute(text("DELETE FROM users"))
         await cleanup_session.commit()
 

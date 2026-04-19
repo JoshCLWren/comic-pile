@@ -1,10 +1,12 @@
 """Tests for authentication endpoints."""
 
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
+from app.main import app
 from app.models.user import User
 
 
@@ -51,7 +53,6 @@ class TestAuth:
         self, client: AsyncClient, async_db: AsyncSession
     ) -> None:
         """Test registration with duplicate username fails."""
-        # Create first user
         user_data = {
             "username": "testuser",
             "email": "test@example.com",
@@ -60,7 +61,6 @@ class TestAuth:
         response = await client.post("/api/auth/register", json=user_data)
         assert response.status_code == 200
 
-        # Try to create user with same username
         duplicate_data = {
             "username": "testuser",
             "email": "different@example.com",
@@ -75,7 +75,6 @@ class TestAuth:
         self, client: AsyncClient, async_db: AsyncSession
     ) -> None:
         """Test registration with duplicate email fails."""
-        # Create first user
         user_data = {
             "username": "user1",
             "email": "same@example.com",
@@ -84,7 +83,6 @@ class TestAuth:
         response = await client.post("/api/auth/register", json=user_data)
         assert response.status_code == 200
 
-        # Try to create user with same email
         duplicate_data = {
             "username": "user2",
             "email": "same@example.com",
@@ -97,7 +95,6 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_login_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test successful user login."""
-        # Register user first
         user_data = {
             "username": "loginuser",
             "email": "login@example.com",
@@ -106,7 +103,6 @@ class TestAuth:
         response = await client.post("/api/auth/register", json=user_data)
         assert response.status_code == 200
 
-        # Login
         login_data = {
             "username": "loginuser",
             "password": "mypassword123",
@@ -133,7 +129,6 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_refresh_token_success(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test successful token refresh."""
-        # Register and login user
         user_data = {
             "username": "refreshuser",
             "email": "refresh@example.com",
@@ -150,7 +145,6 @@ class TestAuth:
         assert response.status_code == 200
         tokens = response.json()
 
-        # Refresh token
         refresh_data = {"refresh_token": tokens["refresh_token"]}
         response = await client.post("/api/auth/refresh", json=refresh_data)
         assert response.status_code == 200
@@ -160,12 +154,13 @@ class TestAuth:
         assert "refresh_token" in new_tokens
         assert new_tokens["token_type"] == "bearer"
 
-        # New tokens should be different
         assert new_tokens["access_token"] != tokens["access_token"]
         assert new_tokens["refresh_token"] != tokens["refresh_token"]
 
     @pytest.mark.asyncio
-    async def test_login_sets_refresh_cookie(self, client: AsyncClient, async_db: AsyncSession) -> None:
+    async def test_login_sets_refresh_cookie(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
         """Login sets refresh token in HttpOnly cookie."""
         user_data = {
             "username": "cookieuser",
@@ -184,7 +179,9 @@ class TestAuth:
         assert "HttpOnly" in set_cookie
 
     @pytest.mark.asyncio
-    async def test_refresh_token_success_with_cookie(self, client: AsyncClient, async_db: AsyncSession) -> None:
+    async def test_refresh_token_success_with_cookie(
+        self, client: AsyncClient, async_db: AsyncSession
+    ) -> None:
         """Refresh endpoint accepts refresh token from HttpOnly cookie."""
         user_data = {
             "username": "cookie_refresh_user",
@@ -225,7 +222,6 @@ class TestAuth:
         self, client: AsyncClient, async_db: AsyncSession
     ) -> None:
         """Test getting current user info when authenticated."""
-        # Register and login user
         user_data = {
             "username": "meuser",
             "email": "me@example.com",
@@ -242,7 +238,6 @@ class TestAuth:
         assert response.status_code == 200
         tokens = response.json()
 
-        # Get current user info
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
         response = await client.get("/api/auth/me", headers=headers)
         assert response.status_code == 200
@@ -262,7 +257,6 @@ class TestAuth:
     @pytest.mark.asyncio
     async def test_logout(self, client: AsyncClient, async_db: AsyncSession) -> None:
         """Test user logout."""
-        # Register and login user
         user_data = {
             "username": "logoutuser",
             "email": "logout@example.com",
@@ -279,7 +273,6 @@ class TestAuth:
         assert response.status_code == 200
         tokens = response.json()
 
-        # Logout
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
         response = await client.post("/api/auth/logout", headers=headers)
         assert response.status_code == 200
@@ -314,3 +307,150 @@ class TestAuth:
         access_token = tokens["access_token"]
         await revoke_token(async_db, access_token, user.id)
         await revoke_token(async_db, access_token, user.id)
+
+
+async def _create_committed_client(session: AsyncSession):
+    """Build an AsyncClient whose get_db override uses a committed session."""
+
+    async def override():
+        yield session
+
+    app.dependency_overrides[get_db] = override
+    transport = ASGITransport(app=app)
+    return AsyncClient(transport=transport, base_url="http://test")
+
+
+class TestAccountLockout:
+    """Test account lockout after failed login attempts."""
+
+    @pytest.mark.asyncio
+    async def test_username_lockout_after_five_failures(
+        self, async_db_committed: AsyncSession
+    ) -> None:
+        """Five wrong-password attempts lock the username; 6th fails even with correct pw."""
+        async with await _create_committed_client(async_db_committed) as client:
+            user_data = {
+                "username": "lockoutuser",
+                "email": "lockout@example.com",
+                "password": "password123",
+            }
+            reg = await client.post("/api/auth/register", json=user_data)
+            assert reg.status_code == 200
+
+            wrong = {"username": "lockoutuser", "password": "wrongpw"}
+            for i in range(5):
+                resp = await client.post("/api/auth/login", json=wrong)
+                assert resp.status_code == 401, f"Attempt {i + 1} should be 401"
+
+            correct = {"username": "lockoutuser", "password": "password123"}
+            locked = await client.post("/api/auth/login", json=correct)
+            assert locked.status_code == 401
+            assert "Incorrect username or password" in locked.json()["detail"]
+
+        app.dependency_overrides.pop(get_db, None)
+
+    @pytest.mark.asyncio
+    async def test_success_clears_counter(self, async_db_committed: AsyncSession) -> None:
+        """A successful login resets the failure counter for that username."""
+        async with await _create_committed_client(async_db_committed) as client:
+            user_data = {
+                "username": "resetworks",
+                "email": "reset@example.com",
+                "password": "password123",
+            }
+            reg = await client.post("/api/auth/register", json=user_data)
+            assert reg.status_code == 200
+
+            wrong = {"username": "resetworks", "password": "wrong"}
+            for _ in range(4):
+                resp = await client.post("/api/auth/login", json=wrong)
+                assert resp.status_code == 401
+
+            correct = {"username": "resetworks", "password": "password123"}
+            ok = await client.post("/api/auth/login", json=correct)
+            assert ok.status_code == 200
+
+            for _ in range(4):
+                resp = await client.post("/api/auth/login", json=wrong)
+                assert resp.status_code == 401
+
+            ok2 = await client.post("/api/auth/login", json=correct)
+            assert ok2.status_code == 200
+
+        app.dependency_overrides.pop(get_db, None)
+
+    @pytest.mark.asyncio
+    async def test_lockout_is_per_username(self, async_db_committed: AsyncSession) -> None:
+        """Locking one username does not affect a different username."""
+        async with await _create_committed_client(async_db_committed) as client:
+            user_a = {"username": "user_a", "email": "a@example.com", "password": "pw123"}
+            user_b = {"username": "user_b", "email": "b@example.com", "password": "pw456"}
+            reg_a = await client.post("/api/auth/register", json=user_a)
+            assert reg_a.status_code == 200, f"user_a register: {reg_a.text}"
+            reg_b = await client.post("/api/auth/register", json=user_b)
+            assert reg_b.status_code == 200, f"user_b register: {reg_b.text}"
+
+            wrong_a = {"username": "user_a", "password": "wrong"}
+            for _ in range(5):
+                resp = await client.post("/api/auth/login", json=wrong_a)
+                assert resp.status_code == 401
+
+            locked = await client.post("/api/auth/login", json=wrong_a)
+            assert locked.status_code == 401
+
+            correct_b = {"username": "user_b", "password": "pw456"}
+            ok = await client.post("/api/auth/login", json=correct_b)
+            assert ok.status_code == 200
+
+        app.dependency_overrides.pop(get_db, None)
+
+    @pytest.mark.asyncio
+    async def test_lockout_returns_generic_error(self, async_db_committed: AsyncSession) -> None:
+        """Lockout response does not reveal whether the username exists."""
+        async with await _create_committed_client(async_db_committed) as client:
+            user_data = {
+                "username": "genericerr",
+                "email": "generic@example.com",
+                "password": "password123",
+            }
+            await client.post("/api/auth/register", json=user_data)
+
+            wrong = {"username": "genericerr", "password": "wrong"}
+            for _ in range(5):
+                await client.post("/api/auth/login", json=wrong)
+
+            locked = await client.post("/api/auth/login", json=wrong)
+            assert locked.status_code == 401
+            assert locked.json()["detail"] == "Incorrect username or password"
+
+        app.dependency_overrides.pop(get_db, None)
+
+    @pytest.mark.asyncio
+    async def test_nonexistent_user_records_failure(self, async_db_committed: AsyncSession) -> None:
+        """Attempts against a non-existent username still count toward IP lockout."""
+        async with await _create_committed_client(async_db_committed) as client:
+            for _ in range(9):
+                resp = await client.post(
+                    "/api/auth/login",
+                    json={"username": f"noexist_{_}", "password": "wrong"},
+                )
+                assert resp.status_code == 401
+
+            user_data = {
+                "username": "lateuser",
+                "email": "late@example.com",
+                "password": "password123",
+            }
+            await client.post("/api/auth/register", json=user_data)
+
+            resp = await client.post(
+                "/api/auth/login",
+                json={"username": "lateuser", "password": "wrong"},
+            )
+            assert resp.status_code == 401
+
+            correct = {"username": "lateuser", "password": "password123"}
+            locked = await client.post("/api/auth/login", json=correct)
+            assert locked.status_code == 401
+
+        app.dependency_overrides.pop(get_db, None)
