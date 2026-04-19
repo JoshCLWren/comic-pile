@@ -31,6 +31,7 @@ from app.schemas import (
 )
 from app.schemas.review import ReviewResponse
 from app.schemas.migration import MigrateToIssuesSimpleRequest
+from app.services.ownership import get_owned_collection_or_404, get_owned_thread_or_404
 from comic_pile.session import get_current_die, get_or_create
 
 router = APIRouter(tags=["threads"])
@@ -316,14 +317,7 @@ async def create_thread(
     """
     # If collection_id is provided, verify it belongs to the user
     if thread_data.collection_id is not None:
-        from app.models import Collection
-
-        collection = await db.get(Collection, thread_data.collection_id)
-        if not collection or collection.user_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Collection {thread_data.collection_id} not found",
-            )
+        await get_owned_collection_or_404(db, current_user.id, thread_data.collection_id)
 
     max_retries = 3
     initial_delay = 0.1
@@ -386,12 +380,7 @@ async def get_thread(
     Raises:
         HTTPException: If thread not found.
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
     return await thread_to_response(thread, db)
 
 
@@ -416,12 +405,7 @@ async def update_thread(
     Raises:
         HTTPException: If thread not found.
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
     if thread_data.title is not None:
         thread.title = thread_data.title
     if thread_data.format is not None:
@@ -441,14 +425,7 @@ async def update_thread(
     if "collection_id" in thread_data.model_fields_set:
         # If collection_id is provided (can be None to clear), verify ownership
         if thread_data.collection_id is not None:
-            from app.models import Collection
-
-            collection = await db.get(Collection, thread_data.collection_id)
-            if not collection or collection.user_id != current_user.id:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Collection {thread_data.collection_id} not found",
-                )
+            await get_owned_collection_or_404(db, current_user.id, thread_data.collection_id)
         thread.collection_id = thread_data.collection_id
     await db.commit()
     await db.refresh(thread)
@@ -472,12 +449,7 @@ async def delete_thread(
     Raises:
         HTTPException: If thread not found.
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     from app.models import Session as SessionModel
 
@@ -530,12 +502,7 @@ async def reactivate_thread(
     Raises:
         HTTPException: If thread not found, not completed, or issues_to_add invalid.
     """
-    thread = await db.get(Thread, request.thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {request.thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, request.thread_id)
     if thread.status != "completed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -625,13 +592,7 @@ async def set_pending_thread(
     Raises:
         HTTPException: If thread not found.
     """
-    thread = await db.get(Thread, thread_id)
-
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     if thread.status != "active":
         raise HTTPException(
@@ -740,23 +701,11 @@ async def move_thread_to_collection(
     Raises:
         HTTPException: If thread not found or collection doesn't belong to user.
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     # If collection_id is provided, verify it belongs to the user
     if collection_id is not None:
-        from app.models import Collection
-
-        collection = await db.get(Collection, collection_id)
-        if not collection or collection.user_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Collection {collection_id} not found",
-            )
+        await get_owned_collection_or_404(db, current_user.id, collection_id)
 
     thread.collection_id = collection_id
     response = await thread_to_response(thread, db)
@@ -785,12 +734,7 @@ async def get_thread_reviews(
     Raises:
         HTTPException: If thread not found or not owned by user
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     result = await db.execute(
         select(Review)
@@ -832,12 +776,7 @@ async def backdate_thread_for_testing(
             detail="This endpoint is only available in test environment",
         )
 
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     thread.last_activity_at = datetime.now(UTC) - timedelta(days=days_ago)
     await db.commit()
@@ -870,12 +809,7 @@ async def migrate_thread_to_issues(
     Raises:
         HTTPException: 404 if thread not found, 400 if validation fails
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     if thread.total_issues is not None:
         raise HTTPException(
@@ -927,12 +861,7 @@ async def migrate_thread_to_issues_simple(
     Raises:
         HTTPException: 404 if thread not found, 400 if validation fails
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     if thread.total_issues is not None:
         raise HTTPException(
