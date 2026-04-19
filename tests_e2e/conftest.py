@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 
 from app.config import clear_settings_cache
+from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.database import Base, get_db
 from app.main import app
 from app.models import User
@@ -236,6 +237,9 @@ async def auth_api_client_async(async_db: SQLAlchemyAsyncSession) -> AsyncGenera
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        csrf_token = generate_csrf_token()
+        ac.cookies.set(CSRF_COOKIE_NAME, csrf_token)
+        ac.headers.update({CSRF_HEADER_NAME: csrf_token})
         result = await async_db.execute(
             select(User).where(User.username == "test_user@example.com")
         )
