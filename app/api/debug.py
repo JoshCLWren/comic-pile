@@ -2,17 +2,50 @@
 
 import sys
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import get_current_user
+from app.config import get_app_settings
+from app.database import get_db
+from app.middleware import limiter
+from app.models.user import User
 
 router = APIRouter()
 
 ALLOWED_LEVELS = {"INFO", "WARN", "ERROR"}
 MAX_MESSAGE_LENGTH = 2000
 
+app_settings = get_app_settings()
+
+
+def check_debug_routes_enabled() -> None:
+    """Check if debug routes are enabled via environment variable."""
+    if app_settings.environment == "production":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Not found",
+        )
+
 
 @router.post("/debug/log")
-async def log_message(request: Request) -> dict[str, str]:
+@limiter.limit("10/minute")
+async def log_message(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
     """Receive client-side log messages and output to server terminal."""
+    # Check if debug routes are enabled (defense in depth)
+    check_debug_routes_enabled()
+
+    # Check if user is admin
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+
     body = await request.json()
     if not isinstance(body, dict):
         raise HTTPException(
