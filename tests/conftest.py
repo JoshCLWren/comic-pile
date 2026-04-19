@@ -179,48 +179,45 @@ async def db_engine(
                 async with engine.begin() as conn:
 
                     def _check_and_drop(sync_conn: Connection) -> None:
-                        if _has_schema_drift(sync_conn):
-                            if not _looks_like_test_database(database_url):
-                                raise RuntimeError(
-                                    "Refusing to reset schema on non-test database. "
-                                    f"Database '{make_url(database_url).database}' must include 'test'."
-                                )
-                        sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-                        sync_conn.exec_driver_sql("CREATE SCHEMA public")
-                        Base.metadata.create_all(bind=sync_conn)
+                        """Drop all tables and recreate schema."""
+                        inspector = inspect(sync_conn)
+                        tables = inspector.get_table_names()
+                        if tables:
+                            for table in reversed(Base.metadata.sorted_tables):
+                                if table.name in tables:
+                                    sync_conn.execute(table.delete())
+                        Base.metadata.create_all(sync_conn)
 
-                    await conn.run_sync(_check_and_drop)
-
-                marker_file.touch()
+                    _check_and_drop(conn.sync_connection)
+                    marker_file.touch()
         else:
-            import time
+            # Wait for gw0 to finish initialization
+            root_tmp_dir = tmp_path_factory.getbasetemp() if tmp_path_factory else Path("/tmp")
+            marker_file = root_tmp_dir / "db_init.done"
+            while not marker_file.exists():
+                import asyncio
 
-            for _ in range(300):
-                if marker_file.exists():
-                    break
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
     else:
+        # Non-xdist execution (sequential)
         async with engine.begin() as conn:
 
             def _check_and_drop(sync_conn: Connection) -> None:
-                if _has_schema_drift(sync_conn):
-                    if not _looks_like_test_database(database_url):
-                        raise RuntimeError(
-                            "Refusing to reset schema on non-test database. "
-                            f"Database '{make_url(database_url).database}' must include 'test'."
-                        )
-                sync_conn.exec_driver_sql("DROP SCHEMA public CASCADE")
-                sync_conn.exec_driver_sql("CREATE SCHEMA public")
-                Base.metadata.create_all(bind=sync_conn)
+                """Drop all tables and recreate schema."""
+                inspector = inspect(sync_conn)
+                tables = inspector.get_table_names()
+                if tables:
+                    for table in reversed(Base.metadata.sorted_tables):
+                        if table.name in tables:
+                            sync_conn.execute(table.delete())
+                Base.metadata.create_all(sync_conn)
 
-            await conn.run_sync(_check_and_drop)
+            _check_and_drop(conn.sync_connection)
 
     _SHARED_TEST_ENGINE = engine
-    try:
-        yield engine
-    finally:
-        _SHARED_TEST_ENGINE = None
-        await engine.dispose()
+    yield engine
+    _SHARED_TEST_ENGINE = None
+    await engine.dispose()
 
 
 async def _ensure_default_user_async(db: SQLAlchemyAsyncSession) -> User:

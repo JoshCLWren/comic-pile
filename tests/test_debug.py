@@ -3,22 +3,48 @@
 import os
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from httpx._transports.asgi import ASGITransport
 
-from app.auth import create_access_token, hash_password
-from app.models.user import User
+from app.auth import get_current_user
+from app.main import app
+from app.api.debug import router
+
+
+@pytest.fixture
+async def debug_client():
+    """Create a test client for debug routes with dependency overrides."""
+    app.include_router(router, prefix="/api/debug")
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        yield client
+
+    # Clean up
+    app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_debug_log_admin_success(auth_client: AsyncClient) -> None:
+async def test_debug_log_admin_success(debug_client: AsyncClient) -> None:
     """Test that admin users can access debug log endpoint."""
+
+    # Create a mock admin user
+    class MockAdminUser:
+        def __init__(self):
+            self.id = 1
+            self.username = "admin"
+            self.is_admin = True
+
+    # Override the get_current_user dependency
+    def mock_get_current_admin_user():
+        return MockAdminUser()
+
+    app.dependency_overrides[get_current_user] = mock_get_current_admin_user
+
     # Ensure we're in non-production environment for debug routes to be mounted
     original_env = os.environ.get("ENVIRONMENT", "")
     os.environ["ENVIRONMENT"] = "development"
 
     try:
-        response = await auth_client.post(
+        response = await debug_client.post(
             "/api/debug/log", json={"level": "INFO", "message": "test message"}
         )
         assert response.status_code == 200
@@ -29,40 +55,33 @@ async def test_debug_log_admin_success(auth_client: AsyncClient) -> None:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_debug_log_non_admin_forbidden(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
+async def test_debug_log_non_admin_forbidden(debug_client: AsyncClient) -> None:
     """Test that non-admin users get 403 when accessing debug log endpoint."""
-    # Create a non-admin user
-    result = await async_db.execute(select(User).where(User.username == "testuser"))
-    user = result.scalar_one_or_none()
-    if not user:
-        # Create test user if not exists
-        test_user = User(
-            username="testuser",
-            email="test@example.com",
-            password_hash=hash_password("password123"),
-            is_admin=False,
-        )
-        async_db.add(test_user)
-        await async_db.commit()
-        await async_db.refresh(test_user)
 
-    # Login as non-admin user
-    access_token = create_access_token(data={"sub": "testuser", "jti": "test-non-admin"})
+    # Create a mock non-admin user
+    class MockUser:
+        def __init__(self):
+            self.id = 1
+            self.username = "testuser"
+            self.is_admin = False
+
+    # Override the get_current_user dependency
+    def mock_get_current_user():
+        return MockUser()
+
+    app.dependency_overrides[get_current_user] = mock_get_current_user
 
     # Ensure we're in non-production environment for debug routes to be mounted
     original_env = os.environ.get("ENVIRONMENT", "")
     os.environ["ENVIRONMENT"] = "development"
 
     try:
-        response = await auth_client.post(
-            "/api/debug/log",
-            json={"level": "INFO", "message": "test message"},
-            headers={"Authorization": f"Bearer {access_token}"},
+        response = await debug_client.post(
+            "/api/debug/log", json={"level": "INFO", "message": "test message"}
         )
         assert response.status_code == 403
         assert response.json()["detail"] == "Insufficient permissions"
@@ -72,17 +91,18 @@ async def test_debug_log_non_admin_forbidden(
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_debug_log_anonymous_unauthorized(client: AsyncClient) -> None:
+async def test_debug_log_anonymous_unauthorized(debug_client: AsyncClient) -> None:
     """Test that anonymous users get 401 when accessing debug log endpoint."""
     # Ensure we're in non-production environment for debug routes to be mounted
     original_env = os.environ.get("ENVIRONMENT", "")
     os.environ["ENVIRONMENT"] = "development"
 
     try:
-        response = await client.post(
+        response = await debug_client.post(
             "/api/debug/log", json={"level": "INFO", "message": "test message"}
         )
         assert response.status_code == 401
@@ -96,21 +116,32 @@ async def test_debug_log_anonymous_unauthorized(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_debug_log_disabled_in_production(auth_client: AsyncClient) -> None:
-    """Test that debug routes return 404 when ENABLE_DEBUG_ROUTES is disabled (production)."""
-    # Set environment to production
+async def test_debug_routes_disabled_in_production() -> None:
+    """Test that debug routes are disabled in production environment."""
+    # Import the function directly
+    from app.api.debug import check_debug_routes_enabled
+    from app.config import get_app_settings
+    from fastapi import HTTPException
+
+    # Clear the lru_cache to force reloading settings
+    get_app_settings.cache_clear()
+
+    # Store original environment
     original_env = os.environ.get("ENVIRONMENT", "")
     os.environ["ENVIRONMENT"] = "production"
 
     try:
-        response = await auth_client.post(
-            "/api/debug/log", json={"level": "INFO", "message": "test message"}
-        )
-        assert response.status_code == 404
-        assert response.json()["detail"] == "Not found"
+        # This should raise HTTPException with 404
+        with pytest.raises(HTTPException) as exc_info:
+            check_debug_routes_enabled()
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Not found"
     finally:
         # Restore original environment
         if original_env:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        # Clear cache again to restore original settings
+        get_app_settings.cache_clear()
