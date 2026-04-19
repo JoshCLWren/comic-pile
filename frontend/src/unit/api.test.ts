@@ -20,13 +20,23 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { dependenciesApi, queueApi, threadsApi } from '../services/api'
+import { clearAccessToken, dependenciesApi, queueApi, setAccessToken, threadsApi } from '../services/api'
+
+const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
+  config: { method?: string; url?: string; headers?: Record<string, string> }
+) => Promise<{ method?: string; url?: string; headers?: Record<string, string> }>
 
 beforeEach(() => {
+  get.mockReset()
+  post.mockReset()
+  put.mockReset()
+  del.mockReset()
   get.mockResolvedValue({})
   post.mockResolvedValue({})
   put.mockResolvedValue({})
   del.mockResolvedValue({})
+  clearAccessToken()
+  document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
 })
 
 it('calls thread endpoints with expected paths', () => {
@@ -68,4 +78,34 @@ it('calls dependency endpoints with expected paths', () => {
     target_id: 2,
   })
   expect(del).toHaveBeenCalledWith('/v1/dependencies/7')
+})
+
+it('adds auth and csrf headers to mutating requests', async () => {
+  setAccessToken('access-token')
+  document.cookie = 'csrf_token=cookie-token; path=/'
+
+  const config = await requestInterceptor({
+    method: 'post',
+    url: '/threads/',
+    headers: {},
+  })
+
+  expect(config.headers).toEqual({
+    Authorization: 'Bearer access-token',
+    'X-CSRF-Token': 'cookie-token',
+  })
+  expect(get).not.toHaveBeenCalled()
+})
+
+it('bootstraps a csrf token before protected requests when the cookie is missing', async () => {
+  get.mockResolvedValue({ csrf_token: 'fresh-token' })
+
+  const config = await requestInterceptor({
+    method: 'delete',
+    url: '/threads/9',
+    headers: {},
+  })
+
+  expect(get).toHaveBeenCalledWith('/auth/csrf', { skipAuthRedirect: true })
+  expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
 })

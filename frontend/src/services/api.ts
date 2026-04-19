@@ -52,6 +52,11 @@ const rawApi = axios.create({
   timeout: 10000,
 })
 
+const CSRF_COOKIE_NAME = 'csrf_token'
+const CSRF_HEADER_NAME = 'X-CSRF-Token'
+const CSRF_PROTECTED_METHODS = new Set(['post', 'put', 'patch', 'delete'])
+const CSRF_EXEMPT_PATHS = ['/auth/login', '/auth/register', '/auth/refresh']
+
 // Axios returns AxiosResponse by default, but the response interceptor below unwraps to response.data.
 // Cast once at the boundary so callers get strongly typed payload methods.
 const api = rawApi as unknown as ApiClient
@@ -60,6 +65,7 @@ let refreshTokenPromise: Promise<AuthTokens> | null = null
 let isRedirectingToLogin = false
 let redirectTimeoutId: ReturnType<typeof setTimeout> | null = null
 let accessToken: string | null = null
+let csrfTokenPromise: Promise<string | null> | null = null
 let failedQueue: Array<{
   resolve: (value: unknown) => void
   reject: (reason: unknown) => void
@@ -77,6 +83,49 @@ export function getAccessToken(): string | null {
 
 export function clearAccessToken(): void {
   accessToken = null
+}
+
+function getCookieValue(name: string): string | null {
+  if (typeof document === 'undefined' || !document.cookie) {
+    return null
+  }
+
+  const prefix = `${encodeURIComponent(name)}=`
+  for (const cookie of document.cookie.split('; ')) {
+    if (cookie.startsWith(prefix)) {
+      return decodeURIComponent(cookie.slice(prefix.length))
+    }
+  }
+
+  return null
+}
+
+function shouldAttachCsrfToken(config: InternalAxiosRequestConfig): boolean {
+  const method = (config.method ?? 'get').toLowerCase()
+  if (!CSRF_PROTECTED_METHODS.has(method)) {
+    return false
+  }
+
+  const requestUrl = config.url ?? ''
+  return !CSRF_EXEMPT_PATHS.some((path) => requestUrl.includes(path))
+}
+
+async function ensureCsrfToken(): Promise<string | null> {
+  const existingToken = getCookieValue(CSRF_COOKIE_NAME)
+  if (existingToken) {
+    return existingToken
+  }
+
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = rawApi
+      .get<{ csrf_token: string }>('/auth/csrf', { skipAuthRedirect: true })
+      .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
+      .finally(() => {
+        csrfTokenPromise = null
+      })
+  }
+
+  return csrfTokenPromise
 }
 
 function isOnAuthPage(): boolean {
@@ -106,11 +155,21 @@ function redirectToLogin(): void {
 }
 
 rawApi.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
     const token = getAccessToken()
+    config.headers = config.headers ?? {}
+
     if (token) {
       ;(config.headers as Record<string, string>).Authorization = `Bearer ${token}`
     }
+
+    if (shouldAttachCsrfToken(config)) {
+      const csrfToken = await ensureCsrfToken()
+      if (csrfToken) {
+        ;(config.headers as Record<string, string>)[CSRF_HEADER_NAME] = csrfToken
+      }
+    }
+
     return config
   },
   (error: unknown) => Promise.reject(error),
