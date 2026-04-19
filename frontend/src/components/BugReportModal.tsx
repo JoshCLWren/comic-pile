@@ -93,7 +93,7 @@ export default function BugReportModal({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Brief description of the bug"
-            className="w-full bg-white/5 border border-stone-700 rounded-xl px-3 py-2 text-sm text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            className="w-full bg-white/5 border border-white/20 rounded-xl px-3 py-2 text-sm text-stone-200 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30 transition-colors"
             maxLength={200}
             required
           />
@@ -144,7 +144,7 @@ export default function BugReportModal({
               <img
                 src={screenshotUrl}
                 alt="Screenshot"
-                className="w-full max-h-48 object-contain border border-stone-700 rounded-xl"
+                className="w-full max-h-48 object-contain border border-white/20 rounded-xl"
               />
               <button
                 type="button"

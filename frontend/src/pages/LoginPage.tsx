@@ -82,7 +82,7 @@ export default function LoginPage() {
                  required
                  value={username}
                  onChange={(e) => setUsername(e.target.value)}
-                 className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+                 className="w-full h-12 px-4 bg-white/5 border border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30 transition-colors"
                  placeholder="Enter your username"
                />
              </div>
@@ -99,7 +99,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-12 px-4 bg-white/5 border border-white/10 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors"
+                className="w-full h-12 px-4 bg-white/5 border border-white/20 rounded-xl text-sm text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30 transition-colors"
                 placeholder="••••••••"
               />
             </div>

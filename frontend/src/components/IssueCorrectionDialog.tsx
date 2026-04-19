@@ -252,7 +252,7 @@ export default function IssueCorrectionDialog({
                     }}
                     onKeyDown={handleKeyDown}
                     disabled={isLoading}
-                    className="w-full text-center text-3xl font-black bg-white/5 border border-white/10 rounded-lg py-3 px-4 text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full text-center text-3xl font-black bg-white/5 border border-white/20 rounded-lg py-3 px-4 text-stone-200 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30 transition-colors"
                     aria-describedby="issue-range"
                   />
                   {totalIssues && (
@@ -282,7 +282,7 @@ export default function IssueCorrectionDialog({
                     value={insertPosition}
                     onChange={(event) => setInsertPosition(event.target.value)}
                     disabled={isLoading}
-                    className="w-full bg-stone-950/80 border border-white/10 rounded-lg py-2 px-3 text-sm text-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full bg-stone-950/80 border border-white/20 rounded-lg py-2 px-3 text-sm text-stone-200 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30 transition-colors"
                   >
                     <option value="end">At the end</option>
                     <option value="start">At the beginning</option>
