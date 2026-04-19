@@ -216,9 +216,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         return redacted
 
     def sanitize_for_logging(log_data: dict[str, object]) -> dict[str, object]:
-        """Trim request context from logs in production.
+        """Trim request context from logs in production and staging.
 
-        In production, avoid logging request bodies, query params, and session identifiers.
+        In production and staging, avoid logging request bodies, query params, and session identifiers.
 
         Args:
             log_data: Log payload.
@@ -226,7 +226,7 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         Returns:
             Possibly-trimmed log payload.
         """
-        if app_settings.environment != "production":
+        if app_settings.environment not in ("production", "staging"):
             return log_data
 
         # Avoid leaking potentially sensitive request context.
