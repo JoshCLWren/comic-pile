@@ -117,8 +117,8 @@ async function ensureCsrfToken(): Promise<string | null> {
   }
 
   if (!csrfTokenPromise) {
-    csrfTokenPromise = rawApi
-      .get<{ csrf_token: string }>('/auth/csrf', { skipAuthRedirect: true })
+    csrfTokenPromise = api
+      .get<{ csrf_token: string }>('/auth/csrf', { skipAuthRedirect: true } as ApiRequestConfig)
       .then((response) => response.csrf_token ?? getCookieValue(CSRF_COOKIE_NAME))
       .finally(() => {
         csrfTokenPromise = null
