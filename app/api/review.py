@@ -14,9 +14,10 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Issue, Review, Thread
+from app.models import Issue, Review
 from app.models.user import User
 from app.schemas.review import ReviewCreate, ReviewListResponse, ReviewResponse, ReviewUpdate
+from app.services.ownership import get_owned_review_or_404, get_owned_thread_or_404
 
 router = APIRouter(tags=["reviews"])
 
@@ -120,15 +121,7 @@ async def create_review(
     thread_id = review_data.thread_id
 
     # Verify thread exists and belongs to user
-    result = await db.execute(
-        select(Thread).where(and_(Thread.id == thread_id, Thread.user_id == user_id))
-    )
-    thread = result.scalar_one_or_none()
-    if not thread:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found or does not belong to user",
-        )
+    await get_owned_thread_or_404(db, user_id, thread_id)
 
     # Get issue ID if issue number provided
     issue_id = await _get_issue_id(db, thread_id, review_data.issue_number)
@@ -281,17 +274,12 @@ async def get_review(
     Raises:
         HTTPException: If review not found or not owned by user
     """
-    result = await db.execute(
-        select(Review)
-        .where(and_(Review.id == review_id, Review.user_id == current_user.id))
-        .options(selectinload(Review.thread), selectinload(Review.issue))
+    review = await get_owned_review_or_404(
+        db,
+        current_user.id,
+        review_id,
+        include_relations=True,
     )
-    review = result.scalar_one_or_none()
-    if not review:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Review {review_id} not found or not owned by user",
-        )
 
     return await _create_or_update_review_response(review, db)
 
@@ -317,17 +305,12 @@ async def update_review(
     Raises:
         HTTPException: If review not found or not owned by user
     """
-    result = await db.execute(
-        select(Review)
-        .where(and_(Review.id == review_id, Review.user_id == current_user.id))
-        .options(selectinload(Review.thread), selectinload(Review.issue))
+    review = await get_owned_review_or_404(
+        db,
+        current_user.id,
+        review_id,
+        include_relations=True,
     )
-    review = result.scalar_one_or_none()
-    if not review:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Review {review_id} not found or not owned by user",
-        )
 
     # Update fields if provided
     data = update_data.model_dump(exclude_unset=True)
@@ -354,15 +337,7 @@ async def delete_review(
     Raises:
         HTTPException: If review not found or not owned by user
     """
-    result = await db.execute(
-        select(Review).where(and_(Review.id == review_id, Review.user_id == current_user.id))
-    )
-    review = result.scalar_one_or_none()
-    if not review:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Review {review_id} not found or not owned by user",
-        )
+    review = await get_owned_review_or_404(db, current_user.id, review_id)
 
     await db.delete(review)
     await db.commit()
