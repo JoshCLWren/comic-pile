@@ -42,6 +42,13 @@ TRUNCATE_TEST_DATA_SQL = text(
 _SHARED_TEST_ENGINE: AsyncEngine | None = None
 
 
+def _get_xdist_sync_dir(tmp_path_factory: pytest.TempPathFactory | None) -> Path:
+    """Return a worker-shared temp directory for xdist coordination files."""
+    if tmp_path_factory is None:
+        return Path("/tmp")
+    return tmp_path_factory.getbasetemp().parent
+
+
 @pytest.fixture(autouse=True, scope="session")
 def set_test_environment() -> Iterator[None]:
     """Set TEST_ENVIRONMENT for all tests to disable rate limiting."""
@@ -171,12 +178,13 @@ async def db_engine(
     is_xdist = worker_id.startswith("gw")
 
     if is_xdist:
-        root_tmp_dir = tmp_path_factory.getbasetemp() if tmp_path_factory else Path("/tmp")
+        root_tmp_dir = _get_xdist_sync_dir(tmp_path_factory)
         lock_file = root_tmp_dir / "db_init.lock"
         marker_file = root_tmp_dir / "db_init.done"
 
         if should_init:
-            with FileLock(lock_file):
+            with FileLock(str(lock_file)):
+                marker_file.unlink(missing_ok=True)
                 async with engine.begin() as conn:
 
                     def _check_and_drop(sync_conn: Connection) -> None:
@@ -200,6 +208,10 @@ async def db_engine(
                 if marker_file.exists():
                     break
                 time.sleep(0.1)
+            else:
+                raise RuntimeError(
+                    f"Timed out waiting for test database initialization marker: {marker_file}"
+                )
     else:
         async with engine.begin() as conn:
 

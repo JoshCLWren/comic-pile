@@ -1,13 +1,17 @@
 """Tests for authentication endpoints."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.database import get_db
 from app.main import app
 from app.models.user import User
+from tests.conftest import TRUNCATE_TEST_DATA_SQL
 
 
 class TestAuth:
@@ -309,26 +313,39 @@ class TestAuth:
         await revoke_token(async_db, access_token, user.id)
 
 
-async def _create_committed_client(session: AsyncSession):
-    """Build an AsyncClient whose get_db override uses a committed session."""
+@asynccontextmanager
+async def _create_committed_client(db_engine: AsyncEngine) -> AsyncIterator[AsyncClient]:
+    """Build an AsyncClient backed by fresh committed DB sessions per request."""
+    session_maker = async_sessionmaker(bind=db_engine, expire_on_commit=False, class_=AsyncSession)
+
+    async with session_maker() as setup_session:
+        await setup_session.execute(TRUNCATE_TEST_DATA_SQL)
+        await setup_session.commit()
 
     async def override():
-        yield session
+        async with session_maker() as request_session:
+            yield request_session
 
     app.dependency_overrides[get_db] = override
     transport = ASGITransport(app=app)
-    return AsyncClient(transport=transport, base_url="http://test")
+
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        async with session_maker() as cleanup_session:
+            await cleanup_session.execute(TRUNCATE_TEST_DATA_SQL)
+            await cleanup_session.commit()
 
 
 class TestAccountLockout:
     """Test account lockout after failed login attempts."""
 
     @pytest.mark.asyncio
-    async def test_username_lockout_after_five_failures(
-        self, async_db_committed: AsyncSession
-    ) -> None:
+    async def test_username_lockout_after_five_failures(self, db_engine: AsyncEngine) -> None:
         """Five wrong-password attempts lock the username; 6th fails even with correct pw."""
-        async with await _create_committed_client(async_db_committed) as client:
+        async with _create_committed_client(db_engine) as client:
             user_data = {
                 "username": "lockoutuser",
                 "email": "lockout@example.com",
@@ -347,12 +364,10 @@ class TestAccountLockout:
             assert locked.status_code == 401
             assert "Incorrect username or password" in locked.json()["detail"]
 
-        app.dependency_overrides.pop(get_db, None)
-
     @pytest.mark.asyncio
-    async def test_success_clears_counter(self, async_db_committed: AsyncSession) -> None:
+    async def test_success_clears_counter(self, db_engine: AsyncEngine) -> None:
         """A successful login resets the failure counter for that username."""
-        async with await _create_committed_client(async_db_committed) as client:
+        async with _create_committed_client(db_engine) as client:
             user_data = {
                 "username": "resetworks",
                 "email": "reset@example.com",
@@ -377,12 +392,10 @@ class TestAccountLockout:
             ok2 = await client.post("/api/auth/login", json=correct)
             assert ok2.status_code == 200
 
-        app.dependency_overrides.pop(get_db, None)
-
     @pytest.mark.asyncio
-    async def test_lockout_is_per_username(self, async_db_committed: AsyncSession) -> None:
+    async def test_lockout_is_per_username(self, db_engine: AsyncEngine) -> None:
         """Locking one username does not affect a different username."""
-        async with await _create_committed_client(async_db_committed) as client:
+        async with _create_committed_client(db_engine) as client:
             user_a = {"username": "user_a", "email": "a@example.com", "password": "pw123"}
             user_b = {"username": "user_b", "email": "b@example.com", "password": "pw456"}
             reg_a = await client.post("/api/auth/register", json=user_a)
@@ -402,12 +415,10 @@ class TestAccountLockout:
             ok = await client.post("/api/auth/login", json=correct_b)
             assert ok.status_code == 200
 
-        app.dependency_overrides.pop(get_db, None)
-
     @pytest.mark.asyncio
-    async def test_lockout_returns_generic_error(self, async_db_committed: AsyncSession) -> None:
+    async def test_lockout_returns_generic_error(self, db_engine: AsyncEngine) -> None:
         """Lockout response does not reveal whether the username exists."""
-        async with await _create_committed_client(async_db_committed) as client:
+        async with _create_committed_client(db_engine) as client:
             user_data = {
                 "username": "genericerr",
                 "email": "generic@example.com",
@@ -423,12 +434,10 @@ class TestAccountLockout:
             assert locked.status_code == 401
             assert locked.json()["detail"] == "Incorrect username or password"
 
-        app.dependency_overrides.pop(get_db, None)
-
     @pytest.mark.asyncio
-    async def test_nonexistent_user_records_failure(self, async_db_committed: AsyncSession) -> None:
+    async def test_nonexistent_user_records_failure(self, db_engine: AsyncEngine) -> None:
         """Attempts against a non-existent username still count toward IP lockout."""
-        async with await _create_committed_client(async_db_committed) as client:
+        async with _create_committed_client(db_engine) as client:
             for _ in range(9):
                 resp = await client.post(
                     "/api/auth/login",
@@ -452,5 +461,3 @@ class TestAccountLockout:
             correct = {"username": "lateuser", "password": "password123"}
             locked = await client.post("/api/auth/login", json=correct)
             assert locked.status_code == 401
-
-        app.dependency_overrides.pop(get_db, None)
