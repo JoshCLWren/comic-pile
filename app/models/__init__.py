@@ -3,6 +3,7 @@
 from app.models.collection import Collection
 from app.models.dependency import Dependency
 from app.models.event import Event
+from app.models.failed_login_attempt import FailedLoginAttempt
 from app.models.issue import Issue
 from app.models.revoked_token import RevokedToken
 from app.models.review import Review
@@ -15,6 +16,7 @@ __all__ = [
     "Collection",
     "Dependency",
     "Event",
+    "FailedLoginAttempt",
     "Issue",
     "RevokedToken",
     "Review",

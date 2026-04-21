@@ -18,6 +18,7 @@ from app.auth import (
     JWTError,
 )
 from app.database import get_db
+from app.middleware import limiter
 from app.models.user import User
 from app.schemas.auth import (
     RefreshTokenRequest,
@@ -25,6 +26,12 @@ from app.schemas.auth import (
     UserLoginRequest,
     UserRegisterRequest,
     UserResponse,
+)
+from app.security import (
+    check_login_lockout,
+    clear_failed_logins,
+    get_client_ip,
+    record_failed_login,
 )
 
 router = APIRouter(tags=["auth"])
@@ -129,6 +136,7 @@ async def register_user(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login_user(
     login_data: UserLoginRequest,
     request: Request,
@@ -139,7 +147,7 @@ async def login_user(
 
     Args:
         login_data: User login data (username, password).
-        request: Incoming request used for cookie security policy.
+        request: Incoming request used for cookie security policy and IP extraction.
         response: Outgoing response used to set auth cookies.
         db: SQLAlchemy session for database operations.
 
@@ -147,23 +155,33 @@ async def login_user(
         TokenResponse with access and refresh tokens.
 
     Raises:
-        HTTPException: If credentials are invalid.
+        HTTPException: If credentials are invalid or account is locked out.
     """
+    client_ip = get_client_ip(
+        dict(request.headers),
+        request.client.host if request.client else None,
+    )
+
+    await check_login_lockout(db, username=login_data.username, ip_address=client_ip)
+
     result = await db.execute(select(User).where(User.username == login_data.username).limit(1))
     user = result.scalar_one_or_none()
     if not user or not user.password_hash:
+        await record_failed_login(db, username=login_data.username, ip_address=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
 
     if not verify_password(login_data.password, user.password_hash):
+        await record_failed_login(db, username=login_data.username, ip_address=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
 
-    # Create tokens with JTI for revocation
+    await clear_failed_logins(db, username=login_data.username)
+
     jti = secrets.token_urlsafe(32)
     access_token = create_access_token(data={"sub": user.username, "jti": jti})
     refresh_token = create_refresh_token(data={"sub": user.username, "jti": jti})
@@ -197,7 +215,9 @@ async def refresh_access_token(
         HTTPException: If refresh token is invalid or revoked.
     """
     try:
-        refresh_token = refresh_data.refresh_token if refresh_data else request.cookies.get(REFRESH_COOKIE_NAME)
+        refresh_token = (
+            refresh_data.refresh_token if refresh_data else request.cookies.get(REFRESH_COOKIE_NAME)
+        )
         if not refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
