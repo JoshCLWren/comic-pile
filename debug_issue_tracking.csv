@@ -1,0 +1,25 @@
+id,title,status,is_blocked,issues_remaining,total_issues,next_unread_issue_id,reading_progress,actual_issue_count,unread_count,read_count
+240,Absolute Batman,active,t,9,19,302,in_progress,19,9,10
+364,Absolute Catwoman,active,t,1,1,10752,in_progress,1,1,0
+375,Absolute Evil ,active,t,1,1,10854,in_progress,1,1,0
+361,Absolute Flash,active,t,13,15,10724,in_progress,15,13,2
+363,Absolute Green Arrow,active,t,1,1,10751,in_progress,1,1,0
+362,Absolute Green Lantern,active,t,11,14,10740,in_progress,14,11,3
+241,Absolute Martian Manhunter,active,t,4,9,490,in_progress,9,4,5
+360,Absolute Superman,active,t,16,18,10706,in_progress,18,16,2
+248,Absolute Wonder Woman,active,t,8,16,285,in_progress,16,8,8
+347,Free Comic Book Day 2024: Ultimate Universe / Spider-Man,active,t,1,1,10608,in_progress,1,1,0
+348,Free Comic Book Day 2025: Amazing Spider-Man / Ultimate Universe,active,t,1,1,10609,in_progress,1,1,0
+340,The Ultimates,active,t,24,24,10555,in_progress,24,24,0
+338,Ultimate Black Panther,active,t,22,24,10508,in_progress,24,22,2
+344,Ultimate Endgame,active,t,5,5,10601,in_progress,5,5,0
+343,Ultimate Hawkeye,active,t,1,1,10600,in_progress,1,1,0
+346,Ultimate Impact: Reborn,active,t,1,1,10607,in_progress,1,1,0
+251,Ultimate Invasion,completed,f,0,,,,0,0,0
+337,Ultimate Spider-Man,active,t,22,24,10484,in_progress,24,22,2
+342,Ultimate Spider-Man: Incursion,active,t,5,5,10595,in_progress,5,5,0
+351,Ultimate Universe: Finale,active,t,1,1,10612,in_progress,1,1,0
+349,Ultimate Universe: One Year In,active,t,1,1,10610,in_progress,1,1,0
+350,Ultimate Universe: Two Years In,active,t,1,1,10611,in_progress,1,1,0
+341,Ultimate Wolverine,active,t,16,16,10579,in_progress,16,16,0
+339,Ultimate X-Men,active,t,19,25,10536,in_progress,25,19,6

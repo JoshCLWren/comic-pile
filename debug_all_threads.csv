@@ -1,0 +1,69 @@
+id,title,format,status,is_blocked,queue_position,collection_id,issues_remaining,total_issues,created_at
+3135,Nova,Comics,active,t,65,,3,3,2026-03-31 02:00:38.552863+00
+3134,Thanos,Comics,active,f,76,,10,12,2026-03-31 01:57:35.762933+00
+3133,Annihilation: Heralds of Galactus,Comic,active,t,64,,2,2,2026-03-31 01:56:04.996338+00
+3132,Annihilation,Comic,active,t,63,,6,6,2026-03-31 01:56:04.663603+00
+3131,Annihilation: Silver Surfer,Comic,active,t,62,,4,4,2026-03-31 01:56:04.246161+00
+3130,Annihilation: Super-Skrull,Comic,active,t,61,,4,4,2026-03-31 01:56:03.879819+00
+3129,Annihilation: Ronan,Comic,active,t,60,,4,4,2026-03-31 01:56:03.454504+00
+3128,Annihilation: Nova,Comic,active,t,59,,4,4,2026-03-31 01:56:03.206801+00
+3127,Annihilation: Prologue,Comic,active,t,58,,1,1,2026-03-31 01:56:02.887758+00
+3126,Drax the Destroyer,Comic,active,t,57,,4,4,2026-03-31 01:56:02.444233+00
+3125,Superman 2026 Annual: Year One Thousand,Comic,active,t,56,,1,1,2026-03-31 00:13:33.952337+00
+3124,DC K.O.: Boss Battle,Comic,active,t,55,,1,1,2026-03-31 00:13:33.731677+00
+3123,DC K.O.: The Kids Are All Fight Special,Comic,active,t,54,,1,1,2026-03-31 00:13:33.510574+00
+3122,DC K.O.: Green Lantern Galactic Slam,Comic,active,t,53,,1,1,2026-03-31 00:13:33.28771+00
+3121,DC K.O.: Red Hood vs. The Joker,Comic,active,t,52,,1,1,2026-03-31 00:13:33.007653+00
+3120,DC K.O.: Harley Quinn vs. Zatanna,Comic,active,t,51,,1,1,2026-03-31 00:13:32.787185+00
+3119,DC K.O.: Wonder Woman vs. Lobo,Comic,active,t,50,,1,1,2026-03-31 00:13:32.461182+00
+3118,DC K.O.: Superman vs. Captain Atom,Comic,active,t,49,,1,1,2026-03-31 00:13:32.081713+00
+3117,DC K.O.: Knightfight,Comic,active,t,75,,3,4,2026-03-31 00:13:31.660986+00
+3116,Titans,Comic,active,t,71,,4,5,2026-03-31 00:13:31.321979+00
+3115,Aquaman,Comic,active,t,48,,4,4,2026-03-31 00:09:47.631578+00
+375,Absolute Evil ,Comics,active,t,43,,1,1,2026-03-18 17:16:09.531318+00
+374,Planetary/Batman: Night on Earth,digital,active,t,41,,1,1,2026-03-14 15:06:39.805644+00
+373,Planetary/JLA: Terra Occulta,digital,active,t,40,,1,1,2026-03-14 15:06:39.188245+00
+372,Jenny Sparks: The Secret History of the Authority,digital,active,t,39,,5,5,2026-03-14 15:06:38.581521+00
+371,Planetary/The Authority: Ruling the World,digital,active,t,38,,1,1,2026-03-14 15:06:38.194613+00
+370,The Authority,digital,active,t,37,,12,12,2026-03-14 15:06:37.62376+00
+369,WildC.A.T.s/Aliens,digital,active,t,36,,1,1,2026-03-14 15:06:36.806694+00
+368,Stormwatch Vol. 2,digital,active,t,35,,11,11,2026-03-14 15:06:36.070815+00
+367,Stormwatch Vol. 1,digital,active,t,72,,9,50,2026-03-14 15:06:35.215467+00
+366,Free Comic Book Day 2025: DC All In Special Edition,Comics,completed,f,35,,0,1,2026-03-12 23:59:38.709129+00
+364,Absolute Catwoman,Comics,active,t,32,,1,1,2026-03-12 23:59:37.589582+00
+363,Absolute Green Arrow,Comics,active,t,31,,1,1,2026-03-12 23:59:37.061625+00
+362,Absolute Green Lantern,Comics,active,t,68,,11,14,2026-03-12 23:59:36.464289+00
+361,Absolute Flash,Comics,active,t,67,,13,15,2026-03-12 23:59:35.521673+00
+360,Absolute Superman,Comics,active,t,74,,16,18,2026-03-12 23:59:34.870994+00
+359,DC K.O.,Comics,active,t,2,,5,5,2026-03-12 23:59:33.590117+00
+358,Summer of Superman Special,Comics,completed,f,31,,0,1,2026-03-12 23:59:32.948088+00
+357,Justice League: The Omega Act Special,Comics,completed,f,77,,0,1,2026-03-12 23:59:32.352071+00
+356,Justice League Unlimited,Comics,active,t,66,,5,16,2026-03-12 23:59:31.743425+00
+355,Justice League: Dark Tomorrow Special,Comics,completed,f,28,,0,1,2026-03-12 23:59:31.004202+00
+354,The Flash,Comics,active,t,26,,5,30,2026-03-12 23:59:30.277444+00
+353,Superman,Comics,completed,f,54,,0,35,2026-03-12 23:59:29.66659+00
+352,Dark Nights: Death Metal,Comics,completed,f,51,,0,7,2026-03-12 23:59:29.035158+00
+351,Ultimate Universe: Finale,Comics,active,t,25,,1,1,2026-03-12 23:42:31.957235+00
+350,Ultimate Universe: Two Years In,Comics,active,t,24,,1,1,2026-03-12 23:42:31.717257+00
+349,Ultimate Universe: One Year In,Comics,active,t,23,,1,1,2026-03-12 23:42:31.33757+00
+348,Free Comic Book Day 2025: Amazing Spider-Man / Ultimate Universe,Comics,active,t,22,,1,1,2026-03-12 23:42:31.137994+00
+347,Free Comic Book Day 2024: Ultimate Universe / Spider-Man,Comics,active,t,21,,1,1,2026-03-12 23:42:30.868844+00
+346,Ultimate Impact: Reborn,Comics,active,t,20,,1,1,2026-03-12 23:42:30.591327+00
+345,Miles Morales: Spider-Man,Comics,active,t,19,,1,1,2026-03-12 23:42:30.311238+00
+344,Ultimate Endgame,Comics,active,t,18,,5,5,2026-03-12 23:42:30.09289+00
+343,Ultimate Hawkeye,Comics,active,t,17,,1,1,2026-03-12 23:42:29.887419+00
+342,Ultimate Spider-Man: Incursion,Comics,active,t,16,,5,5,2026-03-12 23:42:29.619072+00
+341,Ultimate Wolverine,Comics,active,t,15,,16,16,2026-03-12 23:42:29.40661+00
+340,The Ultimates,Comics,active,t,14,,24,24,2026-03-12 23:42:29.121254+00
+339,Ultimate X-Men,Comics,active,t,13,,19,25,2026-03-12 23:42:28.9274+00
+338,Ultimate Black Panther,Comics,active,t,70,,22,24,2026-03-12 23:42:28.637933+00
+337,Ultimate Spider-Man,Comics,active,t,45,,22,24,2026-03-12 23:42:28.320492+00
+253,DC All in Special,digital,completed,f,16,,0,,2026-02-24 00:51:09.627107+00
+251,Ultimate Invasion,digital,completed,f,15,,0,,2026-02-24 00:49:03.666512+00
+250,Planetary,digital,active,t,34,,19,27,2026-02-24 00:44:55.812558+00
+248,Absolute Wonder Woman,digital,active,t,73,,8,16,2026-02-24 00:39:57.523283+00
+245,Promethea,digital,active,f,44,,25,32,2026-02-24 00:22:56.943199+00
+241,Absolute Martian Manhunter,digital,active,t,11,,4,9,2026-02-22 13:14:05.408048+00
+240,Absolute Batman,digital,active,t,1,,9,19,2026-02-22 13:13:50.087962+00
+239,The Maxx,digital,active,f,69,,25,35,2026-02-22 13:13:25.634843+00
+238,New Teen Titans,digital,active,f,46,,35,40,2026-02-22 13:12:14.093426+00

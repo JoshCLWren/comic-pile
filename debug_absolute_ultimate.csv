@@ -1,0 +1,25 @@
+id,title,status,is_blocked,queue_position,issues_remaining,total_issues
+240,Absolute Batman,active,t,1,9,19
+364,Absolute Catwoman,active,t,32,1,1
+375,Absolute Evil ,active,t,43,1,1
+361,Absolute Flash,active,t,67,13,15
+363,Absolute Green Arrow,active,t,31,1,1
+362,Absolute Green Lantern,active,t,68,11,14
+241,Absolute Martian Manhunter,active,t,11,4,9
+360,Absolute Superman,active,t,74,16,18
+248,Absolute Wonder Woman,active,t,73,8,16
+347,Free Comic Book Day 2024: Ultimate Universe / Spider-Man,active,t,21,1,1
+348,Free Comic Book Day 2025: Amazing Spider-Man / Ultimate Universe,active,t,22,1,1
+340,The Ultimates,active,t,14,24,24
+338,Ultimate Black Panther,active,t,70,22,24
+344,Ultimate Endgame,active,t,18,5,5
+343,Ultimate Hawkeye,active,t,17,1,1
+346,Ultimate Impact: Reborn,active,t,20,1,1
+251,Ultimate Invasion,completed,f,15,0,
+337,Ultimate Spider-Man,active,t,45,22,24
+342,Ultimate Spider-Man: Incursion,active,t,16,5,5
+351,Ultimate Universe: Finale,active,t,25,1,1
+349,Ultimate Universe: One Year In,active,t,23,1,1
+350,Ultimate Universe: Two Years In,active,t,24,1,1
+341,Ultimate Wolverine,active,t,15,16,16
+339,Ultimate X-Men,active,t,13,19,25
