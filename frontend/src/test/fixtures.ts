@@ -22,6 +22,26 @@ type TestUser = {
 
 let fixtureUserCounter = 0;
 
+async function getCsrfToken(request: APIRequestContext, accessToken: string): Promise<string> {
+  const response = await request.get('/api/auth/csrf', {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    timeout: 10000,
+  });
+
+  if (!response.ok()) {
+    throw new Error(`Failed to fetch CSRF token: ${response.status()} ${response.statusText()}`);
+  }
+
+  const data = await response.json() as { csrf_token?: string };
+  if (!data.csrf_token) {
+    throw new Error('CSRF bootstrap response did not include csrf_token');
+  }
+
+  return data.csrf_token;
+}
+
 async function registerWithRetry(
   request: APIRequestContext,
   testUser: TestUser,
@@ -93,9 +113,11 @@ async function createThreadsForUser(
   accessToken: string,
   threadCount: number,
 ): Promise<void> {
+  const csrfToken = await getCsrfToken(request, accessToken);
   const headers = {
     'Authorization': `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
+    'X-CSRF-Token': csrfToken,
   };
 
   for (let i = 0; i < threadCount; i++) {
