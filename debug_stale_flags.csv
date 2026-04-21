@@ -1,0 +1,61 @@
+id,title,current_flag,should_be_blocked,flag_status
+240,Absolute Batman,t,t,CORRECT
+364,Absolute Catwoman,t,t,CORRECT
+375,Absolute Evil ,t,t,CORRECT
+361,Absolute Flash,t,t,CORRECT
+363,Absolute Green Arrow,t,t,CORRECT
+362,Absolute Green Lantern,t,t,CORRECT
+241,Absolute Martian Manhunter,t,t,CORRECT
+360,Absolute Superman,t,t,CORRECT
+248,Absolute Wonder Woman,t,t,CORRECT
+3132,Annihilation,t,t,CORRECT
+3133,Annihilation: Heralds of Galactus,t,t,CORRECT
+3128,Annihilation: Nova,t,t,CORRECT
+3127,Annihilation: Prologue,t,t,CORRECT
+3129,Annihilation: Ronan,t,t,CORRECT
+3131,Annihilation: Silver Surfer,t,t,CORRECT
+3130,Annihilation: Super-Skrull,t,t,CORRECT
+3115,Aquaman,t,t,CORRECT
+359,DC K.O.,t,t,CORRECT
+3124,DC K.O.: Boss Battle,t,t,CORRECT
+3122,DC K.O.: Green Lantern Galactic Slam,t,t,CORRECT
+3120,DC K.O.: Harley Quinn vs. Zatanna,t,t,CORRECT
+3117,DC K.O.: Knightfight,t,t,CORRECT
+3121,DC K.O.: Red Hood vs. The Joker,t,t,CORRECT
+3118,DC K.O.: Superman vs. Captain Atom,t,t,CORRECT
+3123,DC K.O.: The Kids Are All Fight Special,t,t,CORRECT
+3119,DC K.O.: Wonder Woman vs. Lobo,t,t,CORRECT
+3126,Drax the Destroyer,t,t,CORRECT
+347,Free Comic Book Day 2024: Ultimate Universe / Spider-Man,t,t,CORRECT
+348,Free Comic Book Day 2025: Amazing Spider-Man / Ultimate Universe,t,t,CORRECT
+372,Jenny Sparks: The Secret History of the Authority,t,t,CORRECT
+356,Justice League Unlimited,t,t,CORRECT
+345,Miles Morales: Spider-Man,t,t,CORRECT
+238,New Teen Titans,f,f,CORRECT
+3135,Nova,t,t,CORRECT
+250,Planetary,t,t,CORRECT
+374,Planetary/Batman: Night on Earth,t,t,CORRECT
+373,Planetary/JLA: Terra Occulta,t,t,CORRECT
+371,Planetary/The Authority: Ruling the World,t,t,CORRECT
+245,Promethea,f,f,CORRECT
+367,Stormwatch Vol. 1,t,t,CORRECT
+368,Stormwatch Vol. 2,t,t,CORRECT
+3125,Superman 2026 Annual: Year One Thousand,t,t,CORRECT
+3134,Thanos,f,f,CORRECT
+370,The Authority,t,t,CORRECT
+354,The Flash,t,t,CORRECT
+239,The Maxx,f,f,CORRECT
+340,The Ultimates,t,t,CORRECT
+3116,Titans,t,t,CORRECT
+338,Ultimate Black Panther,t,t,CORRECT
+344,Ultimate Endgame,t,t,CORRECT
+343,Ultimate Hawkeye,t,t,CORRECT
+346,Ultimate Impact: Reborn,t,t,CORRECT
+337,Ultimate Spider-Man,t,t,CORRECT
+342,Ultimate Spider-Man: Incursion,t,t,CORRECT
+351,Ultimate Universe: Finale,t,t,CORRECT
+349,Ultimate Universe: One Year In,t,t,CORRECT
+350,Ultimate Universe: Two Years In,t,t,CORRECT
+341,Ultimate Wolverine,t,t,CORRECT
+339,Ultimate X-Men,t,t,CORRECT
+369,WildC.A.T.s/Aliens,t,t,CORRECT

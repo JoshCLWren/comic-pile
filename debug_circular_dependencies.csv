@@ -1,0 +1,60 @@
+thread_id,thread_title,blocked_by_thread_id,blocked_by_thread_title,target_series,source_series,dependency_count,chain_type
+240,Absolute Batman,375,Absolute Evil ,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+364,Absolute Catwoman,375,Absolute Evil ,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+375,Absolute Evil ,240,Absolute Batman,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+375,Absolute Evil ,361,Absolute Flash,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+375,Absolute Evil ,360,Absolute Superman,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+375,Absolute Evil ,248,Absolute Wonder Woman,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+361,Absolute Flash,375,Absolute Evil ,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+363,Absolute Green Arrow,375,Absolute Evil ,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+362,Absolute Green Lantern,375,Absolute Evil ,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+241,Absolute Martian Manhunter,375,Absolute Evil ,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+360,Absolute Superman,375,Absolute Evil ,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+248,Absolute Wonder Woman,375,Absolute Evil ,Absolute,Absolute,1,SAME SERIES - CIRCULAR
+3133,Annihilation: Heralds of Galactus,3133,Annihilation: Heralds of Galactus,Annihilation,Annihilation,1,SAME SERIES - CIRCULAR
+3128,Annihilation: Nova,3128,Annihilation: Nova,Annihilation,Annihilation,3,SAME SERIES - CIRCULAR
+3128,Annihilation: Nova,3127,Annihilation: Prologue,Annihilation,Annihilation,1,SAME SERIES - CIRCULAR
+3129,Annihilation: Ronan,3128,Annihilation: Nova,Annihilation,Annihilation,1,SAME SERIES - CIRCULAR
+3129,Annihilation: Ronan,3129,Annihilation: Ronan,Annihilation,Annihilation,3,SAME SERIES - CIRCULAR
+3131,Annihilation: Silver Surfer,3131,Annihilation: Silver Surfer,Annihilation,Annihilation,3,SAME SERIES - CIRCULAR
+3131,Annihilation: Silver Surfer,3130,Annihilation: Super-Skrull,Annihilation,Annihilation,1,SAME SERIES - CIRCULAR
+3130,Annihilation: Super-Skrull,3129,Annihilation: Ronan,Annihilation,Annihilation,1,SAME SERIES - CIRCULAR
+3130,Annihilation: Super-Skrull,3130,Annihilation: Super-Skrull,Annihilation,Annihilation,3,SAME SERIES - CIRCULAR
+359,DC K.O.,359,DC K.O.,DC,DC,2,SAME SERIES - CIRCULAR
+3124,DC K.O.: Boss Battle,3123,DC K.O.: The Kids Are All Fight Special,DC,DC,1,SAME SERIES - CIRCULAR
+3117,DC K.O.: Knightfight,3124,DC K.O.: Boss Battle,DC,DC,1,SAME SERIES - CIRCULAR
+3117,DC K.O.: Knightfight,3121,DC K.O.: Red Hood vs. The Joker,DC,DC,1,SAME SERIES - CIRCULAR
+3121,DC K.O.: Red Hood vs. The Joker,3120,DC K.O.: Harley Quinn vs. Zatanna,DC,DC,1,SAME SERIES - CIRCULAR
+3118,DC K.O.: Superman vs. Captain Atom,3117,DC K.O.: Knightfight,DC,DC,1,SAME SERIES - CIRCULAR
+3123,DC K.O.: The Kids Are All Fight Special,3122,DC K.O.: Green Lantern Galactic Slam,DC,DC,1,SAME SERIES - CIRCULAR
+3119,DC K.O.: Wonder Woman vs. Lobo,3118,DC K.O.: Superman vs. Captain Atom,DC,DC,1,SAME SERIES - CIRCULAR
+3126,Drax the Destroyer,3126,Drax the Destroyer,Drax,Drax,3,SAME SERIES - CIRCULAR
+356,Justice League Unlimited,356,Justice League Unlimited,Justice,Justice,1,SAME SERIES - CIRCULAR
+367,Stormwatch Vol. 1,367,Stormwatch Vol. 1,Stormwatch,Stormwatch,1,SAME SERIES - CIRCULAR
+368,Stormwatch Vol. 2,367,Stormwatch Vol. 1,Stormwatch,Stormwatch,1,SAME SERIES - CIRCULAR
+368,Stormwatch Vol. 2,368,Stormwatch Vol. 2,Stormwatch,Stormwatch,1,SAME SERIES - CIRCULAR
+340,The Ultimates,340,The Ultimates,The,The,1,SAME SERIES - CIRCULAR
+338,Ultimate Black Panther,337,Ultimate Spider-Man,Ultimate,Ultimate,5,SAME SERIES - CIRCULAR
+338,Ultimate Black Panther,342,Ultimate Spider-Man: Incursion,Ultimate,Ultimate,4,SAME SERIES - CIRCULAR
+338,Ultimate Black Panther,350,Ultimate Universe: Two Years In,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+338,Ultimate Black Panther,341,Ultimate Wolverine,Ultimate,Ultimate,3,SAME SERIES - CIRCULAR
+338,Ultimate Black Panther,339,Ultimate X-Men,Ultimate,Ultimate,4,SAME SERIES - CIRCULAR
+344,Ultimate Endgame,338,Ultimate Black Panther,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+344,Ultimate Endgame,337,Ultimate Spider-Man,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+344,Ultimate Endgame,341,Ultimate Wolverine,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+343,Ultimate Hawkeye,337,Ultimate Spider-Man,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+337,Ultimate Spider-Man,338,Ultimate Black Panther,Ultimate,Ultimate,6,SAME SERIES - CIRCULAR
+337,Ultimate Spider-Man,341,Ultimate Wolverine,Ultimate,Ultimate,3,SAME SERIES - CIRCULAR
+337,Ultimate Spider-Man,339,Ultimate X-Men,Ultimate,Ultimate,7,SAME SERIES - CIRCULAR
+342,Ultimate Spider-Man: Incursion,337,Ultimate Spider-Man,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+342,Ultimate Spider-Man: Incursion,341,Ultimate Wolverine,Ultimate,Ultimate,3,SAME SERIES - CIRCULAR
+351,Ultimate Universe: Finale,344,Ultimate Endgame,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+350,Ultimate Universe: Two Years In,339,Ultimate X-Men,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+341,Ultimate Wolverine,338,Ultimate Black Panther,Ultimate,Ultimate,4,SAME SERIES - CIRCULAR
+341,Ultimate Wolverine,344,Ultimate Endgame,Ultimate,Ultimate,2,SAME SERIES - CIRCULAR
+341,Ultimate Wolverine,337,Ultimate Spider-Man,Ultimate,Ultimate,3,SAME SERIES - CIRCULAR
+341,Ultimate Wolverine,339,Ultimate X-Men,Ultimate,Ultimate,4,SAME SERIES - CIRCULAR
+339,Ultimate X-Men,338,Ultimate Black Panther,Ultimate,Ultimate,11,SAME SERIES - CIRCULAR
+339,Ultimate X-Men,337,Ultimate Spider-Man,Ultimate,Ultimate,12,SAME SERIES - CIRCULAR
+339,Ultimate X-Men,349,Ultimate Universe: One Year In,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR
+339,Ultimate X-Men,341,Ultimate Wolverine,Ultimate,Ultimate,1,SAME SERIES - CIRCULAR

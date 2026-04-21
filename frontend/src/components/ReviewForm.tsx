@@ -115,7 +115,7 @@ export default function ReviewForm({
             value={reviewText}
             onChange={(e) => setReviewText(e.target.value)}
             placeholder="Share your thoughts about this comic..."
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[120px] resize-y focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+            className="w-full bg-white/5 border border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[120px] resize-y focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/30 transition-colors"
             maxLength={2000}
           />
           <div className="text-[10px] text-stone-500 text-right">

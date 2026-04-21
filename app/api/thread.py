@@ -351,7 +351,6 @@ async def create_thread(
             db.add(new_thread)
             await db.commit()
             await db.refresh(new_thread)
-
             return await thread_to_response(new_thread, db)
         except OperationalError as e:
             if "deadlock" in str(e).lower():
