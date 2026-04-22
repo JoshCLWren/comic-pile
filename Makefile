@@ -13,6 +13,7 @@ LIBDIR ?= $(PREFIX)/lib
 PYTHON ?= .venv/bin/python
 PYTEST ?= $(PYTHON) -m pytest
 PROD_BASE_URL ?= https://app-production-72b9.up.railway.app
+RAILWAY_PROJECT_ID ?= 8222a6ae-6873-443e-a367-a240536dc213
 RAILWAY_PROD_ENV ?= production
 RAILWAY_APP_SERVICE ?= app
 PROD_MIGRATE_CMD ?= /app/.venv/bin/alembic upgrade head
@@ -296,11 +297,15 @@ deploy-prod:  ## Deploy to Railway production
 	fi
 	@echo "Running frontend TypeScript typecheck..."
 	@cd frontend && npm run typecheck
-	@echo "Deploying to Railway..."
-	@railway up --detach
+	@echo "Deploying to Railway project $(RAILWAY_PROJECT_ID) service $(RAILWAY_APP_SERVICE) in $(RAILWAY_PROD_ENV)..."
+	@railway up \
+		--project $(RAILWAY_PROJECT_ID) \
+		--environment $(RAILWAY_PROD_ENV) \
+		--service $(RAILWAY_APP_SERVICE) \
+		--detach
 	@sleep 60
-	@echo "Checking deployment status..."
-	@railway status
+	@echo "Checking deployment status for $(RAILWAY_APP_SERVICE) in $(RAILWAY_PROD_ENV)..."
+	@railway service status --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV)
 	@echo "Testing health endpoint..."
 	@curl -fsS $(PROD_BASE_URL)/health >/dev/null
 	@echo "Validating deployed frontend asset references..."
@@ -314,10 +319,10 @@ prod-migrate:  ## Run Alembic migrations in Railway production app service
 		uv run alembic heads 2>/dev/null; \
 		exit 1; \
 	fi
-	@echo "Running production migrations on Railway ($(RAILWAY_APP_SERVICE)/$(RAILWAY_PROD_ENV))..."
-	@railway ssh --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) $(PROD_MIGRATE_CMD)
+	@echo "Running production migrations on Railway ($(RAILWAY_PROJECT_ID)/$(RAILWAY_APP_SERVICE)/$(RAILWAY_PROD_ENV))..."
+	@railway ssh --project $(RAILWAY_PROJECT_ID) --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) $(PROD_MIGRATE_CMD)
 	@echo "Verifying production migration revision..."
-	@railway ssh --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) /app/.venv/bin/alembic current
+	@railway ssh --project $(RAILWAY_PROJECT_ID) --service $(RAILWAY_APP_SERVICE) --environment $(RAILWAY_PROD_ENV) /app/.venv/bin/alembic current
 
 deploy-prod-migrate: deploy-prod prod-migrate  ## Deploy to Railway production, then run Alembic migrations
 	@echo "Verifying health endpoint after production migration..."
