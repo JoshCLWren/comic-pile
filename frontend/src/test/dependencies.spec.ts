@@ -158,7 +158,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#target-issue')).toBeVisible()
     })
 
-    test('issues load and display correctly with status indicators', async ({ authenticatedPage }) => {
+    test('issues load and display correctly as unread-only numbered options', async ({ authenticatedPage }) => {
       const sourceThread = await createThread(authenticatedPage, {
         title: 'Source Series',
         format: 'Comics',
@@ -193,7 +193,7 @@ test.describe('Dependencies', () => {
       expect(targetOptions).toBeGreaterThan(1)
 
       const firstSourceOption = await authenticatedPage.locator('#source-issue option').nth(1).textContent()
-      expect(firstSourceOption).toMatch(/#\d+ [✅🟢]/)
+      expect(firstSourceOption).toMatch(/^#\d+$/)
     })
 
     test('auto-selection of first unread issue', async ({ authenticatedPage }) => {
@@ -253,9 +253,11 @@ test.describe('Dependencies', () => {
       expect(sourceValue).not.toBe('')
 
       const sourceOptions = await authenticatedPage.locator('#source-issue option').allTextContents()
-      const selectedOptionText = await authenticatedPage.locator('#source-issue option:checked').textContent()
+      expect(sourceOptions).not.toContain('#1')
+      expect(sourceOptions).not.toContain('#2')
 
-      expect(selectedOptionText).toContain('🟢')
+      const selectedOptionText = await authenticatedPage.locator('#source-issue option:checked').textContent()
+      expect(selectedOptionText).toBe('#3')
     })
 
     test('creating dependency with selected issues (not just next_unread)', async ({ authenticatedPage }) => {

@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { expect, test, beforeEach, vi } from 'vitest'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
+import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
 const mockApiGet = vi.fn()
 const mockSetAccessToken = vi.fn()
@@ -32,7 +33,9 @@ const renderWithAuth = () => {
   return render(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
-        <Navigation onBugReportSubmit={vi.fn()} />
+        <BugReportRestoreProvider>
+          <Navigation onBugReportSubmit={vi.fn()} />
+        </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>
   )
@@ -43,7 +46,9 @@ const renderWithoutAuth = () => {
   return render(
     <MemoryRouter initialEntries={['/']}>
       <AuthProvider>
-        <Navigation onBugReportSubmit={vi.fn()} />
+        <BugReportRestoreProvider>
+          <Navigation onBugReportSubmit={vi.fn()} />
+        </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>
   )

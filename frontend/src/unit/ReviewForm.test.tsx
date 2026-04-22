@@ -179,6 +179,8 @@ describe('ReviewForm', () => {
   })
 
   it('should handle skip button click', async () => {
+    mockOnSubmit.mockResolvedValue(undefined)
+
     render(
       <ReviewForm
         isOpen={true}
@@ -195,9 +197,14 @@ describe('ReviewForm', () => {
       fireEvent.click(skipButton)
     })
 
+    // Skip submits the rating without review text; parent controls closing.
     await waitFor(() => {
-      expect(mockOnClose).toHaveBeenCalled()
+      expect(mockOnSubmit).toHaveBeenCalledWith({
+        thread_id: 42,
+        rating: 4.5,
+      })
     })
+    expect(mockOnClose).not.toHaveBeenCalled()
   })
 
   it('should submit review with text content', async () => {
@@ -230,8 +237,9 @@ describe('ReviewForm', () => {
         review_text: 'Great issue!',
         issue_number: '1'
       })
-      expect(mockOnClose).toHaveBeenCalled()
     })
+    // Parent controls closing after a successful submit; the form no longer self-closes.
+    expect(mockOnClose).not.toHaveBeenCalled()
   })
 
   it('should submit review without text content (undefined)', async () => {
