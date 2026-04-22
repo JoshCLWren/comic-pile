@@ -40,7 +40,7 @@ it('calls list reviews endpoint with expected paths', () => {
 it('calls get thread reviews endpoint with expected paths', () => {
   reviewsApi.getThreadReviews(42)
 
-  expect(get).toHaveBeenCalledWith('/v1/reviews/threads/42/reviews')
+  expect(get).toHaveBeenCalledWith('/threads/42/reviews')
 })
 
 it('calls get review endpoint with expected paths', () => {

@@ -41,6 +41,7 @@ vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="sessio
 vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
 
 import { AuthProvider, AppRoutes, useAuth } from '../App'
+import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
 let authContextValue: AuthContextValue | null = null
 
@@ -57,8 +58,10 @@ const renderWithAuth = (initialEntry = '/') => {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AuthProvider>
-        <TestAuthConsumer />
-        <AppRoutes />
+        <BugReportRestoreProvider>
+          <TestAuthConsumer />
+          <AppRoutes />
+        </BugReportRestoreProvider>
       </AuthProvider>
     </MemoryRouter>
   )

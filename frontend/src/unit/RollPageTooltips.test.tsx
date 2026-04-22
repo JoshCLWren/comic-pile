@@ -13,10 +13,11 @@ import {
  useSetDie,
 } from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
 import { ToastProvider } from '../contexts/ToastContext'
+import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
 const navigateSpy = vi.fn()
 
@@ -50,6 +51,7 @@ vi.mock('../hooks/useSnooze', () => ({
 vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
+  useShuffleQueue: vi.fn(),
 }))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
@@ -79,6 +81,7 @@ const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseRate = vi.mocked(useRate) as any
 const mockedUseCollections = vi.mocked(useCollections) as any
 
@@ -114,6 +117,7 @@ beforeEach(() => {
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRate.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseCollections.mockReturnValue({
     collections: [],
@@ -130,7 +134,9 @@ afterEach(() => {
 it('renders tooltip for offset indicator when snoozed threads exist', async () => {
   render(
     <ToastProvider>
-      <RollPage />
+      <BugReportRestoreProvider>
+        <RollPage />
+      </BugReportRestoreProvider>
     </ToastProvider>
   )
 
@@ -146,7 +152,13 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
 })
 
   it('renders tooltips for snoozed offset active text', async () => {
-    render(<ToastProvider><RollPage /></ToastProvider>)
+    render(
+      <ToastProvider>
+        <BugReportRestoreProvider>
+          <RollPage />
+        </BugReportRestoreProvider>
+      </ToastProvider>
+    )
 
     const snoozedIndicator = screen.getByText('+2')
     expect(snoozedIndicator).toBeInTheDocument()
@@ -166,7 +178,9 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
 it('renders tooltip for ladder indicator', async () => {
   render(
     <ToastProvider>
-      <RollPage />
+      <BugReportRestoreProvider>
+        <RollPage />
+      </BugReportRestoreProvider>
     </ToastProvider>
   )
 
@@ -195,7 +209,9 @@ it('does not render snoozed indicators when no snoozed threads', async () => {
 
   render(
     <ToastProvider>
-      <RollPage />
+      <BugReportRestoreProvider>
+        <RollPage />
+      </BugReportRestoreProvider>
     </ToastProvider>
   )
 

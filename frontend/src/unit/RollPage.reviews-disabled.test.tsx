@@ -12,10 +12,11 @@ import {
   useSetDie,
 } from '../hooks/useRoll'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { useMoveToBack, useMoveToFront } from '../hooks/useQueue'
+import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
 import { ToastProvider } from '../contexts/ToastContext'
+import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { threadsApi } from '../services/api'
 
 const navigateSpy = vi.fn()
@@ -39,6 +40,7 @@ vi.mock('../components/LazyDice3D', () => ({
 
 vi.mock('../config/featureFlags', () => ({
   isReviewsFeatureEnabled: vi.fn(() => false),
+  collectionsEnabled: false,
 }))
 
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
@@ -57,6 +59,7 @@ vi.mock('../hooks/useSnooze', () => ({
 vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
+  useShuffleQueue: vi.fn(),
 }))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
@@ -86,6 +89,7 @@ const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 const mockedUseMoveToBack = vi.mocked(useMoveToBack) as any
+const mockedUseShuffleQueue = vi.mocked(useShuffleQueue) as any
 const mockedUseRate = vi.mocked(useRate) as any
 const mockedUseCollections = vi.mocked(useCollections) as any
 
@@ -146,6 +150,7 @@ beforeEach(() => {
   mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
+  mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRate.mockReturnValue({ mutate: vi.fn().mockResolvedValue(undefined), isPending: false })
   mockedUseCollections.mockReturnValue({
     collections: [],
@@ -163,7 +168,9 @@ it('submits the rating immediately without showing review UI when reviews are di
   const user = userEvent.setup()
   render(
     <ToastProvider>
-      <RollPage />
+      <BugReportRestoreProvider>
+        <RollPage />
+      </BugReportRestoreProvider>
     </ToastProvider>,
   )
 
