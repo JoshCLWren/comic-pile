@@ -13,6 +13,28 @@ function getDefaultDependencyMode(_thread: Thread | null): 'thread' | 'issue' {
   return 'issue'
 }
 
+async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
+  const allIssues: Issue[] = []
+  const seenPageTokens = new Set<string>()
+  let nextPageToken: string | null = null
+
+  while (true) {
+    const data = await issuesApi.list(threadId, {
+      status: 'unread',
+      page_size: 100,
+      ...(nextPageToken ? { page_token: nextPageToken } : {}),
+    })
+    allIssues.push(...(data.issues || []))
+
+    if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
+      return allIssues
+    }
+
+    seenPageTokens.add(data.next_page_token)
+    nextPageToken = data.next_page_token
+  }
+}
+
 function groupByThread(deps: Dependency[], labelKey: 'source_label' | 'target_label'): Map<string, Dependency[]> {
   const groups = new Map<string, Dependency[]>()
   for (const dep of deps) {
@@ -311,15 +333,15 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       setIsLoadingTargetIssues(true)
       setError('')
       try {
-        const [sourceData, targetData] = await Promise.all([
-          issuesApi.list(selectedThreadId),
-          issuesApi.list(thread.id),
+        const [sourceIssuesList, targetIssuesList] = await Promise.all([
+          fetchAllUnreadIssues(selectedThreadId),
+          fetchAllUnreadIssues(thread.id),
         ])
         if (!isCurrent) return
-        setSourceIssues(sourceData.issues || [])
-        setTargetIssues(targetData.issues || [])
-        setSourceIssueId(sourceData.issues?.find((i) => i.status === 'unread')?.id || null)
-        setTargetIssueId(targetData.issues?.find((i) => i.status === 'unread')?.id || null)
+        setSourceIssues(sourceIssuesList)
+        setTargetIssues(targetIssuesList)
+        setSourceIssueId(sourceIssuesList[0]?.id || null)
+        setTargetIssueId(targetIssuesList[0]?.id || null)
       } catch (issuesError: unknown) {
         if (!isCurrent) return
         setError(getApiErrorDetail(issuesError))
@@ -812,13 +834,20 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                        value={sourceIssueId || ''}
                        onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+                       disabled={sourceIssues.length === 0}
                      >
-                       <option value="">Select an issue</option>
-                        {sourceIssues.map((issue) => (
-                          <option key={issue.id} value={issue.id}>
-                            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
-                          </option>
-                        ))}
+                       {sourceIssues.length === 0 ? (
+                         <option value="">No unread issues available</option>
+                       ) : (
+                         <>
+                           <option value="">Select an issue</option>
+                           {sourceIssues.map((issue) => (
+                             <option key={issue.id} value={issue.id}>
+                               #{issue.issue_number}
+                             </option>
+                           ))}
+                         </>
+                       )}
                      </select>
                    </div>
                    <div>
@@ -830,13 +859,20 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                        value={targetIssueId || ''}
                        onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
                        className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+                       disabled={targetIssues.length === 0}
                      >
-                       <option value="">Select an issue</option>
-                        {targetIssues.map((issue) => (
-                          <option key={issue.id} value={issue.id}>
-                            #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
-                          </option>
-                        ))}
+                       {targetIssues.length === 0 ? (
+                         <option value="">No unread issues available</option>
+                       ) : (
+                         <>
+                           <option value="">Select an issue</option>
+                           {targetIssues.map((issue) => (
+                             <option key={issue.id} value={issue.id}>
+                               #{issue.issue_number}
+                             </option>
+                           ))}
+                         </>
+                       )}
                      </select>
                    </div>
                  </>
