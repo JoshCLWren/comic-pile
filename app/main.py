@@ -46,6 +46,7 @@ from app.api.review import router
 from app.config import get_app_settings, get_database_settings
 from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
+from app.middleware.security_headers import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,9 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Add security headers middleware
+    app.add_middleware(SecurityHeadersMiddleware)
 
     def redact_headers(headers: dict) -> dict:
         """Redact sensitive headers from logging.
