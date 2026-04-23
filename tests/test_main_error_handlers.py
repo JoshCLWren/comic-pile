@@ -1,9 +1,121 @@
 """Tests for error handlers in app/main.py."""
 
+import os
+
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+@pytest.mark.asyncio
+async def test_validation_exception_handler_production_sanitization() -> None:
+    """Test validation exception handler returns generic errors in production."""
+    from app.config import clear_settings_cache
+    from app.main import create_app
+
+    original_env = os.getenv("ENVIRONMENT")
+    original_cors = os.getenv("CORS_ORIGINS")
+
+    try:
+        os.environ["ENVIRONMENT"] = "production"
+        os.environ["CORS_ORIGINS"] = "https://example.com"
+        clear_settings_cache()
+
+        test_app = create_app(serve_frontend=False)
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/auth/login",
+                json={},
+            )
+            assert response.status_code == 422
+            data = response.json()
+            assert "detail" in data
+            assert data["detail"] == "Validation failed"
+            assert "errors" not in data
+            assert "body" not in data
+    finally:
+        if original_env is None:
+            os.environ.pop("ENVIRONMENT", None)
+        else:
+            os.environ["ENVIRONMENT"] = original_env
+        if original_cors is None:
+            os.environ.pop("CORS_ORIGINS", None)
+        else:
+            os.environ["CORS_ORIGINS"] = original_cors
+        clear_settings_cache()
+
+
+@pytest.mark.asyncio
+async def test_validation_exception_handler_development_detailed() -> None:
+    """Test validation exception handler returns detailed errors in development."""
+    from app.config import clear_settings_cache
+    from app.main import create_app
+
+    original_env = os.getenv("ENVIRONMENT")
+
+    try:
+        os.environ["ENVIRONMENT"] = "development"
+        clear_settings_cache()
+
+        test_app = create_app(serve_frontend=False)
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/auth/login",
+                json={},
+            )
+            assert response.status_code == 422
+            data = response.json()
+            assert "detail" in data
+            assert data["detail"] == "Validation failed"
+            assert "errors" in data
+            assert len(data["errors"]) > 0
+            assert "body" in data
+    finally:
+        if original_env is None:
+            os.environ.pop("ENVIRONMENT", None)
+        else:
+            os.environ["ENVIRONMENT"] = original_env
+        clear_settings_cache()
+
+
+@pytest.mark.asyncio
+async def test_validation_exception_handler_test_detailed() -> None:
+    """Test validation exception handler returns detailed errors in test environment."""
+    from app.config import clear_settings_cache
+    from app.main import create_app
+
+    original_env = os.getenv("ENVIRONMENT")
+
+    try:
+        os.environ["ENVIRONMENT"] = "test"
+        clear_settings_cache()
+
+        test_app = create_app(serve_frontend=False)
+
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/api/auth/login",
+                json={},
+            )
+            assert response.status_code == 422
+            data = response.json()
+            assert "detail" in data
+            assert data["detail"] == "Validation failed"
+            assert "errors" in data
+            assert len(data["errors"]) > 0
+            assert "body" in data
+    finally:
+        if original_env is None:
+            os.environ.pop("ENVIRONMENT", None)
+        else:
+            os.environ["ENVIRONMENT"] = original_env
+        clear_settings_cache()
 
 
 @pytest.mark.asyncio
