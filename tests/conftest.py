@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.pool import NullPool
 
+from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.database import Base, get_db
 from app.main import app
 from app.models import Event, Thread, User
@@ -608,6 +609,9 @@ async def client(async_db: SQLAlchemyAsyncSession) -> AsyncGenerator[AsyncClient
     app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        csrf_token = generate_csrf_token()
+        ac.cookies.set(CSRF_COOKIE_NAME, csrf_token)
+        ac.headers.update({CSRF_HEADER_NAME: csrf_token})
         yield ac
     app.dependency_overrides.clear()
 
@@ -622,6 +626,9 @@ async def auth_client(
     app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        csrf_token = generate_csrf_token()
+        ac.cookies.set(CSRF_COOKIE_NAME, csrf_token)
+        ac.headers.update({CSRF_HEADER_NAME: csrf_token})
         result = await async_db.execute(select(User).where(User.username == test_username))
         user = result.scalar_one_or_none()
         if not user:

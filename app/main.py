@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import secrets
 import sys
 import time
 import traceback
@@ -44,6 +45,7 @@ from app.api import (
 )
 from app.api.review import router
 from app.config import get_app_settings, get_database_settings
+from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, is_csrf_protected_request
 from app.database import Base, AsyncSessionLocal, get_db
 from app.middleware import limiter
 
@@ -187,6 +189,30 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
             else:
                 redacted[key] = value
         return redacted
+
+    @app.middleware("http")
+    async def csrf_middleware(request: Request, call_next):
+        """Require a matching CSRF header and cookie on mutating API requests."""
+        if not is_csrf_protected_request(request.method, request.url.path):
+            return await call_next(request)
+
+        auth_header = request.headers.get("authorization")
+        if not auth_header:
+            return await call_next(request)
+
+        csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
+        csrf_header = request.headers.get(CSRF_HEADER_NAME)
+        if (
+            not csrf_cookie
+            or not csrf_header
+            or not secrets.compare_digest(csrf_cookie, csrf_header)
+        ):
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": "CSRF token missing or invalid"},
+            )
+
+        return await call_next(request)
 
     @app.middleware("http")
     async def log_errors_middleware(request: Request, call_next):

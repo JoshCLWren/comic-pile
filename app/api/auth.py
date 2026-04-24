@@ -17,6 +17,7 @@ from app.auth import (
     verify_token,
     JWTError,
 )
+from app.csrf import ensure_csrf_cookie, is_secure_request
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
@@ -32,24 +33,13 @@ router = APIRouter(tags=["auth"])
 REFRESH_COOKIE_NAME = "refresh_token"
 
 
-def _is_secure_request(request: Request) -> bool:
-    """Determine whether the original client request was HTTPS.
-
-    Respects reverse-proxy forwarded proto headers when present.
-    """
-    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
-    if forwarded_proto:
-        return forwarded_proto == "https"
-    return request.url.scheme == "https"
-
-
 def _set_refresh_cookie(response: Response, request: Request, refresh_token: str) -> None:
     """Set refresh token in a secure HttpOnly cookie."""
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=refresh_token,
         httponly=True,
-        secure=_is_secure_request(request),
+        secure=is_secure_request(request),
         samesite="lax",
         path="/api/auth",
         max_age=60 * 60 * 24 * 30,
@@ -118,6 +108,7 @@ async def register_user(
 
     # Create tokens
     jti = secrets.token_urlsafe(32)
+    ensure_csrf_cookie(request, response)
     access_token = create_access_token(data={"sub": username, "jti": jti})
     refresh_token = create_refresh_token(data={"sub": username, "jti": jti})
     _set_refresh_cookie(response, request, refresh_token)
@@ -165,6 +156,7 @@ async def login_user(
 
     # Create tokens with JTI for revocation
     jti = secrets.token_urlsafe(32)
+    ensure_csrf_cookie(request, response)
     access_token = create_access_token(data={"sub": user.username, "jti": jti})
     refresh_token = create_refresh_token(data={"sub": user.username, "jti": jti})
     _set_refresh_cookie(response, request, refresh_token)
@@ -197,7 +189,9 @@ async def refresh_access_token(
         HTTPException: If refresh token is invalid or revoked.
     """
     try:
-        refresh_token = refresh_data.refresh_token if refresh_data else request.cookies.get(REFRESH_COOKIE_NAME)
+        refresh_token = (
+            refresh_data.refresh_token if refresh_data else request.cookies.get(REFRESH_COOKIE_NAME)
+        )
         if not refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -252,6 +246,7 @@ async def refresh_access_token(
 
     # Create new tokens
     new_jti = secrets.token_urlsafe(32)
+    ensure_csrf_cookie(request, response)
     access_token = create_access_token(data={"sub": user.username, "jti": new_jti})
     refresh_token = create_refresh_token(data={"sub": user.username, "jti": new_jti})
     _set_refresh_cookie(response, request, refresh_token)
@@ -304,10 +299,17 @@ async def logout_user(
         key=REFRESH_COOKIE_NAME,
         path="/api/auth",
         httponly=True,
-        secure=_is_secure_request(request),
+        secure=is_secure_request(request),
         samesite="lax",
     )
     return {"message": "Successfully logged out"}
+
+
+@router.get("/csrf")
+async def get_csrf_token(request: Request, response: Response) -> dict[str, str]:
+    """Return a CSRF token and ensure the CSRF cookie is present."""
+    token = ensure_csrf_cookie(request, response)
+    return {"csrf_token": token}
 
 
 @router.get("/me", response_model=UserResponse)
