@@ -1,5 +1,10 @@
 # Prompt: Fix issue-level dependency blocking to use position-based range
 
+> Superseded by GitHub issue #528. This prompt documents the older anticipatory-blocking
+> behavior that caused false thread deadlocks in interleaved reading orders. Current desired
+> behavior is next-unread-only blocking: a dependency blocks only when its target issue is the
+> target thread's immediate next unread issue.
+
 ## Context
 
 You are working on `comic-pile`, a FastAPI + React comic reading queue app.

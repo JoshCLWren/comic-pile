@@ -1,5 +1,32 @@
 import { test, expect } from './fixtures'
 import { createThread } from './helpers'
+import type { Page } from '@playwright/test'
+
+async function markIssueNumbersRead(
+  page: Page,
+  token: string | null,
+  threadId: number,
+  issueNumbers: string[]
+): Promise<void> {
+  const issuesResponse = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+  })
+  expect(issuesResponse.ok()).toBeTruthy()
+  const issuesData = await issuesResponse.json() as { issues: Array<{ id: number; issue_number: string }> }
+
+  for (const issueNumber of issueNumbers) {
+    const issue = issuesData.issues.find((candidate) => candidate.issue_number === issueNumber)
+    expect(issue, `Expected issue #${issueNumber} in thread ${threadId}`).toBeDefined()
+    const markReadResponse = await page.request.post(`/api/v1/issues/${issue!.id}:markRead`, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+    expect(markReadResponse.ok()).toBeTruthy()
+  }
+}
 
 test.describe('Dependencies', () => {
   test('creates dependency from queue UI and shows blocked indicator', async ({ authenticatedPage }) => {
@@ -211,31 +238,9 @@ test.describe('Dependencies', () => {
         total_issues: 10,
       })
 
-      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN ?? null)
 
-      await authenticatedPage.request.post(`/api/v1/threads/${sourceThread.id}/issues`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { issue_range: '1-10' },
-      })
-
-      await authenticatedPage.request.patch(`/api/v1/threads/${sourceThread.id}/issues/1`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { read: true },
-      })
-
-      await authenticatedPage.request.patch(`/api/v1/threads/${sourceThread.id}/issues/2`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { read: true },
-      })
+      await markIssueNumbersRead(authenticatedPage, token, sourceThread.id, ['1', '2'])
 
       await authenticatedPage.goto('/queue')
       await authenticatedPage.waitForLoadState('networkidle')
@@ -453,40 +458,10 @@ test.describe('Dependencies', () => {
         total_issues: 5,
       })
 
-      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN ?? null)
 
-      // Mark all but the last issue as read
-      await authenticatedPage.request.patch(`/api/v1/threads/${sourceThread.id}/issues/1`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { read: true },
-      })
-
-      await authenticatedPage.request.patch(`/api/v1/threads/${sourceThread.id}/issues/2`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { read: true },
-      })
-
-      await authenticatedPage.request.patch(`/api/v1/threads/${sourceThread.id}/issues/3`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { read: true },
-      })
-
-      await authenticatedPage.request.patch(`/api/v1/threads/${sourceThread.id}/issues/4`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        data: { read: true },
-      })
+      // Mark all but the last issue as read.
+      await markIssueNumbersRead(authenticatedPage, token, sourceThread.id, ['1', '2', '3', '4'])
 
       await authenticatedPage.goto('/queue')
       await authenticatedPage.waitForLoadState('networkidle')

@@ -76,6 +76,10 @@ vi.mock('../contexts/ToastContext', () => ({
   ToastProvider: ({ children }: { children: ReactNode }) => children,
 }))
 
+vi.mock('../contexts/useToast', () => ({
+  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
+}))
+
 const mockedUseThreads = vi.mocked(useThreads) as any
 const mockedUseCreateThread = vi.mocked(useCreateThread) as any
 const mockedUseUpdateThread = vi.mocked(useUpdateThread) as any

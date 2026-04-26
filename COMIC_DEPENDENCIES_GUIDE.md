@@ -665,10 +665,16 @@ Current state:
 
 Result: X-Men is NOT blocked yet
 
-After reading UX-M #361:
-  - UX-M next_unread = #362 (now matches the dependency source)
+After reading X-Men #81:
+  - X-Men next_unread = #82 (now matches the dependency target)
+  - UX-M #362 is still unread
 
 Result: X-Men is now BLOCKED (can't roll #82 until #362 is read)
+
+After reading UX-M #362:
+  - UX-M #362 status = read
+
+Result: X-Men is unblocked
 ```
 
 ### Roll Pool Filtering (`comic_pile/queue.py`)
@@ -953,7 +959,7 @@ POST /api/v1/dependencies/
 
 **Step 2: Select Issue-Level Dependencies**
 1. Click "Issue Level" button (highlights amber)
-2. See helper text: "Uses each thread's next unread issue"
+2. See helper text: "Blocks only when the target issue becomes next unread"
 
 **Step 3: Find Source Thread**
 1. Type "uncanny" in search box

@@ -354,7 +354,8 @@ async def create_dependency(
                 warning = (
                     f"Target issue #{target_issue.issue_number} is not yet the next"
                     f" unread (current next unread: #{next_unread_issue.issue_number})."
-                    f" This dependency will activate in {issues_ahead} {issue_word}."
+                    f" This dependency will block when the target thread reaches it in"
+                    f" {issues_ahead} {issue_word}."
                 )
 
         dependency = Dependency(

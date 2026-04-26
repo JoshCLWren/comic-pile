@@ -1,9 +1,9 @@
 """Regression tests for fix_stale_blocked_flags script.
 
 Verifies that refresh_user_blocked_status (the core of the script) correctly
-recalculates stale is_blocked flags after the position-based blocking logic:
-- Threads stamped is_blocked=True by the old exact-match logic must be cleared when
-  the dependency's target issue is before next_unread_issue (i.e., already past).
+recalculates stale is_blocked flags after the next-unread-only blocking logic:
+- Threads stamped is_blocked=True by old range-based logic must be cleared when
+  the dependency's target issue is not the next unread issue.
 - Threads that are genuinely blocked must remain blocked after recalculation.
 """
 
@@ -21,10 +21,9 @@ from comic_pile.queue import get_roll_pool
 async def test_stale_blocked_flag_cleared_after_refresh(async_db: AsyncSession) -> None:
     """Stale is_blocked=True flags must be cleared when next_unread is past the dep target.
 
-    Regression: old exact-match logic only blocked when dep target was exactly
-    next_unread_issue_id. Position-based logic blocks when dep target position
-    >= next_unread position. When next_unread has moved past the dep target,
-    the block should be cleared.
+    Regression: range-based logic blocked whenever a dependency target was at or
+    after next_unread. Next-unread-only logic must clear stale flags unless the
+    dependency target is exactly the next unread issue.
     """
     user = User(username="stale_flag_user", created_at=datetime.now(UTC))
     async_db.add(user)

@@ -1376,7 +1376,7 @@ async def test_move_issue_refreshes_blocked_status_from_new_next_unread_issue(
 
     await async_db.refresh(target_thread)
     assert target_thread.next_unread_issue_id == target_issues[2].id
-    assert target_thread.is_blocked is True
+    assert target_thread.is_blocked is False
 
     source_issues[0].status = "read"
     source_issues[0].read_at = datetime.now(UTC)
@@ -1455,7 +1455,7 @@ async def test_reorder_issues_refreshes_blocked_status_from_new_next_unread_issu
 
     await async_db.refresh(target_thread)
     assert target_thread.next_unread_issue_id == target_issues[1].id
-    assert target_thread.is_blocked is True
+    assert target_thread.is_blocked is False
 
     source_issues[0].status = "read"
     source_issues[0].read_at = datetime.now(UTC)
