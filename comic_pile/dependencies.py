@@ -13,23 +13,17 @@ from app.models.thread import Thread
 async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     """Return thread IDs blocked by unsatisfied issue-level dependencies for a user."""
     source_issue = Issue.__table__.alias("source_issue")
-    dep_target_issue = Issue.__table__.alias("dep_target_issue")
-    target_next_unread = Issue.__table__.alias("target_next_unread")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
     target_thread = Thread.__table__.alias("target_thread")
     source = Thread.__table__.alias("source_thread")
 
     issue_result = await db.execute(
         select(target_thread.c.id)
         .join(
-            target_next_unread,
-            target_next_unread.c.id == target_thread.c.next_unread_issue_id,
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
         )
-        .join(
-            dep_target_issue,
-            (dep_target_issue.c.thread_id == target_thread.c.id)
-            & (dep_target_issue.c.position >= target_next_unread.c.position),
-        )
-        .join(Dependency, Dependency.target_issue_id == dep_target_issue.c.id)
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source, source_issue.c.thread_id == source.c.id)
         .where(target_thread.c.user_id == user_id)
@@ -44,8 +38,7 @@ async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
 async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSession) -> list[str]:
     """Human-readable reasons a thread is blocked."""
     source_issue = Issue.__table__.alias("source_issue")
-    dep_target_issue = Issue.__table__.alias("dep_target_issue")
-    target_next_unread = Issue.__table__.alias("target_next_unread")
+    next_unread_issue = Issue.__table__.alias("next_unread_issue")
     source_thread = Thread.__table__.alias("source_thread")
     target_thread = Thread.__table__.alias("target_thread")
 
@@ -58,15 +51,10 @@ async def get_blocking_explanations(thread_id: int, user_id: int, db: AsyncSessi
         )
         .select_from(target_thread)
         .join(
-            target_next_unread,
-            target_next_unread.c.id == target_thread.c.next_unread_issue_id,
+            next_unread_issue,
+            next_unread_issue.c.id == target_thread.c.next_unread_issue_id,
         )
-        .join(
-            dep_target_issue,
-            (dep_target_issue.c.thread_id == target_thread.c.id)
-            & (dep_target_issue.c.position >= target_next_unread.c.position),
-        )
-        .join(Dependency, Dependency.target_issue_id == dep_target_issue.c.id)
+        .join(Dependency, Dependency.target_issue_id == next_unread_issue.c.id)
         .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
         .join(source_thread, source_issue.c.thread_id == source_thread.c.id)
         .where(target_thread.c.id == thread_id)

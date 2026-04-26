@@ -7,7 +7,7 @@ import { dependenciesApi, threadsApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, ThreadDependenciesResponse } from '../types'
 import { getApiErrorDetail } from '../utils/apiError'
-import { useToast } from '../contexts/ToastContext'
+import { useToast } from '../contexts/useToast'
 
 function getDefaultDependencyMode(_thread: Thread | null): 'thread' | 'issue' {
   return 'issue'
@@ -728,7 +728,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
             Dependency type
           </p>
           <p className="text-xs text-stone-500">
-            Issue-level: uses each thread&apos;s next unread issue.
+            Issue-level: blocks only when the target issue becomes next unread.
           </p>
         </div>
 

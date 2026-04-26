@@ -249,7 +249,10 @@ async def test_issue_dependency_api_lifecycle(auth_client, async_db, test_userna
 
     info_resp = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
     assert info_resp.status_code == 200
-    assert info_resp.json()["is_blocked"] is True
+    info = info_resp.json()
+    assert info["is_blocked"] is True
+    assert info["blocking_reasons"]
+    assert "issue #1" in info["blocking_reasons"][0].lower()
     target_thread = Thread(
         title="Negative Target Thread",
         format="Comic",
@@ -379,10 +382,10 @@ async def test_duplicate_dependency_returns_400(auth_client, async_db, test_user
 
 
 @pytest.mark.asyncio
-async def test_issue_dependency_blocks_when_target_not_next_unread(
+async def test_issue_dependency_does_not_block_until_target_is_next_unread(
     auth_client, async_db, test_username
 ):
-    """Issue dependency on a future issue should block thread anticipatorily (issue #270)."""
+    """Future issue dependency should block only when target becomes next unread."""
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
 
@@ -451,9 +454,13 @@ async def test_issue_dependency_blocks_when_target_not_next_unread(
 
     blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_resp.status_code == 200
-    assert target_thread.id in blocked_resp.json(), (
-        "Thread should be blocked when dependency target position >= next_unread position"
+    assert target_thread.id not in blocked_resp.json(), (
+        "Thread should remain roll-eligible until the dependency target is next unread"
     )
+
+    info_before_target = await auth_client.post(f"/api/v1/threads/{target_thread.id}:getBlockingInfo")
+    assert info_before_target.status_code == 200
+    assert info_before_target.json()["is_blocked"] is False
 
     target_issue_1.status = "read"
     target_issue_1.read_at = datetime.now(UTC)
@@ -475,10 +482,10 @@ async def test_issue_dependency_blocks_when_target_not_next_unread(
 
 
 @pytest.mark.asyncio
-async def test_issue_dependency_blocking_multiple_issues_same_thread(
+async def test_issue_dependency_waits_for_first_matching_target_in_same_thread(
     auth_client, async_db, test_username
 ):
-    """Multiple dependencies on different issues in same thread should all block."""
+    """Multiple future dependencies should block only when one target is next unread."""
     user_result = await async_db.execute(select(User).where(User.username == test_username))
     user = user_result.scalar_one()
 
@@ -565,11 +572,11 @@ async def test_issue_dependency_blocking_multiple_issues_same_thread(
 
     blocked_resp = await auth_client.get("/api/v1/dependencies/blocked")
     assert blocked_resp.status_code == 200
-    assert target_thread.id in blocked_resp.json(), (
-        "Thread should be blocked when dependency target positions >= next_unread position"
+    assert target_thread.id not in blocked_resp.json(), (
+        "Thread should remain roll-eligible before the first dependency target"
     )
 
-    # Now read issue 1, making next unread issue 2
+    # Now read issue 1, making the first dependency target the next unread issue.
     target_issue_1.status = "read"
     target_issue_1.read_at = datetime.now(UTC)
     target_thread.next_unread_issue_id = target_issue_3.id
@@ -1310,3 +1317,4 @@ async def test_dependency_future_target_returns_warning(auth_client, async_db, t
     assert "#10" in data["warning"]
     assert "#8" in data["warning"]
     assert "2 issues" in data["warning"]
+    assert "will block when the target thread reaches it" in data["warning"]

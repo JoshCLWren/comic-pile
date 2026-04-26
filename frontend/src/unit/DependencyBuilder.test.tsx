@@ -124,6 +124,16 @@ beforeEach(() => {
 })
 
 describe('DependencyBuilder issue selection', () => {
+  it('explains that issue dependencies block only when the target issue is next unread', async () => {
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse([]))
+
+    renderBuilder()
+
+    expect(
+      await screen.findByText(/blocks only when the target issue becomes next unread/i)
+    ).toBeInTheDocument()
+  })
+
   it('fetches source and target issues with status=unread filter', async () => {
     mockedIssuesApi.list.mockResolvedValue(buildListResponse([]))
     renderBuilder()

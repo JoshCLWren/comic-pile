@@ -77,7 +77,7 @@ Roll Pool (d4)
 | "No prerequisites yet." | "No reading prerequisites." |
 | "No dependent threads yet." | "Doesn't unlock anything yet." |
 | "Adding dependency…" | "Saving…" |
-| "Uses each thread's next unread issue." | "Block a specific issue behind another issue." |
+| "Uses each thread's next unread issue." | "Blocks only when the target issue becomes next unread." |
 
 ---
 

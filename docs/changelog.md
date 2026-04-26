@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-04-26
+
+**Dependency Blocking**
+- Fixed issue-level dependencies so future gated issues no longer hide a thread from the roll pool early.
+- Threads now become blocked only when their next unread issue has an unread prerequisite.
+- Updated dependency creation copy to clarify that future issue gates activate when the target issue is reached.
+
 ## 2026-03-27
 
 **Pagination for thread list and session list endpoints (#378)**
@@ -182,6 +189,7 @@
 - Fixed dependency blocking to only block when next unread issue has unread prerequisite
 - Improved `is_blocked` flag recalculation after dependency changes
 - Dependency blocking now works correctly regardless of `next_unread_issue`
+  - Superseded on 2026-04-26: issue dependencies now block only when the target issue is next unread.
 
 **Data Migration**
 - Fixed off-by-one error in auto-migration that created phantom issues
@@ -204,6 +212,7 @@
 
 **Dependencies**
 - Fixed issue dependencies to block threads regardless of `next_unread_issue` state
+  - Superseded on 2026-04-26: issue dependencies now block only when the target issue is next unread.
 
 ## 2026-03-09
 

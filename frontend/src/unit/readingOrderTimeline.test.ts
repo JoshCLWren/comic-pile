@@ -52,6 +52,10 @@ describe('buildReadingOrderTimelineEntries', () => {
     expect(entries[0].kind).toBe('span')
     expect(entries[1].kind).toBe('gate')
     expect(entries[1].kind === 'gate' && entries[1].gate.status).toBe('blocked')
+    expect(entries[1].kind === 'gate' && entries[1].gate.isCurrent).toBe(true)
+    expect(entries[2].kind).toBe('gate')
+    expect(entries[2].kind === 'gate' && entries[2].gate.status).toBe('dormant')
+    expect(entries[2].kind === 'gate' && entries[2].gate.isCurrent).toBe(false)
     expect(entries[3].kind === 'span' && entries[3].span.label).toBe('Issues 17–30')
   })
 
