@@ -913,7 +913,7 @@ useEffect(() => {
             <div className="space-y-2">
               <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Thread</label>
               <select value={overrideThreadId} onChange={(event) => setOverrideThreadId(event.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300" required>
+                className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors" required>
                 <option value="">Select a thread...</option>
                 <optgroup label="Active Threads">
                   {activeThreads.map((thread) => (<option key={thread.id} value={thread.id}>{thread.title} ({thread.format})</option>))}

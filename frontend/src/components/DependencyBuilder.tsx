@@ -742,7 +742,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Type at least 2 characters"
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+            className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
           />
           {isSearching && <p className="text-xs text-stone-500">Searching…</p>}
           {!isSearching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
@@ -790,7 +790,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                           min="0"
                           value={migrationLastRead}
                           onChange={(e) => setMigrationLastRead(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-stone-300"
+                          className="w-full bg-white/5 border border-solid border-white/20 rounded-lg px-2 py-1 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
                           required
                         />
                       </div>
@@ -802,7 +802,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                           min="1"
                           value={migrationTotal}
                           onChange={(e) => setMigrationTotal(e.target.value)}
-                          className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-sm text-stone-300"
+                          className="w-full bg-white/5 border border-solid border-white/20 rounded-lg px-2 py-1 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
                           required
                         />
                       </div>
@@ -833,7 +833,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                        id="source-issue"
                        value={sourceIssueId || ''}
                        onChange={(event) => setSourceIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+                       className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
                        disabled={sourceIssues.length === 0}
                      >
                        {sourceIssues.length === 0 ? (
@@ -858,7 +858,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                        id="target-issue"
                        value={targetIssueId || ''}
                        onChange={(event) => setTargetIssueId(event.target.value ? Number(event.target.value) : null)}
-                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+                       className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
                        disabled={targetIssues.length === 0}
                      >
                        {targetIssues.length === 0 ? (
@@ -1035,7 +1035,7 @@ function DependencyRow({
             onChange={(e) => onNoteChange(e.target.value)}
             placeholder="Add a note..."
             maxLength={255}
-            className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-stone-300"
+            className="flex-1 bg-white/5 border border-solid border-white/20 rounded-lg px-2 py-1 text-xs text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
           />
           <button
             type="button"

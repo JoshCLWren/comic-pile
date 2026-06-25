@@ -773,7 +773,7 @@ export default function QueuePage() {
   id="create-thread-title"
   value={createForm.title}
   onChange={(event) => setCreateForm({ ...createForm, title: event.target.value })}
-  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
   required
   />
   </div>
@@ -794,7 +794,7 @@ export default function QueuePage() {
   type="text"
   value={createForm.issues}
   onChange={(event) => setCreateForm({ ...createForm, issues: event.target.value })}
-  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
   placeholder="0-25 or 0, ½, Annual 1, 5-7"
   required
   />
@@ -823,7 +823,7 @@ export default function QueuePage() {
   lastIssueRead: clampedValue,
   })
   }}
-  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
   />
             {createForm.lastIssueRead > 0 && issuePreview !== null && (
               <p className="text-xs text-stone-400">
@@ -843,7 +843,7 @@ export default function QueuePage() {
   id="create-thread-notes"
   value={createForm.notes}
   onChange={(event) => setCreateForm({ ...createForm, notes: event.target.value })}
-  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
+  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
   ></textarea>
   </div>
           <button
@@ -866,7 +866,7 @@ export default function QueuePage() {
   id="edit-thread-title"
   value={editForm.title}
   onChange={(event) => setEditForm({ ...editForm, title: event.target.value })}
-  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
   required
   />
   </div>
@@ -896,7 +896,7 @@ export default function QueuePage() {
   issuesRemaining: Number.parseInt(event.target.value, 10) || 0,
   })
   }
-  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
   />
   </div>
   )}
@@ -907,7 +907,7 @@ export default function QueuePage() {
   id="edit-thread-notes"
   value={editForm.notes}
   onChange={(event) => setEditForm({ ...editForm, notes: event.target.value })}
-  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300 min-h-[80px]"
+  className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors min-h-[80px]"
   ></textarea>
   </div>
 
@@ -954,7 +954,7 @@ export default function QueuePage() {
             <select
               value={reactivateThreadId}
               onChange={(event) => setReactivateThreadId(event.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
               required
             >
               <option value="">Select a thread...</option>
@@ -972,7 +972,7 @@ export default function QueuePage() {
               min="1"
               value={issuesToAdd}
               onChange={(event) => setIssuesToAdd(Number.parseInt(event.target.value, 10) || 1)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-stone-300"
+              className="w-full bg-white/5 border border-solid border-white/20 rounded-xl px-3 py-2 text-sm text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors"
               required
             />
           </div>

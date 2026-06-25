@@ -53,7 +53,7 @@ export default function CollectionToolbar({ showNewLabel = true, className = '',
         <select
           value={activeCollectionId ?? 'all'}
           onChange={(e) => handleCollectionChange(e.target.value === 'all' ? null : Number(e.target.value))}
-          className="min-w-0 w-full max-w-[280px] bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-600/40"
+          className="min-w-0 w-full max-w-[280px] bg-white/5 border border-solid border-white/20 rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-600/40 transition-colors"
           aria-label="Filter by collection"
         >
           <option value="all">All Collections</option>
