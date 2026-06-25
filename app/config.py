@@ -157,9 +157,14 @@ class SessionSettings(BaseSettings):
         description="Hours of inactivity before starting a new session (1-168)",
         json_schema_extra={"env": "SESSION_GAP_HOURS"},
     )
+    session_gap_hours: int = Field(
+        default=6,
+        description="Hours of inactivity before starting a new session (1-168)",
+        json_schema_extra={"env": "SESSION_GAP_HOURS"},
+    )
     start_die: int = Field(
         default=6,
-        description="Starting die size for new sessions (4-20)",
+        description="Starting die size for new sessions (4-100)",
         json_schema_extra={"env": "START_DIE"},
     )
 
@@ -175,8 +180,8 @@ class SessionSettings(BaseSettings):
     @classmethod
     def validate_start_die(cls, v: int) -> int:
         """Ensure start die is within valid range."""
-        if not 4 <= v <= 20:
-            raise ValueError(f"START_DIE must be between 4 and 20, got {v}")
+        if not 4 <= v <= 100:
+            raise ValueError(f"START_DIE must be between 4 and 100, got {v}")
         return v
 
 

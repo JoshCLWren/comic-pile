@@ -4,7 +4,7 @@ The Dice Ladder System
 ======================
 The dice ladder is the core game mechanic that governs how comics are selected
 for reading. It uses standard RPG polyhedral dice (d4, d6, d8, d10, d12, d20)
-to create a dynamic selection pool that responds to reading satisfaction.
+extended with larger sizes (d30, d50, d100) to support very large thread pools.
 
 How It Works:
 -------------
@@ -24,9 +24,9 @@ Design Philosophy:
 
 Ladder Progression:
 -------------------
-    d4 <-> d6 <-> d8 <-> d10 <-> d12 <-> d20
-    ^                                      ^
-    (minimum - tight focus)     (maximum - wide variety)
+    d4 <-> d6 <-> d8 <-> d10 <-> d12 <-> d20 <-> d30 <-> d50 <-> d100
+    ^                                                              ^
+    (minimum - tight focus)                         (maximum - wide variety)
 
 Example Flow:
 -------------
@@ -36,7 +36,7 @@ Example Flow:
 4. Continue rating poorly -> step up to d8, d10, etc.
 """
 
-DICE_LADDER = [4, 6, 8, 10, 12, 20]
+DICE_LADDER = [4, 6, 8, 10, 12, 20, 30, 50, 100]
 
 
 def step_down(die_size: int) -> int:

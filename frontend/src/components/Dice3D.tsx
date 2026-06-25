@@ -643,6 +643,74 @@ function createD20Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return geometry;
 }
 
+function createQuadSphereGeometry(
+  sides: number,
+  latBands: number,
+  lonSegs: number,
+  atlasInfo: DiceTextureAtlas,
+): THREE.BufferGeometry {
+  const { cols, rows, uvInset } = atlasInfo;
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
+
+  const sphereVerts: Vector3Tuple[] = []
+  for (let latIdx = 0; latIdx <= latBands; latIdx++) {
+    const theta = (latIdx / latBands) * Math.PI
+    const y = Math.cos(theta)
+    const r = Math.sin(theta)
+    for (let lonIdx = 0; lonIdx < lonSegs; lonIdx++) {
+      const phi = (lonIdx / lonSegs) * 2 * Math.PI
+      sphereVerts.push([r * Math.cos(phi), y, r * Math.sin(phi)])
+    }
+  }
+
+  let faceNum = 1
+  for (let latIdx = 0; latIdx < latBands; latIdx++) {
+    for (let lonIdx = 0; lonIdx < lonSegs; lonIdx++) {
+      const nextLon = (lonIdx + 1) % lonSegs
+
+      const a = latIdx * lonSegs + lonIdx
+      const b = latIdx * lonSegs + nextLon
+      const c = (latIdx + 1) * lonSegs + nextLon
+      const d = (latIdx + 1) * lonSegs + lonIdx
+
+      const uv = getUVForNumber(faceNum, cols, rows, uvInset)
+      const idx = verts.length / 3
+
+      verts.push(
+        sphereVerts[a][0], sphereVerts[a][1], sphereVerts[a][2],
+        sphereVerts[b][0], sphereVerts[b][1], sphereVerts[b][2],
+        sphereVerts[c][0], sphereVerts[c][1], sphereVerts[c][2],
+        sphereVerts[d][0], sphereVerts[d][1], sphereVerts[d][2],
+      )
+      uvs.push(uv.u0, uv.v0, uv.u1, uv.v0, uv.u1, uv.v1, uv.u0, uv.v1)
+      inds.push(idx, idx + 1, idx + 2, idx, idx + 2, idx + 3)
+
+      faceNum++
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+  geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createD30Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+  return createQuadSphereGeometry(30, 3, 10, atlasInfo)
+}
+
+function createD50Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+  return createQuadSphereGeometry(50, 5, 10, atlasInfo)
+}
+
+function createD100Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+  return createQuadSphereGeometry(100, 10, 10, atlasInfo)
+}
+
 function buildGeometry(sides: number, atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   switch (sides) {
     case 4:
@@ -657,6 +725,12 @@ function buildGeometry(sides: number, atlasInfo: DiceTextureAtlas): THREE.Buffer
       return createD12Geometry(atlasInfo);
     case 20:
       return createD20Geometry(atlasInfo);
+    case 30:
+      return createD30Geometry(atlasInfo);
+    case 50:
+      return createD50Geometry(atlasInfo);
+    case 100:
+      return createD100Geometry(atlasInfo);
     default:
       return createD6Geometry(atlasInfo);
   }
