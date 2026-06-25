@@ -295,7 +295,7 @@ async def set_manual_die(
     """Set manual die size for current session.
 
     Args:
-        die: The die size to set (must be 4, 6, 8, 10, 12, or 20).
+        die: The die size to set (must be 4, 6, 8, 10, 12, 20, 30, 50, or 100).
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
 
@@ -307,10 +307,10 @@ async def set_manual_die(
     """
     current_session = await get_or_create(db, user_id=current_user.id)
 
-    if die not in [4, 6, 8, 10, 12, 20]:
+    if die not in [4, 6, 8, 10, 12, 20, 30, 50, 100]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid die size. Must be one of: 4, 6, 8, 10, 12, 20",
+            detail="Invalid die size. Must be one of: 4, 6, 8, 10, 12, 20, 30, 50, 100",
         )
 
     current_session.manual_die = die

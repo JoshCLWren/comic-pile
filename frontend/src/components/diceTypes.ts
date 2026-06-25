@@ -1,7 +1,7 @@
-export type DiceSide = 4 | 6 | 8 | 10 | 12 | 20
+export type DiceSide = 4 | 6 | 8 | 10 | 12 | 20 | 30 | 50 | 100
 
 export function isDiceSide(value: number): value is DiceSide {
-  return value === 4 || value === 6 || value === 8 || value === 10 || value === 12 || value === 20
+  return value === 4 || value === 6 || value === 8 || value === 10 || value === 12 || value === 20 || value === 30 || value === 50 || value === 100
 }
 
 export interface DiceRenderGlobalConfig {

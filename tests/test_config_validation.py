@@ -88,11 +88,11 @@ class TestSessionSettingsValidation:
         assert settings.start_die == 4
 
     def test_start_die_maximum_boundary(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that start_die=20 (maximum) is accepted."""
-        monkeypatch.setenv("START_DIE", "20")
+        """Test that start_die=100 (maximum) is accepted."""
+        monkeypatch.setenv("START_DIE", "100")
         clear_settings_cache()
         settings = SessionSettings()
-        assert settings.start_die == 20
+        assert settings.start_die == 100
 
     def test_invalid_start_die_too_low(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that start_die < 4 raises ValidationError."""
@@ -103,20 +103,19 @@ class TestSessionSettingsValidation:
         assert "start_die" in str(exc_info.value).lower()
 
     def test_invalid_start_die_too_high(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that start_die > 20 raises ValidationError."""
-        monkeypatch.setenv("START_DIE", "21")
+        """Test that start_die > 100 raises ValidationError."""
+        monkeypatch.setenv("START_DIE", "101")
         clear_settings_cache()
         with pytest.raises(ValidationError) as exc_info:
             SessionSettings()
         assert "start_die" in str(exc_info.value).lower()
 
-    def test_invalid_start_die_example_from_issue(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test the example from issue #296: START_DIE=100 should fail."""
+    def test_valid_start_die_max(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that start_die=100 is valid (extended ladder)."""
         monkeypatch.setenv("START_DIE", "100")
         clear_settings_cache()
-        with pytest.raises(ValidationError) as exc_info:
-            SessionSettings()
-        assert "start_die" in str(exc_info.value).lower()
+        settings = SessionSettings()
+        assert settings.start_die == 100
 
 
 class TestRatingSettingsValidation:

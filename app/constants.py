@@ -22,7 +22,8 @@ class ThreadStatus(StrEnum):
 
 
 # Dice ladder - standard RPG dice progression
-DICE_LADDER = [4, 6, 8, 10, 12, 20]
+# Extended to support large thread pools (50+ threads)
+DICE_LADDER = [4, 6, 8, 10, 12, 20, 30, 50, 100]
 
 # Session configuration
 DEFAULT_SESSION_GAP_HOURS = 6

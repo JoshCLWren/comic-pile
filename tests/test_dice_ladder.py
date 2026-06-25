@@ -23,21 +23,21 @@ def test_dice_ladder_step_down_bounds() -> None:
 
 
 def test_dice_ladder_step_up_bounds() -> None:
-    """Returns same when at d20 (maximum)."""
-    assert step_up(20) == 20
+    """Returns same when at d100 (maximum)."""
+    assert step_up(100) == 100
 
 
 def test_dice_ladder_full_traversal() -> None:
     """Test step through all dice values."""
     result = step_up(4)
-    for expected in [6, 8, 10, 12, 20]:
+    for expected in [6, 8, 10, 12, 20, 30, 50, 100]:
         assert result == expected
         result = step_up(result)
 
-    assert step_up(20) == 20
+    assert step_up(100) == 100
 
-    result = step_down(20)
-    for expected in [12, 10, 8, 6, 4]:
+    result = step_down(100)
+    for expected in [50, 30, 20, 12, 10, 8, 6, 4]:
         assert result == expected
         result = step_down(result)
 
@@ -50,8 +50,8 @@ def test_dice_ladder_invalid_die_size_step_down() -> None:
 
     with pytest.raises(ValueError, match="Invalid die size: 5"):
         step_down(5)
-    with pytest.raises(ValueError, match="Invalid die size: 100"):
-        step_down(100)
+    with pytest.raises(ValueError, match="Invalid die size: 99"):
+        step_down(99)
     with pytest.raises(ValueError, match="Invalid die size: 3"):
         step_down(3)
 
@@ -62,15 +62,15 @@ def test_dice_ladder_invalid_die_size_step_up() -> None:
 
     with pytest.raises(ValueError, match="Invalid die size: 5"):
         step_up(5)
-    with pytest.raises(ValueError, match="Invalid die size: 100"):
-        step_up(100)
+    with pytest.raises(ValueError, match="Invalid die size: 99"):
+        step_up(99)
     with pytest.raises(ValueError, match="Invalid die size: 3"):
         step_up(3)
 
 
 def test_dice_ladder_constant_values() -> None:
     """Verify DICE_LADDER contains expected values."""
-    assert DICE_LADDER == [4, 6, 8, 10, 12, 20]
-    assert len(DICE_LADDER) == 6
+    assert DICE_LADDER == [4, 6, 8, 10, 12, 20, 30, 50, 100]
+    assert len(DICE_LADDER) == 9
     assert DICE_LADDER[0] == 4
-    assert DICE_LADDER[-1] == 20
+    assert DICE_LADDER[-1] == 100

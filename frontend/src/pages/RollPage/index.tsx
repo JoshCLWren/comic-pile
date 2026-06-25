@@ -763,12 +763,12 @@ useEffect(() => {
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
-          {((session?.snoozed_threads?.length ?? 0) > 0) && currentDie === 20 && (
+          {((session?.snoozed_threads?.length ?? 0) > 0) && currentDie === 100 && (
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d20) - snoozing won't increase it further</span>
+              <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d100) - snoozing won't increase it further</span>
             </div>
           )}
-          {((session?.snoozed_threads?.length ?? 0) > 0) && currentDie !== 20 && (
+          {((session?.snoozed_threads?.length ?? 0) > 0) && currentDie !== 100 && (
             <div className="flex items-center gap-2 mt-1">
               <Tooltip content="Snoozed offset"><span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session?.snoozed_threads?.length ?? 0}</span></Tooltip>
               <Tooltip content="Snoozed offset active"><span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">offset active</span></Tooltip>
@@ -804,7 +804,7 @@ useEffect(() => {
               </div>
             </div>
             <div className="text-right">
-              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20. Promotes automatically based on ratings (5→up, 1-2→down)">
+              <Tooltip content="Dice ladder: d4→d6→d8→d10→d12→d20→d30→d50→d100. Promotes automatically based on ratings (5→up, 1-2→down)">
                 <span className="block text-[8px] font-black text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">Ladder</span>
               </Tooltip>
               <span id="header-die-label" className="text-[10px] font-black text-amber-500">d{currentDie}</span>
