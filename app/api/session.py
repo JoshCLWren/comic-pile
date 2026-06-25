@@ -22,6 +22,7 @@ from app.schemas import (
     SnapshotsListResponse,
 )
 from app.schemas.session import SnoozedThreadInfo
+from app.services.ownership import get_owned_session_or_404
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.session import get_current_die, get_or_create, is_active
 
@@ -605,12 +606,7 @@ async def get_session(
     Raises:
         HTTPException: If session not found.
     """
-    session = await db.get(SessionModel, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if session.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = await get_owned_session_or_404(db, current_user.id, session_id)
 
     _, active_thread = await get_session_with_thread_safe(session_id, db)
 
@@ -657,12 +653,7 @@ async def get_session_details(
     Raises:
         HTTPException: If session not found.
     """
-    session_obj = await db.get(SessionModel, session_id)
-    if not session_obj:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if session_obj.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session_obj = await get_owned_session_or_404(db, current_user.id, session_id)
 
     events_result = await db.execute(
         select(Event).where(Event.session_id == session_id).order_by(Event.timestamp)
@@ -746,12 +737,7 @@ async def get_session_snapshots(
     Raises:
         HTTPException: If session not found.
     """
-    session = await db.get(SessionModel, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if session.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await get_owned_session_or_404(db, current_user.id, session_id)
 
     snapshots_result = await db.execute(
         select(Snapshot)
@@ -802,18 +788,7 @@ async def restore_session_start(
 
     while retries < max_retries:
         try:
-            session = await db.get(SessionModel, session_id)
-            if not session:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Session {session_id} not found",
-                )
-
-            if session.user_id != current_user.id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Access denied",
-                )
+            session = await get_owned_session_or_404(db, current_user.id, session_id)
 
             snapshot_result = await db.execute(
                 select(Snapshot)

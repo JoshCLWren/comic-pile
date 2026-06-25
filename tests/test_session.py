@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import get_active_thread
+from app.auth import create_access_token
 from app.config import clear_settings_cache
 from app.models import Event, Issue, Session, Snapshot, Thread, User
 from app.models import Session as SessionModel
@@ -823,6 +824,55 @@ async def test_restore_session_start_no_snapshot(
     response = await auth_client.post(f"/api/sessions/{session.id}/restore-session-start")
     assert response.status_code == 404
     assert "No session start snapshot found" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_session_endpoints_return_404_for_non_owner(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Session resource endpoints return 404 for non-owners."""
+    owner_session = SessionModel(start_die=6, user_id=default_user.id)
+    async_db.add(owner_session)
+    await async_db.commit()
+    await async_db.refresh(owner_session)
+
+    intruder = User(username="session_intruder", created_at=None)
+    async_db.add(intruder)
+    await async_db.commit()
+    await async_db.refresh(intruder)
+
+    intruder_token = create_access_token(data={"sub": intruder.username, "jti": "session-intruder"})
+    intruder_headers = {"Authorization": f"Bearer {intruder_token}"}
+
+    get_response = await auth_client.get(
+        f"/api/sessions/{owner_session.id}",
+        headers=intruder_headers,
+    )
+    assert get_response.status_code == 404
+    assert get_response.json()["detail"] == "Session not found"
+
+    details_response = await auth_client.get(
+        f"/api/sessions/{owner_session.id}/details",
+        headers=intruder_headers,
+    )
+    assert details_response.status_code == 404
+    assert details_response.json()["detail"] == "Session not found"
+
+    snapshots_response = await auth_client.get(
+        f"/api/sessions/{owner_session.id}/snapshots",
+        headers=intruder_headers,
+    )
+    assert snapshots_response.status_code == 404
+    assert snapshots_response.json()["detail"] == "Session not found"
+
+    restore_response = await auth_client.post(
+        f"/api/sessions/{owner_session.id}/restore-session-start",
+        headers=intruder_headers,
+    )
+    assert restore_response.status_code == 404
+    assert restore_response.json()["detail"] == "Session not found"
 
 
 @pytest.mark.asyncio

@@ -22,6 +22,7 @@ from app.schemas import (
     IssueResponse,
 )
 from app.utils.issue_parser import parse_issue_ranges
+from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from comic_pile.dependencies import (
     refresh_user_blocked_status,
     validate_position_dependency_consistency,
@@ -76,13 +77,7 @@ async def _get_locked_thread_with_issues(
     db: AsyncSession,
 ) -> tuple[Thread, list[Issue]]:
     """Lock a thread and all of its issues, validating ownership."""
-    thread_result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
-    thread = thread_result.scalar_one_or_none()
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id, for_update=True)
 
     issues_result = await db.execute(
         select(Issue)
@@ -177,12 +172,7 @@ async def list_issues(
     Raises:
         HTTPException: If thread not found.
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     query = select(Issue).where(Issue.thread_id == thread_id)
 
@@ -261,12 +251,7 @@ async def validate_issue_order(
     Raises:
         HTTPException: If the thread does not exist or is not owned by the user.
     """
-    thread = await db.get(Thread, thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    await get_owned_thread_or_404(db, current_user.id, thread_id)
 
     warnings = await validate_position_dependency_consistency(thread_id, current_user.id, db)
     return IssueOrderValidationResponse(warnings=warnings)
@@ -302,13 +287,7 @@ async def create_issues(
         HTTPException: If thread not found, all issues already exist,
                       position collision detected, or issue range is invalid.
     """
-    thread_result = await db.execute(select(Thread).where(Thread.id == thread_id).with_for_update())
-    thread = thread_result.scalar_one_or_none()
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
+    thread = await get_owned_thread_or_404(db, current_user.id, thread_id, for_update=True)
 
     try:
         issue_numbers = parse_issue_ranges(request.issue_range)
@@ -552,19 +531,7 @@ async def get_issue(
     Raises:
         HTTPException: If issue not found.
     """
-    issue = await db.get(Issue, issue_id)
-    if not issue:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
-
-    thread = await db.get(Thread, issue.thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
+    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
 
     return issue_to_response(issue)
 
@@ -755,19 +722,8 @@ async def mark_issue_read(
     Raises:
         HTTPException: If issue not found, thread not found, or issue already read.
     """
-    issue = await db.get(Issue, issue_id)
-    if not issue:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
-
-    thread = await db.get(Thread, issue.thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
+    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
+    thread = await get_owned_thread_or_404(db, current_user.id, issue.thread_id)
 
     if issue.status == "read":
         raise HTTPException(
@@ -832,19 +788,8 @@ async def mark_issue_unread(
     Raises:
         HTTPException: If issue not found, thread not found, or issue already unread.
     """
-    issue = await db.get(Issue, issue_id)
-    if not issue:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
-
-    thread = await db.get(Thread, issue.thread_id)
-    if not thread or thread.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
+    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
+    thread = await get_owned_thread_or_404(db, current_user.id, issue.thread_id)
 
     if issue.status == "unread":
         raise HTTPException(

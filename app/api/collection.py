@@ -17,6 +17,7 @@ from app.schemas.collection import (
     CollectionResponse,
     CollectionUpdate,
 )
+from app.services.ownership import get_owned_collection_or_404
 
 router = APIRouter(tags=["collections"])
 
@@ -166,12 +167,7 @@ async def get_collection(
     Raises:
         HTTPException: If collection not found.
     """
-    collection = await db.get(Collection, collection_id)
-    if not collection or collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection {collection_id} not found",
-        )
+    collection = await get_owned_collection_or_404(db, current_user.id, collection_id)
 
     return CollectionResponse(
         id=collection.id,
@@ -204,12 +200,7 @@ async def update_collection(
     Raises:
         HTTPException: If collection not found.
     """
-    collection = await db.get(Collection, collection_id)
-    if not collection or collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection {collection_id} not found",
-        )
+    collection = await get_owned_collection_or_404(db, current_user.id, collection_id)
 
     if collection_data.name is not None:
         collection.name = collection_data.name
@@ -259,12 +250,7 @@ async def patch_collection(
     Raises:
         HTTPException: If collection not found.
     """
-    collection = await db.get(Collection, collection_id)
-    if not collection or collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection {collection_id} not found",
-        )
+    collection = await get_owned_collection_or_404(db, current_user.id, collection_id)
 
     if collection_data.name is not None:
         collection.name = collection_data.name
@@ -311,12 +297,7 @@ async def delete_collection(
     """
     from sqlalchemy import update as sa_update
 
-    collection = await db.get(Collection, collection_id)
-    if not collection or collection.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection {collection_id} not found",
-        )
+    collection = await get_owned_collection_or_404(db, current_user.id, collection_id)
 
     if collection.is_default:
         raise HTTPException(

@@ -3,9 +3,11 @@
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Collection, Thread
+from app.auth import create_access_token
+from app.models import Collection, Thread, User
 
 
 @pytest_asyncio.fixture
@@ -118,3 +120,52 @@ async def test_filter_threads_by_collection(
     threads = data["threads"]
     assert len(threads) == 1
     assert threads[0]["id"] == sample_thread.id
+
+
+@pytest.mark.asyncio
+async def test_collection_endpoints_return_404_for_non_owner(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    sample_collection: Collection,
+) -> None:
+    """Collection read/update/delete endpoints return 404 for non-owners."""
+    intruder = User(username="collection_intruder", created_at=None)
+    async_db.add(intruder)
+    await async_db.commit()
+    await async_db.refresh(intruder)
+
+    intruder_token = create_access_token(
+        data={"sub": intruder.username, "jti": "collection-intruder"}
+    )
+    intruder_headers = {"Authorization": f"Bearer {intruder_token}"}
+
+    get_response = await auth_client.get(
+        f"/api/v1/collections/{sample_collection.id}",
+        headers=intruder_headers,
+    )
+    assert get_response.status_code == 404
+
+    put_response = await auth_client.put(
+        f"/api/v1/collections/{sample_collection.id}",
+        json={"name": "Hijacked"},
+        headers=intruder_headers,
+    )
+    assert put_response.status_code == 404
+
+    patch_response = await auth_client.patch(
+        f"/api/v1/collections/{sample_collection.id}",
+        json={"position": 99},
+        headers=intruder_headers,
+    )
+    assert patch_response.status_code == 404
+
+    delete_response = await auth_client.delete(
+        f"/api/v1/collections/{sample_collection.id}",
+        headers=intruder_headers,
+    )
+    assert delete_response.status_code == 404
+
+    collection_result = await async_db.execute(
+        select(Collection).where(Collection.id == sample_collection.id)
+    )
+    assert collection_result.scalar_one_or_none() is not None
