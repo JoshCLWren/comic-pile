@@ -10,8 +10,9 @@ import pytest
 from pydantic import ValidationError
 
 from app.config import (
-    SessionSettings,
+    AuthSettings,
     RatingSettings,
+    SessionSettings,
     clear_settings_cache,
 )
 
@@ -231,3 +232,60 @@ class TestRatingSettingsValidation:
         with pytest.raises(ValidationError) as exc_info:
             RatingSettings()
         assert "rating_threshold" in str(exc_info.value).lower()
+
+
+class TestAuthSettingsValidation:
+    """Test AuthSettings environment-aware secret key behavior."""
+
+    def test_generates_random_secret_key_in_test(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test test environment generates random secret key when missing."""
+        monkeypatch.setenv("ENVIRONMENT", "test")
+        monkeypatch.setenv("SECRET_KEY", "")
+        clear_settings_cache()
+        first_settings = AuthSettings()
+        clear_settings_cache()
+        second_settings = AuthSettings()
+
+        assert first_settings.secret_key
+        assert second_settings.secret_key
+        assert first_settings.secret_key != second_settings.secret_key
+
+    def test_ignores_configured_secret_key_in_test(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test test environment still uses randomized secret key when configured."""
+        monkeypatch.setenv("ENVIRONMENT", "test")
+        monkeypatch.setenv("SECRET_KEY", "configured-key")
+        clear_settings_cache()
+        settings = AuthSettings()
+
+        assert settings.secret_key != "configured-key"
+
+    def test_generates_random_secret_key_in_development(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test development environment generates random secret key when missing."""
+        monkeypatch.setenv("ENVIRONMENT", "development")
+        monkeypatch.setenv("SECRET_KEY", "")
+        clear_settings_cache()
+        settings = AuthSettings()
+
+        assert settings.secret_key
+
+    def test_requires_secret_key_in_production(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test production environment rejects missing secret key."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("SECRET_KEY", "")
+        clear_settings_cache()
+
+        with pytest.raises(ValidationError) as exc_info:
+            AuthSettings()
+
+        assert "secret_key" in str(exc_info.value).lower()
+
+    def test_uses_explicit_secret_key_in_production(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test production environment uses configured secret key."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("SECRET_KEY", "prod-secret-key")
+        clear_settings_cache()
+        settings = AuthSettings()
+
+        assert settings.secret_key == "prod-secret-key"

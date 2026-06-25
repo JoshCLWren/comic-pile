@@ -31,9 +31,6 @@ from app.models import Session as SessionModel
 
 load_dotenv(".env.test")
 
-if not os.getenv("SECRET_KEY"):
-    os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
-
 
 TRUNCATE_TEST_DATA_SQL = text(
     "TRUNCATE TABLE sessions, events, threads, issues, snapshots, dependencies, "

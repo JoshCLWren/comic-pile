@@ -5,6 +5,7 @@ Configuration is validated at startup and provides type-safe access to settings.
 """
 
 import os
+import secrets
 from functools import lru_cache
 from typing import Literal
 
@@ -72,7 +73,7 @@ class AuthSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
 
     secret_key: str = Field(
-        default_factory=lambda: os.environ.get("SECRET_KEY") or "test-secret-key-for-testing-only",
+        default="",
         description="Secret key for JWT token signing (required)",
         json_schema_extra={"env": "SECRET_KEY"},
     )
@@ -90,6 +91,18 @@ class AuthSettings(BaseSettings):
         description="Refresh token expiration time in days",
         json_schema_extra={"env": "REFRESH_TOKEN_EXPIRE_DAYS"},
     )
+
+    @field_validator("secret_key", mode="before")
+    @classmethod
+    def validate_secret_key(cls, v: str | None) -> str:
+        """Require explicit secret key in production, randomize in non-production."""
+        environment = os.environ.get("ENVIRONMENT", "development")
+        if environment == "production":
+            if v and v.strip():
+                return v
+            raise ValueError("SECRET_KEY must be set in production mode")
+
+        return secrets.token_urlsafe(48)
 
 
 class AppSettings(BaseSettings):

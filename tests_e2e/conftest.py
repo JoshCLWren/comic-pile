@@ -27,9 +27,6 @@ from app.models import User
 
 load_dotenv()
 
-if not os.getenv("SECRET_KEY"):
-    os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
-
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _create_database_tables():
