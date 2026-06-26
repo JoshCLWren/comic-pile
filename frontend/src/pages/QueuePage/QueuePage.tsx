@@ -9,6 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import CollectionDialog from '../../components/CollectionDialog'
+import ThemeSelector from '../../components/ThemeSelector'
 import CollectionToolbar from '../../components/CollectionToolbar'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
 import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
@@ -535,6 +536,7 @@ export default function QueuePage() {
             >
               Add Thread
             </button>
+            <ThemeSelector />
           </div>
         </div>
         {collectionsEnabled && <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />}
