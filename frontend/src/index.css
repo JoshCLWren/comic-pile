@@ -1,6 +1,20 @@
 @import "tailwindcss";
 @import "./styles.css";
 
+:root {
+  --theme-primary: #d6890e;
+  --theme-primary-light: #f0b429;
+  --theme-bg-dark: #110e0a;
+  --theme-bg-card: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="blue"] {
+  --theme-primary: #3b82f6;
+  --theme-primary-light: #60a5fa;
+  --theme-bg-dark: #0f172a;
+  --theme-bg-card: rgba(59, 130, 246, 0.1);
+}
+
 /* Strip problematic CSS during screenshot capture for Safari compatibility */
 .screenshot-mode [data-exclude-from-screenshot="true"] {
   display: none !important;

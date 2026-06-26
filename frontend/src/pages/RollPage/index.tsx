@@ -5,6 +5,7 @@ import Modal from '../../components/Modal'
 import Tooltip from '../../components/Tooltip'
 import MigrationDialog from '../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../components/SimpleMigrationDialog'
+import ThemeSelector from '../../components/ThemeSelector'
 import CollectionDialog from '../../components/CollectionDialog'
 import CollectionToolbar from '../../components/CollectionToolbar'
 import { useNavigate } from 'react-router-dom'
@@ -815,6 +816,7 @@ useEffect(() => {
               Override
             </button>
           </Tooltip>
+          <ThemeSelector />
         </div>
       </header>
       {collectionsEnabled && <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />}
