@@ -65,6 +65,7 @@
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
     "vite": "^7.2.4",
+    "vite-plugin-sri": "^0.0.2",
     "vitest": "^4.0.18"
   }
 }
