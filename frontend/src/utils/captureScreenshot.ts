@@ -253,12 +253,8 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
   debugLog('Target', diagnostics.target)
   debugLog('Environment', diagnostics.environment)
 
-  // Add screenshot-mode class to strip problematic CSS
+  // Add screenshot-mode class to strip problematic CSS and set solid background
   document.documentElement.classList.add('screenshot-mode')
-
-  // Force solid background to prevent transparency issues
-  const prevBackground = target.style.backgroundColor
-  target.style.backgroundColor = '#111827'
 
   let overrideStyle: HTMLStyleElement | null = null
 
@@ -388,7 +384,6 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
     return { blob: null, diagnostics }
   } finally {
     document.documentElement.classList.remove('screenshot-mode')
-    target.style.backgroundColor = prevBackground
     overrideStyle?.remove()
     debugLog('Cleaned up screenshot mode')
   }
