@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import BugReportModal from './BugReportModal'
 import { useDiagnostics } from '../hooks/useDiagnostics'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
@@ -18,8 +18,11 @@ export default function BugReportButton({ onSubmit, variant = 'floating' }: BugR
   const [screenshotDiagnostics, setScreenshotDiagnostics] = useState<ScreenshotDiagnostics | null>(null)
   const { collectDiagnostics } = useDiagnostics()
   const { restoreLastView } = useBugReportRestore()
+  const isCapturingRef = useRef(false)
 
   const handleClick = async () => {
+    if (isCapturingRef.current) return
+    isCapturingRef.current = true
     const diagnostics = collectDiagnostics()
     setDiagnosticData(diagnostics)
 
@@ -33,6 +36,7 @@ export default function BugReportButton({ onSubmit, variant = 'floating' }: BugR
       setScreenshotDiagnostics(null)
     } finally {
       setIsModalOpen(true)
+      isCapturingRef.current = false
     }
   }
 

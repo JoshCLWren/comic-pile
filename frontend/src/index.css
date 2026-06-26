@@ -35,3 +35,11 @@
   from { transform: translateX(0); }
   to { transform: translateX(-50%); }
 }
+
+/* Force solid background on #root during screenshot to prevent transparency issues.
+   Must use CSS (not inline style) so that concurrent captureScreenshot calls don't
+   create a race condition where one call's prevBackground captures another call's
+   #111827 and restores to the wrong value. */
+.screenshot-mode #root {
+  background-color: #111827 !important;
+}
