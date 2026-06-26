@@ -1,4 +1,4 @@
-"""Tests for configuration validation (issue #296).
+"""Tests for configuration validation (issues #296, #515).
 
 These tests verify that invalid environment variable values raise validation errors
 instead of silently falling back to defaults.
@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.config import (
+    AppSettings,
     AuthSettings,
     RatingSettings,
     SessionSettings,
@@ -88,11 +89,11 @@ class TestSessionSettingsValidation:
         assert settings.start_die == 4
 
     def test_start_die_maximum_boundary(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that start_die=100 (maximum) is accepted."""
-        monkeypatch.setenv("START_DIE", "100")
+        """Test that start_die=20 (maximum) is accepted."""
+        monkeypatch.setenv("START_DIE", "20")
         clear_settings_cache()
         settings = SessionSettings()
-        assert settings.start_die == 100
+        assert settings.start_die == 20
 
     def test_invalid_start_die_too_low(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that start_die < 4 raises ValidationError."""
@@ -103,19 +104,20 @@ class TestSessionSettingsValidation:
         assert "start_die" in str(exc_info.value).lower()
 
     def test_invalid_start_die_too_high(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that start_die > 100 raises ValidationError."""
-        monkeypatch.setenv("START_DIE", "101")
+        """Test that start_die > 20 raises ValidationError."""
+        monkeypatch.setenv("START_DIE", "21")
         clear_settings_cache()
         with pytest.raises(ValidationError) as exc_info:
             SessionSettings()
         assert "start_die" in str(exc_info.value).lower()
 
-    def test_valid_start_die_max(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that start_die=100 is valid (extended ladder)."""
+    def test_invalid_start_die_example_from_issue(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test the example from issue #296: START_DIE=100 should fail."""
         monkeypatch.setenv("START_DIE", "100")
         clear_settings_cache()
-        settings = SessionSettings()
-        assert settings.start_die == 100
+        with pytest.raises(ValidationError) as exc_info:
+            SessionSettings()
+        assert "start_die" in str(exc_info.value).lower()
 
 
 class TestRatingSettingsValidation:
@@ -288,3 +290,67 @@ class TestAuthSettingsValidation:
         settings = AuthSettings()
 
         assert settings.secret_key == "prod-secret-key"
+
+
+class TestAppSettingsCorsValidation:
+    """Test CORS origin validation in production (issue #515)."""
+
+    def test_production_rejects_wildcard_cors(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that wildcard CORS in production raises RuntimeError."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("CORS_ORIGINS", "*")
+        clear_settings_cache()
+        settings = AppSettings()
+
+        with pytest.raises(RuntimeError, match="Wildcard CORS not allowed in production"):
+            _ = settings.cors_origins_list
+
+    def test_production_rejects_missing_cors(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that missing CORS_ORIGINS in production raises RuntimeError."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.delenv("CORS_ORIGINS", raising=False)
+        clear_settings_cache()
+        settings = AppSettings()
+
+        with pytest.raises(RuntimeError, match="CORS_ORIGINS must be set in production"):
+            _ = settings.cors_origins_list
+
+    def test_production_rejects_empty_cors(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that empty CORS_ORIGINS in production raises RuntimeError."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("CORS_ORIGINS", "")
+        clear_settings_cache()
+        settings = AppSettings()
+
+        with pytest.raises(RuntimeError, match="CORS_ORIGINS must be set in production"):
+            _ = settings.cors_origins_list
+
+    def test_production_accepts_explicit_origins(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that explicit CORS origins are accepted in production."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("CORS_ORIGINS", "https://example.com,https://app.example.com")
+        clear_settings_cache()
+        settings = AppSettings()
+
+        origins = settings.cors_origins_list
+        assert origins == ["https://example.com", "https://app.example.com"]
+
+    def test_development_allows_wildcard(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that wildcard CORS is allowed in development."""
+        monkeypatch.setenv("ENVIRONMENT", "development")
+        monkeypatch.delenv("CORS_ORIGINS", raising=False)
+        clear_settings_cache()
+        settings = AppSettings()
+
+        origins = settings.cors_origins_list
+        assert origins == ["*"]
+
+    def test_production_accepts_single_origin(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that a single explicit CORS origin is accepted in production."""
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        monkeypatch.setenv("CORS_ORIGINS", "https://example.com")
+        clear_settings_cache()
+        settings = AppSettings()
+
+        origins = settings.cors_origins_list
+        assert origins == ["https://example.com"]
