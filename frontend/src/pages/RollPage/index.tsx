@@ -27,6 +27,7 @@ import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../../hooks/useQ
 import { useRate } from '../../hooks'
 import { isReviewsFeatureEnabled } from '../../config/featureFlags'
 import { threadsApi, dependenciesApi } from '../../services/api'
+import { readingOrdersApi } from '../../services/api-reading-orders'
 import { reviewsApi } from '../../services/api-reviews'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
@@ -81,6 +82,7 @@ export default function RollPage() {
   const [reviewSaveError, setReviewSaveError] = useState<string | null>(null)
   const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
   const [existingReview, setExistingReview] = useState<Review | null>(null)
+  const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   const { activeCollectionId = null } = useCollections()
@@ -218,6 +220,18 @@ export default function RollPage() {
       }
     } else {
       setExistingReview(null)
+    }
+
+    if (threadId) {
+      try {
+        const ordersResponse = await readingOrdersApi.getForThread(threadId)
+        setReadingOrders(ordersResponse.reading_orders)
+      } catch (error) {
+        console.error('Failed to fetch reading orders:', error)
+        setReadingOrders([])
+      }
+    } else {
+      setReadingOrders([])
     }
   }, [reviewsEnabled, session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
 
@@ -849,6 +863,7 @@ useEffect(() => {
                 rateIsPending={rateMutation.isPending}
                 snoozeIsPending={snoozeMutation.isPending}
                 dismissIsPending={dismissPendingMutation.isPending}
+                readingOrders={readingOrders}
                 onUpdateRating={updateRatingUI}
                 onSubmitRating={handleSubmitRating}
                 onSnooze={handleSnooze}

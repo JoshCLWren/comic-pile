@@ -8,6 +8,7 @@ from app.models.revoked_token import RevokedToken
 from app.models.review import Review
 from app.models.session import Session
 from app.models.snapshot import Snapshot
+from app.models.reading_order import ReadingOrder, ReadingOrderItem
 from app.models.thread import Thread
 from app.models.user import User
 
@@ -16,6 +17,8 @@ __all__ = [
     "Dependency",
     "Event",
     "Issue",
+    "ReadingOrder",
+    "ReadingOrderItem",
     "RevokedToken",
     "Review",
     "Session",

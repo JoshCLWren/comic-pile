@@ -6,6 +6,7 @@ import Tooltip from '../../../components/Tooltip'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
+import type { ReadingOrder } from '../../../services/api-reading-orders'
 
 interface RatingViewProps {
   activeRatingThread: RatingThread | null
@@ -19,6 +20,7 @@ interface RatingViewProps {
   rateIsPending: boolean
   snoozeIsPending: boolean
   dismissIsPending: boolean
+  readingOrders: ReadingOrder[]
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
@@ -38,6 +40,7 @@ export function RatingView({
   rateIsPending,
   snoozeIsPending,
   dismissIsPending,
+  readingOrders,
   onUpdateRating,
   onSubmitRating,
   onSnooze,
@@ -236,6 +239,35 @@ export function RatingView({
           </div>
         )}
       </div>
+
+      {readingOrders.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500 text-center">Reading Orders</h3>
+          <div className="space-y-2">
+            {readingOrders.map((order) => (
+              <div key={order.id} className="bg-white/5 border border-white/10 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-stone-300 truncate">{order.name}</h4>
+                  <span className="text-[10px] text-stone-500 font-bold shrink-0 ml-2">
+                    {order.completed_items}/{order.total_items}
+                  </span>
+                </div>
+                {order.description && (
+                  <p className="text-[10px] text-stone-500 mb-2">{order.description}</p>
+                )}
+                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-amber-600 transition-all duration-300 rounded-full"
+                    style={{
+                      width: `${order.total_items > 0 ? Math.round((order.completed_items / order.total_items) * 100) : 0}%`
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {activeRatingThread && (
         <IssueCorrectionDialog
