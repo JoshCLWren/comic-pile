@@ -86,7 +86,7 @@ export default function RollPage() {
   const { activeCollectionId = null } = useCollections()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
   const { data: threads, refetch: refetchThreads } = useThreads('', collectionsEnabled ? activeCollectionId : null)
-  const { data: staleThreads } = useStaleThreads(7)
+  const { data: staleThreads, refetch: refetchStaleThreads } = useStaleThreads(7)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -224,10 +224,11 @@ export default function RollPage() {
 const handleMigrationComplete = useCallback((migratedThread: Thread) => {
   refetchThreads()
   refetchSession()
+  refetchStaleThreads()
   setShowMigrationDialog(false)
   setThreadToMigrate(null)
   enterRatingView(migratedThread.id, null, migratedThread)
-}, [refetchThreads, refetchSession, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
+}, [refetchThreads, refetchSession, refetchStaleThreads, enterRatingView, setShowMigrationDialog, setThreadToMigrate])
 
 const handleMigrationSkip = useCallback(() => {
   setShowMigrationDialog(false)
@@ -255,11 +256,11 @@ const handleSimpleMigrationComplete = useCallback((issueNumber: string) => {
       setSelectedThreadId(null)
       setActiveRatingThread(null)
       setErrorMessage('')
-      Promise.allSettled([refetchSession(), refetchThreads()])
+      Promise.allSettled([refetchSession(), refetchThreads(), refetchStaleThreads()])
     }).catch((error: unknown) => {
       setErrorMessage(getApiErrorDetail(error) || 'Failed to save rating')
     })
-  }, [activeRatingThread, rating, rateMutation, refetchSession, refetchThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
+  }, [activeRatingThread, rating, rateMutation, refetchSession, refetchThreads, refetchStaleThreads, setShowSimpleMigration, suppressPendingAutoOpenRef, setIsRolling, setIsRatingView, setRolledResult, setSelectedThreadId, setActiveRatingThread, setErrorMessage])
 
   async function handleAction(action: string) {
     if (!selectedThread) return
@@ -512,7 +513,7 @@ useEffect(() => {
           issue_number: activeRatingThread?.issue_number || undefined,
         })
 
-        const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
+        const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads(), refetchStaleThreads()])
         if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
           setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
           return
@@ -579,7 +580,7 @@ useEffect(() => {
       }
 
       // Refresh data
-      const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads()])
+      const refreshResults = await Promise.allSettled([refetchSession(), refetchThreads(), refetchStaleThreads()])
       if (refreshResults[0].status === 'rejected' || refreshResults[1].status === 'rejected') {
         setErrorMessage('Rating saved but failed to refresh. Please refresh the page.')
         returnToRollView()

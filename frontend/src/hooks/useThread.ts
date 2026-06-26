@@ -171,7 +171,21 @@ export function useStaleThreads(days?: number) {
     };
   }, [days]);
 
-  return { data, isPending, isError };
+  const refetch = useCallback(async () => {
+    setIsPending(true);
+    setIsError(false);
+
+    try {
+      const result = await threadsApi.listStale(days);
+      setData(result);
+    } catch {
+      setIsError(true);
+    } finally {
+      setIsPending(false);
+    }
+  }, [days]);
+
+  return { data, isPending, isError, refetch };
 }
 
 export function useCreateThread() {
