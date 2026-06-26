@@ -136,9 +136,12 @@ class AppSettings(BaseSettings):
         """Get CORS origins as a list."""
         if not self.cors_origins or not self.cors_origins.strip():
             if self.environment == "production":
-                return []
+                raise RuntimeError("CORS_ORIGINS must be set in production")
             return ["*"]
-        return [origin.strip() for origin in self.cors_origins.split(",")]
+        origins = [origin.strip() for origin in self.cors_origins.split(",")]
+        if self.environment == "production" and "*" in origins:
+            raise RuntimeError("Wildcard CORS not allowed in production")
+        return origins
 
     def validate_production_cors(self) -> None:
         """Validate that CORS is properly configured in production."""
@@ -157,14 +160,9 @@ class SessionSettings(BaseSettings):
         description="Hours of inactivity before starting a new session (1-168)",
         json_schema_extra={"env": "SESSION_GAP_HOURS"},
     )
-    session_gap_hours: int = Field(
-        default=6,
-        description="Hours of inactivity before starting a new session (1-168)",
-        json_schema_extra={"env": "SESSION_GAP_HOURS"},
-    )
     start_die: int = Field(
         default=6,
-        description="Starting die size for new sessions (4-100)",
+        description="Starting die size for new sessions (4-20)",
         json_schema_extra={"env": "START_DIE"},
     )
 
@@ -180,8 +178,8 @@ class SessionSettings(BaseSettings):
     @classmethod
     def validate_start_die(cls, v: int) -> int:
         """Ensure start die is within valid range."""
-        if not 4 <= v <= 100:
-            raise ValueError(f"START_DIE must be between 4 and 100, got {v}")
+        if not 4 <= v <= 20:
+            raise ValueError(f"START_DIE must be between 4 and 20, got {v}")
         return v
 
 
