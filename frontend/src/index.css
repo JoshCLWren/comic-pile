@@ -26,3 +26,12 @@
   backdrop-filter: none !important;
   filter: none !important;
 }
+
+.marquee-runner:hover {
+  animation: marquee 8s linear infinite;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}

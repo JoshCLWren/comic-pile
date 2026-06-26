@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
@@ -61,6 +61,8 @@ export default function QueuePage() {
   const [reorderError, setReorderError] = useState<string | null>(null)
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
+  const [sortBy, setSortBy] = useState<'position' | 'alphabetical' | 'created'>('position')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const openActionSheet = (thread: Thread) => {
     setSelectedThread(thread)
@@ -141,6 +143,23 @@ export default function QueuePage() {
     ?.filter((thread) => thread.status === 'active')
     .sort((a, b) => a.queue_position - b.queue_position) ?? []
   const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
+
+  const sortedThreads = useMemo(() => {
+    if (sortBy === 'alphabetical') {
+      return [...activeThreads].sort((a, b) => a.title.localeCompare(b.title))
+    }
+    if (sortBy === 'created') {
+      return [...activeThreads].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    }
+    return activeThreads
+  }, [activeThreads, sortBy])
+
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery.trim()) return sortedThreads
+    return sortedThreads.filter((t) =>
+      t.title.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [sortedThreads, searchQuery])
 
   const handleDelete = (threadId: number) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
@@ -540,6 +559,31 @@ export default function QueuePage() {
           </div>
         </div>
         {collectionsEnabled && <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
+            {(['position', 'alphabetical', 'created'] as const).map((sort) => (
+              <button
+                key={sort}
+                type="button"
+                onClick={() => setSortBy(sort)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${
+                  sortBy === sort
+                    ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30'
+                    : 'bg-white/5 text-stone-400 border border-white/10 hover:bg-white/10'
+                }`}
+              >
+                {sort === 'position' ? 'Position' : sort === 'alphabetical' ? 'A-Z' : 'Newest'}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search threads..."
+            className="h-9 px-3 bg-white/5 border border-white/10 rounded-lg text-xs text-stone-300 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors w-full md:w-auto"
+          />
+        </div>
       </header>
 
       {/* Mobile FAB for Add Thread */}
@@ -554,6 +598,8 @@ export default function QueuePage() {
 
       {activeThreads.length === 0 ? (
         <div className="text-center text-stone-500">No active threads in queue</div>
+      ) : filteredThreads.length === 0 ? (
+        <div className="text-center text-stone-500">No threads match your search</div>
       ) : (
         <>
           {reorderError && (
@@ -568,7 +614,7 @@ export default function QueuePage() {
             aria-label="Thread queue"
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
           >
-            {activeThreads.map((thread, index) => {
+            {filteredThreads.map((thread, index) => {
               const isDragOver = dragOverThreadId === thread.id
               const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
               const blockingReasons = blockingReasonMap[thread.id] || []
@@ -611,7 +657,12 @@ export default function QueuePage() {
                             ⠿
                           </button>
                         </Tooltip>
-                         <h3 className="text-lg font-bold text-white flex-1 line-clamp-2">{thread.title}</h3>
+                         <div className="overflow-hidden flex-1 whitespace-nowrap">
+                           <h3 className="text-lg font-bold text-white inline-block marquee-runner">
+                             <span>{thread.title}</span>
+                             <span className="ml-8">{thread.title}</span>
+                           </h3>
+                         </div>
                         {isBlocked && (
                           <Tooltip content={blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'}>
                             <span className="text-red-300 text-lg" aria-label="Blocked thread">🔒</span>
@@ -619,7 +670,7 @@ export default function QueuePage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="hidden md:flex items-center gap-1">
                       <Tooltip content="Edit thread details.">
                         <button
                           type="button"
@@ -681,7 +732,7 @@ export default function QueuePage() {
             openActionSheet(thread)
           }
         }}
-        className="md:hidden text-stone-500 flex items-center justify-center w-8 h-8 text-xl"
+        className="md:hidden text-stone-500 flex items-center justify-center w-12 h-12 md:w-8 md:h-8 text-xl"
         aria-label="Open actions"
       >
         ⋮
