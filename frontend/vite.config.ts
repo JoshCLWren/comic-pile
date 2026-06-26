@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import sri from 'vite-plugin-sri'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -7,7 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig(() => ({
   base: '/',
-  plugins: [react()],
+  plugins: [react(), sri({ algorithm: 'sha384' })],
   server: {
     host: '0.0.0.0',
     proxy: {
