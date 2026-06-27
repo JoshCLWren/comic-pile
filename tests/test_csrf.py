@@ -10,7 +10,7 @@ from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 
 
 @pytest.fixture(autouse=True)
-def _enable_csrf_for_tests() -> Generator[None, None, None]:
+def _enable_csrf_for_tests() -> Generator[None]:
     """Override TEST_ENVIRONMENT so CSRF protection is active during these tests.
 
     The global conftest sets TEST_ENVIRONMENT=true which skips CSRF middleware.
