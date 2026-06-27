@@ -1,9 +1,25 @@
 """Tests for CSRF protection on mutating API requests."""
 
+import os
+from collections.abc import Generator
+
 import pytest
 from httpx import AsyncClient
 
 from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME
+
+
+@pytest.fixture(autouse=True)
+def _enable_csrf_for_tests() -> Generator[None, None, None]:
+    """Override TEST_ENVIRONMENT so CSRF protection is active during these tests.
+
+    The global conftest sets TEST_ENVIRONMENT=true which skips CSRF middleware.
+    These tests specifically verify CSRF behavior, so we need it active.
+    """
+    original = os.environ.pop("TEST_ENVIRONMENT", None)
+    yield
+    if original is not None:
+        os.environ["TEST_ENVIRONMENT"] = original
 
 
 THREAD_PAYLOAD = {
