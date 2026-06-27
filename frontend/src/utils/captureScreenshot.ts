@@ -345,7 +345,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
       allowTaint: false,
       scale: 1,
       logging: false,
-      backgroundColor: '#111827',
+      backgroundColor: '#110e0a',
       ignoreElements: (element: Element) => {
         const excluded = element instanceof HTMLElement && element.closest('[data-exclude-from-screenshot="true"]') !== null
         return excluded

@@ -60,7 +60,8 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.goto(`/queue`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click(`text=${target.title}`);
+    await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: target.title }).click();
+    await authenticatedPage.waitForURL('**/thread/**', { timeout: 10000 });
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
@@ -94,7 +95,8 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.goto(`/queue`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click(`text=${thread.title}`);
+    await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: thread.title }).click();
+    await authenticatedPage.waitForURL('**/thread/**', { timeout: 10000 });
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
@@ -147,7 +149,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.goto(`/queue`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click(`text=${target.title}`);
+    await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: target.title }).click();
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
@@ -227,7 +229,8 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.goto(`/queue`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click(`text=${target.title}`);
+    await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: target.title }).click();
+    await authenticatedPage.waitForURL('**/thread/**', { timeout: 10000 });
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
@@ -309,7 +312,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.goto(`/queue`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.click(`text=${middle.title}`);
+    await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ has: authenticatedPage.locator('h3', { hasText: middle.title }) }).click();
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');

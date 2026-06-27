@@ -95,13 +95,14 @@ class AuthSettings(BaseSettings):
     @field_validator("secret_key", mode="before")
     @classmethod
     def validate_secret_key(cls, v: str | None) -> str:
-        """Require explicit secret key in production, randomize in non-production."""
+        """Require explicit secret key in production, use it in test mode, randomize in development."""
         environment = os.environ.get("ENVIRONMENT", "development")
         if environment == "production":
             if v and v.strip():
                 return v
             raise ValueError("SECRET_KEY must be set in production mode")
-
+        if environment == "test" and v and v.strip():
+            return v
         return secrets.token_urlsafe(48)
 
 

@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 import { createThread } from './helpers';
 
 test.describe('Issue #292: Snoozed-offset badge at d20 ceiling', () => {
-  test('should NOT show snoozed-offset badge when die is d20 (pool already at max)', async ({ authenticatedPage, request }) => {
+  test('should show snoozed-offset badge when die is d20 (ladder now goes to 100)', async ({ authenticatedPage, request }) => {
     const page = authenticatedPage;
 
     // Create 21 threads (20 for d20 pool + 1 to snooze)
@@ -55,11 +55,12 @@ test.describe('Issue #292: Snoozed-offset badge at d20 ceiling', () => {
     // Verify we're back on roll page
     await expect(page.locator('#main-die-3d')).toBeVisible();
 
-    // The snoozed-offset badge should NOT be visible when die is d20
-    // because the pool is already at maximum size (20) and snoozing
-    // cannot increase it further
+    // The snoozed-offset badge should be visible when die is d20
+    // because the dice ladder now extends to 100, so d20 is no longer
+    // the ceiling and the pool can grow via snoozed offset
     const snoozedOffsetBadge = page.locator('.modifier-badge');
-    await expect(snoozedOffsetBadge).not.toBeVisible();
+    await expect(snoozedOffsetBadge).toBeVisible();
+    await expect(snoozedOffsetBadge).toContainText('+1');
   });
 
   test('should show snoozed-offset badge when die is d6 (pool can grow)', async ({ authenticatedPage, request }) => {

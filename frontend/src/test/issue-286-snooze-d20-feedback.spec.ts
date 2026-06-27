@@ -1,12 +1,12 @@
 import { test, expect } from './fixtures';
 import { createThread } from './helpers';
 
-test.describe('Issue #286: Snooze feedback at d20', () => {
-  test('should show feedback when snoozing at d20 (max pool size)', async ({ authenticatedPage, request }) => {
+test.describe('Issue #286: Snooze feedback at ladder ceiling', () => {
+  test('should show feedback when snoozing at d100 (max pool size)', async ({ authenticatedPage, request }) => {
     const page = authenticatedPage;
 
-    // Create 21 threads (20 for d20 pool + 1 to roll)
-    for (let i = 0; i < 21; i++) {
+    // Create 101 threads (100 for d100 pool + 1 to roll)
+    for (let i = 0; i < 101; i++) {
       await createThread(page, {
         title: `Test Thread ${i + 1}`,
         format: 'issue',
@@ -15,9 +15,9 @@ test.describe('Issue #286: Snooze feedback at d20', () => {
       });
     }
 
-    // Set die to d20 (maximum)
+    // Set die to d100 (ladder maximum)
     const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
-    const setDieResponse = await request.post('/api/roll/set-die?die=20', {
+    const setDieResponse = await request.post('/api/roll/set-die?die=100', {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(setDieResponse.ok()).toBeTruthy();
@@ -26,9 +26,9 @@ test.describe('Issue #286: Snooze feedback at d20', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Verify die is d20
+    // Verify die is d100
     const headerDieLabel = page.locator('#header-die-label');
-    await expect(headerDieLabel).toContainText('d20');
+    await expect(headerDieLabel).toContainText('d100');
 
   // Click on the first thread to open action sheet (roll pool threads open action sheet directly)
   const firstThread = page.locator('[data-roll-pool] [role="button"]').first();

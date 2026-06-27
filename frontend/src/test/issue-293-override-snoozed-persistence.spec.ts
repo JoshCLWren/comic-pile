@@ -140,9 +140,9 @@ test.describe('Issue #293: Snoozed Thread Persistence', () => {
     const headerDieLabel = pageUnderTest.locator('#header-die-label');
     await expect(headerDieLabel).toContainText('d20');
 
-    // The snoozed-offset badge should NOT be visible when die is d20
+    // The snoozed-offset badge should be visible when die is d20 (pool + snoozed > dieSize)
     const snoozedOffsetBadge = pageUnderTest.locator('.modifier-badge');
-    await expect(snoozedOffsetBadge).not.toBeVisible();
+    await expect(snoozedOffsetBadge).toBeVisible();
 
     // Verify thread is in snoozed list via session API
     const sessionResponse = await pageUnderTest.request.get('/api/sessions/current/', {
@@ -155,8 +155,8 @@ test.describe('Issue #293: Snoozed Thread Persistence', () => {
     const isInSnoozedList = sessionData.snoozed_threads.some((t: any) => t.id === snoozedThread.id);
     expect(isInSnoozedList).toBe(true);
 
-    // The snoozed-offset badge should STILL not be visible
-    await expect(snoozedOffsetBadge).not.toBeVisible();
+    // The snoozed-offset badge should STILL be visible
+    await expect(snoozedOffsetBadge).toBeVisible();
   });
 
   test('should maintain snoozed state consistency across operations', async ({ page, request }) => {
