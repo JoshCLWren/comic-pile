@@ -16,12 +16,9 @@ router = APIRouter()
 ALLOWED_LEVELS = {"INFO", "WARN", "ERROR"}
 MAX_MESSAGE_LENGTH = 2000
 
-app_settings = get_app_settings()
-
-
 def check_debug_routes_enabled() -> None:
     """Check if debug routes are enabled via environment variable."""
-    if app_settings.environment == "production":
+    if get_app_settings().environment == "production":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not found",

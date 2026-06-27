@@ -5,6 +5,7 @@ import os
 import pytest
 from httpx import AsyncClient
 
+from app.config import clear_settings_cache
 from app.main import app
 
 
@@ -37,6 +38,7 @@ async def test_debug_log_admin_success(client: AsyncClient) -> None:
     app.dependency_overrides[get_current_user] = _override
 
     original_env = os.environ.get("ENVIRONMENT", "")
+    clear_settings_cache()
     os.environ["ENVIRONMENT"] = "development"
 
     try:
@@ -50,6 +52,7 @@ async def test_debug_log_admin_success(client: AsyncClient) -> None:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        clear_settings_cache()
         app.dependency_overrides.pop(get_current_user, None)
 
 
@@ -64,6 +67,7 @@ async def test_debug_log_non_admin_forbidden(client: AsyncClient) -> None:
     app.dependency_overrides[get_current_user] = _override
 
     original_env = os.environ.get("ENVIRONMENT", "")
+    clear_settings_cache()
     os.environ["ENVIRONMENT"] = "development"
 
     try:
@@ -78,6 +82,7 @@ async def test_debug_log_non_admin_forbidden(client: AsyncClient) -> None:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        clear_settings_cache()
         app.dependency_overrides.pop(get_current_user, None)
 
 
@@ -85,6 +90,7 @@ async def test_debug_log_non_admin_forbidden(client: AsyncClient) -> None:
 async def test_debug_log_anonymous_unauthorized(client: AsyncClient) -> None:
     """Test that anonymous users get 401 when accessing debug log endpoint."""
     original_env = os.environ.get("ENVIRONMENT", "")
+    clear_settings_cache()
     os.environ["ENVIRONMENT"] = "development"
 
     try:
@@ -98,6 +104,7 @@ async def test_debug_log_anonymous_unauthorized(client: AsyncClient) -> None:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        clear_settings_cache()
 
 
 @pytest.mark.asyncio
@@ -111,6 +118,7 @@ async def test_debug_log_disabled_in_production(client: AsyncClient) -> None:
     app.dependency_overrides[get_current_user] = _override
 
     original_env = os.environ.get("ENVIRONMENT", "")
+    clear_settings_cache()
     os.environ["ENVIRONMENT"] = "production"
 
     try:
@@ -124,4 +132,5 @@ async def test_debug_log_disabled_in_production(client: AsyncClient) -> None:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        clear_settings_cache()
         app.dependency_overrides.pop(get_current_user, None)
