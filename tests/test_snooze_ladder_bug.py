@@ -132,10 +132,11 @@ async def test_multiple_snooze_then_rate(auth_client: AsyncClient, async_db: Asy
     assert session_after_rate.status_code == 200
     rated_data = session_after_rate.json()
 
-    expected_final_die = step_down(20)
+    die_before_rate = expected_dies[-1]
+    expected_final_die = step_down(die_before_rate)
     actual_final_die = rated_data["current_die"]
 
     assert actual_final_die == expected_final_die, (
-        f"After rating 4.0/5.0 from d20, expected die d{expected_final_die}, "
+        f"After rating 4.0/5.0 from d{die_before_rate}, expected die d{expected_final_die}, "
         f"got d{actual_final_die}. Expected ladder path: {' → '.join(str(d) for d in expected_dies)} → {expected_final_die}"
     )
