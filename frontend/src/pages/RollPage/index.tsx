@@ -784,7 +784,7 @@ useEffect(() => {
               <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d{dieSize}) - snoozing won't increase it further</span>
             </div>
           )}
-          {((session?.snoozed_threads?.length ?? 0) > 0) && pool.length < dieSize + (session?.snoozed_threads?.length ?? 0) && (
+          {((session?.snoozed_threads?.length ?? 0) > 0) && pool.length + (session?.snoozed_threads?.length ?? 0) > dieSize && (
             <div className="flex items-center gap-2 mt-1">
               <Tooltip content="Snoozed offset"><span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session?.snoozed_threads?.length ?? 0}</span></Tooltip>
               <Tooltip content="Snoozed offset active"><span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">offset active</span></Tooltip>

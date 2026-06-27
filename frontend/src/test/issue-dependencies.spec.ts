@@ -312,7 +312,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.goto(`/queue`);
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: middle.title }).click();
+    await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ has: authenticatedPage.locator('h3', { hasText: middle.title }) }).click();
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');

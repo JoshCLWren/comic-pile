@@ -251,9 +251,20 @@ class TestAuthSettingsValidation:
         assert second_settings.secret_key
         assert first_settings.secret_key != second_settings.secret_key
 
-    def test_ignores_configured_secret_key_in_test(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test test environment still uses randomized secret key when configured."""
+    def test_uses_configured_secret_key_in_test(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test test environment uses explicit secret key when configured."""
         monkeypatch.setenv("ENVIRONMENT", "test")
+        monkeypatch.setenv("SECRET_KEY", "configured-key")
+        clear_settings_cache()
+        settings = AuthSettings()
+
+        assert settings.secret_key == "configured-key"
+
+    def test_ignores_configured_secret_key_in_development(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test development still randomizes secret key even when configured."""
+        monkeypatch.setenv("ENVIRONMENT", "development")
         monkeypatch.setenv("SECRET_KEY", "configured-key")
         clear_settings_cache()
         settings = AuthSettings()
