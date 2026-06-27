@@ -779,12 +779,12 @@ useEffect(() => {
       <header className="flex justify-between items-center px-3 py-2 shrink-0 z-10">
         <div>
           <h1 className="text-2xl font-black tracking-tighter text-glow uppercase">Pile Roller</h1>
-          {((session?.snoozed_threads?.length ?? 0) > 0) && pool.length >= dieSize && (
+          {((session?.snoozed_threads?.length ?? 0) > 0) && currentDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
             <div className="flex items-center gap-2 mt-1">
               <span className="text-[9px] text-stone-500 uppercase tracking-wider">pool at max size (d{dieSize}) - snoozing won't increase it further</span>
             </div>
           )}
-          {((session?.snoozed_threads?.length ?? 0) > 0) && pool.length < dieSize && (
+          {((session?.snoozed_threads?.length ?? 0) > 0) && pool.length < dieSize + (session?.snoozed_threads?.length ?? 0) && (
             <div className="flex items-center gap-2 mt-1">
               <Tooltip content="Snoozed offset"><span className="modifier-badge text-[10px] font-black text-amber-500 cursor-help border-b border-dashed border-stone-600">+{session?.snoozed_threads?.length ?? 0}</span></Tooltip>
               <Tooltip content="Snoozed offset active"><span className="text-[9px] text-stone-500 uppercase tracking-wider cursor-help border-b border-dashed border-stone-600">offset active</span></Tooltip>

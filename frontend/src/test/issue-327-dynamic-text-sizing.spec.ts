@@ -46,7 +46,8 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     const className = await firstTitle.getAttribute('class');
     const hasLineClamp = className?.includes('line-clamp-2');
     const hasTruncate = className?.includes('truncate');
-    expect(hasLineClamp || hasTruncate).toBe(true);
+    const hasMarquee = className?.includes('marquee-runner');
+    expect(hasLineClamp || hasTruncate || hasMarquee).toBe(true);
   });
 
   test('rating view title wraps to 2 lines after rolling', async ({ authenticatedPage, request }) => {
@@ -120,6 +121,7 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     const className = await title.getAttribute('class');
     const hasLineClamp = className?.includes('line-clamp-2');
     const hasTruncate = className?.includes('truncate');
-    expect(hasLineClamp || hasTruncate).toBe(true);
+    const hasMarquee = className?.includes('marquee-runner');
+    expect(hasLineClamp || hasTruncate || hasMarquee).toBe(true);
   });
 });

@@ -9,6 +9,36 @@
 }
 
 [data-theme="blue"] {
+  --color-amber-100: #dbeafe;
+  --color-amber-200: #bfdbfe;
+  --color-amber-300: #93c5fd;
+  --color-amber-400: #60a5fa;
+  --color-amber-500: #3b82f6;
+  --color-amber-600: #2563eb;
+  --color-amber-700: #1d4ed8;
+  --color-amber-800: #1e40af;
+  --color-amber-900: #1e3a8a;
+
+  --color-stone-100: #f1f5f9;
+  --color-stone-200: #e2e8f0;
+  --color-stone-300: #cbd5e1;
+  --color-stone-400: #94a3b8;
+  --color-stone-500: #64748b;
+  --color-stone-600: #475569;
+  --color-stone-700: #334155;
+  --color-stone-800: #1e293b;
+  --color-stone-900: #0f172a;
+  --color-stone-950: #020617;
+
+  --bg-main: #0f172a;
+  --bg-darker: #020617;
+  --accent-primary: #3b82f6;
+  --text-primary: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --glass-bg: rgba(59, 130, 246, 0.04);
+  --glass-border: rgba(59, 130, 246, 0.08);
+
   --theme-primary: #3b82f6;
   --theme-primary-light: #60a5fa;
   --theme-bg-dark: #0f172a;
@@ -41,5 +71,5 @@
    create a race condition where one call's prevBackground captures another call's
    #111827 and restores to the wrong value. */
 .screenshot-mode #root {
-  background-color: #111827 !important;
+  background-color: #110e0a !important;
 }
