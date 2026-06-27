@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, generate_csrf_token
 from app.models import Issue, Thread, User
 from tests.conftest import get_or_create_user_async, get_test_database_url
 
@@ -69,9 +70,12 @@ async def test_concurrent_issue_adds_no_position_collisions(
         """Add issues concurrently using a dedicated client per request."""
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            csrf_token = generate_csrf_token()
+            client.cookies.set(CSRF_COOKIE_NAME, csrf_token)
             response = await client.post(
                 f"/api/v1/threads/{thread_id}/issues",
                 json={"issue_range": f"{range_start}-{range_start + 4}"},
+                headers={CSRF_HEADER_NAME: csrf_token},
             )
 
         assert response.status_code == 201, f"Failed for range {range_start}: {response.text}"
@@ -184,9 +188,12 @@ async def test_concurrent_issue_adds_same_thread_different_overlaps(
         """Add issues concurrently."""
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            csrf_token = generate_csrf_token()
+            client.cookies.set(CSRF_COOKIE_NAME, csrf_token)
             response = await client.post(
                 f"/api/v1/threads/{thread_id}/issues",
                 json={"issue_range": range_str},
+                headers={CSRF_HEADER_NAME: csrf_token},
             )
 
             assert response.status_code in (201, 400, 409), (

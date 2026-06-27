@@ -126,6 +126,25 @@ export async function getAuthToken(page: Page): Promise<string | null> {
   });
 }
 
+async function getCsrfToken(page: Page, token: string | null): Promise<string> {
+  const response = await page.request.get('/api/auth/csrf', {
+    headers: {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!response.ok()) {
+    throw new Error(`Failed to fetch CSRF token: ${response.status()} ${response.statusText()}`);
+  }
+
+  const data = await response.json() as { csrf_token?: string };
+  if (!data.csrf_token) {
+    throw new Error('CSRF bootstrap response did not include csrf_token');
+  }
+
+  return data.csrf_token;
+}
+
 export async function submitRatingAndDismissReviewIfShown(
   page: Page,
   submitAction: () => Promise<void>,
@@ -158,6 +177,7 @@ export async function createThread(
   threadData: { title: string; format: string; issues_remaining: number; total_issues?: number; issue_range?: string }
 ): Promise<{ id: number }> {
   const token = await getAuthToken(page);
+  const csrfToken = await getCsrfToken(page, token);
 
   const dataWithoutTotal = {
     title: threadData.title,
@@ -173,11 +193,12 @@ export async function createThread(
   while (!success && attempts < maxAttempts) {
     const response = await page.request.post('/api/threads/', {
       data: dataWithoutTotal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
-    });
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'X-CSRF-Token': csrfToken,
+        },
+      });
 
     if (response.ok()) {
       success = true;
@@ -196,6 +217,7 @@ export async function createThread(
             headers: {
               'Content-Type': 'application/json',
               ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+              'X-CSRF-Token': csrfToken,
             },
           });
 
@@ -216,6 +238,7 @@ export async function createThread(
                   await page.request.post(`/api/v1/issues/${issue.id}:markRead`, {
                     headers: {
                       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                      'X-CSRF-Token': csrfToken,
                     },
                   });
                 }
