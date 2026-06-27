@@ -61,6 +61,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click(`text=${target.title}`);
+    await authenticatedPage.waitForURL('**/thread/**', { timeout: 5000 });
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
@@ -95,6 +96,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click(`text=${thread.title}`);
+    await authenticatedPage.waitForURL('**/thread/**', { timeout: 5000 });
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
@@ -228,6 +230,7 @@ test.describe('Issue Dependency Indicators', () => {
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click(`text=${target.title}`);
+    await authenticatedPage.waitForURL('**/thread/**', { timeout: 5000 });
     await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');

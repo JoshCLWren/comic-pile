@@ -58,7 +58,7 @@ test.describe('Thread Management', () => {
     }
 
     for (const thread of threads) {
-      await expect(authenticatedPage.locator(`text=${thread.title}`)).toBeVisible();
+      await expect(authenticatedPage.locator('#queue-container h3').filter({ hasText: thread.title })).toBeVisible();
     }
   });
 
@@ -118,8 +118,8 @@ test.describe('Thread Management', () => {
     await authenticatedPage.click('button:has-text("Save Changes")');
     await authenticatedPage.waitForLoadState('networkidle');
 
-    await authenticatedPage.waitForSelector('text=Updated Title', { state: 'visible', timeout: 5000 });
-    await expect(authenticatedPage.locator('text=Updated Title')).toBeVisible();
+    await authenticatedPage.waitForSelector('#queue-container h3', { state: 'visible', timeout: 5000 });
+    await expect(authenticatedPage.locator('#queue-container h3').filter({ hasText: 'Updated Title' })).toBeVisible();
   });
 
   test('should delete thread', async ({ authenticatedPage }) => {

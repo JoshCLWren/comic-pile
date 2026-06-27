@@ -925,13 +925,10 @@ test.describe('Roll Dice Feature', () => {
        ).toBeVisible({ timeout: 10000 })
 
        // Check that snoozed thread is NOT in the roll pool
-       const rollPoolText = await authenticatedPage.evaluate(() => {
-         const poolElement = document.querySelector('[data-roll-pool]')
-         return poolElement ? poolElement.textContent : ''
-       })
+       await expect(authenticatedPage.locator('[data-roll-pool]').getByText('Snoozed Thread B')).toHaveCount(0)
 
-       expect(rollPoolText).not.toContain('Snoozed Thread B')
-       expect(rollPoolText).toContain('Active Thread A')
+       // Check that active thread IS in the roll pool
+       await expect(authenticatedPage.locator('[data-roll-pool]').getByText('Active Thread A')).toBeVisible()
     })
 
     test('snoozed thread appears in SNOOZED section only', async ({ authenticatedPage }) => {
