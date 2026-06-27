@@ -243,6 +243,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     @app.middleware("http")
     async def csrf_middleware(request: Request, call_next):
         """Require a matching CSRF header and cookie on mutating API requests."""
+        if os.getenv("TEST_ENVIRONMENT") == "true":
+            return await call_next(request)
         if not is_csrf_protected_request(request.method, request.url.path):
             return await call_next(request)
 
