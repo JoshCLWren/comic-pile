@@ -29,13 +29,15 @@ Skipped tests create technical debt and hide broken functionality. If a test is 
 - **Auth**: JWT authentication with refresh token rotation
 - **Code Quality**: ruff linting, ty type checking, 96% coverage requirement
 
-> **⚠️ IMPORTANT: Async PostgreSQL Only**
+> **⚠️ IMPORTANT: Async PostgreSQL Only in Application Code**
 > 
-> This project uses **asyncpg (async PostgreSQL) ONLY**. Never use synchronous psycopg2.
-> - ✅ USE: `asyncpg`, `create_async_engine()`, `AsyncSession`
-> - ❌ NEVER USE: `psycopg2`, `psycopg`, `create_engine()` (sync), `Session` (sync)
+> Application code uses **asyncpg (async PostgreSQL) ONLY**. Never use synchronous database drivers in `app/` or `comic_pile/`.
+> - ✅ USE in app code: `asyncpg`, `create_async_engine()`, `AsyncSession`
+> - ❌ NEVER USE in app code: `psycopg2`, `create_engine()` (sync), `Session` (sync)
 > 
-> Mixing sync/async database code will break the application. See [AGENTS.md](AGENTS.md) for details.
+> The one exception: `psycopg` (sync, v3) is a core dependency used **only inside `alembic/`** for migrations. `app/config.py` converts `postgresql+psycopg://` back to `postgresql+asyncpg://` at runtime, so the app never runs sync DB access.
+> 
+> Mixing sync/async database code in the application will break it. See [AGENTS.md](AGENTS.md) for details.
 
 ## Quick Start
 
