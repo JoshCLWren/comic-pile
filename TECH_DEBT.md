@@ -174,16 +174,17 @@
 
 ## Low Priority (Nice-to-Have Improvements)
 
-### 9. No API Versioning Strategy
-**Location:** All routes at `/api/` level (no version prefix)
-**Description:** No versioning (e.g., `/api/v1/`) on API routes
+### 9. Partial API Versioning (Documented Convention)
+**Location:** `app/main.py` router includes; `docs/API.md` (API Versioning)
+**Description:** Versioning is partially applied: newer resources (dependencies, collections, reviews, issues, reading-orders) are served under `/api/v1/*`, while legacy resources (threads, roll, queue, rate, snooze, undo, auth, admin, analytics, bug-reports, sessions) remain under `/api/*`. `/api/v1/sessions/*` is an explicit, tested backwards-compat alias of `/api/sessions/*` (issue #376, `tests/test_route_versioning.py`).
+**Status:** The convention is now **documented** (`docs/API.md` + a comment in `app/main.py`): new resources go under `/api/v1/*`; no new bare `/api/*` routes.
 **Why It's Debt:**
-- Breaking changes affect all clients
-- Can't maintain multiple API versions
-**Suggested Approach:**
-- Add version prefix to all API routes: `/api/v1/threads/`
-- Document versioning strategy
-**Estimated Effort:** 3-4 hours
+- Two surfaces remain; a single-version migration is not yet complete
+- Breaking changes to legacy resources still affect all clients on `/api/*`
+**Suggested Approach (deferred):**
+- Migrate remaining legacy resources onto `/api/v1/*` behind a coordinated frontend update
+- Keep `/api/*` as a deprecated alias during transition, then remove
+**Estimated Effort:** 6-10 hours (frontend + backend coordinated migration)
 
 ### 10. No Pagination on Most List Endpoints
 **Location:** Only `/sessions/` has pagination

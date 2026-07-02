@@ -151,6 +151,18 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
     # Global, HTTP, and validation exception handlers (environment-aware logging).
     register_exception_handlers(app, app_settings)
 
+    # API route prefix convention:
+    # - Legacy resources are served under /api/* (threads, roll, queue,
+    #   rate, snooze, undo, auth, admin, analytics, bug-reports, sessions).
+    # - Newer resources are served under the versioned /api/v1/* surface
+    #   (dependencies, collections, reviews, issues, reading-orders).
+    # - /api/v1/sessions/* is an explicit, tested backwards-compat alias of
+    #   /api/sessions/* (see tests/test_route_versioning.py, issue #376).
+    # - Non-production tooling routes (debug, test) are also mounted under
+    #   bare /api/* but only in non-production/test environments — they are
+    #   intentional exceptions to the versioning rule, not client APIs.
+    # Add new client resources under /api/v1/*; do not introduce new bare
+    # /api/* routes.
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(router, prefix="/api/v1/reviews", tags=["reviews"])
     app.include_router(admin.router, prefix="/api", tags=["admin"])
