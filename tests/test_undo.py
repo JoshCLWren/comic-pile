@@ -3,39 +3,47 @@
 from datetime import UTC, datetime
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Session as SessionModel, Snapshot, Thread, User  # noqa: I001
+from app.models import Event, Snapshot, Thread, User
+from app.models import Session as SessionModel
 
 
-@pytest.fixture(scope="function")
-def sample_user(db) -> User:
+@pytest_asyncio.fixture(scope="function")
+async def sample_user(async_db: AsyncSession) -> User:
     """Create a test user for undo tests."""
-    from tests.conftest import get_or_create_user
+    from tests.conftest import get_or_create_user_async
 
-    return get_or_create_user(db)
+    return await get_or_create_user_async(async_db)
 
 
 @pytest.mark.asyncio
-async def test_list_snapshots_empty(client: AsyncClient, db, sample_user):
+async def test_list_snapshots_empty(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test listing snapshots for a session with no snapshots."""
     session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
-    response = await client.get(f"/undo/{session.id}/snapshots")
+    response = await auth_client.get(f"/api/undo/{session.id}/snapshots")
     assert response.status_code == 200
     assert response.json() == []
 
 
 @pytest.mark.asyncio
-async def test_list_snapshots_with_data(client: AsyncClient, db, sample_user):
+async def test_list_snapshots_with_data(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test listing snapshots for a session with snapshots."""
     session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -44,9 +52,9 @@ async def test_list_snapshots_with_data(client: AsyncClient, db, sample_user):
         queue_position=1,
         user_id=sample_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="rate",
@@ -57,9 +65,9 @@ async def test_list_snapshots_with_data(client: AsyncClient, db, sample_user):
         die=6,
         die_after=4,
     )
-    db.add(event)
-    db.commit()
-    db.refresh(event)
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -67,10 +75,10 @@ async def test_list_snapshots_with_data(client: AsyncClient, db, sample_user):
         thread_states={thread.id: {"issues_remaining": 10, "queue_position": 1}},
         description="Test snapshot",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
-    response = await client.get(f"/undo/{session.id}/snapshots")
+    response = await auth_client.get(f"/api/undo/{session.id}/snapshots")
     assert response.status_code == 200
     snapshots = response.json()
     assert len(snapshots) == 1
@@ -80,20 +88,22 @@ async def test_list_snapshots_with_data(client: AsyncClient, db, sample_user):
 
 
 @pytest.mark.asyncio
-async def test_list_snapshots_invalid_session(client: AsyncClient):
+async def test_list_snapshots_invalid_session(auth_client: AsyncClient) -> None:
     """Test listing snapshots for non-existent session."""
-    response = await client.get("/undo/9999/snapshots")
+    response = await auth_client.get("/api/undo/9999/snapshots")
     assert response.status_code == 404
     assert "Session 9999 not found" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot(client: AsyncClient, db, sample_user):
+async def test_undo_to_snapshot(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test undoing to a specific snapshot."""
     session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -103,9 +113,9 @@ async def test_undo_to_snapshot(client: AsyncClient, db, sample_user):
         last_rating=4.0,
         user_id=sample_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -114,9 +124,9 @@ async def test_undo_to_snapshot(client: AsyncClient, db, sample_user):
         selected_thread_id=thread.id,
         result=3,
     )
-    db.add(event)
-    db.commit()
-    db.refresh(event)
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -132,13 +142,13 @@ async def test_undo_to_snapshot(client: AsyncClient, db, sample_user):
         },
         description="Before changes",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
-    response = await client.post(f"/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
 
-    db.refresh(thread)
+    await async_db.refresh(thread)
     assert thread.issues_remaining == 15
     assert thread.queue_position == 1
     assert thread.last_rating == 5.0
@@ -146,35 +156,40 @@ async def test_undo_to_snapshot(client: AsyncClient, db, sample_user):
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot_invalid_session(client: AsyncClient, db, sample_user):
+async def test_undo_to_snapshot_invalid_session(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test undoing with invalid session ID."""
-    response = await client.post("/undo/9999/undo/1")
+    _ = async_db, sample_user
+    response = await auth_client.post("/api/undo/9999/undo/1")
     assert response.status_code == 404
     assert "Session 9999 not found" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot_invalid_snapshot(client: AsyncClient, db, sample_user):
+async def test_undo_to_snapshot_invalid_snapshot(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test undoing with invalid snapshot ID."""
-    from app.models import Session as SessionModel
-
     session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
-    response = await client.post(f"/undo/{session.id}/undo/9999")
+    response = await auth_client.post(f"/api/undo/{session.id}/undo/9999")
     assert response.status_code == 404
     assert "Snapshot 9999 not found" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db, sample_user):
+async def test_undo_to_snapshot_restores_thread_states(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test that undo correctly restores all thread states."""
     session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread1 = Thread(
         title="Comic 1",
@@ -192,10 +207,10 @@ async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db, 
         last_rating=3.0,
         user_id=sample_user.id,
     )
-    db.add_all([thread1, thread2])
-    db.commit()
-    db.refresh(thread1)
-    db.refresh(thread2)
+    async_db.add_all([thread1, thread2])
+    await async_db.commit()
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
 
     event = Event(
         type="roll",
@@ -204,9 +219,9 @@ async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db, 
         selected_thread_id=thread1.id,
         result=3,
     )
-    db.add(event)
-    db.commit()
-    db.refresh(event)
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -229,13 +244,13 @@ async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db, 
         },
         description="Restore both threads",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
-    await client.post(f"/undo/{session.id}/undo/{snapshot.id}")
+    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
 
-    db.refresh(thread1)
-    db.refresh(thread2)
+    await async_db.refresh(thread1)
+    await async_db.refresh(thread2)
 
     assert thread1.issues_remaining == 10
     assert thread1.queue_position == 2
@@ -247,12 +262,14 @@ async def test_undo_to_snapshot_restores_thread_states(client: AsyncClient, db, 
 
 
 @pytest.mark.asyncio
-async def test_snapshot_created_on_rating(client: AsyncClient, db, sample_user):
+async def test_snapshot_created_on_rating(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test that a snapshot is automatically created when rating."""
     session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -261,9 +278,9 @@ async def test_snapshot_created_on_rating(client: AsyncClient, db, sample_user):
         queue_position=1,
         user_id=sample_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     roll_event = Event(
         type="roll",
@@ -272,28 +289,33 @@ async def test_snapshot_created_on_rating(client: AsyncClient, db, sample_user):
         selected_thread_id=thread.id,
         result=3,
     )
-    db.add(roll_event)
-    db.commit()
+    async_db.add(roll_event)
+    await async_db.commit()
 
-    response = await client.post(
-        "/rate/",
-        json={"thread_id": thread.id, "rating": 5.0, "issues_read": 1},
+    response = await auth_client.post(
+        "/api/rate/",
+        json={"rating": 5.0, "issues_read": 1},
     )
     assert response.status_code == 200
 
-    snapshots = db.query(Snapshot).filter(Snapshot.session_id == session.id).all()
+    result = await async_db.execute(
+        select(Snapshot).where(Snapshot.session_id == session.id)
+    )
+    snapshots = result.scalars().all()
     assert len(snapshots) == 1
     assert "After rating" in snapshots[0].description
     assert str(thread.id) in snapshots[0].thread_states
 
 
 @pytest.mark.asyncio
-async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db, sample_user):
+async def test_multiple_snapshots_listed_in_order(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test that multiple snapshots are listed in reverse chronological order."""
     session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -302,9 +324,9 @@ async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db, sampl
         queue_position=1,
         user_id=sample_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     for i in range(3):
         event = Event(
@@ -316,9 +338,9 @@ async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db, sampl
             die=6,
             die_after=4,
         )
-        db.add(event)
-        db.commit()
-        db.refresh(event)
+        async_db.add(event)
+        await async_db.commit()
+        await async_db.refresh(event)
 
         snapshot = Snapshot(
             session_id=session.id,
@@ -326,10 +348,10 @@ async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db, sampl
             thread_states={thread.id: {"issues_remaining": 10 - i}},
             description=f"Snapshot {i}",
         )
-        db.add(snapshot)
-        db.commit()
+        async_db.add(snapshot)
+        await async_db.commit()
 
-    response = await client.get(f"/undo/{session.id}/snapshots")
+    response = await auth_client.get(f"/api/undo/{session.id}/snapshots")
     assert response.status_code == 200
     snapshots = response.json()
     assert len(snapshots) == 3
@@ -339,12 +361,14 @@ async def test_multiple_snapshots_listed_in_order(client: AsyncClient, db, sampl
 
 
 @pytest.mark.asyncio
-async def test_undo_to_earliest_snapshot(client: AsyncClient, db, sample_user):
+async def test_undo_to_earliest_snapshot(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test undoing to earliest snapshot in a session."""
     session = SessionModel(start_die=6, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -353,9 +377,9 @@ async def test_undo_to_earliest_snapshot(client: AsyncClient, db, sample_user):
         queue_position=1,
         user_id=sample_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     earliest_event = Event(
         type="roll",
@@ -364,9 +388,9 @@ async def test_undo_to_earliest_snapshot(client: AsyncClient, db, sample_user):
         selected_thread_id=thread.id,
         result=3,
     )
-    db.add(earliest_event)
-    db.commit()
-    db.refresh(earliest_event)
+    async_db.add(earliest_event)
+    await async_db.commit()
+    await async_db.refresh(earliest_event)
 
     earliest_snapshot = Snapshot(
         session_id=session.id,
@@ -374,8 +398,8 @@ async def test_undo_to_earliest_snapshot(client: AsyncClient, db, sample_user):
         thread_states={thread.id: {"issues_remaining": 100}},
         description="Earliest snapshot",
     )
-    db.add(earliest_snapshot)
-    db.commit()
+    async_db.add(earliest_snapshot)
+    await async_db.commit()
 
     latest_event = Event(
         type="roll",
@@ -384,8 +408,8 @@ async def test_undo_to_earliest_snapshot(client: AsyncClient, db, sample_user):
         selected_thread_id=thread.id,
         result=5,
     )
-    db.add(latest_event)
-    db.commit()
+    async_db.add(latest_event)
+    await async_db.commit()
 
     latest_snapshot = Snapshot(
         session_id=session.id,
@@ -393,24 +417,26 @@ async def test_undo_to_earliest_snapshot(client: AsyncClient, db, sample_user):
         thread_states={thread.id: {"issues_remaining": 5}},
         description="Latest snapshot",
     )
-    db.add(latest_snapshot)
-    db.commit()
+    async_db.add(latest_snapshot)
+    await async_db.commit()
 
-    await client.post(f"/undo/{session.id}/undo/{earliest_snapshot.id}")
+    await auth_client.post(f"/api/undo/{session.id}/undo/{earliest_snapshot.id}")
 
-    db.refresh(thread)
+    await async_db.refresh(thread)
     assert thread.issues_remaining == 100
 
 
 @pytest.mark.asyncio
-async def test_undo_restores_session_state(client: AsyncClient, db, sample_user):
+async def test_undo_restores_session_state(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test that undo correctly restores session state (start_die, manual_die)."""
     session = SessionModel(
         start_die=6, manual_die=4, user_id=sample_user.id, started_at=datetime.now(UTC)
     )
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -419,9 +445,9 @@ async def test_undo_restores_session_state(client: AsyncClient, db, sample_user)
         queue_position=1,
         user_id=sample_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -430,9 +456,9 @@ async def test_undo_restores_session_state(client: AsyncClient, db, sample_user)
         selected_thread_id=thread.id,
         result=3,
     )
-    db.add(event)
-    db.commit()
-    db.refresh(event)
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -441,24 +467,26 @@ async def test_undo_restores_session_state(client: AsyncClient, db, sample_user)
         session_state={"start_die": 10, "manual_die": 8},
         description="Session with different dice",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
-    response = await client.post(f"/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
 
-    db.refresh(session)
+    await async_db.refresh(session)
     assert session.start_die == 10
     assert session.manual_die == 8
 
 
 @pytest.mark.asyncio
-async def test_undo_to_session_start_snapshot(client: AsyncClient, db, sample_user):
+async def test_undo_to_session_start_snapshot(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test undoing to session start snapshot restores initial state."""
     session = SessionModel(start_die=20, user_id=sample_user.id, started_at=datetime.now(UTC))
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -467,9 +495,9 @@ async def test_undo_to_session_start_snapshot(client: AsyncClient, db, sample_us
         queue_position=1,
         user_id=sample_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -478,8 +506,8 @@ async def test_undo_to_session_start_snapshot(client: AsyncClient, db, sample_us
         selected_thread_id=thread.id,
         result=3,
     )
-    db.add(event)
-    db.commit()
+    async_db.add(event)
+    await async_db.commit()
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -488,13 +516,13 @@ async def test_undo_to_session_start_snapshot(client: AsyncClient, db, sample_us
         session_state={"start_die": 6, "manual_die": None},
         description="Session start",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
-    await client.post(f"/undo/{session.id}/undo/{snapshot.id}")
+    await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
 
-    db.refresh(session)
-    db.refresh(thread)
+    await async_db.refresh(session)
+    await async_db.refresh(thread)
 
     assert session.start_die == 6
     assert session.manual_die is None
@@ -503,14 +531,16 @@ async def test_undo_to_session_start_snapshot(client: AsyncClient, db, sample_us
 
 
 @pytest.mark.asyncio
-async def test_undo_handles_missing_session_state(client: AsyncClient, db, sample_user):
+async def test_undo_handles_missing_session_state(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_user: User
+) -> None:
     """Test that undo works when snapshot has no session_state (backward compatibility)."""
     session = SessionModel(
         start_die=6, manual_die=4, user_id=sample_user.id, started_at=datetime.now(UTC)
     )
-    db.add(session)
-    db.commit()
-    db.refresh(session)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
 
     thread = Thread(
         title="Test Comic",
@@ -519,9 +549,9 @@ async def test_undo_handles_missing_session_state(client: AsyncClient, db, sampl
         queue_position=1,
         user_id=sample_user.id,
     )
-    db.add(thread)
-    db.commit()
-    db.refresh(thread)
+    async_db.add(thread)
+    await async_db.commit()
+    await async_db.refresh(thread)
 
     event = Event(
         type="roll",
@@ -530,9 +560,9 @@ async def test_undo_handles_missing_session_state(client: AsyncClient, db, sampl
         selected_thread_id=thread.id,
         result=3,
     )
-    db.add(event)
-    db.commit()
-    db.refresh(event)
+    async_db.add(event)
+    await async_db.commit()
+    await async_db.refresh(event)
 
     snapshot = Snapshot(
         session_id=session.id,
@@ -541,16 +571,16 @@ async def test_undo_handles_missing_session_state(client: AsyncClient, db, sampl
         session_state=None,
         description="Old snapshot without session state",
     )
-    db.add(snapshot)
-    db.commit()
+    async_db.add(snapshot)
+    await async_db.commit()
 
     original_start_die = session.start_die
     original_manual_die = session.manual_die
 
-    response = await client.post(f"/undo/{session.id}/undo/{snapshot.id}")
+    response = await auth_client.post(f"/api/undo/{session.id}/undo/{snapshot.id}")
     assert response.status_code == 200
 
-    db.refresh(session)
+    await async_db.refresh(session)
 
     assert session.start_die == original_start_die
     assert session.manual_die == original_manual_die
