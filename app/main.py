@@ -1,18 +1,12 @@
 """FastAPI application factory and configuration."""
 
-import json
 import logging
 import os
 import secrets
-import sys
-import time
-import traceback
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
 from fastapi import Depends, FastAPI, Request, status
-from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -48,8 +42,11 @@ from app.api import (
 from app.api.review import router
 from app.config import get_app_settings, get_database_settings
 from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, is_csrf_protected_request
-from app.database import Base, AsyncSessionLocal, get_db
+from app.database import get_db
+from app.exception_handlers import register_exception_handlers
+from app.lifecycle import init_database
 from app.middleware import limiter, SecurityHeadersMiddleware
+from app.middleware.request_logging import add_request_logging_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -57,86 +54,6 @@ logger = logging.getLogger(__name__)
 _db_settings = get_database_settings()
 _redacted_url = make_url(_db_settings.database_url).render_as_string(hide_password=True)
 logger.info(f"Starting with DATABASE_URL: {_redacted_url}")
-
-MAX_LOG_BODY_SIZE = 1000
-
-
-def contains_sensitive_keys(body_json: dict | list) -> bool:
-    """Check if body contains sensitive keys recursively.
-
-    Args:
-        body_json: JSON body to check (dict or list).
-
-    Returns:
-        True if sensitive keys found, False otherwise.
-    """
-    sensitive_keys = {"password", "secret", "token", "access_token", "refresh_token", "api_key"}
-
-    if isinstance(body_json, dict):
-        for key in body_json:
-            if key in sensitive_keys:
-                return True
-        for value in body_json.values():
-            if contains_sensitive_keys(value):
-                return True
-    elif isinstance(body_json, list):
-        for item in body_json:
-            if contains_sensitive_keys(item):
-                return True
-    return False
-
-
-def is_auth_route(path: str) -> bool:
-    """Check if path is an auth-related route.
-
-    Args:
-        path: Request path to check.
-
-    Returns:
-        True if path is auth-related, False otherwise.
-    """
-    auth_paths = ("/api/auth/", "/api/login", "/api/register", "/api/logout")
-    return any(path.startswith(auth_path) for auth_path in auth_paths)
-
-
-async def _safe_get_request_body(request: Request) -> str | dict | None:
-    """Safely read and redact request body for logging.
-
-    Args:
-        request: FastAPI request object.
-
-    Returns:
-        Redacted body as string or dict, or None if not applicable.
-    """
-    try:
-        if request.method not in ("POST", "PUT", "PATCH"):
-            return None
-
-        body = await request.body()
-        if not body:
-            return None
-
-        if is_auth_route(request.url.path):
-            content_type = request.headers.get("content-type", "unknown")
-            return f"[AUTH ROUTE: {len(body)} bytes, {content_type}]"
-
-        try:
-            body_str = body.decode("utf-8")
-            if len(body_str) <= MAX_LOG_BODY_SIZE:
-                body_json = json.loads(body_str)
-                if contains_sensitive_keys(body_json):
-                    return "[REDACTED: contains sensitive data]"
-                return body_json
-            return f"[TRUNCATED: {len(body_str)} bytes]"
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            if len(body) <= MAX_LOG_BODY_SIZE:
-                return body.decode("utf-8", errors="replace")
-            return f"[BINARY DATA: {len(body)} bytes]"
-    except (OSError, RuntimeError, TimeoutError) as e:
-        # Catch I/O errors (body already consumed, network issues), RuntimeError from Starlette, and timeouts
-        logger.debug(f"Failed to read request body: {e}")
-        return None
-
 
 def create_app(*, serve_frontend: bool = True) -> FastAPI:
     """Create and configure the FastAPI application.
@@ -202,44 +119,6 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     app.add_middleware(SecurityHeadersMiddleware)
 
-    def redact_headers(headers: dict) -> dict:
-        """Redact sensitive headers from logging.
-
-        Args:
-            headers: Dictionary of HTTP headers.
-
-        Returns:
-            Dictionary with sensitive headers redacted.
-        """
-        sensitive_headers = {"authorization", "cookie", "set-cookie"}
-        redacted = {}
-        for key, value in headers.items():
-            if key.lower() in sensitive_headers:
-                redacted[key] = f"[REDACTED: {key}]"
-            else:
-                redacted[key] = value
-        return redacted
-
-    def sanitize_for_logging(log_data: dict[str, object]) -> dict[str, object]:
-        """Trim request context from logs in production and staging.
-
-        In production and staging, avoid logging request bodies, query params, and session identifiers.
-
-        Args:
-            log_data: Log payload.
-
-        Returns:
-            Possibly-trimmed log payload.
-        """
-        if app_settings.environment not in ("production", "staging"):
-            return log_data
-
-        # Avoid leaking potentially sensitive request context.
-        trimmed = dict(log_data)
-        for key in ("request_body", "query_params", "session_id", "body"):
-            trimmed.pop(key, None)
-        return trimmed
-
     @app.middleware("http")
     async def csrf_middleware(request: Request, call_next):
         """Require a matching CSRF header and cookie on mutating API requests."""
@@ -266,251 +145,11 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
         return await call_next(request)
 
-    @app.middleware("http")
-    async def log_errors_middleware(request: Request, call_next):
-        """Log all requests with status codes >= 400.
+    # Error-only request logging (body redaction + environment-aware sanitization).
+    add_request_logging_middleware(app, app_settings.environment)
 
-        Args:
-            request: FastAPI request object.
-            call_next: Next middleware/route handler.
-
-        Returns:
-            HTTP response from the next handler.
-        """
-        start_time = time.time()
-
-        if app_settings.environment != "production":
-            body = await _safe_get_request_body(request)
-            if body:
-                request.state.request_body = body
-
-        response = await call_next(request)
-        process_time = time.time() - start_time
-        status_code = response.status_code
-
-        if status_code >= 400:
-            log_data = {
-                "timestamp": datetime.now(UTC).isoformat(),
-                "method": request.method,
-                "path": request.url.path,
-                "query_params": str(request.url.query) if request.url.query else None,
-                "status_code": status_code,
-                "process_time_ms": round(process_time * 1000, 2),
-                "client_host": request.client.host if request.client else None,
-                "user_agent": request.headers.get("user-agent"),
-                "headers": redact_headers(dict(request.headers)),
-            }
-
-            if hasattr(request.state, "request_body"):
-                log_data["request_body"] = request.state.request_body
-            if hasattr(request.state, "user_id"):
-                log_data["user_id"] = request.state.user_id
-            if hasattr(request.state, "session_id"):
-                log_data["session_id"] = request.state.session_id
-
-            log_data = sanitize_for_logging(log_data)
-
-            if status_code >= 500:
-                logger.error(
-                    f"API Error: {request.method} {request.url.path} - {status_code}",
-                    extra={**log_data, "level": "ERROR"},
-                )
-            else:
-                logger.warning(
-                    f"Client Error: {request.method} {request.url.path} - {status_code}",
-                    extra={**log_data, "level": "WARNING"},
-                )
-
-        return response
-
-    @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception):
-        """Handle all unhandled exceptions with full stacktrace logging.
-
-        Args:
-            request: FastAPI request object.
-            exc: Exception that was raised.
-
-        Returns:
-            JSON response with 500 status code.
-        """
-        error_data = {
-            "timestamp": datetime.now(UTC).isoformat(),
-            "method": request.method,
-            "path": request.url.path,
-            "query_params": str(request.url.query) if request.url.query else None,
-            "error_type": type(exc).__name__,
-            "error_message": str(exc),
-            "stacktrace": traceback.format_exc(),
-            "client_host": request.client.host if request.client else None,
-            "user_agent": request.headers.get("user-agent"),
-            "headers": redact_headers(dict(request.headers)),
-            "level": "ERROR",
-        }
-
-        if app_settings.environment != "production":
-            body = await _safe_get_request_body(request)
-            if body:
-                error_data["request_body"] = body
-
-        if hasattr(request.state, "user_id"):
-            error_data["user_id"] = request.state.user_id
-        if hasattr(request.state, "session_id"):
-            error_data["session_id"] = request.state.session_id
-
-        error_data = sanitize_for_logging(error_data)
-
-        logger.error(
-            f"Unhandled Exception: {type(exc).__name__}",
-            extra=error_data,
-            exc_info=True,
-        )
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "Internal server error"},
-        )
-
-    @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
-        """Handle HTTP exceptions with contextual logging.
-
-        Args:
-            request: FastAPI request object.
-            exc: HTTP exception that was raised.
-
-        Returns:
-            JSON response with exception status code.
-        """
-        error_data = {
-            "timestamp": datetime.now(UTC).isoformat(),
-            "method": request.method,
-            "path": request.url.path,
-            "query_params": str(request.url.query) if request.url.query else None,
-            "status_code": exc.status_code,
-            "detail": exc.detail,
-            "client_host": request.client.host if request.client else None,
-            "user_agent": request.headers.get("user-agent"),
-            "headers": redact_headers(dict(request.headers)),
-        }
-
-        if app_settings.environment != "production":
-            body = await _safe_get_request_body(request)
-            if body:
-                error_data["request_body"] = body
-        if hasattr(request.state, "user_id"):
-            error_data["user_id"] = request.state.user_id
-        if hasattr(request.state, "session_id"):
-            error_data["session_id"] = request.state.session_id
-
-        error_data = sanitize_for_logging(error_data)
-
-        if exc.status_code >= 500:
-            error_data["level"] = "ERROR"
-            logger.error(
-                f"HTTP Exception: {exc.status_code} - {exc.detail}",
-                extra=error_data,
-            )
-        elif exc.status_code >= 400:
-            error_data["level"] = "WARNING"
-            logger.warning(
-                f"HTTP Exception: {exc.status_code} - {exc.detail}",
-                extra=error_data,
-            )
-
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.detail},
-        )
-
-    @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
-        """Handle validation errors with environment-aware sanitization.
-
-        In production: Returns generic error messages to prevent information disclosure.
-        In development/test: Returns detailed error messages for debugging.
-
-        Args:
-            request: FastAPI request object.
-            exc: Validation error that was raised.
-
-        Returns:
-            JSON response with 422 status code and sanitized validation errors.
-        """
-        errors = []
-        for error in exc.errors():
-            field_path = ".".join(str(loc) for loc in error["loc"])
-            errors.append(
-                {
-                    "field": field_path,
-                    "message": error["msg"],
-                    "type": error["type"],
-                }
-            )
-
-        # Convert exc.body to a JSON-serializable format for logging
-        # FormData objects are not directly JSON serializable
-        body_for_log: object
-        if hasattr(exc.body, "__class__") and exc.body.__class__.__name__ == "FormData":
-            body_for_log = {
-                k: v if isinstance(v, str) else f"<{type(v).__name__}>"
-                for k, v in exc.body.multi_items()
-            }
-        else:
-            body_for_log = exc.body
-
-        error_data = {
-            "timestamp": datetime.now(UTC).isoformat(),
-            "method": request.method,
-            "path": request.url.path,
-            "query_params": str(request.url.query) if request.url.query else None,
-            "status_code": 422,
-            "validation_errors": errors,
-            "body": body_for_log,
-            "client_host": request.client.host if request.client else None,
-            "level": "WARNING",
-        }
-
-        if hasattr(request.state, "request_body"):
-            error_data["request_body"] = request.state.request_body
-        if hasattr(request.state, "user_id"):
-            error_data["user_id"] = request.state.user_id
-        if hasattr(request.state, "session_id"):
-            error_data["session_id"] = request.state.session_id
-
-        error_data = sanitize_for_logging(error_data)
-
-        logger.warning(
-            f"Validation Error: {errors}",
-            extra=error_data,
-        )
-
-        if app_settings.environment == "production":
-            return JSONResponse(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                content={
-                    "detail": "Validation failed",
-                },
-            )
-
-        # Convert exc.body to a JSON-serializable format
-        # FormData objects are not directly JSON serializable
-        body_content: object
-        if hasattr(exc.body, "__class__") and exc.body.__class__.__name__ == "FormData":
-            body_content = {
-                k: v if isinstance(v, str) else f"<{type(v).__name__}>"
-                for k, v in exc.body.multi_items()
-            }
-        else:
-            body_content = exc.body
-
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "detail": "Validation failed",
-                "errors": errors,
-                "body": body_content,
-            },
-        )
+    # Global, HTTP, and validation exception handlers (environment-aware logging).
+    register_exception_handlers(app, app_settings)
 
     app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(router, prefix="/api/v1/reviews", tags=["reviews"])
@@ -715,50 +354,8 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.on_event("startup")
     async def startup_event():
-        """Initialize database on application startup.
-
-        Attempts to connect to database and optionally creates tables
-        in non-production environments.
-        """
-        import asyncio
-        from sqlalchemy import text
-
-        max_retries = 3
-        retry_delay = 1
-
-        database_ready = False
-        for attempt in range(1, max_retries + 1):
-            try:
-                async with AsyncSessionLocal() as db:
-                    await db.execute(text("SELECT 1"))
-                    database_ready = True
-                    logger.info("Database connection established successfully")
-                    break
-            except sqlalchemy_exc.DBAPIError as e:
-                # Catch database connection and execution errors (OperationalError, InterfaceError, etc.)
-                logger.warning(f"Database connection attempt {attempt}/{max_retries} failed: {e}")
-                if attempt < max_retries:
-                    logger.info(f"Retrying in {retry_delay} seconds...")
-                    await asyncio.sleep(retry_delay)
-                else:
-                    logger.error("All database connection attempts failed")
-
-        if database_ready:
-            if app_settings.environment == "production":
-                logger.info("Production mode: Skipping table creation (migrations required)")
-            else:
-                try:
-                    from app.database import async_engine
-
-                    async with async_engine.begin() as conn:
-                        await conn.run_sync(Base.metadata.create_all)
-                    logger.info("Database tables created successfully")
-                except sqlalchemy_exc.DBAPIError as e:
-                    # Catch database errors during table creation (OperationalError, ProgrammingError, etc.)
-                    logger.error(f"Failed to create database tables: {e}")
-                    sys.exit(1)
-        else:
-            logger.warning("Skipping database initialization due to connection failure")
+        """Initialize database on application startup."""
+        await init_database(app_settings.environment)
 
     return app
 
