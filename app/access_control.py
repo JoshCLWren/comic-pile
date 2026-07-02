@@ -1,4 +1,4 @@
-"""FastAPI dependencies for authentication and access control."""
+"""Route-level access control gates for debug and internal-ops endpoints."""
 
 from fastapi import HTTPException
 

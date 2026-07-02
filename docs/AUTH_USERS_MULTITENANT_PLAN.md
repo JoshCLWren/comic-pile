@@ -214,7 +214,7 @@ Work items:
 
 - Gate internal endpoints (tasks/admin/debug) by env flag and admin auth.
   [STATUS: ✅ COMPLETE]
-  - Created `app/dependencies.py` with `require_debug_routes()` and `require_internal_ops_routes()`
+  - Created `app/access_control.py` with `require_debug_routes()` and `require_internal_ops_routes()`
   - Applied gating to `/api/tasks/*` routes (router level)
   - Applied gating to `/api/admin/*` routes (router level)
   - Applied gating to `/debug/*` routes (route level)
