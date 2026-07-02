@@ -311,7 +311,7 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "aiosqlite" },
     { name = "bcrypt" },
@@ -322,6 +322,7 @@ dev = [
     { name = "pygithub" },
     { name = "pyright" },
     { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "pytest-playwright" },
     { name = "pytest-xdist" },
@@ -331,62 +332,48 @@ dev = [
     { name = "uvicorn" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "playwright" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pytest-playwright" },
-]
-
 [package.metadata]
 requires-dist = [
-    { name = "aiosqlite", marker = "extra == 'dev'", specifier = ">=0.19.0" },
     { name = "alembic", specifier = ">=1.12.0" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "bcrypt", specifier = ">=5.0.0" },
-    { name = "bcrypt", marker = "extra == 'dev'" },
     { name = "email-validator", specifier = ">=2.3.0" },
-    { name = "faker", marker = "extra == 'dev'", specifier = ">=20.0.0" },
     { name = "fastapi", specifier = ">=0.100.0" },
     { name = "filelock", specifier = ">=3.25.2" },
-    { name = "filelock", marker = "extra == 'dev'", specifier = ">=3.13.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.24.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
-    { name = "playwright", marker = "extra == 'dev'", specifier = "==1.48.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.1.0" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "pygithub", specifier = ">=2.0.0" },
-    { name = "pygithub", marker = "extra == 'dev'", specifier = ">=2.0.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
-    { name = "pytest-playwright", marker = "extra == 'dev'", specifier = "==0.7.0" },
     { name = "pytest-xdist", specifier = ">=3.0.0" },
-    { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
-    { name = "python-jose", extras = ["cryptography"], marker = "extra == 'dev'" },
     { name = "python-multipart", specifier = ">=0.0.6" },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "slowapi", specifier = ">=0.1.9" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.12" },
-    { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.30.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.20.0" },
 ]
-provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "aiosqlite", specifier = ">=0.19.0" },
+    { name = "bcrypt" },
+    { name = "faker", specifier = ">=20.0.0" },
+    { name = "filelock", specifier = ">=3.13.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "playwright", specifier = "==1.48.0" },
+    { name = "pygithub", specifier = ">=2.0.0" },
+    { name = "pyright", specifier = ">=1.1.0" },
+    { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "pytest-playwright", specifier = "==0.7.0" },
+    { name = "pytest-xdist", specifier = ">=3.0.0" },
+    { name = "python-jose", extras = ["cryptography"] },
+    { name = "ruff", specifier = ">=0.1.0" },
+    { name = "ty", specifier = ">=0.0.12" },
+    { name = "uvicorn", specifier = ">=0.30.0" },
 ]
 
 [[package]]
