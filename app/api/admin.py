@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.session import build_narrative_summary
 from app.database import get_db
-from app.dependencies import require_internal_ops_routes
+from app.access_control import require_internal_ops_routes
 from app.models import Event, Thread, User
 from app.models import Session as SessionModel
 
