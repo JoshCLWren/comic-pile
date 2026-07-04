@@ -36,15 +36,20 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `npm` (frontend)
 
-## CRITICAL: Async PostgreSQL Only - NO Sync psycopg2
+## CRITICAL: Async PostgreSQL Only in Application Code
 
-**This project uses asyncpg (async PostgreSQL) ONLY. NEVER use synchronous psycopg2.**
+**Application code must use asyncpg (async PostgreSQL) ONLY. Never use synchronous database drivers in `app/` or `comic_pile/`.**
 
 **Database Access Rules**:
-- ✅ **USE**: `asyncpg` (async), `create_async_engine()`, `AsyncSession`
-- ❌ **NEVER USE**: `psycopg2`, `psycopg`, `create_engine()` (sync), `Session` (sync)
+- ✅ **USE in app code**: `asyncpg` (async), `create_async_engine()`, `AsyncSession`
+- ❌ **NEVER USE in app code**: `psycopg2`, `create_engine()` (sync), `Session` (sync), or any sync DB driver
 
-**Why async-only?** Weeks of refactoring converted entire codebase to async. Mixing sync/async causes event loop conflicts and greenlet errors. Sync code WILL BREAK the application.
+**The ONE exception — `psycopg` is permitted inside `alembic/` ONLY for migrations**:
+- `psycopg[binary]` (the psycopg v3 sync driver) is a core dependency, but its sync use is confined to `alembic/env.py`.
+- `alembic/env.py` converts the app's `postgresql+asyncpg://` URL to `postgresql+psycopg://` so Alembic can run migrations synchronously.
+- `app/config.py` converts any `postgresql+psycopg://` URL back to `postgresql+asyncpg://` at runtime, so the application never runs sync DB access.
+
+**Why async-only in app code?** Weeks of refactoring converted the codebase to async. Mixing sync/async causes event loop conflicts and greenlet errors. Sync DB access in `app/` or `comic_pile/` WILL BREAK the application.
 
 **If you need to create tables in tests**: Use module-scoped `@pytest_asyncio.fixture` with `create_async_engine()`, call `await conn.run_sync(Base.metadata.create_all)`. See `tests_e2e/conftest.py:_create_database_tables` for example.
 
