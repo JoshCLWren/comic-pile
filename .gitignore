@@ -48,6 +48,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+pytest_output.txt
 
 # Translations
 *.mo
@@ -174,6 +175,7 @@ playwright-report*/
 # Production database dumps
 prod_dump*.sql
 prod_dump*.sql.gz
+prod_backup.json
 scripts/clone_prod_users.sh
 
 # Documentation screenshots
