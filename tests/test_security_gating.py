@@ -437,3 +437,38 @@ async def test_app_starts_successfully(
             os.environ.pop("CORS_ORIGINS", None)
         else:
             os.environ["CORS_ORIGINS"] = original_cors
+
+
+@pytest.mark.asyncio
+async def test_test_endpoints_not_mounted_when_test_environment_unset(
+    async_db: AsyncSession,
+) -> None:
+    """The /api/test/* router is not mounted when TEST_ENVIRONMENT is unset.
+
+    This is a regression guard for the least-privilege gate introduced in #552:
+    the state-mutating test harness must only be registered in pytest/E2E where
+    TEST_ENVIRONMENT is explicitly set, never in dev/staging/review apps.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    from app.database import get_db
+    from app.main import create_app
+
+    original_test_env = os.getenv("TEST_ENVIRONMENT")
+    os.environ.pop("TEST_ENVIRONMENT", None)
+
+    test_app = create_app(serve_frontend=False)
+    test_app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
+
+    try:
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            response = await ac.post("/api/test/sessions/expire")
+            assert response.status_code == 404, (
+                f"Expected 404 (route not mounted) when TEST_ENVIRONMENT is unset, "
+                f"got {response.status_code}"
+            )
+    finally:
+        test_app.dependency_overrides.clear()
+        if original_test_env is not None:
+            os.environ["TEST_ENVIRONMENT"] = original_test_env
