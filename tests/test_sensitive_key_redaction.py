@@ -1,6 +1,6 @@
 """Test for recursive sensitive key redaction."""
 
-from app.main import contains_sensitive_keys
+from app.middleware.request_logging import contains_sensitive_keys
 
 
 def test_top_level_password() -> None:

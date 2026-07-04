@@ -10,9 +10,9 @@ from httpx import ASGITransport, AsyncClient
 
 def _find_client_error_record(caplog: pytest.LogCaptureFixture) -> logging.LogRecord:
     for record in caplog.records:
-        if record.name == "app.main" and record.getMessage().startswith("Client Error:"):
+        if record.name == "app.middleware.request_logging" and record.getMessage().startswith("Client Error:"):
             return record
-    raise AssertionError("Expected a 'Client Error' error record from app.main")
+    raise AssertionError("Expected a 'Client Error' error record from app.middleware.request_logging")
 
 
 @pytest.mark.asyncio
@@ -36,7 +36,7 @@ async def test_development_logs_include_request_body_and_session_id(
 
         return JSONResponse(status_code=400, content={"detail": "nope"})
 
-    caplog.set_level(logging.WARNING, logger="app.main")
+    caplog.set_level(logging.WARNING, logger="app.middleware.request_logging")
 
     transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -71,7 +71,7 @@ async def test_production_logs_drop_request_body_query_params_and_session_id(
 
         return JSONResponse(status_code=400, content={"detail": "nope"})
 
-    caplog.set_level(logging.WARNING, logger="app.main")
+    caplog.set_level(logging.WARNING, logger="app.middleware.request_logging")
 
     transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -108,7 +108,7 @@ async def test_staging_logs_drop_request_body_query_params_and_session_id(
 
         return JSONResponse(status_code=400, content={"detail": "nope"})
 
-    caplog.set_level(logging.WARNING, logger="app.main")
+    caplog.set_level(logging.WARNING, logger="app.middleware.request_logging")
 
     transport = ASGITransport(app=test_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
