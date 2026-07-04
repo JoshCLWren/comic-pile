@@ -1,6 +1,14 @@
-"""Tests for API route versioning aliases (issue #376).
+"""Tests for the API route prefix convention and the sessions alias (issue #376).
 
-Ensures /api/v1/sessions/* endpoints behave identically to /api/sessions/*.
+The API exposes a legacy surface (/api/*) and a versioned surface (/api/v1/*).
+/api/v1/sessions/current/ is an explicit backwards-compat alias of
+/api/sessions/current/ so session consumers can use the versioned surface
+without behavior changes. See docs/API.md (API Versioning) and the convention
+comment in app/main.py.
+
+This test verifies the alias does not drift for the /sessions/current/
+endpoint: /api/v1/sessions/current/ must behave identically to
+/api/sessions/current/. Other session sub-paths are not yet parametrized here.
 """
 
 import pytest
