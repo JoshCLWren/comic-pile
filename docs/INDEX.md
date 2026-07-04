@@ -16,7 +16,7 @@ When tests fail:
 
 This principle is enforced through:
 - Pre-commit hooks (AGENTS.md, CONTRIBUTING.md)
-- Pre-push hooks (PRE_PUSH_CHECKLIST.md)
+- Pre-push hooks ([PRE_PUSH_CHECKLIST.md](../archive/historical/PRE_PUSH_CHECKLIST.md))
 - CI/CD pipelines
 - Code review standards
 
