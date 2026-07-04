@@ -8,7 +8,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     title: overrides.title ?? 'Planetary',
     format: overrides.format ?? 'Issues',
     issues_remaining: overrides.issues_remaining ?? 10,
-    total_issues: overrides.total_issues ?? 27,
+    total_issues: overrides.total_issues !== undefined ? overrides.total_issues : 27,
     next_unread_issue_id: overrides.next_unread_issue_id ?? 1010,
     next_unread_issue_number: overrides.next_unread_issue_number ?? '10',
     reading_progress: overrides.reading_progress ?? null,
@@ -100,5 +100,63 @@ describe('buildReadingOrderTimelineEntries', () => {
     }
     expect(entries[2].kind).toBe('span')
     expect(entries[2].kind === 'span' && entries[2].span.label).toBe('Issues 7–10')
+  })
+
+  it('renders an open-ended span when total_issues is null and no gates exist', () => {
+    const thread = makeThread({
+      total_issues: null,
+      next_unread_issue_number: '5',
+      next_unread_issue_id: 1005,
+    })
+    const entries = buildReadingOrderTimelineEntries({ thread, dependencies: [] })
+    expect(entries).toHaveLength(1)
+    expect(entries[0].kind).toBe('span')
+    const span = entries[0].kind === 'span' ? entries[0].span : null
+    expect(span).not.toBeNull()
+    if (span) {
+      expect(span.label).toBe('Issues 1+')
+      expect(span.isOpenEnded).toBe(true)
+    }
+  })
+
+  it('renders an open-ended trailing span when total_issues is null and gates exist', () => {
+    const thread = makeThread({
+      total_issues: null,
+      next_unread_issue_number: '5',
+      next_unread_issue_id: 1005,
+    })
+    const dependencies: Dependency[] = [
+      makeDependency({ id: 1, target_issue_id: 1005, target_label: 'Planetary #5', source_label: 'Stormwatch #11' }),
+    ]
+    const entries = buildReadingOrderTimelineEntries({ thread, dependencies })
+    // span before the gate (1–4), gate at #5, then an open-ended span from #6 onward
+    expect(entries).toHaveLength(3)
+    expect(entries[0].kind).toBe('span')
+    expect(entries[0].kind === 'span' && entries[0].span.label).toBe('Issues 1–4')
+    expect(entries[1].kind).toBe('gate')
+    expect(entries[2].kind).toBe('span')
+    const span = entries[2].kind === 'span' ? entries[2].span : null
+    expect(span).not.toBeNull()
+    if (span) {
+      expect(span.label).toBe('Issues 6+')
+      expect(span.isOpenEnded).toBe(true)
+    }
+  })
+
+  it('handles a zero-indexed next_unread_issue_number', () => {
+    const thread = makeThread({
+      total_issues: 10,
+      next_unread_issue_number: '0',
+      next_unread_issue_id: 1000,
+    })
+    const dependencies: Dependency[] = [
+      makeDependency({ id: 1, target_issue_id: 1000, target_label: 'Planetary #0', source_label: 'Stormwatch #11' }),
+    ]
+    const entries = buildReadingOrderTimelineEntries({ thread, dependencies })
+    // gate at #0 is the first gate; no span before it (0 is not > 1), then span 1–10
+    expect(entries.length).toBeGreaterThanOrEqual(1)
+    const gate = entries.find((e) => e.kind === 'gate')
+    expect(gate).toBeDefined()
+    expect(gate?.kind === 'gate' && gate.gate.issueNumberValue).toBe(0)
   })
 })
