@@ -340,7 +340,10 @@ test.describe('Edge Cases & Error Handling', () => {
     await createThread(authenticatedPage, threadData);
     await createThread(authenticatedPage, threadData);
 
-    const response = await authenticatedPage.request.get('/api/threads/');
+    const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
+    const response = await authenticatedPage.request.get('/api/threads/', {
+      headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+    });
     expect(response.ok()).toBeTruthy();
     const threads = extractThreadsFromResponse(await response.json());
     const apiDuplicates = threads.filter((thread) => thread.title === threadData.title);

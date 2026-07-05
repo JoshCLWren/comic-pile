@@ -589,7 +589,7 @@ test.describe('Roll Dice Feature', () => {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       })
       const thread1IssuesData = await thread1IssuesResponse.json()
-      const thread1LastIssue = thread1IssuesData.issues[thread1IssuesData.issues.length - 1]
+      const thread1FirstIssue = thread1IssuesData.issues[0]
 
       const thread2IssuesResponse = await authenticatedPage.request.get(`/api/v1/threads/${thread2.id}/issues`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -598,39 +598,35 @@ test.describe('Roll Dice Feature', () => {
       const thread2FirstIssue = thread2IssuesData.issues[0]
 
       // Create a dependency that blocks thread2
-      await authenticatedPage.request.post('/api/v1/dependencies/', {
+      const dependencyResponse = await authenticatedPage.request.post('/api/v1/dependencies/', {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         data: {
           source_type: 'issue',
-          source_id: thread1LastIssue.id,
+          source_id: thread1FirstIssue.id,
           target_type: 'issue',
           target_id: thread2FirstIssue.id,
         },
       })
+      expect(dependencyResponse.ok()).toBeTruthy()
 
       // Verify dependency blocking state through the API.
       await expect.poll(async () => {
-        const response = await authenticatedPage.request.get('/api/threads/', {
+        const response = await authenticatedPage.request.post(`/api/v1/threads/${thread2.id}:getBlockingInfo`, {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         })
         const body = await response.json()
-        const threads = Array.isArray(body) ? body : body.threads
-        const blockedThread = threads.find((thread: { id: number }) => thread.id === thread2.id)
-        return blockedThread?.blocking_reasons?.length ?? 0
+        return body.is_blocked === true ? body.blocking_reasons?.length ?? 1 : 0
       }).toBeGreaterThan(0)
 
-      const threadsResponse = await authenticatedPage.request.get('/api/threads/', {
+      const unblockedInfoResponse = await authenticatedPage.request.post(`/api/v1/threads/${thread1.id}:getBlockingInfo`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       })
-      const threadsBody = await threadsResponse.json()
-      const threads = Array.isArray(threadsBody) ? threadsBody : threadsBody.threads
-      const unblockedThread = threads.find((thread: { id: number }) => thread.id === thread1.id)
-      const blockedThread = threads.find((thread: { id: number }) => thread.id === thread2.id)
-      expect(unblockedThread?.blocking_reasons ?? []).toHaveLength(0)
-      expect(blockedThread?.blocking_reasons.length ?? 0).toBeGreaterThan(0)
+      expect(unblockedInfoResponse.ok()).toBeTruthy()
+      const unblockedInfo = await unblockedInfoResponse.json()
+      expect(unblockedInfo.is_blocked).toBe(false)
 
       // Go to roll page and, when the pool is rendered, ensure blocked items are absent.
       await authenticatedPage.goto('/')
