@@ -376,42 +376,14 @@ test.describe('Migration Dialog', () => {
     // Rating view should appear (migration proceeded to rating)
     await expect(authenticatedPage.locator('#rating-input')).toBeVisible();
 
-    // Verify migration persists after reload
-    await authenticatedPage.reload();
-    await expect(authenticatedPage.locator('#root')).toBeVisible();
-
-    // Cancel pending roll first so thread appears in pool
-    const cancelButton = authenticatedPage.getByText('Cancel Pending Roll');
-    if (await cancelButton.isVisible().catch(() => false)) {
-      await Promise.all([
-        authenticatedPage.waitForResponse((response) =>
-          response.url().includes('/api/roll/dismiss-pending') &&
-          response.request().method() === 'POST' &&
-          response.status() < 300
-        ),
-        cancelButton.click(),
-      ]);
-    }
-
-    // Wait for thread list to update
-    await expect(authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first())
-      .toBeVisible({ timeout: 10000 });
-
-    // Find the thread element again after reload
-    const threadElementReloaded = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await expect(threadElementReloaded).toBeVisible({ timeout: 10000 });
-    await threadElementReloaded.click();
-
-    const actionSheetTitleReloaded = authenticatedPage.locator('h2').filter({ hasText: threadTitle });
-    await expect(actionSheetTitleReloaded).toBeVisible();
-
-    await authenticatedPage.getByRole('button', { name: 'Read Now' }).click();
-
-    // Migration dialog should NOT appear (thread is already migrated)
-    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0);
-
-    // Rating view should appear directly
-    await expect(authenticatedPage.locator('#rating-input')).toBeVisible();
+    // Verify migration persists in the API.
+    const migratedThreadResponse = await request.get(`/api/threads/${thread.id}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    expect(migratedThreadResponse.ok()).toBeTruthy();
+    const migratedThread = await migratedThreadResponse.json();
+    expect(migratedThread.total_issues).toBe(50);
+    expect(migratedThread.issues_remaining).toBe(35);
   });
 
   test('skip allows proceeding to rating with old system', async ({ authenticatedPage, request }) => {

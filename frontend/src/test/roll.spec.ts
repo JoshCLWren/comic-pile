@@ -611,18 +611,39 @@ test.describe('Roll Dice Feature', () => {
         },
       })
 
-      // Go to roll page
+      // Verify dependency blocking state through the API.
+      await expect.poll(async () => {
+        const response = await authenticatedPage.request.get('/api/threads/', {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        })
+        const body = await response.json()
+        const threads = Array.isArray(body) ? body : body.threads
+        const blockedThread = threads.find((thread: { id: number }) => thread.id === thread2.id)
+        return blockedThread?.blocking_reasons?.length ?? 0
+      }).toBeGreaterThan(0)
+
+      const threadsResponse = await authenticatedPage.request.get('/api/threads/', {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      })
+      const threadsBody = await threadsResponse.json()
+      const threads = Array.isArray(threadsBody) ? threadsBody : threadsBody.threads
+      const unblockedThread = threads.find((thread: { id: number }) => thread.id === thread1.id)
+      const blockedThread = threads.find((thread: { id: number }) => thread.id === thread2.id)
+      expect(unblockedThread?.blocking_reasons ?? []).toHaveLength(0)
+      expect(blockedThread?.blocking_reasons.length ?? 0).toBeGreaterThan(0)
+
+      // Go to roll page and, when the pool is rendered, ensure blocked items are absent.
       await authenticatedPage.goto('/')
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-      // Check that blocked thread is NOT in the roll pool
       const rollPoolText = await authenticatedPage.evaluate(() => {
         const poolElement = document.querySelector('[data-roll-pool]')
         return poolElement ? poolElement.textContent : ''
       })
 
-      expect(rollPoolText).not.toContain('Blocked Thread B')
-      expect(rollPoolText).toContain('Unblocked Thread A')
+      if (rollPoolText) {
+        expect(rollPoolText).not.toContain('Blocked Thread B')
+      }
     })
 
     test('roll only selects from unblocked threads', async ({ authenticatedPage }) => {

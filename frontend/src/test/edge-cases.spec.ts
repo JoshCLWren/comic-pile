@@ -1,5 +1,12 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS } from './helpers';
+import {
+  generateTestUser,
+  registerUser,
+  loginUser,
+  createThread,
+  SELECTORS,
+  extractThreadsFromResponse,
+} from './helpers';
 
 test.describe('Edge Cases & Error Handling', () => {
   test('should handle empty form submission', async ({ authenticatedPage }) => {
@@ -333,12 +340,15 @@ test.describe('Edge Cases & Error Handling', () => {
     await createThread(authenticatedPage, threadData);
     await createThread(authenticatedPage, threadData);
 
+    const response = await authenticatedPage.request.get('/api/threads/');
+    expect(response.ok()).toBeTruthy();
+    const threads = extractThreadsFromResponse(await response.json());
+    const apiDuplicates = threads.filter((thread) => thread.title === threadData.title);
+    expect(apiDuplicates.length).toBeGreaterThanOrEqual(2);
+
     await authenticatedPage.goto('/queue');
     await expect(authenticatedPage.locator('#root')).toBeVisible();
-    await authenticatedPage.reload();
-    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-    const duplicates = await authenticatedPage.locator('text=Duplicate Test').count();
-    expect(duplicates).toBeGreaterThanOrEqual(2);
+    await expect(authenticatedPage.locator('text=Duplicate Test').first()).toBeVisible();
   });
 });
