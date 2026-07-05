@@ -79,6 +79,63 @@ jobs:
       - name: Run frontend typecheck
         run: cd frontend && npm run typecheck
 
+  python-lint:
+    name: Python Lint (ruff)
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image-tag }}
+    needs: build
+    timeout-minutes: 10
+    env:
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run ruff check
+        run: ruff check .
+
+  python-typecheck:
+    name: Python Type Check (ty)
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image-tag }}
+    needs: build
+    timeout-minutes: 15
+    env:
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run ty check
+        run: ty check --error-on-warning
+
+  frontend-unit-tests:
+    name: Frontend Unit Tests (vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # NOTE: continue-on-error is intentional — there are 7 pre-existing vitest
+    # failures in QueuePage.test.tsx, RollPage.test.tsx, RollPage.reviews-disabled.test.tsx,
+    # and RollPageTooltips.test.tsx that were never caught before this job was added.
+    # Remove continue-on-error and fix those tests to make this blocking.
+    # See: https://github.com/JoshCLWren/comic-pile/issues (tracking issue TBD)
+    continue-on-error: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Run vitest unit tests
+        run: cd frontend && npm test
+
   migration-health:
     name: Migration Health
     runs-on: ubuntu-latest

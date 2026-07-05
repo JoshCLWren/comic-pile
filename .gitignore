@@ -160,8 +160,8 @@ logs/
 .opencode/
 .specify/
 
-# Node.js dependencies
-node_modules/
+# Node.js dependencies (covers both directories and symlinks)
+node_modules
 
 # Pipeline artifacts (never commit these)
 review_critique.md

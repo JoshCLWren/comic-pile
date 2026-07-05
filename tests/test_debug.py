@@ -29,7 +29,7 @@ class _MockRegularUser:
 
 @pytest.mark.asyncio
 async def test_debug_log_admin_success(client: AsyncClient) -> None:
-    """Test that admin users can access debug log endpoint."""
+    """Test that admin users can access debug log endpoint when enabled."""
     from app.auth import get_current_user
 
     def _override() -> _MockAdminUser:
@@ -38,8 +38,10 @@ async def test_debug_log_admin_success(client: AsyncClient) -> None:
     app.dependency_overrides[get_current_user] = _override
 
     original_env = os.environ.get("ENVIRONMENT", "")
+    original_debug = os.environ.get("ENABLE_DEBUG_ROUTES", "")
     clear_settings_cache()
     os.environ["ENVIRONMENT"] = "development"
+    os.environ["ENABLE_DEBUG_ROUTES"] = "true"
 
     try:
         response = await client.post(
@@ -52,6 +54,10 @@ async def test_debug_log_admin_success(client: AsyncClient) -> None:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        if original_debug:
+            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
+        else:
+            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
         clear_settings_cache()
         app.dependency_overrides.pop(get_current_user, None)
 
@@ -67,8 +73,10 @@ async def test_debug_log_non_admin_forbidden(client: AsyncClient) -> None:
     app.dependency_overrides[get_current_user] = _override
 
     original_env = os.environ.get("ENVIRONMENT", "")
+    original_debug = os.environ.get("ENABLE_DEBUG_ROUTES", "")
     clear_settings_cache()
     os.environ["ENVIRONMENT"] = "development"
+    os.environ["ENABLE_DEBUG_ROUTES"] = "true"
 
     try:
         response = await client.post(
@@ -82,6 +90,10 @@ async def test_debug_log_non_admin_forbidden(client: AsyncClient) -> None:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        if original_debug:
+            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
+        else:
+            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
         clear_settings_cache()
         app.dependency_overrides.pop(get_current_user, None)
 
@@ -90,8 +102,10 @@ async def test_debug_log_non_admin_forbidden(client: AsyncClient) -> None:
 async def test_debug_log_anonymous_unauthorized(client: AsyncClient) -> None:
     """Test that anonymous users get 401 when accessing debug log endpoint."""
     original_env = os.environ.get("ENVIRONMENT", "")
+    original_debug = os.environ.get("ENABLE_DEBUG_ROUTES", "")
     clear_settings_cache()
     os.environ["ENVIRONMENT"] = "development"
+    os.environ["ENABLE_DEBUG_ROUTES"] = "true"
 
     try:
         response = await client.post(
@@ -104,12 +118,16 @@ async def test_debug_log_anonymous_unauthorized(client: AsyncClient) -> None:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        if original_debug:
+            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
+        else:
+            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
         clear_settings_cache()
 
 
 @pytest.mark.asyncio
-async def test_debug_log_disabled_in_production(client: AsyncClient) -> None:
-    """Test that debug routes return 404 in production."""
+async def test_debug_log_disabled_when_flag_off(client: AsyncClient) -> None:
+    """Test that debug routes return 404 when enable_debug_routes is False."""
     from app.auth import get_current_user
 
     def _override() -> _MockAdminUser:
@@ -118,19 +136,25 @@ async def test_debug_log_disabled_in_production(client: AsyncClient) -> None:
     app.dependency_overrides[get_current_user] = _override
 
     original_env = os.environ.get("ENVIRONMENT", "")
+    original_debug = os.environ.get("ENABLE_DEBUG_ROUTES", "")
     clear_settings_cache()
-    os.environ["ENVIRONMENT"] = "production"
+    os.environ["ENVIRONMENT"] = "development"
+    os.environ["ENABLE_DEBUG_ROUTES"] = "false"
 
     try:
         response = await client.post(
             "/api/debug/log", json={"level": "INFO", "message": "test message"}
         )
         assert response.status_code == 404
-        assert response.json()["detail"] == "Not found"
+        assert response.json()["detail"] == "Not Found"
     finally:
         if original_env:
             os.environ["ENVIRONMENT"] = original_env
         else:
             os.environ.pop("ENVIRONMENT", None)
+        if original_debug:
+            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
+        else:
+            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
         clear_settings_cache()
         app.dependency_overrides.pop(get_current_user, None)
