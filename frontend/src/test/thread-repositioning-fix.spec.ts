@@ -20,7 +20,7 @@ test.describe('Thread Repositioning - Fix Verification', () => {
   test('demonstrates thread repositioning fix working', async ({ page }) => {
     // Navigate to Queue page
     await page.goto('/queue');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     
     // Take initial screenshot
     await page.screenshot({ path: 'queue_initial.png', fullPage: true });
@@ -72,7 +72,7 @@ test.describe('Thread Repositioning - Fix Verification', () => {
     
     // Wait for modal to close and operation to complete
     await expect(modal).toBeHidden({ timeout: 5000 });
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     
     // Take final screenshot
     await page.screenshot({ path: 'queue_final.png', fullPage: true });

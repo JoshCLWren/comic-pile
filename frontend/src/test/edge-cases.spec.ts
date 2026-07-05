@@ -71,7 +71,7 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle browser back button', async ({ authenticatedPage }) => {
     const baseUrl = process.env.BASE_URL || 'http://localhost:9000';
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState("networkidle");
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.goBack();
 
     await expect(authenticatedPage).toHaveURL(`${baseUrl}/`);
@@ -80,9 +80,9 @@ test.describe('Edge Cases & Error Handling', () => {
   test('should handle browser forward button', async ({ authenticatedPage }) => {
     const baseUrl = process.env.BASE_URL || 'http://localhost:9000';
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState("networkidle");
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.goBack();
-    await authenticatedPage.waitForLoadState("networkidle");
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.goForward();
 
     await expect(authenticatedPage).toHaveURL(`${baseUrl}/queue`);
@@ -128,7 +128,7 @@ test.describe('Edge Cases & Error Handling', () => {
       issues_remaining: 5,
     });
 
-    await page1.waitForLoadState("networkidle");
+    await expect(page1.locator('#root')).toBeVisible();
     await page2.reload();
 
     const threadOnPage2 = page2.locator('text=Concurrent Tab Test');
@@ -195,20 +195,20 @@ test.describe('Edge Cases & Error Handling', () => {
 
   test('should handle bookmarking/direct URL access', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const url = authenticatedPage.url();
     await authenticatedPage.goto('/');
 
     await authenticatedPage.goto(url);
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await expect(authenticatedPage.locator('h1:has-text("Read Queue")')).toBeVisible();
   });
 
   test('should handle losing network connection', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await authenticatedPage.context().setOffline(true);
 
@@ -224,10 +224,10 @@ test.describe('Edge Cases & Error Handling', () => {
 
   test('should handle regaining network connection', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await authenticatedPage.context().setOffline(true);
-    await authenticatedPage.waitForLoadState("networkidle");
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await authenticatedPage.context().setOffline(false);
     await authenticatedPage.reload();
@@ -334,9 +334,9 @@ test.describe('Edge Cases & Error Handling', () => {
     await createThread(authenticatedPage, threadData);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.reload();
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const duplicates = await authenticatedPage.locator('text=Duplicate Test').count();
     expect(duplicates).toBeGreaterThanOrEqual(2);

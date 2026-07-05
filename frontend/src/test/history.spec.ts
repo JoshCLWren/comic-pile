@@ -16,7 +16,7 @@ test.describe('History Page', () => {
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     await authenticatedWithThreadsPage.goto('/history');
 
@@ -78,7 +78,7 @@ test.describe('History Page', () => {
       const count = await expandButton.count();
       if (count > 0) {
         await expandButton.first().click();
-        await authenticatedWithThreadsPage.waitForLoadState("networkidle");
+        await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
         const details = authenticatedWithThreadsPage.locator('.session-details, .expanded-content');
         await expect(details.first()).toBeVisible();
@@ -94,7 +94,7 @@ test.describe('History Page', () => {
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     await authenticatedWithThreadsPage.goto('/history');
 
@@ -156,7 +156,7 @@ test.describe('History Page', () => {
         if (initialCount > 0) {
           authenticatedPage.on('dialog', dialog => dialog.accept());
           await deleteButton.first().click();
-          await authenticatedPage.waitForLoadState("networkidle");
+          await expect(authenticatedPage.locator('#root')).toBeVisible();
 
           const newCount = await authenticatedPage.locator('.session-item, .history-item').count();
           expect(newCount).toBeLessThanOrEqual(initialCount);
@@ -175,7 +175,7 @@ test.describe('History Page', () => {
         const initialCount = await authenticatedPage.locator('.session-item').count();
 
         await authenticatedPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-        await authenticatedPage.waitForLoadState('networkidle');
+        await expect(authenticatedPage.locator('#root')).toBeVisible();
 
         const newCount = await authenticatedPage.locator('.session-item').count();
         expect(newCount).toBeGreaterThanOrEqual(initialCount);

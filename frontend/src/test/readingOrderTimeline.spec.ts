@@ -48,7 +48,7 @@ test.describe('Reading Order Timeline', () => {
 
     // Navigate to queue and open dependency builder for Target
     await page.goto('/queue')
-    await page.waitForLoadState('networkidle')
+    await expect(page.locator('#root')).toBeVisible();
     const targetCard = page.locator('#queue-container .glass-card').filter({ hasText: 'Target' }).first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
     await page.waitForSelector('button[data-testid="toggle-reading-order"]')

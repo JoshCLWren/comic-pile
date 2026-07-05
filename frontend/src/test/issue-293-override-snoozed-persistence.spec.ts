@@ -32,7 +32,7 @@ test.describe('Issue #293: Snoozed Thread Persistence', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    await page.waitForTimeout(500);
+    await expect(page.locator('#root')).toBeVisible();
 
     // Snooze the thread
     const snoozeResponse = await page.request.post('/api/snooze/', {
@@ -51,7 +51,7 @@ test.describe('Issue #293: Snoozed Thread Persistence', () => {
 
     // Perform a normal roll to get an active thread
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
 
     const mainDie = page.locator('#main-die-3d');
@@ -125,7 +125,7 @@ test.describe('Issue #293: Snoozed Thread Persistence', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    await pageUnderTest.waitForTimeout(500);
+    await expect(pageUnderTest.locator('#root')).toBeVisible();
 
     const snoozeResponse = await pageUnderTest.request.post('/api/snooze/', {
       headers: { Authorization: `Bearer ${token}` },
@@ -134,7 +134,7 @@ test.describe('Issue #293: Snoozed Thread Persistence', () => {
 
     // Refresh to see updated state
     await pageUnderTest.goto('/');
-    await pageUnderTest.waitForLoadState('networkidle');
+    await expect(pageUnderTest.locator('#root')).toBeVisible();
 
     // Verify die is d20
     const headerDieLabel = pageUnderTest.locator('#header-die-label');
@@ -189,7 +189,7 @@ test.describe('Issue #293: Snoozed Thread Persistence', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    await page.waitForTimeout(500);
+    await expect(page.locator('#root')).toBeVisible();
 
     const snoozeResponse = await page.request.post('/api/snooze/', {
       headers: { Authorization: `Bearer ${token}` },
@@ -228,7 +228,7 @@ test.describe('Issue #293: Snoozed Thread Persistence', () => {
         },
       });
 
-      await page.waitForTimeout(500);
+      await expect(page.locator('#root')).toBeVisible();
     }
 
     // Final verification: thread should still be in snoozed list after multiple cycles

@@ -12,10 +12,10 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     await authenticatedWithThreadsPage.goto('/history');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const sessionLink = authenticatedWithThreadsPage.locator('a[href^="/sessions/"]').first();
     await expect(async () => {
@@ -26,7 +26,7 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
     }).toPass({ timeout: 10000 });
 
     await sessionLink.first().click();
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     await expect(authenticatedWithThreadsPage.locator('h1:has-text("Session Details")')).toBeVisible();
 
@@ -43,10 +43,10 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     await authenticatedWithThreadsPage.goto('/history');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const sessionLink = authenticatedWithThreadsPage.locator('a[href^="/sessions/"]').first();
     await expect(async () => {
@@ -57,7 +57,7 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
     }).toPass({ timeout: 10000 });
 
     await sessionLink.first().click();
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     await expect(authenticatedWithThreadsPage.locator('h1:has-text("Session Details")')).toBeVisible();
 

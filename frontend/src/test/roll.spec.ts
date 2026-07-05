@@ -19,7 +19,7 @@ test.describe('Roll Dice Feature', () => {
 
   test('regression: roll API response should be handled and inline rating should appear', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
@@ -135,7 +135,7 @@ test.describe('Roll Dice Feature', () => {
 
   test('should be accessible via keyboard navigation', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     await authenticatedWithThreadsPage.waitForSelector('#main-die-3d', { state: 'visible', timeout: 5000 });
 
     const dieElement = authenticatedWithThreadsPage.locator('#main-die-3d');
@@ -233,7 +233,7 @@ test.describe('Roll Dice Feature', () => {
       const thread = await threadResponse.json();
 
       await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       await authenticatedPage.click(SELECTORS.roll.mainDie);
 
@@ -312,7 +312,7 @@ test.describe('Roll Dice Feature', () => {
       }
 
       await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
       await threadElement.click();
@@ -399,7 +399,7 @@ test.describe('Roll Dice Feature', () => {
       }
 
       await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
       await threadElement.click();
@@ -420,7 +420,7 @@ test.describe('Roll Dice Feature', () => {
       const initialIssueNumber = initialSessionData.active_thread.issue_number;
 
       await authenticatedPage.reload();
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
@@ -477,7 +477,7 @@ test.describe('Roll Dice Feature', () => {
       }
 
       await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       await authenticatedPage.click(SELECTORS.roll.mainDie);
 
@@ -613,7 +613,7 @@ test.describe('Roll Dice Feature', () => {
 
       // Go to roll page
       await authenticatedPage.goto('/')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Check that blocked thread is NOT in the roll pool
       const rollPoolText = await authenticatedPage.evaluate(() => {
@@ -703,11 +703,11 @@ test.describe('Roll Dice Feature', () => {
       })
 
       // Wait for dependency to be processed and refetch threads
-      await authenticatedPage.waitForTimeout(2000)
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Perform multiple rolls to verify blocked thread is never selected
       await authenticatedPage.goto('/')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       for (let i = 0; i < 5; i++) {
         await authenticatedPage.click(SELECTORS.roll.mainDie)
@@ -804,7 +804,7 @@ test.describe('Roll Dice Feature', () => {
 
       // Navigate to queue and verify blocked indicator
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const blockedCard = authenticatedPage
         .locator('#queue-container .glass-card')
@@ -818,7 +818,7 @@ test.describe('Roll Dice Feature', () => {
 
       // Now check roll page
       await authenticatedPage.goto('/')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Blocked thread should NOT appear in roll pool
       const rollPoolText = await authenticatedPage.evaluate(() => {
@@ -898,7 +898,7 @@ test.describe('Roll Dice Feature', () => {
 
       // Go to roll page
       await authenticatedPage.goto('/')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Click on snoozed thread to open action sheet
       const snoozedThreadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Snoozed Thread B' })
@@ -916,7 +916,7 @@ test.describe('Roll Dice Feature', () => {
       await snoozeButton.click()
 
        // Wait for snooze to complete and return to roll page
-       await authenticatedPage.waitForLoadState('networkidle')
+       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
        // Wait for at least one active thread to appear in the pool
        await expect(
@@ -957,7 +957,7 @@ test.describe('Roll Dice Feature', () => {
 
       // Go to roll page
       await authenticatedPage.goto('/')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Click on thread to open action sheet
       const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Snoozed Test Thread' })
@@ -975,14 +975,14 @@ test.describe('Roll Dice Feature', () => {
       await snoozeButton.click()
 
       // Wait for snooze to complete and return to roll page
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Expand the snoozed section - look for button containing "Snoozed ("
       const snoozedToggleButton = authenticatedPage.locator('button').filter({ hasText: /Snoozed \(/ })
       await snoozedToggleButton.click()
 
       // Wait for snoozed threads to appear
-      await authenticatedPage.waitForTimeout(500)
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Check that snoozed thread appears in SNOOZED section
       await expect(authenticatedPage.locator('text=Snoozed Test Thread')).toBeVisible()
@@ -1002,14 +1002,14 @@ test.describe('Roll Dice Feature', () => {
       const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
       await authenticatedWithThreadsPage.goto('/');
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
       await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
       const MANUAL_DIE = 8;
 
       const dieButton = authenticatedWithThreadsPage.locator(`button:has-text("d${MANUAL_DIE}")`).first();
       await dieButton.click();
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
       const sessionBefore = await request.get('/api/sessions/current/', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -1027,7 +1027,7 @@ test.describe('Roll Dice Feature', () => {
       );
 
       await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
       const sessionAfter = await request.get('/api/sessions/current/', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -1042,14 +1042,14 @@ test.describe('Roll Dice Feature', () => {
       const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
 
       await authenticatedWithThreadsPage.goto('/');
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
       await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
       const MANUAL_DIE = 10;
 
       const dieButton = authenticatedWithThreadsPage.locator(`button:has-text("d${MANUAL_DIE}")`).first();
       await dieButton.click();
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
       const sessionBeforeRoll = await request.get('/api/sessions/current/', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -1070,7 +1070,7 @@ test.describe('Roll Dice Feature', () => {
       await snoozeButton.click();
 
       await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
       const sessionAfterSnooze = await request.get('/api/sessions/current/', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -1117,7 +1117,7 @@ test.describe('Roll Dice Feature', () => {
     });
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: threadTitle }).first();
     await threadElement.click();
@@ -1185,7 +1185,7 @@ test.describe('Roll Dice Feature', () => {
       }
 
       await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Test Thread' }).first();
       await threadElement.click();
@@ -1202,7 +1202,7 @@ test.describe('Roll Dice Feature', () => {
 
     test('issue #324: rating view should show "You rolled a X!" instead of Queue position', async ({ authenticatedWithThreadsPage }) => {
       await authenticatedWithThreadsPage.goto('/');
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
       await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
       await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
@@ -1248,7 +1248,7 @@ test.describe('Roll Dice Feature', () => {
     });
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: longTitle }).first();
     await threadElement.click();
@@ -1297,7 +1297,7 @@ test.describe('Roll Dice Feature', () => {
       });
 
       await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const threadElement = authenticatedPage.locator('[data-roll-pool] [role="button"]').filter({ hasText: 'Unread Thread' }).first();
       await threadElement.click();
@@ -1370,7 +1370,7 @@ test.describe('Roll Dice Feature', () => {
       });
 
       await authenticatedPage.goto('/');
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
@@ -1382,7 +1382,7 @@ test.describe('Roll Dice Feature', () => {
       });
 
       await authenticatedPage.reload();
-      await authenticatedPage.waitForLoadState('networkidle');
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 

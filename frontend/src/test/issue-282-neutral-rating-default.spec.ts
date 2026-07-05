@@ -15,7 +15,7 @@ test.describe('Issue #282: Neutral rating slider default', () => {
 
     // Go to home and verify we can roll
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
   // Click on the first thread to open action sheet (roll pool threads open action sheet directly)
   const firstThread = page.locator('[data-roll-pool] [role="button"]').first();

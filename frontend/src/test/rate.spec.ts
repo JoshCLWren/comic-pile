@@ -3,7 +3,7 @@ import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown } from '.
 
 async function ensureRatingView(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await expect(page.locator('#root')).toBeVisible();
 
   if (await page.locator(SELECTORS.rate.ratingInput).isVisible().catch(() => false)) {
     return;
@@ -17,7 +17,7 @@ async function ensureRatingView(page: import('@playwright/test').Page): Promise<
 test.describe('Rate Thread Feature', () => {
   test.beforeEach(async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({
       has: authenticatedWithThreadsPage.locator('p.font-black'),
     }).first();
@@ -37,7 +37,7 @@ test.describe('Rate Thread Feature', () => {
     await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toHaveCount(0);
   });
@@ -47,10 +47,10 @@ test.describe('Rate Thread Feature', () => {
     await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toHaveCount(0);
-    await authenticatedWithThreadsPage.waitForTimeout(1000);
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toHaveCount(0);
 
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
@@ -73,10 +73,10 @@ test.describe('Rate Thread Feature', () => {
     expect(beforeTitle).toBeTruthy();
 
     await authenticatedWithThreadsPage.goto('/history');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const afterResponse = await authenticatedWithThreadsPage.request.get('/api/sessions/current/', {
       headers: { Authorization: `Bearer ${token}` },
@@ -112,17 +112,17 @@ test.describe('Rate Thread Feature', () => {
     await snoozeButton.click();
 
     await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
   });
 
   test('should remove unsnoozed thread from roll page without refresh', async ({ authenticatedWithThreadsPage }) => {
     const snoozeButton = authenticatedWithThreadsPage.locator(SELECTORS.rate.snoozeButton);
     await snoozeButton.click();
 
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const snoozedToggle = authenticatedWithThreadsPage.locator('button:has-text("Snoozed")');
     await expect(snoozedToggle).toBeVisible();
@@ -150,10 +150,10 @@ test.describe('Rate Thread Feature', () => {
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
 
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     
     await authenticatedWithThreadsPage.goto('/queue');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const threadElement = authenticatedWithThreadsPage.locator('.glass-card').first();
     await expect(threadElement).toBeVisible({ timeout: 5000 });
@@ -176,7 +176,7 @@ test.describe('Rate Thread Feature', () => {
       );
 
       await authenticatedWithThreadsPage.waitForURL('**/', { timeout: 5000 });
-      await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+      await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
       const sessionEnded = await authenticatedWithThreadsPage.locator('text=session ended|session complete').count();
       expect(sessionEnded).toBeGreaterThan(0);
@@ -190,7 +190,7 @@ test.describe('Rate Thread Feature', () => {
     expect(token).toBeTruthy();
 
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const createResponse = await authenticatedWithThreadsPage.request.post('/api/threads/', {
       headers: {
@@ -239,7 +239,7 @@ test.describe('Rate Thread Feature', () => {
     const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
     await ratingInput.waitFor({ state: 'visible' });
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
-    await authenticatedWithThreadsPage.waitForLoadState("networkidle");
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const ratingValue = await ratingInput.inputValue();
     expect(parseFloat(ratingValue)).toBe(3.5);

@@ -45,7 +45,7 @@ test.describe('Dependencies', () => {
     })
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Thread' }).first()
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -63,7 +63,7 @@ test.describe('Dependencies', () => {
     )
 
     await authenticatedPage.click('button[aria-label="Close modal"]')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await expect(
       authenticatedPage
@@ -117,7 +117,7 @@ test.describe('Dependencies', () => {
     })
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
      // Wait for the blocked indicator to appear (means blocked state was loaded)
      await expect(
@@ -142,17 +142,14 @@ test.describe('Dependencies', () => {
 
     // Set up dialog handler that auto-accepts and captures the message
     let dialogMessage = ''
-    authenticatedPage.on('dialog', async (dialog) => {
+    authenticatedPage.once('dialog', async (dialog) => {
       dialogMessage = dialog.message()
       await dialog.accept()
     })
 
     await authenticatedPage.click('button:has-text("Read Now")')
 
-    // Wait a bit for the dialog handler to fire
-    await authenticatedPage.waitForTimeout(500)
-
-    expect(dialogMessage.toLowerCase()).toContain('blocked')
+    await expect.poll(() => dialogMessage.toLowerCase()).toContain('blocked')
   })
 
   test.describe('Flexible issue dependencies', () => {
@@ -172,7 +169,7 @@ test.describe('Dependencies', () => {
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Comic' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -201,7 +198,7 @@ test.describe('Dependencies', () => {
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Series' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -243,7 +240,7 @@ test.describe('Dependencies', () => {
       await markIssueNumbersRead(authenticatedPage, token, sourceThread.id, ['1', '2'])
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Main Series' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -281,7 +278,7 @@ test.describe('Dependencies', () => {
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Comic' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -321,7 +318,7 @@ test.describe('Dependencies', () => {
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Dependent Series' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -356,7 +353,7 @@ test.describe('Dependencies', () => {
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Loading Target' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -393,7 +390,7 @@ test.describe('Dependencies', () => {
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Issue Target' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -427,7 +424,7 @@ test.describe('Dependencies', () => {
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'No Issues Target' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
@@ -464,7 +461,7 @@ test.describe('Dependencies', () => {
       await markIssueNumbersRead(authenticatedPage, token, sourceThread.id, ['1', '2', '3', '4'])
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'All Read Target' }).first()
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()

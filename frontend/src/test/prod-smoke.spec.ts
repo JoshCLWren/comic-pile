@@ -106,7 +106,7 @@ test.describe('Production Smoke', () => {
     });
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible();
 
     await page.click(SELECTORS.roll.mainDie);
@@ -114,7 +114,7 @@ test.describe('Production Smoke', () => {
     await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
 
     await page.goto('/queue');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await expect(page.locator(SELECTORS.threadList.container)).toBeVisible();
 
     expect(chunkFailures, `Chunk load failures: ${chunkFailures.join(', ')}`).toEqual([]);
@@ -141,7 +141,7 @@ test.describe('Production Smoke', () => {
     }, token);
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible();
 
     await page.click(SELECTORS.roll.mainDie);
@@ -182,9 +182,9 @@ test.describe('Production Smoke', () => {
     }, token);
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible();
 
     await page.click(SELECTORS.roll.mainDie);
@@ -201,10 +201,10 @@ test.describe('Production Smoke', () => {
     expect(activeBefore).toBeTruthy();
 
     await page.goto('/history');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible();
 
     const afterSession = await page.request.get('/api/sessions/current/', {
@@ -242,7 +242,7 @@ test.describe('Production Smoke', () => {
     });
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     const mainDie = page.locator('#main-die-3d');
     await expect(mainDie).toBeVisible();
@@ -263,7 +263,7 @@ test.describe('Production Smoke', () => {
     await mainDie.click();
 
     // Check animation started
-    await page.waitForTimeout(100);
+    await expect.poll(async () => (await getDieState()).hasRollingClass).toBe(true);
     const duringFirst = await getDieState();
     console.log('First roll state:', duringFirst);
 
@@ -280,7 +280,7 @@ test.describe('Production Smoke', () => {
     console.log('Back at roll view after first rating');
 
     // Wait for state to fully settle
-    await page.waitForTimeout(1000);
+    await expect.poll(async () => (await getDieState()).hasRollingClass).toBe(false);
 
     // ========== SECOND ROLL ==========
     console.log('Starting second roll...');
@@ -293,7 +293,7 @@ test.describe('Production Smoke', () => {
     await mainDie.click();
 
     // Check animation started for second roll
-    await page.waitForTimeout(100);
+    await expect.poll(async () => (await getDieState()).hasRollingClass).toBe(true);
     const duringSecond = await getDieState();
     console.log('Second roll state:', duringSecond);
 

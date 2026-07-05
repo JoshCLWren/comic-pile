@@ -3,7 +3,7 @@ import { test, expect } from './fixtures';
 test.describe('Set Pending Thread (Manual Selection)', () => {
   test('should click thread in queue and navigate to home page', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/queue');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     await authenticatedWithThreadsPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
 
     const firstThreadCard = authenticatedWithThreadsPage.locator('#queue-container .glass-card').first();
@@ -26,7 +26,7 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
     await readButton.click();
     await authenticatedWithThreadsPage.waitForSelector('#rating-input', { state: 'visible', timeout: 10000 });
 
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const currentUrl = authenticatedWithThreadsPage.url();
     expect(new URL(currentUrl).pathname).toBe('/');

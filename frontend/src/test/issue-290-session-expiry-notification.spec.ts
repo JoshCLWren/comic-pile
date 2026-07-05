@@ -4,7 +4,7 @@ import { SELECTORS } from './helpers';
 test.describe('Session Expiry Notification (Issue #290)', () => {
   test('should show notification when session expires', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const mainDieExists = await authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie).count();
     test.skip(mainDieExists === 0, 'No main die found - no threads available');
@@ -35,7 +35,7 @@ test.describe('Session Expiry Notification (Issue #290)', () => {
     expect(expireResponse.ok()).toBeTruthy();
 
     await authenticatedWithThreadsPage.reload();
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const newResponse = await authenticatedWithThreadsPage.request.get('/api/sessions/current/', {
       headers: {

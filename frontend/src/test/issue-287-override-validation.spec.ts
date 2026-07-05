@@ -64,7 +64,7 @@ test.describe('Issue #287: Override Validation', () => {
 
     // Roll to get a normal thread
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
 
     const mainDie = page.locator('#main-die-3d');
@@ -116,7 +116,7 @@ test.describe('Issue #287: Override Validation', () => {
 
     // Roll to get a normal thread
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
 
     const mainDie = page.locator('#main-die-3d');
@@ -168,7 +168,7 @@ test.describe('Issue #287: Override Validation', () => {
 
     // Roll to get a normal thread
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
 
     const mainDie = page.locator('#main-die-3d');

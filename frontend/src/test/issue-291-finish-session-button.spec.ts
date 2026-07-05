@@ -4,7 +4,7 @@ import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown } from '.
 test.describe('Issue 291: Finish Session Button', () => {
   test('should have a "Finish Session" button in rating view', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({
       has: authenticatedWithThreadsPage.locator('p.font-black'),
@@ -26,7 +26,7 @@ test.describe('Issue 291: Finish Session Button', () => {
     expect(token).toBeTruthy();
 
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({
       has: authenticatedWithThreadsPage.locator('p.font-black'),
@@ -44,7 +44,7 @@ test.describe('Issue 291: Finish Session Button', () => {
       finishSessionButton.click(),
     );
 
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const sessionResponse = await authenticatedWithThreadsPage.request.get('/api/sessions/current/', {
       headers: { Authorization: `Bearer ${token}` },
@@ -58,7 +58,7 @@ test.describe('Issue 291: Finish Session Button', () => {
 
   test('should send finish_session=true when Finish Session button is clicked', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({
       has: authenticatedWithThreadsPage.locator('p.font-black'),
@@ -82,7 +82,7 @@ test.describe('Issue 291: Finish Session Button', () => {
     await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
       finishSessionButton.click(),
     );
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     expect(requestData).toBeTruthy();
     const parsedData = JSON.parse(requestData as string);

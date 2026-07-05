@@ -4,7 +4,7 @@ import { SELECTORS } from './helpers';
 test.describe('Issue #294: Hide roll instruction when pool is empty', () => {
   test('should not show "Tap Die to Roll" instruction when pool is empty', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
     const tapInstruction = authenticatedPage.locator(SELECTORS.roll.tapInstruction);
@@ -30,7 +30,7 @@ test.describe('Issue #294: Hide roll instruction when pool is empty', () => {
     });
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
     const tapInstruction = authenticatedPage.locator(SELECTORS.roll.tapInstruction);

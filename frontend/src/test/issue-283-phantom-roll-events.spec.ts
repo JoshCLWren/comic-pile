@@ -23,7 +23,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
     // Roll the thread
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
 
     const mainDie = page.locator('#main-die-3d');
@@ -56,7 +56,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
     // Wait for roll view to return
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Get session history after rate - should have 1 "roll" and 1 "rate" event
     const currentSession2 = await page.request.get('/api/sessions/current/', {
@@ -87,7 +87,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
     // Wait for roll view to return
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Get session history after snooze - should NOT have an additional "roll" event
     const currentSession3 = await page.request.get('/api/sessions/current/', {
@@ -127,7 +127,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
     // Roll the thread
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
 
     const mainDie = page.locator('#main-die-3d');
@@ -142,7 +142,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
     // Wait for roll view to return
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Now roll again
     await mainDie.click();
@@ -154,7 +154,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
     // Wait for roll view to return
     await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Get final session history
     const currentSession4 = await page.request.get('/api/sessions/current/', {
@@ -213,7 +213,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
     for (let i = 0; i < 3; i++) {
       // Roll
       await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await expect(page.locator('#root')).toBeVisible();
       await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
 
       const mainDie = page.locator('#main-die-3d');
@@ -243,7 +243,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
       );
       
       await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
-      await page.waitForLoadState('networkidle');
+      await expect(page.locator('#root')).toBeVisible();
 
       // Roll again to get into rating view
       await mainDie.click();
@@ -269,7 +269,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
       const snoozeButton = page.locator('button:has-text("Snooze")');
       await snoozeButton.click();
       await page.waitForSelector('#main-die-3d', { state: 'visible', timeout: 10000 });
-      await page.waitForLoadState('networkidle');
+      await expect(page.locator('#root')).toBeVisible();
 
       // Verify snooze did NOT create a roll event
       const currentSession3 = await page.request.get('/api/sessions/current/', {
