@@ -25,6 +25,38 @@ export async function getCollectionsEnabled(page: Page): Promise<boolean> {
   return process.env.VITE_ENABLE_COLLECTIONS === 'true'
 }
 
+export async function waitForQueueReady(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'Read Queue' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Add Thread' })).toBeVisible()
+}
+
+export async function gotoQueue(page: Page): Promise<void> {
+  await page.goto('/queue', { waitUntil: 'domcontentloaded' })
+  await waitForQueueReady(page)
+}
+
+export async function waitForRollPageReady(page: Page): Promise<void> {
+  const mainDie = page.locator(SELECTORS.roll.mainDie)
+  const rollPool = page.locator('[data-roll-pool]')
+
+  await expect(mainDie.or(rollPool).first()).toBeVisible()
+}
+
+export async function gotoRollPage(page: Page): Promise<void> {
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await waitForRollPageReady(page)
+}
+
+export async function waitForThreadInQueue(page: Page, title: string): Promise<void> {
+  await expect(
+    page.locator(SELECTORS.threadList.threadItem).filter({ hasText: title }),
+  ).toBeVisible()
+}
+
+export async function waitForEditThreadModal(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'Edit Thread' })).toBeVisible()
+}
+
 function isAuthResponse(data: unknown): data is { access_token: string } {
   return (
     typeof data === 'object' &&

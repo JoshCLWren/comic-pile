@@ -1,6 +1,12 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
-import { createThread, extractThreadsFromResponse, findByTitle } from './helpers';
+import {
+  createThread,
+  extractThreadsFromResponse,
+  findByTitle,
+  gotoQueue,
+  waitForEditThreadModal,
+} from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
@@ -67,9 +73,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     expect(thread).toBeDefined();
 
     // Step 2: Navigate to queue page
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     // Step 3: Open the edit modal for the thread
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
@@ -77,7 +81,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open - wait for the modal heading
-    await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
+    await waitForEditThreadModal(authenticatedPage);
     
     // Verify modal is open using the fixed overlay class
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
