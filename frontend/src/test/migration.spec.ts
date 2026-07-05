@@ -383,11 +383,19 @@ test.describe('Migration Dialog', () => {
     // Cancel pending roll first so thread appears in pool
     const cancelButton = authenticatedPage.getByText('Cancel Pending Roll');
     if (await cancelButton.isVisible().catch(() => false)) {
-      await cancelButton.click();
+      await Promise.all([
+        authenticatedPage.waitForResponse((response) =>
+          response.url().includes('/api/roll/dismiss-pending') &&
+          response.request().method() === 'POST' &&
+          response.status() < 300
+        ),
+        cancelButton.click(),
+      ]);
     }
 
     // Wait for thread list to update
-    await expect(authenticatedPage.locator('#root')).toBeVisible();
+    await expect(authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first())
+      .toBeVisible({ timeout: 10000 });
 
     // Find the thread element again after reload
     const threadElementReloaded = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();

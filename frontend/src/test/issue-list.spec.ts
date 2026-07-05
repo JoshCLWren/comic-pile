@@ -1,6 +1,14 @@
 import { test, expect } from './fixtures';
 import { createThread, SELECTORS, extractThreadsFromResponse, findByTitle } from './helpers';
 
+type ThreadRecord = {
+  id: number;
+  title: string;
+  total_issues: number | null;
+  reading_progress?: string;
+  next_unread_issue_id?: number | null;
+};
+
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
   const options: any = {
@@ -45,6 +53,47 @@ async function makeAuthenticatedRequest(page: any, method: string, url: string, 
   }
   
   return await page.request.fetch(url, options);
+}
+
+async function expectThreadByTitle(page: any, title: string): Promise<ThreadRecord> {
+  await expect.poll(async () => {
+    const response = await makeAuthenticatedRequest(page, 'GET', '/api/threads/');
+    expect(response.ok()).toBeTruthy();
+    const threads = extractThreadsFromResponse(await response.json());
+    return threads.find((thread) => thread.title === title)?.id ?? null;
+  }, {
+    message: `Expected item with title ${title}`,
+    timeout: 10000,
+  }).not.toBeNull();
+
+  const response = await makeAuthenticatedRequest(page, 'GET', '/api/threads/');
+  expect(response.ok()).toBeTruthy();
+  const threads = extractThreadsFromResponse(await response.json());
+  const thread = findByTitle(threads, title) as ThreadRecord | undefined;
+  if (!thread) {
+    throw new Error(`Expected item with title ${title}`);
+  }
+  return thread;
+}
+
+async function expectThreadTotalIssues(
+  page: any,
+  thread: ThreadRecord,
+  expectedTotalIssues: number,
+): Promise<ThreadRecord> {
+  await expect.poll(async () => {
+    const threadResponse = await makeAuthenticatedRequest(page, 'GET', `/api/threads/${thread.id}`);
+    expect(threadResponse.ok()).toBeTruthy();
+    const threadData = await threadResponse.json() as ThreadRecord;
+    return threadData.total_issues;
+  }, {
+    message: `Expected thread ${thread.title} to have ${expectedTotalIssues} total issues`,
+    timeout: 10000,
+  }).toBe(expectedTotalIssues);
+
+  const threadResponse = await makeAuthenticatedRequest(page, 'GET', `/api/threads/${thread.id}`);
+  expect(threadResponse.ok()).toBeTruthy();
+  return await threadResponse.json() as ThreadRecord;
 }
 
 test.describe('Thread Creation with Issue Ranges', () => {
@@ -687,38 +736,9 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.click('button[type="submit"]');
     await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-    // Verify thread was created with correct total_issues - retry logic with longer timeout
-    let testThread: any = null;
-    let attempts = 0;
-    while (!testThread && attempts < 10) {
-      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-      expect(response.ok()).toBeTruthy();
-      const threads = extractThreadsFromResponse(await response.json());
-      testThread = findByTitle(threads, uniqueTitle);
-      
-      if (!testThread) {
-        await expect(authenticatedPage.locator('#root')).toBeVisible();
-        attempts++;
-      }
-    }
-    
-    expect(testThread).toBeDefined();
-
-    // For large ranges, total_issues might take longer to be set, fetch individual thread with retry
-    if (testThread.total_issues === null) {
-      let retryCount = 0;
-      while (retryCount < 10) {
-        const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
-        expect(threadResponse.ok()).toBeTruthy();
-        const threadData = await threadResponse.json();
-        if (threadData.total_issues !== null) {
-          testThread = threadData;
-          break;
-        }
-        await expect(authenticatedPage.locator('#root')).toBeVisible();
-        retryCount++;
-      }
-    }
+    // Verify thread was created with correct total_issues.
+    let testThread = await expectThreadByTitle(authenticatedPage, uniqueTitle);
+    testThread = await expectThreadTotalIssues(authenticatedPage, testThread, 150);
     expect(testThread.total_issues).toBe(150);
   });
 
@@ -776,41 +796,9 @@ test.describe('Issue Range Edge Cases', () => {
     await authenticatedPage.click('button[type="submit"]');
     await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-    await expect(authenticatedPage.locator('#root')).toBeVisible();
-    await expect(authenticatedPage.locator('#root')).toBeVisible();
-
-    // Verify thread was created with correct count (9 unique issues) - retry logic
-    let testThread: any = null;
-    let attempts = 0;
-    while (!testThread && attempts < 5) {
-      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-      expect(response.ok()).toBeTruthy();
-      const threads = extractThreadsFromResponse(await response.json());
-      testThread = findByTitle(threads, uniqueTitle);
-      
-      if (!testThread) {
-        await expect(authenticatedPage.locator('#root')).toBeVisible();
-        attempts++;
-      }
-    }
-    
-    expect(testThread).toBeDefined();
-
-    // If total_issues is not set yet, fetch individual thread with retry
-    if (testThread.total_issues === null) {
-      let retryCount = 0;
-      while (retryCount < 5) {
-        const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
-        expect(threadResponse.ok()).toBeTruthy();
-        const threadData = await threadResponse.json();
-        if (threadData.total_issues !== null) {
-          testThread = threadData;
-          break;
-        }
-        await expect(authenticatedPage.locator('#root')).toBeVisible();
-        retryCount++;
-      }
-    }
+    // Verify thread was created with correct count (9 unique issues).
+    let testThread = await expectThreadByTitle(authenticatedPage, uniqueTitle);
+    testThread = await expectThreadTotalIssues(authenticatedPage, testThread, 9);
     expect(testThread.total_issues).toBe(9);
   });
 });

@@ -11,7 +11,7 @@
     "typecheck": "tsc -P tsconfig.json --noEmit && tsc -P tsconfig.test.json --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "preview": "vite preview",
-    "test": "vitest",
+    "test": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",

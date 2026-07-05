@@ -192,6 +192,7 @@ test.describe('Accessibility Tests', () => {
     const focusableElementsLocator = authenticatedPage.locator(
       'button, a, input, [tabindex]:not([tabindex="-1"])'
     );
+    await expect(focusableElementsLocator.first()).toBeVisible();
     const elementCount = await focusableElementsLocator.count();
 
     let tabPresses = 0;
