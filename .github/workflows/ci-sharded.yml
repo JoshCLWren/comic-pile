@@ -115,12 +115,6 @@ jobs:
     name: Frontend Unit Tests (vitest)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # NOTE: continue-on-error is intentional — there are 7 pre-existing vitest
-    # failures in QueuePage.test.tsx, RollPage.test.tsx, RollPage.reviews-disabled.test.tsx,
-    # and RollPageTooltips.test.tsx that were never caught before this job was added.
-    # Remove continue-on-error and fix those tests to make this blocking.
-    # See: https://github.com/JoshCLWren/comic-pile/issues (tracking issue TBD)
-    continue-on-error: true
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

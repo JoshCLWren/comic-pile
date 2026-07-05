@@ -15,8 +15,8 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
-import { useBugReportRestore } from '../contexts/BugReportRestoreContext'
-import { ToastProvider } from '../contexts/ToastContext'
+import { useBugReportRestore } from '../contexts/useBugReportRestore'
+import { ToastProvider } from '../contexts/ToastProvider'
 import type { RollResponse } from '../types'
 
 const navigateSpy = vi.fn()
@@ -57,7 +57,7 @@ vi.mock('../config/featureFlags', () => ({
   collectionsEnabled: true,
   isReviewsFeatureEnabled: vi.fn(() => true),
 }))
-vi.mock('../contexts/BugReportRestoreContext', () => ({ useBugReportRestore: vi.fn() }))
+vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
@@ -66,10 +66,20 @@ vi.mock('../hooks', async (importOriginal) => {
   }
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
-vi.mock('../contexts/ToastContext', () => ({
-  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
-  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
+vi.mock('../services/api-reading-orders', () => ({
+  readingOrdersApi: {
+    getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }),
+  },
 }))
+vi.mock('../services/api', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    dependenciesApi: {
+      getBlockingInfo: vi.fn().mockResolvedValue({ is_blocked: false, blocking_reasons: [] }),
+    },
+  }
+})
 
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
@@ -147,7 +157,7 @@ beforeEach(() => {
     ],
     refetch: vi.fn()
   })
-  mockedUseStaleThreads.mockReturnValue({ data: [] })
+  mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
   mockedUseSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
@@ -1045,7 +1055,7 @@ describe('Rating View', () => {
         data: [],
         refetch: vi.fn(),
       })
-      mockedUseStaleThreads.mockReturnValue({ data: [] })
+      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
 
       render(<RollPage />)
 
@@ -1074,7 +1084,7 @@ describe('Rating View', () => {
         ],
         refetch: vi.fn(),
       })
-      mockedUseStaleThreads.mockReturnValue({ data: [] })
+      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
 
       render(<RollPage />)
 
@@ -1103,7 +1113,7 @@ describe('Rating View', () => {
         data: [],
         refetch: vi.fn(),
       })
-      mockedUseStaleThreads.mockReturnValue({ data: [] })
+      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
 
       render(<RollPage />)
 
@@ -1129,7 +1139,7 @@ describe('Rating View', () => {
         data: [],
         refetch: vi.fn(),
       })
-      mockedUseStaleThreads.mockReturnValue({ data: [] })
+      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
 
       const user = userEvent.setup()
       render(<RollPage />)
@@ -1160,7 +1170,7 @@ describe('Rating View', () => {
         data: [],
         refetch: vi.fn(),
       })
-      mockedUseStaleThreads.mockReturnValue({ data: [] })
+      mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
 
       const user = userEvent.setup()
       render(<RollPage />)

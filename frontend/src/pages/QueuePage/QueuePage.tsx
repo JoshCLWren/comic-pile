@@ -17,7 +17,7 @@ import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
-import { useBugReportRestore } from '../../contexts/BugReportRestoreContext'
+import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { useCollections } from '../../contexts/CollectionContext'
 import { collectionsEnabled } from '../../config/featureFlags'
 import { PositionMenuProvider } from '../../contexts/PositionMenuContext'
@@ -139,10 +139,16 @@ export default function QueuePage() {
     }
   }, [createForm.issues])
 
-  const activeThreads = threads
-    ?.filter((thread) => thread.status === 'active')
-    .sort((a, b) => a.queue_position - b.queue_position) ?? []
-  const completedThreads = threads?.filter((thread) => thread.status === 'completed') ?? []
+  const activeThreads = useMemo(
+    () => threads
+      ?.filter((thread) => thread.status === 'active')
+      .sort((a, b) => a.queue_position - b.queue_position) ?? [],
+    [threads],
+  )
+  const completedThreads = useMemo(
+    () => threads?.filter((thread) => thread.status === 'completed') ?? [],
+    [threads],
+  )
 
   const sortedThreads = useMemo(() => {
     if (sortBy === 'alphabetical') {

@@ -15,7 +15,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
-import { ToastProvider } from '../contexts/ToastContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { threadsApi } from '../services/api'
 
@@ -69,12 +69,13 @@ vi.mock('../hooks', async (importOriginal) => {
   }
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
-vi.mock('../contexts/ToastContext', () => ({
-  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
-  ToastProvider: ({ children }: { children: React.ReactNode }) => children,
-}))
 vi.mock('../services/api-reviews', () => ({
   reviewsApi: reviewsApiMock,
+}))
+vi.mock('../services/api-reading-orders', () => ({
+  readingOrdersApi: {
+    getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }),
+  },
 }))
 
 const mockedUseSession = vi.mocked(useSession) as any
@@ -140,7 +141,7 @@ beforeEach(() => {
     ],
     refetch: vi.fn().mockResolvedValue(undefined),
   })
-  mockedUseStaleThreads.mockReturnValue({ data: [] })
+  mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
   mockedUseSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRoll.mockReturnValue({ mutate: vi.fn().mockResolvedValue(baseRollResponse), isPending: false })

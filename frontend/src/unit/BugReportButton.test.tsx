@@ -15,7 +15,7 @@ vi.mock('../hooks/useDiagnostics', () => ({
   useDiagnostics: () => ({ collectDiagnostics: collectDiagnosticsMock }),
 }))
 
-vi.mock('../contexts/BugReportRestoreContext', () => ({
+vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),

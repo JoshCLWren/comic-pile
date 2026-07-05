@@ -8,8 +8,8 @@ import type {
   SessionSnapshotsResponse,
   SessionSummary,
 } from "../types";
-import { useToast } from "../contexts/ToastContext";
-import { useCache } from "../contexts/CacheContext";
+import { useToast } from "../contexts/useToast";
+import { useCache } from "../contexts/useCache";
 
 const EMPTY_PARAMS = Object.freeze({});
 const STORAGE_KEY_PREFIX = "comic_pile_last_session_id";

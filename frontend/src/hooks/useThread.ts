@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useContext, useMemo } from 'react';
 import axios from 'axios';
 import { threadsApi } from '../services/api';
 import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadListResponse, ThreadQueryParams, ThreadUpdatePayload } from '../types';
-import { CacheContext } from '../contexts/CacheContext';
+import { CacheContext } from '../contexts/CacheContextValue';
 
 type UseThreadsOptions = {
   searchTerm?: string;

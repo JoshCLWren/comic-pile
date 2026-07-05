@@ -13,7 +13,7 @@ import { DICE_LADDER } from '../../components/diceLadder'
 import { useSession } from '../../hooks/useSession'
 import { useStaleThreads, useThreads } from '../../hooks/useThread'
 import { useCollections } from '../../contexts/CollectionContext'
-import { useBugReportRestore } from '../../contexts/BugReportRestoreContext'
+import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { collectionsEnabled } from '../../config/featureFlags'
 import {
   useClearManualDie,

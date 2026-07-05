@@ -377,7 +377,10 @@ async def test_rating_creates_snapshot_automatically(
     final_snapshots = final_snapshots_result.scalars().all()
 
     assert len(final_snapshots) > len(initial_snapshots)
-    assert any("After rating" in s.description for s in final_snapshots)
+    assert any(
+        s.description is not None and "After rating" in s.description
+        for s in final_snapshots
+    )
 
 
 @pytest.mark.asyncio

@@ -3,9 +3,8 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useContext,
-  ReactNode,
 } from "react";
+import type { ReactNode } from "react";
 import { ToastContext } from "./ToastContext";
 
 type ToastType = "info" | "success" | "warning" | "error";
@@ -104,12 +103,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useToast() {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error("useToast must be used within a ToastProvider");
-  }
-  return context;
-}
-
-export const TOAST_DURATION = 5000;
+const TOAST_DURATION = 5000;

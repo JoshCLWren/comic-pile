@@ -1,12 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-
-interface CacheContextType {
-  invalidateQueries: (queries: string[]) => void;
-  cache: Map<string, unknown>;
-  updateCache: (key: string, value: unknown) => void;
-}
-
-export const CacheContext = createContext<CacheContextType | undefined>(undefined);
+import { useState, useCallback } from 'react';
+import { CacheContext } from './CacheContextValue';
 
 export function CacheProvider({ children }: { children: React.ReactNode }) {
   const [cache, setCache] = useState<Map<string, unknown>>(new Map());
@@ -30,12 +23,4 @@ export function CacheProvider({ children }: { children: React.ReactNode }) {
   return (
     <CacheContext.Provider value={{ cache, updateCache, invalidateQueries }}>{children}</CacheContext.Provider>
   );
-}
-
-export function useCache() {
-  const context = useContext(CacheContext);
-  if (!context) {
-    throw new Error('useCache must be used within a CacheProvider');
-  }
-  return context;
 }

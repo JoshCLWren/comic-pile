@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserRouter } from 'react-router-dom'
 import QueuePage from '../pages/QueuePage'
 import { CollectionProvider } from '../contexts/CollectionContext'
-import { ToastProvider } from '../contexts/ToastContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 import {
  useCreateThread,
  useDeleteThread,
@@ -13,7 +13,7 @@ import {
  useThreads,
  useUpdateThread,
 } from '../hooks/useThread'
-import { useBugReportRestore } from '../contexts/BugReportRestoreContext'
+import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
@@ -52,7 +52,7 @@ vi.mock('../services/api', () => ({
   },
 }))
 
-vi.mock('../contexts/BugReportRestoreContext', () => ({
+vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: vi.fn(),
 }))
 
@@ -69,11 +69,6 @@ vi.mock('../contexts/CollectionContext', () => ({
     moveCollection: vi.fn(),
     isLoading: false,
   }),
-}))
-
-vi.mock('../contexts/ToastContext', () => ({
-  useToast: vi.fn(() => ({ showToast: vi.fn(), removeToast: vi.fn(), toasts: [] })),
-  ToastProvider: ({ children }: { children: ReactNode }) => children,
 }))
 
 vi.mock('../contexts/useToast', () => ({
@@ -153,7 +148,7 @@ it('renders queue items and opens create modal', async () => {
     </BrowserRouter>
   )
 
-  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.getAllByText('Saga')[0]).toBeInTheDocument()
   expect(screen.getByText('Descender')).toBeInTheDocument()
   expect(screen.getByText('#1')).toBeInTheDocument()
 

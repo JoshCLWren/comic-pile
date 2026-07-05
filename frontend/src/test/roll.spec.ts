@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { test, expect } from './fixtures';
 import { SELECTORS, submitRatingAndDismissReviewIfShown } from './helpers';
 

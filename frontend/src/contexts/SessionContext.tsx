@@ -1,14 +1,6 @@
-import { createContext, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { SessionCurrent } from '../types'
-
-interface SessionContextValue {
-  currentSession: SessionCurrent | null
-  setCurrentSession: Dispatch<SetStateAction<SessionCurrent | null>>
-  hasRestorePoint: boolean
-  setHasRestorePoint: Dispatch<SetStateAction<boolean>>
-}
-
-export const SessionContext = createContext<SessionContextValue | null>(null)
+import { SessionContext } from './SessionContextValue'
 
 interface SessionProviderProps {
   children: ReactNode

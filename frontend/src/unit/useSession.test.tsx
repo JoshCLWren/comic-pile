@@ -9,7 +9,7 @@ import {
   useSessions,
 } from '../hooks/useSession'
 import { sessionApi } from '../services/api'
-import { ToastProvider } from '../contexts/ToastContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { CacheProvider } from '../contexts/CacheContext'
 
 vi.mock('../services/api', () => ({

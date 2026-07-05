@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useCollections } from '../contexts/CollectionContext'
-import { useToast } from '../contexts/ToastContext'
+import { useToast } from '../contexts/useToast'
 import { collectionsEnabled } from '../config/featureFlags'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 import './CollectionDialog.css'
