@@ -120,7 +120,7 @@ test.describe('Accessibility Tests', () => {
   test('should have proper heading hierarchy', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
 
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const headingsLocator = authenticatedPage.locator('h1, h2, h3, h4, h5, h6');
     const headingCount = await headingsLocator.count();
     const levels: number[] = [];
@@ -188,10 +188,11 @@ test.describe('Accessibility Tests', () => {
       document.body?.focus();
     });
 
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const focusableElementsLocator = authenticatedPage.locator(
       'button, a, input, [tabindex]:not([tabindex="-1"])'
     );
+    await expect(focusableElementsLocator.first()).toBeVisible();
     const elementCount = await focusableElementsLocator.count();
 
     let tabPresses = 0;
@@ -221,7 +222,7 @@ test.describe('Accessibility Tests', () => {
   test('should have descriptive link text', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
 
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const linksLocator = authenticatedPage.locator('a');
     const linkCount = await linksLocator.count();
 
@@ -240,7 +241,7 @@ test.describe('Accessibility Tests', () => {
   test('should have proper form labels', async ({ page }) => {
     await page.goto('/register');
 
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     const inputsLocator = page.locator('input');
     const inputCount = await inputsLocator.count();
 

@@ -6,7 +6,7 @@ test.describe('Review Validation E2E Tests', () => {
     const page = authenticatedWithThreadsPage;
     
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
     
     const mainDie = page.locator(SELECTORS.roll.mainDie);
     await expect(mainDie).toBeVisible();

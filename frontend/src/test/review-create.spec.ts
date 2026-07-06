@@ -12,7 +12,7 @@ test.describe('Review Feature Flag E2E Tests', () => {
     })
 
     await page.goto('/')
-    await page.waitForLoadState('networkidle')
+    await expect(page.locator('#root')).toBeVisible();
 
     const mainDie = page.locator(SELECTORS.roll.mainDie)
     await expect(mainDie).toBeVisible()

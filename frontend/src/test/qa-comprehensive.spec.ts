@@ -125,7 +125,7 @@ test('1. Auth - Navigate to home and verify authentication', async ({ authentica
       if (indicatorCount > 0) {
         // Hover over first indicator to check tooltip
         await indicators.first().hover();
-        await authenticatedPage.waitForTimeout(500);
+        await expect(authenticatedPage.locator('#root')).toBeVisible();
       }
     }
 
@@ -161,11 +161,11 @@ test('3. Queue page - Verify thread list and search/filter', async ({ authentica
 
       // Test search functionality
       await searchBox.first().fill('X-Men');
-      await authenticatedPage.waitForTimeout(500);
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Clear search
       await searchBox.first().fill('');
-      await authenticatedPage.waitForTimeout(500);
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
     }
 
     // Verify thread cards show correct info
@@ -191,7 +191,7 @@ test('4. Session page - Click into thread and verify issues', async ({ authentic
     await authenticatedPage.goto('/queue', { waitUntil: 'domcontentloaded' });
 
     // Wait for queue to load
-    await authenticatedPage.waitForTimeout(1000);
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Find and click on a thread
     const threadLinks = authenticatedPage.locator('a[href*="/thread/"], [data-testid="queue-thread-item"]');
@@ -328,7 +328,7 @@ test('6. Analytics page - Verify charts and stats', async ({ authenticatedPage }
 
 // Navigate to queue and check for dependency indicators
     await authenticatedPage.goto('/queue', { waitUntil: 'domcontentloaded' });
-    await authenticatedPage.waitForTimeout(1000);
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Look for dependency indicators
     const depIndicators = authenticatedPage.locator('[data-dependency], .dependency, [aria-label*="depend" i]');
@@ -337,7 +337,7 @@ test('6. Analytics page - Verify charts and stats', async ({ authenticatedPage }
     if (depCount > 0) {
       // Hover over dependency indicator to check tooltip
       await depIndicators.first().hover();
-      await authenticatedPage.waitForTimeout(500);
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Check tooltip text
       const tooltip = authenticatedPage.locator('.tooltip, [role="tooltip"]');
@@ -368,7 +368,7 @@ test('8. Collections - Verify collection switcher and creation', async ({ authen
 
     if (switcherCount > 0) {
       await collectionSwitcher.first().click();
-      await authenticatedPage.waitForTimeout(500);
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Check for collections list
       const collectionsList = authenticatedPage.locator('.collections-list, [data-collections]');
@@ -384,7 +384,7 @@ test('8. Collections - Verify collection switcher and creation', async ({ authen
 
       if (newCollectionCount > 0) {
         await newCollectionButton.first().click();
-        await authenticatedPage.waitForTimeout(500);
+        await expect(authenticatedPage.locator('#root')).toBeVisible();
 
         // Check for collection creation dialog/form
         const collectionForm = authenticatedPage.locator('input[placeholder*="collection" i], .collection-form');
@@ -395,7 +395,7 @@ test('8. Collections - Verify collection switcher and creation', async ({ authen
 
           // Close the form/dialog
           await authenticatedPage.keyboard.press('Escape');
-          await authenticatedPage.waitForTimeout(500);
+          await expect(authenticatedPage.locator('#root')).toBeVisible();
         }
       }
     }

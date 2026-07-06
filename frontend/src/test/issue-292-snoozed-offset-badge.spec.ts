@@ -24,7 +24,7 @@ test.describe('Issue #292: Snoozed-offset badge at d20 ceiling', () => {
 
     // Refresh to see updated state
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Verify die is d20
   const headerDieLabel = page.locator('#header-die-label');
@@ -46,11 +46,11 @@ test.describe('Issue #292: Snoozed-offset badge at d20 ceiling', () => {
     await snoozeButton.click();
 
     // Wait for snooze to complete
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Go back to roll page
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Verify we're back on roll page
     await expect(page.locator('#main-die-3d')).toBeVisible();
@@ -85,7 +85,7 @@ test.describe('Issue #292: Snoozed-offset badge at d20 ceiling', () => {
 
     // Refresh to see updated state
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Verify die is d6
   const headerDieLabel = page.locator('#header-die-label');
@@ -107,11 +107,11 @@ test.describe('Issue #292: Snoozed-offset badge at d20 ceiling', () => {
     await snoozeButton.click();
 
     // Wait for snooze to complete
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Go back to roll page
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Verify we're back on roll page
     await expect(page.locator('#main-die-3d')).toBeVisible();

@@ -37,8 +37,8 @@ test.describe('Analytics Dashboard', () => {
 
   test('should show active vs completed threads', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/analytics');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-    await authenticatedWithThreadsPage.waitForLoadState("networkidle");
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const activeThreadsLabel = authenticatedWithThreadsPage.locator('text=Active Threads');
     await expect(activeThreadsLabel.first()).toBeVisible({ timeout: 5000 });

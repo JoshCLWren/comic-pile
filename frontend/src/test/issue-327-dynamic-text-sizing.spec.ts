@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { SELECTORS } from './helpers';
+import { gotoQueue } from './helpers';
 
 test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
   test('queue page thread titles wrap to 2 lines for long titles', async ({ authenticatedPage, request }) => {
@@ -34,8 +34,7 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
       expect(issuesResponse.ok()).toBeTruthy();
     }
 
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     const threadCards = authenticatedPage.locator('[data-testid="queue-thread-item"]');
     await expect(threadCards).toHaveCount(3);
@@ -74,11 +73,9 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
     });
     expect(issuesResponse.ok()).toBeTruthy();
 
-    await authenticatedPage.goto('/');
-    await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
-    await authenticatedPage.click(SELECTORS.roll.mainDie);
-
-    await authenticatedPage.waitForTimeout(2000);
+    const rollResponse = await request.post('/api/roll/', { headers });
+    expect(rollResponse.ok()).toBeTruthy();
+    await authenticatedPage.goto('/', { waitUntil: 'domcontentloaded' });
 
     // Look for h2 inside #thread-info specifically
     const threadInfo = authenticatedPage.locator('#thread-info h2').first();
@@ -109,8 +106,7 @@ test.describe('Issue #327: Dynamic Text Sizing for Long Titles', () => {
       throw new Error(`Failed to create thread: ${response.status()} ${response.statusText()} - ${errorText}`);
     }
 
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     const threadCards = authenticatedPage.locator('[data-testid="queue-thread-item"]');
     const batmanCard = threadCards.filter({ hasText: 'Batman' });

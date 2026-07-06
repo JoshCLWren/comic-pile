@@ -4,7 +4,7 @@ import { getCollectionsEnabled } from './helpers';
 test.describe('CollectionDialog Success Feedback', () => {
   test('should show success toast after creating collection', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedWithThreadsPage);
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
@@ -32,7 +32,7 @@ test.describe('CollectionDialog Success Feedback', () => {
 
   test('should auto-dismiss success toast', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedWithThreadsPage);
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
@@ -61,7 +61,7 @@ test.describe('CollectionDialog Success Feedback', () => {
 
   test('should not show success toast on validation error', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedWithThreadsPage);
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
@@ -87,7 +87,7 @@ test.describe('CollectionDialog Success Feedback', () => {
 
   test('should not show success toast on network error', async ({ authenticatedWithThreadsPage, context }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedWithThreadsPage);
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
@@ -119,7 +119,7 @@ test.describe('CollectionDialog Success Feedback', () => {
 
   test('should close dialog cleanly after successful creation', async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedWithThreadsPage);
 
     const newButton = authenticatedWithThreadsPage.getByRole('button', { name: /new collection/i });
@@ -148,7 +148,7 @@ test.describe('CollectionDialog Success Feedback', () => {
 
   test('should show success toast after updating collection', async ({ authenticatedWithThreadsPage, request }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedWithThreadsPage);
 
     const collectionName = `Update Test ${Date.now()}`;

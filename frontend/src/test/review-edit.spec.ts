@@ -47,7 +47,7 @@ test.describe('Review Editing E2E Tests', () => {
     expect(latestReview.review_text).toBe('Original review')
 
     await page.goto('/')
-    await page.waitForLoadState('networkidle')
+    await expect(page.locator('#root')).toBeVisible();
 
     await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 15000 })
     await page.locator(SELECTORS.roll.mainDie).click()
@@ -158,7 +158,7 @@ test.describe('Review Feature Flag E2E Tests', () => {
     })
 
     await page.goto('/')
-    await page.waitForLoadState('networkidle')
+    await expect(page.locator('#root')).toBeVisible();
 
     const mainDie = page.locator(SELECTORS.roll.mainDie)
     await expect(mainDie).toBeVisible()

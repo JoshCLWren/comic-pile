@@ -29,7 +29,7 @@ test.describe('Issue #298 - Button Label on Last Issue', () => {
 
     // Reload the page to see the pending thread
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     // Click on the first thread card
     const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({
@@ -81,7 +81,7 @@ test.describe('Issue #298 - Button Label on Last Issue', () => {
 
     // Reload the page to see the pending thread
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     // Click on the first thread card
     const firstThreadCard = authenticatedWithThreadsPage.locator('[role="button"]').filter({

@@ -39,7 +39,7 @@ test('shows flowchart toggle after creating a dependency', async ({ authenticate
   })
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open dependency builder for the target thread
     const targetCard = authenticatedPage
@@ -126,7 +126,7 @@ test('renders flowchart with nodes and edges when toggled', async ({ authenticat
     expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open dependency builder for the target thread
     const targetCard = authenticatedPage
@@ -221,7 +221,7 @@ test('flowchart zoom controls work', async ({ authenticatedPage }) => {
     expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const targetCard = authenticatedPage
       .locator('#queue-container .glass-card')
@@ -304,7 +304,7 @@ test('flowchart shows tooltip on node hover', async ({ authenticatedPage }) => {
     expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const targetCard = authenticatedPage
       .locator('#queue-container .glass-card')
@@ -380,7 +380,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
     expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const targetCard = authenticatedPage
       .locator('#queue-container .glass-card')
@@ -452,7 +452,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
     expect(depResponse.ok()).toBe(true)
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const targetCard = authenticatedPage
       .locator('#queue-container .glass-card')
@@ -477,7 +477,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
     })
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const card = authenticatedPage
       .locator('#queue-container .glass-card')
@@ -544,7 +544,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       expect(depResponse.ok()).toBe(true)
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage
         .locator('#queue-container .glass-card')
@@ -651,7 +651,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       expect(dep2Response.ok()).toBe(true)
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       // Open Animal Man dependencies
       const animalManCard = authenticatedPage
@@ -735,7 +735,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage
         .locator('#queue-container .glass-card')
@@ -808,7 +808,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage
         .locator('#queue-container .glass-card')
@@ -884,7 +884,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage
         .locator('#queue-container .glass-card')
@@ -989,7 +989,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       })
 
       await authenticatedPage.goto('/queue')
-      await authenticatedPage.waitForLoadState('networkidle')
+      await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const betaCard = authenticatedPage
         .locator('#queue-container .glass-card')

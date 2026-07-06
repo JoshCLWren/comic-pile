@@ -1,5 +1,13 @@
 import { test, expect } from './fixtures';
-import { createThread, SELECTORS, extractThreadsFromResponse, findByTitle, findByIssueNumber } from './helpers';
+import {
+  createThread,
+  SELECTORS,
+  extractThreadsFromResponse,
+  findByTitle,
+  findByIssueNumber,
+  gotoQueue,
+  waitForEditThreadModal,
+} from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any): Promise<any> {
 	const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
@@ -57,25 +65,19 @@ test.describe('Issue Dependency Indicators', () => {
     });
     expect(createDepResponse.ok()).toBeTruthy();
 
-    await authenticatedPage.goto(`/queue`);
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: target.title }).click();
     await authenticatedPage.waitForURL('**/thread/**', { timeout: 10000 });
-    await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    await authenticatedPage.waitForTimeout(2000);
+    await waitForEditThreadModal(authenticatedPage);
 
     const issueItem = authenticatedPage.locator(`[data-testid="issue-pill-${targetIssue.id}"]`);
-    await issueItem.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(issueItem).toBeVisible();
 
     const indicator = issueItem.locator('.dependency-indicator');
-    const indicatorCount = await indicator.count();
-
-    expect(indicatorCount).toBeGreaterThan(0);
+    await expect(indicator).toHaveCount(1);
   });
 
   test('should not show dependency indicator for issues without dependencies', async ({ authenticatedPage }) => {
@@ -92,20 +94,16 @@ test.describe('Issue Dependency Indicators', () => {
 	const threads = extractThreadsFromResponse(await threadsResponse.json());
 	const thread = findByTitle(threads, `No Dependencies Thread ${timestamp}`);
 
-    await authenticatedPage.goto(`/queue`);
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: thread.title }).click();
     await authenticatedPage.waitForURL('**/thread/**', { timeout: 10000 });
-    await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    await authenticatedPage.waitForTimeout(1000);
+    await waitForEditThreadModal(authenticatedPage);
 
     const indicators = authenticatedPage.locator('.dependency-indicator');
-    expect(await indicators.count()).toBe(0);
+    await expect(indicators).toHaveCount(0);
   });
 
   test('should show tooltip with dependency details on hover', async ({ authenticatedPage }) => {
@@ -146,28 +144,23 @@ test.describe('Issue Dependency Indicators', () => {
       target_id: targetIssue.id,
     });
 
-    await authenticatedPage.goto(`/queue`);
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: target.title }).click();
-    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForURL('**/thread/**', { timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Edit")');
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    await authenticatedPage.waitForTimeout(2000);
+    await waitForEditThreadModal(authenticatedPage);
 
     const issueItem = authenticatedPage.locator(`[data-testid="issue-pill-${targetIssue.id}"]`);
-    await issueItem.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(issueItem).toBeVisible();
 
     const indicator = issueItem.locator('.dependency-indicator');
     if (await indicator.count() > 0) {
       await indicator.hover();
-      await authenticatedPage.waitForTimeout(500);
 
       const tooltip = authenticatedPage.locator('.relative .absolute');
-      const tooltipVisible = await tooltip.count() > 0;
-      expect(tooltipVisible).toBeTruthy();
+      await expect(tooltip.first()).toBeVisible();
     }
   });
 
@@ -226,30 +219,25 @@ test.describe('Issue Dependency Indicators', () => {
       target_id: targetIssue.id,
     });
 
-    await authenticatedPage.goto(`/queue`);
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: target.title }).click();
     await authenticatedPage.waitForURL('**/thread/**', { timeout: 10000 });
-    await authenticatedPage.waitForLoadState('networkidle');
 
     await authenticatedPage.click('button:has-text("Edit")');
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    await authenticatedPage.waitForTimeout(2000);
+    await waitForEditThreadModal(authenticatedPage);
 
     const issueItem = authenticatedPage.locator(`[data-testid="issue-pill-${targetIssue.id}"]`);
-    await issueItem.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(issueItem).toBeVisible();
 
     const indicator = issueItem.locator('.dependency-indicator');
-    const indicatorCount = await indicator.count();
-
-    expect(indicatorCount).toBeGreaterThan(0);
+    await expect(indicator).toHaveCount(1);
 
     await indicator.hover();
-    await authenticatedPage.waitForTimeout(500);
 
-    const tooltipText = await authenticatedPage.locator('.relative .absolute').first().textContent();
+    const tooltip = authenticatedPage.locator('.relative .absolute').first();
+    await expect(tooltip).toBeVisible();
+    const tooltipText = await tooltip.textContent();
     expect(tooltipText).toContain('Source 1');
     expect(tooltipText).toContain('Source 2');
   });
@@ -309,26 +297,24 @@ test.describe('Issue Dependency Indicators', () => {
       target_id: targetIssues.issues[0].id,
     });
 
-    await authenticatedPage.goto(`/queue`);
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     await authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ has: authenticatedPage.locator('h3', { hasText: middle.title }) }).click();
-    await authenticatedPage.waitForLoadState('networkidle');
+    await authenticatedPage.waitForURL('**/thread/**', { timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Edit")');
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    await authenticatedPage.waitForTimeout(2000);
+    await waitForEditThreadModal(authenticatedPage);
 
     const issueItem = authenticatedPage.locator(`[data-testid="issue-pill-${middleIssue.id}"]`);
-    await issueItem.waitFor({ state: 'visible', timeout: 5000 });
+    await expect(issueItem).toBeVisible();
 
     const indicator = issueItem.locator('.dependency-indicator');
     if (await indicator.count() > 0) {
       await indicator.hover();
-      await authenticatedPage.waitForTimeout(500);
 
-      const tooltipText = await authenticatedPage.locator('.relative .absolute').first().textContent();
+      const tooltip = authenticatedPage.locator('.relative .absolute').first();
+      await expect(tooltip).toBeVisible();
+      const tooltipText = await tooltip.textContent();
       expect(tooltipText).toContain('Chain Source');
       expect(tooltipText).toContain('Chain Target');
       expect(tooltipText).toContain('Blocked by');

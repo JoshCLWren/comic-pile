@@ -43,7 +43,7 @@ test.describe('Issue #295 - Stale Thread Nudge Count', () => {
 
     // Reload the page to see the stale thread nudge
     await freshUserPage.goto('/');
-    await freshUserPage.waitForLoadState('networkidle');
+    await expect(freshUserPage.locator('#root')).toBeVisible();
 
     if (backdateAvailable) {
       // The stale thread nudge should be visible with count indicator
@@ -83,7 +83,7 @@ test.describe('Issue #295 - Stale Thread Nudge Count', () => {
 
     // Reload the page
     await freshUserPage.goto('/');
-    await freshUserPage.waitForLoadState('networkidle');
+    await expect(freshUserPage.locator('#root')).toBeVisible();
 
     if (backdateResponse.ok()) {
       // The stale thread nudge should be visible with singular count

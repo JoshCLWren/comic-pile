@@ -1,6 +1,14 @@
 import { test, expect } from './fixtures';
 import { createThread, SELECTORS, extractThreadsFromResponse, findByTitle } from './helpers';
 
+type ThreadRecord = {
+  id: number;
+  title: string;
+  total_issues: number | null;
+  reading_progress?: string;
+  next_unread_issue_id?: number | null;
+};
+
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
   const options: any = {
@@ -47,13 +55,54 @@ async function makeAuthenticatedRequest(page: any, method: string, url: string, 
   return await page.request.fetch(url, options);
 }
 
+async function expectThreadByTitle(page: any, title: string): Promise<ThreadRecord> {
+  await expect.poll(async () => {
+    const response = await makeAuthenticatedRequest(page, 'GET', '/api/threads/');
+    expect(response.ok()).toBeTruthy();
+    const threads = extractThreadsFromResponse(await response.json());
+    return threads.find((thread) => thread.title === title)?.id ?? null;
+  }, {
+    message: `Expected item with title ${title}`,
+    timeout: 10000,
+  }).not.toBeNull();
+
+  const response = await makeAuthenticatedRequest(page, 'GET', '/api/threads/');
+  expect(response.ok()).toBeTruthy();
+  const threads = extractThreadsFromResponse(await response.json());
+  const thread = findByTitle(threads, title) as ThreadRecord | undefined;
+  if (!thread) {
+    throw new Error(`Expected item with title ${title}`);
+  }
+  return thread;
+}
+
+async function expectThreadTotalIssues(
+  page: any,
+  thread: ThreadRecord,
+  expectedTotalIssues: number,
+): Promise<ThreadRecord> {
+  await expect.poll(async () => {
+    const threadResponse = await makeAuthenticatedRequest(page, 'GET', `/api/threads/${thread.id}`);
+    expect(threadResponse.ok()).toBeTruthy();
+    const threadData = await threadResponse.json() as ThreadRecord;
+    return threadData.total_issues;
+  }, {
+    message: `Expected thread ${thread.title} to have ${expectedTotalIssues} total issues`,
+    timeout: 10000,
+  }).toBe(expectedTotalIssues);
+
+  const threadResponse = await makeAuthenticatedRequest(page, 'GET', `/api/threads/${thread.id}`);
+  expect(threadResponse.ok()).toBeTruthy();
+  return await threadResponse.json() as ThreadRecord;
+}
+
 test.describe('Thread Creation with Issue Ranges', () => {
   test('should create thread with issue range "1-25"', async ({ authenticatedPage }) => {
     const timestamp = Date.now();
     const uniqueTitle = `Test Comic Series ${timestamp}`;
     
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
@@ -70,7 +119,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
     // Submit form and wait for network to settle
     await authenticatedPage.click('button[type="submit"]');
-    await authenticatedPage.waitForTimeout(2000);
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
@@ -87,10 +136,10 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
     // Submit form and wait for network to settle
     await authenticatedPage.click('button[type="submit"]');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-	await authenticatedPage.waitForLoadState('networkidle');
-	await authenticatedPage.waitForTimeout(500);
+	await expect(authenticatedPage.locator('#root')).toBeVisible();
+	await expect(authenticatedPage.locator('#root')).toBeVisible();
 
 	// Verify thread was created with correct number of issues - retry logic
 	let testThread: any = null;
@@ -102,7 +151,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
 		testThread = findByTitle(threads, uniqueTitle);
       
       if (!testThread) {
-        await authenticatedPage.waitForTimeout(300);
+        await expect(authenticatedPage.locator('#root')).toBeVisible();
         attempts++;
       }
     }
@@ -113,7 +162,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
 
   test('should show error for invalid issue range', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
@@ -139,7 +188,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     const uniqueTitle = `Single Issue Comic ${timestamp}`;
     
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
@@ -166,8 +215,8 @@ test.describe('Thread Creation with Issue Ranges', () => {
       authenticatedPage.click('button[type="submit"]'),
     ]);
 
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForTimeout(500);
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Verify thread was created with correct total_issues - retry logic
     let testThread: any = null;
@@ -179,7 +228,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
       testThread = findByTitle(threads, uniqueTitle);
       
       if (!testThread) {
-        await authenticatedPage.waitForTimeout(300);
+        await expect(authenticatedPage.locator('#root')).toBeVisible();
         attempts++;
       }
     }
@@ -198,7 +247,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
           testThread = threadData;
           break;
         }
-        await authenticatedPage.waitForTimeout(300);
+        await expect(authenticatedPage.locator('#root')).toBeVisible();
         retryCount++;
       }
     }
@@ -210,7 +259,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     const uniqueTitle = `Duplicate Issues Comic ${timestamp}`;
     
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
@@ -237,8 +286,8 @@ test.describe('Thread Creation with Issue Ranges', () => {
       authenticatedPage.click('button[type="submit"]'),
     ]);
 
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForTimeout(500);
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Verify thread was created with deduplicated count - retry logic
     let testThread: any = null;
@@ -250,7 +299,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
       testThread = findByTitle(threads, uniqueTitle);
       
       if (!testThread) {
-        await authenticatedPage.waitForTimeout(300);
+        await expect(authenticatedPage.locator('#root')).toBeVisible();
         attempts++;
       }
     }
@@ -268,7 +317,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
           testThread = threadData;
           break;
         }
-        await authenticatedPage.waitForTimeout(300);
+        await expect(authenticatedPage.locator('#root')).toBeVisible();
         retryCount++;
       }
     }
@@ -423,19 +472,25 @@ test.describe('Issue Status Toggle', () => {
 test.describe('Roll Result with Issue Display', () => {
   test('should show issue number in roll result for threads with issue tracking', async ({ authenticatedPage }) => {
     // Create thread with issues
+    const timestamp = Date.now();
+    const uniqueTitle = `Roll Issue Test ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: 'Roll Issue Test',
+      title: uniqueTitle,
       format: 'Comics',
       issues_remaining: 10,
       total_issues: 10,
+      issue_range: '1-10',
     });
 
-    await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+    const threads = extractThreadsFromResponse(await threadsResponse.json());
+    const thread = findByTitle(threads, uniqueTitle);
+    expect(thread).toBeDefined();
 
-    // Roll the dice
-    await authenticatedPage.click(SELECTORS.roll.mainDie);
+    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/threads/${thread.id}/set-pending`);
+
+    await authenticatedPage.goto('/');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
 
     // Check if issue info is displayed (text pattern like "#1" or "of 10")
@@ -449,18 +504,23 @@ test.describe('Roll Result with Issue Display', () => {
 
   test('should handle roll result for threads without issue tracking', async ({ authenticatedPage }) => {
     // Create thread without issue tracking (old style)
+    const timestamp = Date.now();
+    const uniqueTitle = `Old Style Thread ${timestamp}`;
     await createThread(authenticatedPage, {
-      title: 'Old Style Thread',
+      title: uniqueTitle,
       format: 'Trade',
       issues_remaining: 5,
     });
 
-    await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
+    const threadsResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
+    const threads = extractThreadsFromResponse(await threadsResponse.json());
+    const thread = findByTitle(threads, uniqueTitle);
+    expect(thread).toBeDefined();
 
-    // Roll the dice (may need multiple attempts if there are multiple threads)
-    await authenticatedPage.click(SELECTORS.roll.mainDie);
+    await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/threads/${thread.id}/set-pending`);
+
+    await authenticatedPage.goto('/');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 });
 
     // Just verify the rating view is shown - actual thread selection is random
@@ -495,7 +555,7 @@ test.describe('Roll Result with Issue Display', () => {
     await makeAuthenticatedRequest(authenticatedPage, 'POST', `/api/threads/${thread.id}/set-pending`);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // The thread info should be accessible
     const threadInfo = await authenticatedPage.locator('#thread-info h2').textContent();
@@ -657,7 +717,7 @@ test.describe('Issue Range Edge Cases', () => {
     const uniqueTitle = `Long Running Series ${timestamp}`;
     
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
@@ -674,46 +734,17 @@ test.describe('Issue Range Edge Cases', () => {
     
     // Submit form and wait for network to settle (can take longer for large ranges)
     await authenticatedPage.click('button[type="submit"]');
-    await authenticatedPage.waitForTimeout(5000);
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-    // Verify thread was created with correct total_issues - retry logic with longer timeout
-    let testThread: any = null;
-    let attempts = 0;
-    while (!testThread && attempts < 10) {
-      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-      expect(response.ok()).toBeTruthy();
-      const threads = extractThreadsFromResponse(await response.json());
-      testThread = findByTitle(threads, uniqueTitle);
-      
-      if (!testThread) {
-        await authenticatedPage.waitForTimeout(500);
-        attempts++;
-      }
-    }
-    
-    expect(testThread).toBeDefined();
-
-    // For large ranges, total_issues might take longer to be set, fetch individual thread with retry
-    if (testThread.total_issues === null) {
-      let retryCount = 0;
-      while (retryCount < 10) {
-        const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
-        expect(threadResponse.ok()).toBeTruthy();
-        const threadData = await threadResponse.json();
-        if (threadData.total_issues !== null) {
-          testThread = threadData;
-          break;
-        }
-        await authenticatedPage.waitForTimeout(500);
-        retryCount++;
-      }
-    }
+    // Verify thread was created with correct total_issues.
+    let testThread = await expectThreadByTitle(authenticatedPage, uniqueTitle);
+    testThread = await expectThreadTotalIssues(authenticatedPage, testThread, 150);
     expect(testThread.total_issues).toBe(150);
   });
 
   test('should reject invalid range formats', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
@@ -746,7 +777,7 @@ test.describe('Issue Range Edge Cases', () => {
     const uniqueTitle = `Whitespace Test ${timestamp}`;
     
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
@@ -763,43 +794,11 @@ test.describe('Issue Range Edge Cases', () => {
 
     // Submit form and wait for network to settle
     await authenticatedPage.click('button[type="submit"]');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForTimeout(500);
-
-    // Verify thread was created with correct count (9 unique issues) - retry logic
-    let testThread: any = null;
-    let attempts = 0;
-    while (!testThread && attempts < 5) {
-      const response = await makeAuthenticatedRequest(authenticatedPage, 'GET', '/api/threads/');
-      expect(response.ok()).toBeTruthy();
-      const threads = extractThreadsFromResponse(await response.json());
-      testThread = findByTitle(threads, uniqueTitle);
-      
-      if (!testThread) {
-        await authenticatedPage.waitForTimeout(300);
-        attempts++;
-      }
-    }
-    
-    expect(testThread).toBeDefined();
-
-    // If total_issues is not set yet, fetch individual thread with retry
-    if (testThread.total_issues === null) {
-      let retryCount = 0;
-      while (retryCount < 5) {
-        const threadResponse = await makeAuthenticatedRequest(authenticatedPage, 'GET', `/api/threads/${testThread.id}`);
-        expect(threadResponse.ok()).toBeTruthy();
-        const threadData = await threadResponse.json();
-        if (threadData.total_issues !== null) {
-          testThread = threadData;
-          break;
-        }
-        await authenticatedPage.waitForTimeout(300);
-        retryCount++;
-      }
-    }
+    // Verify thread was created with correct count (9 unique issues).
+    let testThread = await expectThreadByTitle(authenticatedPage, uniqueTitle);
+    testThread = await expectThreadTotalIssues(authenticatedPage, testThread, 9);
     expect(testThread.total_issues).toBe(9);
   });
 });

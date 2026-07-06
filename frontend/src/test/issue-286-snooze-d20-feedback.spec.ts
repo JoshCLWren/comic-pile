@@ -24,7 +24,7 @@ test.describe('Issue #286: Snooze feedback at ladder ceiling', () => {
 
     // Refresh to see updated state
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Verify die is d100
     const headerDieLabel = page.locator('#header-die-label');
@@ -46,7 +46,7 @@ test.describe('Issue #286: Snooze feedback at ladder ceiling', () => {
     await snoozeButton.click();
 
     // Wait for snooze to complete and return to roll page
-    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#root')).toBeVisible();
 
     // Verify we're back on roll page
     await expect(page.locator('#main-die-3d')).toBeVisible();

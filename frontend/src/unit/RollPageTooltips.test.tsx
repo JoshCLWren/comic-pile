@@ -16,7 +16,7 @@ import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useCollections } from '../contexts/CollectionContext'
-import { ToastProvider } from '../contexts/ToastContext'
+import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
 const navigateSpy = vi.fn()
@@ -61,14 +61,6 @@ vi.mock('../hooks', async (importOriginal) => {
   }
 })
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: vi.fn() }))
-vi.mock('../contexts/ToastContext', () => ({
-  ToastProvider: ({ children }: { children: ReactNode }) => children,
-  useToast: () => ({
-    showToast: vi.fn(),
-    removeToast: vi.fn(),
-  }),
-}))
-
 const mockedUseSession = vi.mocked(useSession) as any
 const mockedUseThreads = vi.mocked(useThreads) as any
 const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
@@ -104,10 +96,15 @@ beforeEach(() => {
     data: [
       { id: 1, title: 'Saga', format: 'Comics', status: 'active' },
       { id: 2, title: 'X-Men', format: 'Comics', status: 'active' },
+      { id: 3, title: 'Descender', format: 'Comics', status: 'active' },
+      { id: 4, title: 'Black Science', format: 'Comics', status: 'active' },
+      { id: 5, title: 'East of West', format: 'Comics', status: 'active' },
+      { id: 6, title: 'Monstress', format: 'Comics', status: 'active' },
+      { id: 7, title: 'Paper Girls', format: 'Comics', status: 'active' },
     ],
     refetch: vi.fn()
   })
-  mockedUseStaleThreads.mockReturnValue({ data: [] })
+  mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
   mockedUseSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })

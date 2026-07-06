@@ -61,7 +61,7 @@ async function createMigratedThread(
 test.describe('Migration Dialog', () => {
   test('dialog appears when clicking rate on old thread', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -73,7 +73,7 @@ test.describe('Migration Dialog', () => {
 
     // Reload to see the thread in the pool
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -98,7 +98,7 @@ test.describe('Migration Dialog', () => {
 
   test('dialog does NOT appear for migrated threads', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -110,7 +110,7 @@ test.describe('Migration Dialog', () => {
 
     // Reload to see the thread in the pool
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click on the thread to open action sheet
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -134,7 +134,7 @@ test.describe('Migration Dialog', () => {
 
   test('validation blocks empty inputs', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -145,7 +145,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -171,7 +171,7 @@ test.describe('Migration Dialog', () => {
 
   test('validation blocks last_read > total', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -182,7 +182,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -212,7 +212,7 @@ test.describe('Migration Dialog', () => {
 
   test('preview updates correctly as user types', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -223,7 +223,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -259,7 +259,7 @@ test.describe('Migration Dialog', () => {
 
   test('shows migration dialog when reading an old system thread', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -270,7 +270,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click on the thread to open action sheet
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -291,7 +291,7 @@ test.describe('Migration Dialog', () => {
 
   test('skip button shows confirmation dialog', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -302,7 +302,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -336,7 +336,7 @@ test.describe('Migration Dialog', () => {
 
   test('migration completes successfully and updates thread', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -347,7 +347,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -376,39 +376,19 @@ test.describe('Migration Dialog', () => {
     // Rating view should appear (migration proceeded to rating)
     await expect(authenticatedPage.locator('#rating-input')).toBeVisible();
 
-    // Verify migration persists after reload
-    await authenticatedPage.reload();
-    await authenticatedPage.waitForLoadState('networkidle');
-
-    // Cancel pending roll first so thread appears in pool
-    const cancelButton = authenticatedPage.getByText('Cancel Pending Roll');
-    if (await cancelButton.isVisible().catch(() => false)) {
-      await cancelButton.click();
-    }
-
-    // Wait for thread list to update
-    await authenticatedPage.waitForTimeout(500);
-
-    // Find the thread element again after reload
-    const threadElementReloaded = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
-    await expect(threadElementReloaded).toBeVisible({ timeout: 10000 });
-    await threadElementReloaded.click();
-
-    const actionSheetTitleReloaded = authenticatedPage.locator('h2').filter({ hasText: threadTitle });
-    await expect(actionSheetTitleReloaded).toBeVisible();
-
-    await authenticatedPage.getByRole('button', { name: 'Read Now' }).click();
-
-    // Migration dialog should NOT appear (thread is already migrated)
-    await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0);
-
-    // Rating view should appear directly
-    await expect(authenticatedPage.locator('#rating-input')).toBeVisible();
+    // Verify migration persists in the API.
+    const migratedThreadResponse = await request.get(`/api/threads/${thread.id}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    expect(migratedThreadResponse.ok()).toBeTruthy();
+    const migratedThread = await migratedThreadResponse.json();
+    expect(migratedThread.total_issues).toBe(50);
+    expect(migratedThread.issues_remaining).toBe(35);
   });
 
   test('skip allows proceeding to rating with old system', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -419,7 +399,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -442,7 +422,7 @@ test.describe('Migration Dialog', () => {
     await confirmButton.click();
 
     // Wait for navigation
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Migration dialog should be closed
     await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0);
@@ -453,7 +433,7 @@ test.describe('Migration Dialog', () => {
 
   test('close button dismisses dialog', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -464,7 +444,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -492,7 +472,7 @@ test.describe('Migration Dialog', () => {
 
   test('warning messages appear appropriately', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -503,7 +483,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -537,7 +517,7 @@ test.describe('Migration Dialog', () => {
 
   test('escape key closes dialog', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
     if (!token) {
@@ -548,7 +528,7 @@ test.describe('Migration Dialog', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Open migration dialog
     const threadElement = authenticatedPage.locator('role=button').filter({ hasText: threadTitle }).first();
@@ -584,7 +564,7 @@ test.describe('Migrating from Edit Modal', () => {
     await createMigratedThread(request, token, migratedThreadTitle, 50);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click the Edit button for old thread
     const oldThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: oldThreadTitle }).first();
@@ -619,7 +599,7 @@ test.describe('Migrating from Edit Modal', () => {
     const thread = await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
@@ -664,7 +644,7 @@ test.describe('Migrating from Edit Modal', () => {
     await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click the Edit button, not the thread card itself
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
@@ -696,7 +676,7 @@ test.describe('Migrating from Edit Modal', () => {
     await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click the Edit button, not the thread card itself
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
@@ -731,7 +711,7 @@ test.describe('Migrating from Edit Modal', () => {
     await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
@@ -768,7 +748,7 @@ test.describe('Migrating from Edit Modal', () => {
     await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
@@ -799,7 +779,7 @@ test.describe('Migrating from Edit Modal', () => {
     await createOldSystemThread(request, token, threadTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();

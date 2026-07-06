@@ -4,7 +4,7 @@ import { useDiagnostics } from '../hooks/useDiagnostics'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 import { captureScreenshot } from '../utils/captureScreenshot'
 import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
-import { useBugReportRestore } from '../contexts/BugReportRestoreContext'
+import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
 interface BugReportButtonProps {
   onSubmit: (title: string, description: string, screenshotBlob: Blob | null, diagnosticData: DiagnosticData | null, screenshotDiagnostics?: ScreenshotDiagnostics) => Promise<void>

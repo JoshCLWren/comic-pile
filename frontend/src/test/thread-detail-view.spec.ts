@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { createThread } from './helpers';
+import { createThread, gotoQueue } from './helpers';
 
 test.describe('Thread Detail View', () => {
   test('should navigate to thread detail view when clicking a thread', async ({ authenticatedPage }) => {
@@ -9,9 +9,7 @@ test.describe('Thread Detail View', () => {
       issues_remaining: 10,
     });
 
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Detail View Test' });
     await threadCard.waitFor({ state: 'visible', timeout: 5000 });
@@ -30,16 +28,13 @@ test.describe('Thread Detail View', () => {
       issues_remaining: 10,
     });
 
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Progress Test' });
     await threadCard.waitFor({ state: 'visible', timeout: 5000 });
     await threadCard.click();
 
     await authenticatedPage.waitForURL('**/thread/**', { timeout: 5000 });
-    await authenticatedPage.waitForSelector('h1:has-text("Progress Test")', { state: 'visible', timeout: 5000 });
-
     await expect(authenticatedPage.locator('h1:has-text("Progress Test")')).toBeVisible();
     await expect(authenticatedPage.locator('text=Comics')).toBeVisible();
     await expect(authenticatedPage.locator('text=10 issues')).toBeVisible();
@@ -53,16 +48,13 @@ test.describe('Thread Detail View', () => {
       issue_range: '1-10',
     });
 
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Migrated Thread' });
     await threadCard.waitFor({ state: 'visible', timeout: 5000 });
     await threadCard.click();
 
     await authenticatedPage.waitForURL('**/thread/**', { timeout: 5000 });
-    await authenticatedPage.waitForSelector('h1:has-text("Migrated Thread")', { state: 'visible', timeout: 5000 });
-
     await expect(authenticatedPage.locator('h1:has-text("Migrated Thread")')).toBeVisible();
     await expect(authenticatedPage.locator('text=Reading Progress')).toBeVisible();
     await expect(authenticatedPage.locator('text=0%')).toBeVisible();
@@ -76,7 +68,7 @@ test.describe('Thread Detail View', () => {
     });
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Edit From Detail' });
     await threadCard.waitFor({ state: 'visible', timeout: 5000 });
@@ -90,7 +82,7 @@ test.describe('Thread Detail View', () => {
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Updated Title');
     await authenticatedPage.click('button:has-text("Save Changes")');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await expect(authenticatedPage.locator('h1:has-text("Updated Title")')).toBeVisible();
   });
@@ -103,7 +95,7 @@ test.describe('Thread Detail View', () => {
     });
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Back Button Test' });
     await threadCard.waitFor({ state: 'visible', timeout: 5000 });
@@ -126,7 +118,7 @@ test.describe('Thread Detail View', () => {
     });
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Notes Test' });
     await threadCard.waitFor({ state: 'visible', timeout: 5000 });
@@ -136,7 +128,7 @@ test.describe('Thread Detail View', () => {
 
     await authenticatedPage.fill('label:has-text("Notes") + textarea', 'These are test notes for the thread');
     await authenticatedPage.click('button:has-text("Save Changes")');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await threadCard.click();
     await authenticatedPage.waitForURL('**/thread/**', { timeout: 5000 });
@@ -153,7 +145,7 @@ test.describe('Thread Detail View', () => {
     });
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Issue List Test' });
     await threadCard.waitFor({ state: 'visible', timeout: 5000 });

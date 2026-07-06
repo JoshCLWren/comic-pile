@@ -4,7 +4,7 @@ import { getCollectionsEnabled } from './helpers'
 test.describe('Collection Toolbar', () => {
   test('should display collection toolbar on Roll page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
     if (collectionsEnabled) {
@@ -25,7 +25,7 @@ test.describe('Collection Toolbar', () => {
 
   test('should display collection toolbar on Queue page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
     if (collectionsEnabled) {
@@ -65,7 +65,7 @@ test.describe('Collection Toolbar', () => {
     const collectionId = collection.id
 
     await authenticatedPage.goto('/')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
     if (!collectionsEnabled) {
@@ -102,7 +102,7 @@ test.describe('Collection Toolbar', () => {
     const collectionId = collection.id
 
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
     if (!collectionsEnabled) {
@@ -120,7 +120,7 @@ test.describe('Collection Toolbar', () => {
 
   test('should open collection dialog from toolbar on Roll page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
     if (collectionsEnabled) {
@@ -137,7 +137,7 @@ test.describe('Collection Toolbar', () => {
 
   test('should open collection dialog from toolbar on Queue page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/queue')
-    await authenticatedPage.waitForLoadState('networkidle')
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage)
 
     if (collectionsEnabled) {

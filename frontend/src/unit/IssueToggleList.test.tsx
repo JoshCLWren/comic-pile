@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
+import { dependenciesApi } from '../services/api'
 import { issuesApi } from '../services/api-issues'
 import type { Issue, IssueListResponse } from '../types'
 
@@ -18,7 +19,14 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
+vi.mock('../services/api', () => ({
+  dependenciesApi: {
+    getIssueDependencies: vi.fn(),
+  },
+}))
+
 const mockedIssuesApi = vi.mocked(issuesApi, { deep: true })
+const mockedDependenciesApi = vi.mocked(dependenciesApi, { deep: true })
 
 const BASE_ISSUES: Issue[] = [
   {
@@ -106,6 +114,11 @@ beforeEach(() => {
   mockedIssuesApi.markUnread.mockResolvedValue()
   mockedIssuesApi.reorder.mockResolvedValue()
   mockedIssuesApi.delete.mockResolvedValue()
+  mockedDependenciesApi.getIssueDependencies.mockImplementation(async (issueId: number) => ({
+    issue_id: issueId,
+    incoming: [],
+    outgoing: [],
+  }))
 })
 
 describe('IssueToggleList', () => {

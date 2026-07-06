@@ -1,6 +1,12 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
-import { createThread, extractThreadsFromResponse, findByTitle } from './helpers';
+import {
+  createThread,
+  extractThreadsFromResponse,
+  findByTitle,
+  gotoQueue,
+  waitForEditThreadModal,
+} from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
   const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN);
@@ -67,9 +73,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     expect(thread).toBeDefined();
 
     // Step 2: Navigate to queue page
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     // Step 3: Open the edit modal for the thread
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
@@ -77,7 +81,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open - wait for the modal heading
-    await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
+    await waitForEditThreadModal(authenticatedPage);
     
     // Verify modal is open using the fixed overlay class
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
@@ -106,7 +110,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // Submit the form - use the button within the modal
     const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
     await waitForIssueMutation(authenticatedPage, () => addIssuesButton.click());
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // CRITICAL CHECK: Verify modal is still open
     const modalStillVisible = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
@@ -148,7 +152,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     expect(thread).toBeDefined();
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.locator('button[aria-label="Edit thread"]').click();
@@ -160,7 +164,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     await addIssuesInput.fill('Annual 1');
 
     await waitForIssueMutation(authenticatedPage, () => addIssuesInput.press('Enter'));
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await expect(editModal).toBeVisible();
     await expect(editModal.locator('h2')).toContainText('Edit Thread');
@@ -188,7 +192,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     });
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.locator('button[aria-label="Edit thread"]').click();
@@ -223,7 +227,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     const thread = findByTitle(threads, uniqueTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Monitor for 401 errors
     const failedRequests: { url: string; status: number; method: string }[] = [];
@@ -251,7 +255,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
     await waitForIssueMutation(authenticatedPage, () => addIssuesButton.click());
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Verify modal is still open
     await expect(editModal).toBeVisible();
@@ -287,7 +291,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     const thread = findByTitle(threads, uniqueTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Get initial page URL
     const initialUrl = authenticatedPage.url();
@@ -318,7 +322,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
       authenticatedPage,
       () => editModal.locator('[data-testid="issue-add-button"]').click()
     );
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Check if URL changed (indicating full page navigation)
     const currentUrl = authenticatedPage.url();
@@ -348,7 +352,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     });
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Track all requests
     const allRequests: { url: string; method: string; status?: number }[] = [];
@@ -380,7 +384,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
         response.url().includes('/issues') &&
         response.status() === 200
     );
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Analyze requests
     const requestSummary = {
@@ -425,7 +429,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Step 2: Navigate to queue page
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
 
     // Step 3: Open the edit modal for the thread
@@ -459,7 +463,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     const addIssuesButton = editModal.locator('[data-testid="issue-add-button"]');
     await waitForIssueMutation(authenticatedPage, () => addIssuesButton.click());
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // CRITICAL CHECK: Verify modal stays open after adding issues
     // This was the bug - the modal would close unexpectedly
@@ -477,7 +481,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // 1. POST request to add the issue
     // 2. GET request to refresh issues list
     // 3. React state update and re-render
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     // Wait for issues list to finish loading (not in loading state)
     await expect(editModal.locator('text=Loading issues…')).not.toBeVisible({ timeout: 10000 });

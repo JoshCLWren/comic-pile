@@ -303,6 +303,7 @@ async def test_snapshot_created_on_rating(
     )
     snapshots = result.scalars().all()
     assert len(snapshots) == 1
+    assert snapshots[0].description is not None
     assert "After rating" in snapshots[0].description
     assert str(thread.id) in snapshots[0].thread_states
 

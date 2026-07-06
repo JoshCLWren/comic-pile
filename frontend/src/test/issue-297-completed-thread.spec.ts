@@ -45,7 +45,7 @@ test.describe('Issue 297: Completed Thread Active Slot', () => {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    await page.waitForTimeout(500);
+    await expect(page.locator('#root')).toBeVisible();
 
     const pendingResponse = await page.request.get('/api/sessions/current/', {
       headers: { Authorization: `Bearer ${token}` },
@@ -91,7 +91,7 @@ test.describe('Issue 297: Completed Thread Active Slot', () => {
     console.log('Thread status:', threadAfterRate.status);
     console.log('Thread reading_progress:', threadAfterRate.reading_progress);
 
-    await page.waitForTimeout(500);
+    await expect(page.locator('#root')).toBeVisible();
 
     const afterRateResponse = await page.request.get('/api/sessions/current/', {
       headers: { Authorization: `Bearer ${token}` },

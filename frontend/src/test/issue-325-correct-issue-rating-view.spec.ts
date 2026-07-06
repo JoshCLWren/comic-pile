@@ -4,7 +4,7 @@ import { SELECTORS, createThread } from './helpers';
 test.describe('Issue #325: Correct Issue Number from Rating View', () => {
   test.beforeEach(async ({ authenticatedWithThreadsPage }) => {
     await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
   });
 
   test('should display edit icon next to issue number in rating view', async ({ authenticatedWithThreadsPage }) => {
@@ -260,8 +260,8 @@ test.describe('Issue #325: Correct Issue Number from Rating View', () => {
     const updateButton = authenticatedWithThreadsPage.getByRole('button', { name: 'Update' });
     await updateButton.click();
 
-    await authenticatedWithThreadsPage.waitForLoadState('networkidle');
-    await authenticatedWithThreadsPage.waitForTimeout(1000);
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
+    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
     const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
     const response = await authenticatedWithThreadsPage.request.get(`/api/threads/${thread.id}`, {

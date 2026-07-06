@@ -54,7 +54,7 @@ test.describe('Collections', () => {
     const collectionId = await createCollection(request, token, collectionName);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     if (!collectionsEnabled) {
@@ -79,7 +79,7 @@ test.describe('Collections', () => {
     await createThreadInCollection(request, token, collectionId, threadTitle);
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: threadTitle });
@@ -107,7 +107,7 @@ test.describe('Collections', () => {
     });
 
     await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     const threadCard = authenticatedPage.locator('[data-testid="queue-thread-item"]').filter({ hasText: threadTitle });
@@ -136,7 +136,7 @@ test.describe('Collections', () => {
     await createThreadInCollection(request, token, collectionBId, threadBName);
 
     await authenticatedPage.goto('/');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedPage);
 
     if (!collectionsEnabled) {
@@ -147,7 +147,7 @@ test.describe('Collections', () => {
     const selector = authenticatedPage.getByLabel('Filter by collection');
 
     await selector.selectOption(String(collectionAId));
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadA = authenticatedPage.locator(`text="${threadAName}"`);
     const threadB = authenticatedPage.locator(`text="${threadBName}"`);
@@ -155,12 +155,12 @@ test.describe('Collections', () => {
     await expect(threadA).toBeVisible({ timeout: 10000 });
 
     await selector.selectOption(String(collectionBId));
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await expect(threadB).toBeVisible({ timeout: 10000 });
 
     await selector.selectOption('all');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     await expect(authenticatedPage.locator(`text="${threadAName}"`)).toBeVisible({ timeout: 10000 });
     await expect(authenticatedPage.locator(`text="${threadBName}"`)).toBeVisible({ timeout: 10000 });

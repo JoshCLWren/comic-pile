@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { createThread } from './helpers';
+import { createThread, gotoQueue, waitForEditThreadModal } from './helpers';
 
 test.describe('Issue #326: Collapsible Issue List', () => {
   test('should show only issues around next unread by default when thread has many issues', async ({ authenticatedPage }) => {
@@ -15,9 +15,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     });
 
     // Navigate to queue page
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
@@ -25,7 +23,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
-    await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
+    await waitForEditThreadModal(authenticatedPage);
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
     await expect(editModal).toBeVisible();
 
@@ -55,16 +53,14 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     });
 
     // Navigate to queue page
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
-    await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
+    await waitForEditThreadModal(authenticatedPage);
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
 
     // Wait for issues to load (not loading state)
@@ -94,16 +90,14 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     });
 
     // Navigate to queue page
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
-    await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
+    await waitForEditThreadModal(authenticatedPage);
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
 
     // Wait for issues to load (not loading state)
@@ -139,16 +133,14 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     });
 
     // Navigate to queue page
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
-    await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
+    await waitForEditThreadModal(authenticatedPage);
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
 
     // Wait for issues to load (not loading state)
@@ -175,16 +167,13 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     });
 
     // Navigate to queue page
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
-    // Wait for edit modal to open
-    await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
+    await waitForEditThreadModal(authenticatedPage);
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
 
     // Find a visible unread issue and toggle it

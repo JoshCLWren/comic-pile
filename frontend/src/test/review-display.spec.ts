@@ -20,7 +20,7 @@ test.describe('Review Feature Flag E2E Tests', () => {
     expect(threads.length).toBeGreaterThan(0)
 
     await page.goto(`/thread/${threads[0].id}`)
-    await page.waitForLoadState('networkidle')
+    await expect(page.locator('#root')).toBeVisible();
 
     await expect(page.getByText(/Reviews/)).toHaveCount(0)
     await expect(page.getByText('No reviews yet.')).toHaveCount(0)

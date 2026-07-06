@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Modal from '../components/Modal'
 import type { Review, ReviewCreatePayload } from '../types'
 
@@ -27,11 +27,20 @@ export default function ReviewForm({
 }: ReviewFormProps) {
   const [reviewText, setReviewText] = useState(existingReview?.review_text || '')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (isOpen) {
       setReviewText(existingReview?.review_text || '')
-      setIsSubmitting(false)
+      if (isMountedRef.current) {
+        setIsSubmitting(false)
+      }
     }
   }, [isOpen, existingReview])
 
@@ -51,7 +60,9 @@ export default function ReviewForm({
     } catch (error) {
       console.error('Failed to submit review:', error)
     } finally {
-      setIsSubmitting(false)
+      if (isMountedRef.current) {
+        setIsSubmitting(false)
+      }
     }
   }
 

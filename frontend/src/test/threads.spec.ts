@@ -1,11 +1,16 @@
 import { test, expect } from './fixtures';
-import { createThread, SELECTORS } from './helpers';
+import {
+  createThread,
+  gotoQueue,
+  SELECTORS,
+  waitForEditThreadModal,
+  waitForThreadInQueue,
+} from './helpers';
 
 test.describe('Thread Management', () => {
   test('should create a new thread successfully', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
+    await gotoQueue(authenticatedPage);
+    await expect(authenticatedPage.getByRole('button', { name: 'Add Thread' })).toBeVisible();
 
     await authenticatedPage.click('button:has-text("Add Thread")');
     await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
@@ -22,16 +27,11 @@ test.describe('Thread Management', () => {
       authenticatedPage.click('button[type="submit"]'),
     ]);
     
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForTimeout(1000);
-
-    await authenticatedPage.waitForSelector('#queue-container h3', { state: 'visible', timeout: 15000 });
-    await expect(authenticatedPage.locator('#queue-container h3').filter({ hasText: 'Saga' })).toBeVisible();
+    await waitForThreadInQueue(authenticatedPage, 'Saga');
   });
 
   test('should create multiple threads', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
 
     const threads = [
       { title: 'Superman', format: 'Comics' },
@@ -46,10 +46,15 @@ test.describe('Thread Management', () => {
       await authenticatedPage.fill('label:has-text("Title") + input', thread.title);
       await authenticatedPage.selectOption('label:has-text("Format") + select', thread.format);
       await authenticatedPage.fill(SELECTORS.threadCreate.issuesInput, '1-10');
-      await authenticatedPage.click('button[type="submit"]');
-      
-      await authenticatedPage.waitForLoadState("networkidle");
-      await authenticatedPage.waitForTimeout(500);
+      await Promise.all([
+        authenticatedPage.waitForResponse((response) =>
+          response.url().includes('/api/threads/') &&
+          response.request().method() === 'POST' &&
+          response.status() < 300
+        ),
+        authenticatedPage.click('button[type="submit"]'),
+      ]);
+      await waitForThreadInQueue(authenticatedPage, thread.title);
       
       const closeButton = authenticatedPage.locator('button[aria-label="Close"], button:has-text("×"), button:has-text("Cancel")').first();
       if (await closeButton.count() > 0) {
@@ -67,7 +72,7 @@ test.describe('Thread Management', () => {
     await authenticatedPage.click('button:has-text("Add Thread")');
 
     await authenticatedPage.click('button[type="submit"]');
-    await authenticatedPage.waitForLoadState("networkidle");
+    await expect(authenticatedPage.locator('select:invalid, input:invalid').first()).toBeAttached();
 
     const hasInvalidInput = await authenticatedPage.locator('select:invalid, input:invalid').count() > 0;
     expect(hasInvalidInput).toBe(true);
@@ -84,10 +89,9 @@ test.describe('Thread Management', () => {
       });
     }
 
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForSelector('#queue-container', { timeout: 5000 });
+    await gotoQueue(authenticatedPage);
     await authenticatedPage.reload();
-    await authenticatedPage.waitForSelector('#queue-container', { timeout: 5000 });
+    await waitForThreadInQueue(authenticatedPage, threadTitles[0]);
 
     const threadElements = authenticatedPage.locator('#queue-container h3');
     const count = await threadElements.count();
@@ -107,19 +111,23 @@ test.describe('Thread Management', () => {
       issues_remaining: 10,
     });
 
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').first();
     await threadItem.locator('button[aria-label="Edit thread"]').click();
+    await waitForEditThreadModal(authenticatedPage);
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Updated Title');
-    await authenticatedPage.click('button:has-text("Save Changes")');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await Promise.all([
+      authenticatedPage.waitForResponse((response) =>
+        response.url().includes('/api/threads/') &&
+        response.request().method() === 'PUT' &&
+        response.status() < 300
+      ),
+      authenticatedPage.click('button:has-text("Save Changes")'),
+    ]);
 
-    await authenticatedPage.waitForSelector('#queue-container h3', { state: 'visible', timeout: 5000 });
-    await expect(authenticatedPage.locator('#queue-container h3').filter({ hasText: 'Updated Title' })).toBeVisible();
+    await waitForThreadInQueue(authenticatedPage, 'Updated Title');
   });
 
   test('should delete thread', async ({ authenticatedPage }) => {
@@ -129,19 +137,21 @@ test.describe('Thread Management', () => {
       issues_remaining: 5,
     });
 
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await gotoQueue(authenticatedPage);
 
     authenticatedPage.on('dialog', dialog => dialog.accept());
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'To Be Deleted' });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
-    await threadItem.locator('button[aria-label="Delete thread"]').click();
-
-    await authenticatedPage.waitForLoadState('networkidle');
-    await authenticatedPage.reload();
-    await authenticatedPage.waitForLoadState('networkidle');
+    await Promise.all([
+      authenticatedPage.waitForResponse((response) =>
+        response.url().includes('/api/threads/') &&
+        response.request().method() === 'DELETE'
+      ),
+      threadItem.locator('button[aria-label="Delete thread"]').click(),
+    ]);
+    await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
+    await expect(authenticatedPage.getByRole('heading', { name: 'Read Queue' })).toBeVisible();
 
     const deletedText = authenticatedPage.locator('text=To Be Deleted');
     await expect(async () => {
@@ -151,8 +161,7 @@ test.describe('Thread Management', () => {
   });
 
   test('should validate issues_remaining is non-negative', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/queue');
-    await authenticatedPage.waitForLoadState('networkidle');
+    await gotoQueue(authenticatedPage);
     await authenticatedPage.click('button:has-text("Add Thread")');
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Test Comic');

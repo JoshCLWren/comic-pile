@@ -274,30 +274,11 @@ export const test = base.extend<TestFixtures>({
      // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
      await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-     // Wait for auth state to stabilize:
-     // 1. Wait for "Checking authentication..." to disappear
-     await page.waitForSelector('text=Checking authentication...', { state: 'detached', timeout: 10000 }).catch(() => {
-       // Element may not exist if auth is fast, that's OK
-     });
+     if (await getCollectionsEnabled(page)) {
+       await page.locator('[aria-label="Filter by collection"]').waitFor({ state: 'visible' });
+     }
 
-     // 2. Wait for "Loading..." states to disappear
-     await page.waitForSelector('text=Loading...', { state: 'detached', timeout: 10000 }).catch(() => {
-       // Element may not exist, that's OK
-     });
-
-      if (await getCollectionsEnabled(page)) {
-        // 3. Wait for collections to finish loading (Loading collections... text should disappear)
-        // The CollectionToolbar component shows "Loading collections..." while fetching
-        await page.waitForSelector('text=Loading collections...', { state: 'detached', timeout: 45000 });
-        // 4. Wait for the collection toolbar dropdown to be visible (with extended timeout for CI)
-        await page.waitForSelector('[aria-label="Filter by collection"]', { state: 'visible', timeout: 60000 });
-      }
-
-  // 6. Wait for the roll page to be ready (die button is always present on home route)
-     await page.waitForSelector('[aria-label="Roll the dice"]', { state: 'visible', timeout: 10000 }).catch(() => {
-       // May not exist if no session or in empty state — check for roll pool instead
-       return page.waitForSelector('[data-roll-pool]', { state: 'attached', timeout: 5000 }).catch(() => {});
-     });
+     await page.locator('#root').waitFor({ state: 'visible' });
 
      await use(page);
 
