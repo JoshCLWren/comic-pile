@@ -432,3 +432,14 @@ export function extractThreadsFromResponse(response: unknown): Thread[] {
   }
   return [];
 }
+
+export async function navigateToRatePage(page: Page): Promise<void> {
+  await page.goto('/queue');
+  await expect(page.locator('#queue-container')).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 667 });
+  const firstThreadCard = page.locator('#queue-container .glass-card').first();
+  await expect(firstThreadCard).toBeVisible();
+  await firstThreadCard.locator('button[aria-label="Open actions"]').click();
+  await page.getByText('Read Now', { exact: true }).first().click();
+  await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+}

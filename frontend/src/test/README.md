@@ -22,7 +22,7 @@ Fast, in-process tests — no server required.
 
 **Run:**
 ```bash
-cd frontend && npm test
+cd frontend && pnpm test
 ```
 
 **What belongs here:**
@@ -67,30 +67,30 @@ frontend/src/
 
 ### Running E2E Tests
 
-`npm run test:e2e` builds the frontend automatically before running. If you
+`pnpm run test:e2e` builds the frontend automatically before running. If you
 invoke Playwright directly (e.g. `npx playwright test`), build first:
 
 ```bash
-cd frontend && npm run build
+cd frontend && pnpm run build
 ```
 
 ```bash
 # Run all E2E tests (builds frontend first)
-cd frontend && npm run test:e2e
+cd frontend && pnpm run test:e2e
 
 # Run tests in UI mode (interactive)
-npm run test:e2e:ui
+pnpm run test:e2e:ui
 
 # Run tests in headed mode (visible browser)
-npm run test:e2e:headed
+pnpm run test:e2e:headed
 
 # Debug tests
-npm run test:e2e:debug
+pnpm run test:e2e:debug
 
-# Run specific test file (requires prior npm run build)
+# Run specific test file (requires prior pnpm run build)
 npx playwright test auth.spec.ts
 
-# Run tests matching a pattern (requires prior npm run build)
+# Run tests matching a pattern (requires prior pnpm run build)
 npx playwright test -g "should login"
 ```
 
@@ -220,7 +220,7 @@ await expect(page.locator(SELECTORS.roll.dieSelector)).toBeVisible();
 ### Playwright Inspector
 
 ```bash
-npm run test:e2e:debug
+pnpm run test:e2e:debug
 ```
 
 ### Screenshots

@@ -906,7 +906,16 @@ export default function Dice3D({
     camera.position.set(0, 0, 4);
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch (e) {
+      console.error('WebGL initialization failed:', e);
+      sceneRef.current = null;
+      cameraRef.current = null;
+      return;
+    }
+
     renderer.setSize(w, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor(0x000000, 0);
@@ -981,6 +990,8 @@ export default function Dice3D({
   }, [sides, color, renderConfig]);
 
   useEffect(() => {
+    if (!rendererRef.current) return;
+
     let animationFrameId: number | null = null
 
     const animate = () => {

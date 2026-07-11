@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures'
 
-// Firefox-only test verifying the skipFonts fix for:
-//   TypeError: can't access property "trim", a is undefined
+// Portable test (runs on both Chromium and Firefox) verifying the skipFonts
+// fix for: TypeError: can't access property "trim", a is undefined
 // html-to-image crashes on Firefox when processing font-face CSS rules
 // unless skipFonts: true is passed to toBlob.
 //
@@ -11,8 +11,8 @@ import { test, expect } from './fixtures'
 //   2. Clicking it opens the modal (fallback path when capture fails)
 //   3. No font-processing "trim" crash appears in the console
 
-test.describe('Bug Report Button - Firefox', () => {
-  test('opens modal and no trim crash on Firefox', async ({ authenticatedPage }) => {
+test.describe('Bug Report Button', () => {
+  test('opens modal without font-processing trim crash', async ({ authenticatedPage }) => {
     const consoleErrors: string[] = []
     authenticatedPage.on('console', msg => {
       if (msg.type() === 'error') consoleErrors.push(msg.text())

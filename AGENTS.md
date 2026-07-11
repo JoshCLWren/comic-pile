@@ -34,7 +34,7 @@ If a test is failing:
 Comic Pile is a dice-driven comic reading tracker built with:
 - **Backend**: Python 3.13, FastAPI, SQLAlchemy, PostgreSQL
 - **Frontend**: React 19, Vite, Tailwind CSS
-- **Package managers**: `uv` (Python), `npm` (frontend)
+- **Package managers**: `uv` (Python), `pnpm` (frontend)
 
 ## CRITICAL: Async PostgreSQL Only in Application Code
 
@@ -62,7 +62,7 @@ Comic Pile is a dice-driven comic reading tracker built with:
 make lint                    # All linters (Python + JS + HTML)
 ruff check .                 # Python only
 ty check --error-on-warning  # Python type checking
-cd frontend && npm run lint  # Frontend ESLint
+cd frontend && pnpm run lint  # Frontend ESLint
 ```
 
 ### Testing
@@ -72,16 +72,16 @@ make test                                       # With coverage
 pytest tests/test_roll_api.py -v                # Single file
 pytest tests/test_roll_api.py::test_roll_success -v  # Single function
 pytest -k "roll" -v                             # Pattern matching
-cd frontend && npm test                         # Frontend unit tests (vitest)
-cd frontend && npm run typecheck                # Frontend TypeScript check
+cd frontend && pnpm test                         # Frontend unit tests (vitest)
+cd frontend && pnpm run typecheck                # Frontend TypeScript check
 ```
 
 ### E2E Tests (Playwright)
 **⚠️ MUST build frontend first:**
 ```bash
-cd frontend && npm run test:e2e        # Builds + runs tests
-cd frontend && npm run test:e2e:quick  # Skip build (faster iteration)
-cd frontend && npm run build && npx playwright test --headed  # Run with browser visible
+cd frontend && pnpm run test:e2e        # Builds + runs tests
+cd frontend && pnpm run test:e2e:quick  # Skip build (faster iteration)
+cd frontend && pnpm run build && npx playwright test --headed  # Run with browser visible
 ```
 
 **Why build required?** Playwright tests run against production build in `static/react/`, not dev server. Without build, tests fail with 404s for CSS/JS assets.
@@ -203,7 +203,7 @@ if not thread or thread.user_id != current_user.id:
 ```bash
 # Option 1: With Docker (recommended)
 docker compose -f docker-compose.test.yml up -d postgres-test
-cd frontend && npm run build && npx playwright test --project=chromium
+cd frontend && pnpm run build && npx playwright test --project=chromium
 docker compose -f docker-compose.test.yml down
 
 # Option 2: Manual setup
@@ -211,7 +211,7 @@ export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5437/comic_
 export SECRET_KEY=test-secret-key
 .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 # In another terminal:
-cd frontend && npm run build
+cd frontend && pnpm run build
 REUSE_EXISTING_SERVER=true npx playwright test --project=chromium
 ```
 

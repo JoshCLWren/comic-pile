@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS, formatA11yViolations } from './helpers';
+import { generateTestUser, registerUser, loginUser, createThread, formatA11yViolations, navigateToRatePage } from './helpers';
 import { AxeBuilder } from '@axe-core/playwright';
 
 test.describe('Accessibility Tests', () => {
@@ -64,11 +64,7 @@ test.describe('Accessibility Tests', () => {
       issues_remaining: 5,
     });
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
-    await page.click(SELECTORS.roll.mainDie);
-
-    await page.waitForSelector(SELECTORS.rate.ratingInput, { state: 'visible' });
+    await navigateToRatePage(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -283,16 +279,12 @@ test.describe('Accessibility Tests', () => {
       issues_remaining: 5,
     });
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
+    await navigateToRatePage(page);
 
     const liveRegions = await page.locator('[aria-live], [role="status"], [role="alert"]').all();
     const hasLiveRegions = liveRegions.length > 0;
 
     if (hasLiveRegions) {
-      await page.click(SELECTORS.roll.mainDie);
-      await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
-
       for (const region of liveRegions) {
         const isVisible = await region.isVisible();
         if (isVisible) {

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, loginUser, SELECTORS } from './helpers';
+import { generateTestUser, loginUser, registerUser, SELECTORS } from './helpers';
 
 test.describe('Authentication Flow', () => {
   test('should register a new user successfully', async ({ page }) => {
@@ -86,24 +86,43 @@ test.describe('Authentication Flow', () => {
 
   test('should persist auth token across page reloads', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
-    await expect(authenticatedPage.locator(SELECTORS.roll.dieSelector)).toBeVisible();
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
+
+    const tokenBeforeReload = await authenticatedPage.evaluate(() => {
+      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
+      return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null
+    });
+    expect(tokenBeforeReload).toBeTruthy();
 
     await authenticatedPage.reload();
-    await expect(authenticatedPage.locator(SELECTORS.roll.dieSelector)).toBeVisible();
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
+
+    const tokenAfterReload = await authenticatedPage.evaluate(() => {
+      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
+      return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null
+    });
+    expect(tokenAfterReload).toBe(tokenBeforeReload);
+
+    const meResponse = await authenticatedPage.request.get('/api/auth/me', {
+      headers: { Authorization: `Bearer ${tokenAfterReload}` },
+    });
+    expect(meResponse.ok()).toBeTruthy();
   });
 
-  test('should logout and redirect to login', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/');
+  test('should clear auth token and redirect to login on logout', async ({ page }) => {
+    const user = generateTestUser();
+    await registerUser(page, user);
 
-    const hasTokenBefore = await authenticatedPage.evaluate(() => {
-      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
-      return Boolean(localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN)
-    });
-    expect(hasTokenBefore).toBe(true);
+    const logoutButton = page.getByRole('button', { name: 'Log out' });
+    await expect(logoutButton).toBeVisible({ timeout: 10000 });
 
-    await authenticatedPage.click('button:has-text("Log Out")');
+    await logoutButton.click();
 
-    await authenticatedPage.waitForURL('/login', { timeout: 5000 });
-    await expect(authenticatedPage).toHaveURL('/login');
+    await page.waitForURL('**/login', { timeout: 5000 });
+    await expect(page).toHaveURL('/login');
+
+    await page.goto('/');
+    await page.waitForURL('**/login', { timeout: 5000 });
+    await expect(page).toHaveURL('/login');
   });
 });

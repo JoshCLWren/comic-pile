@@ -3,16 +3,12 @@
 import io
 
 import pytest
-from typing import Any
 
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Thread, User
-
-_pytest_skip: Any = pytest.skip
-
 
 @pytest.mark.asyncio
 async def test_import_valid_csv(
@@ -280,9 +276,7 @@ async def test_export_json(
 
     # Clean test data
     response = await auth_client.post("/api/admin/delete-test-data/")
-    # Allow 404 if endpoint doesn't exist (it was removed in recent API compliance changes)
-    if response.status_code != 404:
-        assert response.status_code == 200
+    assert response.status_code == 200
 
     # Create test data: 1 user, 5 threads, 2 sessions, 2 events
     csv_content = """title,format,issues_remaining
@@ -295,23 +289,15 @@ Thread 5,Comic,2"""
     files = {"file": ("test.csv", csv_file, "text/csv")}
 
     import_response = await auth_client.post("/api/admin/import/csv/", files=files)
-    # The import endpoint might not exist if API compliance changes removed it
-    if import_response.status_code != 404:
-        assert import_response.status_code == 200
-        import_data = import_response.json()
-        assert import_data["imported"] == 5
-    else:
-        # Skip rest of test if endpoints don't exist
-        _pytest_skip("Admin import/export endpoints not available due to API compliance changes")
+    assert import_response.status_code == 200
+    import_data = import_response.json()
+    assert import_data["imported"] == 5
 
     # Create 2 sessions
     await auth_client.post("/api/roll/")
     await auth_client.post("/api/roll/")
 
-    # Export JSON - skip if endpoint doesn't exist
     response = await auth_client.get("/api/admin/export/json/")
-    if response.status_code == 404:
-        _pytest_skip("Admin export endpoint not available due to API compliance changes")
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
 
@@ -343,10 +329,9 @@ async def test_import_then_export_roundtrip(
     """Test import then export returns equivalent data."""
     _ = enable_internal_ops
 
-    # Clean test database - allow 404 if endpoint doesn't exist
+    # Clean test database
     response = await auth_client.post("/api/admin/delete-test-data/")
-    if response.status_code != 404:
-        assert response.status_code == 200
+    assert response.status_code == 200
 
     # Import test data (header + 3 lines)
     csv_content = """title,format,issues_remaining

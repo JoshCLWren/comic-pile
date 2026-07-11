@@ -34,14 +34,14 @@ if [ -z "${VIRTUAL_ENV:-}" ]; then
     fi
 fi
 
-if ! command -v npm >/dev/null 2>&1; then
-    echo "ERROR: npm is required for frontend lint/tests."
+if ! command -v pnpm >/dev/null 2>&1; then
+    echo "ERROR: pnpm is required for frontend lint/tests."
     exit 1
 fi
 
 if [ ! -d "frontend/node_modules" ]; then
     echo "Installing frontend dependencies (frontend/node_modules missing)..."
-    (cd frontend && npm ci)
+    pnpm install --frozen-lockfile
 fi
 
 echo ""
@@ -64,7 +64,7 @@ echo ""
 echo "5/5 Running frontend Playwright E2E (build + test)..."
 (
     cd frontend
-    npm run test:e2e
+    pnpm run test:e2e
 )
 
 echo ""

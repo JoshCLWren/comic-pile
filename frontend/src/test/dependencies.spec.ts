@@ -210,11 +210,8 @@ test.describe('Dependencies', () => {
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible' })
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible' })
 
-      const sourceOptions = await authenticatedPage.locator('#source-issue option').count()
-      const targetOptions = await authenticatedPage.locator('#target-issue option').count()
-
-      expect(sourceOptions).toBeGreaterThan(1)
-      expect(targetOptions).toBeGreaterThan(1)
+      await expect.poll(async () => authenticatedPage.locator('#source-issue option').count()).toBeGreaterThan(1)
+      await expect.poll(async () => authenticatedPage.locator('#target-issue option').count()).toBeGreaterThan(1)
 
       const firstSourceOption = await authenticatedPage.locator('#source-issue option').nth(1).textContent()
       expect(firstSourceOption).toMatch(/^#\d+$/)
@@ -251,15 +248,14 @@ test.describe('Dependencies', () => {
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
 
-      const sourceValue = await authenticatedPage.locator('#source-issue').inputValue()
-      expect(sourceValue).not.toBe('')
+      await expect.poll(async () => authenticatedPage.locator('#source-issue').inputValue()).not.toBe('')
 
+      await expect.poll(async () => authenticatedPage.locator('#source-issue option').allTextContents()).toContain('#3')
       const sourceOptions = await authenticatedPage.locator('#source-issue option').allTextContents()
       expect(sourceOptions).not.toContain('#1')
       expect(sourceOptions).not.toContain('#2')
 
-      const selectedOptionText = await authenticatedPage.locator('#source-issue option:checked').textContent()
-      expect(selectedOptionText).toBe('#3')
+      await expect.poll(async () => authenticatedPage.locator('#source-issue option:checked').textContent()).toBe('#3')
     })
 
     test('creating dependency with selected issues (not just next_unread)', async ({ authenticatedPage }) => {
@@ -370,8 +366,7 @@ test.describe('Dependencies', () => {
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 5000 })
 
       // Verify that issues were loaded
-      const sourceOptions = await authenticatedPage.locator('#source-issue option').count()
-      expect(sourceOptions).toBeGreaterThan(1)
+      await expect.poll(async () => authenticatedPage.locator('#source-issue option').count()).toBeGreaterThan(1)
     })
 
     test('button shows issue numbers when issues selected', async ({ authenticatedPage }) => {
@@ -401,6 +396,9 @@ test.describe('Dependencies', () => {
 
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 5000 })
+
+      await expect.poll(async () => authenticatedPage.locator('#source-issue').inputValue()).not.toBe('')
+      await expect.poll(async () => authenticatedPage.locator('#target-issue').inputValue()).not.toBe('')
 
       const button = authenticatedPage.locator('button.glass-button').filter({ hasText: 'Block issue' })
       const buttonText = await button.textContent()
@@ -436,8 +434,8 @@ test.describe('Dependencies', () => {
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
       await authenticatedPage.waitForSelector('#target-issue', { state: 'visible', timeout: 5000 })
 
-      const sourceOptions = await authenticatedPage.locator('#source-issue option').count()
-      expect(sourceOptions).toBeGreaterThanOrEqual(1)
+      await expect(authenticatedPage.locator('#source-issue')).toBeDisabled()
+      await expect(authenticatedPage.locator('#source-issue')).toContainText('No unread issues available')
     })
 
     test('edge case: all issues read', async ({ authenticatedPage }) => {
@@ -473,8 +471,7 @@ test.describe('Dependencies', () => {
       await authenticatedPage.waitForSelector('#source-issue', { state: 'visible', timeout: 5000 })
 
       // With 4 read issues and 1 unread, should auto-select issue #5 (the unread one)
-      const sourceValue = await authenticatedPage.locator('#source-issue').inputValue()
-      expect(sourceValue).not.toBe('')
+      await expect.poll(async () => authenticatedPage.locator('#source-issue option:checked').textContent()).toBe('#5')
     })
   })
 })

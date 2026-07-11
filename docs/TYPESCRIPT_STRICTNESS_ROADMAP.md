@@ -18,7 +18,7 @@ Turning strict mode on immediately would block CI and merge velocity for unrelat
 
 ## Enforcement Plan
 
-1. Keep CI gate on `npm -C frontend run typecheck` for app code.
+1. Keep CI gate on `pnpm --filter frontend run typecheck` for app code.
 2. Burn down strictness blockers in prioritized slices:
    - `Dice3D` and geometry/render config typing
    - hook nullability + API error normalization
@@ -31,5 +31,5 @@ Turning strict mode on immediately would block CI and merge velocity for unrelat
 
 ## Exit Criteria
 
-- `npm -C frontend run typecheck` passes with `strict: true`.
-- `npm -C frontend run typecheck:test` passes and is enforced in CI.
+- `pnpm --filter frontend run typecheck` passes with `strict: true`.
+- `pnpm --filter frontend run typecheck:test` passes and is enforced in CI.

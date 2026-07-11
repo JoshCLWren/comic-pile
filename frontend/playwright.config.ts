@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './src/test',
   testMatch: '**/*.spec.ts',
-  testIgnore: ['**/*.test.{js,jsx,ts,tsx}', '**/prod-smoke.spec.ts', '**/thread-repositioning-fix.spec.ts'],
+  testIgnore: ['**/*.test.{js,jsx,ts,tsx}'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -40,13 +40,12 @@ export default defineConfig({
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testMatch: '**/bug-report-button.spec.ts',
     },
   ],
   webServer: {
     command: process.env.REUSE_EXISTING_SERVER
       ? 'bash -c "echo Reusing existing server; trap \'exit 0\' TERM INT; tail -f /dev/null"'
-      : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4"',
+      : 'bash -c "cd .. && set -a && source .env.test && set +a && .venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 1"',
     port: 9000,
     reuseExistingServer: !!process.env.REUSE_EXISTING_SERVER,
     timeout: 120000,

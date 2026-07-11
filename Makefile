@@ -202,7 +202,7 @@ test-e2e-prod-smoke:  ## Run Playwright prod smoke test (set PROD_BASE_URL=https
 		echo "Usage: make test-e2e-prod-smoke PROD_BASE_URL=https://app-production-72b9.up.railway.app"; \
 		exit 1; \
 	fi
-	@PROD_BASE_URL="$(PROD_BASE_URL)" npm --prefix frontend run test:e2e:prod-smoke
+	@PROD_BASE_URL="$(PROD_BASE_URL)" pnpm --filter frontend run test:e2e:prod-smoke
  
 save-db:  ## Save database to JSON (python -m scripts.export_db)
 	@echo "Exporting database to db_export.json..."
@@ -296,7 +296,7 @@ deploy-prod:  ## Deploy to Railway production
 		exit 1; \
 	fi
 	@echo "Running frontend TypeScript typecheck..."
-	@cd frontend && npm run typecheck
+	@pnpm --filter frontend run typecheck
 	@echo "Deploying to Railway project $(RAILWAY_PROJECT_ID) service $(RAILWAY_APP_SERVICE) in $(RAILWAY_PROD_ENV)..."
 	@railway up \
 		--project $(RAILWAY_PROJECT_ID) \
@@ -340,14 +340,14 @@ check-prod-assets:  ## Validate deployed frontend assets (make check-prod-assets
 dev-all:  ## Run both frontend and backend dev servers (Vite proxies /api to backend)
 	@bash scripts/dev-all.sh
 
-dev-frontend:  ## Run frontend dev server only (npm run dev in frontend/)
+dev-frontend:  ## Run frontend dev server only (pnpm --filter frontend run dev)
 	@echo "Checking for running servers..."
 	@FRONTEND_PID=$$(lsof -t -i:5173 2>/dev/null || echo ""); \
 	if [ -n "$$FRONTEND_PID" ]; then \
 		echo "Frontend already running on port 5173 (PID: $$FRONTEND_PID)"; \
 	else \
 		echo "Starting Vite dev server on http://localhost:5173..."; \
-		cd frontend && npm run dev; \
+		pnpm --filter frontend run dev; \
 	fi
 
 # Docker test environment for Python Playwright tests

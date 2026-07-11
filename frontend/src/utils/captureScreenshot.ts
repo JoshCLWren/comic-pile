@@ -245,144 +245,184 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
   }
 
   const pixelRatio = 1
-  const canUseForeignObject = await getForeignObjectSupport()
-  diagnostics.environment = { pixelRatio, devicePixelRatio: window.devicePixelRatio, canUseForeignObject }
-
-  logAncestorChain(target)
-
-  debugLog('Target', diagnostics.target)
-  debugLog('Environment', diagnostics.environment)
 
   // Add screenshot-mode class to strip problematic CSS and set solid background
   document.documentElement.classList.add('screenshot-mode')
 
-  let overrideStyle: HTMLStyleElement | null = null
+  // Inject oklch fallbacks before the race so cleanup is always handled in the outer finally.
+  // No-op when the document has no oklch() values.
+  const overrideStyle = injectOklchFallbacks()
 
-  try {
-    const toBlobOptions = {
-      skipFonts: true,
-      cacheBust: true,
-      pixelRatio,
-      filter: (node: unknown) => {
-        const excluded = node instanceof HTMLElement && node.closest('[data-exclude-from-screenshot="true"]') !== null
-        return !excluded
-      },
-    }
+  const captureTimeoutMs = 5000
+  let captureTimer: ReturnType<typeof setTimeout> | null = null
+  let captureSettled = false
+  let timeoutWon = false
 
-    debugLog('Trying html-to-image')
-    const blob = await toBlob(target, toBlobOptions)
-
-    diagnostics.captureAttempts.push({
-      method: 'html-to-image',
-      success: blob !== null,
-      size: blob?.size,
-    })
-
-    debugLog('html-to-image result', { success: blob !== null, size: blob?.size })
-
-    if (blob !== null) {
-      const isBlank = await blobLooksBlankOrBlack(blob)
-      diagnostics.captureAttempts[0].blank = isBlank
-      debugLog('Blob validation', { isBlank })
-
-      if (!isBlank) {
-        debugLog('Using html-to-image blob', { size: blob.size })
-        return { blob, diagnostics }
-      }
-
-      debugLog('html-to-image blob is blank, retrying once')
-      const retryBlob = await toBlob(target, toBlobOptions)
-
-      if (retryBlob !== null) {
-        const retryIsBlank = await blobLooksBlankOrBlack(retryBlob)
-        diagnostics.captureAttempts.push({
-          method: 'html-to-image-retry',
-          success: true,
-          size: retryBlob.size,
-          blank: retryIsBlank,
-        })
-
-        if (!retryIsBlank) {
-          debugLog('Retry succeeded', { size: retryBlob.size })
-          return { blob: retryBlob, diagnostics }
-        }
-        debugLog('Retry blob also blank')
-      } else {
-        diagnostics.captureAttempts.push({
-          method: 'html-to-image-retry',
-          success: false,
-        })
-        debugLog('Retry returned null')
-      }
-    } else {
-      debugLog('html-to-image returned null')
-    }
-
-    // Fallback to html2canvas if html-to-image fails or returns blank
-    debugLog('Trying html2canvas fallback')
-    let html2canvas: typeof import('html2canvas').default
+  const captureWork = async (): Promise<{ blob: Blob | null; diagnostics: ScreenshotDiagnostics }> => {
     try {
-      html2canvas = (await import('html2canvas')).default
-      debugLog('html2canvas imported successfully')
+      const canUseForeignObject = await getForeignObjectSupport()
+      if (timeoutWon) return { blob: null, diagnostics }
+      diagnostics.environment = { pixelRatio, devicePixelRatio: window.devicePixelRatio, canUseForeignObject }
+
+      logAncestorChain(target)
+
+      debugLog('Target', diagnostics.target)
+      debugLog('Environment', diagnostics.environment)
+
+      const toBlobOptions = {
+        skipFonts: true,
+        cacheBust: true,
+        pixelRatio,
+        filter: (node: unknown) => {
+          if (!(node instanceof HTMLElement)) return true
+          if (node.closest('[data-exclude-from-screenshot="true"]') !== null) return false
+          if (node.tagName === 'CANVAS') return false
+          return true
+        },
+      }
+
+      debugLog('Trying html-to-image')
+      const blob = await toBlob(target, toBlobOptions)
+      if (timeoutWon) return { blob: null, diagnostics }
+
+      diagnostics.captureAttempts.push({
+        method: 'html-to-image',
+        success: blob !== null,
+        size: blob?.size,
+      })
+
+      debugLog('html-to-image result', { success: blob !== null, size: blob?.size })
+
+      if (blob !== null) {
+        const isBlank = await blobLooksBlankOrBlack(blob)
+        if (timeoutWon) return { blob: null, diagnostics }
+        diagnostics.captureAttempts[0].blank = isBlank
+        debugLog('Blob validation', { isBlank })
+
+        if (!isBlank) {
+          debugLog('Using html-to-image blob', { size: blob.size })
+          return { blob, diagnostics }
+        }
+
+        debugLog('html-to-image blob is blank, retrying once')
+        const retryBlob = await toBlob(target, toBlobOptions)
+        if (timeoutWon) return { blob: null, diagnostics }
+
+        if (retryBlob !== null) {
+          const retryIsBlank = await blobLooksBlankOrBlack(retryBlob)
+          if (timeoutWon) return { blob: null, diagnostics }
+          diagnostics.captureAttempts.push({
+            method: 'html-to-image-retry',
+            success: true,
+            size: retryBlob.size,
+            blank: retryIsBlank,
+          })
+
+          if (!retryIsBlank) {
+            debugLog('Retry succeeded', { size: retryBlob.size })
+            return { blob: retryBlob, diagnostics }
+          }
+          debugLog('Retry blob also blank')
+        } else {
+          diagnostics.captureAttempts.push({
+            method: 'html-to-image-retry',
+            success: false,
+          })
+          debugLog('Retry returned null')
+        }
+      } else {
+        debugLog('html-to-image returned null')
+      }
+
+      // Fallback to html2canvas if html-to-image fails or returns blank
+      debugLog('Trying html2canvas fallback')
+      let html2canvas: typeof import('html2canvas').default
+      try {
+        html2canvas = (await import('html2canvas')).default
+        if (timeoutWon) return { blob: null, diagnostics }
+        debugLog('html2canvas imported successfully')
+      } catch (error) {
+        diagnostics.captureAttempts.push({
+          method: 'html2canvas-import',
+          success: false,
+          error: String(error),
+        })
+        debugLog('Failed to import html2canvas', { error: String(error) })
+        return { blob: null, diagnostics }
+      }
+
+      debugLog('oklch fallback already injected', { injected: overrideStyle !== null })
+
+      debugLog('html2canvas starting')
+
+      const canvas = await html2canvas(target, {
+        useCORS: true,
+        allowTaint: false,
+        scale: 1,
+        logging: false,
+        backgroundColor: '#110e0a',
+        ignoreElements: (element: Element) => {
+          if (!(element instanceof HTMLElement)) return false
+          if (element.closest('[data-exclude-from-screenshot="true"]') !== null) return true
+          if (element.tagName === 'CANVAS') return true
+          return false
+        },
+      })
+      if (timeoutWon) return { blob: null, diagnostics }
+
+      diagnostics.captureAttempts.push({
+        method: 'html2canvas',
+        success: true,
+        size: canvas.width * canvas.height * 4,
+      })
+
+      debugLog('html2canvas canvas created', { width: canvas.width, height: canvas.height })
+
+      const h2cBlob = await new Promise<Blob | null>((resolve) => {
+        try {
+          canvas.toBlob((result) => resolve(result), 'image/png')
+        } catch (e) {
+          debugLog('canvas.toBlob error', { error: String(e) })
+          resolve(null)
+        }
+      })
+      if (timeoutWon) return { blob: null, diagnostics }
+
+      if (h2cBlob) {
+        debugLog('html2canvas blob created', { size: h2cBlob.size, type: h2cBlob.type })
+      }
+
+      return { blob: h2cBlob, diagnostics }
     } catch (error) {
       diagnostics.captureAttempts.push({
-        method: 'html2canvas-import',
+        method: 'html2canvas',
         success: false,
-        error: String(error),
+        error: error instanceof Error ? error.message : String(error),
       })
-      debugLog('Failed to import html2canvas', { error: String(error) })
+      debugLog('capture ERROR', { error: String(error) })
       return { blob: null, diagnostics }
     }
+  }
 
-    // Inject hex fallbacks for oklch() values that html2canvas can't parse
-    overrideStyle = injectOklchFallbacks()
-    debugLog('oklch fallback injected', { injected: overrideStyle !== null })
+  const timeoutPromise = new Promise<{ blob: Blob | null; diagnostics: ScreenshotDiagnostics }>((resolve) => {
+    captureTimer = setTimeout(() => {
+      if (captureSettled) return
+      timeoutWon = true
+      diagnostics.captureAttempts.push({
+        method: 'capture-timeout',
+        success: false,
+      })
+      debugLog('Capture timeout fired, returning null blob')
+      resolve({ blob: null, diagnostics })
+    }, captureTimeoutMs)
+  })
 
-    debugLog('html2canvas starting')
-
-    const canvas = await html2canvas(target, {
-      useCORS: true,
-      allowTaint: false,
-      scale: 1,
-      logging: false,
-      backgroundColor: '#110e0a',
-      ignoreElements: (element: Element) => {
-        const excluded = element instanceof HTMLElement && element.closest('[data-exclude-from-screenshot="true"]') !== null
-        return excluded
-      },
-    })
-
-    diagnostics.captureAttempts.push({
-      method: 'html2canvas',
-      success: true,
-      size: canvas.width * canvas.height * 4,
-    })
-
-    debugLog('html2canvas canvas created', { width: canvas.width, height: canvas.height })
-
-    const h2cBlob = await new Promise<Blob | null>((resolve) => {
-      try {
-        canvas.toBlob((result) => resolve(result), 'image/png')
-      } catch (e) {
-        debugLog('canvas.toBlob error', { error: String(e) })
-        resolve(null)
-      }
-    })
-
-    if (h2cBlob) {
-      debugLog('html2canvas blob created', { size: h2cBlob.size, type: h2cBlob.type })
-    }
-
-    return { blob: h2cBlob, diagnostics }
-  } catch (error) {
-    diagnostics.captureAttempts.push({
-      method: 'html2canvas',
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    debugLog('html2canvas ERROR', { error: String(error) })
-    return { blob: null, diagnostics }
+  try {
+    const result = await Promise.race([captureWork(), timeoutPromise])
+    captureSettled = true
+    return result
   } finally {
+    if (captureTimer) clearTimeout(captureTimer)
     document.documentElement.classList.remove('screenshot-mode')
     overrideStyle?.remove()
     debugLog('Cleaned up screenshot mode')

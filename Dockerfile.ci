@@ -1,6 +1,11 @@
+# Keep frontend tooling identical to the production image.
+FROM node:22.23.1-trixie-slim AS node-runtime
+
 # Stage 1: Base system dependencies
 FROM debian:13 AS base
 ENV DEBIAN_FRONTEND=noninteractive
+
+COPY --from=node-runtime /usr/local/ /usr/local/
 
 # Install all system dependencies in one layer for better caching
 RUN apt-get update -qq && \
@@ -12,8 +17,6 @@ RUN apt-get update -qq && \
         python3 \
         python3-venv \
         python3-pip \
-        nodejs \
-        npm \
         postgresql-client \
         tar \
         ripgrep \
@@ -68,22 +71,21 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 
 # Stage 5: Frontend dependencies
 FROM playwright-env AS frontend-deps
-COPY package.json package-lock.json ./
-COPY frontend/package.json frontend/package-lock.json frontend/
-RUN npm ci && \
-    (cd frontend && npm ci && npx playwright install chromium)
+RUN npm install -g pnpm@10.15.0
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY frontend/package.json frontend/
+RUN pnpm install --frozen-lockfile && \
+    pnpm --filter frontend exec playwright install chromium firefox
 
 # Stage 6: Frontend build
 FROM frontend-deps AS frontend-build
 COPY frontend/ frontend/
-RUN cd frontend && npm run build
+RUN pnpm --filter frontend run build
 
 # Stage 7: Final image with everything
 FROM frontend-build AS final
-RUN mkdir -p /opt/ci-assets/frontend /opt/ci-assets/static
-COPY --from=frontend-build /workspace/frontend/node_modules /opt/ci-assets/frontend/node_modules
+RUN mkdir -p /opt/ci-assets/static
 COPY --from=frontend-build /workspace/static/react /opt/ci-assets/static/react
 COPY --from=frontend-build /workspace/static/react /workspace/static/react
-COPY . .
 ENV PATH="/workspace/.venv/bin:$PATH"
 CMD ["/bin/bash"]

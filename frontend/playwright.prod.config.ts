@@ -8,7 +8,7 @@ if (!prodBaseUrl) {
 
 export default defineConfig({
   testDir: './src/test',
-  testMatch: 'prod-smoke.spec.ts',
+  testMatch: 'smoke.spec.ts',
   fullyParallel: false,
   retries: 0,
   workers: 1,

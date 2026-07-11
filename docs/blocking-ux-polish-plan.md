@@ -102,7 +102,7 @@ Roll Pool (d4)
 
 ## Verification
 
-- `cd frontend && npm test` — unit tests pass
-- `cd frontend && npm run build` — no build errors
+- `cd frontend && pnpm test` — unit tests pass
+- `cd frontend && pnpm run build` — no build errors
 - Manual check: create a dependency, confirm blocked thread shows 🔒 on queue, shows in RollPage blocked section, "Read Now" shows styled modal not alert()
 - `make lint` — no regressions

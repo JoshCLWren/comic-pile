@@ -62,7 +62,7 @@ BACKEND_PID=$!
 echo "$BACKEND_PID" > "$PID_FILE"
 
 echo "Starting frontend on port ${FRONTEND_PORT}..."
-cd frontend && npm run dev &
+pnpm --filter frontend run dev &
 FRONTEND_PID=$!
 echo "$FRONTEND_PID" >> "$PID_FILE"
 

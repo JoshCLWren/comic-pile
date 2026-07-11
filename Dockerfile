@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy uv binary from a pinned tag for reproducible builds.
-COPY --from=ghcr.io/astral-sh/uv:0.6.3 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
@@ -31,20 +31,24 @@ RUN uv sync --frozen --no-dev
 # ============================
 # Frontend build stage
 # ============================
-FROM node:22.13.1-bookworm-slim AS frontend-builder
+FROM node:22.23.1-trixie-slim AS frontend-builder
 
-WORKDIR /app/frontend
+WORKDIR /app
 
-# Copy dependency files first for layer caching
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm install -g pnpm@10.15.0
+
+# Copy workspace and dependency files first for layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY frontend/package.json frontend/
+
+RUN pnpm install --frozen-lockfile
 
 # Copy source files - this layer invalidates when any source changes
-COPY frontend/ ./
+COPY frontend/ ./frontend/
 
 # Force cache invalidation by using build arg
 ARG BUILD_TIMESTAMP
-RUN echo "Build timestamp: ${BUILD_TIMESTAMP:-$(date -u +%s)}" && npm run build
+RUN echo "Build timestamp: ${BUILD_TIMESTAMP:-$(date -u +%s)}" && pnpm --filter frontend run build
 
 # Vite writes to /app/static/react based on outDir in vite config
 
