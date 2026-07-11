@@ -71,15 +71,16 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 
 # Stage 5: Frontend dependencies
 FROM playwright-env AS frontend-deps
-COPY package.json package-lock.json ./
-COPY frontend/package.json frontend/package-lock.json frontend/
-RUN npm ci && \
-    (cd frontend && npm ci && npx playwright install chromium firefox)
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY frontend/package.json frontend/
+RUN pnpm install --frozen-lockfile && \
+    pnpm --filter frontend exec playwright install chromium firefox
 
 # Stage 6: Frontend build
 FROM frontend-deps AS frontend-build
 COPY frontend/ frontend/
-RUN cd frontend && npm run build
+RUN pnpm --filter frontend run build
 
 # Stage 7: Final image with everything
 FROM frontend-build AS final

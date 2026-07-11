@@ -33,18 +33,22 @@ RUN uv sync --frozen --no-dev
 # ============================
 FROM node:22.23.1-trixie-slim AS frontend-builder
 
-WORKDIR /app/frontend
+WORKDIR /app
 
-# Copy dependency files first for layer caching
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN corepack enable
+
+# Copy workspace and dependency files first for layer caching
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY frontend/package.json frontend/
+
+RUN pnpm install --frozen-lockfile
 
 # Copy source files - this layer invalidates when any source changes
-COPY frontend/ ./
+COPY frontend/ ./frontend/
 
 # Force cache invalidation by using build arg
 ARG BUILD_TIMESTAMP
-RUN echo "Build timestamp: ${BUILD_TIMESTAMP:-$(date -u +%s)}" && npm run build
+RUN echo "Build timestamp: ${BUILD_TIMESTAMP:-$(date -u +%s)}" && pnpm --filter frontend run build
 
 # Vite writes to /app/static/react based on outDir in vite config
 

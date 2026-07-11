@@ -15,12 +15,12 @@
   "scripts": {
     "lint:js": "sh -c 'if ls static/react/assets/*.js >/dev/null 2>&1 || ls static/assets/*.js >/dev/null 2>&1; then npx eslint static/react/assets/*.js static/assets/*.js; else echo \"No JavaScript files to lint\"; fi'",
     "lint:html": "npx htmlhint app/templates/*.html",
-    "lint": "npm run lint:js && npm run lint:html",
+    "lint": "pnpm run lint:js && pnpm run lint:html",
     "lint:fix": "sh -c 'if ls static/react/assets/*.js >/dev/null 2>&1 || ls static/assets/*.js >/dev/null 2>&1; then npx eslint static/react/assets/*.js static/assets/*.js --fix; else echo \"No JavaScript files to fix\"; fi'",
-    "dice:playground": "npm --prefix frontend run dice:playground",
-    "test:dice-playground": "npm --prefix frontend run test:dice-playground",
-    "test:dice-playground:update": "npm --prefix frontend run test:dice-playground:update",
-    "test:e2e:prod-smoke": "npm --prefix frontend run test:e2e:prod-smoke"
+    "dice:playground": "pnpm --filter frontend run dice:playground",
+    "test:dice-playground": "pnpm --filter frontend run test:dice-playground",
+    "test:dice-playground:update": "pnpm --filter frontend run test:dice-playground:update",
+    "test:e2e:prod-smoke": "pnpm --filter frontend run test:e2e:prod-smoke"
   },
   "dependencies": {
     "@typescript-eslint/eslint-plugin": "^8.57.2",
@@ -28,5 +28,5 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "jiti": "^2.6.1"
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b"
 }

@@ -81,10 +81,10 @@ jobs:
           ln -s /opt/ci-assets/static/react static/react
 
       - name: Run frontend lint
-        run: cd frontend && npm run lint
+        run: pnpm --filter frontend run lint
 
       - name: Run frontend typecheck
-        run: cd frontend && npm run typecheck
+        run: pnpm --filter frontend run typecheck
 
   python-lint:
     name: Python Lint (ruff)
@@ -139,7 +139,7 @@ jobs:
           ln -s /opt/ci-assets/static/react static/react
 
       - name: Run vitest unit tests
-        run: cd frontend && npm test
+        run: pnpm --filter frontend test
 
   migration-health:
     name: Migration Health
