@@ -44,16 +44,16 @@ These are Node.js-based Playwright tests with comprehensive coverage including a
 
 ```bash
 # Run all TypeScript E2E tests
-cd frontend && npm run test:e2e
+cd frontend && pnpm run test:e2e
 
 # Run in UI mode (interactive)
-npm run test:e2e:ui
+pnpm run test:e2e:ui
 
 # Run specific test file
 npx playwright test auth.spec.ts
 
 # Run with headed browser
-npm run test:e2e:headed
+pnpm run test:e2e:headed
 ```
 
 **Test Files**:
@@ -74,7 +74,7 @@ MissingGreenlet errors in `app/api/session.py` and `app/api/rate.py` have been f
 
 ## CI Configuration
 
-The CI pipeline (`.github/workflows/ci-sharded.yml`) runs:
+The CI pipeline (`.github/workflows/ci.yml`) runs:
 
 1. **Python E2E Tests** ✅
    - `test-e2e-api` - API workflow tests
@@ -103,7 +103,7 @@ pytest tests_e2e/test_browser_ui.py -v --no-cov
 ```bash
 # Install dependencies
 cd frontend
-npm install
+pnpm install
 npx playwright install chromium
 
 # Start backend (in separate terminal)
@@ -160,7 +160,7 @@ def login_with_playwright(page, test_server_url, email, password=None):
 
 ```bash
 # Run with debug mode
-npm run test:e2e:debug
+pnpm run test:e2e:debug
 
 # View trace
 npx playwright show-trace test-results/<test-name>/trace.zip

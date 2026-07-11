@@ -34,7 +34,7 @@ If a test is failing:
 Comic Pile is a dice-driven comic reading tracker built with:
 - **Backend**: Python 3.13, FastAPI, SQLAlchemy, PostgreSQL
 - **Frontend**: React 19, Vite, Tailwind CSS
-- **Package managers**: `uv` (Python), `npm` (frontend)
+- **Package managers**: `uv` (Python), `pnpm` (frontend)
 
 ## CRITICAL: Async PostgreSQL Only in Application Code
 

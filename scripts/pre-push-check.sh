@@ -60,7 +60,7 @@ if git diff --name-only HEAD~ | grep -q "^frontend/"; then
     echo -e "${YELLOW}[5/6] Frontend changes detected - checking if frontend is built...${NC}"
     if [ ! -d "static/react" ] || [ -z "$(ls -A static/react 2>/dev/null)" ]; then
         echo -e "${RED}❌ Frontend not built${NC}"
-        echo "Run: cd frontend && npm run build"
+        echo "Run: cd frontend && pnpm run build"
         exit 1
     fi
     echo -e "${GREEN}✅ Frontend built${NC}"

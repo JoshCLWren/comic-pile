@@ -84,12 +84,12 @@ Fix the problem instead.
 
 ### Frontend Development
 
-- Install deps:    `cd frontend && npm install`
-- Dev server:      `npm run dev` (proxies `/api` → localhost:8000; backend must be running)
-- Build:           `npm run build` (outputs to `static/react/`)
-- Lint:            `npm run lint`
-- Unit tests:      `npm test` (vitest, no server needed)
-- E2E tests:       `npm run test:e2e` (requires backend server)
+- Install deps:    `pnpm install`
+- Dev server:      `pnpm --filter frontend run dev` (proxies `/api` to localhost:8000; backend must be running)
+- Build:           `pnpm --filter frontend run build` (outputs to `static/react/`)
+- Lint:            `pnpm --filter frontend run lint`
+- Unit tests:      `pnpm --filter frontend test` (vitest, no server needed)
+- E2E tests:       `pnpm --filter frontend run test:e2e` (requires backend server)
 
 React components live in `frontend/src/` with JSX syntax. Style with Tailwind CSS (mobile-first, touch targets ≥44px).
 
@@ -107,7 +107,7 @@ make migrate  # or: alembic upgrade head
 
 - Run linting after each change:
   - `make lint` or `bash scripts/lint.sh` (Python)
-  - `cd frontend && npm run lint` (JavaScript/JSX)
+  - `pnpm --filter frontend run lint` (JavaScript/JSX)
 - Use specific types instead of `Any` in type annotations (ruff ANN401 rule)
 - Run tests when you touch logic or input handling:
   - `pytest` or `make pytest`

@@ -160,9 +160,14 @@ logs/
 .codex/
 .opencode/
 .specify/
+HANDOFF.md
 
 # Node.js dependencies (covers both directories and symlinks)
 node_modules
+
+# npm lockfiles (project uses pnpm; keep these ignored as a safety net)
+package-lock.json
+frontend/package-lock.json
 
 # Pipeline artifacts (never commit these)
 review_critique.md

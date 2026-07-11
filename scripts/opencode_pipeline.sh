@@ -1910,7 +1910,7 @@ Instructions:
    factually wrong assertion (e.g., wrong aria-label because the source label changed
    intentionally).
 3. After fixing, do a quick sanity check:
-   - Frontend issue: run  cd frontend && npm run build 2>&1 | tail -20
+   - Frontend issue: run  cd frontend && pnpm run build 2>&1 | tail -20
    - Backend issue:  run  cd /mnt/extra/josh/code/comic-pile && uv run pytest --tb=short -q 2>&1 | tail -30
 4. Commit the fix: git add <files> && git commit -m "fix(ci): <short description>"
    Do NOT use git add -p (non-interactive only). Do NOT amend existing commits.
@@ -1953,7 +1953,7 @@ PROMPT
 
             # Always run frontend lint if any frontend file changed
             if grep -qE "^frontend/" <<< "$changed_files"; then
-                npm run lint --prefix "$REPO_ROOT/frontend" >> "$FIXER_LOG" 2>&1 || lint_exit=$?
+                pnpm --filter frontend run lint >> "$FIXER_LOG" 2>&1 || lint_exit=$?
             fi
             # Always run backend lint if any Python file changed
             if grep -qE "\.py$" <<< "$changed_files"; then

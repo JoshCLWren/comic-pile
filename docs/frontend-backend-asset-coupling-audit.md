@@ -194,11 +194,11 @@ Recommendation:
 ## Current Strengths
 
 - Dockerfile build flow already produces frontend assets during image build:
-  - `Dockerfile` - `frontend-builder` stage `npm run build`
+  - `Dockerfile` - `frontend-builder` stage `pnpm run build`
 - CI Playwright job explicitly builds frontend before browser tests:
-  - `.github/workflows/ci-sharded.yml` - Playwright job build step
+  - `.github/workflows/ci.yml` - Playwright job build step
 - Production smoke coverage catches chunk load failures in key routes:
-  - `frontend/src/test/prod-smoke.spec.ts` - chunk failure response listener
+  - `frontend/src/test/smoke.spec.ts` - chunk failure response listener
 - Dockerfile already separates build and runtime stages:
   - `Dockerfile` - `python-builder` and runtime stages
 - Runtime container already runs as non-root user:
@@ -232,7 +232,7 @@ These are good foundations; the remaining issues are mostly fail-fast and proces
 ## Acceptance Criteria
 
 - Production startup fails if frontend artifact set is incomplete.
-- No deploy path requires local manual `npm run build` as a hidden prerequisite.
+- No deploy path requires local manual `pnpm run build` as a hidden prerequisite.
 - No runtime configs default to `postgresql+psycopg://`.
 - Smoke tests run with stable selectors and do not fail from purely cosmetic DOM changes.
 - Documentation reflects actual artifact path and deploy behavior.

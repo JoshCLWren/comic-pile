@@ -12,8 +12,7 @@ export default defineConfig({
   // Same ignore patterns as main config (playwright.config.ts)
   testIgnore: [
     '**/*.test.{js,jsx,ts,tsx}', // Test utility files
-    '**/prod-smoke.spec.ts', // Use playwright.prod.config.ts for prod smoke tests
-    '**/thread-repositioning-fix.spec.ts', // Requires TEST_USERNAME and TEST_PASSWORD env vars
+    '**/smoke.spec.ts', // Use playwright.prod.config.ts for prod smoke tests
   ],
   fullyParallel: false,
   retries: 5,

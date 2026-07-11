@@ -229,7 +229,7 @@ React Router preserves existing URL patterns for bookmarks:
 ### Development Mode
 
 ```bash
-npm run dev
+pnpm run dev
 # or
 pnpm dev
 # or
@@ -241,7 +241,7 @@ Vite dev server runs on `http://localhost:5173` with HMR (Hot Module Replacement
 ### Production Build
 
 ```bash
-npm run build
+pnpm run build
 # or
 pnpm build
 ```
@@ -372,7 +372,7 @@ Three.js is lazy-loaded on demand via `LazyDice3D`:
 - `Dice3D` chunk: ~16 KB (~6 KB gzipped)
 - `three` chunk: ~489 KB (~124 KB gzipped)
 
-_Measured via `cd frontend && npm run build` Vite output, March 2026. Re-run after significant dependency changes to keep these numbers accurate._
+_Measured via `cd frontend && pnpm run build` Vite output, March 2026. Re-run after significant dependency changes to keep these numbers accurate._
 
 ## Mobile Usage Guide
 
@@ -438,7 +438,7 @@ All interactive elements maintain minimum 44px touch targets:
 ### Linting
 
 ```bash
-npm run lint # ESLint for JSX/JavaScript
+pnpm --filter frontend run lint # ESLint for JSX/JavaScript
 make lint # Run Python + JavaScript linting
 ```
 
@@ -456,7 +456,7 @@ Vite dev server updates:
 
 ### Build Process
 
-1. `npm run build` → Builds to `static/react/`
+1. `pnpm run build` → Builds to `static/react/`
 2. `alembic upgrade head` → Database migrations
 3. `uvicorn app.main:app --host 0.0.0.0` → Start FastAPI
 

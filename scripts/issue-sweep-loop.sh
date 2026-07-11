@@ -22,7 +22,7 @@ STEPS=(
 
   "step6|Fix #260: Add DELETE /api/v1/issues/{issue_id} endpoint in app/api/issue.py. Delete the issue, shift subsequent positions down, update total_issues/issues_remaining/next_unread_issue_id/reading_progress on the thread. Log an issue_deleted event. Add issuesApi.delete() in frontend/src/services/api-issues.ts. Add tests for delete-middle, delete-last, delete-next-unread, delete-all-issues, delete-nonexistent. Run: make lint && pytest tests/test_issue_api.py -v. Commit with message 'Fix #260: Add individual issue deletion API'. Read AGENTS.md and archive/historical/ISSUE_SWEEP_PROMPT.md Step 6 for full details."
 
-  "step7|Fix #266: Add drag-and-drop issue reordering to IssueToggleList in frontend/src/pages/QueuePage.tsx. Follow the existing thread drag-and-drop pattern (lines 240-370) using HTML5 drag events. On drop, call issuesApi.move() or issuesApi.reorder(). Add optimistic UI update with revert on error. Add a delete button (small x) on each issue pill with confirmation. Add vitest unit tests. Run: cd frontend && npm test && npm run build. Commit with message 'Fix #266: Add frontend issue reorder and delete UI'. Read AGENTS.md and archive/historical/ISSUE_SWEEP_PROMPT.md Step 7 for full details."
+  "step7|Fix #266: Add drag-and-drop issue reordering to IssueToggleList in frontend/src/pages/QueuePage.tsx. Follow the existing thread drag-and-drop pattern (lines 240-370) using HTML5 drag events. On drop, call issuesApi.move() or issuesApi.reorder(). Add optimistic UI update with revert on error. Add a delete button (small x) on each issue pill with confirmation. Add vitest unit tests. Run: cd frontend && pnpm test && pnpm run build. Commit with message 'Fix #266: Add frontend issue reorder and delete UI'. Read AGENTS.md and archive/historical/ISSUE_SWEEP_PROMPT.md Step 7 for full details."
 
   "step8|Fix #264: Add deprecation header comments to these scripts: scripts/add_xmen_annuals.py, scripts/fix_thread_positions.py, scripts/audit_thread_positions.py, scripts/complete_annual_dependencies.py, scripts/create_xmen_dependencies.py, scripts/check_xmen_dependencies.py. Comment should say DEPRECATED and reference the replacement API endpoints. Do NOT delete the scripts. Run: make lint. Commit with message 'Fix #264: Deprecate compensating scripts'. Read AGENTS.md and archive/historical/ISSUE_SWEEP_PROMPT.md Step 8 for full details."
 
@@ -61,4 +61,4 @@ done
 echo ""
 echo "=== All steps complete ==="
 echo "Run final verification:"
-echo "  make lint && pytest && cd frontend && npm test && npm run build"
+echo "  make lint && pytest && cd frontend && pnpm test && pnpm run build"
