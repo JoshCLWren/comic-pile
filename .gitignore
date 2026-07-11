@@ -190,3 +190,6 @@ scripts/clone_prod_users.sh
 dogfood-output/
 .opencode_handoff/
 .playwright-mcp/
+
+# Local AI/tool config
+opencode.json
