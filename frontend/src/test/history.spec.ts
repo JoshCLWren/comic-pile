@@ -1,15 +1,9 @@
 import { test, expect } from './fixtures';
-import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown } from './helpers';
+import type { Page } from '@playwright/test';
+import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown, navigateToRatePage } from './helpers';
 
-async function readThreadFromQueue(page: import('@playwright/test').Page, rating: string): Promise<void> {
-  await page.goto('/queue');
-  await expect(page.locator('#queue-container')).toBeVisible();
-  await page.setViewportSize({ width: 375, height: 667 });
-  const firstThreadCard = page.locator('#queue-container .glass-card').first();
-  await expect(firstThreadCard).toBeVisible();
-  await firstThreadCard.locator('button[aria-label="Open actions"]').click();
-  await page.getByText('Read Now', { exact: true }).first().click();
-  await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+async function readThreadFromQueue(page: Page, rating: string): Promise<void> {
+  await navigateToRatePage(page);
   await setRangeInput(page, SELECTORS.rate.ratingInput, rating);
   await submitRatingAndDismissReviewIfShown(page, () => page.click('button:has-text("Finish Session")'));
   await expect(page.locator('#root')).toBeVisible();

@@ -27,6 +27,7 @@ jobs:
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
       image-tag: ${{ steps.set-outputs.outputs.image-tag }}
+      image-ref: ${{ steps.set-outputs.outputs.image-ref }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -58,13 +59,15 @@ jobs:
 
       - name: Set image tag output
         id: set-outputs
-        run: echo "image-tag=${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image-name }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+        run: |
+          echo "image-tag=${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image-name }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "image-ref=${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image-name }}@${{ steps.build.outputs.digest }}" >> $GITHUB_OUTPUT
 
   frontend-typecheck:
     name: Frontend Lint + Typecheck
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
     needs: build
     timeout-minutes: 15
     env:
@@ -90,7 +93,7 @@ jobs:
     name: Python Lint (ruff)
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
     needs: build
     timeout-minutes: 10
     env:
@@ -106,7 +109,7 @@ jobs:
     name: Python Type Check (ty)
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
     needs: build
     timeout-minutes: 15
     env:
@@ -122,7 +125,7 @@ jobs:
     name: Frontend Unit Tests (vitest)
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
     needs: build
     timeout-minutes: 10
     env:
@@ -145,7 +148,7 @@ jobs:
     name: Migration Health
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
     needs: build
     timeout-minutes: 10
     env:
@@ -172,7 +175,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Remove .env files
-        run: rm -f .env .env.test .env.backup .envrc 2>/dev/null || true
+        run: rm -f .env .env.test .env.backup .envrc
 
       - name: Wait for PostgreSQL
         run: |
@@ -206,7 +209,7 @@ jobs:
     name: Backend Tests
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
     needs: build
     timeout-minutes: 60
     env:
@@ -235,7 +238,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Remove .env file to prevent CI database override
-        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production 2>/dev/null || true
+        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production
 
       - name: Wait for PostgreSQL
         run: |
@@ -267,7 +270,7 @@ jobs:
     name: E2E API Tests
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
     needs: build
     timeout-minutes: 20
     env:
@@ -295,7 +298,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Remove .env file to prevent CI database override
-        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production 2>/dev/null || true
+        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production
 
       - name: Wait for PostgreSQL
         run: |
@@ -319,7 +322,7 @@ jobs:
     name: E2E Dice Ladder
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
     needs: build
     timeout-minutes: 20
     env:
@@ -347,7 +350,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Remove .env file to prevent CI database override
-        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production 2>/dev/null || true
+        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production
 
       - name: Wait for PostgreSQL
         run: |
@@ -371,7 +374,7 @@ jobs:
     name: E2E Playwright Tests (Shard ${{ matrix.shardIndex }}/${{ matrix.totalShards }})
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-tag }}
+      image: ${{ needs.build.outputs.image-ref }}
       options: >-
         --shm-size=2gb
         --memory=8gb
@@ -410,7 +413,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Remove .env file to prevent CI database override
-        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production 2>/dev/null || true
+        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production
 
       - name: Wait for PostgreSQL
         run: |
@@ -464,7 +467,7 @@ jobs:
           exit 1
 
       - name: Run Playwright tests
-        run: cd frontend && REUSE_EXISTING_SERVER=true BASE_URL=http://localhost:9000 npx playwright test --project=chromium --shard=${{ matrix.shardIndex }}/${{ matrix.totalShards }}
+        run: cd frontend && REUSE_EXISTING_SERVER=true BASE_URL=http://localhost:9000 pnpm exec playwright test --project=chromium --shard=${{ matrix.shardIndex }}/${{ matrix.totalShards }}
 
   check-all-jobs:
     name: CI Summary

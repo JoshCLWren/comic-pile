@@ -50,7 +50,7 @@ cd frontend && pnpm run test:e2e
 pnpm run test:e2e:ui
 
 # Run specific test file
-npx playwright test auth.spec.ts
+pnpm exec playwright test auth.spec.ts
 
 # Run with headed browser
 pnpm run test:e2e:headed
@@ -104,7 +104,7 @@ pytest tests_e2e/test_browser_ui.py -v --no-cov
 # Install dependencies
 cd frontend
 pnpm install
-npx playwright install chromium
+pnpm exec playwright install chromium
 
 # Start backend (in separate terminal)
 cd ..
@@ -112,7 +112,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # Run tests
 cd frontend
-npx playwright test --project=chromium
+pnpm exec playwright test --project=chromium
 ```
 
 ## Test Structure
@@ -163,13 +163,13 @@ def login_with_playwright(page, test_server_url, email, password=None):
 pnpm run test:e2e:debug
 
 # View trace
-npx playwright show-trace test-results/<test-name>/trace.zip
+pnpm exec playwright show-trace test-results/<test-name>/trace.zip
 
 # View screenshots
 ls test-results/*/test-failed-*.png
 
 # View HTML report
-npx playwright show-report
+pnpm exec playwright show-report
 ```
 
 ### Python Tests

@@ -254,10 +254,14 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
   const overrideStyle = injectOklchFallbacks()
 
   const captureTimeoutMs = 5000
+  let captureTimer: ReturnType<typeof setTimeout> | null = null
+  let captureSettled = false
+  let timeoutWon = false
 
   const captureWork = async (): Promise<{ blob: Blob | null; diagnostics: ScreenshotDiagnostics }> => {
     try {
       const canUseForeignObject = await getForeignObjectSupport()
+      if (timeoutWon) return { blob: null, diagnostics }
       diagnostics.environment = { pixelRatio, devicePixelRatio: window.devicePixelRatio, canUseForeignObject }
 
       logAncestorChain(target)
@@ -279,6 +283,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
 
       debugLog('Trying html-to-image')
       const blob = await toBlob(target, toBlobOptions)
+      if (timeoutWon) return { blob: null, diagnostics }
 
       diagnostics.captureAttempts.push({
         method: 'html-to-image',
@@ -290,6 +295,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
 
       if (blob !== null) {
         const isBlank = await blobLooksBlankOrBlack(blob)
+        if (timeoutWon) return { blob: null, diagnostics }
         diagnostics.captureAttempts[0].blank = isBlank
         debugLog('Blob validation', { isBlank })
 
@@ -300,9 +306,11 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
 
         debugLog('html-to-image blob is blank, retrying once')
         const retryBlob = await toBlob(target, toBlobOptions)
+        if (timeoutWon) return { blob: null, diagnostics }
 
         if (retryBlob !== null) {
           const retryIsBlank = await blobLooksBlankOrBlack(retryBlob)
+          if (timeoutWon) return { blob: null, diagnostics }
           diagnostics.captureAttempts.push({
             method: 'html-to-image-retry',
             success: true,
@@ -331,6 +339,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
       let html2canvas: typeof import('html2canvas').default
       try {
         html2canvas = (await import('html2canvas')).default
+        if (timeoutWon) return { blob: null, diagnostics }
         debugLog('html2canvas imported successfully')
       } catch (error) {
         diagnostics.captureAttempts.push({
@@ -359,6 +368,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
           return false
         },
       })
+      if (timeoutWon) return { blob: null, diagnostics }
 
       diagnostics.captureAttempts.push({
         method: 'html2canvas',
@@ -376,6 +386,7 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
           resolve(null)
         }
       })
+      if (timeoutWon) return { blob: null, diagnostics }
 
       if (h2cBlob) {
         debugLog('html2canvas blob created', { size: h2cBlob.size, type: h2cBlob.type })
@@ -393,12 +404,10 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
     }
   }
 
-  let captureTimer: ReturnType<typeof setTimeout> | null = null
-  let captureSettled = false
-
   const timeoutPromise = new Promise<{ blob: Blob | null; diagnostics: ScreenshotDiagnostics }>((resolve) => {
     captureTimer = setTimeout(() => {
       if (captureSettled) return
+      timeoutWon = true
       diagnostics.captureAttempts.push({
         method: 'capture-timeout',
         success: false,

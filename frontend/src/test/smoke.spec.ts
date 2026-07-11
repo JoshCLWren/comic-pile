@@ -212,6 +212,8 @@ test.describe('Smoke', () => {
     expect(afterSession.ok()).toBeTruthy();
     const afterData = await afterSession.json();
     expect(afterData.active_thread).toBeTruthy();
+    expect(afterData.active_thread?.id).toBe(activeBefore);
+    expect(afterData.active_thread?.title).toBe(beforeData.active_thread?.title);
   });
 
   test('double roll animation works correctly', async ({ page }) => {

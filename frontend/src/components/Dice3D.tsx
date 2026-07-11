@@ -911,6 +911,8 @@ export default function Dice3D({
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     } catch (e) {
       console.error('WebGL initialization failed:', e);
+      sceneRef.current = null;
+      cameraRef.current = null;
       return;
     }
 

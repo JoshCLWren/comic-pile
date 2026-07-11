@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, registerUser, loginUser, createThread, SELECTORS, formatA11yViolations } from './helpers';
+import { generateTestUser, registerUser, loginUser, createThread, formatA11yViolations, navigateToRatePage } from './helpers';
 import { AxeBuilder } from '@axe-core/playwright';
 
 test.describe('Accessibility Tests', () => {
@@ -64,14 +64,7 @@ test.describe('Accessibility Tests', () => {
       issues_remaining: 5,
     });
 
-    await page.goto('/queue');
-    await expect(page.locator('#queue-container')).toBeVisible();
-    await page.setViewportSize({ width: 375, height: 667 });
-    const firstThreadCard = page.locator('#queue-container .glass-card').first();
-    await expect(firstThreadCard).toBeVisible();
-    await firstThreadCard.locator('button[aria-label="Open actions"]').click();
-    await page.getByText('Read Now', { exact: true }).first().click();
-    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+    await navigateToRatePage(page);
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -286,14 +279,7 @@ test.describe('Accessibility Tests', () => {
       issues_remaining: 5,
     });
 
-    await page.goto('/queue');
-    await expect(page.locator('#queue-container')).toBeVisible();
-    await page.setViewportSize({ width: 375, height: 667 });
-    const firstThreadCard = page.locator('#queue-container .glass-card').first();
-    await expect(firstThreadCard).toBeVisible();
-    await firstThreadCard.locator('button[aria-label="Open actions"]').click();
-    await page.getByText('Read Now', { exact: true }).first().click();
-    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+    await navigateToRatePage(page);
 
     const liveRegions = await page.locator('[aria-live], [role="status"], [role="alert"]').all();
     const hasLiveRegions = liveRegions.length > 0;
