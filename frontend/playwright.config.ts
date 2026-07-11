@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './src/test',
   testMatch: '**/*.spec.ts',
-  testIgnore: ['**/*.test.{js,jsx,ts,tsx}', '**/prod-smoke.spec.ts', '**/thread-repositioning-fix.spec.ts'],
+  testIgnore: ['**/*.test.{js,jsx,ts,tsx}'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -36,12 +36,10 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: '**/bug-report-button.spec.ts',
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testMatch: '**/bug-report-button.spec.ts',
     },
   ],
   webServer: {

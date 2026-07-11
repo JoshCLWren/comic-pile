@@ -10,8 +10,8 @@ type TestUser = {
 function createProdSmokeUser(): TestUser {
   const nonce = `${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
   return {
-    username: `prod_smoke_${nonce}`,
-    email: `prod_smoke_${nonce}@example.com`,
+    username: `smoke_${nonce}`,
+    email: `smoke_${nonce}@example.com`,
     password: 'ProdSmokePass123!',
   };
 }
@@ -38,29 +38,6 @@ async function createAuthenticatedUser(page: Page): Promise<string> {
   return token;
 }
 
-async function loginExistingUser(
-  page: Page,
-  username: string,
-  password: string,
-): Promise<string> {
-  const loginResponse = await page.request.post('/api/auth/login', {
-    data: { username, password },
-    timeout: 15000,
-  });
-  expect(loginResponse.ok()).toBeTruthy();
-
-  const loginData = await loginResponse.json();
-  const token = loginData.access_token as string;
-  expect(token).toBeTruthy();
-  return token;
-}
-
-function getExistingUserCredentials() {
-  const username = process.env.PROD_TEST_USERNAME;
-  const password = process.env.PROD_TEST_PASSWORD;
-  return { username, password };
-}
-
 async function seedThreads(
   page: Page,
   token: string,
@@ -79,16 +56,16 @@ async function seedThreads(
   }
 }
 
-test.describe('Production Smoke', () => {
+test.describe('Smoke', () => {
   test('roll/rate/queue routes load without chunk 404s', async ({ page }) => {
     const health = await page.request.get('/health');
     expect(health.ok()).toBeTruthy();
 
     const token = await createAuthenticatedUser(page);
     await seedThreads(page, token, [
-      { title: 'Prod Smoke A', format: 'Comics', issues_remaining: 3 },
-      { title: 'Prod Smoke B', format: 'Manga', issues_remaining: 2 },
-      { title: 'Prod Smoke C', format: 'Novel', issues_remaining: 4 },
+      { title: 'Smoke A', format: 'Comics', issues_remaining: 3 },
+      { title: 'Smoke B', format: 'Manga', issues_remaining: 2 },
+      { title: 'Smoke C', format: 'Novel', issues_remaining: 4 },
     ]);
 
     await page.addInitScript((authToken: string) => {
@@ -120,19 +97,18 @@ test.describe('Production Smoke', () => {
     expect(chunkFailures, `Chunk load failures: ${chunkFailures.join(', ')}`).toEqual([]);
   });
 
-  test('roll, rate, save and continue clears pending and returns to roll view (existing prod user)', async ({
+  test('roll, rate, save and continue clears pending and returns to roll view', async ({
     page,
   }) => {
     const health = await page.request.get('/health');
     expect(health.ok()).toBeTruthy();
 
-    const { username, password } = getExistingUserCredentials();
-
-    if (!username || !password) {
-      throw new Error('PROD_TEST_USERNAME and PROD_TEST_PASSWORD must be set for production smoke tests');
-    }
-
-    const token = await loginExistingUser(page, username as string, password as string);
+    const token = await createAuthenticatedUser(page);
+    await seedThreads(page, token, [
+      { title: 'Roll Rate Save A', format: 'Comics', issues_remaining: 3 },
+      { title: 'Roll Rate Save B', format: 'Manga', issues_remaining: 2 },
+      { title: 'Roll Rate Save C', format: 'Novel', issues_remaining: 4 },
+    ]);
 
     await page.addInitScript((authToken: string) => {
       localStorage.setItem('auth_token', authToken);
@@ -161,19 +137,16 @@ test.describe('Production Smoke', () => {
     expect(sessionData.pending_thread_id).toBeNull();
   });
 
-  test('leave and return to / before submit keeps same active thread (existing prod user)', async ({
-    page,
-  }) => {
+  test('leave and return to / before submit keeps same active thread', async ({ page }) => {
     const health = await page.request.get('/health');
     expect(health.ok()).toBeTruthy();
 
-    const { username, password } = getExistingUserCredentials();
-
-    if (!username || !password) {
-      throw new Error('PROD_TEST_USERNAME and PROD_TEST_PASSWORD must be set for production smoke tests');
-    }
-
-    const token = await loginExistingUser(page, username as string, password as string);
+    const token = await createAuthenticatedUser(page);
+    await seedThreads(page, token, [
+      { title: 'Active Thread A', format: 'Comics', issues_remaining: 5 },
+      { title: 'Active Thread B', format: 'Manga', issues_remaining: 5 },
+      { title: 'Active Thread C', format: 'Novel', issues_remaining: 5 },
+    ]);
 
     await page.addInitScript((authToken: string) => {
       localStorage.setItem('auth_token', authToken);
@@ -217,8 +190,6 @@ test.describe('Production Smoke', () => {
   });
 
   test('double roll animation works correctly', async ({ page }) => {
-    // This test specifically checks the dice animation on consecutive rolls
-    // which has been reported as not working in production
     const health = await page.request.get('/health');
     expect(health.ok()).toBeTruthy();
 
@@ -235,7 +206,6 @@ test.describe('Production Smoke', () => {
         authToken;
     }, token);
 
-    // Collect browser console logs
     const consoleLogs: Array<{ type: string; text: string }> = [];
     page.on('console', (msg) => {
       consoleLogs.push({ type: msg.type(), text: msg.text() });
@@ -247,7 +217,6 @@ test.describe('Production Smoke', () => {
     const mainDie = page.locator('#main-die-3d');
     await expect(mainDie).toBeVisible();
 
-    // Helper function to check rolling state
     const getDieState = async () => {
       return mainDie.evaluate((el) => ({
         className: el.className,
@@ -255,49 +224,38 @@ test.describe('Production Smoke', () => {
       }));
     };
 
-    // ========== FIRST ROLL ==========
     console.log('Starting first roll...');
     const beforeFirst = await getDieState();
     expect(beforeFirst.hasRollingClass).toBe(false);
 
     await mainDie.click();
 
-    // Check animation started
     await expect.poll(async () => (await getDieState()).hasRollingClass).toBe(true);
     const duringFirst = await getDieState();
     console.log('First roll state:', duringFirst);
 
-    // Wait for rating view
     await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
     console.log('First roll completed - rating view visible');
 
-    // ========== RETURN TO ROLL VIEW ==========
-    // Click Save & Continue
     await page.click(SELECTORS.rate.submitButton);
 
-    // Wait for navigation back to roll page
     await expect(mainDie).toBeVisible({ timeout: 15000 });
     console.log('Back at roll view after first rating');
 
-    // Wait for state to fully settle
     await expect.poll(async () => (await getDieState()).hasRollingClass).toBe(false);
 
-    // ========== SECOND ROLL ==========
     console.log('Starting second roll...');
     const beforeSecond = await getDieState();
     console.log('Before second roll:', beforeSecond);
 
-    // The die should NOT be in rolling state before we click
     expect(beforeSecond.hasRollingClass).toBe(false);
 
     await mainDie.click();
 
-    // Check animation started for second roll
     await expect.poll(async () => (await getDieState()).hasRollingClass).toBe(true);
     const duringSecond = await getDieState();
     console.log('Second roll state:', duringSecond);
 
-    // THIS IS THE KEY ASSERTION - the animation should be playing
     expect(
       duringSecond.hasRollingClass,
       `Second roll animation should be active. ` +
@@ -309,7 +267,6 @@ test.describe('Production Smoke', () => {
           .join('; ')}`
     ).toBe(true);
 
-    // Wait for second rating view to confirm roll completed
     await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 15000 });
     console.log('Second roll completed successfully');
   });

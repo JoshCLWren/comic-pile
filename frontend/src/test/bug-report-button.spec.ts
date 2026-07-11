@@ -11,7 +11,7 @@ import { test, expect } from './fixtures'
 //   2. Clicking it opens the modal (fallback path when capture fails)
 //   3. No font-processing "trim" crash appears in the console
 
-test.describe('Bug Report Button - Firefox', () => {
+test.describe('Bug Report Button', () => {
   test('opens modal and no trim crash on Firefox', async ({ authenticatedPage }) => {
     const consoleErrors: string[] = []
     authenticatedPage.on('console', msg => {

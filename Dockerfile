@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy uv binary from a pinned tag for reproducible builds.
-COPY --from=ghcr.io/astral-sh/uv:0.6.3 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ RUN uv sync --frozen --no-dev
 # ============================
 # Frontend build stage
 # ============================
-FROM node:22.13.1-bookworm-slim AS frontend-builder
+FROM node:22.23.1-trixie-slim AS frontend-builder
 
 WORKDIR /app/frontend
 
