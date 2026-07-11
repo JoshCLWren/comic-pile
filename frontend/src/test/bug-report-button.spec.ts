@@ -12,7 +12,7 @@ import { test, expect } from './fixtures'
 //   3. No font-processing "trim" crash appears in the console
 
 test.describe('Bug Report Button', () => {
-  test('opens modal and no trim crash on Firefox', async ({ authenticatedPage }) => {
+  test('opens modal without font-processing trim crash', async ({ authenticatedPage }) => {
     const consoleErrors: string[] = []
     authenticatedPage.on('console', msg => {
       if (msg.type() === 'error') consoleErrors.push(msg.text())

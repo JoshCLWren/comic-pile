@@ -112,48 +112,17 @@ test.describe('Authentication Flow', () => {
   test('should clear auth token and redirect to login on logout', async ({ page }) => {
     const user = generateTestUser();
     await registerUser(page, user);
-    const loginResponse = await page.request.post('/api/auth/login', {
-      data: {
-        username: user.username,
-        password: user.password,
-      },
-    });
-    expect(loginResponse.ok()).toBeTruthy();
-    const loginData = await loginResponse.json() as { access_token?: string };
-    expect(loginData.access_token).toBeTruthy();
 
-    await page.goto('/');
-    await page.evaluate((token: string) => {
-      localStorage.setItem('auth_token', token);
-    }, loginData.access_token as string);
+    const logoutButton = page.getByRole('button', { name: 'Log out' });
+    await expect(logoutButton).toBeVisible({ timeout: 10000 });
 
-    await page.reload();
+    await logoutButton.click();
 
-    const tokenBefore = await page.evaluate(() => {
-      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
-      return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null
-    });
-    expect(tokenBefore).toBeTruthy();
-
-    const logoutResponse = await page.request.post('/api/auth/logout', {
-      headers: { Authorization: `Bearer ${tokenBefore}` },
-    });
-    expect(logoutResponse.ok()).toBeTruthy();
-
-    await page.evaluate(() => {
-      localStorage.clear();
-      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
-    });
-
-    await page.goto('/login');
-
+    await page.waitForURL('**/login', { timeout: 5000 });
     await expect(page).toHaveURL('/login');
 
-    await expect.poll(async () => {
-      return page.evaluate(() => {
-        const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
-        return Boolean(localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN)
-      })
-    }).toBe(false);
+    await page.goto('/');
+    await page.waitForURL('**/login', { timeout: 5000 });
+    await expect(page).toHaveURL('/login');
   });
 });

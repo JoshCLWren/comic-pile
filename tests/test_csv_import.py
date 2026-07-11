@@ -329,10 +329,9 @@ async def test_import_then_export_roundtrip(
     """Test import then export returns equivalent data."""
     _ = enable_internal_ops
 
-    # Clean test database - allow 404 if endpoint doesn't exist
+    # Clean test database
     response = await auth_client.post("/api/admin/delete-test-data/")
-    if response.status_code != 404:
-        assert response.status_code == 200
+    assert response.status_code == 200
 
     # Import test data (header + 3 lines)
     csv_content = """title,format,issues_remaining
