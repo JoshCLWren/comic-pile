@@ -77,8 +77,8 @@ jobs:
         run: |
           mkdir -p static
           rm -rf frontend/node_modules static/react
-          cp -a /opt/ci-assets/frontend/node_modules frontend/node_modules
           cp -a /opt/ci-assets/static/react static/react
+          pnpm install --frozen-lockfile
 
       - name: Run frontend lint
         run: pnpm --filter frontend run lint
@@ -135,8 +135,8 @@ jobs:
         run: |
           mkdir -p static
           rm -rf frontend/node_modules static/react
-          cp -a /opt/ci-assets/frontend/node_modules frontend/node_modules
           cp -a /opt/ci-assets/static/react static/react
+          pnpm install --frozen-lockfile
 
       - name: Run vitest unit tests
         run: pnpm --filter frontend test
@@ -431,8 +431,8 @@ jobs:
         run: |
           mkdir -p static
           rm -rf frontend/node_modules static/react
-          cp -a /opt/ci-assets/frontend/node_modules frontend/node_modules
           cp -a /opt/ci-assets/static/react static/react
+          pnpm install --frozen-lockfile
 
       - name: Start backend server
         shell: bash

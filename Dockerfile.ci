@@ -84,8 +84,7 @@ RUN pnpm --filter frontend run build
 
 # Stage 7: Final image with everything
 FROM frontend-build AS final
-RUN mkdir -p /opt/ci-assets/frontend /opt/ci-assets/static
-COPY --from=frontend-build /workspace/frontend/node_modules /opt/ci-assets/frontend/node_modules
+RUN mkdir -p /opt/ci-assets/static
 COPY --from=frontend-build /workspace/static/react /opt/ci-assets/static/react
 COPY --from=frontend-build /workspace/static/react /workspace/static/react
 COPY . .
