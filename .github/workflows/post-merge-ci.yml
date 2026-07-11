@@ -58,18 +58,22 @@ jobs:
   frontend-typecheck:
     name: Frontend Lint + Typecheck
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image-tag }}
+    needs: build
     timeout-minutes: 15
+    env:
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
+      - name: Restore frontend toolchain from CI image
+        run: |
+          mkdir -p static
+          rm -rf frontend/node_modules static/react
+          ln -s /opt/ci-assets/frontend/node_modules frontend/node_modules
+          ln -s /opt/ci-assets/static/react static/react
 
       - name: Run frontend lint
         run: cd frontend && npm run lint
@@ -112,18 +116,22 @@ jobs:
   frontend-unit-tests:
     name: Frontend Unit Tests (vitest)
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image-tag }}
+    needs: build
     timeout-minutes: 10
+    env:
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
+      - name: Restore frontend toolchain from CI image
+        run: |
+          mkdir -p static
+          rm -rf frontend/node_modules static/react
+          ln -s /opt/ci-assets/frontend/node_modules frontend/node_modules
+          ln -s /opt/ci-assets/static/react static/react
 
       - name: Run vitest unit tests
         run: cd frontend && npm test
@@ -139,6 +147,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PGUSER: postgres
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
@@ -200,6 +209,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:
@@ -251,6 +261,7 @@ jobs:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
     services:
       postgres:

@@ -1,5 +1,19 @@
 import { test, expect } from './fixtures';
-import { createThread, SELECTORS, setRangeInput } from './helpers';
+import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown } from './helpers';
+
+async function readThreadFromQueue(page: import('@playwright/test').Page, rating: string): Promise<void> {
+  await page.goto('/queue');
+  await expect(page.locator('#queue-container')).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 667 });
+  const firstThreadCard = page.locator('#queue-container .glass-card').first();
+  await expect(firstThreadCard).toBeVisible();
+  await firstThreadCard.locator('button[aria-label="Open actions"]').click();
+  await page.getByText('Read Now', { exact: true }).first().click();
+  await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+  await setRangeInput(page, SELECTORS.rate.ratingInput, rating);
+  await submitRatingAndDismissReviewIfShown(page, () => page.click('button:has-text("Finish Session")'));
+  await expect(page.locator('#root')).toBeVisible();
+}
 
 test.describe('History Page', () => {
   test('should display history page', async ({ authenticatedPage }) => {
@@ -9,14 +23,7 @@ test.describe('History Page', () => {
   });
 
   test('should list past sessions', async ({ authenticatedWithThreadsPage }) => {
-    await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
-
-    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
+    await readThreadFromQueue(authenticatedWithThreadsPage, '4.0');
 
     await authenticatedWithThreadsPage.goto('/history');
 
@@ -30,10 +37,7 @@ test.describe('History Page', () => {
   });
 
   test('should show session details including die size and threads', async ({ authenticatedWithThreadsPage }) => {
-    await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
+    await readThreadFromQueue(authenticatedWithThreadsPage, '4.0');
 
     await authenticatedWithThreadsPage.goto('/history');
 
@@ -87,14 +91,7 @@ test.describe('History Page', () => {
   });
 
   test('should show ratings for each session', async ({ authenticatedWithThreadsPage }) => {
-    await authenticatedWithThreadsPage.goto('/');
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
-
-    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
-    await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
-    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
+    await readThreadFromQueue(authenticatedWithThreadsPage, '4.5');
 
     await authenticatedWithThreadsPage.goto('/history');
 

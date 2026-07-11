@@ -64,11 +64,14 @@ test.describe('Accessibility Tests', () => {
       issues_remaining: 5,
     });
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
-    await page.click(SELECTORS.roll.mainDie);
-
-    await page.waitForSelector(SELECTORS.rate.ratingInput, { state: 'visible' });
+    await page.goto('/queue');
+    await expect(page.locator('#queue-container')).toBeVisible();
+    await page.setViewportSize({ width: 375, height: 667 });
+    const firstThreadCard = page.locator('#queue-container .glass-card').first();
+    await expect(firstThreadCard).toBeVisible();
+    await firstThreadCard.locator('button[aria-label="Open actions"]').click();
+    await page.getByText('Read Now', { exact: true }).first().click();
+    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
 
     const accessibilityScanResults = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -283,16 +286,19 @@ test.describe('Accessibility Tests', () => {
       issues_remaining: 5,
     });
 
-    await page.goto('/');
-    await page.waitForSelector(SELECTORS.roll.mainDie);
+    await page.goto('/queue');
+    await expect(page.locator('#queue-container')).toBeVisible();
+    await page.setViewportSize({ width: 375, height: 667 });
+    const firstThreadCard = page.locator('#queue-container .glass-card').first();
+    await expect(firstThreadCard).toBeVisible();
+    await firstThreadCard.locator('button[aria-label="Open actions"]').click();
+    await page.getByText('Read Now', { exact: true }).first().click();
+    await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
 
     const liveRegions = await page.locator('[aria-live], [role="status"], [role="alert"]').all();
     const hasLiveRegions = liveRegions.length > 0;
 
     if (hasLiveRegions) {
-      await page.click(SELECTORS.roll.mainDie);
-      await page.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
-
       for (const region of liveRegions) {
         const isVisible = await region.isVisible();
         if (isVisible) {

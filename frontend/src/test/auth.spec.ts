@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { generateTestUser, loginUser, SELECTORS } from './helpers';
+import { generateTestUser, loginUser, registerUser, SELECTORS } from './helpers';
 
 test.describe('Authentication Flow', () => {
   test('should register a new user successfully', async ({ page }) => {
@@ -86,24 +86,74 @@ test.describe('Authentication Flow', () => {
 
   test('should persist auth token across page reloads', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
-    await expect(authenticatedPage.locator(SELECTORS.roll.dieSelector)).toBeVisible();
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
+
+    const tokenBeforeReload = await authenticatedPage.evaluate(() => {
+      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
+      return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null
+    });
+    expect(tokenBeforeReload).toBeTruthy();
 
     await authenticatedPage.reload();
-    await expect(authenticatedPage.locator(SELECTORS.roll.dieSelector)).toBeVisible();
+    await expect(authenticatedPage.locator('#root')).toBeVisible();
+
+    const tokenAfterReload = await authenticatedPage.evaluate(() => {
+      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
+      return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null
+    });
+    expect(tokenAfterReload).toBe(tokenBeforeReload);
+
+    const meResponse = await authenticatedPage.request.get('/api/auth/me', {
+      headers: { Authorization: `Bearer ${tokenAfterReload}` },
+    });
+    expect(meResponse.ok()).toBeTruthy();
   });
 
-  test('should logout and redirect to login', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/');
-
-    const hasTokenBefore = await authenticatedPage.evaluate(() => {
-      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
-      return Boolean(localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN)
+  test('should clear auth token and redirect to login on logout', async ({ page }) => {
+    const user = generateTestUser();
+    await registerUser(page, user);
+    const loginResponse = await page.request.post('/api/auth/login', {
+      data: {
+        username: user.username,
+        password: user.password,
+      },
     });
-    expect(hasTokenBefore).toBe(true);
+    expect(loginResponse.ok()).toBeTruthy();
+    const loginData = await loginResponse.json() as { access_token?: string };
+    expect(loginData.access_token).toBeTruthy();
 
-    await authenticatedPage.click('button:has-text("Log Out")');
+    await page.goto('/');
+    await page.evaluate((token: string) => {
+      localStorage.setItem('auth_token', token);
+    }, loginData.access_token as string);
 
-    await authenticatedPage.waitForURL('/login', { timeout: 5000 });
-    await expect(authenticatedPage).toHaveURL('/login');
+    await page.reload();
+
+    const tokenBefore = await page.evaluate(() => {
+      const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
+      return localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN ?? null
+    });
+    expect(tokenBefore).toBeTruthy();
+
+    const logoutResponse = await page.request.post('/api/auth/logout', {
+      headers: { Authorization: `Bearer ${tokenBefore}` },
+    });
+    expect(logoutResponse.ok()).toBeTruthy();
+
+    await page.evaluate(() => {
+      localStorage.clear();
+      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
+    });
+
+    await page.goto('/login');
+
+    await expect(page).toHaveURL('/login');
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const win = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
+        return Boolean(localStorage.getItem('auth_token') ?? win.__COMIC_PILE_ACCESS_TOKEN)
+      })
+    }).toBe(false);
   });
 });

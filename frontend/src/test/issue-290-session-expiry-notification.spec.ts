@@ -6,10 +6,7 @@ test.describe('Session Expiry Notification (Issue #290)', () => {
     await authenticatedWithThreadsPage.goto('/');
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
-    const mainDieExists = await authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie).count();
-    test.skip(mainDieExists === 0, 'No main die found - no threads available');
-
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie);
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible();
 
     const token = await authenticatedWithThreadsPage.evaluate(() => localStorage.getItem('auth_token'));
 
