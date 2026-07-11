@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures'
 
-// Firefox-only test verifying the skipFonts fix for:
-//   TypeError: can't access property "trim", a is undefined
+// Portable test (runs on both Chromium and Firefox) verifying the skipFonts
+// fix for: TypeError: can't access property "trim", a is undefined
 // html-to-image crashes on Firefox when processing font-face CSS rules
 // unless skipFonts: true is passed to toBlob.
 //

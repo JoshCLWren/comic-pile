@@ -990,6 +990,8 @@ export default function Dice3D({
   }, [sides, color, renderConfig]);
 
   useEffect(() => {
+    if (!rendererRef.current) return;
+
     let animationFrameId: number | null = null
 
     const animate = () => {

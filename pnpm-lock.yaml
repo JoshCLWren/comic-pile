@@ -7,32 +7,31 @@ settings:
 importers:
 
   .:
-    dependencies:
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.17.0
+        version: 9.39.5
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.57.2
         version: 8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+      eslint:
+        specifier: ^9.17.0
+        version: 9.39.5(jiti@2.7.0)
       eslint-plugin-react-hooks:
         specifier: ^7.0.1
         version: 7.1.1(eslint@9.39.5(jiti@2.7.0))
       eslint-plugin-react-refresh:
         specifier: ^0.5.2
         version: 0.5.3(eslint@9.39.5(jiti@2.7.0))
-      jiti:
-        specifier: ^2.6.1
-        version: 2.7.0
-    devDependencies:
-      '@eslint/js':
-        specifier: ^9.17.0
-        version: 9.39.5
-      eslint:
-        specifier: ^9.17.0
-        version: 9.39.5(jiti@2.7.0)
       globals:
         specifier: ^15.13.0
         version: 15.15.0
       htmlhint:
         specifier: ^1.1.5
         version: 1.9.2
+      jiti:
+        specifier: ^2.6.1
+        version: 2.7.0
 
   frontend:
     dependencies:

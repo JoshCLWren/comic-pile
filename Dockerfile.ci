@@ -87,6 +87,5 @@ FROM frontend-build AS final
 RUN mkdir -p /opt/ci-assets/static
 COPY --from=frontend-build /workspace/static/react /opt/ci-assets/static/react
 COPY --from=frontend-build /workspace/static/react /workspace/static/react
-COPY . .
 ENV PATH="/workspace/.venv/bin:$PATH"
 CMD ["/bin/bash"]
