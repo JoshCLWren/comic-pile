@@ -35,7 +35,7 @@ FROM node:22.23.1-trixie-slim AS frontend-builder
 
 WORKDIR /app
 
-RUN corepack enable
+RUN npm install -g pnpm@10.15.0
 
 # Copy workspace and dependency files first for layer caching
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

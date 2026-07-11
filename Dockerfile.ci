@@ -71,7 +71,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
 
 # Stage 5: Frontend dependencies
 FROM playwright-env AS frontend-deps
-RUN corepack enable
+RUN npm install -g pnpm@10.15.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY frontend/package.json frontend/
 RUN pnpm install --frozen-lockfile && \
