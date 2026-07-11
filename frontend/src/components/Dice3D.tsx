@@ -906,14 +906,13 @@ export default function Dice3D({
     camera.position.set(0, 0, 4);
     cameraRef.current = camera;
 
-    let renderer: THREE.WebGLRenderer | null = null;
+    let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     } catch (e) {
       console.error('WebGL initialization failed:', e);
       return;
     }
-    if (!renderer) return;
 
     renderer.setSize(w, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));

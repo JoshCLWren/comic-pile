@@ -393,8 +393,12 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
     }
   }
 
+  let captureTimer: ReturnType<typeof setTimeout> | null = null
+  let captureSettled = false
+
   const timeoutPromise = new Promise<{ blob: Blob | null; diagnostics: ScreenshotDiagnostics }>((resolve) => {
-    setTimeout(() => {
+    captureTimer = setTimeout(() => {
+      if (captureSettled) return
       diagnostics.captureAttempts.push({
         method: 'capture-timeout',
         success: false,
@@ -405,8 +409,11 @@ export async function captureScreenshot(): Promise<{ blob: Blob | null; diagnost
   })
 
   try {
-    return await Promise.race([captureWork(), timeoutPromise])
+    const result = await Promise.race([captureWork(), timeoutPromise])
+    captureSettled = true
+    return result
   } finally {
+    if (captureTimer) clearTimeout(captureTimer)
     document.documentElement.classList.remove('screenshot-mode')
     overrideStyle?.remove()
     debugLog('Cleaned up screenshot mode')
