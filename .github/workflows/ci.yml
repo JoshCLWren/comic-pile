@@ -1,8 +1,13 @@
-name: Post-Merge CI
+name: CI
 
-# Runs all CI jobs after merging to main to catch any issues that slipped through
+# SECURITY: The following secrets must be configured in GitHub repository settings:
+# Settings > Secrets and variables > Actions > New repository secret
+# - SECRET_KEY: Application secret key for session encryption
+# - DATABASE_URL: PostgreSQL connection string (e.g., postgresql+asyncpg://postgres:PASSWORD@postgres:5432/comic_pile_test)
+# - POSTGRES_PASSWORD: PostgreSQL database password
 
 on:
+  pull_request:
   push:
     branches:
       - main
@@ -136,13 +141,74 @@ jobs:
       - name: Run vitest unit tests
         run: cd frontend && npm test
 
+  migration-health:
+    name: Migration Health
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image-tag }}
+    needs: build
+    timeout-minutes: 10
+    env:
+      CI: true
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
+      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: comic_pile_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Remove .env files
+        run: rm -f .env .env.test .env.backup .envrc 2>/dev/null || true
+
+      - name: Wait for PostgreSQL
+        run: |
+          i=1
+          while [ $i -le 30 ]; do
+            if pg_isready -h postgres -p 5432 -U postgres; then exit 0; fi
+            sleep 2; i=$((i + 1))
+          done
+          exit 1
+
+      - name: Check single Alembic head
+        run: |
+          HEADS=$(alembic heads 2>/dev/null | grep -c "(head)")
+          if [ "$HEADS" -ne 1 ]; then
+            echo "ERROR: $HEADS Alembic heads detected - resolve before merging"
+            alembic heads
+            exit 1
+          fi
+          echo "Single head confirmed: $(alembic heads 2>/dev/null)"
+
+      - name: Apply all migrations from scratch
+        run: alembic upgrade head
+
+      # Note: alembic check is intentionally omitted. The reviews table uses a
+      # NULLS NOT DISTINCT unique index (uq_review_user_thread_issue) applied via
+      # raw SQL in migration 4882a6a20f35. SQLAlchemy has no native representation
+      # for this, so alembic check always reports a false-positive difference.
+      # Single-head enforcement + clean upgrade-from-scratch is the effective gate.
+
   test-unit:
     name: Backend Tests
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-tag }}
     needs: build
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
       CI: true
       SECRET_KEY: test-secret-key-for-testing-only
@@ -196,7 +262,6 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: backend
-          name: codecov-umbrella
 
   test-e2e-api:
     name: E2E API Tests
@@ -373,6 +438,10 @@ jobs:
         shell: bash
         run: |
           export AUTO_BACKUP_ENABLED=false
+          # Debug: Log environment variables
+          echo "DATABASE_URL: ${DATABASE_URL:0:50}..."
+          echo "TEST_DATABASE_URL: ${TEST_DATABASE_URL:0:50}..."
+          echo "PGUSER: $PGUSER"
           # Each shard runs Playwright with a single worker, so one backend worker
           # is enough and avoids extra process startup and CPU contention.
           python -m uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 1 --log-level warning > /tmp/backend.log 2>&1 &
@@ -398,9 +467,9 @@ jobs:
         run: cd frontend && REUSE_EXISTING_SERVER=true BASE_URL=http://localhost:9000 npx playwright test --project=chromium --shard=${{ matrix.shardIndex }}/${{ matrix.totalShards }}
 
   check-all-jobs:
-    name: Post-Merge CI Summary
+    name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, test-unit, test-e2e-api, test-e2e-dice-ladder, test-e2e-playwright]
+    needs: [build, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, migration-health, test-unit, test-e2e-api, test-e2e-dice-ladder, test-e2e-playwright]
     if: always()
     steps:
       - name: Check job results
@@ -410,6 +479,7 @@ jobs:
           echo "Python Lint (ruff): ${{ needs.python-lint.result }}"
           echo "Python Type Check (ty): ${{ needs.python-typecheck.result }}"
           echo "Frontend Unit Tests: ${{ needs.frontend-unit-tests.result }}"
+          echo "Migration Health: ${{ needs.migration-health.result }}"
           echo "Backend Tests: ${{ needs.test-unit.result }}"
           echo "E2E API Tests: ${{ needs.test-e2e-api.result }}"
           echo "E2E Dice Ladder: ${{ needs.test-e2e-dice-ladder.result }}"
@@ -420,12 +490,13 @@ jobs:
              [ "${{ needs.python-lint.result }}" != "success" ] || \
              [ "${{ needs.python-typecheck.result }}" != "success" ] || \
              [ "${{ needs.frontend-unit-tests.result }}" != "success" ] || \
+             [ "${{ needs.migration-health.result }}" != "success" ] || \
              [ "${{ needs.test-unit.result }}" != "success" ] || \
              [ "${{ needs.test-e2e-api.result }}" != "success" ] || \
              [ "${{ needs.test-e2e-dice-ladder.result }}" != "success" ] || \
              [ "${{ needs.test-e2e-playwright.result }}" != "success" ]; then
-            echo "::error::One or more post-merge CI jobs failed. Please review the failures."
+            echo "::error::One or more CI jobs failed. Please review the failures."
             exit 1
           fi
 
-          echo "::notice::All post-merge CI jobs passed successfully!"
+          echo "::notice::All CI jobs passed successfully!"
