@@ -131,15 +131,6 @@ test.describe('Dependencies', () => {
       // Set mobile viewport for swipe actions
       await authenticatedPage.setViewportSize({ width: 375, height: 667 })
 
-      // Use API to attempt reading the blocked thread
-      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
-      const threadsResponse = await authenticatedPage.request.get('/api/threads/', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const threadsData = await threadsResponse.json()
-      const allThreads = threadsData.threads ?? threadsData
-      const blockedThread = allThreads.find((t: any) => t.title === 'B Main Story')
-
       // Set up dialog handler that auto-accepts and captures the message
       let dialogMessage = ''
       authenticatedPage.once('dialog', async (dialog) => {
