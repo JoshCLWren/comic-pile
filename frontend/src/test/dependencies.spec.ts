@@ -131,23 +131,30 @@ test.describe('Dependencies', () => {
       // Set mobile viewport for swipe actions
       await authenticatedPage.setViewportSize({ width: 375, height: 667 })
 
-      // Click the Read swipe action button on the blocked thread
+      // Use API to attempt reading the blocked thread
+      const token = await authenticatedPage.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+      const threadsResponse = await authenticatedPage.request.get('/api/threads/', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const threadsData = await threadsResponse.json()
+      const allThreads = threadsData.threads ?? threadsData
+      const blockedThread = allThreads.find((t: any) => t.title === 'B Main Story')
+
+      // Set up dialog handler that auto-accepts and captures the message
+      let dialogMessage = ''
+      authenticatedPage.once('dialog', async (dialog) => {
+        dialogMessage = dialog.message()
+        await dialog.accept()
+      })
+
+      // Trigger the read action via the swipe button (force click to bypass overlay)
       await authenticatedPage
         .locator('[data-testid="queue-thread-item"]')
         .filter({ hasText: 'B Main Story' })
         .locator('button[aria-label="Read"]')
         .click({ force: true })
 
-    // Set up dialog handler that auto-accepts and captures the message
-    let dialogMessage = ''
-    authenticatedPage.once('dialog', async (dialog) => {
-      dialogMessage = dialog.message()
-      await dialog.accept()
-    })
-
-    // The Read action on a blocked thread should trigger an alert
-    // Give it a moment to process
-    await authenticatedPage.waitForTimeout(500)
+      await authenticatedPage.waitForTimeout(1000)
 
     await expect.poll(() => dialogMessage.toLowerCase()).toContain('blocked')
   })
