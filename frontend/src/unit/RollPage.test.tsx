@@ -77,6 +77,7 @@ vi.mock('../services/api', async (importOriginal) => {
     ...actual,
     dependenciesApi: {
       getBlockingInfo: vi.fn().mockResolvedValue({ is_blocked: false, blocking_reasons: [] }),
+      getConnectedThreads: vi.fn().mockResolvedValue({ thread_id: 0, connected_threads: [] }),
     },
   }
 })

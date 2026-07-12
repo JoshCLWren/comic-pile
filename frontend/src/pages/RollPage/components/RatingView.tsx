@@ -7,6 +7,7 @@ import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import { RATING_THRESHOLD, getProgressPercentage } from '../utils'
 import type { RatingThread } from '../types'
 import type { ReadingOrder } from '../../../services/api-reading-orders'
+import type { ConnectedThreadInfo } from '../../../types'
 
 interface RatingViewProps {
   activeRatingThread: RatingThread | null
@@ -21,6 +22,7 @@ interface RatingViewProps {
   snoozeIsPending: boolean
   dismissIsPending: boolean
   readingOrders: ReadingOrder[]
+  connectedThreads: ConnectedThreadInfo[]
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze: () => void
@@ -41,6 +43,7 @@ export function RatingView({
   snoozeIsPending,
   dismissIsPending,
   readingOrders,
+  connectedThreads,
   onUpdateRating,
   onSubmitRating,
   onSnooze,
@@ -120,6 +123,24 @@ export function RatingView({
         </div>
       </div>
 
+      {connectedThreads.length > 0 && (
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-900/20 border border-blue-700/30 rounded-lg">
+            <span className="text-[10px] font-black uppercase tracking-wider text-blue-400">Connected</span>
+            <Tooltip content={`This thread is linked to ${connectedThreads.length} other thread${connectedThreads.length !== 1 ? 's' : ''} via dependencies.`}>
+              <span tabIndex={0} className="text-[9px] text-blue-500 cursor-help border-b border-dashed border-blue-800">
+                {connectedThreads.map((ct, i) => (
+                  <span key={ct.thread_id}>
+                    {i > 0 && ', '}
+                    {ct.title}
+                  </span>
+                ))}
+              </span>
+            </Tooltip>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-5 md:space-y-8">
         <div id="rating-preview-dice" className="dice-perspective">
           <div
@@ -153,7 +174,7 @@ export function RatingView({
         </div>
 
         <div className="text-center space-y-4">
-          <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the thread to the front and step the die down. Lower ratings move it back and step the die up.`}>
+          <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the thread to the front and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-stone-500 cursor-help">How was it?</p>
           </Tooltip>
           <div id="rating-value" className={`text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-amber-500' : 'text-red-700'}`}>
@@ -182,7 +203,7 @@ export function RatingView({
           <p id="queue-effect" className="text-[10px] font-black text-stone-300 text-center uppercase tracking-[0.15em] leading-relaxed">
             {rating >= RATING_THRESHOLD
               ? `Excellent! Die steps down 🎲 Move to front${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`
-              : `Okay. Die steps up 🎲 Move to back${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`}
+              : `Okay. Die steps up 🎲 Move past next roll range${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`}
           </p>
         </div>
 

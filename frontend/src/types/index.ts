@@ -338,6 +338,30 @@ export interface ThreadDependenciesResponse {
 }
 
 /**
+ * A thread connected via issue-level dependencies
+ */
+export interface ConnectedThreadInfo {
+  /** ID of the connected thread */
+  thread_id: number;
+  /** Title of the connected thread */
+  title: string;
+  /** Direction of the relationship */
+  connection_type: 'blocks' | 'blocked_by' | 'blocks & blocked_by';
+  /** ID of the dependency edge */
+  dependency_id: number;
+}
+
+/**
+ * Response from the thread connected-dependencies endpoint
+ */
+export interface ConnectedDependenciesResponse {
+  /** The queried thread ID */
+  thread_id: number;
+  /** Threads connected via dependency edges */
+  connected_threads: ConnectedThreadInfo[];
+}
+
+/**
  * Represents a single dependency edge for an issue
  */
 export interface IssueDependencyEdge {

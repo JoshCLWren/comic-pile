@@ -1028,11 +1028,18 @@ test.describe('Roll Dice Feature', () => {
       await dieButton.click();
       await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
+      await expect.poll(async () => {
+        const res = await request.get('/api/sessions/current/', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const data = await res.json();
+        return data.manual_die;
+      }, { timeout: 5000 }).toBe(MANUAL_DIE);
+
       const sessionBefore = await request.get('/api/sessions/current/', {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       const sessionBeforeData = await sessionBefore.json();
-      expect(sessionBeforeData.manual_die).toBe(MANUAL_DIE);
       expect(sessionBeforeData.current_die).toBe(MANUAL_DIE);
 
       await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
@@ -1068,11 +1075,18 @@ test.describe('Roll Dice Feature', () => {
       await dieButton.click();
       await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
+      await expect.poll(async () => {
+        const res = await request.get('/api/sessions/current/', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const data = await res.json();
+        return data.manual_die;
+      }, { timeout: 5000 }).toBe(MANUAL_DIE);
+
       const sessionBeforeRoll = await request.get('/api/sessions/current/', {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       const sessionBeforeRollData = await sessionBeforeRoll.json();
-      expect(sessionBeforeRollData.manual_die).toBe(MANUAL_DIE);
       expect(sessionBeforeRollData.current_die).toBe(MANUAL_DIE);
 
       await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
