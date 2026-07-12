@@ -100,6 +100,7 @@ test.describe('Issue #325: Correct Issue Number from Rating View', () => {
     await editIcon.click();
 
     const issueInput = authenticatedWithThreadsPage.locator('input#issue-number');
+    await expect(issueInput).toHaveValue(/\d+/);
     const initialValue = await issueInput.inputValue();
     const initialNum = parseInt(initialValue, 10);
 
