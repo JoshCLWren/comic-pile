@@ -1,6 +1,6 @@
 """Dependency API endpoints (/api/v1)."""
 
-from typing import Annotated
+from typing import Annotated, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -32,6 +32,16 @@ from comic_pile.dependencies import (
     get_dependency_order_conflicts,
     refresh_user_blocked_status,
 )
+
+
+class _ConnectedThreadEntry(TypedDict):
+    """Internal structure for tracking connected threads during deduplication."""
+
+    thread_id: int
+    title: str
+    types: set[str]
+    dependency_ids: set[int]
+
 
 router = APIRouter(tags=["dependencies"])
 
@@ -576,7 +586,7 @@ async def get_thread_connected_threads(
             thread_map[thread_obj.id] = thread_obj
 
     # Track unique connected threads by thread_id, aggregating connection types.
-    connected_by_thread: dict[int, dict[str, str | int]] = {}
+    connected_by_thread: dict[int, _ConnectedThreadEntry] = {}
 
     blocking_result2 = await db.execute(
         select(Dependency)

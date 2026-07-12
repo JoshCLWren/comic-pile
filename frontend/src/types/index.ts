@@ -346,7 +346,7 @@ export interface ConnectedThreadInfo {
   /** Title of the connected thread */
   title: string;
   /** Direction of the relationship */
-  connection_type: 'blocks' | 'blocked_by';
+  connection_type: 'blocks' | 'blocked_by' | 'blocks & blocked_by';
   /** ID of the dependency edge */
   dependency_id: number;
 }
