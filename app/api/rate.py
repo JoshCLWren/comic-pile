@@ -18,7 +18,7 @@ from app.schemas import RateRequest, ThreadResponse
 from app.api.thread import thread_to_response
 from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.dice_ladder import step_down, step_up
-from comic_pile.queue import move_to_back, move_to_front
+from comic_pile.queue import move_to_back, move_to_front, move_to_safe_position
 from comic_pile.session import get_current_die
 
 router = APIRouter()
@@ -370,7 +370,7 @@ async def rate_thread(
     elif rate_data.rating >= rating_threshold:
         await move_to_front(thread_id, user_id, db, commit=False)
     else:
-        await move_to_back(thread_id, user_id, db, commit=False)
+        await move_to_safe_position(thread_id, user_id, new_die, db)
 
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)

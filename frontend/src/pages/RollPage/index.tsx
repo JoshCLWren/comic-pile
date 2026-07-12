@@ -30,7 +30,7 @@ import { readingOrdersApi } from '../../services/api-reading-orders'
 import { reviewsApi } from '../../services/api-reviews'
 import { getApiErrorStatus, getApiErrorDetail } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
-import type { Thread, RollResponse, SessionThread, Collection, ReviewCreatePayload, Review } from '../../types'
+import type { Thread, RollResponse, SessionThread, Collection, ReviewCreatePayload, Review, ConnectedThreadInfo } from '../../types'
 import { useRollPageState } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import {
@@ -82,6 +82,7 @@ export default function RollPage() {
   const [pendingRatingAction, setPendingRatingAction] = useState<{finishSession: boolean} | null>(null)
   const [existingReview, setExistingReview] = useState<Review | null>(null)
   const [readingOrders, setReadingOrders] = useState<import('../../services/api-reading-orders').ReadingOrder[]>([])
+  const [connectedThreads, setConnectedThreads] = useState<ConnectedThreadInfo[]>([])
 
   const { data: session, refetch: refetchSession, isPending: isSessionLoading, isError: isSessionError, error: sessionError } = useSession()
   const { activeCollectionId = null } = useCollections()
@@ -229,8 +230,16 @@ export default function RollPage() {
         console.error('Failed to fetch reading orders:', error)
         setReadingOrders([])
       }
+      try {
+        const connectedResponse = await dependenciesApi.getConnectedThreads(threadId)
+        setConnectedThreads(connectedResponse.connected_threads)
+      } catch (error) {
+        console.error('Failed to fetch connected threads:', error)
+        setConnectedThreads([])
+      }
     } else {
       setReadingOrders([])
+      setConnectedThreads([])
     }
   }, [reviewsEnabled, session, currentDie, suppressPendingAutoOpenRef, setSelectedThreadId, setRolledResult, setActiveRatingThread, setRating, setErrorMessage, setPredictedDie, setIsRatingView])
 
@@ -865,6 +874,7 @@ useEffect(() => {
                 snoozeIsPending={snoozeMutation.isPending}
                 dismissIsPending={dismissPendingMutation.isPending}
                 readingOrders={readingOrders}
+                connectedThreads={connectedThreads}
                 onUpdateRating={updateRatingUI}
                 onSubmitRating={handleSubmitRating}
                 onSnooze={handleSnooze}

@@ -94,3 +94,19 @@ class ThreadDependencyOrderCheckResponse(BaseModel):
 
     thread_id: int
     conflicts: list[DependencyOrderConflict]
+
+
+class ConnectedThreadInfo(BaseModel):
+    """Lightweight info about a thread connected via dependencies."""
+
+    thread_id: int
+    title: str
+    connection_type: str  # "blocks" or "blocked_by"
+    dependency_id: int
+
+
+class ThreadConnectedResponse(BaseModel):
+    """Schema for thread dependency connectivity info."""
+
+    thread_id: int
+    connected_threads: list[ConnectedThreadInfo]

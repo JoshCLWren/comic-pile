@@ -13,6 +13,7 @@ import type {
   CollectionCreate,
   CollectionListResponse,
   CollectionUpdate,
+  ConnectedDependenciesResponse,
   Dependency,
   DependencyCreatePayload,
   IssueDependenciesResponse,
@@ -339,6 +340,8 @@ export const dependenciesApi = {
     api.get<IssueDependenciesResponse>(`/v1/issues/${issueId}/dependencies`),
   getBlockingInfo: (threadId: number) =>
     api.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
+  getConnectedThreads: (threadId: number) =>
+    api.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
   createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
     api.post<Dependency, { source_type: 'thread' | 'issue'; source_id: number; target_type: 'thread' | 'issue'; target_id: number }>('/v1/dependencies/', {
       source_type: sourceType,

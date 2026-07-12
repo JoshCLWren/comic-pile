@@ -94,9 +94,18 @@ async def move_to_back(thread_id: int, user_id: int, db: AsyncSession, commit: b
 
 
 async def move_to_position(
-    thread_id: int, user_id: int, new_position: int, db: AsyncSession
+    thread_id: int, user_id: int, new_position: int, db: AsyncSession,
+    do_commit: bool = True,
 ) -> None:
-    """Move thread to specific position."""
+    """Move thread to specific position.
+
+    Args:
+        thread_id: Thread to move.
+        user_id: Thread owner.
+        new_position: Target sequential position (1-indexed).
+        db: Async database session.
+        do_commit: Whether to commit inside this helper.
+    """
     logger.info(
         f"move_to_position ENTRY: thread_id={thread_id}, user_id={user_id}, new_position={new_position}"
     )
@@ -201,7 +210,8 @@ async def move_to_position(
         logger.info(f"Set target thread {thread_id} position to {new_position}")
 
     logger.debug("Committing database transaction")
-    await db.commit()
+    if do_commit:
+        await db.commit()
 
     logger.info(f"move_to_position SUCCESS: thread {thread_id} moved to position {new_position}")
 
@@ -219,6 +229,71 @@ async def move_to_position(
         logger.debug(
             f"  Position {thread.queue_position}: Thread {thread.id} ('{thread.title[:50]}...')"
         )
+
+
+async def move_to_safe_position(
+    thread_id: int,
+    user_id: int,
+    die_size: int,
+    db: AsyncSession,
+) -> None:
+    """Move thread to a position just beyond the current die range.
+
+    Instead of sending a low-rated thread to the very back (which can bury it
+    for months), place it at position ``die_size + 1`` in sequential order,
+    adjusted for blocked threads that occupy positions within the die range
+    but are not rollable.  This guarantees the thread won't reappear in the
+    next roll pool while keeping it realistically reachable.
+
+    Example (die=d6, no blocked threads):
+        Position 1-6: rollable pool
+        Rated thread -> position 7
+
+    Example (die=d6, 2 blocked threads in top 8):
+        Position 1-6: rollable pool (but 2 are blocked, so only 4 real options)
+        Rated thread -> position 9  (6 + 2 blocked = 8, +1 = 9)
+
+    Args:
+        thread_id: Thread to reposition.
+        user_id: Thread owner.
+        die_size: Current die size from the dice ladder.
+        db: Async database session (caller handles commit/rollback).
+    """
+    result = await db.execute(
+        select(Thread)
+        .where(Thread.user_id == user_id)
+        .where(Thread.status == "active")
+        .where(Thread.queue_position >= 1)
+        .order_by(Thread.queue_position)
+    )
+    all_active = list(result.scalars().all())
+
+    target_index = next(
+        (i for i, t in enumerate(all_active) if t.id == thread_id), -1
+    )
+    if target_index == -1:
+        return
+
+    if target_index == 0 and len(all_active) == 1:
+        return
+
+    # Count blocked threads among the first (die_size + target's position) slots.
+    # We want to place the thread far enough out that it won't be in the die
+    # range the next time the user rolls.
+    blocked_in_range = sum(
+        1 for i, t in enumerate(all_active)
+        if i != target_index
+        and t.is_blocked
+        and i < (die_size + target_index)
+    )
+
+    raw_target = die_size + 1 + blocked_in_range
+    target_seq = min(raw_target, len(all_active))
+
+    if target_seq == target_index + 1:
+        return
+
+    await move_to_position(thread_id, user_id, target_seq, db, do_commit=False)
 
 
 async def shuffle_queue(user_id: int, db: AsyncSession) -> int:

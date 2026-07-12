@@ -13,6 +13,7 @@ from app.models import Dependency, Issue, Thread
 from app.models.user import User
 from app.schemas.dependency import (
     BlockingExplanation,
+    ConnectedThreadInfo,
     DependencyCreate,
     DependencyNoteUpdate,
     DependencyOrderConflict,
@@ -20,6 +21,7 @@ from app.schemas.dependency import (
     DependencyResponse,
     IssueDependenciesResponse,
     IssueDependencyEdge,
+    ThreadConnectedResponse,
     ThreadDependenciesResponse,
     ThreadDependencyOrderCheckResponse,
 )
@@ -507,6 +509,111 @@ async def check_thread_dependency_order(
         conflicts.append(conflict_obj)
 
     return ThreadDependencyOrderCheckResponse(thread_id=thread_id, conflicts=conflicts)
+
+
+@router.get(
+    "/threads/{thread_id}/connected",
+    response_model=ThreadConnectedResponse,
+)
+async def get_thread_connected_threads(
+    thread_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ThreadConnectedResponse:
+    """Return threads connected to this one via dependencies.
+
+    When you are reading a thread, this tells you which other threads
+    are part of the same dependency web so you know there's a relationship.
+    """
+    thread = await db.get(Thread, thread_id)
+    if not thread or thread.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread {thread_id} not found",
+        )
+
+    source_issue = Issue.__table__.alias("source_issue")
+    target_issue = Issue.__table__.alias("target_issue")
+
+    blocking_result = await db.execute(
+        select(Dependency)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .where(source_issue.c.thread_id == thread_id)
+    )
+    blocked_by_result = await db.execute(
+        select(Dependency)
+        .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
+        .where(target_issue.c.thread_id == thread_id)
+    )
+
+    all_deps = list(blocking_result.scalars().all()) + list(blocked_by_result.scalars().all())
+    if not all_deps:
+        return ThreadConnectedResponse(thread_id=thread_id, connected_threads=[])
+
+    issue_ids = set()
+    for dep in all_deps:
+        if dep.source_issue_id is not None:
+            issue_ids.add(dep.source_issue_id)
+        if dep.target_issue_id is not None:
+            issue_ids.add(dep.target_issue_id)
+
+    issue_map: dict[int, Issue] = {}
+    thread_ids: set[int] = set()
+    if issue_ids:
+        result = await db.execute(
+            select(Issue).where(Issue.id.in_(issue_ids))
+        )
+        for issue_obj in result.scalars():
+            issue_map[issue_obj.id] = issue_obj
+            thread_ids.add(issue_obj.thread_id)
+
+    thread_map: dict[int, Thread] = {}
+    if thread_ids:
+        result = await db.execute(
+            select(Thread).where(Thread.id.in_(thread_ids)).where(Thread.user_id == current_user.id)
+        )
+        for thread_obj in result.scalars():
+            thread_map[thread_obj.id] = thread_obj
+
+    connected: list[ConnectedThreadInfo] = []
+
+    blocking_result2 = await db.execute(
+        select(Dependency)
+        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
+        .where(source_issue.c.thread_id == thread_id)
+    )
+    for dep in blocking_result2.scalars().all():
+        if dep.target_issue_id is not None:
+            target_issue_obj = issue_map.get(dep.target_issue_id)
+            if target_issue_obj:
+                target_thread_obj = thread_map.get(target_issue_obj.thread_id)
+                if target_thread_obj and target_issue_obj.thread_id != thread_id:
+                    connected.append(ConnectedThreadInfo(
+                        thread_id=target_thread_obj.id,
+                        title=target_thread_obj.title,
+                        connection_type="blocks",
+                        dependency_id=dep.id,
+                    ))
+
+    blocked_by_result2 = await db.execute(
+        select(Dependency)
+        .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
+        .where(target_issue.c.thread_id == thread_id)
+    )
+    for dep in blocked_by_result2.scalars().all():
+        if dep.source_issue_id is not None:
+            source_issue_obj = issue_map.get(dep.source_issue_id)
+            if source_issue_obj:
+                source_thread_obj = thread_map.get(source_issue_obj.thread_id)
+                if source_thread_obj and source_issue_obj.thread_id != thread_id:
+                    connected.append(ConnectedThreadInfo(
+                        thread_id=source_thread_obj.id,
+                        title=source_thread_obj.title,
+                        connection_type="blocked_by",
+                        dependency_id=dep.id,
+                    ))
+
+    return ThreadConnectedResponse(thread_id=thread_id, connected_threads=connected)
 
 
 async def _is_dependency_owned_by_user(
