@@ -128,18 +128,15 @@ test.describe('Dependencies', () => {
          .locator('[aria-label="Blocked thread"]')
      ).toBeVisible()
 
-     // Set mobile viewport for action sheet (mobile-only)
-     await authenticatedPage.setViewportSize({ width: 375, height: 667 })
+      // Set mobile viewport for swipe actions
+      await authenticatedPage.setViewportSize({ width: 375, height: 667 })
 
-     // Click the ⋮ menu button to open action sheet
-     await authenticatedPage
-       .locator('#queue-container .glass-card')
-       .filter({ hasText: 'B Main Story' })
-       .locator('button[aria-label="Open actions"]')
-       .click()
-
-    // Wait for action sheet modal to open
-    await authenticatedPage.waitForSelector('button:has-text("Read Now")', { state: 'visible' })
+      // Click the Read swipe action button on the blocked thread
+      await authenticatedPage
+        .locator('[data-testid="queue-thread-item"]')
+        .filter({ hasText: 'B Main Story' })
+        .locator('button[aria-label="Read"]')
+        .click()
 
     // Set up dialog handler that auto-accepts and captures the message
     let dialogMessage = ''
@@ -148,7 +145,9 @@ test.describe('Dependencies', () => {
       await dialog.accept()
     })
 
-    await authenticatedPage.click('button:has-text("Read Now")')
+    // The Read action on a blocked thread should trigger an alert
+    // Give it a moment to process
+    await authenticatedPage.waitForTimeout(500)
 
     await expect.poll(() => dialogMessage.toLowerCase()).toContain('blocked')
   })

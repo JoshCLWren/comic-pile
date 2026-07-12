@@ -6,24 +6,13 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     await authenticatedWithThreadsPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
 
-    const firstThreadCard = authenticatedWithThreadsPage.locator('#queue-container .glass-card').first();
+    const firstThreadCard = authenticatedWithThreadsPage.locator('[data-testid="queue-thread-item"]').first();
     await expect(firstThreadCard).toBeVisible({ timeout: 5000 });
 
-    // Set mobile viewport to make action sheet button visible
     await authenticatedWithThreadsPage.setViewportSize({ width: 375, height: 667 });
 
-    // Click the action menu (three dots) to open action sheet
-    await firstThreadCard.locator('button[aria-label="Open actions"]').click();
+    await firstThreadCard.locator('button[aria-label="Read"]').click();
 
-    await expect(async () => {
-      const modal = authenticatedWithThreadsPage.locator('.fixed.inset-0.z-50');
-      await expect(modal).toBeVisible();
-    }).toPass({ timeout: 5000 });
-
-    const readButton = authenticatedWithThreadsPage.getByText('Read Now', { exact: true }).first();
-    await expect(readButton).toBeVisible({ timeout: 3000 });
-
-    await readButton.click();
     await authenticatedWithThreadsPage.waitForSelector('#rating-input', { state: 'visible', timeout: 10000 });
 
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
