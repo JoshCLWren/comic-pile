@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { openThreadActions } from './helpers';
 
 /**
  * Helper to create a thread without total_issues (old system) via API
@@ -568,6 +569,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button for old thread
     const oldThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: oldThreadTitle }).first();
+    await openThreadActions(oldThreadCard)
     await oldThreadCard.locator('button[aria-label="Edit thread"]').click();
 
     const oldEditModal = authenticatedPage.locator('.edit-modal__overlay');
@@ -581,6 +583,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button for migrated thread
     const migratedThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: migratedThreadTitle }).first();
+    await openThreadActions(migratedThreadCard)
     await migratedThreadCard.locator('button[aria-label="Edit thread"]').click();
 
     const migratedEditModal = authenticatedPage.locator('.edit-modal__overlay');
@@ -603,6 +606,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await openThreadActions(threadCard)
     await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
@@ -648,6 +652,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card itself
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await openThreadActions(threadCard)
     await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
@@ -680,6 +685,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card itself
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await openThreadActions(threadCard)
     await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
@@ -715,6 +721,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await openThreadActions(threadCard)
     await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
@@ -752,6 +759,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await openThreadActions(threadCard)
     await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
@@ -783,6 +791,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
+    await openThreadActions(threadCard)
     await threadCard.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');

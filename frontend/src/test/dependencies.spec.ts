@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures'
-import { createThread } from './helpers'
+import {createThread, openThreadActions} from './helpers'
 import type { Page } from '@playwright/test'
 
 async function markIssueNumbersRead(
@@ -48,6 +48,7 @@ test.describe('Dependencies', () => {
     await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Thread' }).first()
+    await openThreadActions(targetCard)
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
     await authenticatedPage.fill('input#search-prereq-thread', 'Source')
@@ -172,6 +173,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Comic' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Prerequisite')
@@ -201,6 +203,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Series' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Source')
@@ -240,6 +243,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Main Series' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Prequel')
@@ -277,6 +281,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Comic' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Source')
@@ -317,6 +322,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Dependent Series' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Required')
@@ -352,6 +358,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Loading Target' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Loading')
@@ -388,6 +395,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Issue Target' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Issue Source')
@@ -425,6 +433,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'No Issues Target' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'No Issues')
@@ -462,6 +471,7 @@ test.describe('Dependencies', () => {
       await expect(authenticatedPage.locator('#root')).toBeVisible();
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'All Read Target' }).first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'All Read')

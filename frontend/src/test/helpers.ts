@@ -1,4 +1,4 @@
-import { type Page, expect } from '@playwright/test';
+import { type Page, type Locator, expect } from '@playwright/test';
 import type { Thread } from '../types';
 
 type Violation = {
@@ -55,6 +55,11 @@ export async function waitForThreadInQueue(page: Page, title: string): Promise<v
 
 export async function waitForEditThreadModal(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Edit Thread' })).toBeVisible()
+}
+
+export async function openThreadActions(threadItem: Locator): Promise<void> {
+  await threadItem.locator('button[aria-label="Thread actions"]').click()
+  await threadItem.locator('[role="menu"]').waitFor({ state: 'visible' })
 }
 
 function isAuthResponse(data: unknown): data is { access_token: string } {

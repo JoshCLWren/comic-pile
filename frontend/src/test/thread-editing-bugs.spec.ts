@@ -1,11 +1,11 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
-import {
-  createThread,
+import {createThread,
   extractThreadsFromResponse,
   findByTitle,
   gotoQueue,
   waitForEditThreadModal,
+  openThreadActions,
 } from './helpers';
 
 async function makeAuthenticatedRequest(page: any, method: string, url: string, data?: any, maxRetries = 3): Promise<any> {
@@ -78,6 +78,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // Step 3: Open the edit modal for the thread
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open - wait for the modal heading
@@ -155,6 +156,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
@@ -195,6 +197,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     await expect(authenticatedPage.locator('#root')).toBeVisible();
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });
@@ -243,6 +246,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Open edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
     await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
 
@@ -310,6 +314,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Open edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
     await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
 
@@ -366,6 +371,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
 
     // Open edit modal and add issue
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
     await authenticatedPage.waitForSelector('h2:has-text("Edit Thread")', { state: 'visible', timeout: 5000 });
 
@@ -435,6 +441,7 @@ test.describe('Thread Editing - Issue Adding Bug Reproduction', () => {
     // Step 3: Open the edit modal for the thread
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
