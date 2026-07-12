@@ -556,7 +556,9 @@ async def get_thread_connected_threads(
         .where(target_issue.c.thread_id == thread_id)
     )
 
-    all_deps = list(blocking_result.scalars().all()) + list(blocked_by_result.scalars().all())
+    blocking_deps = list(blocking_result.scalars().all())
+    blocked_by_deps = list(blocked_by_result.scalars().all())
+    all_deps = blocking_deps + blocked_by_deps
     if not all_deps:
         return ThreadConnectedResponse(thread_id=thread_id, connected_threads=[])
 
@@ -588,12 +590,7 @@ async def get_thread_connected_threads(
     # Track unique connected threads by thread_id, aggregating connection types.
     connected_by_thread: dict[int, _ConnectedThreadEntry] = {}
 
-    blocking_result2 = await db.execute(
-        select(Dependency)
-        .join(source_issue, Dependency.source_issue_id == source_issue.c.id)
-        .where(source_issue.c.thread_id == thread_id)
-    )
-    for dep in blocking_result2.scalars().all():
+    for dep in blocking_deps:
         if dep.target_issue_id is not None:
             target_issue_obj = issue_map.get(dep.target_issue_id)
             if target_issue_obj:
@@ -611,12 +608,7 @@ async def get_thread_connected_threads(
                         connected_by_thread[tid]["types"].add("blocks")
                         connected_by_thread[tid]["dependency_ids"].add(dep.id)
 
-    blocked_by_result2 = await db.execute(
-        select(Dependency)
-        .join(target_issue, Dependency.target_issue_id == target_issue.c.id)
-        .where(target_issue.c.thread_id == thread_id)
-    )
-    for dep in blocked_by_result2.scalars().all():
+    for dep in blocked_by_deps:
         if dep.source_issue_id is not None:
             source_issue_obj = issue_map.get(dep.source_issue_id)
             if source_issue_obj:
