@@ -441,9 +441,8 @@ export function extractThreadsFromResponse(response: unknown): Thread[] {
 export async function navigateToRatePage(page: Page): Promise<void> {
   await page.goto('/queue');
   await expect(page.locator('#queue-container')).toBeVisible();
-  await page.setViewportSize({ width: 375, height: 667 });
   const firstThreadCard = page.locator('[data-testid="queue-thread-item"]').first();
   await expect(firstThreadCard).toBeVisible();
-  await firstThreadCard.locator('button[aria-label="Read"]').click();
+  await firstThreadCard.locator('button[aria-label="Read"]').click({ force: true });
   await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
 }

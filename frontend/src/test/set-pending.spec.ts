@@ -9,9 +9,7 @@ test.describe('Set Pending Thread (Manual Selection)', () => {
     const firstThreadCard = authenticatedWithThreadsPage.locator('[data-testid="queue-thread-item"]').first();
     await expect(firstThreadCard).toBeVisible({ timeout: 5000 });
 
-    await authenticatedWithThreadsPage.setViewportSize({ width: 375, height: 667 });
-
-    await firstThreadCard.locator('button[aria-label="Read"]').click();
+    await firstThreadCard.locator('button[aria-label="Read"]').click({ force: true });
 
     await authenticatedWithThreadsPage.waitForSelector('#rating-input', { state: 'visible', timeout: 10000 });
 

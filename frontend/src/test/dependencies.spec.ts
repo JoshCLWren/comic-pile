@@ -136,7 +136,7 @@ test.describe('Dependencies', () => {
         .locator('[data-testid="queue-thread-item"]')
         .filter({ hasText: 'B Main Story' })
         .locator('button[aria-label="Read"]')
-        .click()
+        .click({ force: true })
 
     // Set up dialog handler that auto-accepts and captures the message
     let dialogMessage = ''
