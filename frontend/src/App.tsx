@@ -176,7 +176,7 @@ function AuthenticatedLayout({
 }) {
   return (
     <div className="flex min-h-screen">
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
+      <main className="flex-1 container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">
         {children}
       </main>
       <Navigation onBugReportSubmit={onBugReportSubmit} />
@@ -193,7 +193,7 @@ function PublicLayout({
 }) {
   return (
     <div className="min-h-screen">
-      <main className="container mx-auto px-4 py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-24">
+      <main className="container mx-auto px-3 md:px-4 py-4 md:py-6 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl pb-28">
         {children}
       </main>
       <Navigation onBugReportSubmit={onBugReportSubmit} />

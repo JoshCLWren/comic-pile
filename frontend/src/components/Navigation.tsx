@@ -87,22 +87,22 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   return (
     <>
       <nav className="fixed bottom-0 left-0 right-0 nav-container z-40" role="navigation" aria-label="Main navigation">
-        <div className="flex justify-around items-center h-20 px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
+        <div className="flex justify-around items-center h-14 md:h-20 px-1 md:px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
           <Link to="/" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/') ? 'active' : 'hover:bg-white/5'}`} aria-label="Roll page">
-            <span className="text-2xl mb-1" aria-hidden="true">🎲</span>
-            <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Roll</span>
+            <span className="text-2xl" aria-hidden="true">🎲</span>
+            <span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">Roll</span>
           </Link>
           <Link to="/queue" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/queue') ? 'active' : 'hover:bg-white/5'}`} aria-label="Queue page">
-            <span className="text-2xl mb-1" aria-hidden="true">📚</span>
-            <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Queue</span>
+            <span className="text-2xl" aria-hidden="true">📚</span>
+            <span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">Queue</span>
           </Link>
           <Link to="/history" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/history') ? 'active' : 'hover:bg-white/5'}`} aria-label="History page">
-            <span className="text-2xl mb-1" aria-hidden="true">📜</span>
-            <span className="text-[10px] uppercase tracking-widest font-bold nav-label">History</span>
+            <span className="text-2xl" aria-hidden="true">📜</span>
+            <span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">History</span>
           </Link>
           <Link to="/analytics" className={`nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${isActive('/analytics') ? 'active' : 'hover:bg-white/5'}`} aria-label="Analytics page">
-            <span className="text-2xl mb-1" aria-hidden="true">📊</span>
-            <span className="text-[10px] uppercase tracking-widest font-bold nav-label">Analytics</span>
+            <span className="text-2xl" aria-hidden="true">📊</span>
+            <span className="hidden md:block text-[10px] uppercase tracking-widest font-bold nav-label">Stats</span>
           </Link>
           <Link
             to="/help"
@@ -117,26 +117,27 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
           </div>
         </div>
       </nav>
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-3">
+      <div className="fixed top-2 right-2 md:top-4 md:right-4 z-50 flex items-center gap-2 md:gap-3">
         {isLoading ? (
-          <span className="text-xs text-stone-500 font-medium px-2 py-1">
+          <span className="hidden md:inline text-xs text-stone-500 font-medium px-2 py-1">
             Loading...
           </span>
         ) : hasError ? (
-          <span className="text-xs text-amber-500 font-medium px-2 py-1" title="Failed to load user data">
+          <span className="hidden md:inline text-xs text-amber-500 font-medium px-2 py-1" title="Failed to load user data">
             User
           </span>
         ) : username ? (
-          <span className="text-xs text-stone-400 font-medium px-2 py-1">
+          <span className="hidden md:inline text-xs text-stone-400 font-medium px-2 py-1">
             {username}
           </span>
         ) : null}
         <button
           onClick={handleLogout}
-          className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors"
+          className="px-2 py-1.5 md:px-3 text-xs font-bold uppercase tracking-widest text-red-400 hover:text-red-300 bg-[#110e0a]/60 hover:bg-[#110e0a]/80 rounded-lg transition-colors"
           aria-label="Log out"
         >
-          Log Out
+          <span className="md:hidden" aria-hidden="true">⎋</span>
+          <span className="hidden md:inline">Log Out</span>
         </button>
       </div>
     </>

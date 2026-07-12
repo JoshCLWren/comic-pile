@@ -10,7 +10,6 @@ import { MarqueeTitle } from '../../components/MarqueeTitle'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import CollectionDialog from '../../components/CollectionDialog'
-import ThemeSelector from '../../components/ThemeSelector'
 import CollectionToolbar from '../../components/CollectionToolbar'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../../hooks/useQueue'
 import { useCreateThread, useDeleteThread, useReactivateThread, useThreads, useUpdateThread } from '../../hooks/useThread'
@@ -18,6 +17,7 @@ import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
+import Swipeable from '../../components/Swipeable'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { useCollections } from '../../contexts/CollectionContext'
 import { collectionsEnabled } from '../../config/featureFlags'
@@ -60,15 +60,8 @@ export default function QueuePage() {
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
   const [repositioningThread, setRepositioningThread] = useState<Thread | null>(null)
   const [reorderError, setReorderError] = useState<string | null>(null)
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
-  const [isActionSheetOpen, setIsActionSheetOpen] = useState(false)
   const [sortBy, setSortBy] = useState<'position' | 'alphabetical' | 'created'>('position')
   const [searchQuery, setSearchQuery] = useState('')
-
-  const openActionSheet = (thread: Thread) => {
-    setSelectedThread(thread)
-    setIsActionSheetOpen(true)
-  }
   const [showMigrationDialog, setShowMigrationDialog] = useState(false)
   const [threadToMigrate, setThreadToMigrate] = useState<Thread | null>(null)
   const [blockedThreadIds, setBlockedThreadIds] = useState<number[]>([])
@@ -462,39 +455,35 @@ export default function QueuePage() {
     navigate(`/thread/${thread.id}`)
   }
 
-  async function handleAction(action: string) {
-    if (!selectedThread) return
-
-    setIsActionSheetOpen(false)
-
-    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === selectedThread.id) ?? false
+  async function handleActionForThread(action: string, thread: Thread) {
+    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
 
     try {
       switch (action) {
         case 'read':
           {
-            const isBlocked = blockedThreadIds.includes(selectedThread.id) || selectedThread.is_blocked
+            const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
             if (isBlocked) {
-              const reasons = blockingReasonMap[selectedThread.id] || ['This thread is blocked by a dependency.']
+              const reasons = blockingReasonMap[thread.id] || ['This thread is blocked by a dependency.']
               alert(`Cannot read yet:\n\n${reasons.join('\n')}`)
               break
             }
 
-            const response = await threadsApi.setPending(selectedThread.id)
+            const response = await threadsApi.setPending(thread.id)
             navigate('/', { state: { rollResponse: response } })
           }
           break
         case 'move-front':
-          await moveToFrontMutation.mutate(selectedThread.id)
+          await moveToFrontMutation.mutate(thread.id)
           await refetch()
           break
         case 'move-back':
-          await moveToBackMutation.mutate(selectedThread.id)
+          await moveToBackMutation.mutate(thread.id)
           await refetch()
           break
         case 'snooze':
           if (isSnoozed) {
-            await unsnoozeMutation.mutate(selectedThread.id)
+            await unsnoozeMutation.mutate(thread.id)
           } else {
             await snoozeMutation.mutate()
           }
@@ -502,11 +491,11 @@ export default function QueuePage() {
           await refetch()
           break
         case 'dependencies':
-          setDependencyThread(selectedThread)
+          setDependencyThread(thread)
           setIsDependencyBuilderOpen(true)
           break
         case 'edit':
-          navigate(`/thread/${selectedThread.id}`)
+          navigate(`/thread/${thread.id}`)
           break
       }
     } catch (error: unknown) {
@@ -539,21 +528,21 @@ export default function QueuePage() {
 
   return (
     <PositionMenuProvider>
-      <div className="space-y-10 pb-10">
-      <header className="space-y-4 px-2">
-        <div className="flex justify-between items-start gap-4">
-          <div>
-            <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
+      <div className="space-y-6 md:space-y-10 pb-10">
+      <header className="space-y-3 md:space-y-4 px-2">
+        <div className="flex justify-between items-start gap-2 md:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Read Queue</h1>
             <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Your upcoming comics</p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 md:gap-2 shrink-0">
             <button
               type="button"
               onClick={handleShuffleQueue}
               disabled={shuffleQueueMutation.isPending || activeThreads.length < 2}
-              className="h-12 px-5 rounded-lg border border-white/10 bg-white/5 text-xs font-black uppercase tracking-widest whitespace-nowrap text-stone-300 hover:bg-white/10 disabled:opacity-50"
+              className="h-9 md:h-12 px-3 md:px-5 rounded-lg border border-white/10 bg-white/5 text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap text-stone-300 hover:bg-white/10 disabled:opacity-50"
             >
-              Shuffle Queue
+              Shuffle
             </button>
             <button
               type="button"
@@ -562,7 +551,6 @@ export default function QueuePage() {
             >
               Add Thread
             </button>
-            <ThemeSelector />
           </div>
         </div>
         {collectionsEnabled && <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />}
@@ -573,13 +561,13 @@ export default function QueuePage() {
                 key={sort}
                 type="button"
                 onClick={() => setSortBy(sort)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${
+                className={`px-2.5 md:px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${
                   sortBy === sort
                     ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30'
                     : 'bg-white/5 text-stone-400 border border-white/10 hover:bg-white/10'
                 }`}
               >
-                {sort === 'position' ? 'Position' : sort === 'alphabetical' ? 'A-Z' : 'Newest'}
+                {sort === 'position' ? 'Pos' : sort === 'alphabetical' ? 'A-Z' : 'New'}
               </button>
             ))}
           </div>
@@ -587,7 +575,7 @@ export default function QueuePage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search threads..."
+            placeholder="Search..."
             className="h-9 px-3 bg-white/5 border border-white/10 rounded-lg text-xs text-stone-300 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-colors w-full md:w-auto"
           />
         </div>
@@ -628,14 +616,27 @@ export default function QueuePage() {
               const isMigrated = thread.total_issues !== null
 
               return (
-                <div
+                <Swipeable
                   key={thread.id}
                   data-testid="queue-thread-item"
-                  className={`glass-card p-4 space-y-3 group transition-all hover:border-white/20 cursor-pointer ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''
+                  onCardClick={() => handleThreadClick(thread)}
+                  className="rounded-xl"
+                  actions={[
+                    { icon: '📖', label: 'Read', onClick: () => handleActionForThread('read', thread), color: 'bg-amber-600/30 text-amber-300' },
+                    { icon: '✏️', label: 'Edit', onClick: () => navigate(`/thread/${thread.id}`), color: 'bg-white/10 text-stone-300' },
+                    { icon: session?.snoozed_threads?.some((t) => t.id === thread.id) ? '🔔' : '😴', label: session?.snoozed_threads?.some((t) => t.id === thread.id) ? 'Unsnooze' : 'Snooze', onClick: async () => {
+                      const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
+                      if (isSnoozed) { await unsnoozeMutation.mutate(thread.id) } else { await snoozeMutation.mutate() }
+                      await refetchSession(); await refetch()
+                    }, color: 'bg-teal-600/20 text-teal-400' },
+                    { icon: '🗑', label: 'Delete', onClick: () => handleDelete(thread.id), color: 'bg-red-600/25 text-red-400' },
+                  ]}
+                >
+                <div
+                  className={`glass-card p-3 md:p-4 space-y-2 md:space-y-3 group transition-all hover:border-white/20 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''
                     }`}
                   onDragOver={handleDragOver(thread.id)}
                   onDrop={handleDrop(thread.id)}
-                  onClick={() => handleThreadClick(thread)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
@@ -645,9 +646,9 @@ export default function QueuePage() {
                     }
                   }}
                 >
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <span className="text-2xl font-black text-amber-600/30">
+                  <div className="flex justify-between items-start gap-2 md:gap-3">
+                    <div className="flex items-start gap-2 md:gap-3 min-w-0 flex-1">
+                      <span className="text-xl md:text-2xl font-black text-amber-600/30">
                         #{index + 1}
                       </span>
                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -686,27 +687,8 @@ export default function QueuePage() {
           onDelete={handleDelete}
         />
       </div>
-      {/* Mobile 3-dot menu indicator */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          openActionSheet(thread)
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            e.stopPropagation()
-            openActionSheet(thread)
-          }
-        }}
-        className="md:hidden text-stone-500 flex items-center justify-center w-12 h-12 md:w-8 md:h-8 text-xl"
-        aria-label="Open actions"
-      >
-        ⋮
-      </button>
                   </div>
-                  <div className="pl-[2.75rem]">
+                  <div className="pl-8 md:pl-[2.75rem]">
                     <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
                     {thread.collection_id && (
                       <div className="mt-1.5 flex">
@@ -741,6 +723,7 @@ export default function QueuePage() {
                     )}
                   </div>
                 </div>
+                </Swipeable>
               )
             })}
           </div>
@@ -751,13 +734,13 @@ export default function QueuePage() {
       <section className="space-y-4">
         <header className="flex items-center justify-between px-2">
           <div>
-            <h2 className="text-xl font-black uppercase text-stone-300">Completed Threads</h2>
+            <h2 className="text-lg md:text-xl font-black uppercase text-stone-300">Completed Threads</h2>
             <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Reactivate finished series</p>
           </div>
           <button
             type="button"
             onClick={() => openReactivateModal(null)}
-            className="h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
+            className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10"
           >
             Reactivate
           </button>
@@ -1021,59 +1004,6 @@ export default function QueuePage() {
             onCancel={() => setRepositioningThread(null)}
           />
         )}
-      </Modal>
-
-      <Modal isOpen={isActionSheetOpen} title={selectedThread?.title ?? ''} onClose={() => setIsActionSheetOpen(false)}>
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => handleAction('read')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">📖</span>
-            <span>Read Now</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('move-front')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">⬆️</span>
-            <span>Move to Front</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('move-back')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">⬇️</span>
-            <span>Move to Back</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('snooze')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? '🔔' : '😴'}</span>
-            <span>{session?.snoozed_threads?.some((t) => t.id === selectedThread?.id) ? 'Unsnooze' : 'Snooze'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('dependencies')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">🔗</span>
-            <span>Dependencies</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAction('edit')}
-            className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">✏️</span>
-            <span>Edit Thread</span>
-          </button>
-        </div>
       </Modal>
 
       <DependencyBuilder

@@ -49,11 +49,11 @@ export function ThreadPool({
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   return (
-    <div className={`px-4 pb-4 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-8'}`}>
+    <div className={`px-3 md:px-4 pb-3 md:pb-4 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
       {!isRolling && rolledResult === null && !isRatingView && pool.length > 0 && (
         <p
           id="tap-instruction"
-          className="text-stone-500 font-black uppercase tracking-[0.5em] text-[10px] animate-pulse shrink-0 text-center mb-8"
+          className="text-stone-500 font-black uppercase tracking-[0.5em] text-[10px] animate-pulse shrink-0 text-center mb-4 md:mb-8"
         >
           Tap Die to Roll
         </p>
@@ -182,7 +182,7 @@ export function ThreadPool({
       {staleThread && !isRatingView && (
         <div
           onClick={onReadStale}
-          className="mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
+          className="mt-4 md:mt-8 animate-[fade-in_0.5s_ease-out] cursor-pointer hover:bg-amber-500/5 transition-colors rounded-xl"
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -210,7 +210,7 @@ export function ThreadPool({
       )}
 
       {snoozedThreads && snoozedThreads.length > 0 && !isRatingView && (
-        <div className="mt-8">
+        <div className="mt-4 md:mt-8">
           <button
             type="button"
             onClick={onToggleSnoozed}

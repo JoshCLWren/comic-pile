@@ -763,7 +763,7 @@ describe('Rating View', () => {
     await user.click(sagaItem)
     await user.click(screen.getByText('Read Now'))
 
-    await user.click(screen.getByText('Cancel Pending Roll'))
+    await user.click(screen.getByText('Cancel'))
 
     expect(screen.getByText('Tap Die to Roll')).toBeInTheDocument()
 
@@ -1030,7 +1030,7 @@ describe('Rating View', () => {
       expect(screen.getByText('How was it?')).toBeInTheDocument()
     })
 
-    await user.click(screen.getByText('Cancel Pending Roll'))
+    await user.click(screen.getByText('Cancel'))
 
     await waitFor(() => {
       expect(dismissSpy).toHaveBeenCalled()

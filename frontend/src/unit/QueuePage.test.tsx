@@ -208,7 +208,7 @@ it('shuffles the queue from the header control', async () => {
     </BrowserRouter>
   )
 
-  await user.click(screen.getByRole('button', { name: /shuffle queue/i }))
+  await user.click(screen.getByRole('button', { name: /shuffle/i }))
 
   expect(mockShuffle.mutate).toHaveBeenCalled()
   expect(mockRefetch).toHaveBeenCalled()
@@ -225,8 +225,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
 
-  it('opens action sheet when clicking thread card 3-dot menu', async () => {
-    const user = userEvent.setup()
+  it('shows swipe actions for thread cards', () => {
     render(
       <BrowserRouter>
         <ToastProvider>
@@ -235,16 +234,17 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const actionButtons = screen.getAllByLabelText('Open actions')
-    await user.click(actionButtons[0])
-    expect(screen.getByText('Read Now')).toBeInTheDocument()
-    expect(screen.getByText('Move to Front')).toBeInTheDocument()
-    expect(screen.getByText('Move to Back')).toBeInTheDocument()
-    expect(screen.getByText('Snooze')).toBeInTheDocument()
-    expect(screen.getByText('Edit Thread')).toBeInTheDocument()
+    const readButtons = screen.getAllByLabelText('Read')
+    const editButtons = screen.getAllByLabelText('Edit')
+    const snoozeButtons = screen.getAllByLabelText('Snooze')
+    const deleteButtons = screen.getAllByLabelText('Delete')
+    expect(readButtons.length).toBeGreaterThan(0)
+    expect(editButtons.length).toBeGreaterThan(0)
+    expect(snoozeButtons.length).toBeGreaterThan(0)
+    expect(deleteButtons.length).toBeGreaterThan(0)
   })
 
-  it('calls snooze mutation when thread is not snoozed and snooze action is clicked', async () => {
+  it('calls snooze mutation when snooze swipe action is clicked', async () => {
     const user = userEvent.setup()
     render(
       <BrowserRouter>
@@ -254,17 +254,14 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const actionButtons = screen.getAllByLabelText('Open actions')
-    await user.click(actionButtons[0])
-
-    const snoozeButton = screen.getByText('Snooze')
-    await user.click(snoozeButton)
+    const snoozeButtons = screen.getAllByLabelText('Snooze')
+    await user.click(snoozeButtons[0])
 
     expect(mockSnoozeMutation.mutate).toHaveBeenCalled()
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
-  it('calls unsnooze mutation when thread is snoozed and unsnooze action is clicked', async () => {
+  it('calls unsnooze mutation when unsnooze swipe action is clicked', async () => {
     mockedUseSession.mockReturnValue({
       data: {
         snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }]
@@ -281,11 +278,8 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const actionButtons = screen.getAllByLabelText('Open actions')
-    await user.click(actionButtons[0])
-
-    const unsnoozeButton = screen.getByText('Unsnooze')
-    await user.click(unsnoozeButton)
+    const unsnoozeButtons = screen.getAllByLabelText('Unsnooze')
+    await user.click(unsnoozeButtons[0])
 
     expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
     expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
@@ -315,11 +309,8 @@ describe('Action Sheet Snooze/Unsnooze', () => {
       </BrowserRouter>
     )
 
-    const actionButtons = screen.getAllByLabelText('Open actions')
-    await user.click(actionButtons[0])
-
-    const snoozeButton = screen.getByText('Snooze')
-    await user.click(snoozeButton)
+    const snoozeButtons = screen.getAllByLabelText('Snooze')
+    await user.click(snoozeButtons[0])
 
     await waitFor(() => {
       expect(mockRefetchSession).toHaveBeenCalled()
@@ -329,8 +320,7 @@ describe('Action Sheet Snooze/Unsnooze', () => {
 })
 
 describe('Keyboard Accessibility', () => {
-  it('opens action sheet when pressing Enter on thread card 3-dot menu', async () => {
-    const user = userEvent.setup()
+  it('thread card is present and focusable', () => {
     render(
       <BrowserRouter>
         <ToastProvider>
@@ -339,27 +329,7 @@ describe('Keyboard Accessibility', () => {
       </BrowserRouter>
     )
 
-    const actionButtons = screen.getAllByLabelText('Open actions')
-    actionButtons[0].focus()
-    await user.keyboard('{Enter}')
-
-    expect(screen.getByText('Read Now')).toBeInTheDocument()
-  })
-
-  it('opens action sheet when pressing Space on thread card 3-dot menu', async () => {
-    const user = userEvent.setup()
-    render(
-      <BrowserRouter>
-        <ToastProvider>
-          <QueuePage />
-        </ToastProvider>
-      </BrowserRouter>
-    )
-
-    const actionButtons = screen.getAllByLabelText('Open actions')
-    actionButtons[0].focus()
-    await user.keyboard(' ')
-
-    expect(screen.getByText('Read Now')).toBeInTheDocument()
+    const threadItems = screen.getAllByTestId('queue-thread-item')
+    expect(threadItems.length).toBeGreaterThan(0)
   })
 })

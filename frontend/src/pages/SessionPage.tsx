@@ -22,14 +22,14 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-6 md:space-y-8 pb-20">
       <header className="px-2">
-        <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Session Details</h1>
+        <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Session Details</h1>
         <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">Session #{details.session_id}</p>
       </header>
 
-      <div className="glass-card p-6 space-y-6">
-        <div className="grid gap-4 md:grid-cols-2">
+      <div className="glass-card p-4 md:p-6 space-y-4 md:space-y-6">
+        <div className="grid gap-3 md:gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Started</p>
             <p className="text-sm font-black text-stone-200">{formatDateTime(details.started_at)}</p>
@@ -53,7 +53,7 @@ export default function SessionPage() {
           <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Ladder Path</p>
           <p className="text-sm font-bold text-stone-300">{details.ladder_path}</p>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-3 md:gap-4 md:grid-cols-3">
           {Object.entries(details.narrative_summary || {}).map(([key, values]) => (
             <div key={key} className="space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{key}</p>
@@ -71,14 +71,14 @@ export default function SessionPage() {
         </div>
       </div>
 
-      <div className="glass-card p-6 space-y-4">
+      <div className="glass-card p-4 md:p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black uppercase text-stone-200">Snapshots</h2>
           <button
             type="button"
             onClick={() => restoreMutation.mutate(details.session_id)}
             disabled={restoreMutation.isPending || snapshots.length === 0}
-            className="h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60"
+            className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60"
           >
             {restoreMutation.isPending ? 'Restoring...' : 'Restore Start'}
           </button>
@@ -88,9 +88,9 @@ export default function SessionPage() {
         ) : (
           <div className="space-y-3">
             {snapshots.map((snapshot) => (
-              <div key={snapshot.id} className="flex items-center justify-between gap-4 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
-                <div>
-                  <p className="text-sm font-bold text-stone-300">{snapshot.description || 'Snapshot'}</p>
+              <div key={snapshot.id} className="flex items-center justify-between gap-2 md:gap-4 bg-white/5 border border-white/10 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
+                <div className="min-w-0">
+                  <p className="text-xs md:text-sm font-bold text-stone-300">{snapshot.description || 'Snapshot'}</p>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">{formatDateTime(snapshot.created_at)}</p>
                 </div>
                 <button
@@ -99,7 +99,7 @@ export default function SessionPage() {
                     undoMutation.mutate({ sessionId: details.session_id, snapshotId: snapshot.id })
                   }
                   disabled={undoMutation.isPending}
-                  className="h-10 px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60"
+                  className="h-8 md:h-10 px-3 md:px-4 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 disabled:opacity-60 shrink-0"
                 >
                   Undo
                 </button>
@@ -109,14 +109,14 @@ export default function SessionPage() {
         )}
       </div>
 
-      <div className="glass-card p-6 space-y-4">
+      <div className="glass-card p-4 md:p-6 space-y-4">
         <h2 className="text-lg font-black uppercase text-stone-200">Event Timeline</h2>
         {details.events.length === 0 ? (
           <p className="text-xs text-stone-500">No events recorded.</p>
         ) : (
           <div className="space-y-3">
             {details.events.map((event) => (
-              <div key={event.id} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+              <div key={event.id} className="bg-white/5 border border-white/10 rounded-xl px-3 md:px-4 py-2.5 md:py-3">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                     {formatDateTime(event.timestamp)}

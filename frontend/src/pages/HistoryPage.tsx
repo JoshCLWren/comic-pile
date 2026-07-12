@@ -14,12 +14,12 @@ export default function HistoryPage() {
 
   if (!sessions || sessions.length === 0) {
     return (
-      <div className="space-y-8 pb-20">
+      <div className="space-y-6 md:space-y-8 pb-20">
         <header className="px-2">
-          <div className="flex items-center gap-4">
-            <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">History</h1>
+          <div className="flex items-center gap-3 md:gap-4">
+            <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">History</h1>
             <a href="/admin/export/summary/"
-               className="h-10 px-4 glass-button text-[10px] font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+               className="h-9 md:h-10 px-3 md:px-4 glass-button text-[10px] font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
                download>
               Export Summary
             </a>
@@ -83,9 +83,9 @@ export default function HistoryPage() {
         {sessions.map((session) => {
           const duration = formatDuration(session.started_at, session.ended_at)
           return (
-            <div key={session.id} role="listitem" className="glass-card p-6 group transition-all hover:border-white/20 relative overflow-hidden">
-              <div className="flex justify-between items-start gap-6 relative z-10">
-                <div className="space-y-4 flex-1 min-w-0">
+            <div key={session.id} role="listitem" className="glass-card p-4 md:p-6 group transition-all hover:border-white/20 relative overflow-hidden">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-6 relative z-10">
+                <div className="space-y-3 md:space-y-4 flex-1 min-w-0">
                   <div className="flex items-center gap-3">
                     <div className="px-2 py-0.5 bg-white/5 rounded-lg border border-white/5 text-[9px] font-black uppercase tracking-widest text-stone-400">
                       {formatDate(session.started_at)}
@@ -130,12 +130,13 @@ export default function HistoryPage() {
                   )}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <Link
                     to={`/sessions/${session.id}`}
-                    className="h-12 px-6 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+                    className="h-9 md:h-12 px-4 md:px-6 glass-button text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl flex items-center"
                   >
-                    View Full Session
+                    <span className="md:hidden">View</span>
+                    <span className="hidden md:inline">View Full Session</span>
                   </Link>
                 </div>
               </div>

@@ -149,9 +149,9 @@ export default function ThreadDetailView() {
 
   if (error || !thread) {
     return (
-      <div className="space-y-8 pb-20">
+      <div className="space-y-6 md:space-y-8 pb-20">
         <header className="px-2">
-          <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Thread Details</h1>
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">Thread Details</h1>
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">View thread information</p>
         </header>
         <div className="text-center text-stone-500">
@@ -166,9 +166,9 @@ export default function ThreadDetailView() {
   const issuesReadCount = getIssuesReadCount()
 
   return (
-    <div className="space-y-8 pb-20">
-      <header className="flex justify-between items-start px-2 gap-4">
-        <div className="flex-1">
+    <div className="space-y-6 md:space-y-8 pb-20">
+      <header className="flex justify-between items-start px-2 gap-2 md:gap-4">
+        <div className="flex-1 min-w-0">
           <button
             type="button"
             onClick={() => navigate('/queue')}
@@ -176,19 +176,19 @@ export default function ThreadDetailView() {
           >
             ← Back to Queue
           </button>
-          <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">{thread.title}</h1>
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase truncate">{thread.title}</h1>
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">{thread.format}</p>
         </div>
         <button
           type="button"
           onClick={openEditModal}
-          className="h-12 px-5 glass-button text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl"
+          className="h-9 md:h-12 px-4 md:px-5 glass-button text-[10px] md:text-xs font-black uppercase tracking-widest whitespace-nowrap shadow-xl shrink-0"
         >
           Edit
         </button>
       </header>
 
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         {thread.collection_id && (
           <div className="flex">
             <CollectionBadge collectionId={thread.collection_id} />
@@ -196,7 +196,7 @@ export default function ThreadDetailView() {
         )}
 
         {progressPercentage && (
-          <div className="glass-card p-4 space-y-3">
+          <div className="glass-card p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">Reading Progress</span>
               <span className="text-sm font-black text-amber-400">{progressPercentage}</span>
@@ -212,14 +212,14 @@ export default function ThreadDetailView() {
         )}
 
         {thread.notes && (
-          <div className="glass-card p-4 space-y-2">
+          <div className="glass-card p-3 md:p-4 space-y-2">
             <span className="text-xs font-black uppercase tracking-widest text-stone-500">Notes</span>
             <p className="text-sm text-stone-300 whitespace-pre-wrap">{thread.notes}</p>
           </div>
         )}
 
         {isMigrated && issues.length > 0 && (
-          <div className="glass-card p-4 space-y-3">
+          <div className="glass-card p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
                 Issues ({issues.length})
@@ -270,14 +270,14 @@ export default function ThreadDetailView() {
         )}
 
         {!isMigrated && (
-          <div className="glass-card p-4 space-y-2">
+          <div className="glass-card p-3 md:p-4 space-y-2">
             <span className="text-xs font-black uppercase tracking-widest text-stone-500">Issues Remaining</span>
             <p className="text-sm text-stone-300">{thread.issues_remaining} issues</p>
           </div>
         )}
 
         {reviewsEnabled && (
-          <div className="glass-card p-4 space-y-3">
+          <div className="glass-card p-3 md:p-4 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black uppercase tracking-widest text-stone-500">
                 Reviews {reviews.length > 0 && `(${reviews.length})`}
@@ -323,12 +323,12 @@ export default function ThreadDetailView() {
           </div>
         )}
 
-        <div className="glass-card p-4 space-y-2">
+        <div className="glass-card p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">Queue Position</span>
           <p className="text-sm text-stone-300">Position #{thread.queue_position}</p>
         </div>
 
-        <div className="glass-card p-4 space-y-2">
+        <div className="glass-card p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">Status</span>
           <p className="text-sm font-black uppercase">{thread.status}</p>
         </div>
