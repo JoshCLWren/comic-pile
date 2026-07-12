@@ -130,7 +130,7 @@ export function RatingView({
             <Tooltip content={`This thread is linked to ${connectedThreads.length} other thread${connectedThreads.length !== 1 ? 's' : ''} via dependencies.`}>
               <span className="text-[9px] text-blue-500 cursor-help border-b border-dashed border-blue-800">
                 {connectedThreads.map((ct, i) => (
-                  <span key={ct.dependency_id}>
+                  <span key={ct.thread_id}>
                     {i > 0 && ', '}
                     {ct.title}
                   </span>
@@ -174,7 +174,7 @@ export function RatingView({
         </div>
 
         <div className="text-center space-y-4">
-          <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the thread to the front and step the die down. Lower ratings move it back and step the die up.`}>
+          <Tooltip content={`Ratings of ${RATING_THRESHOLD.toFixed(1)}+ move the thread to the front and step the die down. Lower ratings move it past the next roll range and step the die up.`}>
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-stone-500 cursor-help">How was it?</p>
           </Tooltip>
           <div id="rating-value" className={`text-4xl font-black ${rating >= RATING_THRESHOLD ? 'text-amber-500' : 'text-red-700'}`}>
@@ -203,7 +203,7 @@ export function RatingView({
           <p id="queue-effect" className="text-[10px] font-black text-stone-300 text-center uppercase tracking-[0.15em] leading-relaxed">
             {rating >= RATING_THRESHOLD
               ? `Excellent! Die steps down 🎲 Move to front${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`
-              : `Okay. Die steps up 🎲 Move to back${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`}
+              : `Okay. Die steps up 🎲 Move past next roll range${predictedDie !== currentDie ? ` (d${predictedDie})` : ''}`}
           </p>
         </div>
 

@@ -10,7 +10,7 @@ from comic_pile.queue import move_to_safe_position
 async def test_move_to_safe_position_no_blocked(
     async_db: AsyncSession, default_user, sample_data
 ) -> None:
-    """With die=d6 and no blocked threads, thread lands at position 7."""
+    """With die=d6 and fewer threads than die+1, thread lands at position 4 (back of queue)."""
     thread = sample_data["threads"][0]  # Superman, pos 1
     # Superman is at position 1, die=6 => safe position should be min(7, active_count)
     # Active threads after superman: Batman(2), Flash(4), Aquaman(5) = 4 total

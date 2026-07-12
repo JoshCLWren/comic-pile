@@ -684,3 +684,61 @@ async def test_dep_does_not_block_when_next_unread_past_dep_target(async_db):
 
     blocked = await get_blocked_thread_ids(user.id, async_db)
     assert target_thread.id not in blocked
+
+
+@pytest.mark.asyncio
+async def test_connected_threads_deduplicates_multiple_edges(
+    async_db, auth_client, default_user
+):
+    """Connected threads endpoint should deduplicate by thread_id when multiple edges exist."""
+    user = default_user
+
+    thread_a = Thread(
+        title="Thread A",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    thread_b = Thread(
+        title="Thread B",
+        format="Comic",
+        issues_remaining=2,
+        queue_position=2,
+        status="active",
+        user_id=user.id,
+        total_issues=2,
+    )
+    async_db.add_all([thread_a, thread_b])
+    await async_db.flush()
+
+    # Create two issues per thread
+    a_issue_1 = Issue(thread_id=thread_a.id, issue_number="1", position=1, status="unread")
+    a_issue_2 = Issue(thread_id=thread_a.id, issue_number="2", position=2, status="unread")
+    b_issue_1 = Issue(thread_id=thread_b.id, issue_number="1", position=1, status="unread")
+    b_issue_2 = Issue(thread_id=thread_b.id, issue_number="2", position=2, status="unread")
+    async_db.add_all([a_issue_1, a_issue_2, b_issue_1, b_issue_2])
+    await async_db.flush()
+
+    # Create TWO dependency edges between the same threads:
+    # A issue 1 -> B issue 1
+    # A issue 2 -> B issue 2
+    async_db.add_all([
+        Dependency(source_issue_id=a_issue_1.id, target_issue_id=b_issue_1.id),
+        Dependency(source_issue_id=a_issue_2.id, target_issue_id=b_issue_2.id),
+    ])
+    await async_db.commit()
+
+    # The connected threads endpoint should return Thread B only ONCE,
+    # not once per dependency edge.
+    response = await auth_client.get(f"/api/v1/threads/{thread_a.id}/connected")
+    assert response.status_code == 200
+
+    data = response.json()
+    connected = data["connected_threads"]
+    thread_ids = [ct["thread_id"] for ct in connected]
+    assert len(connected) == 1, f"Expected 1 connected thread, got {len(connected)}"
+    assert thread_ids.count(thread_b.id) == 1, "Thread B should appear only once"
+    assert connected[0]["title"] == "Thread B"

@@ -575,7 +575,8 @@ async def get_thread_connected_threads(
         for thread_obj in result.scalars():
             thread_map[thread_obj.id] = thread_obj
 
-    connected: list[ConnectedThreadInfo] = []
+    # Track unique connected threads by thread_id, aggregating connection types.
+    connected_by_thread: dict[int, dict[str, str | int]] = {}
 
     blocking_result2 = await db.execute(
         select(Dependency)
@@ -588,12 +589,17 @@ async def get_thread_connected_threads(
             if target_issue_obj:
                 target_thread_obj = thread_map.get(target_issue_obj.thread_id)
                 if target_thread_obj and target_issue_obj.thread_id != thread_id:
-                    connected.append(ConnectedThreadInfo(
-                        thread_id=target_thread_obj.id,
-                        title=target_thread_obj.title,
-                        connection_type="blocks",
-                        dependency_id=dep.id,
-                    ))
+                    tid = target_thread_obj.id
+                    if tid not in connected_by_thread:
+                        connected_by_thread[tid] = {
+                            "thread_id": tid,
+                            "title": target_thread_obj.title,
+                            "types": {"blocks"},
+                            "dependency_ids": {dep.id},
+                        }
+                    else:
+                        connected_by_thread[tid]["types"].add("blocks")
+                        connected_by_thread[tid]["dependency_ids"].add(dep.id)
 
     blocked_by_result2 = await db.execute(
         select(Dependency)
@@ -606,12 +612,33 @@ async def get_thread_connected_threads(
             if source_issue_obj:
                 source_thread_obj = thread_map.get(source_issue_obj.thread_id)
                 if source_thread_obj and source_issue_obj.thread_id != thread_id:
-                    connected.append(ConnectedThreadInfo(
-                        thread_id=source_thread_obj.id,
-                        title=source_thread_obj.title,
-                        connection_type="blocked_by",
-                        dependency_id=dep.id,
-                    ))
+                    tid = source_thread_obj.id
+                    if tid not in connected_by_thread:
+                        connected_by_thread[tid] = {
+                            "thread_id": tid,
+                            "title": source_thread_obj.title,
+                            "types": {"blocked_by"},
+                            "dependency_ids": {dep.id},
+                        }
+                    else:
+                        connected_by_thread[tid]["types"].add("blocked_by")
+                        connected_by_thread[tid]["dependency_ids"].add(dep.id)
+
+    connected: list[ConnectedThreadInfo] = []
+    for entry in connected_by_thread.values():
+        types = entry["types"]
+        if types == {"blocks"}:
+            connection_type = "blocks"
+        elif types == {"blocked_by"}:
+            connection_type = "blocked_by"
+        else:
+            connection_type = "blocks & blocked_by"
+        connected.append(ConnectedThreadInfo(
+            thread_id=entry["thread_id"],
+            title=entry["title"],
+            connection_type=connection_type,
+            dependency_id=min(entry["dependency_ids"]),
+        ))
 
     return ThreadConnectedResponse(thread_id=thread_id, connected_threads=connected)
 
