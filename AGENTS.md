@@ -29,6 +29,23 @@ If a test is failing:
 - **Write regression tests** for bugs you find and fix
 - **Update documentation** when you find gaps or outdated information
 
+## CRITICAL: NEVER USE CI AS A LOCAL DEBUGGER
+
+**⚠️ ALL TESTS MUST PASS LOCALLY BEFORE PUSHING. NO EXCEPTIONS.**
+
+CI is not a debugging tool. Every failed CI run wastes compute, blocks the pipeline, and disrespects the reviewer's time. If you push code that fails CI and then push fix-after-fix to get it green, you are using CI as your local debugger. This is prohibited.
+
+**Before pushing ANY branch that has changes to frontend or E2E tests:**
+1. Run `cd frontend && pnpm run lint && pnpm run typecheck` - must be clean
+2. Run `cd frontend && pnpm run build` - must succeed
+3. Run `cd frontend && pnpm test` (vitest) - all must pass
+4. Run `cd frontend && pnpm run build && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium` - all E2E must pass (requires backend running on port 9000)
+5. Only after ALL of the above are green, you may push
+
+**If E2E tests need a backend:** Start one locally with `.venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000` and set `REUSE_EXISTING_SERVER=true`. Do not push to trigger CI to run them for you.
+
+**This is a hard rule.** Violating it is the same severity as skipping tests or bypassing hooks. If you cannot run E2E tests locally for some reason, say so explicitly and ask the user before pushing.
+
 ## Project Overview
 
 Comic Pile is a dice-driven comic reading tracker built with:
