@@ -6,6 +6,7 @@ import PositionMenu from '../../components/PositionMenu'
 import PositionSlider from '../../components/PositionSlider'
 import Tooltip from '../../components/Tooltip'
 import LoadingSpinner from '../../components/LoadingSpinner'
+import { MarqueeTitle } from '../../components/MarqueeTitle'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import CollectionDialog from '../../components/CollectionDialog'
@@ -662,14 +663,9 @@ export default function QueuePage() {
                           >
                             ⠿
                           </button>
-                        </Tooltip>
-                         <div className="overflow-hidden flex-1 whitespace-nowrap">
-                           <h3 className="text-lg font-bold text-white inline-block marquee-runner">
-                             <span>{thread.title}</span>
-                             <span className="ml-8">{thread.title}</span>
-                           </h3>
-                         </div>
-                        {isBlocked && (
+                         </Tooltip>
+                         <MarqueeTitle title={thread.title} />
+                         {isBlocked && (
                           <Tooltip content={blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'}>
                             <span className="text-red-300 text-lg" aria-label="Blocked thread">🔒</span>
                           </Tooltip>
@@ -677,51 +673,17 @@ export default function QueuePage() {
                       </div>
                     </div>
                     <div className="hidden md:flex items-center gap-1">
-                      <Tooltip content="Edit thread details.">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openEditModal(thread)
-                          }}
-                          className="text-stone-500 hover:text-white transition-colors text-sm"
-                          aria-label="Edit thread"
-                        >
-                          ✎
-                        </button>
-                      </Tooltip>
-                      <Tooltip content="Manage dependencies for this thread.">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDependencyThread(thread)
-                            setIsDependencyBuilderOpen(true)
-                          }}
-                          className="text-stone-500 hover:text-white transition-colors text-sm"
-                          aria-label="Manage dependencies"
-                        >
-                          🔗
-                        </button>
-                      </Tooltip>
-                      <Tooltip content="Delete thread from queue.">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDelete(thread.id)
-                          }}
-                          className="text-stone-500 hover:text-red-400 transition-colors text-xl"
-                          aria-label="Delete thread"
-                        >
-                          &times;
-                        </button>
-                      </Tooltip>
         <PositionMenu
           thread={thread}
           onMoveToFront={handleMoveToFront}
           onReposition={openRepositionModal}
           onMoveToBack={handleMoveToBack}
+          onEdit={openEditModal}
+          onDependencies={(t) => {
+            setDependencyThread(t)
+            setIsDependencyBuilderOpen(true)
+          }}
+          onDelete={handleDelete}
         />
       </div>
       {/* Mobile 3-dot menu indicator */}

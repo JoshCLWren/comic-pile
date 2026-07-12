@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { createThread, gotoQueue, waitForEditThreadModal } from './helpers';
+import {createThread, gotoQueue, waitForEditThreadModal, openThreadActions} from './helpers';
 
 test.describe('Issue #326: Collapsible Issue List', () => {
   test('should show only issues around next unread by default when thread has many issues', async ({ authenticatedPage }) => {
@@ -20,6 +20,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
@@ -57,6 +58,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
@@ -94,6 +96,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
@@ -137,6 +140,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     // Wait for edit modal to open
@@ -171,6 +175,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
+    await openThreadActions(threadItem)
     await threadItem.locator('button[aria-label="Edit thread"]').click();
 
     await waitForEditThreadModal(authenticatedPage);

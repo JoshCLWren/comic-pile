@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures'
-import { createThread } from './helpers'
+import {createThread, openThreadActions} from './helpers'
 
 async function getIssueIdByNumber(authenticatedPage: any, threadId: number, issueNumber: string, token: string | null | undefined): Promise<number> {
   if (!token) {
@@ -46,6 +46,7 @@ test('shows flowchart toggle after creating a dependency', async ({ authenticate
       .locator('#queue-container .glass-card')
       .filter({ hasText: 'Flowchart Target' })
       .first()
+    await openThreadActions(targetCard)
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
     // Search and add a dependency
@@ -133,6 +134,7 @@ test('renders flowchart with nodes and edges when toggled', async ({ authenticat
       .locator('#queue-container .glass-card')
       .filter({ hasText: 'FC Node Target' })
       .first()
+    await openThreadActions(targetCard)
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
     await openFlowchartView(authenticatedPage)
@@ -227,6 +229,7 @@ test('flowchart zoom controls work', async ({ authenticatedPage }) => {
       .locator('#queue-container .glass-card')
       .filter({ hasText: 'Zoom Target' })
       .first()
+    await openThreadActions(targetCard)
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
     await openFlowchartView(authenticatedPage)
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
@@ -310,6 +313,7 @@ test('flowchart shows tooltip on node hover', async ({ authenticatedPage }) => {
       .locator('#queue-container .glass-card')
       .filter({ hasText: 'Hover Target Thread' })
       .first()
+    await openThreadActions(targetCard)
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
     await openFlowchartView(authenticatedPage)
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
@@ -386,6 +390,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       .locator('#queue-container .glass-card')
       .filter({ hasText: 'Blocked Thread FC' })
       .first()
+    await openThreadActions(targetCard)
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
     await openFlowchartView(authenticatedPage)
     await expect(authenticatedPage.locator('[data-testid="flowchart-svg"]')).toBeVisible()
@@ -458,6 +463,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       .locator('#queue-container .glass-card')
       .filter({ hasText: 'Toggle Target' })
       .first()
+    await openThreadActions(targetCard)
     await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
     // Toggle on and switch to graph view
@@ -483,6 +489,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
       .locator('#queue-container .glass-card')
       .filter({ hasText: 'Lonely Thread' })
       .first()
+    await openThreadActions(card)
     await card.locator('button[aria-label="Manage dependencies"]').click()
 
     // Should not show flowchart toggle when there are no dependencies
@@ -550,6 +557,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .locator('#queue-container .glass-card')
         .filter({ hasText: 'Swamp Thing' })
         .first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
 
       // Wait for toggle button to appear
@@ -658,6 +666,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .locator('#queue-container .glass-card')
         .filter({ hasText: 'Animal Man' })
         .first()
+      await openThreadActions(animalManCard)
       await animalManCard.locator('button[aria-label="Manage dependencies"]').click()
       await openFlowchartView(authenticatedPage)
 
@@ -741,6 +750,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .locator('#queue-container .glass-card')
         .filter({ hasText: 'Target Series' })
         .first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
       await openFlowchartView(authenticatedPage)
 
@@ -814,6 +824,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .locator('#queue-container .glass-card')
         .filter({ hasText: 'Blocked Target' })
         .first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
       await openFlowchartView(authenticatedPage)
 
@@ -890,6 +901,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .locator('#queue-container .glass-card')
         .filter({ hasText: 'Edge Target' })
         .first()
+      await openThreadActions(targetCard)
       await targetCard.locator('button[aria-label="Manage dependencies"]').click()
       await openFlowchartView(authenticatedPage)
 
@@ -995,6 +1007,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .locator('#queue-container .glass-card')
         .filter({ hasText: 'Thread Beta' })
         .first()
+      await openThreadActions(betaCard)
       await betaCard.locator('button[aria-label="Manage dependencies"]').click()
       await openFlowchartView(authenticatedPage)
 

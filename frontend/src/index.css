@@ -57,7 +57,7 @@
   filter: none !important;
 }
 
-.marquee-runner:hover {
+.marquee-runner {
   animation: marquee 8s linear infinite;
 }
 

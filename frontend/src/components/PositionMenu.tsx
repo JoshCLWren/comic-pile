@@ -7,9 +7,12 @@ interface PositionMenuProps {
   onMoveToFront: (threadId: number) => void
   onReposition: (thread: Thread) => void
   onMoveToBack: (threadId: number) => void
+  onEdit: (thread: Thread) => void
+  onDependencies: (thread: Thread) => void
+  onDelete: (threadId: number) => void
 }
 
-export default function PositionMenu({ thread, onMoveToFront, onReposition, onMoveToBack }: PositionMenuProps) {
+export default function PositionMenu({ thread, onMoveToFront, onReposition, onMoveToBack, onEdit, onDependencies, onDelete }: PositionMenuProps) {
   const { openThreadId, closeMenu: closeContextMenu, openMenu, toggleMenu } = usePositionMenu()
   const isOpen = openThreadId === thread.id
 
@@ -79,7 +82,8 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isOpen, closeMenu])
 
-  const handleTriggerClick = () => {
+  const handleTriggerClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
     if (clickFromKeyboardRef.current) {
       clickFromKeyboardRef.current = false
       return
@@ -90,16 +94,24 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
   const handleTriggerKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
       e.preventDefault()
+      e.stopPropagation()
       clickFromKeyboardRef.current = true
       openMenu(thread.id)
       setTimeout(() => menuItemsRef.current[0]?.focus(), 0)
     }
   }
 
-  const menuItems = [
+  const menuItems: Array<{
+    label: string
+    icon: string
+    ariaLabel: string
+    destructive?: boolean
+    action: () => void
+  }> = [
     {
       label: 'Move to Front',
       icon: '\u2B06',
+      ariaLabel: 'Move to front',
       action: () => {
         onMoveToFront(thread.id)
         closeMenu()
@@ -108,6 +120,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     {
       label: 'Reposition\u2026',
       icon: '\u2261',
+      ariaLabel: 'Reposition thread',
       action: () => {
         onReposition(thread)
         closeMenu()
@@ -116,8 +129,37 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     {
       label: 'Move to Back',
       icon: '\u2193',
+      ariaLabel: 'Move to back',
       action: () => {
         onMoveToBack(thread.id)
+        closeMenu()
+      },
+    },
+    {
+      label: 'Edit Thread',
+      icon: '\u270F\uFE0F',
+      ariaLabel: 'Edit thread',
+      action: () => {
+        onEdit(thread)
+        closeMenu()
+      },
+    },
+    {
+      label: 'Dependencies',
+      icon: '\u26D3\uFE0F',
+      ariaLabel: 'Manage dependencies',
+      action: () => {
+        onDependencies(thread)
+        closeMenu()
+      },
+    },
+    {
+      label: 'Delete Thread',
+      icon: '\u{1F5D1}',
+      ariaLabel: 'Delete thread',
+      destructive: true,
+      action: () => {
+        onDelete(thread.id)
         closeMenu()
       },
     },
@@ -125,14 +167,14 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
 
   return (
     <div className="relative" ref={menuRef}>
-      <Tooltip content="More actions">
+      <Tooltip content="Thread actions">
         <button
           ref={triggerRef}
           type="button"
           onClick={handleTriggerClick}
           onKeyDown={handleTriggerKeyDown}
           className="flex items-center justify-center w-11 h-11 text-stone-500 hover:text-white transition-colors text-lg rounded-lg hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-          aria-label="Position actions"
+          aria-label="Thread actions"
           aria-haspopup="menu"
           aria-expanded={isOpen}
         >
@@ -143,15 +185,23 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
         <div
           className="absolute right-0 top-full mt-1 w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-50 py-1 overflow-hidden"
           role="menu"
-          aria-label="Position actions"
+          aria-label="Thread actions"
         >
           {menuItems.map((item, index) => (
             <button
               key={item.label}
               ref={(el) => { menuItemsRef.current[index] = el }}
               type="button"
-              onClick={item.action}
-              className="w-full px-4 py-3 text-left text-sm text-stone-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 focus-visible:text-white"
+              onClick={(e) => {
+                e.stopPropagation()
+                item.action()
+              }}
+              aria-label={item.ariaLabel}
+              className={`w-full px-4 py-3 text-left text-sm transition-colors flex items-center gap-3 focus:outline-none focus-visible:bg-white/10 ${
+                item.destructive
+                  ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
+                  : 'text-stone-300 hover:bg-white/10 hover:text-white focus-visible:bg-white/10 focus-visible:text-white'
+              }`}
               role="menuitem"
             >
               <span className="text-base">{item.icon}</span>
