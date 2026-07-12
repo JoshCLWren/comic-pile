@@ -138,12 +138,12 @@ test.describe('Dependencies', () => {
         await dialog.accept()
       })
 
-      // Trigger the read action via the swipe button (force click to bypass overlay)
+      // Click the Read swipe action by dispatching click directly via JS
       await authenticatedPage
         .locator('[data-testid="queue-thread-item"]')
         .filter({ hasText: 'B Main Story' })
         .locator('button[aria-label="Read"]')
-        .click({ force: true })
+        .evaluate((btn) => (btn as HTMLButtonElement).click())
 
       await authenticatedPage.waitForTimeout(1000)
 
