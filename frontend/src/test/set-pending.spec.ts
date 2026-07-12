@@ -1,35 +1,20 @@
 import { test, expect } from './fixtures';
 
 test.describe('Set Pending Thread (Manual Selection)', () => {
-  test('should click thread in queue and navigate to home page', async ({ authenticatedWithThreadsPage }) => {
-    await authenticatedWithThreadsPage.goto('/queue');
+  test('should click thread in roll pool and navigate to rating view', async ({ authenticatedWithThreadsPage }) => {
+    await authenticatedWithThreadsPage.goto('/');
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
-    await authenticatedWithThreadsPage.waitForSelector('#queue-container', { state: 'visible', timeout: 5000 });
+    await authenticatedWithThreadsPage.waitForSelector('[data-roll-pool]', { state: 'visible', timeout: 5000 });
 
-    const firstThreadCard = authenticatedWithThreadsPage.locator('#queue-container .glass-card').first();
-    await expect(firstThreadCard).toBeVisible({ timeout: 5000 });
+    const firstPoolThread = authenticatedWithThreadsPage.locator('[data-roll-pool] [role="button"]').first();
+    await expect(firstPoolThread).toBeVisible({ timeout: 5000 });
+    await firstPoolThread.click();
 
-    // Set mobile viewport to make action sheet button visible
-    await authenticatedWithThreadsPage.setViewportSize({ width: 375, height: 667 });
+    await authenticatedWithThreadsPage.waitForSelector('button:has-text("Read Now")', { state: 'visible', timeout: 5000 });
+    await authenticatedWithThreadsPage.getByText('Read Now', { exact: true }).click();
 
-    // Click the action menu (three dots) to open action sheet
-    await firstThreadCard.locator('button[aria-label="Open actions"]').click();
-
-    await expect(async () => {
-      const modal = authenticatedWithThreadsPage.locator('.fixed.inset-0.z-50');
-      await expect(modal).toBeVisible();
-    }).toPass({ timeout: 5000 });
-
-    const readButton = authenticatedWithThreadsPage.getByText('Read Now', { exact: true }).first();
-    await expect(readButton).toBeVisible({ timeout: 3000 });
-
-    await readButton.click();
     await authenticatedWithThreadsPage.waitForSelector('#rating-input', { state: 'visible', timeout: 10000 });
 
-    await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
-
-    const currentUrl = authenticatedWithThreadsPage.url();
-    expect(new URL(currentUrl).pathname).toBe('/');
     await expect(authenticatedWithThreadsPage.locator('#rating-input')).toBeVisible({ timeout: 3000 });
   });
 

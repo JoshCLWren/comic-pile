@@ -51,11 +51,11 @@ export function RatingView({
   const previewDie = isDiceSide(currentDie) ? currentDie : 6
 
   return (
-    <div className="p-4 space-y-8 relative z-10">
+    <div className="p-3 md:p-4 space-y-5 md:space-y-8 relative z-10">
       <div id="thread-info" role="status" aria-live="polite">
-        <div className="space-y-3 text-center">
+        <div className="space-y-2 md:space-y-3 text-center">
       <>
-        <h2 className="text-2xl font-black text-stone-200 truncate">
+        <h2 className="text-xl md:text-2xl font-black text-stone-200 truncate">
           {activeRatingThread?.title || 'Loading...'}
           {activeRatingThread && (activeRatingThread.next_issue_number ?? activeRatingThread.issue_number) != null && (
             <span className="text-stone-400"> #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}</span>
@@ -120,11 +120,11 @@ export function RatingView({
         </div>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-5 md:space-y-8">
         <div id="rating-preview-dice" className="dice-perspective">
           <div
             id="die-preview-wrapper"
-            className="dice-state-rate-flow relative flex items-center justify-center w-[120px] h-[120px] mx-auto"
+            className="dice-state-rate-flow relative flex items-center justify-center w-[96px] h-[96px] md:w-[120px] md:h-[120px] mx-auto"
           >
             <LazyDice3D
               sides={previewDie}
@@ -136,7 +136,7 @@ export function RatingView({
             />
           </div>
           {hasValidRolledResult && (
-            <div className="mt-6 text-center space-y-1">
+            <div className="mt-3 md:mt-6 text-center space-y-1">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">
                 Rolled {rolledResult} on d{currentDie}
               </p>
@@ -194,41 +194,31 @@ export function RatingView({
           </div>
         )}
 
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => onSubmitRating(false)}
-              disabled={rateIsPending}
-              className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
-            >
-              {rateIsPending ? 'Saving...' : (activeRatingThread?.issues_remaining === 1 ? 'Save & Complete' : 'Save & Continue')}
-            </button>
-            <button
-              type="button"
-              onClick={() => onSubmitRating(true)}
-              disabled={rateIsPending}
-              className="w-full py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:opacity-50"
-            >
-              Finish Session
-            </button>
-          </div>
+        <div className="sticky bottom-0 -mx-3 md:-mx-4 px-3 md:px-4 pt-4 pb-3 bg-gradient-to-t from-[#1a1410] via-[#1a1410]/95 to-transparent z-20 space-y-2 md:space-y-3">
           <button
             type="button"
-            onClick={onSnooze}
-            disabled={snoozeIsPending}
-            className="w-full py-4 glass-button text-sm font-black uppercase tracking-[0.2em] relative shadow-[0_15px_40px_rgba(20,184,166,0.3)] disabled:opacity-50"
+            onClick={() => onSubmitRating(false)}
+            disabled={rateIsPending}
+            className="w-full py-3.5 md:py-4 bg-amber-600/25 hover:bg-amber-600/35 border border-amber-600/50 rounded-xl text-xs font-black uppercase tracking-[0.15em] md:tracking-[0.2em] transition-all disabled:opacity-50 active:scale-[0.98]"
           >
-            {snoozeIsPending ? 'Snoozing...' : 'Snooze'}
+            {rateIsPending ? 'Saving...' : (activeRatingThread?.issues_remaining === 1 ? 'Save & Complete' : 'Save & Continue')}
           </button>
-          <div className="flex justify-center">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onSnooze}
+              disabled={snoozeIsPending}
+              className="flex-1 py-3 md:py-4 glass-button text-sm font-black uppercase tracking-[0.2em] shadow-[0_15px_40px_rgba(20,184,166,0.3)] disabled:opacity-50 active:scale-[0.98] rounded-xl"
+            >
+              {snoozeIsPending ? 'Snoozing...' : 'Snooze'}
+            </button>
             <button
               type="button"
               onClick={onCancel}
               disabled={dismissIsPending}
-              className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 hover:bg-white/5 border border-transparent hover:border-white/10 rounded-lg transition-all disabled:opacity-50"
+              className="px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 bg-white/5 border border-white/10 rounded-xl transition-all disabled:opacity-50 active:scale-[0.98]"
             >
-              Cancel Pending Roll
+              Cancel
             </button>
           </div>
         </div>

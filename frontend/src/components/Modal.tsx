@@ -80,18 +80,21 @@ export default function Modal({
   if (!isOpen) return null
 
   return (
-    <div data-exclude-from-screenshot="true" className={`fixed inset-0 z-50 flex items-center justify-center px-4 ${overlayClassName || ''}`}>
+    <div data-exclude-from-screenshot="true" className={`fixed inset-0 z-[60] flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}>
       <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true"></div>
       <div
         ref={modalRef}
         data-testid={testId}
-        className="relative w-full max-w-lg modal-card p-6 max-h-[85vh] flex flex-col"
+        className="relative w-full max-w-lg modal-card max-h-[90vh] md:max-h-[85vh] flex flex-col rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
       >
-        <div className="flex items-start justify-between gap-4 pb-4 shrink-0">
-          <h2 id="modal-title" className="text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
+        <div className="flex justify-center pt-2 pb-1 md:hidden shrink-0">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
+        <div className="flex items-start justify-between gap-2 md:gap-4 px-4 md:px-6 pt-2 md:pt-0 pb-3 md:pb-4 shrink-0">
+          <h2 id="modal-title" className="text-lg md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -101,7 +104,7 @@ export default function Modal({
             &times;
           </button>
         </div>
-        <div className="overflow-y-auto space-y-6 min-h-0">
+        <div className="overflow-y-auto space-y-4 md:space-y-6 min-h-0 px-4 md:px-6 pb-4 md:pb-6">
           {children}
         </div>
       </div>

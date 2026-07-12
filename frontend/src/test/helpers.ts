@@ -439,12 +439,18 @@ export function extractThreadsFromResponse(response: unknown): Thread[] {
 }
 
 export async function navigateToRatePage(page: Page): Promise<void> {
-  await page.goto('/queue');
-  await expect(page.locator('#queue-container')).toBeVisible();
-  await page.setViewportSize({ width: 375, height: 667 });
-  const firstThreadCard = page.locator('#queue-container .glass-card').first();
-  await expect(firstThreadCard).toBeVisible();
-  await firstThreadCard.locator('button[aria-label="Open actions"]').click();
-  await page.getByText('Read Now', { exact: true }).first().click();
-  await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible();
+  const token = await page.evaluate(() => localStorage.getItem('auth_token') ?? (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN)
+  const threadsResponse = await page.request.get('/api/threads/', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const threadsData = await threadsResponse.json()
+  const threads = threadsData.threads ?? threadsData
+  expect(threads.length).toBeGreaterThan(0)
+
+  await page.request.post(`/api/threads/${threads[0].id}/set-pending`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  await page.goto('/')
+  await expect(page.locator(SELECTORS.rate.ratingInput)).toBeVisible()
 }

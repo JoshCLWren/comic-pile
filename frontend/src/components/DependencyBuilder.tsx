@@ -780,8 +780,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                    Migrate Now
                  </button>
                ) : (
-                 <form onSubmit={handleInlineMigration} className="space-y-2">
-                    <div className="flex gap-2">
+                  <form onSubmit={handleInlineMigration} className="space-y-2">
+                     <div className="flex flex-col md:flex-row gap-2">
                       <div className="flex-1">
                         <label htmlFor="migration-last-read" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Last issue read</label>
                         <input

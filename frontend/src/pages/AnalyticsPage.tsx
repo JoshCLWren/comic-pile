@@ -25,7 +25,7 @@ export default function AnalyticsPage() {
     <div className="space-y-6 pb-10">
       <header className="flex justify-between items-center px-2">
         <div>
-          <h1 className="text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
             Analytics
           </h1>
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
@@ -35,34 +35,34 @@ export default function AnalyticsPage() {
       </header>
 
       {/* Top Metrics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="glass-card p-4">
-          <div className="text-3xl font-bold text-amber-500">{metrics.total_threads || 0}</div>
-          <div className="text-xs text-stone-400 uppercase tracking-widest mt-1">Total Threads</div>
+      <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+        <div className="glass-card p-3 md:p-4">
+          <div className="text-2xl md:text-3xl font-bold text-amber-500">{metrics.total_threads || 0}</div>
+          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Total Threads</div>
         </div>
-        <div className="glass-card p-4">
-          <div className="text-3xl font-bold text-amber-400">{metrics.active_threads || 0}</div>
-          <div className="text-xs text-stone-400 uppercase tracking-widest mt-1">Active Threads</div>
+        <div className="glass-card p-3 md:p-4">
+          <div className="text-2xl md:text-3xl font-bold text-amber-400">{metrics.active_threads || 0}</div>
+          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Active Threads</div>
         </div>
-        <div className="glass-card p-4">
-          <div className="text-3xl font-bold text-amber-300">{metrics.completed_threads || 0}</div>
-          <div className="text-xs text-stone-400 uppercase tracking-widest mt-1">Completed</div>
+        <div className="glass-card p-3 md:p-4">
+          <div className="text-2xl md:text-3xl font-bold text-amber-300">{metrics.completed_threads || 0}</div>
+          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Completed</div>
         </div>
-        <div className="glass-card p-4">
-          <div className="text-3xl font-bold text-orange-400">
+        <div className="glass-card p-3 md:p-4">
+          <div className="text-2xl md:text-3xl font-bold text-orange-400">
             {Number.isFinite(metrics.completion_rate) 
               ? `${metrics.completion_rate.toFixed(1)}%` 
               : 'N/A'}
           </div>
-          <div className="text-xs text-stone-400 uppercase tracking-widest mt-1">Completion Rate</div>
+          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Completion Rate</div>
         </div>
-        <div className="glass-card p-4">
-          <div className="text-3xl font-bold text-amber-400">
+        <div className="glass-card p-3 md:p-4">
+          <div className="text-2xl md:text-3xl font-bold text-amber-400">
             {Number.isFinite(metrics.average_session_hours)
               ? `${metrics.average_session_hours.toFixed(1)}h`
               : 'N/A'}
           </div>
-          <div className="text-xs text-stone-400 uppercase tracking-widest mt-1">Avg Session</div>
+          <div className="text-[10px] md:text-xs text-stone-400 uppercase tracking-widest mt-1">Avg Session</div>
         </div>
       </div>
 

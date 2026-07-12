@@ -731,7 +731,7 @@ test.describe('Roll Dice Feature', () => {
         await expect(authenticatedPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 5000 })
 
         // Check that the rolled thread is not the blocked one by verifying thread title in rating view
-        const threadTitle = await authenticatedPage.locator('h2.text-2xl.font-black').textContent()
+        const threadTitle = await authenticatedPage.locator('#thread-info h2').textContent()
         expect(threadTitle).not.toContain('Blocked Thread - Never Rolled')
 
         // Submit rating to reset for next roll

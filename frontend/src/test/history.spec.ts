@@ -5,7 +5,7 @@ import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown, navigate
 async function readThreadFromQueue(page: Page, rating: string): Promise<void> {
   await navigateToRatePage(page);
   await setRangeInput(page, SELECTORS.rate.ratingInput, rating);
-  await submitRatingAndDismissReviewIfShown(page, () => page.click('button:has-text("Finish Session")'));
+  await submitRatingAndDismissReviewIfShown(page, () => page.click('button:has-text("Save & Continue")'));
   await expect(page.locator('#root')).toBeVisible();
 }
 

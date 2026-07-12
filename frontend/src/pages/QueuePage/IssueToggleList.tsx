@@ -405,7 +405,7 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                    onClick={() => handleToggle(issue)}
                    disabled={isBusy}
                    className={[
-                     'min-h-[44px] min-w-[44px] flex items-center justify-center px-2 py-0.5 text-xs font-bold transition-all',
+                     'min-h-[36px] md:min-h-[44px] min-w-[36px] md:min-w-[44px] flex items-center justify-center px-2 py-0.5 text-xs font-bold transition-all',
                      isBusy ? '' : 'hover:opacity-80 cursor-grab active:cursor-grabbing',
                    ].join(' ')}
                    title={`#${issue.issue_number}: ${issue.status}. Drag to reorder.`}
@@ -419,7 +419,7 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                   <Tooltip content={tooltipContent}>
                     <button
                       type="button"
-                      className="dependency-indicator min-h-[44px] min-w-[44px] px-1 text-[10px] opacity-70 hover:opacity-100 cursor-help"
+                      className="dependency-indicator min-h-[36px] md:min-h-[44px] min-w-[28px] md:min-w-[44px] px-1 text-[10px] opacity-70 hover:opacity-100 cursor-help"
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelectedDepsIssue(issue)
@@ -432,7 +432,7 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                   </Tooltip>
                 </>
               )}
-               <div className="flex border-l border-white/10">
+               <div className="hidden md:flex border-l border-white/10">
                  <button
                    type="button"
                    onClick={() => handleMoveIssue(issue, 'up')}
@@ -471,7 +471,7 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
                  }}
                  disabled={deleting.has(issue.id)}
                  className={[
-                   'min-h-[44px] min-w-[44px] flex items-center justify-center pr-2 text-[10px] font-black text-stone-500 transition-colors',
+                   'min-h-[36px] md:min-h-[44px] min-w-[28px] md:min-w-[44px] flex items-center justify-center pr-2 text-[10px] font-black text-stone-500 transition-colors',
                    'hover:text-red-300 disabled:opacity-50',
                  ].join(' ')}
                  aria-label={`Delete issue #${issue.issue_number}`}
@@ -496,15 +496,15 @@ if (isLoading) return <p className="text-xs text-stone-500">Loading issues…</p
               void handleAddIssues()
             }
           }}
-          placeholder="Add issues: 19-24 or 0, Annual 1"
-          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-4 text-xs text-stone-300"
+          placeholder="Add: 19-24 or 0, Annual 1"
+          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-3 md:py-4 text-xs text-stone-300"
           data-testid="issue-add-input"
         />
         <button
           type="button"
           onClick={() => handleAddIssues()}
           disabled={isAdding || !addRange.trim()}
-          className="px-3 py-4 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
+          className="px-3 py-3 md:py-4 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
           data-testid="issue-add-button"
         >
           {isAdding ? '…' : 'Add'}
