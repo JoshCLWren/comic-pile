@@ -202,7 +202,7 @@ test.describe('Issue #325: Correct Issue Number from Rating View', () => {
 
     await expect(authenticatedWithThreadsPage.getByRole('dialog', { name: /Correct Issue Number/i })).toBeVisible();
 
-    const cancelButton = authenticatedWithThreadsPage.locator('.fixed.inset-0.z-50').getByRole('button', { name: 'Cancel', exact: true });
+    const cancelButton = authenticatedWithThreadsPage.locator('.fixed.inset-0').getByRole('button', { name: 'Cancel', exact: true });
     await cancelButton.click();
 
     await expect(authenticatedWithThreadsPage.getByRole('dialog', { name: /Correct Issue Number/i })).not.toBeVisible();
@@ -229,7 +229,7 @@ test.describe('Issue #325: Correct Issue Number from Rating View', () => {
 
     await expect(authenticatedWithThreadsPage.getByRole('dialog', { name: /Correct Issue Number/i })).toBeVisible();
 
-    const backdrop = authenticatedWithThreadsPage.locator('.fixed.inset-0.z-50');
+    const backdrop = authenticatedWithThreadsPage.locator('.fixed.inset-0');
     await backdrop.click({ position: { x: 10, y: 10 } });
 
     await expect(authenticatedWithThreadsPage.getByRole('dialog', { name: /Correct Issue Number/i })).not.toBeVisible();
