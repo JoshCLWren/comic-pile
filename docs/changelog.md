@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-13
+
+**Mobile Safari rendering fix**
+- Pages now render their background correctly on mobile Safari instead of appearing stripped or bare.
+- Touch interactions and rubber-band overscroll prevention remain unchanged.
+
+
 ## 2026-04-26
 
 **Dependency Blocking**
