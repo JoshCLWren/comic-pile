@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-13
+
+**Mobile Safari rendering fix (issue #579)**
+- Removed `position: fixed` from `html`, `body`, and `#root` — this was causing Safari/WebKit to not paint the background canvas, making the page appear "stripped and bare" on mobile Safari while other browsers rendered correctly.
+- Removed deprecated `-webkit-overflow-scrolling: touch` from `#root` — this property is known to cause paint bugs in WebKit scroll containers and is superseded by native momentum scrolling.
+- Preserved overscroll-behavior prevention (`overscroll-behavior: none` on `html`/`body`, `overscroll-behavior: contain` on `#root`) to maintain the issue #340 fix for rubber-banding.
+- Preserved `touch-action: pan-y` for zoom prevention on mobile.
+
+
 ## 2026-04-26
 
 **Dependency Blocking**

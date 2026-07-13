@@ -1,8 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
 
-html, body {
-  position: fixed;
-  width: 100%;
+html {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none !important;
@@ -10,11 +14,9 @@ html, body {
 }
 
 #root {
-  position: fixed;
-  inset: 0;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
 
@@ -33,10 +35,6 @@ html, body {
 }
 
 body {
-  position: fixed;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
   background: radial-gradient(
     circle at top left,
     #2a2018 0%,
@@ -45,8 +43,6 @@ body {
   );
   color: var(--text-primary);
   font-family: 'Outfit', sans-serif;
-  overscroll-behavior: none !important;
-  touch-action: pan-y !important;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
