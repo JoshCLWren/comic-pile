@@ -9,6 +9,12 @@ interface ModalProps {
   overlayClassName?: string
 }
 
+// Module-level lock counter so nested/overlapping modals don't prematurely
+// unlock #root scroll. The lock is only released when the last modal closes.
+let rootLockCount = 0
+let savedOverflow = ''
+let savedScrollTop = 0
+
 export default function Modal({
   isOpen,
   title,
@@ -77,11 +83,39 @@ export default function Modal({
     }
   }, [isOpen])
 
+  // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
+  // This app scrolls via #root, NOT <body> (see src/styles.css: html/body are
+  // overflow:hidden, so locking <body> is a no-op). Use overflow:hidden ONLY on
+  // #root — do NOT set touch-action:none on #root: the modal content is a DOM
+  // descendant of #root (Modal renders inline, no portal), and an ancestor
+  // touch-action:none would disable touch-panning for descendants, breaking
+  // in-modal scrolling on mobile.
+  // Uses a module-level ref count so nested/overlapping modals don't prematurely
+  // unlock #root — the lock is only released when the last modal closes.
+  useEffect(() => {
+    if (!isOpen) return
+    const root = document.getElementById('root')
+    if (!root) return
+    if (rootLockCount === 0) {
+      savedOverflow = root.style.overflow
+      savedScrollTop = root.scrollTop
+      root.style.overflow = 'hidden'
+    }
+    rootLockCount++
+    return () => {
+      rootLockCount--
+      if (rootLockCount === 0) {
+        root.style.overflow = savedOverflow
+        root.scrollTop = savedScrollTop
+      }
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   return (
     <div data-exclude-from-screenshot="true" className={`fixed inset-0 z-[60] flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}>
-      <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true"></div>
+      <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none" onClick={onClose} aria-hidden="true"></div>
       <div
         ref={modalRef}
         data-testid={testId}
@@ -104,7 +138,7 @@ export default function Modal({
             &times;
           </button>
         </div>
-        <div className="overflow-y-auto space-y-4 md:space-y-6 min-h-0 px-4 md:px-6 pb-4 md:pb-6">
+        <div className="overflow-y-auto space-y-4 md:space-y-6 min-h-0 px-4 md:px-6 pb-4 md:pb-6 overscroll-contain">
           {children}
         </div>
       </div>
