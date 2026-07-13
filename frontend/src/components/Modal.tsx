@@ -9,6 +9,12 @@ interface ModalProps {
   overlayClassName?: string
 }
 
+// Module-level lock counter so nested/overlapping modals don't prematurely
+// unlock #root scroll. The lock is only released when the last modal closes.
+let rootLockCount = 0
+let savedOverflow = ''
+let savedScrollTop = 0
+
 export default function Modal({
   isOpen,
   title,
@@ -84,16 +90,24 @@ export default function Modal({
   // descendant of #root (Modal renders inline, no portal), and an ancestor
   // touch-action:none would disable touch-panning for descendants, breaking
   // in-modal scrolling on mobile.
+  // Uses a module-level ref count so nested/overlapping modals don't prematurely
+  // unlock #root — the lock is only released when the last modal closes.
   useEffect(() => {
     if (!isOpen) return
     const root = document.getElementById('root')
     if (!root) return
-    const prevOverflow = root.style.overflow
-    const prevScrollTop = root.scrollTop
-    root.style.overflow = 'hidden'
+    if (rootLockCount === 0) {
+      savedOverflow = root.style.overflow
+      savedScrollTop = root.scrollTop
+      root.style.overflow = 'hidden'
+    }
+    rootLockCount++
     return () => {
-      root.style.overflow = prevOverflow
-      root.scrollTop = prevScrollTop
+      rootLockCount--
+      if (rootLockCount === 0) {
+        root.style.overflow = savedOverflow
+        root.scrollTop = savedScrollTop
+      }
     }
   }, [isOpen])
 
