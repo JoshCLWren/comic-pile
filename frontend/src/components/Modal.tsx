@@ -77,11 +77,31 @@ export default function Modal({
     }
   }, [isOpen])
 
+  // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
+  // This app scrolls via #root, NOT <body> (see src/styles.css: html/body are
+  // overflow:hidden, so locking <body> is a no-op). Use overflow:hidden ONLY on
+  // #root — do NOT set touch-action:none on #root: the modal content is a DOM
+  // descendant of #root (Modal renders inline, no portal), and an ancestor
+  // touch-action:none would disable touch-panning for descendants, breaking
+  // in-modal scrolling on mobile.
+  useEffect(() => {
+    if (!isOpen) return
+    const root = document.getElementById('root')
+    if (!root) return
+    const prevOverflow = root.style.overflow
+    const prevScrollTop = root.scrollTop
+    root.style.overflow = 'hidden'
+    return () => {
+      root.style.overflow = prevOverflow
+      root.scrollTop = prevScrollTop
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   return (
     <div data-exclude-from-screenshot="true" className={`fixed inset-0 z-[60] flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}>
-      <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true"></div>
+      <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none" onClick={onClose} aria-hidden="true"></div>
       <div
         ref={modalRef}
         data-testid={testId}
@@ -104,7 +124,7 @@ export default function Modal({
             &times;
           </button>
         </div>
-        <div className="overflow-y-auto space-y-4 md:space-y-6 min-h-0 px-4 md:px-6 pb-4 md:pb-6">
+        <div className="overflow-y-auto space-y-4 md:space-y-6 min-h-0 px-4 md:px-6 pb-4 md:pb-6 overscroll-contain">
           {children}
         </div>
       </div>
