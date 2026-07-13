@@ -27,7 +27,8 @@ export default function Swipeable({
   const startOffsetRef = useRef(0)
   const isHorizontalRef = useRef<boolean | null>(null)
   const ACTION_WIDTH = 192
-  const SWIPE_THRESHOLD = 48
+  const SWIPE_THRESHOLD = 64
+  const DIRECTION_LOCK_THRESHOLD = 12
 
   function handleTouchStart(e: TouchEvent) {
     const touch = e.touches[0]
@@ -44,7 +45,7 @@ export default function Swipeable({
     const dy = touch.clientY - startYRef.current
 
     if (isHorizontalRef.current === null) {
-      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return
+      if (Math.abs(dx) < DIRECTION_LOCK_THRESHOLD && Math.abs(dy) < DIRECTION_LOCK_THRESHOLD) return
       isHorizontalRef.current = Math.abs(dx) > Math.abs(dy)
     }
 
