@@ -6,6 +6,7 @@ type TestFixtures = {
   freshUserPage: Page;
   authenticatedPage: Page;
   authenticatedWithThreadsPage: Page;
+  authenticatedWithLargeQueuePage: Page;
   testUser: {
     email: string;
     password: string;
@@ -326,6 +327,36 @@ export const test = base.extend<TestFixtures>({
       delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
     });
   },
+
+  authenticatedWithLargeQueuePage: async ({ page, request }, use) => {
+    const counter = ++fixtureUserCounter;
+    const timestamp = Date.now();
+    const workerId = process.pid ?? 0;
+    const testUser = {
+      username: `auth_large_${timestamp}_${counter}_${workerId}`,
+      email: `auth_large_${timestamp}_${counter}_${workerId}@example.com`,
+      password: 'TestPass123!',
+    };
+
+    const { accessToken } = await registerWithRetry(request, testUser);
+    await createThreadsForUser(request, accessToken, 60);
+
+    await page.addInitScript((token: string) => {
+      localStorage.setItem('auth_token', token);
+      (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = token;
+    }, accessToken);
+
+    // Use 'domcontentloaded' instead of 'load' to avoid timeout in SPAs
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+    await use(page);
+
+    await page.evaluate(() => {
+      localStorage.clear();
+      delete (window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN;
+    });
+  },
+
 
   testUser: async ({}, use) => {
     const counter = ++fixtureUserCounter;

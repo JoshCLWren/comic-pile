@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { expect, it, vi, beforeAll } from 'vitest'
+import { getColumnCount } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
 
 interface MockThread {
@@ -142,6 +143,102 @@ it('renders virtual items with correct positioning', () => {
     expect(parent.dataset.index).toBe(String(i))
     expect(parent.style.transform).toBe(`translateY(${i * 160}px)`)
   })
+})
+
+// ── Pure breakpoint tests (no DOM required) ──
+
+it('getColumnCount returns 1 below sm breakpoint', () => {
+  expect(getColumnCount(0)).toBe(1)
+  expect(getColumnCount(375)).toBe(1)
+  expect(getColumnCount(767)).toBe(1)
+})
+
+it('getColumnCount returns 2 at md breakpoint (768-1023)', () => {
+  expect(getColumnCount(768)).toBe(2)
+  expect(getColumnCount(800)).toBe(2)
+  expect(getColumnCount(1023)).toBe(2)
+})
+
+it('getColumnCount returns 2 at lg breakpoint (1024-1279)', () => {
+  expect(getColumnCount(1024)).toBe(2)
+  expect(getColumnCount(1152)).toBe(2)
+  expect(getColumnCount(1279)).toBe(2)
+})
+
+it('getColumnCount returns 3 at xl breakpoint (1280+)', () => {
+  expect(getColumnCount(1280)).toBe(3)
+  expect(getColumnCount(1440)).toBe(3)
+  expect(getColumnCount(1920)).toBe(3)
+})
+
+// ── Multi-column render tests ──
+
+it('renders 3 columns of items when columnCount=3', () => {
+  const threads = createMockThreads(60)
+
+  // 5 virtual rows × 3 columns = 15 items visible
+  mockGetVirtualItems.mockReturnValue(
+    Array.from({ length: 5 }, (_, i) => ({
+      key: i,
+      index: i,
+      start: i * 176,
+      end: (i + 1) * 176,
+      size: 176,
+      lane: 0,
+    })),
+  )
+
+  const { container } = render(
+    <VirtualizedThreadList
+      threads={threads}
+      columnCount={3}
+      renderItem={(thread, _index) => (
+        <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          Thread {(thread as MockThread).title}
+        </div>
+      )}
+    />,
+  )
+
+  const items = screen.getAllByTestId('queue-thread-item')
+  expect(items).toHaveLength(15)
+
+  // First row's grid should have 3 columns
+  const firstRow = container.querySelector('[data-index="0"]')!
+  const grid = firstRow.firstElementChild as HTMLElement
+  expect(grid.style.gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))')
+})
+
+it('renders 1 column when columnCount=1 (single-column fallback)', () => {
+  const threads = createMockThreads(60)
+
+  mockGetVirtualItems.mockReturnValue(
+    Array.from({ length: 5 }, (_, i) => ({
+      key: i,
+      index: i,
+      start: i * 160,
+      end: (i + 1) * 160,
+      size: 160,
+      lane: 0,
+    })),
+  )
+
+  render(
+    <VirtualizedThreadList
+      threads={threads}
+      columnCount={1}
+      renderItem={(thread, index) => (
+        <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          {(thread as MockThread).title} #{index + 1}
+        </div>
+      )}
+    />,
+  )
+
+  const items = screen.getAllByTestId('queue-thread-item')
+  expect(items).toHaveLength(5)
+  expect(items[0]).toHaveTextContent('Thread 1')
+  expect(items[4]).toHaveTextContent('Thread 5')
 })
 
 it('sets aria-label and role on the scroll container', () => {
