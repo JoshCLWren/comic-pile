@@ -1,7 +1,13 @@
 import type { ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { COL_BREAKPOINTS, getColumnCount } from './VirtualizedThreadList.helpers'
+import {
+  getColumnCount,
+  getRowThreads,
+  ROW_GAP,
+  ROW_HEIGHT_WITH_GAP,
+  OVERSCAN_PX,
+} from './VirtualizedThreadList.helpers'
 
 /** Threshold above which the queue switches from a plain grid to a virtualized list. */
 export const VIRTUALIZATION_THRESHOLD = 50
@@ -12,7 +18,8 @@ interface VirtualizedThreadListProps<T> {
   /**
    * Render-prop called for each visible virtual item.
    * @param thread — the thread at the current virtual index
-   * @param index — the virtual array index (not the DB id)
+   * @param index — the thread's position in the `threads` array.
+   *   **Not a stable identifier** — it changes if the array is reordered.
    */
   renderItem: (thread: T, index: number) => ReactNode
   /**
@@ -20,7 +27,7 @@ interface VirtualizedThreadListProps<T> {
    * width derivation used in production. Useful for deterministic tests
    * in environments without real layout (e.g. jsdom).
    */
-  columnCount?: number
+  explicitColumnCount?: number
 }
 
 /**
@@ -33,12 +40,18 @@ interface VirtualizedThreadListProps<T> {
  * On desktop (`columnCount >= 2`) it virtualizes **rows** of N cards:
  * `count = Math.ceil(threads.length / columnCount)`. Each virtual row renders
  * `columnCount` cards in a CSS grid with `gap-4` (matching the non-virtualized
- * grid's spacing). Vertical gap is achieved via `paddingBottom: '1rem'` on
- * each row, measured by `measureElement`.
+ * grid's spacing). Vertical gap is achieved via `paddingBottom` derived from
+ * the `ROW_GAP` constant, measured by `measureElement`.
  *
  * Column count is derived from a `ResizeObserver` on the scroll container,
- * matching the Tailwind breakpoints. An optional `columnCount` prop can
- * override this for testing.
+ * matching the Tailwind breakpoints. An optional `explicitColumnCount` prop
+ * can override this for testing.
+ *
+ * ### `data-index` contract
+ * The `data-index` attribute on each virtual row **always** represents the
+ * virtual row index. In single-column mode this incidentally equals the thread
+ * index; in multi-column mode consumers must use `renderItem`'s second argument
+ * for thread-level identity.
  *
  * Uses `@tanstack/react-virtual` with `useVirtualizer` for efficient
  * DOM virtualization. Container height is derived from a `ResizeObserver`
@@ -47,35 +60,32 @@ interface VirtualizedThreadListProps<T> {
  *
  * Preserves existing selectors (`data-testid="queue-thread-list"`,
  * `id="queue-container"`, `role="list"`, `aria-label="Thread queue"`)
- * for E2E compatibility.
+ * for E2E compatibility, including in the empty state.
  */
 export default function VirtualizedThreadList<T>({
   threads,
   renderItem,
-  columnCount: explicitColumnCount,
+  explicitColumnCount,
 }: VirtualizedThreadListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [containerHeight, setContainerHeight] = useState(0)
-  const [columnCount, setColumnCount] = useState(() =>
-    explicitColumnCount ?? 1,
-  )
+  // Default to 1; useLayoutEffect below is the single source of truth
+  // for both dynamic and prop-driven column counts (Finding #6).
+  const [columnCount, setColumnCount] = useState(1)
 
   // Read the initial wrapper dimensions synchronously to avoid a
-  // 0 → measured layout jump on mount.
+  // 0 → measured layout jump on mount. Handles both the explicit prop
+  // and the width-derived default, so the separate sync useEffect for
+  // explicitColumnCount is not needed.
   useLayoutEffect(() => {
     if (wrapperRef.current) {
       setContainerHeight(wrapperRef.current.offsetHeight)
-      if (explicitColumnCount === undefined) {
+      if (explicitColumnCount !== undefined) {
+        setColumnCount(explicitColumnCount)
+      } else {
         setColumnCount(getColumnCount(wrapperRef.current.offsetWidth))
       }
-    }
-  }, [explicitColumnCount])
-
-  // Keep columnCount in sync when the prop changes externally.
-  useEffect(() => {
-    if (explicitColumnCount !== undefined) {
-      setColumnCount(explicitColumnCount)
     }
   }, [explicitColumnCount])
 
@@ -117,8 +127,8 @@ export default function VirtualizedThreadList<T>({
     () => ({
       count: rowCount,
       getScrollElement: () => scrollRef.current,
-      estimateSize: () => 176, // card height (~160) + vertical gap (16)
-      overscan: 5, // ~800px buffer prevents blank flash during fast scroll
+      estimateSize: () => ROW_HEIGHT_WITH_GAP,
+      overscan: Math.ceil(OVERSCAN_PX / ROW_HEIGHT_WITH_GAP),
     }),
     [rowCount],
   )
@@ -127,16 +137,26 @@ export default function VirtualizedThreadList<T>({
 
   // Defensive empty state — QueuePage gates on empty/filtered-empty before reaching this
   // component, but this ensures standalone reuse also shows a graceful fallback.
+  // Wraps in the same `wrapperRef > scrollRef` tree structure as the populated state
+  // for consistent DOM ancestry (Finding #3).
   if (threads.length === 0) {
     return (
-      <div
-        data-testid="queue-thread-list"
-        id="queue-container"
-        role="list"
-        aria-label="Thread queue"
-        className="flex items-center justify-center text-stone-500 py-8"
-      >
-        No threads in queue
+      <div ref={wrapperRef} style={{ height: 'calc(100dvh - 14rem)' }}>
+        <div
+          ref={scrollRef}
+          data-testid="queue-thread-list"
+          id="queue-container"
+          role="list"
+          aria-label="Thread queue"
+          style={{
+            height: '100%',
+            overflowY: 'auto',
+          }}
+        >
+          <div className="flex items-center justify-center text-stone-500 py-8">
+            No threads in queue
+          </div>
+        </div>
       </div>
     )
   }
@@ -191,6 +211,8 @@ export default function VirtualizedThreadList<T>({
             ) : (
               // ═══ Multi-column path (desktop parity) ═══
               // Each virtual row is a CSS grid of columnCount cards.
+              // `data-index` always represents the virtual row index.
+              // Use `renderItem`'s second argument for thread-level identity.
               <div
                 key={virtualItem.key}
                 data-index={rowIndex}
@@ -200,7 +222,7 @@ export default function VirtualizedThreadList<T>({
                   top: 0,
                   left: 0,
                   width: '100%',
-                  paddingBottom: '1rem', // vertical gap matching gap-4
+                  paddingBottom: `${ROW_GAP}px`, // vertical gap matching gap-4
                   transform: `translateY(${virtualItem.start}px)`,
                 }}
               >
@@ -208,18 +230,12 @@ export default function VirtualizedThreadList<T>({
                   className="grid gap-4"
                   style={{
                     gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+                    rowGap: `${ROW_GAP}px`,
                   }}
                 >
-                  {Array.from(
-                    { length: columnCount },
-                    (_, colIndex) => {
-                      const threadIndex = rowIndex * columnCount + colIndex
-                      if (threadIndex >= threads.length) return null
-                      return renderItem(
-                        threads[threadIndex],
-                        threadIndex,
-                      )
-                    },
+                  {getRowThreads(threads, rowIndex, columnCount).map(
+                    (thread, colIndex) =>
+                      renderItem(thread, rowIndex * columnCount + colIndex),
                   )}
                 </div>
               </div>

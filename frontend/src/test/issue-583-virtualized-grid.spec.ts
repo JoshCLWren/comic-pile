@@ -70,7 +70,10 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     await list.evaluate((el) => {
       el.scrollTop = 2000;
     });
-    await page.waitForTimeout(300);
+
+    // Wait deterministically for new virtualized items to render after scroll
+    const lastItem = list.locator('[data-testid="queue-thread-item"]').last();
+    await lastItem.waitFor({ state: 'visible', timeout: 5000 });
 
     // After scrolling, new items should be visible
     const scrolledItems = await list.locator('[data-testid="queue-thread-item"]').count();
