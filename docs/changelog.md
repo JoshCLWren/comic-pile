@@ -2,6 +2,13 @@
 
 ## 2026-07-13
 
+**Queue virtualization for large collections**
+- Added `@tanstack/react-virtual` to virtualize the queue list when it exceeds 50 threads.
+- Small queues (<50) continue to use the existing responsive grid with no behavioral change.
+- Large queues (>50) switch to a single-column virtualized list that only renders visible rows, drastically reducing DOM nodes and improving scroll performance on mobile.
+- Container height is derived reactively via `ResizeObserver` (not `window.innerHeight`), ensuring correct behavior across device orientation changes.
+- Full feature parity maintained via the shared `QueueThreadCard` component (extracted in a prior refactor).
+
 **Mobile Safari rendering fix**
 - Pages now render their background correctly on mobile Safari instead of appearing stripped or bare.
 - Touch interactions and rubber-band overscroll prevention remain unchanged.

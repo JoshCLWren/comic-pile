@@ -28,6 +28,7 @@
     "test:dice-playground:update": "playwright test --config=playwright.dice.config.ts --update-snapshots"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.14.6",
     "axios": "^1.13.6",
     "html-to-image": "^1.11.11",
     "html2canvas": "^1.4.1",

@@ -23,6 +23,7 @@ import { getApiErrorDetail } from '../../utils/apiError'
 import { FormatSelect } from './FormatSelect'
 import { IssueToggleList } from './IssueToggleList'
 import QueueThreadCard from './QueueThreadCard'
+import VirtualizedThreadList from './VirtualizedThreadList'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from './types'
 
 export default function QueuePage() {
@@ -156,6 +157,14 @@ export default function QueuePage() {
       t.title.toLowerCase().includes(searchQuery.toLowerCase())
     )
   }, [sortedThreads, searchQuery])
+
+  /**
+   * Threshold above which the queue switches from a plain grid to a
+   * virtualized (windowing) list. Below this limit the standard responsive
+   * grid renders faster. The threshold keeps the UX smooth for small queues
+   * while optimizing large ones.
+   */
+  const VIRTUALIZATION_THRESHOLD = 50
 
   const handleDelete = (threadId: number) => {
     if (window.confirm('Are you sure you want to delete this thread?')) {
@@ -591,6 +600,56 @@ export default function QueuePage() {
         <div className="text-center text-stone-500">No active threads in queue</div>
       ) : filteredThreads.length === 0 ? (
         <div className="text-center text-stone-500">No threads match your search</div>
+      ) : filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
+        <VirtualizedThreadList threads={filteredThreads}>
+          {(thread: Thread, index: number) => {
+            const isDragOver = dragOverThreadId === thread.id
+            const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
+            const blockingReasons = blockingReasonMap[thread.id] || []
+            const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
+            const snoozeIcon = isSnoozed ? '🔔' : '😴'
+            const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
+
+            return (
+              <QueueThreadCard
+                key={thread.id}
+                thread={thread}
+                index={index}
+                isBlocked={isBlocked}
+                blockingReasons={blockingReasons}
+                isDragOver={isDragOver}
+                snoozeIcon={snoozeIcon}
+                snoozeLabel={snoozeLabel}
+                onCardClick={() => handleThreadClick(thread)}
+                onDragStart={handleDragStart(thread.id)}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver(thread.id)}
+                onDrop={handleDrop(thread.id)}
+                onSwipeRead={() => handleActionForThread('read', thread)}
+                onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
+                onSwipeSnooze={async () => {
+                  if (isSnoozed) {
+                    await unsnoozeMutation.mutate(thread.id)
+                  } else {
+                    await snoozeMutation.mutate()
+                  }
+                  await refetchSession()
+                  await refetch()
+                }}
+                onSwipeDelete={() => handleDelete(thread.id)}
+                onMoveToFront={() => handleMoveToFront(thread.id)}
+                onMoveToBack={() => handleMoveToBack(thread.id)}
+                onReposition={() => openRepositionModal(thread)}
+                onEdit={() => openEditModal(thread)}
+                onDependencies={() => {
+                  setDependencyThread(thread)
+                  setIsDependencyBuilderOpen(true)
+                }}
+                onDelete={() => handleDelete(thread.id)}
+              />
+            )
+          }}
+        </VirtualizedThreadList>
       ) : (
         <>
           {reorderError && (
