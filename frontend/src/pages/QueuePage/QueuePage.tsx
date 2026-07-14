@@ -519,6 +519,83 @@ export default function QueuePage() {
     }
   }
 
+  // Shared render callback used by both the virtualized list (>50 threads) and the
+  // responsive grid (≤50 threads). Keeps the two rendering paths in lockstep so any
+  // future handler change only needs one edit.
+  const renderThreadCard = useCallback(
+    (thread: Thread, index: number) => {
+      const isDragOver = dragOverThreadId === thread.id
+      const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
+      const blockingReasons = blockingReasonMap[thread.id] || []
+      const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
+      const snoozeIcon = isSnoozed ? '🔔' : '😴'
+      const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
+
+      return (
+        <QueueThreadCard
+          key={thread.id}
+          thread={thread}
+          index={index}
+          isBlocked={isBlocked}
+          blockingReasons={blockingReasons}
+          isDragOver={isDragOver}
+          snoozeIcon={snoozeIcon}
+          snoozeLabel={snoozeLabel}
+          onCardClick={() => handleThreadClick(thread)}
+          onDragStart={handleDragStart(thread.id)}
+          onDragEnd={handleDragEnd}
+          onDragOver={handleDragOver(thread.id)}
+          onDrop={handleDrop(thread.id)}
+          onSwipeRead={() => handleActionForThread('read', thread)}
+          onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
+          onSwipeSnooze={async () => {
+            if (isSnoozed) {
+              await unsnoozeMutation.mutate(thread.id)
+            } else {
+              await snoozeMutation.mutate()
+            }
+            await refetchSession()
+            await refetch()
+          }}
+          onSwipeDelete={() => handleDelete(thread.id)}
+          onMoveToFront={() => handleMoveToFront(thread.id)}
+          onMoveToBack={() => handleMoveToBack(thread.id)}
+          onReposition={() => openRepositionModal(thread)}
+          onEdit={() => openEditModal(thread)}
+          onDependencies={() => {
+            setDependencyThread(thread)
+            setIsDependencyBuilderOpen(true)
+          }}
+          onDelete={() => handleDelete(thread.id)}
+        />
+      )
+    },
+    [
+      dragOverThreadId,
+      blockedThreadIds,
+      blockingReasonMap,
+      session,
+      navigate,
+      handleThreadClick,
+      handleDragStart,
+      handleDragEnd,
+      handleDragOver,
+      handleDrop,
+      handleActionForThread,
+      handleDelete,
+      handleMoveToFront,
+      handleMoveToBack,
+      openRepositionModal,
+      openEditModal,
+      setDependencyThread,
+      setIsDependencyBuilderOpen,
+      refetchSession,
+      refetch,
+      unsnoozeMutation,
+      snoozeMutation,
+    ],
+  )
+
   if (isPending) {
     return <LoadingSpinner fullScreen />
   }
@@ -592,57 +669,6 @@ export default function QueuePage() {
         <div className="text-center text-stone-500">No active threads in queue</div>
       ) : filteredThreads.length === 0 ? (
         <div className="text-center text-stone-500">No threads match your search</div>
-      ) : filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
-        <VirtualizedThreadList
-          threads={filteredThreads}
-          renderItem={(thread: Thread, index: number) => {
-            const isDragOver = dragOverThreadId === thread.id
-            const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
-            const blockingReasons = blockingReasonMap[thread.id] || []
-            const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
-            const snoozeIcon = isSnoozed ? '🔔' : '😴'
-            const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
-
-            return (
-              <QueueThreadCard
-                key={thread.id}
-                thread={thread}
-                index={index}
-                isBlocked={isBlocked}
-                blockingReasons={blockingReasons}
-                isDragOver={isDragOver}
-                snoozeIcon={snoozeIcon}
-                snoozeLabel={snoozeLabel}
-                onCardClick={() => handleThreadClick(thread)}
-                onDragStart={handleDragStart(thread.id)}
-                onDragEnd={handleDragEnd}
-                onDragOver={handleDragOver(thread.id)}
-                onDrop={handleDrop(thread.id)}
-                onSwipeRead={() => handleActionForThread('read', thread)}
-                onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
-                onSwipeSnooze={async () => {
-                  if (isSnoozed) {
-                    await unsnoozeMutation.mutate(thread.id)
-                  } else {
-                    await snoozeMutation.mutate()
-                  }
-                  await refetchSession()
-                  await refetch()
-                }}
-                onSwipeDelete={() => handleDelete(thread.id)}
-                onMoveToFront={() => handleMoveToFront(thread.id)}
-                onMoveToBack={() => handleMoveToBack(thread.id)}
-                onReposition={() => openRepositionModal(thread)}
-                onEdit={() => openEditModal(thread)}
-                onDependencies={() => {
-                  setDependencyThread(thread)
-                  setIsDependencyBuilderOpen(true)
-                }}
-                onDelete={() => handleDelete(thread.id)}
-              />
-            )
-          }}
-        />
       ) : (
         <>
           {reorderError && (
@@ -650,61 +676,22 @@ export default function QueuePage() {
               {reorderError}
             </div>
           )}
-          <div
-            data-testid="queue-thread-list"
-            id="queue-container"
-            role="list"
-            aria-label="Thread queue"
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
-          >
-            {filteredThreads.map((thread, index) => {
-              const isDragOver = dragOverThreadId === thread.id
-              const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
-              const blockingReasons = blockingReasonMap[thread.id] || []
-              const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
-              const snoozeIcon = isSnoozed ? '🔔' : '😴'
-              const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
-
-              return (
-                <QueueThreadCard
-                  key={thread.id}
-                  thread={thread}
-                  index={index}
-                  isBlocked={isBlocked}
-                  blockingReasons={blockingReasons}
-                  isDragOver={isDragOver}
-                  snoozeIcon={snoozeIcon}
-                  snoozeLabel={snoozeLabel}
-                  onCardClick={() => handleThreadClick(thread)}
-                  onDragStart={handleDragStart(thread.id)}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={handleDragOver(thread.id)}
-                  onDrop={handleDrop(thread.id)}
-                  onSwipeRead={() => handleActionForThread('read', thread)}
-                  onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
-                  onSwipeSnooze={async () => {
-                    if (isSnoozed) {
-                      await unsnoozeMutation.mutate(thread.id)
-                    } else {
-                      await snoozeMutation.mutate()
-                    }
-                    await refetchSession()
-                    await refetch()
-                  }}
-                  onSwipeDelete={() => handleDelete(thread.id)}
-                  onMoveToFront={() => handleMoveToFront(thread.id)}
-                  onMoveToBack={() => handleMoveToBack(thread.id)}
-                  onReposition={() => openRepositionModal(thread)}
-                  onEdit={() => openEditModal(thread)}
-                  onDependencies={() => {
-                    setDependencyThread(thread)
-                    setIsDependencyBuilderOpen(true)
-                  }}
-                  onDelete={() => handleDelete(thread.id)}
-                />
-              )
-            })}
-          </div>
+          {filteredThreads.length > VIRTUALIZATION_THRESHOLD ? (
+            <VirtualizedThreadList
+              threads={filteredThreads}
+              renderItem={renderThreadCard}
+            />
+          ) : (
+            <div
+              data-testid="queue-thread-list"
+              id="queue-container"
+              role="list"
+              aria-label="Thread queue"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4"
+            >
+              {filteredThreads.map((thread, index) => renderThreadCard(thread, index))}
+            </div>
+          )}
         </>
       )}
 

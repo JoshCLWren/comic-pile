@@ -37,7 +37,7 @@ export default function VirtualizedThreadList<T>({
   const [containerHeight, setContainerHeight] = useState(0)
 
   // Read the initial wrapper height synchronously to avoid a
-  // 0 → measured layout jump on mount (🔴 council finding #1).
+  // 0 → measured layout jump on mount.
   useLayoutEffect(() => {
     if (wrapperRef.current) {
       setContainerHeight(wrapperRef.current.offsetHeight)
@@ -45,7 +45,7 @@ export default function VirtualizedThreadList<T>({
   }, [])
 
   // Reactive container height via ResizeObserver, throttled with
-  // requestAnimationFrame to prevent layout thrashing (🟠 finding #4).
+  // requestAnimationFrame to prevent layout thrashing.
   useEffect(() => {
     const wrapper = wrapperRef.current
     if (!wrapper) return
@@ -72,20 +72,21 @@ export default function VirtualizedThreadList<T>({
   }, [])
 
   // Memoize virtualizer options to avoid unnecessary setOptions()
-  // calls on every render (🟡 finding #8).
+  // calls on every render.
   const virtualizerOptions = useMemo(
     () => ({
       count: threads.length,
       getScrollElement: () => scrollRef.current,
       estimateSize: () => 160,
-      overscan: 10, // bumped from 4 (🔴 council finding #2)
+      overscan: 5, // ~800px buffer prevents blank flash during fast scroll
     }),
     [threads.length],
   )
 
   const virtualizer = useVirtualizer(virtualizerOptions)
 
-  // Empty state guard (🟠 finding #3)
+  // Defensive empty state — QueuePage gates on empty/filtered-empty before reaching this
+  // component, but this ensures standalone reuse also shows a graceful fallback.
   if (threads.length === 0) {
     return (
       <div
