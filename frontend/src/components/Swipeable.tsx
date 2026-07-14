@@ -52,6 +52,12 @@ export default function Swipeable({
     startOffsetRef.current = offset
     isHorizontalRef.current = null
     setIsSwiping(false)
+    // Clear any pending swipe-end timeout so a rapid re-touch within 50ms
+    // doesn't fire mid-gesture and incorrectly set isSwiping to false.
+    if (swipeTimeoutRef.current !== null) {
+      clearTimeout(swipeTimeoutRef.current)
+      swipeTimeoutRef.current = null
+    }
   }
 
   function handleTouchMove(e: TouchEvent) {

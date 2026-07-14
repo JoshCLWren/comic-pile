@@ -82,7 +82,7 @@ export default function VirtualizedThreadList<T>({
     if (wrapperRef.current) {
       setContainerHeight(wrapperRef.current.offsetHeight)
       if (explicitColumnCount !== undefined) {
-        setColumnCount(explicitColumnCount)
+        setColumnCount(Math.max(1, explicitColumnCount))
       } else {
         setColumnCount(getColumnCount(wrapperRef.current.offsetWidth))
       }
