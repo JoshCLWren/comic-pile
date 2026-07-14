@@ -30,11 +30,16 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     const firstRowItems = list.locator('[data-index="0"] [data-testid="queue-thread-item"]');
     await expect(firstRowItems).toHaveCount(3);
 
-    // Assert the grid gap matches the Tailwind gap-4 (1rem = 16px)
-    const gap = await firstRowGrid.evaluate((el) => {
-      return getComputedStyle(el).gap;
+    // Assert the grid gap matches the Tailwind gap-4 (1rem = 16px) on both axes.
+    // Use the longhand properties: Chromium collapses the `gap` shorthand to a
+    // single value ("16px") when row-gap == column-gap, so asserting the
+    // shorthand's exact string form is brittle across engines.
+    const { rowGap, columnGap } = await firstRowGrid.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { rowGap: cs.rowGap, columnGap: cs.columnGap };
     });
-    expect(gap).toBe('16px 16px');
+    expect(rowGap).toBe('16px');
+    expect(columnGap).toBe('16px');
   });
 
   test('renders 1 column at mobile viewport (375×812)', async ({ authenticatedWithLargeQueuePage }) => {
