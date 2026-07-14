@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { expect, it, vi, beforeAll } from 'vitest'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
-import type { ReactElement } from 'react'
 
 interface MockThread {
   id: number
@@ -62,16 +61,16 @@ it('renders only the virtualized subset of items (windowing)', () => {
   const threads = createMockThreads(60)
 
   render(
-    <VirtualizedThreadList threads={threads}>
-      {(thread, index) => (
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, index) => (
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           {(thread as MockThread).title} #{index + 1}
         </div>
       )}
-    </VirtualizedThreadList>,
+    />,
   )
 
-  // With our mock returning 5 virtual items, only 5 should render
   const items = screen.getAllByTestId('queue-thread-item')
   expect(items).toHaveLength(5)
   expect(items[0]).toHaveTextContent('Thread 1')
@@ -82,13 +81,14 @@ it('preserves container selectors for E2E compatibility', () => {
   const threads = createMockThreads(5)
 
   const { container } = render(
-    <VirtualizedThreadList threads={threads}>
-      {(thread, index) => (
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, index) => (
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           Item {index + 1}
         </div>
       )}
-    </VirtualizedThreadList>,
+    />,
   )
 
   expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument()
@@ -103,16 +103,16 @@ it('renders the total-size spacer div', () => {
   const threads = createMockThreads(60)
 
   const { container } = render(
-    <VirtualizedThreadList threads={threads}>
-      {(thread, index) => (
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, index) => (
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           Item {index + 1}
         </div>
       )}
-    </VirtualizedThreadList>,
+    />,
   )
 
-  // The inner spacer div should have height = totalSize
   const scrollEl = container.querySelector('#queue-container')
   expect(scrollEl).toBeInTheDocument()
   const spacer = scrollEl!.firstElementChild as HTMLElement
@@ -124,20 +124,19 @@ it('renders virtual items with correct positioning', () => {
   const threads = createMockThreads(60)
 
   const { container } = render(
-    <VirtualizedThreadList threads={threads}>
-      {(thread, index) => (
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, index) => (
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           Item {index + 1}
         </div>
       )}
-    </VirtualizedThreadList>,
+    />,
   )
 
   const items = screen.getAllByTestId('queue-thread-item')
-  // Should have 5 items (from mock)
   expect(items).toHaveLength(5)
 
-  // Each item wrapper should have data-index and transform style
   items.forEach((item, i) => {
     const parent = item.parentElement as HTMLElement
     expect(parent.dataset.index).toBe(String(i))
@@ -149,13 +148,14 @@ it('sets aria-label and role on the scroll container', () => {
   const threads = createMockThreads(5)
 
   render(
-    <VirtualizedThreadList threads={threads}>
-      {(thread, index) => (
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, index) => (
         <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
           Item {index + 1}
         </div>
       )}
-    </VirtualizedThreadList>,
+    />,
   )
 
   expect(screen.getByRole('list')).toBeInTheDocument()

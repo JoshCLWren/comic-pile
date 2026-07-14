@@ -1,15 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { ReactNode } from 'react'
 
+/** Threshold above which the queue switches from a plain grid to a virtualized list. */
+export const VIRTUALIZATION_THRESHOLD = 50
+
 interface VirtualizedThreadListProps<T> {
-  /** Threads to render in the virtualized list */
+  /** Threads to render in the virtualized list. */
   threads: T[]
   /**
-   * Render-prop for each thread.
-   * The caller provides the full `<QueueThreadCard>` with all handlers bound.
+   * Render-prop called for each visible virtual item.
+   * @param thread — the thread at the current virtual index
+   * @param index — the virtual array index (not the DB id)
    */
-  children: (thread: T, index: number) => ReactNode
+  renderItem: (thread: T, index: number) => ReactNode
 }
 
 /**
@@ -26,35 +30,75 @@ interface VirtualizedThreadListProps<T> {
  */
 export default function VirtualizedThreadList<T>({
   threads,
-  children,
+  renderItem,
 }: VirtualizedThreadListProps<T>) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [containerHeight, setContainerHeight] = useState(0)
 
-  // Reactive container height via ResizeObserver
+  // Read the initial wrapper height synchronously to avoid a
+  // 0 → measured layout jump on mount (🔴 council finding #1).
+  useLayoutEffect(() => {
+    if (wrapperRef.current) {
+      setContainerHeight(wrapperRef.current.offsetHeight)
+    }
+  }, [])
+
+  // Reactive container height via ResizeObserver, throttled with
+  // requestAnimationFrame to prevent layout thrashing (🟠 finding #4).
   useEffect(() => {
     const wrapper = wrapperRef.current
     if (!wrapper) return
 
+    let rafId: number | null = null
+
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerHeight(entry.contentRect.height)
-      }
+      if (rafId !== null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        for (const entry of entries) {
+          setContainerHeight(entry.contentRect.height)
+        }
+      })
     })
 
     observer.observe(wrapper)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+    }
   }, [])
 
-  const virtualizer = useVirtualizer({
-    count: threads.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 160,
-    overscan: 4,
-    measureElement: (element) =>
-      element.getBoundingClientRect().height,
-  })
+  // Memoize virtualizer options to avoid unnecessary setOptions()
+  // calls on every render (🟡 finding #8).
+  const virtualizerOptions = useMemo(
+    () => ({
+      count: threads.length,
+      getScrollElement: () => scrollRef.current,
+      estimateSize: () => 160,
+      overscan: 10, // bumped from 4 (🔴 council finding #2)
+    }),
+    [threads.length],
+  )
+
+  const virtualizer = useVirtualizer(virtualizerOptions)
+
+  // Empty state guard (🟠 finding #3)
+  if (threads.length === 0) {
+    return (
+      <div
+        data-testid="queue-thread-list"
+        id="queue-container"
+        role="list"
+        aria-label="Thread queue"
+        className="flex items-center justify-center text-stone-500 py-8"
+      >
+        No threads in queue
+      </div>
+    )
+  }
 
   return (
     <div ref={wrapperRef} className="flex-1 min-h-0">
@@ -89,7 +133,7 @@ export default function VirtualizedThreadList<T>({
                 transform: `translateY(${virtualItem.start}px)`,
               }}
             >
-              {children(threads[virtualItem.index], virtualItem.index)}
+              {renderItem(threads[virtualItem.index], virtualItem.index)}
             </div>
           ))}
         </div>
