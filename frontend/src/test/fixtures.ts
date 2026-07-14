@@ -159,7 +159,8 @@ async function createThreadsForUser(
 	let threadIds: number[] = [];
 	while (attempts < 10) {
 		const threadsResponse = await request.get('/api/threads/', {
-			headers
+			headers,
+			params: { page_size: 200 },
 		});
 		if (threadsResponse.ok()) {
 			const response = await threadsResponse.json();
