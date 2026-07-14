@@ -643,7 +643,7 @@ export default function QueuePage() {
                   onMoveToFront={() => handleMoveToFront(thread.id)}
                   onMoveToBack={() => handleMoveToBack(thread.id)}
                   onReposition={() => openRepositionModal(thread)}
-                  onEditFromMenu={() => openEditModal(thread)}
+                  onEdit={() => openEditModal(thread)}
                   onDependencies={() => {
                     setDependencyThread(thread)
                     setIsDependencyBuilderOpen(true)

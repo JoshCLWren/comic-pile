@@ -25,7 +25,7 @@ interface QueueThreadCardProps {
   onMoveToFront: () => void
   onMoveToBack: () => void
   onReposition: () => void
-  onEditFromMenu: () => void
+  onEdit: () => void
   onDependencies: () => void
   onDelete: () => void
 }
@@ -50,7 +50,7 @@ export default function QueueThreadCard({
   onMoveToFront,
   onMoveToBack,
   onReposition,
-  onEditFromMenu,
+  onEdit,
   onDependencies,
   onDelete,
 }: QueueThreadCardProps) {
@@ -114,7 +114,7 @@ export default function QueueThreadCard({
               onMoveToFront={() => onMoveToFront()}
               onReposition={() => onReposition()}
               onMoveToBack={() => onMoveToBack()}
-              onEdit={() => onEditFromMenu()}
+              onEdit={() => onEdit()}
               onDependencies={() => onDependencies()}
               onDelete={() => onDelete()}
             />
