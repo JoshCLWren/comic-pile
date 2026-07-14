@@ -98,7 +98,7 @@ it('preserves container selectors for E2E compatibility', () => {
 })
 
 it('renders the total-size spacer div', () => {
-  mockGetTotalSize.mockReturnValue(9600)
+  mockGetTotalSize.mockReturnValueOnce(9600)
 
   const threads = createMockThreads(60)
 

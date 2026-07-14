@@ -522,79 +522,53 @@ export default function QueuePage() {
   // Shared render callback used by both the virtualized list (>50 threads) and the
   // responsive grid (≤50 threads). Keeps the two rendering paths in lockstep so any
   // future handler change only needs one edit.
-  const renderThreadCard = useCallback(
-    (thread: Thread, index: number) => {
-      const isDragOver = dragOverThreadId === thread.id
-      const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
-      const blockingReasons = blockingReasonMap[thread.id] || []
-      const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
-      const snoozeIcon = isSnoozed ? '🔔' : '😴'
-      const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
+  function renderThreadCard(thread: Thread, index: number) {
+    const isDragOver = dragOverThreadId === thread.id
+    const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
+    const blockingReasons = blockingReasonMap[thread.id] || []
+    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
+    const snoozeIcon = isSnoozed ? '🔔' : '😴'
+    const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
 
-      return (
-        <QueueThreadCard
-          key={thread.id}
-          thread={thread}
-          index={index}
-          isBlocked={isBlocked}
-          blockingReasons={blockingReasons}
-          isDragOver={isDragOver}
-          snoozeIcon={snoozeIcon}
-          snoozeLabel={snoozeLabel}
-          onCardClick={() => handleThreadClick(thread)}
-          onDragStart={handleDragStart(thread.id)}
-          onDragEnd={handleDragEnd}
-          onDragOver={handleDragOver(thread.id)}
-          onDrop={handleDrop(thread.id)}
-          onSwipeRead={() => handleActionForThread('read', thread)}
-          onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
-          onSwipeSnooze={async () => {
-            if (isSnoozed) {
-              await unsnoozeMutation.mutate(thread.id)
-            } else {
-              await snoozeMutation.mutate()
-            }
-            await refetchSession()
-            await refetch()
-          }}
-          onSwipeDelete={() => handleDelete(thread.id)}
-          onMoveToFront={() => handleMoveToFront(thread.id)}
-          onMoveToBack={() => handleMoveToBack(thread.id)}
-          onReposition={() => openRepositionModal(thread)}
-          onEdit={() => openEditModal(thread)}
-          onDependencies={() => {
-            setDependencyThread(thread)
-            setIsDependencyBuilderOpen(true)
-          }}
-          onDelete={() => handleDelete(thread.id)}
-        />
-      )
-    },
-    [
-      dragOverThreadId,
-      blockedThreadIds,
-      blockingReasonMap,
-      session,
-      navigate,
-      handleThreadClick,
-      handleDragStart,
-      handleDragEnd,
-      handleDragOver,
-      handleDrop,
-      handleActionForThread,
-      handleDelete,
-      handleMoveToFront,
-      handleMoveToBack,
-      openRepositionModal,
-      openEditModal,
-      setDependencyThread,
-      setIsDependencyBuilderOpen,
-      refetchSession,
-      refetch,
-      unsnoozeMutation,
-      snoozeMutation,
-    ],
-  )
+    return (
+      <QueueThreadCard
+        key={thread.id}
+        thread={thread}
+        index={index}
+        isBlocked={isBlocked}
+        blockingReasons={blockingReasons}
+        isDragOver={isDragOver}
+        snoozeIcon={snoozeIcon}
+        snoozeLabel={snoozeLabel}
+        onCardClick={() => handleThreadClick(thread)}
+        onDragStart={handleDragStart(thread.id)}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver(thread.id)}
+        onDrop={handleDrop(thread.id)}
+        onSwipeRead={() => handleActionForThread('read', thread)}
+        onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
+        onSwipeSnooze={async () => {
+          if (isSnoozed) {
+            await unsnoozeMutation.mutate(thread.id)
+          } else {
+            await snoozeMutation.mutate()
+          }
+          await refetchSession()
+          await refetch()
+        }}
+        onSwipeDelete={() => handleDelete(thread.id)}
+        onMoveToFront={() => handleMoveToFront(thread.id)}
+        onMoveToBack={() => handleMoveToBack(thread.id)}
+        onReposition={() => openRepositionModal(thread)}
+        onEdit={() => openEditModal(thread)}
+        onDependencies={() => {
+          setDependencyThread(thread)
+          setIsDependencyBuilderOpen(true)
+        }}
+        onDelete={() => handleDelete(thread.id)}
+      />
+    )
+  }
 
   if (isPending) {
     return <LoadingSpinner fullScreen />
