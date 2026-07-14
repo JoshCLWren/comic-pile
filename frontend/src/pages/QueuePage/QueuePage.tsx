@@ -2,11 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Modal from '../../components/Modal'
-import PositionMenu from '../../components/PositionMenu'
 import PositionSlider from '../../components/PositionSlider'
-import Tooltip from '../../components/Tooltip'
 import LoadingSpinner from '../../components/LoadingSpinner'
-import { MarqueeTitle } from '../../components/MarqueeTitle'
 import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import CollectionDialog from '../../components/CollectionDialog'
@@ -17,16 +14,15 @@ import { useSession } from '../../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
 import { dependenciesApi, threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
-import Swipeable from '../../components/Swipeable'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { useCollections } from '../../contexts/CollectionContext'
 import { collectionsEnabled } from '../../config/featureFlags'
 import { PositionMenuProvider } from '../../contexts/PositionMenuContext'
 import type { Thread } from '../../types'
 import { getApiErrorDetail } from '../../utils/apiError'
-import { CollectionBadge } from './CollectionBadge'
 import { FormatSelect } from './FormatSelect'
 import { IssueToggleList } from './IssueToggleList'
+import QueueThreadCard from './QueueThreadCard'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from './types'
 
 export default function QueuePage() {
@@ -613,117 +609,47 @@ export default function QueuePage() {
               const isDragOver = dragOverThreadId === thread.id
               const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
               const blockingReasons = blockingReasonMap[thread.id] || []
-              const isMigrated = thread.total_issues !== null
+              const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
+              const snoozeIcon = isSnoozed ? '🔔' : '😴'
+              const snoozeLabel = isSnoozed ? 'Unsnooze' : 'Snooze'
 
               return (
-                <Swipeable
+                <QueueThreadCard
                   key={thread.id}
-                  data-testid="queue-thread-item"
+                  thread={thread}
+                  index={index}
+                  isBlocked={isBlocked}
+                  blockingReasons={blockingReasons}
+                  isDragOver={isDragOver}
+                  snoozeIcon={snoozeIcon}
+                  snoozeLabel={snoozeLabel}
                   onCardClick={() => handleThreadClick(thread)}
-                  className="rounded-xl"
-                  actions={[
-                    { icon: '📖', label: 'Read', onClick: () => handleActionForThread('read', thread), color: 'bg-amber-600/30 text-amber-300' },
-                    { icon: '✏️', label: 'Edit', onClick: () => navigate(`/thread/${thread.id}`), color: 'bg-white/10 text-stone-300' },
-                    { icon: session?.snoozed_threads?.some((t) => t.id === thread.id) ? '🔔' : '😴', label: session?.snoozed_threads?.some((t) => t.id === thread.id) ? 'Unsnooze' : 'Snooze', onClick: async () => {
-                      const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
-                      if (isSnoozed) { await unsnoozeMutation.mutate(thread.id) } else { await snoozeMutation.mutate() }
-                      await refetchSession(); await refetch()
-                    }, color: 'bg-teal-600/20 text-teal-400' },
-                    { icon: '🗑', label: 'Delete', onClick: () => handleDelete(thread.id), color: 'bg-red-600/25 text-red-400' },
-                  ]}
-                >
-                <div
-                  className={`glass-card p-3 md:p-4 space-y-2 md:space-y-3 group transition-all hover:border-white/20 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''
-                    }`}
+                  onDragStart={handleDragStart(thread.id)}
+                  onDragEnd={handleDragEnd}
                   onDragOver={handleDragOver(thread.id)}
                   onDrop={handleDrop(thread.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      handleThreadClick(thread)
+                  onSwipeRead={() => handleActionForThread('read', thread)}
+                  onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
+                  onSwipeSnooze={async () => {
+                    if (isSnoozed) {
+                      await unsnoozeMutation.mutate(thread.id)
+                    } else {
+                      await snoozeMutation.mutate()
                     }
+                    await refetchSession()
+                    await refetch()
                   }}
-                >
-                  <div className="flex justify-between items-start gap-2 md:gap-3">
-                    <div className="flex items-start gap-2 md:gap-3 min-w-0 flex-1">
-                      <span className="text-xl md:text-2xl font-black text-amber-600/30">
-                        #{index + 1}
-                      </span>
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Tooltip content="Drag to reorder within the queue.">
-                          <button
-                            type="button"
-                            className="text-stone-500 hover:text-stone-300 transition-colors text-lg"
-                            draggable
-                            onDragStart={handleDragStart(thread.id)}
-                            onDragEnd={handleDragEnd}
-                            aria-label="Drag to reorder"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            ⠿
-                          </button>
-                         </Tooltip>
-                         <MarqueeTitle title={thread.title} />
-                         {isBlocked && (
-                          <Tooltip content={blockingReasons.length > 0 ? blockingReasons.join('\n') : 'Blocked by dependency'}>
-                            <span className="text-red-300 text-lg" aria-label="Blocked thread">🔒</span>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </div>
-                    <div className="hidden md:flex items-center gap-1">
-        <PositionMenu
-          thread={thread}
-          onMoveToFront={handleMoveToFront}
-          onReposition={openRepositionModal}
-          onMoveToBack={handleMoveToBack}
-          onEdit={openEditModal}
-          onDependencies={(t) => {
-            setDependencyThread(t)
-            setIsDependencyBuilderOpen(true)
-          }}
-          onDelete={handleDelete}
-        />
-      </div>
-                  </div>
-                  <div className="pl-8 md:pl-[2.75rem]">
-                    <p className="text-xs text-stone-500 uppercase tracking-widest font-bold">{thread.format}</p>
-                    {thread.collection_id && (
-                      <div className="mt-1.5 flex">
-                        <CollectionBadge collectionId={thread.collection_id} />
-                      </div>
-                    )}
-                    {thread.notes && <p className="text-xs text-stone-400 mt-2">{thread.notes}</p>}
-                    {thread.issues_remaining !== null && (
-                      <p className="text-sm text-stone-300 mt-2 font-medium">
-                         {isMigrated && thread.next_unread_issue_number
-                           ? `Up next: #${thread.next_unread_issue_number} · ${thread.issues_remaining} remaining`
-                           : `${thread.issues_remaining} issues remaining`
-                         }
-                      </p>
-                    )}
-                    {isBlocked && blockingReasons.length > 0 && (
-                      <button
-                        type="button"
-                        className="mt-2 w-full text-left text-xs text-red-300/80 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 hover:bg-red-500/15 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDependencyThread(thread)
-                          setIsDependencyBuilderOpen(true)
-                        }}
-                        aria-label={`View dependencies for ${thread.title}`}
-                      >
-                        <span className="font-bold">🔒 {blockingReasons[0]}</span>
-                        {blockingReasons.length > 1 && (
-                          <span className="text-red-400/60 ml-1">+{blockingReasons.length - 1} more</span>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </div>
-                </Swipeable>
+                  onSwipeDelete={() => handleDelete(thread.id)}
+                  onMoveToFront={() => handleMoveToFront(thread.id)}
+                  onMoveToBack={() => handleMoveToBack(thread.id)}
+                  onReposition={() => openRepositionModal(thread)}
+                  onEdit={() => openEditModal(thread)}
+                  onDependencies={() => {
+                    setDependencyThread(thread)
+                    setIsDependencyBuilderOpen(true)
+                  }}
+                  onDelete={() => handleDelete(thread.id)}
+                />
               )
             })}
           </div>
