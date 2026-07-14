@@ -2,6 +2,11 @@
 
 ## 2026-07-13
 
+**Queue virtualization for large collections**
+- Large queues (50+ threads) now use a virtualized single-column list, remaining responsive and smooth during fast scrolling on mobile.
+- Small queues (<50) continue to use the existing responsive grid with no behavioral change.
+- The scroll container adapts to device orientation changes automatically.
+
 **Mobile Safari rendering fix**
 - Pages now render their background correctly on mobile Safari instead of appearing stripped or bare.
 - Touch interactions and rubber-band overscroll prevention remain unchanged.
