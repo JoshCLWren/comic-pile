@@ -123,7 +123,7 @@ it('renders the total-size spacer div', () => {
 it('renders virtual items with correct positioning', () => {
   const threads = createMockThreads(60)
 
-  const { container } = render(
+  render(
     <VirtualizedThreadList
       threads={threads}
       renderItem={(thread, index) => (
