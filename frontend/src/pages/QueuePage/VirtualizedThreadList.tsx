@@ -102,7 +102,13 @@ export default function VirtualizedThreadList<T>({
   }
 
   return (
-    <div ref={wrapperRef} className="flex-1 min-h-0">
+    <div
+      ref={wrapperRef}
+      // Use dvh (dynamic viewport height) instead of vh for mobile browser chrome.
+      // The 14rem offset accounts for the header (~8rem), sort/search bar (~3rem),
+      // padding/spacing (~3rem). ResizeObserver handles orientation changes.
+      style={{ height: containerHeight || 'calc(100dvh - 14rem)' }}
+    >
       <div
         ref={scrollRef}
         data-testid="queue-thread-list"
@@ -110,7 +116,7 @@ export default function VirtualizedThreadList<T>({
         role="list"
         aria-label="Thread queue"
         style={{
-          height: containerHeight || 600,
+          height: '100%',
           overflowY: 'auto',
         }}
       >
