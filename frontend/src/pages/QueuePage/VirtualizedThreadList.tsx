@@ -136,6 +136,13 @@ export default function VirtualizedThreadList<T>({
 
   const virtualizer = useVirtualizer(virtualizerOptions)
 
+  // Keep a ref to the latest virtualizer so the drag-over handler stays
+  // referentially stable. useVirtualizer returns a new object every render,
+  // so putting it in a useCallback deps array would recreate the handler
+  // (and the onDragOver prop) each render — ineffective memoization.
+  const virtualizerRef = useRef(virtualizer)
+  virtualizerRef.current = virtualizer
+
   // ── Drag-reorder edge auto-scroll (583-D) ──
   // Throttle timestamp to avoid calling scrollToIndex faster than the virtualizer
   // can re-measure (~50ms is generous for the resize → remeasure cycle).
@@ -150,9 +157,10 @@ export default function VirtualizedThreadList<T>({
       // Throttle to avoid flooding scrollToIndex with 60+ calls per second.
       if (now - lastEdgeScrollRef.current < 50) return
 
+      const vz = virtualizerRef.current
       const rect = container.getBoundingClientRect()
       const y = event.clientY - rect.top
-      const visibleItems = virtualizer.getVirtualItems()
+      const visibleItems = vz.getVirtualItems()
       if (visibleItems.length === 0) return
 
       const firstIndex = visibleItems[0].index
@@ -160,17 +168,17 @@ export default function VirtualizedThreadList<T>({
 
       if (y < EDGE_SCROLL_ZONE) {
         lastEdgeScrollRef.current = now
-        virtualizer.scrollToIndex(Math.max(0, firstIndex - 1), {
+        vz.scrollToIndex(Math.max(0, firstIndex - 1), {
           align: 'start',
         })
       } else if (y > rect.height - EDGE_SCROLL_ZONE) {
         lastEdgeScrollRef.current = now
-        virtualizer.scrollToIndex(Math.min(rowCount - 1, lastIndex + 1), {
+        vz.scrollToIndex(Math.min(rowCount - 1, lastIndex + 1), {
           align: 'end',
         })
       }
     },
-    [rowCount, virtualizer],
+    [rowCount],
   )
 
   // Defensive empty state — QueuePage gates on empty/filtered-empty before reaching this

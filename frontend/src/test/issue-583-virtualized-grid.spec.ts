@@ -100,11 +100,13 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
       .locator('button[aria-label="Read"]')
       .evaluate((btn) => (btn as HTMLButtonElement).click());
 
-    // After clicking Read in the queue, the user should be navigated to the roll page
-    // We expect either a URL change or a specific UI state
-    await page.waitForURL(/^\/(roll)?$/, { timeout: 5000 }).catch(() => {
-      // Fallback: if URL didn't change (same SPA page), check for roll page indicators
-    });
+    // After clicking Read, the app navigates to the roll page (/). Polling
+    // avoids swallowing navigation failures (the previous
+    // waitForURL().catch(() => {}) masked real bugs). If already on /,
+    // this passes immediately; otherwise it waits for the SPA navigation.
+    await expect
+      .poll(async () => new URL(page.url()).pathname)
+      .toMatch(/^\/(roll)?$/);
 
     // The roll page should show the die or roll pool
     const mainDie = page.locator('[data-testid="d20-die"]');

@@ -43,12 +43,14 @@ test.describe('Virtualized drag-to-reorder (#583-D)', () => {
       })
       .not.toBe(sourceText);
 
-    // Also verify the target card changed (its position was affected)
-    const targetCardAfter = visibleCards.nth(4);
-    const targetTextAfter = await targetCardAfter.textContent();
-    if (targetText && targetTextAfter) {
-      expect(targetText).not.toBe(targetTextAfter);
-    }
+    // The card now at position 5 should show a different thread than before
+    // the reorder. Poll because the refetch + re-render can briefly detach
+    // the element.
+    await expect
+      .poll(async () => {
+        return await page.locator('[data-testid="queue-thread-item"]').nth(4).textContent();
+      })
+      .not.toBe(targetText);
   });
 
   test('dragging near the bottom edge auto-scrolls to reveal off-screen items', async ({ authenticatedWithLargeQueuePage }) => {
