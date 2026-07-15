@@ -1,0 +1,25 @@
+name: Refresh Python Lock
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-lock:
+    if: github.head_ref == 'chore/upgrade-python-3.14'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.28"
+          python-version: "3.14"
+      - name: Regenerate lockfile for Python 3.14
+        run: uv lock --python 3.14
+      - uses: actions/upload-artifact@v6
+        with:
+          name: python-314-lock
+          path: uv.lock
