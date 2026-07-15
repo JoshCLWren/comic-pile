@@ -95,7 +95,7 @@ exclude_lines = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/versions/**"]
 
 [tool.ruff.lint]
@@ -113,7 +113,7 @@ venvPath = "."
 venv = ".venv"
 
 [tool.ty.environment]
-python-version = "3.13"
+python-version = "3.14"
 
 [tool.ty.src]
 include = ["app", "comic_pile", "tests"]
