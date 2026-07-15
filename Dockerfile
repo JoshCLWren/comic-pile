@@ -25,8 +25,8 @@ WORKDIR /app
 # Copy Python dependency metadata
 COPY pyproject.toml uv.lock ./
 
-# Install Python deps into a local venv
-RUN uv sync --frozen --no-dev
+# Resolve and install Python 3.14-compatible runtime dependencies.
+RUN uv lock --upgrade && uv sync --no-dev
 
 # ============================
 # Frontend build stage
