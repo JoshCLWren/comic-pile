@@ -45,11 +45,16 @@ export const EDGE_SCROLL_ZONE = 80
  * viewport size.
  */
 export const COL_BREAKPOINTS = {
-  /** Container width at viewport `md` (768px) — switches to 2 columns. */
+  /** Container width at viewport `md` (768px) — active boundary that switches to 2 columns. */
   tablet: 640,
-  /** Container width at viewport `lg` (1024px) — still 2 columns. */
+  /**
+   * Container width at viewport `lg` (1024px) — still 2 columns.
+   * Descriptive only: not referenced as a boundary in `getColumnCount`
+   * (only `tablet` and `wide` are active boundaries), but kept for
+   * documentation parity with the Tailwind breakpoint table above.
+   */
   desktop: 864,
-  /** Container width at viewport `xl` (1280px) — switches to 3 columns. */
+  /** Container width at viewport `xl` (1280px) — active boundary that switches to 3 columns. */
   wide: 992,
 } as const
 
