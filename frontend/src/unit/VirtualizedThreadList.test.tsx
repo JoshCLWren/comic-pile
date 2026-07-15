@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { expect, it, vi, beforeAll } from 'vitest'
+import { expect, it, vi, beforeAll, beforeEach } from 'vitest'
 import { getColumnCount, getRowThreads } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
 
@@ -30,8 +30,35 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }))
 
-// Stub ResizeObserver (still needed for the component's own ResizeObserver)
+// Stub DragEvent / DataTransfer (not available in jsdom) for drag-reorder tests.
+// Must be defined before the module is loaded so `new DragEvent(...)` works inside
+// tests.  We use a stub DataTransfer object because React's synthetic event system
+// checks `event.dataTransfer`.
+// Also stub ResizeObserver (needed by the component's useEffect).
 beforeAll(() => {
+  if (!globalThis.DataTransfer) {
+    globalThis.DataTransfer = class {
+      effectAllowed = 'none'
+      dropEffect = 'none'
+      items = { length: 0, add: () => {}, clear: () => {} } as unknown as DataTransferItemList
+      types: string[] = []
+      getData = (_format: string) => ''
+      setData = () => {}
+      clearData = () => {}
+      setDragImage = () => {}
+      files = Object.freeze([]) as unknown as FileList
+    } as unknown as typeof DataTransfer
+  }
+  if (!globalThis.DragEvent) {
+    globalThis.DragEvent = class extends MouseEvent {
+      declare dataTransfer: DataTransfer | null
+      constructor(type: string, eventInitDict?: DragEventInit) {
+        super(type, eventInitDict ?? {})
+        this.dataTransfer = (eventInitDict as DragEventInit | undefined)?.dataTransfer ?? null
+      }
+    } as unknown as typeof DragEvent
+  }
+  // Stub ResizeObserver (needed for the component's own ResizeObserver)
   vi.stubGlobal(
     'ResizeObserver',
     vi.fn(function (this: any) {
@@ -372,4 +399,149 @@ it('empty state preserves the same DOM tree structure', () => {
   expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
   // Should show the empty message
   expect(screen.getByText('No threads in queue')).toBeInTheDocument()
+})
+
+// ── Drag-reorder edge auto-scroll tests (583-D) ──
+
+beforeEach(() => {
+  mockScrollToIndex.mockClear()
+  // Restore the default virtual-items mock populated by the top-level beforeAll
+  mockGetVirtualItems.mockReturnValue(
+    Array.from({ length: 5 }, (_, i) => ({
+      key: i,
+      index: i,
+      start: i * 160,
+      end: (i + 1) * 160,
+      size: 160,
+      lane: 0,
+    })),
+  )
+})
+
+it('calls scrollToIndex toward first visible when dragging near the top edge', () => {
+  const threads = createMockThreads(60)
+
+  const { container } = render(
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, _index) => (
+        <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          {(thread as MockThread).title}
+        </div>
+      )}
+    />,
+  )
+
+  const scrollEl = container.querySelector('#queue-container') as HTMLElement
+
+  // Spy on getBoundingClientRect so edge detection works.
+  vi.spyOn(scrollEl, 'getBoundingClientRect').mockReturnValue({
+    top: 0,
+    bottom: 600,
+    height: 600,
+    width: 800,
+    left: 0,
+    right: 800,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  })
+
+  // Construct a proper DragEvent so React's synthetic event system
+  // recognizes and dispatches it. jsdom requires passing dataTransfer
+  // via the constructor's second argument.
+  const dataTransfer = new DataTransfer()
+  const dragEvent = new DragEvent('dragover', {
+    clientY: 10,
+    bubbles: true,
+    cancelable: true,
+    dataTransfer,
+  })
+
+  scrollEl.dispatchEvent(dragEvent)
+
+  expect(mockScrollToIndex).toHaveBeenCalledWith(0, { align: 'start' })
+})
+
+it('calls scrollToIndex toward last visible when dragging near the bottom edge', () => {
+  const threads = createMockThreads(60)
+
+  const { container } = render(
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, _index) => (
+        <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          {(thread as MockThread).title}
+        </div>
+      )}
+    />,
+  )
+
+  const scrollEl = container.querySelector('#queue-container') as HTMLElement
+
+  vi.spyOn(scrollEl, 'getBoundingClientRect').mockReturnValue({
+    top: 0,
+    bottom: 600,
+    height: 600,
+    width: 800,
+    left: 0,
+    right: 800,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  })
+
+  // Drag near bottom edge (clientY=590 → y=590 > 600-80=520)
+  const dataTransfer2 = new DataTransfer()
+  const dragEvent2 = new DragEvent('dragover', {
+    clientY: 590,
+    bubbles: true,
+    cancelable: true,
+    dataTransfer: dataTransfer2,
+  })
+  scrollEl.dispatchEvent(dragEvent2)
+
+  // last visible index is 4, so it should call scrollToIndex(5, { align: 'end' })
+  expect(mockScrollToIndex).toHaveBeenCalledWith(5, { align: 'end' })
+})
+
+it('does not call scrollToIndex when dragging in the middle of the container', () => {
+  const threads = createMockThreads(60)
+
+  const { container } = render(
+    <VirtualizedThreadList
+      threads={threads}
+      renderItem={(thread, _index) => (
+        <div data-testid="queue-thread-item" key={(thread as MockThread).id}>
+          {(thread as MockThread).title}
+        </div>
+      )}
+    />,
+  )
+
+  const scrollEl = container.querySelector('#queue-container') as HTMLElement
+
+  vi.spyOn(scrollEl, 'getBoundingClientRect').mockReturnValue({
+    top: 0,
+    bottom: 600,
+    height: 600,
+    width: 800,
+    left: 0,
+    right: 800,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  })
+
+  // Drag in the middle (clientY=300, well within bounds)
+  const dataTransfer3 = new DataTransfer()
+  const dragEvent3 = new DragEvent('dragover', {
+    clientY: 300,
+    bubbles: true,
+    cancelable: true,
+    dataTransfer: dataTransfer3,
+  })
+  scrollEl.dispatchEvent(dragEvent3)
+
+  expect(mockScrollToIndex).not.toHaveBeenCalled()
 })

@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   getColumnCount,
   getRowThreads,
+  EDGE_SCROLL_ZONE,
   ROW_GAP,
   ROW_HEIGHT_WITH_GAP,
   OVERSCAN_PX,
@@ -135,6 +136,43 @@ export default function VirtualizedThreadList<T>({
 
   const virtualizer = useVirtualizer(virtualizerOptions)
 
+  // ── Drag-reorder edge auto-scroll (583-D) ──
+  // Throttle timestamp to avoid calling scrollToIndex faster than the virtualizer
+  // can re-measure (~50ms is generous for the resize → remeasure cycle).
+  const lastEdgeScrollRef = useRef<number>(0)
+
+  const handleContainerDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      const container = scrollRef.current
+      if (!container) return
+
+      const now = performance.now()
+      // Throttle to avoid flooding scrollToIndex with 60+ calls per second.
+      if (now - lastEdgeScrollRef.current < 50) return
+
+      const rect = container.getBoundingClientRect()
+      const y = event.clientY - rect.top
+      const visibleItems = virtualizer.getVirtualItems()
+      if (visibleItems.length === 0) return
+
+      const firstIndex = visibleItems[0].index
+      const lastIndex = visibleItems[visibleItems.length - 1].index
+
+      if (y < EDGE_SCROLL_ZONE) {
+        lastEdgeScrollRef.current = now
+        virtualizer.scrollToIndex(Math.max(0, firstIndex - 1), {
+          align: 'start',
+        })
+      } else if (y > rect.height - EDGE_SCROLL_ZONE) {
+        lastEdgeScrollRef.current = now
+        virtualizer.scrollToIndex(Math.min(rowCount - 1, lastIndex + 1), {
+          align: 'end',
+        })
+      }
+    },
+    [rowCount, virtualizer],
+  )
+
   // Defensive empty state — QueuePage gates on empty/filtered-empty before reaching this
   // component, but this ensures standalone reuse also shows a graceful fallback.
   // Wraps in the same `wrapperRef > scrollRef` tree structure as the populated state
@@ -175,6 +213,8 @@ export default function VirtualizedThreadList<T>({
         id="queue-container"
         role="list"
         aria-label="Thread queue"
+        onDragOver={handleContainerDragOver}
+        onDrop={(event) => event.preventDefault()}
         style={{
           height: '100%',
           overflowY: 'auto',
