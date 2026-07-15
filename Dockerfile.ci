@@ -62,10 +62,10 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /usr/local/bin/uv
 COPY uv.lock .python-version pyproject.toml ./
 RUN python -m venv .venv
 
-# Stage 3: Python dependencies
+# Stage 3: Resolve and install dependencies for Python 3.14.
 FROM python-env AS python-deps
 COPY pyproject.toml ./
-RUN uv sync --all-extras
+RUN uv lock --upgrade && uv sync --all-extras
 
 # Stage 4: Playwright
 FROM python-deps AS playwright-env
