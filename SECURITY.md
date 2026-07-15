@@ -156,10 +156,10 @@ Run vulnerability scans before deployment:
 
 ```bash
 # Scan Docker image
-docker scan comic-pile:latest
+docker scout cves comic-pile:latest
 
 # Scan base image
-docker scan python:3.14-slim
+docker scout cves python:3.14-slim
 
 # Check for exposed secrets
 git-secrets --scan
