@@ -1,4 +1,4 @@
-import { useState, useRef, type TouchEvent, type ReactNode } from 'react'
+import { useState, useRef, useEffect, type TouchEvent, type ReactNode } from 'react'
 
 interface SwipeableProps {
   children: ReactNode
@@ -27,7 +27,22 @@ export default function Swipeable({
   const startOffsetRef = useRef(0)
   const isHorizontalRef = useRef<boolean | null>(null)
   const ACTION_WIDTH = 192
+  const swipeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const SWIPE_THRESHOLD = 64
+
+  // Clear any pending swipe state timeout on unmount to prevent React 19
+  // from accessing a torn-down `window` in its update-priority resolution
+  // (the "ReferenceError: window is not defined" flake in tests).
+  useEffect(() => {
+    return () => {
+      if (swipeTimeoutRef.current !== null) {
+        clearTimeout(swipeTimeoutRef.current)
+        swipeTimeoutRef.current = null
+      }
+    }
+  }, [])
+
   const DIRECTION_LOCK_THRESHOLD = 12
 
   function handleTouchStart(e: TouchEvent) {
@@ -37,6 +52,12 @@ export default function Swipeable({
     startOffsetRef.current = offset
     isHorizontalRef.current = null
     setIsSwiping(false)
+    // Clear any pending swipe-end timeout so a rapid re-touch within 50ms
+    // doesn't fire mid-gesture and incorrectly set isSwiping to false.
+    if (swipeTimeoutRef.current !== null) {
+      clearTimeout(swipeTimeoutRef.current)
+      swipeTimeoutRef.current = null
+    }
   }
 
   function handleTouchMove(e: TouchEvent) {
@@ -63,7 +84,13 @@ export default function Swipeable({
     } else {
       setOffset(0)
     }
-    setTimeout(() => setIsSwiping(false), 50)
+    if (swipeTimeoutRef.current !== null) {
+      clearTimeout(swipeTimeoutRef.current)
+    }
+    swipeTimeoutRef.current = setTimeout(() => {
+      swipeTimeoutRef.current = null
+      setIsSwiping(false)
+    }, 50)
   }
 
   function handleCardClick() {

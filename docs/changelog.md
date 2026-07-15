@@ -3,7 +3,8 @@
 ## 2026-07-13
 
 **Queue virtualization for large collections**
-- Large queues (50+ threads) now use a virtualized single-column list, remaining responsive and smooth during fast scrolling on mobile.
+- Large queues (50+ threads) now use a virtualized single-column list on mobile, remaining responsive and smooth during fast scrolling.
+- On desktop, the virtualized list renders in a **responsive multi-column grid** (3 columns at ≥1280px, 2 columns at 768–1279px, 1 column below 768px), restoring desktop grid parity while maintaining virtualization performance.
 - Small queues (<50) continue to use the existing responsive grid with no behavioral change.
 - The scroll container adapts to device orientation changes automatically.
 
