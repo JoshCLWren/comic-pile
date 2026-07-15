@@ -214,6 +214,7 @@ export default function VirtualizedThreadList<T>({
         role="list"
         aria-label="Thread queue"
         onDragOver={handleContainerDragOver}
+        onDrop={(event) => event.preventDefault()}
         style={{
           height: '100%',
           overflowY: 'auto',

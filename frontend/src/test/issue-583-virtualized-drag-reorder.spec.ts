@@ -34,19 +34,14 @@ test.describe('Virtualized drag-to-reorder (#583-D)', () => {
     // Perform the drag: drag the handle from card #1 onto card #5
     await dragHandle.dragTo(targetCard, { force: true });
 
-    // After the drop, refetch threads to confirm reorder happened.
-    // The queue should have changed — the originally-#1 thread is no longer at position 1.
-    await page.waitForTimeout(500); // allow the mutation + refetch to complete
-
-    // Verify the first card changed (drag reorder happened)
-    const firstCardAfter = page.locator('[data-testid="queue-thread-item"]').first();
-    const firstTextAfter = await firstCardAfter.textContent();
-
-    // The first card should either be the former target (moved up) or something different
-    // from the original first (we don't know exact position — just verify it changed)
-    if (sourceText && firstTextAfter) {
-      expect(sourceText).not.toBe(firstTextAfter);
-    }
+    // After the drop, wait for the reorder mutation and refetch to settle.
+    // The originally-#1 thread should no longer be at position 1.
+    await expect
+      .poll(async () => {
+        const text = await page.locator('[data-testid="queue-thread-item"]').first().textContent();
+        return text;
+      })
+      .not.toBe(sourceText);
 
     // Also verify the target card changed (its position was affected)
     const targetCardAfter = visibleCards.nth(4);
@@ -98,13 +93,10 @@ test.describe('Virtualized drag-to-reorder (#583-D)', () => {
       return el.scrollTop;
     });
 
-    // Wait for the virtualizer's smooth scroll to settle
-    await page.waitForTimeout(500);
-
-    // Read final scrollTop
-    const finalScrollTop = await list.evaluate((el) => el.scrollTop);
-
-    // The auto-scroll should have increased scrollTop beyond the baseline
-    expect(finalScrollTop).toBeGreaterThan(initialScrollTop);
+    // Wait for the virtualizer's smooth scroll to settle, polling until
+    // scrollTop increases beyond the baseline.
+    await expect
+      .poll(async () => list.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(initialScrollTop);
   });
 });
