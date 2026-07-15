@@ -35,7 +35,7 @@ USER appuser
 ### Image Security
 
 #### Base Image
-- Uses official `python:3.13-slim` image
+- Uses official `python:3.14-slim` image
 - Slim variants reduce attack surface by excluding unnecessary packages
 
 #### Dependencies
@@ -159,7 +159,7 @@ Run vulnerability scans before deployment:
 docker scan comic-pile:latest
 
 # Scan base image
-docker scan python:3.13-slim
+docker scan python:3.14-slim
 
 # Check for exposed secrets
 git-secrets --scan
