@@ -7,6 +7,7 @@
 - On desktop, the virtualized list renders in a **responsive multi-column grid** (3 columns at ≥1280px, 2 columns at 768–1279px, 1 column below 768px), restoring desktop grid parity while maintaining virtualization performance.
 - Small queues (<50) continue to use the existing responsive grid with no behavioral change.
 - The scroll container adapts to device orientation changes automatically.
+- Drag-to-reorder now works in the virtualized list: dragging near the top or bottom of the viewport auto-scrolls so off-screen drop targets come into view, restoring reorder parity for large queues.
 
 **Mobile Safari rendering fix**
 - Pages now render their background correctly on mobile Safari instead of appearing stripped or bare.

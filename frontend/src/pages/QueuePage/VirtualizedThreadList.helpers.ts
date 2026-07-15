@@ -18,6 +18,13 @@ export const ROW_HEIGHT_WITH_GAP = CARD_HEIGHT + ROW_GAP
 export const OVERSCAN_PX = 800
 
 /**
+ * Vertical distance (in px) from the top or bottom edge of the scroll
+ * container within which a drag-over triggers auto-scrolling for
+ * drag-to-reorder in the virtualized list.  Matches ~half a card height.
+ */
+export const EDGE_SCROLL_ZONE = 80
+
+/**
  * Cardinality breakpoint boundaries with descriptive names to avoid
  * confusion with Tailwind's `sm`/`md`/`lg`/`xl` naming.
  *
