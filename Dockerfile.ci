@@ -49,21 +49,21 @@ RUN apt-get update -qq && \
 
 WORKDIR /workspace
 
-# Stage 2: Install uv and provision the project Python version.
+# Stage 2: Python and uv setup
 FROM base AS python-env
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/workspace/.venv/bin:$PATH"
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /usr/local/bin/uv
+# Install uv and create venv
 COPY uv.lock .python-version pyproject.toml ./
-RUN uv python install 3.14 && \
-    uv venv --python 3.14 .venv
+RUN python3 -m venv .venv && \
+    .venv/bin/pip install --no-cache-dir uv
 
-# Stage 3: Resolve and install dependencies for Python 3.14.
+# Stage 3: Python dependencies
 FROM python-env AS python-deps
 COPY pyproject.toml ./
-RUN uv lock --upgrade && uv sync --all-extras
+RUN uv sync --all-extras
 
 # Stage 4: Playwright
 FROM python-deps AS playwright-env
