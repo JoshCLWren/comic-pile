@@ -29,6 +29,20 @@ If a test is failing:
 - **Write regression tests** for bugs you find and fix
 - **Update documentation** when you find gaps or outdated information
 
+
+## CORE PRINCIPLE: PR FEEDBACK TASKS ARE NOT DONE UNTIL PUSHED
+
+**⚠️ When asked to apply PR feedback, the job is: edit → verify → commit → push. All four steps. Every time.**
+
+If you edit files and run tests but stop before pushing, you have **not completed the task**. The user asked you to apply feedback to a PR — leaving changes local is not applying them.
+
+**Requirements:**
+- Edit the files with the requested changes
+- Verify all tests pass (Python + frontend)
+- Commit with a descriptive message
+- **Push to the remote branch immediately** — do not wait for the user to ask
+
+
 ## CRITICAL: NEVER USE CI AS A LOCAL DEBUGGER
 
 **⚠️ ALL TESTS MUST PASS LOCALLY BEFORE PUSHING. NO EXCEPTIONS.**
