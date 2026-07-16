@@ -339,7 +339,7 @@ async def test_github_service_escapes_backticks_in_diagnostics(
     diagnostics_model = BugReportDiagnostics(
         timestamp="2024-01-01T00:00:00.000Z",
         url="http://test.com",
-        user_agent="test-agent```injected```",
+        userAgent="test-agent```injected```",
         screen={"width": 390, "height": 844, "pixelRatio": 3},
         viewport={"width": 390, "height": 664},
         scroll={"x": 0, "y": 0},
