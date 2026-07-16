@@ -1,5 +1,7 @@
 """Dependency model for hard-blocking issue roll eligibility."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -37,13 +39,13 @@ class Dependency(Base):
         UniqueConstraint("source_issue_id", "target_issue_id", name="uq_dependency_issue_edge"),
     )
 
-    source_issue: Mapped["Issue"] = relationship(
+    source_issue: Mapped[Issue] = relationship(
         "Issue",
         foreign_keys=[source_issue_id],
         back_populates="dependencies_out",
         lazy="raise",
     )
-    target_issue: Mapped["Issue"] = relationship(
+    target_issue: Mapped[Issue] = relationship(
         "Issue",
         foreign_keys=[target_issue_id],
         back_populates="dependencies_in",

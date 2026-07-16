@@ -20,7 +20,7 @@ Skipped tests create technical debt and hide broken functionality. If a test is 
 
 ## Tech Stack
 
-- **Backend**: FastAPI (Python 3.13)
+- **Backend**: FastAPI (Python 3.14)
 - **Database**: PostgreSQL with SQLAlchemy ORM (**async-only** via asyncpg)
 - **Migrations**: Alembic
 - **Frontend**: React + Vite + Tailwind CSS

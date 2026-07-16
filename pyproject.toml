@@ -3,7 +3,7 @@ name = "comic_pile"
 version = "0.1.0"
 description = "Dice-Driven Comic Reading Tracker - FastAPI + React + Tailwind CSS"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.20.0",
@@ -95,7 +95,7 @@ exclude_lines = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/versions/**"]
 
 [tool.ruff.lint]

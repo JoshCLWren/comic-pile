@@ -1,5 +1,7 @@
 """Event model for database."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -87,11 +89,11 @@ class Event(Base):
         Index("ix_event_session_type_die_after", "session_id", "type", "die_after"),
     )
 
-    session: Mapped["Session | None"] = relationship(
+    session: Mapped[Session | None] = relationship(
         "Session", back_populates="events", lazy="raise"
     )
-    thread: Mapped["Thread | None"] = relationship("Thread", back_populates="events", lazy="raise")
-    issue: Mapped["Issue | None"] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
-    snapshots: Mapped[list["Snapshot"]] = relationship(
+    thread: Mapped[Thread | None] = relationship("Thread", back_populates="events", lazy="raise")
+    issue: Mapped[Issue | None] = relationship("Issue", foreign_keys=[issue_id], lazy="raise")
+    snapshots: Mapped[list[Snapshot]] = relationship(
         "Snapshot", back_populates="event", cascade="all, delete-orphan", lazy="raise"
     )

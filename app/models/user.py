@@ -1,5 +1,7 @@
 """User model for database."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -31,18 +33,18 @@ class User(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
-    sessions: Mapped[list["Session"]] = relationship(
+    sessions: Mapped[list[Session]] = relationship(
         "Session", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
-    threads: Mapped[list["Thread"]] = relationship(
+    threads: Mapped[list[Thread]] = relationship(
         "Thread", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
-    revoked_tokens: Mapped[list["RevokedToken"]] = relationship(
+    revoked_tokens: Mapped[list[RevokedToken]] = relationship(
         "RevokedToken", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
-    collections: Mapped[list["Collection"]] = relationship(
+    collections: Mapped[list[Collection]] = relationship(
         "Collection", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )
-    reviews: Mapped[list["Review"]] = relationship(
+    reviews: Mapped[list[Review]] = relationship(
         "Review", back_populates="user", cascade="all, delete-orphan", lazy="raise"
     )

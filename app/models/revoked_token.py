@@ -1,5 +1,7 @@
 """RevokedToken model for database."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -34,4 +36,4 @@ class RevokedToken(Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    user: Mapped["User"] = relationship("User", back_populates="revoked_tokens", lazy="raise")
+    user: Mapped[User] = relationship("User", back_populates="revoked_tokens", lazy="raise")
