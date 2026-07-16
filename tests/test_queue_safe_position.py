@@ -172,13 +172,13 @@ async def test_move_to_safe_position_many_blocked_before_target_bug_597(
     Reproduces the production scenario: many blocked threads are interspersed
     before the target thread. The old formula counted blocked threads in a
     fixed index range and produced a position that still left the target inside
-    the roll pool (only 4 non-blocked threads before it with a d6).
+    the roll pool (only 5 non-blocked threads before it with a d6).
 
     With 25 threads, 10 blocked (positions 3-12), and die=6:
-    - Old (broken): target moved to position 20, but only 4 non-blocked
-      threads were before it in the roll pool → still selectable.
-    - Fixed: target placed after the 6th non-blocked thread, guaranteeing
-      it's outside the d6 roll pool.
+    - Old (broken): the target moved to position 11, with only 5 non-blocked
+      threads before it, so it remained selectable.
+    - Fixed: the target moves to position 17, after the 6th non-blocked
+      thread, guaranteeing it's outside the d6 roll pool.
     """
     user = default_user
     threads = []
@@ -198,10 +198,12 @@ async def test_move_to_safe_position_many_blocked_before_target_bug_597(
     for t in threads:
         await async_db.refresh(t)
 
-    # Target is at position 13 (first non-blocked after the blocked block)
-    target = threads[12]  # Thread 13
+    # Target is at the front, before the blocked block.
+    target = threads[0]  # Thread 1
     await move_to_safe_position(target.id, user.id, 6, async_db)
     await async_db.refresh(target)
+
+    assert target.queue_position == 17
 
     # Verify the target is NOT in the roll pool (the actual bug symptom).
     pool = await get_roll_pool(user.id, async_db)
