@@ -240,18 +240,23 @@ async def move_to_safe_position(
     """Move thread to a position just beyond the current die range.
 
     Instead of sending a low-rated thread to the very back (which can bury it
-    for months), place it at position ``die_size + 1`` in sequential order,
-    adjusted for blocked threads that occupy positions within the die range
-    but are not rollable.  This guarantees the thread won't reappear in the
-    next roll pool while keeping it realistically reachable.
+    for months), place it just past the die-size threshold in the **rollable**
+    pool (non-blocked active threads), so it won't reappear in the next roll
+    pool while keeping it realistically reachable.
+
+    The roll pool (``get_roll_pool``) excludes blocked threads, so the target
+    position must be computed by counting non-blocked threads — not raw queue
+    positions.  This fixes a bug (#597) where blocked threads inflated the
+    ``queue_position`` values but were excluded from the roll pool, causing
+    the rated thread to remain selectable.
 
     Example (die=d6, no blocked threads):
         Position 1-6: rollable pool
         Rated thread -> position 7
 
-    Example (die=d6, 2 blocked threads in top 8):
-        Position 1-6: rollable pool (but 2 are blocked, so only 4 real options)
-        Rated thread -> position 9  (6 + 2 blocked = 8, +1 = 9)
+    Example (die=d6, 10 blocked threads interspersed in positions 3-12):
+        Rollable pool: positions 1, 2, 13, 14, ... (blocked skipped)
+        Rated thread -> placed after the 6th non-blocked thread
 
     Args:
         thread_id: Thread to reposition.
@@ -268,29 +273,45 @@ async def move_to_safe_position(
     )
     all_active = list(result.scalars().all())
 
-    target_index = next(
-        (i for i, t in enumerate(all_active) if t.id == thread_id), -1
+    # Build the rollable pool (same filter as get_roll_pool: non-blocked only)
+    rollable = [t for t in all_active if not t.is_blocked]
+
+    target_rollable_index = next(
+        (i for i, t in enumerate(rollable) if t.id == thread_id), -1
     )
-    if target_index == -1:
+    if target_rollable_index == -1:
         return
 
-    if target_index == 0 and len(all_active) == 1:
+    if len(rollable) <= 1:
         return
 
-    # Count blocked threads among the first (die_size + target's position) slots.
-    # We want to place the thread far enough out that it won't be in the die
-    # range the next time the user rolls.
-    blocked_in_range = sum(
-        1 for i, t in enumerate(all_active)
-        if i != target_index
-        and t.is_blocked
-        and i < (die_size + target_index)
+    # If the target is already at or beyond the die range in the rollable
+    # pool, no move is needed — it's already outside the next roll pool.
+    if target_rollable_index >= die_size:
+        return
+
+    # Walk the full active list (including blocked) and count non-blocked
+    # threads (excluding the target) until we've seen die_size of them.
+    # The target goes right after that point in the all-active list,
+    # guaranteeing it has die_size rollable threads before it and is
+    # therefore outside the roll pool.
+    non_blocked_seen = 0
+    target_seq = len(all_active)  # default: back of queue (small-pool fallback)
+    for i, t in enumerate(all_active):
+        if t.id == thread_id:
+            continue
+        if not t.is_blocked:
+            non_blocked_seen += 1
+        if non_blocked_seen >= die_size:
+            target_seq = i + 1  # 1-indexed position in all_active
+            break
+
+    target_seq = min(target_seq, len(all_active))
+
+    target_current_seq = next(
+        (i + 1 for i, t in enumerate(all_active) if t.id == thread_id), 0
     )
-
-    raw_target = die_size + 1 + blocked_in_range
-    target_seq = min(raw_target, len(all_active))
-
-    if target_seq == target_index + 1:
+    if target_current_seq == target_seq:
         return
 
     await move_to_position(thread_id, user_id, target_seq, db, do_commit=False)
