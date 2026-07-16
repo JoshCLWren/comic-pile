@@ -53,7 +53,33 @@ it('loads session list', async () => {
   const { result } = renderWithProvider(() => useSessions({ status: 'done' }))
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
-  expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done', page_size: 200 })
+  expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done', page_size: 200 }, null)
+})
+
+it('paginates through all session pages without infinite loop', async () => {
+  mockedSessionApi.list
+    .mockReset()
+    .mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: 'token2' } as never)
+    .mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: null } as never)
+
+  const { result } = renderWithProvider(() => useSessions())
+
+  await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }, { id: 2 }]))
+  expect(mockedSessionApi.list).toHaveBeenCalledTimes(2)
+  expect(mockedSessionApi.list).toHaveBeenNthCalledWith(1, { page_size: 200 }, null)
+  expect(mockedSessionApi.list).toHaveBeenNthCalledWith(2, { page_size: 200 }, 'token2')
+})
+
+it('handles list errors gracefully', async () => {
+  mockedSessionApi.list
+    .mockReset()
+    .mockRejectedValueOnce(new Error('Network error'))
+
+  const { result } = renderWithProvider(() => useSessions())
+
+  await waitFor(() => expect(result.current.isError).toBe(true))
+  await waitFor(() => expect(result.current.isPending).toBe(false))
+  expect(result.current.error).toBeInstanceOf(Error)
 })
 
 it('loads session details and snapshots', async () => {

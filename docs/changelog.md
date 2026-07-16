@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-15
+
+**History page infinite loading fix (#598)**
+- Fixed infinite pagination loop in `useSessions` hook that caused the History page to hang forever with "Loading..."
+- `sessionApi.list` was overriding the `page_token` in params with `null` from its second parameter default, preventing pagination from advancing past the first page
+- Fixed `useSessions` to pass the page token as the second argument to `sessionApi.list`, matching the pattern used by `threadsApi.list` / `useThreads`
+- Added defensive fix to `sessionApi.list` to only set `page_token` when a truthy second argument is provided
+- Added regression test verifying multi-page session pagination completes correctly
+
 ## 2026-07-13
 
 **Queue virtualization for large collections**

@@ -102,10 +102,10 @@ export function useSessions(params = EMPTY_PARAMS) {
       let nextToken: string | null = null;
       let currentToken: string | undefined = undefined;
       do {
-        const params = currentToken
-          ? { ...baseParams, page_token: currentToken }
-          : baseParams;
-        const result: SessionListResponse = await sessionApi.list(params);
+        const result: SessionListResponse = await sessionApi.list(
+          baseParams,
+          currentToken ?? null,
+        );
         allSessions = allSessions.concat(result.sessions);
         nextToken = result.next_page_token;
         currentToken = nextToken ?? undefined;
