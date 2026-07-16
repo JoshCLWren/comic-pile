@@ -6,7 +6,6 @@ import { useAuth } from '../App'
 import api from '../services/api'
 import type { AuthUser } from '../types'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
-import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
 
 /**
  * Main navigation component that displays a bottom navigation bar
@@ -18,9 +17,7 @@ import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
 type BugReportSubmit = (
   title: string,
   description: string,
-  screenshotBlob: Blob | null,
   diagnosticData: DiagnosticData | null,
-  screenshotDiagnostics?: ScreenshotDiagnostics,
 ) => Promise<void>
 
 interface NavigationProps {

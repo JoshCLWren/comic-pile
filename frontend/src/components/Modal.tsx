@@ -114,7 +114,7 @@ export default function Modal({
   if (!isOpen) return null
 
   return (
-    <div data-exclude-from-screenshot="true" className={`fixed inset-0 z-[60] flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}>
+    <div className={`fixed inset-0 z-[60] flex items-end md:items-center justify-center md:px-4 ${overlayClassName || ''}`}>
       <div className="absolute inset-0 bg-[#110e0a]/60 backdrop-blur-sm touch-none" onClick={onClose} aria-hidden="true"></div>
       <div
         ref={modalRef}

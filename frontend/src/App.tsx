@@ -7,7 +7,6 @@ import api, { clearAccessToken, setAccessToken } from './services/api'
 import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import type { DiagnosticData } from './hooks/useDiagnostics'
-import type { ScreenshotDiagnostics } from './utils/captureScreenshot'
 import { ToastProvider } from './contexts/ToastProvider'
 import { CacheProvider } from './contexts/CacheContext'
 import { BugReportRestoreProvider } from './contexts/BugReportRestoreContext'
@@ -22,9 +21,7 @@ declare global {
 type BugReportSubmit = (
   title: string,
   description: string,
-  screenshotBlob: Blob | null,
   diagnosticData: DiagnosticData | null,
-  screenshotDiagnostics?: ScreenshotDiagnostics,
 ) => Promise<void>
 
 const RollPage = lazy(() => import('./pages/RollPage'))

@@ -1,54 +1,33 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import BugReportModal from './BugReportModal'
 import { useDiagnostics } from '../hooks/useDiagnostics'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
-import { captureScreenshot } from '../utils/captureScreenshot'
-import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 
 interface BugReportButtonProps {
-  onSubmit: (title: string, description: string, screenshotBlob: Blob | null, diagnosticData: DiagnosticData | null, screenshotDiagnostics?: ScreenshotDiagnostics) => Promise<void>
+  onSubmit: (title: string, description: string, diagnosticData: DiagnosticData | null) => Promise<void>
   variant?: 'floating' | 'nav'
 }
 
 export default function BugReportButton({ onSubmit, variant = 'floating' }: BugReportButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null)
   const [diagnosticData, setDiagnosticData] = useState<DiagnosticData | null>(null)
-  const [screenshotDiagnostics, setScreenshotDiagnostics] = useState<ScreenshotDiagnostics | null>(null)
   const { collectDiagnostics } = useDiagnostics()
   const { restoreLastView } = useBugReportRestore()
-  const isCapturingRef = useRef(false)
 
-  const handleClick = async () => {
-    if (isCapturingRef.current) return
-    isCapturingRef.current = true
+  const handleClick = () => {
     const diagnostics = collectDiagnostics()
     setDiagnosticData(diagnostics)
-
-    try {
-      const result = await captureScreenshot()
-      setScreenshotBlob(result.blob)
-      setScreenshotDiagnostics(result.diagnostics)
-    } catch (error) {
-      console.error('Failed to capture screenshot:', error)
-      setScreenshotBlob(null)
-      setScreenshotDiagnostics(null)
-    } finally {
-      setIsModalOpen(true)
-      isCapturingRef.current = false
-    }
+    setIsModalOpen(true)
   }
 
   const handleClose = () => {
     setIsModalOpen(false)
-    setScreenshotBlob(null)
     setDiagnosticData(null)
-    setScreenshotDiagnostics(null)
   }
 
-  const handleSubmit = async (title: string, description: string, screenshotBlob: Blob | null) => {
-    await onSubmit(title, description, screenshotBlob, diagnosticData, screenshotDiagnostics ?? undefined)
+  const handleSubmit = async (title: string, description: string) => {
+    await onSubmit(title, description, diagnosticData)
     handleClose()
     restoreLastView()
   }
@@ -83,7 +62,6 @@ export default function BugReportButton({ onSubmit, variant = 'floating' }: BugR
       <BugReportModal
         isOpen={isModalOpen}
         onClose={handleClose}
-        screenshotBlob={screenshotBlob}
         onSubmit={handleSubmit}
         diagnosticData={diagnosticData}
       />

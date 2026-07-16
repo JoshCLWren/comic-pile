@@ -5,15 +5,13 @@ import type { DiagnosticData } from '../hooks/useDiagnostics'
 interface BugReportModalProps {
   isOpen: boolean
   onClose: () => void
-  screenshotBlob: Blob | null
-  onSubmit: (title: string, description: string, screenshotBlob: Blob | null) => Promise<void>
+  onSubmit: (title: string, description: string) => Promise<void>
   diagnosticData: DiagnosticData | null
 }
 
 export default function BugReportModal({
   isOpen,
   onClose,
-  screenshotBlob,
   onSubmit,
   diagnosticData,
 }: BugReportModalProps) {
@@ -21,21 +19,16 @@ export default function BugReportModal({
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
-  const [activeBlob, setActiveBlob] = useState<Blob | null>(screenshotBlob)
 
+  // Reset form when modal opens
   useEffect(() => {
-    setActiveBlob(screenshotBlob)
-    if (screenshotBlob) {
-      const url = URL.createObjectURL(screenshotBlob)
-      setScreenshotUrl(url)
-      return () => {
-        URL.revokeObjectURL(url)
-      }
-    } else {
-      setScreenshotUrl(null)
+    if (isOpen) {
+      setTitle('')
+      setDescription('')
+      setError(null)
+      setIsSubmitting(false)
     }
-  }, [screenshotBlob])
+  }, [isOpen])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,24 +41,13 @@ export default function BugReportModal({
     setError(null)
 
     try {
-      await onSubmit(title.trim(), description.trim(), activeBlob)
-      setTitle('')
-      setDescription('')
-      onClose()
+      await onSubmit(title.trim(), description.trim())
     } catch (err) {
       console.error('Failed to submit bug report:', err)
       setError(err instanceof Error ? err.message : 'Failed to submit bug report')
     } finally {
       setIsSubmitting(false)
     }
-  }
-
-  const handleClearScreenshot = () => {
-    if (screenshotUrl) {
-      URL.revokeObjectURL(screenshotUrl)
-      setScreenshotUrl(null)
-    }
-    setActiveBlob(null)
   }
 
   return (
@@ -132,28 +114,6 @@ export default function BugReportModal({
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
             <span>Browser info & console errors will be included</span>
-          </div>
-        )}
-
-        {screenshotUrl && (
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-              Screenshot
-            </label>
-            <div className="relative">
-              <img
-                src={screenshotUrl}
-                alt="Screenshot"
-                className="w-full max-h-48 object-contain border border-stone-700 rounded-xl"
-              />
-              <button
-                type="button"
-                onClick={handleClearScreenshot}
-                className="mt-2 text-[10px] text-amber-500 hover:text-amber-400 transition-colors"
-              >
-                Clear screenshot
-              </button>
-            </div>
           </div>
         )}
 

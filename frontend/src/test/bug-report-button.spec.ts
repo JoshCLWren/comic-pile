@@ -1,18 +1,7 @@
 import { test, expect } from './fixtures'
 
-// Portable test (runs on both Chromium and Firefox) verifying the skipFonts
-// fix for: TypeError: can't access property "trim", a is undefined
-// html-to-image crashes on Firefox when processing font-face CSS rules
-// unless skipFonts: true is passed to toBlob.
-//
-// Note: toBlob requires GPU rendering and always fails in headless environments.
-// We test what we can verify headlessly:
-//   1. The button is visible when authenticated
-//   2. Clicking it opens the modal (fallback path when capture fails)
-//   3. No font-processing "trim" crash appears in the console
-
 test.describe('Bug Report Button', () => {
-  test('opens modal without font-processing trim crash', async ({ authenticatedPage }) => {
+  test('opens modal when clicked', async ({ authenticatedPage }) => {
     const consoleErrors: string[] = []
     authenticatedPage.on('console', msg => {
       if (msg.type() === 'error') consoleErrors.push(msg.text())
@@ -22,17 +11,12 @@ test.describe('Bug Report Button', () => {
     await expect(button).toBeVisible()
     await button.click()
 
-    // Modal must open — either with screenshot (headed) or without (headless fallback)
+    // Modal must open with the diagnostic info notice
     const modal = authenticatedPage.getByRole('dialog', { name: 'Report a Bug' })
     await expect(modal).toBeVisible({ timeout: 10000 })
 
-    // The specific Firefox font-processing bug produces this message.
-    // It must not appear after the skipFonts fix.
-    const trimCrashes = consoleErrors.filter(e =>
-      e.includes("can't access property \"trim\"") ||
-      e.includes("Cannot read properties of undefined (reading 'trim')")
-    )
-    expect(trimCrashes, 'Font-processing trim crash should not occur').toHaveLength(0)
+    // Verify the diagnostics notice is shown
+    await expect(authenticatedPage.getByText(/browser info & console errors/i)).toBeVisible()
   })
 
   test('moves the bug report entry point into the mobile nav', async ({ authenticatedPage }) => {
