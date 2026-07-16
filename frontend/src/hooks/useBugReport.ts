@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react'
 import { bugReportsApi } from '../services/api'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { DiagnosticData } from './useDiagnostics'
-import type { ScreenshotDiagnostics } from '../utils/captureScreenshot'
 
 export function useBugReport() {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -12,27 +11,20 @@ export function useBugReport() {
   const submit = useCallback(async (
     title: string,
     description: string,
-    screenshotBlob: Blob | null,
     diagnosticData: DiagnosticData | null,
-    screenshotDiagnostics?: ScreenshotDiagnostics
   ) => {
     setIsSubmitting(true)
     setError(null)
     setIssueUrl(null)
     try {
-      const formData = new FormData()
-      formData.append('title', title)
-      formData.append('description', description)
-      if (screenshotBlob) {
-        formData.append('screenshot', screenshotBlob, 'screenshot.png')
+      const payload: { title: string; description: string; diagnostics?: object } = {
+        title,
+        description,
       }
       if (diagnosticData) {
-        formData.append('diagnostics', JSON.stringify(diagnosticData))
+        payload.diagnostics = diagnosticData
       }
-      if (screenshotDiagnostics) {
-        formData.append('screenshot_diagnostics', JSON.stringify(screenshotDiagnostics))
-      }
-      const response = await bugReportsApi.create(formData)
+      const response = await bugReportsApi.create(payload)
       setIssueUrl(response.issue_url)
     } catch (err: unknown) {
       setError(getApiErrorDetail(err) ?? 'Failed to submit bug report')

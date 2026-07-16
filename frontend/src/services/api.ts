@@ -383,8 +383,6 @@ export const migrationApi = {
 }
 
 export const bugReportsApi = {
-  create: (data: FormData) =>
-    api.post<BugReportResponse>('/bug-reports/', data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+  create: (data: { title: string; description: string; diagnostics?: object }) =>
+    api.post<BugReportResponse>('/bug-reports/', data),
 }
