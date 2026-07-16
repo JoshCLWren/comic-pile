@@ -383,6 +383,6 @@ export const migrationApi = {
 }
 
 export const bugReportsApi = {
-  create: (data: { title: string; description: string; diagnostics?: object }) =>
+  create: (data: { title: string; description: string; diagnostics?: unknown }) =>
     api.post<BugReportResponse>('/bug-reports/', data),
 }
