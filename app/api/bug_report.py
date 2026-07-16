@@ -48,14 +48,7 @@ async def create_bug_report(
             detail="GitHub integration not configured",
         )
 
-    diagnostics_data = None
-    if body.diagnostics:
-        if not isinstance(body.diagnostics, dict):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="diagnostics must be a JSON object",
-            )
-        diagnostics_data = body.diagnostics
+    diagnostics_data = body.diagnostics
 
     try:
         issue_url = await create_bug_report_issue(

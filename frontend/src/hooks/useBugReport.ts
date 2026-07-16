@@ -17,14 +17,11 @@ export function useBugReport() {
     setError(null)
     setIssueUrl(null)
     try {
-      const payload: { title: string; description: string; diagnostics?: object } = {
+      const response = await bugReportsApi.create({
         title,
         description,
-      }
-      if (diagnosticData) {
-        payload.diagnostics = diagnosticData
-      }
-      const response = await bugReportsApi.create(payload)
+        ...(diagnosticData ? { diagnostics: diagnosticData } : {}),
+      })
       setIssueUrl(response.issue_url)
     } catch (err: unknown) {
       setError(getApiErrorDetail(err) ?? 'Failed to submit bug report')
