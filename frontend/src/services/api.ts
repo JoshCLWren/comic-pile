@@ -306,8 +306,12 @@ export const rateApi = {
 
 export const sessionApi = {
   list: async (params?: Record<string, unknown>, pageToken?: string | null): Promise<SessionListResponse> => {
+    const queryParams: Record<string, unknown> = { ...(params ?? {}) };
+    if (pageToken) {
+      queryParams.page_token = pageToken;
+    }
     const response = await api.get<SessionListResponse>('/sessions/', {
-      params: { ...params, page_token: pageToken },
+      params: Object.keys(queryParams).length ? queryParams : undefined,
     })
     return response
   },
