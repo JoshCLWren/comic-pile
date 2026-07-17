@@ -38,7 +38,7 @@ dev = [
     "ty>=0.0.12",
     "faker>=20.0.0",
     "httpx>=0.28.1",
-    "playwright==1.48.0",
+    "playwright>=1.50.0",
     "pytest-playwright==0.7.0",
     "uvicorn>=0.30.0",
     "PyGithub>=2.0.0",
