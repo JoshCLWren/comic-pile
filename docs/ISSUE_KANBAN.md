@@ -15,6 +15,16 @@ Last reviewed: 2026-07-17
 
 ## Board
 
+### Planning required
+
+These issues require a concrete GLM 5.2 implementation plan before DeepSeek starts coding. The plan must be posted as a GitHub issue comment and identify the data flow, files, migration/API impact, tests, risks, and exact verification commands.
+
+| Issue | Planner deliverable | Planning exit criteria | Next column |
+| --- | --- | --- | --- |
+| [#603](https://github.com/JoshCLWren/comic-pile/issues/603) | Mobile dependency-management implementation plan. | Entry points, modal layout, responsive behavior, and regression-test strategy are explicit. | Ready / next up |
+| [#609](https://github.com/JoshCLWren/comic-pile/issues/609) | Session-event and snapshot data-flow plan. | Existing API fields, missing fields, schema changes, and mobile presentation are explicit. | Planned |
+| [#613](https://github.com/JoshCLWren/comic-pile/issues/613) | Named-group architecture plan. | Model relationships, migration, ownership checks, API contract, UI flow, and rollback risks are explicit. | Queued enhancements / decisions |
+
 ### Ready / next up
 
 | Issue | Priority | Work | Depends on | Done when |
@@ -82,6 +92,9 @@ _None recorded._
 ## Working rules
 
 - Keep one canonical issue for duplicate reports; link and close duplicates.
+- Follow the sequence: Planning required → Ready/Planned/Queued → In progress → Validation → Done.
+- A planning issue cannot move to implementation until its GLM plan is posted to GitHub and reviewed for file scope, data flow, tests, risks, and verification commands.
+- GLM planning is required for #603, #609, and #613 only. The other active issues may go directly to DeepSeek execution.
 - Do not move an issue to Validation until the required local tests pass.
 - Frontend issues require lint, typecheck, build, unit tests, and relevant Playwright coverage.
 - Backend changes require the relevant pytest coverage and the repository's async PostgreSQL rules.
