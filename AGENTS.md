@@ -63,7 +63,7 @@ CI is not a debugging tool. Every failed CI run wastes compute, blocks the pipel
 ## Project Overview
 
 Comic Pile is a dice-driven comic reading tracker built with:
-- **Backend**: Python 3.13, FastAPI, SQLAlchemy, PostgreSQL
+- **Backend**: Python 3.14, FastAPI, SQLAlchemy, PostgreSQL
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `pnpm` (frontend)
 

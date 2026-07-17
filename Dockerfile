@@ -6,7 +6,7 @@ ARG BUILD_TIMESTAMP=unknown
 # ============================
 # Python dependency stage
 # ============================
-FROM python:3.13-slim AS python-builder
+FROM python:3.14-slim AS python-builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -25,8 +25,8 @@ WORKDIR /app
 # Copy Python dependency metadata
 COPY pyproject.toml uv.lock ./
 
-# Install Python deps into a local venv
-RUN uv sync --frozen --no-dev
+# Install the exact committed runtime dependency set.
+RUN uv sync --locked --no-dev
 
 # ============================
 # Frontend build stage
@@ -55,7 +55,7 @@ RUN echo "Build timestamp: ${BUILD_TIMESTAMP:-$(date -u +%s)}" && pnpm --filter 
 # ============================
 # Runtime stage
 # ============================
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 ARG USER_ID=1000
 ARG GROUP_ID=1000

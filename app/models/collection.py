@@ -1,5 +1,7 @@
 """Collection model for database."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -27,8 +29,8 @@ class Collection(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="collections", lazy="raise")
-    threads: Mapped[list["Thread"]] = relationship(
+    user: Mapped[User] = relationship("User", back_populates="collections", lazy="raise")
+    threads: Mapped[list[Thread]] = relationship(
         "Thread", back_populates="collection", lazy="raise"
     )
 

@@ -1,5 +1,7 @@
 """Review model for database."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -48,6 +50,6 @@ class Review(Base):
         Index("ix_review_thread_id", "thread_id"),
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="reviews", lazy="raise")
-    thread: Mapped["Thread"] = relationship("Thread", back_populates="reviews", lazy="raise")
-    issue: Mapped["Issue | None"] = relationship("Issue", back_populates="reviews", lazy="raise")
+    user: Mapped[User] = relationship("User", back_populates="reviews", lazy="raise")
+    thread: Mapped[Thread] = relationship("Thread", back_populates="reviews", lazy="raise")
+    issue: Mapped[Issue | None] = relationship("Issue", back_populates="reviews", lazy="raise")

@@ -3,7 +3,7 @@ name = "comic_pile"
 version = "0.1.0"
 description = "Dice-Driven Comic Reading Tracker - FastAPI + React + Tailwind CSS"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.20.0",
@@ -38,7 +38,7 @@ dev = [
     "ty>=0.0.12",
     "faker>=20.0.0",
     "httpx>=0.28.1",
-    "playwright==1.48.0",
+    "playwright>=1.50.0",
     "pytest-playwright==0.7.0",
     "uvicorn>=0.30.0",
     "PyGithub>=2.0.0",
@@ -95,7 +95,7 @@ exclude_lines = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/versions/**"]
 
 [tool.ruff.lint]
@@ -113,7 +113,7 @@ venvPath = "."
 venv = ".venv"
 
 [tool.ty.environment]
-python-version = "3.13"
+python-version = "3.14"
 
 [tool.ty.src]
 include = ["app", "comic_pile", "tests"]

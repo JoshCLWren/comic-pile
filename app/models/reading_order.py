@@ -1,5 +1,7 @@
 """Reading order model for grouping threads into ordered reading lists."""
 
+from __future__ import annotations
+
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,7 +18,7 @@ class ReadingOrder(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
 
-    items: Mapped[list["ReadingOrderItem"]] = relationship(
+    items: Mapped[list[ReadingOrderItem]] = relationship(
         "ReadingOrderItem", back_populates="reading_order", cascade="all, delete-orphan"
     )
 
@@ -34,6 +36,6 @@ class ReadingOrderItem(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     issue_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    reading_order: Mapped["ReadingOrder"] = relationship(
+    reading_order: Mapped[ReadingOrder] = relationship(
         "ReadingOrder", back_populates="items"
     )

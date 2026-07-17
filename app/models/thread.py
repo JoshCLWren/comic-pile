@@ -1,5 +1,7 @@
 """Thread model for database."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -77,14 +79,14 @@ class Thread(Base):
         Index("ix_thread_collection_id", "collection_id"),
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="threads", lazy="raise")
-    collection: Mapped["Collection | None"] = relationship(
+    user: Mapped[User] = relationship("User", back_populates="threads", lazy="raise")
+    collection: Mapped[Collection | None] = relationship(
         "Collection", back_populates="threads", lazy="raise", passive_deletes=True
     )
-    events: Mapped[list["Event"]] = relationship(
+    events: Mapped[list[Event]] = relationship(
         "Event", back_populates="thread", cascade="all, delete-orphan", lazy="raise"
     )
-    issues: Mapped[list["Issue"]] = relationship(
+    issues: Mapped[list[Issue]] = relationship(
         "Issue",
         back_populates="thread",
         cascade="all",
@@ -93,10 +95,10 @@ class Thread(Base):
         order_by="Issue.position",
         foreign_keys="[Issue.thread_id]",
     )
-    reviews: Mapped[list["Review"]] = relationship(
+    reviews: Mapped[list[Review]] = relationship(
         "Review", back_populates="thread", cascade="all, delete-orphan", lazy="raise"
     )
-    next_unread_issue: Mapped["Issue | None"] = relationship(
+    next_unread_issue: Mapped[Issue | None] = relationship(
         "Issue", foreign_keys=[next_unread_issue_id], lazy="raise"
     )
 
@@ -167,7 +169,7 @@ class Thread(Base):
         last_issue_read: int,
         total_issues: int,
         db: AsyncSession,
-    ) -> "Thread":
+    ) -> Thread:
         """Migrate a thread from counter-based to issue-based tracking.
 
         Creates issue records #1 through total_issues.

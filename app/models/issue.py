@@ -1,5 +1,7 @@
 """Issue model for tracking individual comic issues."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -46,23 +48,23 @@ class Issue(Base):
         Index("ix_issue_thread_position", "thread_id", "position"),
     )
 
-    thread: Mapped["Thread"] = relationship(
+    thread: Mapped[Thread] = relationship(
         "Thread", back_populates="issues", lazy="select", foreign_keys=[thread_id]
     )
-    dependencies_out: Mapped[list["Dependency"]] = relationship(
+    dependencies_out: Mapped[list[Dependency]] = relationship(
         "Dependency",
         foreign_keys="Dependency.source_issue_id",
         back_populates="source_issue",
         lazy="raise",
         passive_deletes=True,
     )
-    dependencies_in: Mapped[list["Dependency"]] = relationship(
+    dependencies_in: Mapped[list[Dependency]] = relationship(
         "Dependency",
         foreign_keys="Dependency.target_issue_id",
         back_populates="target_issue",
         lazy="raise",
         passive_deletes=True,
     )
-    reviews: Mapped[list["Review"]] = relationship(
+    reviews: Mapped[list[Review]] = relationship(
         "Review", back_populates="issue", lazy="raise", passive_deletes=True
     )

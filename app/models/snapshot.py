@@ -1,5 +1,7 @@
 """Snapshot model for undo functionality."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -38,5 +40,5 @@ class Snapshot(Base):
         Index("ix_snapshot_created_at", "created_at"),
     )
 
-    session: Mapped["Session"] = relationship("Session", back_populates="snapshots", lazy="raise")
-    event: Mapped["Event | None"] = relationship("Event", back_populates="snapshots", lazy="raise")
+    session: Mapped[Session] = relationship("Session", back_populates="snapshots", lazy="raise")
+    event: Mapped[Event | None] = relationship("Event", back_populates="snapshots", lazy="raise")
