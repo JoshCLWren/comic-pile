@@ -11,10 +11,21 @@ This document is the mandatory operating procedure for agents executing GitHub i
 ## Before changing code
 
 1. Read the complete GitHub issue, all comments, `AGENTS.md`, this protocol, and `docs/ISSUE_KANBAN.md`.
-2. Confirm every dependency listed on the issue and board is complete or explicitly marked non-blocking.
-3. Inspect the named files and existing tests before editing.
-4. Move the issue's row in `docs/ISSUE_KANBAN.md` from Ready/Planned/Queued to In progress. Do not claim work is in progress without making this edit.
-5. Do not broaden scope. If a discovered bug is required to complete the issue, add it to the issue and board before implementing it. If it is unrelated, leave it untouched and report it.
+2. If the issue is marked **Planning required**, do not edit application code. Obtain and post the required implementation plan first.
+3. Confirm every dependency listed on the issue and board is complete or explicitly marked non-blocking.
+4. Inspect the named files and existing tests before editing.
+5. Move the issue's row in `docs/ISSUE_KANBAN.md` from Ready/Planned/Queued to In progress. Do not claim work is in progress without making this edit.
+6. Do not broaden scope. If a discovered bug is required to complete the issue, add it to the issue and board before implementing it. If it is unrelated, leave it untouched and report it.
+
+## Planning gate
+
+For issues marked **Planning required** on the kanban:
+
+1. GLM 5.2 must post a plan comment before implementation begins.
+2. The plan must name files to inspect/change, explain the current data flow, identify likely failure or design risks, describe implementation steps, list regression tests, and provide exact local verification commands.
+3. The plan must explicitly state whether database migrations, API schema changes, authorization checks, or frontend/backend contract changes are required.
+4. The plan must include a rollback or containment strategy for risky schema or behavior changes.
+5. Only after the plan is posted and accepted may the issue move to its execution column and DeepSeek begin code changes.
 
 ## While implementing
 
