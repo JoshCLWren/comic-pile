@@ -21,7 +21,7 @@ This document is the mandatory operating procedure for agents executing GitHub i
 
 For issues marked **Planning required** on the kanban:
 
-1. GLM 5.2 must post a plan comment before implementation begins.
+1. The planning agent must post a plan comment before implementation begins.
 2. The plan must name files to inspect/change, explain the current data flow, identify likely failure or design risks, describe implementation steps, list regression tests, and provide exact local verification commands.
 3. The plan must explicitly state whether database migrations, API schema changes, authorization checks, or frontend/backend contract changes are required.
 4. The plan must include a rollback or containment strategy for risky schema or behavior changes.
