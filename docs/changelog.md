@@ -8,6 +8,7 @@
 - Queue thread-action menus now appear above adjacent cards instead of being clipped in Safari.
 - Queue thread-action menus now also raise their virtualized row, keeping them visible and clickable above the next row in Firefox.
 - Browser verification now covers Firefox, WebKit, and Chromium so desktop Firefox and mobile Safari behavior are release gates.
+- Queue action menus now use a dedicated overlay layer, keeping hidden swipe actions contained and removing the oversized empty hover callout.
 
 ## 2026-07-15
 
