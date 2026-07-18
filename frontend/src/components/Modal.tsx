@@ -26,6 +26,7 @@ export default function Modal({
   autoFocus = true,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
 
@@ -76,10 +77,8 @@ export default function Modal({
     const firstInput = focusableArray.find(
       el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
     )
-    if (autoFocus) {
-      const targetElement = firstInput || firstElement
-      targetElement?.focus()
-    }
+    const targetElement = autoFocus ? firstInput || firstElement : closeButtonRef.current
+    targetElement?.focus()
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
@@ -134,6 +133,7 @@ export default function Modal({
         <div className="flex items-start justify-between gap-2 md:gap-4 px-4 md:px-6 pt-2 md:pt-0 pb-3 md:pb-4 shrink-0">
           <h2 id="modal-title" className="text-lg md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none"
