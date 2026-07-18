@@ -1,3 +1,5 @@
+import { getAccessToken } from './api'
+
 export interface ReadingOrderItem {
   thread_id: number
   thread_title: string
@@ -20,7 +22,7 @@ export interface ThreadReadingOrdersResponse {
 }
 
 function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
+  const token = getAccessToken()
   if (token) {
     return { 'Authorization': `Bearer ${token}` }
   }
