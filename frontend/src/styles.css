@@ -255,29 +255,6 @@ body {
   border-radius: 0.75rem;
 }
 
-/* Let an open actions menu paint above adjacent cards in the queue grid. */
-.queue-thread-card:has([aria-expanded="true"]) {
-  position: relative;
-  z-index: 100;
-}
-
-.queue-thread-swipeable:has([aria-expanded="true"]) {
-  overflow: visible !important;
-  position: relative;
-  z-index: 100;
-}
-
-/* Keep the menu above neighboring virtualized grid rows in Safari. */
-.queue-thread-card:has([aria-expanded="true"]) [role="menu"] {
-  z-index: 200;
-}
-
-/* A transformed virtual row is its own stacking context. Raise the entire row
-   while its menu is open so the following row cannot paint over the menu. */
-#queue-container [data-index]:has([aria-expanded="true"]) {
-  z-index: 100;
-}
-
 .modal-card {
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: var(--glass-blur);
