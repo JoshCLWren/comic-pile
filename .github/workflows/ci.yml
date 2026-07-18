@@ -388,6 +388,9 @@ jobs:
         totalShards: [6]
     env:
       CI: true
+      # Firefox refuses to launch when Actions' mounted HOME is not owned by
+      # the container user. Playwright browsers are installed under /root.
+      HOME: /root
       TEST_ENVIRONMENT: "true"
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
