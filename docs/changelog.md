@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-18
+
+**Mobile modal usability and focus**
+- Mobile modals now use the available viewport height with an independently scrollable content area.
+- Non-autofocus modals keep keyboard focus inside the modal, with a safe close-control fallback.
+
 ## 2026-07-15
 
 **History page infinite loading fix (#598)**
