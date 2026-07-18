@@ -64,21 +64,21 @@ it('refreshes and retries a request after an expired access token', async () => 
   expect(result).toEqual({ refreshed: true })
 })
 
-it('calls thread endpoints with expected paths', () => {
-  threadsApi.list()
-  threadsApi.list({ search: 'bat' })
-  threadsApi.get(9)
+it('calls thread endpoints with expected paths', async () => {
+  await threadsApi.list()
+  await threadsApi.list({ search: 'bat' })
+  await threadsApi.get(9)
 
   expect(get).toHaveBeenCalledWith('/threads/', { params: undefined })
   expect(get).toHaveBeenCalledWith('/threads/', { params: { search: 'bat' } })
   expect(get).toHaveBeenCalledWith('/threads/9')
 })
 
-it('calls queue endpoints with expected paths', () => {
-  queueApi.moveToPosition(3, 2)
-  queueApi.moveToFront(4)
-  queueApi.moveToBack(5)
-  queueApi.shuffle()
+it('calls queue endpoints with expected paths', async () => {
+  await queueApi.moveToPosition(3, 2)
+  await queueApi.moveToFront(4)
+  await queueApi.moveToBack(5)
+  await queueApi.shuffle()
 
   expect(put).toHaveBeenCalledWith('/queue/threads/3/position/', { new_position: 2 })
   expect(put).toHaveBeenCalledWith('/queue/threads/4/front/')
@@ -86,12 +86,12 @@ it('calls queue endpoints with expected paths', () => {
   expect(post).toHaveBeenCalledWith('/queue/shuffle/')
 })
 
-it('calls dependency endpoints with expected paths', () => {
-  dependenciesApi.listBlockedThreadIds()
-  dependenciesApi.listThreadDependencies(11)
-  dependenciesApi.getBlockingInfo(12)
-  dependenciesApi.createDependency({ sourceId: 1, targetId: 2 })
-  dependenciesApi.deleteDependency(7)
+it('calls dependency endpoints with expected paths', async () => {
+  await dependenciesApi.listBlockedThreadIds()
+  await dependenciesApi.listThreadDependencies(11)
+  await dependenciesApi.getBlockingInfo(12)
+  await dependenciesApi.createDependency({ sourceId: 1, targetId: 2 })
+  await dependenciesApi.deleteDependency(7)
 
   expect(get).toHaveBeenCalledWith('/v1/dependencies/blocked')
   expect(get).toHaveBeenCalledWith('/v1/threads/11/dependencies')
@@ -107,23 +107,23 @@ it('calls dependency endpoints with expected paths', () => {
 
 it('calls every remaining API resource endpoint', async () => {
   await threadsApi.list(undefined, 'next')
-  threadsApi.create({ title: 'T', format: 'Comic', issues_remaining: 1 })
-  threadsApi.update(1, { title: 'Updated' })
-  threadsApi.delete(1)
-  threadsApi.reactivate({ thread_id: 1, issues_to_add: 2 })
-  threadsApi.listStale()
-  threadsApi.listStale(7)
-  threadsApi.setPending(1)
-  rollApi.roll(); rollApi.override({ thread_id: 1 }); rollApi.dismissPending(); rollApi.reroll(); rollApi.setDie(6); rollApi.clearManualDie()
-  rateApi.rate({ thread_id: 1, rating: 4 })
+  await threadsApi.create({ title: 'T', format: 'Comic', issues_remaining: 1 })
+  await threadsApi.update(1, { title: 'Updated' })
+  await threadsApi.delete(1)
+  await threadsApi.reactivate({ thread_id: 1, issues_to_add: 2 })
+  await threadsApi.listStale()
+  await threadsApi.listStale(7)
+  await threadsApi.setPending(1)
+  await rollApi.roll(); await rollApi.override({ thread_id: 1 }); await rollApi.dismissPending(); await rollApi.reroll(); await rollApi.setDie(6); await rollApi.clearManualDie()
+  await rateApi.rate({ thread_id: 1, rating: 4 })
   await sessionApi.list({ status: 'complete' }, 'page')
-  sessionApi.get(1); sessionApi.getCurrent(); sessionApi.getDetails('2'); sessionApi.getSnapshots(2); sessionApi.restoreSessionStart(2)
-  undoApi.undo(1, 'snap'); undoApi.listSnapshots(1)
-  dependenciesApi.getIssueDependencies(2); dependenciesApi.getConnectedThreads(1); dependenciesApi.updateDependency(3, null)
-  tasksApi.getMetrics(); snoozeApi.snooze(); snoozeApi.unsnooze(2)
-  collectionsApi.list(); collectionsApi.get(1); collectionsApi.create({ name: 'C', position: 1 }); collectionsApi.update(1, { name: 'D' }); collectionsApi.delete(1); collectionsApi.moveThreadToCollection(2, null)
-  migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
-  bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
+  await sessionApi.get(1); await sessionApi.getCurrent(); await sessionApi.getDetails('2'); await sessionApi.getSnapshots(2); await sessionApi.restoreSessionStart(2)
+  await undoApi.undo(1, 'snap'); await undoApi.listSnapshots(1)
+  await dependenciesApi.getIssueDependencies(2); await dependenciesApi.getConnectedThreads(1); await dependenciesApi.updateDependency(3, null)
+  await tasksApi.getMetrics(); await snoozeApi.snooze(); await snoozeApi.unsnooze(2)
+  await collectionsApi.list(); await collectionsApi.get(1); await collectionsApi.create({ name: 'C', position: 1 }); await collectionsApi.update(1, { name: 'D' }); await collectionsApi.delete(1); await collectionsApi.moveThreadToCollection(2, null)
+  await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
+  await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
   expect(get).toHaveBeenCalledWith('/v1/collections/')
   expect(post).toHaveBeenCalledWith('/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
 })
@@ -142,6 +142,15 @@ it('adds auth and csrf headers to mutating requests', async () => {
     Authorization: 'Bearer access-token',
     'X-CSRF-Token': 'cookie-token',
   })
+  expect(get).not.toHaveBeenCalled()
+})
+
+it('does not attach csrf to safe or exempt requests', async () => {
+  setAccessToken(null)
+  const getConfig = await requestInterceptor({ method: 'get', url: '/threads/', headers: {} })
+  expect(getConfig.headers).toEqual({})
+  const loginConfig = await requestInterceptor({ method: 'post', url: '/auth/login', headers: {} })
+  expect(loginConfig.headers).toEqual({})
   expect(get).not.toHaveBeenCalled()
 })
 
@@ -165,4 +174,19 @@ it('handles response success, network errors, validation errors, and auth errors
   await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
   await expect(responseInterceptor({ config: { url: '/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
   await expect(responseInterceptor({ config: { url: '/x', _retry: true } as never, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
+})
+
+it('rejects a failed token refresh without retrying the original request', async () => {
+  post.mockRejectedValueOnce(new Error('refresh failed'))
+  await expect(responseInterceptor({ config: { url: '/threads/1' }, response: { status: 401 } })).rejects.toThrow('refresh failed')
+  expect(apiMock.request).not.toHaveBeenCalled()
+})
+
+it('redirects to login when the refresh endpoint itself returns unauthorized', async () => {
+  window.history.pushState({}, '', '/queue')
+  await expect(responseInterceptor({
+    config: { url: '/auth/refresh' },
+    response: { status: 401 },
+  })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
+  window.history.pushState({}, '', '/')
 })
