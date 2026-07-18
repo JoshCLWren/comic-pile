@@ -122,7 +122,7 @@ export default function Modal({
       <div
         ref={modalRef}
         data-testid={testId}
-        className="relative w-full max-w-lg modal-card max-h-[90vh] md:max-h-[85vh] flex flex-col rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
+        className="relative w-full max-w-lg h-[calc(100dvh-1rem)] md:h-auto modal-card max-h-[calc(100dvh-1rem)] md:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -131,7 +131,7 @@ export default function Modal({
           <div className="w-10 h-1 bg-white/20 rounded-full" />
         </div>
         <div className="flex items-start justify-between gap-2 md:gap-4 px-4 md:px-6 pt-2 md:pt-0 pb-3 md:pb-4 shrink-0">
-          <h2 id="modal-title" className="text-lg md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
+          <h2 id="modal-title" className="min-w-0 flex-1 text-base md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
           <button
             ref={closeButtonRef}
             type="button"
