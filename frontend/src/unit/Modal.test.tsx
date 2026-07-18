@@ -71,3 +71,74 @@ it('uses a translucent modal surface with a softened overlay', () => {
   expect(overlay).not.toBeNull()
   expect(overlay).toHaveClass('backdrop-blur-sm')
 })
+
+it('returns null while closed and supports fallback focus without autofocus', async () => {
+  const onClose = vi.fn()
+  const { rerender } = render(
+    <Modal isOpen={false} title="Closed" onClose={onClose}>
+      <button type="button">Action</button>
+    </Modal>,
+  )
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+  rerender(
+    <Modal isOpen title="Open" onClose={onClose} autoFocus={false} data-testid="modal">
+      <button type="button">Action</button>
+    </Modal>,
+  )
+  expect(screen.getByRole('button', { name: /close modal/i })).toHaveFocus()
+
+  const user = userEvent.setup()
+  await user.keyboard('{Escape}')
+  expect(onClose).toHaveBeenCalledTimes(1)
+})
+
+it('wraps focus in both tab directions and restores the trigger focus', async () => {
+  const trigger = document.createElement('button')
+  trigger.textContent = 'Trigger'
+  document.body.append(trigger)
+  trigger.focus()
+  const user = userEvent.setup()
+  const { unmount } = render(
+    <Modal isOpen title="Focus" onClose={() => {}}>
+      <input aria-label="First" />
+      <button type="button">Last</button>
+    </Modal>,
+  )
+  const first = screen.getByLabelText('First')
+  const close = screen.getByRole('button', { name: /close modal/i })
+  close.focus()
+  await user.tab()
+  expect(first).toHaveFocus()
+  first.focus()
+  await user.tab({ shift: true })
+  expect(close).toHaveFocus()
+  unmount()
+  expect(trigger).toHaveFocus()
+  trigger.remove()
+})
+
+it('keeps the root lock until overlapping modals have both closed', () => {
+  const root = document.createElement('div')
+  root.id = 'root'
+  document.body.append(root)
+  root.style.overflow = 'auto'
+  const first = render(<Modal isOpen title="One" onClose={() => {}}>One</Modal>)
+  const second = render(<Modal isOpen title="Two" onClose={() => {}}>Two</Modal>)
+  expect(root.style.overflow).toBe('hidden')
+  first.rerender(<Modal isOpen={false} title="One" onClose={() => {}}>One</Modal>)
+  expect(root.style.overflow).toBe('hidden')
+  second.unmount()
+  expect(root.style.overflow).toBe('auto')
+  root.remove()
+})
+
+it('uses the close button as the autofocus fallback', () => {
+  render(
+    <Modal isOpen title="Empty" onClose={() => {}} autoFocus={false}>
+      <p>No controls</p>
+    </Modal>,
+  )
+
+  expect(screen.getByRole('button', { name: /close modal/i })).toHaveFocus()
+})

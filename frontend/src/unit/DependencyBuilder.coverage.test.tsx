@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -43,8 +43,60 @@ describe('DependencyBuilder', () => {
     const remove = screen.getAllByRole('button', { name: 'Remove' })[0]
     fireEvent.click(remove)
     await waitFor(() => expect(toast.showToast).toHaveBeenCalled())
-    const action = toast.showToast.mock.calls[0]?.[2]?.onClick as (() => void) | undefined
+    const call = toast.showToast.mock.calls[0] as unknown as [string, string, { onClick?: () => void }]
+    const action = call[2]?.onClick
     action?.()
     expect(toast.removeToast).toHaveBeenCalled()
+  })
+
+  it('covers reading-order tabs, graph loading, note editing, and deletion commit', async () => {
+    const withNote = { ...dependency, note: 'Read this first' }
+    api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [withNote], blocked_by: [] })
+    api.dependenciesApi.listBlockedThreadIds.mockResolvedValue([1])
+    api.threadsApi.list.mockResolvedValue({ threads: [thread, { ...thread, id: 2, title: 'Source' }] })
+    api.dependenciesApi.deleteDependency.mockResolvedValue({})
+    api.dependenciesApi.updateDependency.mockResolvedValue({ ...withNote, note: 'Updated' })
+    const user = userEvent.setup()
+    render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /view reading order/i }))
+    expect(screen.getByRole('tab', { name: 'Timeline' })).toHaveAttribute('aria-selected', 'true')
+    await user.click(screen.getByRole('tab', { name: 'Flowchart' }))
+    await waitFor(() => expect(screen.getByTestId('mock-flowchart')).toBeInTheDocument())
+    screen.getByRole('tab', { name: 'Flowchart' }).focus()
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'Home' })
+    expect(screen.getByRole('tab', { name: 'Timeline' })).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: /edit note/i }))
+    const noteInput = screen.getByPlaceholderText('Add a note...')
+    await user.clear(noteInput)
+    await user.type(noteInput, 'Updated')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.dependenciesApi.updateDependency).toHaveBeenCalledWith(4, 'Updated'))
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await act(async () => vi.advanceTimersByTime(5000))
+    await act(async () => await Promise.resolve())
+    expect(api.dependenciesApi.deleteDependency).toHaveBeenCalledWith(4)
+    vi.useRealTimers()
+  })
+
+  it('validates and completes inline migration for an unmigrated prerequisite', async () => {
+    api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
+    api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Unmigrated', total_issues: null }] })
+    api.issuesApi.migrateThread.mockResolvedValue({ ...thread, id: 2, title: 'Unmigrated', total_issues: 5 })
+    const user = userEvent.setup()
+    render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
+    await user.type(screen.getByLabelText('Search prerequisite thread'), 'Unm')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Unmigrated/ })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Unmigrated/ }))
+    await user.click(screen.getByRole('button', { name: 'Migrate Now' }))
+    fireEvent.submit(screen.getByRole('button', { name: 'Migrate' }).closest('form')!)
+    expect(screen.getByText('Both fields are required for migration.')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Last issue read'), '1')
+    await user.type(screen.getByLabelText('Total issues'), '5')
+    await user.click(screen.getByRole('button', { name: 'Migrate' }))
+    await waitFor(() => expect(api.issuesApi.migrateThread).toHaveBeenCalledWith(2, 1, 5))
   })
 })

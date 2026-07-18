@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import {createThread, gotoQueue, waitForEditThreadModal, openThreadActions} from './helpers';
+import {createThread, gotoQueue, waitForEditThreadModal, clickThreadAction} from './helpers';
 
 test.describe('Issue #326: Collapsible Issue List', () => {
   test('should show only issues around next unread by default when thread has many issues', async ({ authenticatedPage }) => {
@@ -20,8 +20,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
-    const menu = await openThreadActions(threadItem)
-    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
+    await clickThreadAction(threadItem, 'Edit thread');
 
     // Wait for edit modal to open
     await waitForEditThreadModal(authenticatedPage);
@@ -58,8 +57,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
-    const menu = await openThreadActions(threadItem)
-    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
+    await clickThreadAction(threadItem, 'Edit thread');
 
     // Wait for edit modal to open
     await waitForEditThreadModal(authenticatedPage);
@@ -96,8 +94,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
-    const menu = await openThreadActions(threadItem)
-    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
+    await clickThreadAction(threadItem, 'Edit thread');
 
     // Wait for edit modal to open
     await waitForEditThreadModal(authenticatedPage);
@@ -140,8 +137,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
-    const menu = await openThreadActions(threadItem)
-    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
+    await clickThreadAction(threadItem, 'Edit thread');
 
     // Wait for edit modal to open
     await waitForEditThreadModal(authenticatedPage);
@@ -175,8 +171,7 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
-    const menu = await openThreadActions(threadItem)
-    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
+    await clickThreadAction(threadItem, 'Edit thread');
 
     await waitForEditThreadModal(authenticatedPage);
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });

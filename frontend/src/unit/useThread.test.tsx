@@ -83,3 +83,44 @@ it('creates, updates, deletes, and reactivates threads', async () => {
   expect(mockedThreadsApi.delete).toHaveBeenCalledWith(7)
   expect(mockedThreadsApi.reactivate).toHaveBeenCalledWith({ thread_id: 7, issues_to_add: 3 })
 })
+
+it('supports search/collection pagination, explicit refetch, empty ids, and failures', async () => {
+  mockedThreadsApi.list
+    .mockResolvedValueOnce({ threads: [{ id: 1 }], next_page_token: 'next' } as never)
+    .mockResolvedValueOnce({ threads: [{ id: 2 }], next_page_token: null } as never)
+  const { result } = renderHook(() => useThreads({ searchTerm: '  saga ', collectionId: 4 }), { wrapper: CacheProvider })
+  await waitFor(() => expect(result.current.data).toHaveLength(2))
+  expect(mockedThreadsApi.list).toHaveBeenCalledWith({ search: 'saga', collection_id: 4, page_size: 200 }, 'next')
+  mockedThreadsApi.list.mockResolvedValueOnce({ threads: [{ id: 9 }], next_page_token: 'later' } as never)
+  await act(async () => result.current.refetch('page'))
+  expect(result.current.nextPageToken).toBe('later')
+
+  const empty = renderHook(() => useThread(null))
+  expect(empty.result.current.isPending).toBe(false)
+  mockedThreadsApi.get.mockRejectedValueOnce(new Error('missing'))
+  const failed = renderHook(() => useThread(9))
+  await waitFor(() => expect(failed.result.current.isError).toBe(true))
+  mockedThreadsApi.listStale.mockRejectedValueOnce(new Error('stale failed'))
+  const stale = renderHook(() => useStaleThreads())
+  await waitFor(() => expect(stale.result.current.isError).toBe(true))
+  mockedThreadsApi.listStale.mockResolvedValueOnce([] as never)
+  await act(async () => stale.result.current.refetch())
+})
+
+it('marks all thread mutations as errors and resets pending state', async () => {
+  mockedThreadsApi.create.mockRejectedValueOnce(new Error('create failed'))
+  mockedThreadsApi.update.mockRejectedValueOnce(new Error('update failed'))
+  mockedThreadsApi.delete.mockRejectedValueOnce(new Error('delete failed'))
+  mockedThreadsApi.reactivate.mockRejectedValueOnce(new Error('reactivate failed'))
+  const cases = [
+    [useCreateThread, { title: 'x', format: 'Comic', issues_remaining: 1 }],
+    [useUpdateThread, { id: 1, data: { title: 'x' } }],
+    [useDeleteThread, 1],
+    [useReactivateThread, { thread_id: 1, issues_to_add: 1 }],
+  ] as const
+  for (const [hook, payload] of cases) {
+    const { result } = renderHook(() => hook())
+    await expect(act(async () => result.current.mutate(payload as never))).rejects.toThrow()
+    expect(result.current.isPending).toBe(false)
+  }
+})

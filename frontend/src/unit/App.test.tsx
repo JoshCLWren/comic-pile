@@ -40,7 +40,7 @@ vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="histor
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
 vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
 
-import { AuthProvider, AppRoutes, useAuth } from '../App'
+import App, { AuthProvider, AppRoutes, useAuth } from '../App'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
 let authContextValue: AuthContextValue | null = null
@@ -77,6 +77,25 @@ test('renders navigation labels', async () => {
   expect(screen.getByRole('link', { name: /queue page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /history page/i })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /analytics page/i })).toBeInTheDocument()
+})
+
+test('throws when the auth hook is used outside its provider', () => {
+  expect(() => render(<TestAuthConsumer />)).toThrow('useAuth must be used within an AuthProvider')
+})
+
+test('clears a token when login validation fails', async () => {
+  mockApiGet.mockRejectedValue(new Error('invalid token'))
+  renderWithAuth('/login')
+  await waitFor(() => expect(authContextValue).not.toBeNull())
+
+  await expect(authContextValue!.login('bad-token')).rejects.toThrow('invalid token')
+  expect(mockClearAccessToken).toHaveBeenCalled()
+})
+
+test('mounts the application shell', async () => {
+  mockApiGet.mockRejectedValue(new Error('unauthenticated'))
+  render(<App />)
+  await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument())
 })
 
 describe('route guards', () => {

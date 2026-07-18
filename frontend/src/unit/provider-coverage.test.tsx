@@ -9,7 +9,6 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { CacheProvider } from '../contexts/CacheContext'
 import { useCache } from '../contexts/useCache'
-import { useToast } from '../contexts/useToast'
 import { usePositionMenu } from '../contexts/usePositionMenu'
 import { useToast } from '../contexts/useToast'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
@@ -21,12 +20,15 @@ function PositionConsumer() {
 
 function ToastConsumer() {
   const { showToast } = useToast()
-  return <button onClick={() => showToast('Saved', 'success', { label: 'Undo', onClick: vi.fn() })}>show</button>
+  return <button onClick={() => showToast('Saved', 'success', { label: 'Undo', onClick: undoSpy })}>show</button>
 }
+
+const undoSpy = vi.fn()
+const restoreSpy = vi.fn()
 
 function RestoreConsumer() {
   const { setRestoreAction, restoreLastView, clearRestoreAction } = useBugReportRestore()
-  return <><button onClick={() => setRestoreAction(() => vi.fn())}>set</button><button onClick={restoreLastView}>restore</button><button onClick={clearRestoreAction}>clear</button></>
+  return <><button onClick={() => setRestoreAction(restoreSpy)}>set</button><button onClick={restoreLastView}>restore</button><button onClick={clearRestoreAction}>clear</button></>
 }
 
 function CacheConsumer() {
@@ -68,6 +70,7 @@ describe('context providers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'show' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Saved')
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(undoSpy).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: 'Close notification' }))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'show' }))
@@ -79,9 +82,13 @@ describe('context providers', () => {
     const user = userEvent.setup()
     render(<BugReportRestoreProvider><RestoreConsumer /></BugReportRestoreProvider>)
     await user.click(screen.getByRole('button', { name: 'restore' }))
+    expect(restoreSpy).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'set' }))
     await user.click(screen.getByRole('button', { name: 'restore' }))
+    expect(restoreSpy).toHaveBeenCalledOnce()
     await user.click(screen.getByRole('button', { name: 'clear' }))
+    await user.click(screen.getByRole('button', { name: 'restore' }))
+    expect(restoreSpy).toHaveBeenCalledOnce()
   })
 
   it('updates and invalidates cache entries', async () => {

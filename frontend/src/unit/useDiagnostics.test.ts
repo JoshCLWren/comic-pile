@@ -77,4 +77,25 @@ describe('useDiagnostics', () => {
 
     expect(diagnostics.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
   })
+
+  it('captures mixed console errors and keeps only the newest entries', () => {
+    const original = console.error
+    const passthrough = vi.fn()
+    console.error = passthrough
+    const { result, unmount } = renderHook(() => useDiagnostics())
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+
+    console.error('plain message')
+    console.error(new Error('boom'))
+    console.error({ detail: 'object' }, circular)
+    for (let index = 0; index < 21; index += 1) console.error(`later-${index}`)
+
+    const diagnostics = result.current.collectDiagnostics()
+    expect(diagnostics.errors).toHaveLength(20)
+    expect(diagnostics.errors.at(-1)?.message).toContain('later-20')
+    expect(passthrough).toHaveBeenCalled()
+    unmount()
+    console.error = original
+  })
 })

@@ -199,3 +199,16 @@ it('renders dice container', () => {
   render(<Dice3D sides={6} value={3} />)
   expect(document.querySelector('.dice-3d')).toBeInTheDocument()
 })
+
+it('builds each supported geometry and handles animation/value changes', () => {
+  for (const sides of [4, 6, 8, 10, 12, 20, 30, 50, 100] as const) {
+    const { unmount } = render(
+      <Dice3D sides={sides} value={sides > 1 ? sides - 1 : 1} isRolling showValue={false} color={0xffaa00} />,
+    )
+    expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+    unmount()
+  }
+  const { rerender } = render(<Dice3D sides={6} value={1} isRolling={false} />)
+  rerender(<Dice3D sides={6} value={6} isRolling />)
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+})

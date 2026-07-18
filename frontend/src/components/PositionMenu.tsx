@@ -29,9 +29,20 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     if (!trigger) return
 
     const rect = trigger.getBoundingClientRect()
+    const menuWidth = menuRef.current?.getBoundingClientRect().width || 208
+    const menuHeight = menuRef.current?.getBoundingClientRect().height || 300
+    const horizontalPadding = 4
+    const left = Math.min(
+      Math.max(horizontalPadding, rect.right - menuWidth),
+      Math.max(horizontalPadding, window.innerWidth - menuWidth - horizontalPadding),
+    )
+    const belowTop = rect.bottom + 4
+    const top = belowTop + menuHeight > window.innerHeight
+      ? Math.max(horizontalPadding, rect.top - menuHeight - 4)
+      : belowTop
     setMenuPosition({
-      top: rect.bottom + 4,
-      right: window.innerWidth - rect.right,
+      top,
+      right: Math.max(horizontalPadding, window.innerWidth - left - menuWidth),
     })
   }, [])
 
@@ -87,10 +98,12 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     if (!isOpen) return
 
     updateMenuPosition()
+    const frame = requestAnimationFrame(updateMenuPosition)
     window.addEventListener('resize', updateMenuPosition)
     document.addEventListener('scroll', updateMenuPosition, true)
 
     return () => {
+      cancelAnimationFrame(frame)
       window.removeEventListener('resize', updateMenuPosition)
       document.removeEventListener('scroll', updateMenuPosition, true)
     }

@@ -191,4 +191,34 @@ describe('IssueList', () => {
       status: 'read',
     })
   })
+
+  it('renders empty and loading failures without crashing', async () => {
+    mockedIssuesApi.list.mockResolvedValueOnce(buildListResponse([]))
+    const { rerender } = render(<IssueList thread={mockThread} />)
+    await waitFor(() => expect(screen.getByText('No issues found')).toBeInTheDocument())
+
+    mockedIssuesApi.list.mockRejectedValueOnce(new Error('load failed'))
+    rerender(<IssueList thread={{ ...mockThread, id: 100 }} />)
+    await waitFor(() => expect(screen.getByText('No issues found')).toBeInTheDocument())
+  })
+
+  it('toggles read and unread issues, shows dependencies, and handles dependency errors', async () => {
+    const onThreadUpdated = vi.fn()
+    const readIssue = { ...BASE_ISSUES[0], status: 'read' as const, read_at: '2026-03-09T00:00:00Z' }
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse([readIssue, { ...BASE_ISSUES[1], id: 3 }]))
+    mockedDependenciesApi.getIssueDependencies
+      .mockResolvedValueOnce({ issue_id: 1, incoming: [{ dependency_id: 2, source_issue_id: 2, source_issue_number: '2', source_thread_id: 20, source_thread_title: 'Source' }], outgoing: [] })
+      .mockRejectedValueOnce(new Error('dependency failed'))
+    mockedIssuesApi.markUnread.mockResolvedValue(undefined)
+    mockedIssuesApi.markRead.mockResolvedValue(undefined)
+    render(<IssueList thread={{ ...mockThread, next_unread_issue_id: 3 }} onThreadUpdated={onThreadUpdated} />)
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.getByTitle('Has dependencies')).toBeInTheDocument()
+    const items = screen.getAllByText(/#\d/)
+    await userEvent.click(items[0]!)
+    expect(mockedIssuesApi.markUnread).toHaveBeenCalledWith(1)
+    await waitFor(() => expect(onThreadUpdated).toHaveBeenCalledWith(99))
+    await userEvent.click(items[1]!)
+    expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(3)
+  })
 })

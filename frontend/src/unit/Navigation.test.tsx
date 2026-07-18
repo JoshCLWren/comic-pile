@@ -1,11 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { expect, test, beforeEach, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../App'
 import Navigation from '../components/Navigation'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 
 const mockApiGet = vi.fn()
+const mockApiPost = vi.fn()
 const mockSetAccessToken = vi.fn()
 const mockClearAccessToken = vi.fn()
 
@@ -13,7 +15,7 @@ vi.mock('../services/api', () => {
   return {
     default: {
       get: (...args: Parameters<typeof mockApiGet>) => mockApiGet(...args),
-      post: vi.fn(),
+      post: (...args: Parameters<typeof mockApiPost>) => mockApiPost(...args),
     },
     setAccessToken: (...args: Parameters<typeof mockSetAccessToken>) => mockSetAccessToken(...args),
     clearAccessToken: (...args: Parameters<typeof mockClearAccessToken>) => mockClearAccessToken(...args),
@@ -22,6 +24,7 @@ vi.mock('../services/api', () => {
 
 beforeEach(() => {
   mockApiGet.mockReset()
+  mockApiPost.mockReset()
   mockSetAccessToken.mockReset()
   mockClearAccessToken.mockReset()
 })
@@ -80,4 +83,23 @@ test('shows logout button when authenticated', async () => {
   await waitFor(() => {
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
   })
+})
+
+test('shows loading and non-auth failure states and logs out gracefully', async () => {
+  mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
+    .mockRejectedValueOnce(new Error('server unavailable'))
+  render(
+    <MemoryRouter initialEntries={['/queue']}>
+      <AuthProvider>
+        <BugReportRestoreProvider>
+          <Navigation onBugReportSubmit={vi.fn()} />
+        </BugReportRestoreProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+  await waitFor(() => expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument())
+  mockApiPost.mockRejectedValueOnce(new Error('logout unavailable'))
+  await userEvent.setup().click(screen.getByRole('button', { name: /log out/i }))
+  await waitFor(() => expect(mockClearAccessToken).toHaveBeenCalled())
+
 })

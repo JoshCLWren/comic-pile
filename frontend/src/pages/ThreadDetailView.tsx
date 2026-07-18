@@ -39,7 +39,7 @@ export default function ThreadDetailView() {
         const threadData = await threadsApi.get(Number(id))
         setThread(threadData)
 
-        if (threadData.total_issues !== null) {
+        if (threadData && threadData.total_issues !== null) {
           await fetchIssues(Number(id))
         }
 
