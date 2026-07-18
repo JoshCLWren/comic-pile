@@ -49,7 +49,7 @@ test.describe('Dependencies', () => {
 
     const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Thread' }).first()
     await openThreadActions(targetCard)
-    await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+    await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
     await authenticatedPage.fill('input#search-prereq-thread', 'Source')
     await authenticatedPage.waitForSelector('button:has-text("Source Thread")', { state: 'visible' })
@@ -171,7 +171,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Comic' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Prerequisite')
       await authenticatedPage.waitForSelector('button:has-text("Prerequisite Comic")', { state: 'visible' })
@@ -201,7 +201,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Series' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Source')
       await authenticatedPage.waitForSelector('button:has-text("Source Series")', { state: 'visible' })
@@ -241,7 +241,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Main Series' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Prequel')
       await authenticatedPage.waitForSelector('button:has-text("Prequel Series")', { state: 'visible' })
@@ -279,7 +279,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Target Comic' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Source')
       await authenticatedPage.waitForSelector('button:has-text("Source Comic")', { state: 'visible' })
@@ -320,7 +320,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Dependent Series' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Required')
       await authenticatedPage.waitForSelector('button:has-text("Required Series")', { state: 'visible' })
@@ -356,7 +356,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Loading Target' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Loading')
       await authenticatedPage.waitForSelector('button:has-text("Loading Source")', { state: 'visible' })
@@ -393,7 +393,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Issue Target' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'Issue Source')
       await authenticatedPage.waitForSelector('button:has-text("Issue Source")', { state: 'visible' })
@@ -431,7 +431,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'No Issues Target' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'No Issues')
       await authenticatedPage.waitForSelector('button:has-text("No Issues Source")', { state: 'visible' })
@@ -469,7 +469,7 @@ test.describe('Dependencies', () => {
 
       const targetCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'All Read Target' }).first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
 
       await authenticatedPage.fill('input#search-prereq-thread', 'All Read')
       await authenticatedPage.waitForSelector('button:has-text("All Read Source")', { state: 'visible' })
@@ -479,6 +479,81 @@ test.describe('Dependencies', () => {
 
       // With 4 read issues and 1 unread, should auto-select issue #5 (the unread one)
       await expect.poll(async () => authenticatedPage.locator('#source-issue option:checked').textContent()).toBe('#5')
+    })
+
+  })
+
+  test.describe('Mobile dependency management', () => {
+    test('mobile dependency button opens modal at 375px viewport', async ({ authenticatedPage }) => {
+      // Set mobile viewport
+      await authenticatedPage.setViewportSize({ width: 375, height: 667 })
+
+      await createThread(authenticatedPage, {
+        title: 'Mobile Dep Test',
+        format: 'Comics',
+        issues_remaining: 3,
+        total_issues: 3,
+      })
+
+      await authenticatedPage.goto('/queue')
+      await expect(authenticatedPage.locator('#root')).toBeVisible()
+
+      // Mobile dependency button should be visible at 375px
+      const mobileButton = authenticatedPage.getByTestId('mobile-dependency-action').first()
+      await expect(mobileButton).toBeVisible()
+
+      // Click mobile dependency button
+      await mobileButton.click()
+
+      // Modal should be open
+      const modal = authenticatedPage.getByRole('dialog')
+      await expect(modal).toBeVisible()
+
+      // Modal should not have horizontal overflow
+      const modalBox = modal.locator('> div').first()
+      await expect.poll(async () => {
+        const scrollWidth = await modalBox.evaluate((el) => el.scrollWidth)
+        const clientWidth = await modalBox.evaluate((el) => el.clientWidth)
+        return scrollWidth <= clientWidth
+      }).toBe(true)
+
+      // Close modal
+      await authenticatedPage.click('button[aria-label="Close modal"]')
+      await expect(modal).not.toBeVisible()
+    })
+
+    test('FAB is not visible while dependency modal is open at 375px', async ({ authenticatedPage }) => {
+      await authenticatedPage.setViewportSize({ width: 375, height: 667 })
+
+      await createThread(authenticatedPage, {
+        title: 'FAB Test Thread',
+        format: 'Comics',
+        issues_remaining: 3,
+        total_issues: 3,
+      })
+
+      await authenticatedPage.goto('/queue')
+      await expect(authenticatedPage.locator('#root')).toBeVisible()
+
+      // FAB should be visible initially
+      const fab = authenticatedPage.getByRole('button', { name: 'Add Thread' })
+      await expect(fab).toBeVisible()
+
+      // Open dependency modal
+      const mobileButton = authenticatedPage.getByTestId('mobile-dependency-action').first()
+      await mobileButton.click()
+
+      // Modal should be open
+      await expect(authenticatedPage.getByRole('dialog')).toBeVisible()
+
+      // FAB should NOT be visible while modal is open
+      await expect(fab).not.toBeVisible()
+
+      // Close modal
+      await authenticatedPage.click('button[aria-label="Close modal"]')
+
+      // FAB should be visible again
+      await expect(fab).toBeVisible()
     })
   })
 })
