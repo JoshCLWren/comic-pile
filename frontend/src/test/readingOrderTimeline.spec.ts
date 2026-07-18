@@ -51,7 +51,7 @@ test.describe('Reading Order Timeline', () => {
     await expect(page.locator('#root')).toBeVisible();
     const targetCard = page.locator('#queue-container .glass-card').filter({ hasText: 'Target' }).first()
     await openThreadActions(targetCard)
-    await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+    await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
     await page.waitForSelector('button[data-testid="toggle-reading-order"]')
     await page.click('button[data-testid="toggle-reading-order"]')
     await page.waitForSelector('[role="tablist"]')

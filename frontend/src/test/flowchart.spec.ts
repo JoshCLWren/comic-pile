@@ -1008,7 +1008,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .filter({ hasText: 'Thread Beta' })
         .first()
       await openThreadActions(betaCard)
-      await betaCard.locator('button[aria-label="Manage dependencies"]').click()
+      await betaCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
       await openFlowchartView(authenticatedPage)
 
       // Should have all three thread nodes
