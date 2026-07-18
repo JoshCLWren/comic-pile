@@ -4,28 +4,31 @@ This document is the mandatory operating procedure for agents executing GitHub i
 
 ## Source of truth
 
-- The GitHub issue is the source of truth for the task scope, acceptance criteria, and implementation plan.
+- The GitHub issue is the source of truth for task scope and acceptance criteria.
+- When the kanban links a local plan file, that file is the source of truth for implementation details. GitHub contains a compact pointer to it.
 - `docs/ISSUE_KANBAN.md` is the source of truth for backlog priority, status, and dependencies.
 - `AGENTS.md` is mandatory. Its test, async PostgreSQL, lint, and no-suppression rules override convenience.
 
 ## Before changing code
 
-1. Read the complete GitHub issue, all comments, `AGENTS.md`, this protocol, and `docs/ISSUE_KANBAN.md`.
-2. If the issue is marked **Planning required**, do not edit application code. Obtain and post the required implementation plan first.
-3. Confirm every dependency listed on the issue and board is complete or explicitly marked non-blocking.
-4. Inspect the named files and existing tests before editing.
-5. Move the issue's row in `docs/ISSUE_KANBAN.md` from Ready/Planned/Queued to In progress. Do not claim work is in progress without making this edit.
-6. Do not broaden scope. If a discovered bug is required to complete the issue, add it to the issue and board before implementing it. If it is unrelated, leave it untouched and report it.
+1. Read the selected GitHub issue body, `AGENTS.md`, this protocol, and `docs/ISSUE_KANBAN.md`. Do not dump every GitHub comment into the model context.
+2. If the kanban row links a local plan file, read that file in bounded chunks and treat it as authoritative. Do not use `gh issue view --comments` for the full issue conversation.
+3. If the issue is marked **Planning required**, do not edit application code. Create the local plan file first.
+4. Confirm every dependency listed on the issue and board is complete or explicitly marked non-blocking.
+5. Inspect the named files and existing tests before editing.
+6. Move the issue's row in `docs/ISSUE_KANBAN.md` from Ready/Planned/Queued to In progress. Do not claim work is in progress without making this edit.
+7. Do not broaden scope. If a discovered bug is required to complete the issue, add it to the issue and board before implementing it. If it is unrelated, leave it untouched and report it.
 
 ## Planning gate
 
 For issues marked **Planning required** on the kanban:
 
-1. The planning agent must post a plan comment before implementation begins.
+1. The planning agent must create a local plan file at `docs/issue-plans/<issue-number>.md` before implementation begins.
 2. The plan must name files to inspect/change, explain the current data flow, identify likely failure or design risks, describe implementation steps, list regression tests, and provide exact local verification commands.
 3. The plan must explicitly state whether database migrations, API schema changes, authorization checks, or frontend/backend contract changes are required.
 4. The plan must include a rollback or containment strategy for risky schema or behavior changes.
-5. Only after the plan is posted and accepted may the issue move to its execution column and DeepSeek begin code changes.
+5. Add a compact GitHub comment pointing to the local plan file; do not paste a large duplicate plan into the issue thread.
+6. Only after the plan file exists and is linked from the kanban may the issue move to its execution column and DeepSeek begin code changes.
 
 ## While implementing
 

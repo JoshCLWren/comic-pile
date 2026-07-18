@@ -824,8 +824,8 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                {isLoadingSourceIssues || isLoadingTargetIssues ? (
                  <p className="text-xs text-stone-500">Loading issues…</p>
                ) : (
-                 <>
-                   <div>
+                 <div className="flex flex-col md:flex-row gap-2 min-w-0">
+                   <div className="min-w-0 w-full">
                      <label htmlFor="source-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                        Prerequisite issue
                      </label>
@@ -850,7 +850,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                        )}
                      </select>
                    </div>
-                   <div>
+                   <div className="min-w-0 w-full">
                      <label htmlFor="target-issue" className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
                        Target issue
                      </label>
@@ -875,7 +875,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                        )}
                      </select>
                    </div>
-                 </>
+                 </div>
                )}
              </div>
            )}
@@ -887,7 +887,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                   ? !selectedThread || selectedThreadNeedsMigration || !sourceIssueId || !targetIssueId || isSaving || isDuplicateDependency()
                   : !selectedThread || isSaving || isDuplicateDependency()
               }
-              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50"
+              className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50 whitespace-normal break-words text-left"
             >
                {isSaving
                  ? 'Adding dependency…'
@@ -910,7 +910,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           ) : (
             Array.from(groupByThread(dependencies.blocked_by, 'source_label')).map(([threadName, deps]) => (
               <div key={threadName} className="space-y-1">
-                <p className="text-xs font-bold text-stone-400 truncate">{threadName}</p>
+                <p className="text-xs font-bold text-stone-400 break-words min-w-0">{threadName}</p>
               {deps.map((dep) => {
                 const title = dep.is_issue_level && dep.source_label && dep.target_label
                   ? `${dep.source_label} → ${dep.target_label}`
@@ -946,7 +946,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           ) : (
             Array.from(groupByThread(dependencies.blocking, 'target_label')).map(([threadName, deps]) => (
               <div key={threadName} className="space-y-1">
-                <p className="text-xs font-bold text-stone-400 truncate">{threadName}</p>
+                <p className="text-xs font-bold text-stone-400 break-words min-w-0">{threadName}</p>
               {deps.map((dep) => {
                 const title = dep.is_issue_level && dep.source_label && dep.target_label
                   ? `${dep.source_label} → ${dep.target_label}`
