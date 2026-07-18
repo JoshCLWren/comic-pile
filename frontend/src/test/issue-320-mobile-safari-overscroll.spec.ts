@@ -2,12 +2,11 @@ import { test, expect } from './fixtures';
 
 test.describe('Issue #320: Mobile Safari Overscroll Prevention', () => {
   test('viewport meta tag includes viewport-fit=cover', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('meta[name="viewport"]', { state: 'attached' });
-
-    const contentAttribute = await page.$eval('meta[name="viewport"]', (meta) => meta.getAttribute('content'));
-
-    expect(contentAttribute).toContain('viewport-fit=cover');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+      'content',
+      /viewport-fit=cover/,
+    );
   });
 
   test('overscroll-prevention CSS is loaded in stylesheets', async ({ page }) => {

@@ -7,6 +7,7 @@ interface ModalProps {
   children: React.ReactNode
   'data-testid'?: string
   overlayClassName?: string
+  autoFocus?: boolean
 }
 
 // Module-level lock counter so nested/overlapping modals don't prematurely
@@ -22,8 +23,10 @@ export default function Modal({
   children,
   'data-testid': testId,
   overlayClassName,
+  autoFocus = true,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const onCloseRef = useRef(onClose)
 
@@ -74,14 +77,18 @@ export default function Modal({
     const firstInput = focusableArray.find(
       el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
     )
-    const targetElement = firstInput || firstElement
+    const targetElement = autoFocus
+      ? firstInput || firstElement
+      : closeButtonRef.current ||
+        focusableArray.find(el => !['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) ||
+        modal
     targetElement?.focus()
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       previousFocusRef.current?.focus()
     }
-  }, [isOpen])
+  }, [autoFocus, isOpen])
 
   // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
   // This app scrolls via #root, NOT <body> (see src/styles.css: html/body are
@@ -119,7 +126,8 @@ export default function Modal({
       <div
         ref={modalRef}
         data-testid={testId}
-        className="relative w-full max-w-lg modal-card max-h-[90vh] md:max-h-[85vh] flex flex-col rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
+        tabIndex={-1}
+        className="relative w-full max-w-lg h-[calc(100dvh-1rem)] md:h-auto modal-card max-h-[calc(100dvh-1rem)] md:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -128,8 +136,9 @@ export default function Modal({
           <div className="w-10 h-1 bg-white/20 rounded-full" />
         </div>
         <div className="flex items-start justify-between gap-2 md:gap-4 px-4 md:px-6 pt-2 md:pt-0 pb-3 md:pb-4 shrink-0">
-          <h2 id="modal-title" className="text-lg md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
+          <h2 id="modal-title" className="min-w-0 flex-1 text-base md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none"

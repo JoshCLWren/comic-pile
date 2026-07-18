@@ -616,7 +616,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
   }
 
   return (
-    <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose}>
+    <Modal isOpen={isOpen} title={`Dependencies: ${thread?.title || ''}`} onClose={onClose} autoFocus={false}>
       <div className="space-y-4">
       {/* Flowchart toggle */}
       {thread && (dependencies.blocking.length > 0 || dependencies.blocked_by.length > 0) && (
