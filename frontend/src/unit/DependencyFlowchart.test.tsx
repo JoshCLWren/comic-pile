@@ -1,0 +1,37 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it } from 'vitest'
+import DependencyFlowchart from '../components/DependencyFlowchart'
+
+const makeThread = (id: number) => ({ id, title: `Thread ${id} with a long title`, format: 'Comic', issues_remaining: 1, total_issues: 2, next_unread_issue_id: null, reading_progress: null, queue_position: id, status: 'active', is_blocked: id === 2, blocking_reasons: [], collection_id: null, created_at: 'now' })
+
+describe('DependencyFlowchart', () => {
+  it('renders empty state and interactive graph controls', () => {
+    const empty = render(<DependencyFlowchart threads={[]} dependencies={[]} blockedIds={new Set()} />)
+    expect(empty.getByTestId('flowchart-empty')).toBeInTheDocument()
+    empty.unmount()
+    const view = render(<DependencyFlowchart threads={[makeThread(1), makeThread(2)] as never} dependencies={[{ id: 'd', source_id: 1, target_id: 2, created_at: 'now', isBlocking: true } as never]} blockedIds={new Set([2])} issueNodes={[]} />)
+    const svg = view.getByTestId('flowchart-svg')
+    fireEvent.wheel(svg, { deltaY: -100, clientX: 10, clientY: 10 })
+    fireEvent.mouseDown(svg, { clientX: 10, clientY: 10 }); fireEvent.mouseMove(svg, { clientX: 20, clientY: 30 }); fireEvent.mouseUp(svg)
+    fireEvent.mouseEnter(view.getByTestId('flowchart-node-2'), { clientX: 20, clientY: 30 })
+    expect(view.getByTestId('flowchart-tooltip')).toHaveTextContent('blocked')
+    fireEvent.mouseLeave(view.getByTestId('flowchart-node-2'))
+    fireEvent.click(view.getByRole('button', { name: 'Zoom in' }))
+    fireEvent.click(view.getByRole('button', { name: 'Zoom out' }))
+    fireEvent.click(view.getByRole('button', { name: 'Reset view' }))
+    fireEvent.mouseDown(view.getByTestId('flowchart-node-1'), { clientX: 20, clientY: 20 })
+    fireEvent.mouseMove(svg, { clientX: 30, clientY: 35 }); fireEvent.mouseUp(svg)
+    expect(view.getByTestId('flowchart-edge-1-2')).toBeInTheDocument()
+  })
+
+  it('shows pagination for large graphs', () => {
+    const threads = Array.from({ length: 101 }, (_, index) => makeThread(index + 1))
+    render(<DependencyFlowchart threads={threads as never} dependencies={[]} blockedIds={new Set()} />)
+    expect(screen.getByTestId('flowchart-warning')).toBeInTheDocument()
+    expect(screen.getByText('1/3')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }))
+    expect(screen.getByText('2/3')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }))
+    expect(screen.getByText('1/3')).toBeInTheDocument()
+  })
+})

@@ -6,6 +6,7 @@ const apiMock = vi.hoisted(() => ({
   post: vi.fn(),
   put: vi.fn(),
   delete: vi.fn(),
+  patch: vi.fn(),
   interceptors: {
     request: { use: vi.fn() },
     response: { use: vi.fn() },
@@ -14,6 +15,7 @@ const apiMock = vi.hoisted(() => ({
 
 const { get, post, put } = apiMock
 const del = apiMock.delete
+const patch = apiMock.patch
 
 vi.mock('axios', () => ({
   default: {
@@ -21,7 +23,7 @@ vi.mock('axios', () => ({
   },
 }))
 
-import { clearAccessToken, dependenciesApi, queueApi, setAccessToken, threadsApi } from '../services/api'
+import { bugReportsApi, clearAccessToken, collectionsApi, dependenciesApi, migrationApi, queueApi, rateApi, rollApi, sessionApi, setAccessToken, snoozeApi, tasksApi, threadsApi, undoApi } from '../services/api'
 
 const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> }
@@ -35,10 +37,12 @@ beforeEach(() => {
   post.mockReset()
   put.mockReset()
   del.mockReset()
+  patch.mockReset()
   get.mockResolvedValue({})
   post.mockResolvedValue({})
   put.mockResolvedValue({})
   del.mockResolvedValue({})
+  patch.mockResolvedValue({})
   apiMock.request.mockReset()
   clearAccessToken()
   document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
@@ -101,6 +105,29 @@ it('calls dependency endpoints with expected paths', () => {
   expect(del).toHaveBeenCalledWith('/v1/dependencies/7')
 })
 
+it('calls every remaining API resource endpoint', async () => {
+  await threadsApi.list(undefined, 'next')
+  threadsApi.create({ title: 'T', format: 'Comic', issues_remaining: 1 })
+  threadsApi.update(1, { title: 'Updated' })
+  threadsApi.delete(1)
+  threadsApi.reactivate({ thread_id: 1, issues_to_add: 2 })
+  threadsApi.listStale()
+  threadsApi.listStale(7)
+  threadsApi.setPending(1)
+  rollApi.roll(); rollApi.override({ thread_id: 1 }); rollApi.dismissPending(); rollApi.reroll(); rollApi.setDie(6); rollApi.clearManualDie()
+  rateApi.rate({ thread_id: 1, rating: 4 })
+  await sessionApi.list({ status: 'complete' }, 'page')
+  sessionApi.get(1); sessionApi.getCurrent(); sessionApi.getDetails('2'); sessionApi.getSnapshots(2); sessionApi.restoreSessionStart(2)
+  undoApi.undo(1, 'snap'); undoApi.listSnapshots(1)
+  dependenciesApi.getIssueDependencies(2); dependenciesApi.getConnectedThreads(1); dependenciesApi.updateDependency(3, null)
+  tasksApi.getMetrics(); snoozeApi.snooze(); snoozeApi.unsnooze(2)
+  collectionsApi.list(); collectionsApi.get(1); collectionsApi.create({ name: 'C', position: 1 }); collectionsApi.update(1, { name: 'D' }); collectionsApi.delete(1); collectionsApi.moveThreadToCollection(2, null)
+  migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
+  bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
+  expect(get).toHaveBeenCalledWith('/v1/collections/')
+  expect(post).toHaveBeenCalledWith('/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
+})
+
 it('adds auth and csrf headers to mutating requests', async () => {
   setAccessToken('access-token')
   document.cookie = 'csrf_token=cookie-token; path=/'
@@ -129,4 +156,13 @@ it('bootstraps a csrf token before protected requests when the cookie is missing
 
   expect(get).toHaveBeenCalledWith('/auth/csrf', { skipAuthRedirect: true })
   expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
+})
+
+it('handles response success, network errors, validation errors, and auth errors', async () => {
+  const success = await (apiMock.interceptors.response.use.mock.calls[0][0] as (response: { data: unknown }) => unknown)({ data: { ok: true } })
+  expect(success).toEqual({ ok: true })
+  await expect(responseInterceptor({ config: { url: '/x' }, response: undefined } as never)).rejects.toThrow('Network error')
+  await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
+  await expect(responseInterceptor({ config: { url: '/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
+  await expect(responseInterceptor({ config: { url: '/x', _retry: true } as never, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
 })
