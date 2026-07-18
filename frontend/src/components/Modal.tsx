@@ -7,6 +7,7 @@ interface ModalProps {
   children: React.ReactNode
   'data-testid'?: string
   overlayClassName?: string
+  autoFocus?: boolean
 }
 
 // Module-level lock counter so nested/overlapping modals don't prematurely
@@ -22,6 +23,7 @@ export default function Modal({
   children,
   'data-testid': testId,
   overlayClassName,
+  autoFocus = true,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
@@ -74,14 +76,16 @@ export default function Modal({
     const firstInput = focusableArray.find(
       el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
     )
-    const targetElement = firstInput || firstElement
-    targetElement?.focus()
+    if (autoFocus) {
+      const targetElement = firstInput || firstElement
+      targetElement?.focus()
+    }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       previousFocusRef.current?.focus()
     }
-  }, [isOpen])
+  }, [autoFocus, isOpen])
 
   // Lock the #root scroller while a modal is open (fixes iOS scroll-bleed).
   // This app scrolls via #root, NOT <body> (see src/styles.css: html/body are

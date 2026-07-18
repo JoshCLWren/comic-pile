@@ -255,6 +255,18 @@ body {
   border-radius: 0.75rem;
 }
 
+/* Let an open actions menu paint above adjacent cards in the queue grid. */
+.queue-thread-card:has([aria-expanded="true"]) {
+  position: relative;
+  z-index: 50;
+}
+
+.queue-thread-swipeable:has([aria-expanded="true"]) {
+  overflow: visible;
+  position: relative;
+  z-index: 50;
+}
+
 .modal-card {
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: var(--glass-blur);
