@@ -68,6 +68,8 @@ export default function QueuePage() {
   const [issuePreview, setIssuePreview] = useState<number | null>(null)
   const [issueParseError, setIssueParseError] = useState<string | null>(null)
 
+  const isAnyModalOpen = isCreateOpen || isEditOpen || isReactivateOpen || isCollectionDialogOpen || isDependencyBuilderOpen || showMigrationDialog
+
   async function refreshBlockedState() {
     try {
       const blockedIds = await dependenciesApi.listBlockedThreadIds()
@@ -630,6 +632,7 @@ export default function QueuePage() {
       </header>
 
       {/* Mobile FAB for Add Thread */}
+      {!isAnyModalOpen && (
       <button
         type="button"
         onClick={openCreateModal}
@@ -638,6 +641,7 @@ export default function QueuePage() {
       >
         +
       </button>
+      )}
 
       {activeThreads.length === 0 ? (
         <div className="text-center text-stone-500">No active threads in queue</div>

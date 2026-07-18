@@ -51,6 +51,7 @@ This principle is enforced through:
 - [../TECH_DEBT.md](../TECH_DEBT.md) — Technical debt tracker with prioritized items and resolution history.
 - [ISSUE_KANBAN.md](ISSUE_KANBAN.md) — Repo-level kanban board for active GitHub issues, priorities, dependencies, and completion criteria.
 - [ISSUE_EXECUTION_PROTOCOL.md](ISSUE_EXECUTION_PROTOCOL.md) — Mandatory execution and kanban handoff procedure for coding agents.
+- [issue-plans/](issue-plans/) — Authoritative local implementation plans for complex issues.
 - [TYPESCRIPT_STRICTNESS_ROADMAP.md](TYPESCRIPT_STRICTNESS_ROADMAP.md) — Frontend TypeScript strict-mode rollout plan and staged enforcement.
 - [../AGENTS.md](../AGENTS.md) — AI agent guidelines and project conventions.
 
