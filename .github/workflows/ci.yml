@@ -127,6 +127,8 @@ jobs:
     container:
       image: ${{ needs.build.outputs.image-ref }}
     needs: build
+    permissions:
+      contents: read
     timeout-minutes: 10
     env:
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"

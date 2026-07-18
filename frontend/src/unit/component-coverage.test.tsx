@@ -71,11 +71,49 @@ describe('small and dialog components', () => {
     expect(onCancel).toHaveBeenCalled()
   })
 
+  it('covers front, between, before, after, and long-title slider contexts', () => {
+    const threads = [
+      { id: 1, title: 'Current', queue_position: 1 },
+      { id: 2, title: 'A title that is definitely longer than twenty characters', queue_position: 2 },
+      { id: 3, title: 'Third', queue_position: 3 },
+      { id: 4, title: 'Fourth', queue_position: 4 },
+    ]
+    render(<PositionSlider threads={threads} currentThread={threads[1]} onPositionSelect={vi.fn()} onCancel={vi.fn()} />)
+    const slider = screen.getByRole('slider')
+    fireEvent.change(slider, { target: { value: '0' } })
+    expect(screen.getByText('Move to front of queue')).toBeInTheDocument()
+    fireEvent.change(slider, { target: { value: '3' } })
+    expect(screen.getByText('Move to back of queue')).toBeInTheDocument()
+    fireEvent.change(slider, { target: { value: '2' } })
+    expect(screen.getByText(/Before|Between|After/)).toBeInTheDocument()
+  })
+
   it('renders reading timeline empty and populated states', () => {
     render(<ReadingOrderTimeline thread={null} dependencies={[]} />)
     expect(screen.getByText(/Select a thread/)).toBeInTheDocument()
     render(<ReadingOrderTimeline thread={{ ...thread, issues_remaining: 0, total_issues: null, next_unread_issue_number: null } as never} dependencies={[]} />)
     expect(screen.getByText('Completed')).toBeInTheDocument()
     expect(screen.getByText(/more precise/)).toBeInTheDocument()
+  })
+
+  it('renders gate and span timeline cards for blocked, satisfied, and dormant gates', () => {
+    const timelineThread = {
+      ...thread,
+      id: 1,
+      issues_remaining: 5,
+      total_issues: 12,
+      next_unread_issue_id: 101,
+      next_unread_issue_number: '2',
+    }
+    const dependencies = [
+      { id: 1, source_thread_id: 2, target_thread_id: null, source_issue_id: 1, target_issue_id: 101, source_label: 'Source #1', target_label: 'Target #2', target_issue_thread_id: 1, source_issue_thread_id: 2, is_issue_level: true, created_at: 'now' },
+      { id: 2, source_thread_id: 3, target_thread_id: null, source_issue_id: 2, target_issue_id: 104, source_label: 'Other #2', target_label: 'Target #5', target_issue_thread_id: 1, source_issue_thread_id: 3, is_issue_level: true, created_at: 'now' },
+    ]
+    render(<ReadingOrderTimeline thread={timelineThread as never} dependencies={dependencies as never} />)
+    expect(screen.getAllByText('Issue #2').length).toBeGreaterThan(0)
+    expect(screen.getByText('Blocked')).toBeInTheDocument()
+    expect(screen.getByText('Dormant')).toBeInTheDocument()
+    expect(screen.getByText('Issues 1–1')).toBeInTheDocument()
+    expect(screen.getByText('Issues 6–12')).toBeInTheDocument()
   })
 })

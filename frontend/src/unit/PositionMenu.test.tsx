@@ -109,7 +109,7 @@ describe('PositionMenu', () => {
 
     const menu = screen.getByRole('menu')
     expect(menu).toHaveStyle({ top: '104px' })
-    expect(menu).toHaveStyle({ right: `${window.innerWidth - 200}px` })
+    expect(menu).toHaveStyle({ right: '812px' })
 
     vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
       bottom: 160,
@@ -120,7 +120,32 @@ describe('PositionMenu', () => {
     })
 
     expect(menu).toHaveStyle({ top: '164px' })
-    expect(menu).toHaveStyle({ right: `${window.innerWidth - 300}px` })
+    expect(menu).toHaveStyle({ right: '724px' })
+  })
+
+  it('clamps the menu to the right edge and flips it above a low trigger', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      top: 700,
+      bottom: 740,
+      right: 1020,
+    } as DOMRect)
+    await user.click(trigger)
+
+    const menu = screen.getByRole('menu')
+    expect(menu).toHaveStyle({ top: '396px', right: '4px' })
   })
 
   it('shows Move to Front, Reposition, and Move to Back options', async () => {
