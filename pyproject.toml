@@ -67,7 +67,7 @@ addopts = [
     "--cov=comic_pile",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=0",
+    "--cov-fail-under=96",
 ]
 asyncio_mode = "auto"
 markers = [
@@ -76,6 +76,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["app", "comic_pile"]
+branch = true
 omit = [
     "*/tests/*",
     "*/test_*.py",

@@ -24,6 +24,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'json'],
       exclude: ['node_modules/', 'src/test/'],
+      thresholds: {
+        statements: 96,
+        branches: 96,
+        functions: 96,
+        lines: 96,
+      },
     },
   },
   resolve: {

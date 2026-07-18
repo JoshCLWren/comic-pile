@@ -1,54 +1,44 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import BugReportButton from '../components/BugReportButton'
 
-const collectDiagnosticsMock = vi.hoisted(() => vi.fn())
-const restoreLastViewMock = vi.hoisted(() => vi.fn())
+const collectDiagnostics = vi.fn(() => ({ route: '/queue' }))
+const restoreLastView = vi.fn()
 
-vi.mock('../hooks/useDiagnostics', () => ({
-  useDiagnostics: () => ({ collectDiagnostics: collectDiagnosticsMock }),
-}))
-
+vi.mock('../hooks/useDiagnostics', () => ({ useDiagnostics: () => ({ collectDiagnostics }) }))
 vi.mock('../contexts/useBugReportRestore', () => ({
-  useBugReportRestore: () => ({
-    setRestoreAction: vi.fn(),
-    clearRestoreAction: vi.fn(),
-    restoreLastView: restoreLastViewMock,
-  }),
+  useBugReportRestore: () => ({ restoreLastView }),
 }))
-
 vi.mock('../components/BugReportModal', () => ({
-  default: ({ isOpen, onSubmit }: { isOpen: boolean; onSubmit: (title: string, description: string) => Promise<void> }) =>
-    isOpen ? (
-      <div role="dialog" aria-label="Report a Bug">
-        <button type="button" onClick={() => onSubmit('Bug title', 'Bug description')}>
-          Submit Report
-        </button>
-      </div>
-    ) : null,
+  default: ({ isOpen, onClose, onSubmit, diagnosticData }: {
+    isOpen: boolean
+    onClose: () => void
+    onSubmit: (title: string, description: string) => Promise<void>
+    diagnosticData: unknown
+  }) => isOpen ? <div><span>{JSON.stringify(diagnosticData)}</span><button onClick={onClose}>Close report</button><button onClick={() => void onSubmit('Title', 'Description')}>Submit report</button></div> : null,
 }))
 
-describe('BugReportButton', () => {
-  beforeEach(() => {
-    collectDiagnosticsMock.mockReturnValue({ timestamp: '2024-01-01T00:00:00.000Z' })
-    restoreLastViewMock.mockReset()
-  })
+it('collects diagnostics, submits them, restores the view, and closes the dialog', async () => {
+  const user = userEvent.setup()
+  const onSubmit = vi.fn().mockResolvedValue(undefined)
+  render(<BugReportButton onSubmit={onSubmit} />)
 
-  it('opens the modal and submits with diagnostic data', async () => {
-    const user = userEvent.setup()
-    const onSubmit = vi.fn().mockResolvedValue(undefined)
+  await user.click(screen.getByRole('button', { name: 'Report a bug' }))
+  expect(screen.getByText('{"route":"/queue"}')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Submit report' }))
 
-    render(<BugReportButton onSubmit={onSubmit} />)
+  expect(onSubmit).toHaveBeenCalledWith('Title', 'Description', { route: '/queue' })
+  expect(restoreLastView).toHaveBeenCalledOnce()
+  expect(screen.queryByRole('button', { name: 'Submit report' })).not.toBeInTheDocument()
+})
 
-    await user.click(screen.getByRole('button', { name: /report a bug/i }))
-    await user.click(await screen.findByRole('button', { name: /submit report/i }))
+it('renders the navigation variant and closes without submitting', async () => {
+  const user = userEvent.setup()
+  render(<BugReportButton onSubmit={vi.fn()} variant="nav" />)
 
-    expect(onSubmit).toHaveBeenCalledWith(
-      'Bug title',
-      'Bug description',
-      { timestamp: '2024-01-01T00:00:00.000Z' },
-    )
-    expect(restoreLastViewMock).toHaveBeenCalledTimes(1)
-  })
+  expect(screen.getByText('Report')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Report a bug' }))
+  await user.click(screen.getByRole('button', { name: 'Close report' }))
+  expect(screen.queryByRole('button', { name: 'Submit report' })).not.toBeInTheDocument()
 })
