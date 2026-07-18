@@ -258,13 +258,18 @@ body {
 /* Let an open actions menu paint above adjacent cards in the queue grid. */
 .queue-thread-card:has([aria-expanded="true"]) {
   position: relative;
-  z-index: 50;
+  z-index: 100;
 }
 
 .queue-thread-swipeable:has([aria-expanded="true"]) {
-  overflow: visible;
+  overflow: visible !important;
   position: relative;
-  z-index: 50;
+  z-index: 100;
+}
+
+/* Keep the menu above neighboring virtualized grid rows in Safari. */
+.queue-thread-card:has([aria-expanded="true"]) [role="menu"] {
+  z-index: 200;
 }
 
 .modal-card {
