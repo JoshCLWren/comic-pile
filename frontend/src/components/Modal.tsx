@@ -77,7 +77,11 @@ export default function Modal({
     const firstInput = focusableArray.find(
       el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'
     )
-    const targetElement = autoFocus ? firstInput || firstElement : closeButtonRef.current
+    const targetElement = autoFocus
+      ? firstInput || firstElement
+      : closeButtonRef.current ||
+        focusableArray.find(el => !['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) ||
+        modal
     targetElement?.focus()
 
     return () => {
@@ -122,6 +126,7 @@ export default function Modal({
       <div
         ref={modalRef}
         data-testid={testId}
+        tabIndex={-1}
         className="relative w-full max-w-lg h-[calc(100dvh-1rem)] md:h-auto modal-card max-h-[calc(100dvh-1rem)] md:max-h-[85vh] flex flex-col overflow-hidden rounded-t-2xl md:rounded-lg animate-slide-up md:animate-fade-in pb-[env(safe-area-inset-bottom)]"
         role="dialog"
         aria-modal="true"
