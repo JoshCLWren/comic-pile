@@ -55,7 +55,7 @@ RUN npm install -g pnpm@10.15.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY frontend/package.json frontend/
 RUN pnpm install --frozen-lockfile && \
-    pnpm --filter frontend exec playwright install --with-deps chromium firefox
+    pnpm --filter frontend exec playwright install --with-deps chromium firefox webkit
 
 # Stage 6: Frontend build.
 FROM frontend-deps AS frontend-build

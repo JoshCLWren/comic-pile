@@ -371,7 +371,7 @@ jobs:
         run: pytest tests_e2e/test_dice_ladder_e2e.py --no-cov -v
 
   test-e2e-playwright:
-    name: E2E Playwright Tests (Shard ${{ matrix.shardIndex }}/${{ matrix.totalShards }})
+    name: E2E Playwright Tests (${{ matrix.browser }}, shard ${{ matrix.shardIndex }}/${{ matrix.totalShards }})
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref }}
@@ -383,10 +383,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        browser: [firefox, webkit, chromium]
         shardIndex: [1, 2, 3, 4, 5, 6]
         totalShards: [6]
     env:
       CI: true
+      # Firefox refuses to launch when Actions' mounted HOME is not owned by
+      # the container user. Playwright browsers are installed under /root.
+      HOME: /root
       TEST_ENVIRONMENT: "true"
       SECRET_KEY: test-secret-key-for-testing-only
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
@@ -467,7 +471,7 @@ jobs:
           exit 1
 
       - name: Run Playwright tests
-        run: cd frontend && REUSE_EXISTING_SERVER=true BASE_URL=http://localhost:9000 pnpm exec playwright test --project=chromium --shard=${{ matrix.shardIndex }}/${{ matrix.totalShards }}
+        run: cd frontend && REUSE_EXISTING_SERVER=true BASE_URL=http://localhost:9000 pnpm exec playwright test --project=${{ matrix.browser }} --shard=${{ matrix.shardIndex }}/${{ matrix.totalShards }}
 
   check-all-jobs:
     name: CI Summary

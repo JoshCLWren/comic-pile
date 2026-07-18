@@ -59,6 +59,26 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     await expect(firstRowItems).toHaveCount(1);
   });
 
+  test('keeps an open thread action menu above the following virtual row', async ({ authenticatedWithLargeQueuePage }) => {
+    const page = authenticatedWithLargeQueuePage;
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/queue', { waitUntil: 'domcontentloaded' });
+    await waitForQueueReady(page);
+
+    const firstCard = page.locator('[data-index="0"] [data-testid="queue-thread-item"]').first();
+    await firstCard.getByLabel('Thread actions').click();
+
+    const menu = firstCard.getByRole('menu', { name: 'Thread actions' });
+    await expect(menu).toBeVisible();
+
+    const menuBox = await menu.boundingBox();
+    if (!menuBox) {
+      throw new Error('Expected the thread actions menu to have a bounding box.');
+    }
+    await menu.hover({ position: { x: 16, y: menuBox.height - 16 } });
+  });
+
   test('scroll reveals more virtualized items', async ({ authenticatedWithLargeQueuePage }) => {
     const page = authenticatedWithLargeQueuePage;
 

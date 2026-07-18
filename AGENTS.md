@@ -53,7 +53,7 @@ CI is not a debugging tool. Every failed CI run wastes compute, blocks the pipel
 1. Run `cd frontend && pnpm run lint && pnpm run typecheck` - must be clean
 2. Run `cd frontend && pnpm run build` - must succeed
 3. Run `cd frontend && pnpm test` (vitest) - all must pass
-4. Run `cd frontend && pnpm run build && REUSE_EXISTING_SERVER=true npx playwright test --project=chromium` - all E2E must pass (requires backend running on port 9000)
+4. Run `cd frontend && pnpm run build && REUSE_EXISTING_SERVER=true npx playwright test` - all E2E must pass in Firefox, WebKit, and Chromium (requires backend running on port 9000). Firefox is the primary desktop acceptance browser and WebKit covers the mobile Safari rendering path.
 5. Only after ALL of the above are green, you may push
 
 **If E2E tests need a backend:** Start one locally with `.venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000` and set `REUSE_EXISTING_SERVER=true`. Do not push to trigger CI to run them for you.
