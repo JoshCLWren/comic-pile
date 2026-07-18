@@ -67,6 +67,10 @@ export default function IssueCorrectionDialog({
       const loadedIssues = await loadAllIssues()
 
       setAllIssues(loadedIssues)
+      if (!currentIssueNumber) {
+        const firstUnreadIssue = loadedIssues.find((issue) => issue.status !== 'read')
+        setSelectedIssueNumber(firstUnreadIssue?.issue_number ?? loadedIssues[0]?.issue_number ?? '')
+      }
       setHasLoadedOnce(true)
     } catch (err) {
       console.error('Failed to load issues:', err)
@@ -78,7 +82,7 @@ export default function IssueCorrectionDialog({
     } finally {
       setIsLoadingIssues(false)
     }
-  }, [loadAllIssues])
+  }, [currentIssueNumber, loadAllIssues])
 
   useEffect(() => {
     if (isOpen) {

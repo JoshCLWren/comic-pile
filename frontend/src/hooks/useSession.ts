@@ -32,7 +32,12 @@ export function useSession() {
       const currentSessionId = result.id;
       const currentUserId = result.user_id ?? "anonymous";
       const storageKey = `${STORAGE_KEY_PREFIX}_${currentUserId}`;
-      const storedSessionId = localStorage.getItem(storageKey);
+      let storedSessionId: string | null = null;
+      try {
+        storedSessionId = localStorage.getItem(storageKey);
+      } catch {
+        // Session loading should still succeed when browser storage is unavailable.
+      }
       let previousSessionId: number | null = null;
       if (storedSessionId) {
         const parsed = parseInt(storedSessionId, 10);
@@ -48,7 +53,11 @@ export function useSession() {
         lastNotifiedSessionIdRef.current = currentSessionId;
       }
 
-      localStorage.setItem(storageKey, currentSessionId.toString());
+      try {
+        localStorage.setItem(storageKey, currentSessionId.toString());
+      } catch {
+        // Persisting the session ID is best effort and must not hide the API result.
+      }
       setData(result);
       return result;
     } catch (err: unknown) {
