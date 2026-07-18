@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const apiMock = vi.hoisted(() => ({
+  request: vi.fn(),
   get: vi.fn(),
   post: vi.fn(),
   put: vi.fn(),
@@ -25,6 +26,9 @@ import { clearAccessToken, dependenciesApi, queueApi, setAccessToken, threadsApi
 const requestInterceptor = apiMock.interceptors.request.use.mock.calls[0][0] as (
   config: { method?: string; url?: string; headers?: Record<string, string> }
 ) => Promise<{ method?: string; url?: string; headers?: Record<string, string> }>
+const responseInterceptor = apiMock.interceptors.response.use.mock.calls[0][1] as (
+  error: { config: { url: string; headers?: Record<string, string> }; response: { status: number } },
+) => Promise<unknown>
 
 beforeEach(() => {
   get.mockReset()
@@ -35,8 +39,25 @@ beforeEach(() => {
   post.mockResolvedValue({})
   put.mockResolvedValue({})
   del.mockResolvedValue({})
+  apiMock.request.mockReset()
   clearAccessToken()
   document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+})
+
+it('refreshes and retries a request after an expired access token', async () => {
+  post.mockResolvedValue({ access_token: 'refreshed-token' })
+  apiMock.request.mockResolvedValue({ refreshed: true })
+
+  const originalRequest = { url: '/v1/threads/42/reading-orders', headers: {} }
+  const result = await responseInterceptor({ config: originalRequest, response: { status: 401 } })
+
+  expect(post).toHaveBeenCalledWith('/auth/refresh')
+  expect(apiMock.request).toHaveBeenCalledWith({
+    ...originalRequest,
+    _retry: true,
+    headers: { Authorization: 'Bearer refreshed-token' },
+  })
+  expect(result).toEqual({ refreshed: true })
 })
 
 it('calls thread endpoints with expected paths', () => {

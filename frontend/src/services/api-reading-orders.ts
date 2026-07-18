@@ -1,3 +1,5 @@
+import api from './api'
+
 export interface ReadingOrderItem {
   thread_id: number
   thread_title: string
@@ -19,22 +21,8 @@ export interface ThreadReadingOrdersResponse {
   reading_orders: ReadingOrder[]
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem('auth_token') || (window as any).__COMIC_PILE_ACCESS_TOKEN
-  if (token) {
-    return { 'Authorization': `Bearer ${token}` }
-  }
-  return {}
-}
-
 export const readingOrdersApi = {
   getForThread: async (threadId: number): Promise<ThreadReadingOrdersResponse> => {
-    const response = await fetch(`/api/v1/threads/${threadId}/reading-orders`, {
-      headers: getAuthHeaders(),
-    })
-    if (!response.ok) {
-      throw new Error(`Failed to fetch reading orders: ${response.status}`)
-    }
-    return response.json()
+    return api.get<ThreadReadingOrdersResponse>(`/v1/threads/${threadId}/reading-orders`)
   }
 }
