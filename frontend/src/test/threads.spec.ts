@@ -4,6 +4,7 @@ import {createThread,
   SELECTORS,
   waitForEditThreadModal,
   waitForThreadInQueue,
+  clickThreadAction,
   openThreadActions,
 } from './helpers';
 
@@ -114,8 +115,7 @@ test.describe('Thread Management', () => {
     await gotoQueue(authenticatedPage);
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').first();
-    await openThreadActions(threadItem)
-    await threadItem.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(threadItem, 'Edit thread')
     await waitForEditThreadModal(authenticatedPage);
 
     await authenticatedPage.fill('label:has-text("Title") + input', 'Updated Title');
@@ -144,13 +144,13 @@ test.describe('Thread Management', () => {
 
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'To Be Deleted' });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
-    await openThreadActions(threadItem)
+    const menu = await openThreadActions(threadItem)
     await Promise.all([
       authenticatedPage.waitForResponse((response) =>
         response.url().includes('/api/threads/') &&
         response.request().method() === 'DELETE'
       ),
-      threadItem.locator('button[aria-label="Delete thread"]').click(),
+      menu.getByRole('menuitem', { name: 'Delete thread' }).click(),
     ]);
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
     await expect(authenticatedPage.getByRole('heading', { name: 'Read Queue' })).toBeVisible();

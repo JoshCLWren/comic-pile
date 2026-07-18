@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildReadingOrderTimelineEntries } from '../utils/readingOrderTimeline'
+import { buildReadingOrderTimelineEntries, extractIssueNumber, issueStringToNumber } from '../utils/readingOrderTimeline'
 import type { Dependency, Thread } from '../types'
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
@@ -39,6 +39,15 @@ function makeDependency(overrides: Partial<Dependency>): Dependency {
 }
 
 describe('buildReadingOrderTimelineEntries', () => {
+  it('parses issue labels and numeric fallbacks', () => {
+    expect(extractIssueNumber(null)).toBeNull()
+    expect(extractIssueNumber('Annual')).toBeNull()
+    expect(extractIssueNumber('Series # 12')).toBe('12')
+    expect(extractIssueNumber('Series #')).toBeNull()
+    expect(issueStringToNumber(undefined)).toBeNull()
+    expect(issueStringToNumber('Annual 1.5')).toBe(1.5)
+    expect(issueStringToNumber('Annual')).toBeNull()
+  })
   it('creates spans and gates with correct statuses', () => {
     const thread = makeThread({ total_issues: 30, next_unread_issue_number: '10', next_unread_issue_id: 1010 })
     const dependencies: Dependency[] = [
