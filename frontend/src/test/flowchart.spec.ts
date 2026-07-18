@@ -902,7 +902,7 @@ test('flowchart shows blocked nodes with lock icon', async ({ authenticatedPage 
         .filter({ hasText: 'Edge Target' })
         .first()
       await openThreadActions(targetCard)
-      await targetCard.locator('button[aria-label="Manage dependencies"]').click()
+      await targetCard.locator('button[role="menuitem"][aria-label="Manage dependencies"]').click()
       await openFlowchartView(authenticatedPage)
 
       // Check that issue-level edge has the dashed cyan class
