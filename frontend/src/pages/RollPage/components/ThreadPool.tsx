@@ -49,7 +49,7 @@ export function ThreadPool({
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   return (
-    <div className={`px-3 md:px-4 pb-3 md:pb-4 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
+    <div className={`px-3 md:px-4 pb-20 md:pb-28 flex flex-col ${!isRatingView ? 'flex-1 min-h-[300px]' : 'border-t border-white/5 pt-4 md:pt-8'}`}>
       {!isRolling && rolledResult === null && !isRatingView && pool.length > 0 && (
         <p
           id="tap-instruction"
