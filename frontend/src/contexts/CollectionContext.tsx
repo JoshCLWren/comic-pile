@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode, useRef } from 'react'
-import { collectionsEnabled } from '../config/featureFlags'
 import { collectionsApi } from '../services/api'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 
@@ -31,7 +30,7 @@ interface CollectionProviderProps {
   children: ReactNode
 }
 
-const EnabledCollectionProvider = ({ children }: CollectionProviderProps) => {
+export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   const [collections, setCollections] = useState<Collection[]>([])
   const [activeCollectionId, setActiveCollectionIdState] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -158,31 +157,6 @@ const EnabledCollectionProvider = ({ children }: CollectionProviderProps) => {
       {children}
     </CollectionContext.Provider>
   )
-}
-
-export const CollectionProvider = ({ children }: CollectionProviderProps) => {
-  if (!collectionsEnabled) {
-    return (
-      <CollectionContext.Provider
-        value={{
-          collections: [],
-          activeCollectionId: null,
-          setActiveCollectionId: () => {},
-          createCollection: async () => {},
-          updateCollection: async () => {},
-          deleteCollection: async () => {},
-          moveCollection: async () => {},
-          isLoading: false,
-          error: null,
-          retry: () => {},
-        }}
-      >
-        {children}
-      </CollectionContext.Provider>
-    )
-  }
-
-  return <EnabledCollectionProvider>{children}</EnabledCollectionProvider>
 }
 
 export const useCollections = () => {

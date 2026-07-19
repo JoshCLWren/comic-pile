@@ -16,7 +16,6 @@ vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
 vi.mock('../services/api', () => ({ threadsApi: { setPending: vi.fn() }, dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { create: vi.fn(), markRead: vi.fn(), migrateThread: vi.fn() } }))
-vi.mock('../config/featureFlags', () => ({ collectionsEnabled: true }))
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: () => ({
   collections: [], activeCollectionId: null, setActiveCollectionId: vi.fn(), isLoading: false, error: null,
   createCollection: vi.fn(), updateCollection: vi.fn(), deleteCollection: vi.fn(), moveCollection: vi.fn(),

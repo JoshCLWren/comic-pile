@@ -40,8 +40,7 @@ export default function Modal({
 
     previousFocusRef.current = document.activeElement as HTMLElement
 
-    const modal = modalRef.current
-    if (!modal) return
+    const modal = modalRef.current!
 
     const focusableElements = modal.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -79,9 +78,7 @@ export default function Modal({
     )
     const targetElement = autoFocus
       ? firstInput || firstElement
-      : closeButtonRef.current ||
-        focusableArray.find(el => !['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) ||
-        modal
+      : closeButtonRef.current
     targetElement?.focus()
 
     return () => {

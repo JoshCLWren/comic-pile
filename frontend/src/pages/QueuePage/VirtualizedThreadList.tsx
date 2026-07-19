@@ -93,8 +93,7 @@ export default function VirtualizedThreadList<T>({
   // Reactive container height and column count via ResizeObserver,
   // throttled with requestAnimationFrame to prevent layout thrashing.
   useEffect(() => {
-    const wrapper = wrapperRef.current
-    if (!wrapper) return
+    const wrapper = wrapperRef.current!
 
     let rafId: number | null = null
 
@@ -150,8 +149,7 @@ export default function VirtualizedThreadList<T>({
 
   const handleContainerDragOver = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
-      const container = scrollRef.current
-      if (!container) return
+      const container = scrollRef.current!
 
       const now = performance.now()
       // Throttle to avoid flooding scrollToIndex with 60+ calls per second.

@@ -1,5 +1,4 @@
 import { useCollections } from '../contexts/CollectionContext'
-import { collectionsEnabled } from '../config/featureFlags'
 
 /**
  * Props for the CollectionToolbar component.
@@ -20,10 +19,6 @@ interface CollectionToolbarProps {
  */
 export default function CollectionToolbar({ showNewLabel = true, className = '', onNewCollection }: CollectionToolbarProps) {
   const { collections, activeCollectionId, setActiveCollectionId, isLoading, error } = useCollections()
-
-  if (!collectionsEnabled) {
-    return null
-  }
 
   const handleCollectionChange = (collectionId: number | null) => {
     setActiveCollectionId(collectionId)

@@ -9,7 +9,6 @@ import MigrationDialog from '../components/MigrationDialog'
 
 const issuesApi = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), move: vi.fn(), markRead: vi.fn(), markUnread: vi.fn() }))
 vi.mock('../services/api-issues', () => ({ issuesApi }))
-vi.mock('../config/featureFlags', () => ({ collectionsEnabled: true }))
 const collection = vi.hoisted(() => ({ createCollection: vi.fn().mockResolvedValue(undefined), updateCollection: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: () => collection }))
 const showToast = vi.hoisted(() => vi.fn())

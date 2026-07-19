@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const collectionsApi = vi.hoisted(() => ({
   list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(),
 }))
-vi.mock('../config/featureFlags', () => ({ collectionsEnabled: true }))
 vi.mock('../services/api', () => ({ collectionsApi }))
 
 import { CollectionProvider, useCollections } from '../contexts/CollectionContext'
@@ -130,4 +129,8 @@ describe('enabled collection provider', () => {
     await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('Failed to load collections'))
   })
 
+})
+
+it('rejects consumers outside the provider', () => {
+  expect(() => render(<Consumer />)).toThrow('useCollections must be used within a CollectionProvider')
 })

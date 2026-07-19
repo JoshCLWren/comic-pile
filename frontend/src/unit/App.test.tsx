@@ -122,6 +122,17 @@ test('ignores an auth response that arrives after the provider unmounts', async 
   await act(async () => resolveAuth({ username: 'late-user' }))
 })
 
+test('ignores an auth failure that arrives after the provider unmounts', async () => {
+  let rejectAuth!: (reason?: unknown) => void
+  mockApiGet.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectAuth = reject }))
+  const view = renderWithAuth('/')
+  view.unmount()
+  await act(async () => {
+    rejectAuth(new Error('late auth failure'))
+    await Promise.resolve()
+  })
+})
+
 test('loads each authenticated lazy route', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
   const routes = {
