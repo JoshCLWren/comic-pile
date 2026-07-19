@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi, beforeAll, beforeEach } from 'vitest'
 import { getColumnCount, getRowThreads } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
@@ -20,6 +20,7 @@ const mockGetVirtualItems = vi.fn()
 const mockGetTotalSize = vi.fn(() => 0)
 const mockMeasureElement = vi.fn()
 const mockScrollToIndex = vi.fn()
+let resizeCallback: ((entries: Array<{ contentRect: { height: number; width: number } }>) => void) | undefined
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: () => ({
@@ -61,13 +62,26 @@ beforeAll(() => {
   // Stub ResizeObserver (needed for the component's own ResizeObserver)
   vi.stubGlobal(
     'ResizeObserver',
-    vi.fn(function (this: any) {
+    vi.fn(function (this: any, callback: (entries: Array<{ contentRect: { height: number; width: number } }>) => void) {
+      resizeCallback = callback
       this.observe = vi.fn()
       this.unobserve = vi.fn()
       this.disconnect = vi.fn()
       return this
     }) as unknown as typeof ResizeObserver,
   )
+})
+
+it('reacts to resize measurements and auto-scrolls at both container edges', () => {
+  const threads = createMockThreads(60)
+  render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} />)
+  act(() => resizeCallback?.([{ contentRect: { height: 500, width: 1000 } }]))
+  const container = screen.getByLabelText('Thread queue')
+  Object.defineProperty(container, 'getBoundingClientRect', { value: () => ({ top: 0, height: 100 }) })
+  vi.spyOn(performance, 'now').mockReturnValueOnce(100).mockReturnValueOnce(200)
+  fireEvent.dragOver(container, { clientY: 1 })
+  fireEvent.dragOver(container, { clientY: 99 })
+  expect(mockScrollToIndex).toHaveBeenCalled()
 })
 
 beforeAll(() => {
@@ -123,6 +137,7 @@ it('preserves container selectors for E2E compatibility', () => {
   expect(container.querySelector('#queue-container')).toBeInTheDocument()
   expect(screen.getByRole('list')).toBeInTheDocument()
   expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
+  fireEvent.drop(screen.getByLabelText('Thread queue'))
 })
 
 it('renders the total-size spacer div', () => {

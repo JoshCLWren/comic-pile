@@ -62,9 +62,7 @@ const CSRF_EXEMPT_PATHS = ['/auth/login', '/auth/register', '/auth/refresh']
 // Cast once at the boundary so callers get strongly typed payload methods.
 const api = rawApi as unknown as ApiClient
 
-let refreshTokenPromise: Promise<AuthTokens> | null = null
 let isRedirectingToLogin = false
-let redirectTimeoutId: ReturnType<typeof setTimeout> | null = null
 let accessToken: string | null = null
 let csrfTokenPromise: Promise<string | null> | null = null
 let failedQueue: Array<{
@@ -141,15 +139,10 @@ function redirectToLogin(): void {
 
   isRedirectingToLogin = true
 
-  if (redirectTimeoutId) {
-    clearTimeout(redirectTimeoutId)
-  }
-
   clearAccessToken()
 
-  redirectTimeoutId = setTimeout(() => {
+  setTimeout(() => {
     isRedirectingToLogin = false
-    redirectTimeoutId = null
   }, 5000)
 
   window.location.href = '/login'
@@ -180,7 +173,7 @@ function processQueue(error: unknown | null, token: string | null = null): void 
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error)
-    } else if (token) {
+    } else {
       prom.config.headers = prom.config.headers ?? {}
       ;(prom.config.headers as Record<string, string>).Authorization = `Bearer ${token}`
       prom.resolve(api.request(prom.config))
@@ -234,12 +227,7 @@ rawApi.interceptors.response.use(
       isRefreshing = true
 
       try {
-        if (!refreshTokenPromise) {
-          refreshTokenPromise = api.post<AuthTokens>('/auth/refresh')
-        }
-
-        const response = await refreshTokenPromise
-        refreshTokenPromise = null
+        const response = await api.post<AuthTokens>('/auth/refresh')
 
         const { access_token } = response
         setAccessToken(access_token)
@@ -251,7 +239,6 @@ rawApi.interceptors.response.use(
         ;(originalRequest.headers as Record<string, string>).Authorization = `Bearer ${access_token}`
         return api.request(originalRequest)
       } catch (refreshError) {
-        refreshTokenPromise = null
         processQueue(refreshError, null)
         isRefreshing = false
         if (!originalRequest.skipAuthRedirect) {

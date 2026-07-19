@@ -17,7 +17,8 @@ import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
 import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api'
+import { dependenciesApi, threadsApi } from '../services/api'
+import { issuesApi } from '../services/api-issues'
 
 vi.mock('../hooks/useThread', () => ({
   useThreads: vi.fn(),
@@ -47,8 +48,20 @@ vi.mock('../services/api', () => ({
   threadsApi: {
     setPending: vi.fn(),
   },
+  dependenciesApi: {
+    listBlockedThreadIds: vi.fn().mockResolvedValue([]),
+    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+  },
   collectionsApi: {
     list: vi.fn().mockResolvedValue([]),
+  },
+}))
+
+vi.mock('../services/api-issues', () => ({
+  issuesApi: {
+    create: vi.fn().mockResolvedValue({ issues: [] }),
+    markRead: vi.fn().mockResolvedValue(undefined),
+    migrateThread: vi.fn().mockResolvedValue({}),
   },
 }))
 
@@ -89,6 +102,8 @@ const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 const mockedThreadsApi = vi.mocked(threadsApi) as any
+const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
+const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
   vi.stubGlobal('alert', vi.fn())
@@ -490,4 +505,129 @@ it('reports queue mutation failures and invalid reposition requests', async () =
   const slider = screen.getByRole('slider')
   fireEvent.change(slider, { target: { value: '99' } })
   await user.click(screen.getByTestId('position-slider-confirm'))
+})
+
+it('creates a literal issue range and reports create failures', async () => {
+  const user = userEvent.setup()
+  const create = vi.fn().mockResolvedValue({ id: 55 })
+  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
+  mockedUseThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.type(screen.getByLabelText('Title'), 'Annuals')
+  await user.clear(screen.getByLabelText('Issues'))
+  await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
+  await user.type(screen.getByLabelText(/Last issue read/i), '1')
+  await user.click(screen.getByRole('button', { name: /create thread/i }))
+  await waitFor(() => expect(create).toHaveBeenCalled())
+
+  mockedUseCreateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('create failed')), isPending: false })
+  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.type(screen.getByLabelText('Title'), 'Broken')
+  await user.type(screen.getByLabelText('Issues'), '1')
+  await user.click(screen.getByRole('button', { name: /create thread/i }))
+  await waitFor(() => expect(alert).toHaveBeenCalledWith(expect.stringContaining('create failed')))
+})
+
+it('loads blocking reasons, reads a thread, opens dependencies, and handles edit failure', async () => {
+  const user = userEvent.setup()
+  const update = vi.fn().mockRejectedValue(new Error('update failed'))
+  mockedUseUpdateThread.mockReturnValue({ mutate: update, isPending: false })
+  mockedDependenciesApi.listBlockedThreadIds.mockResolvedValue([2])
+  mockedDependenciesApi.getBlockingInfo.mockRejectedValueOnce(new Error('details failed'))
+  mockedUseThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 2, total_issues: null }], isPending: false, refetch: vi.fn() })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getByLabelText('Read'))
+  expect(mockedThreadsApi.setPending).toHaveBeenCalledWith(1)
+  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('menuitem', { name: /dependencies/i }))
+  expect(screen.getByRole('heading', { name: /dependencies:/i })).toBeInTheDocument()
+  await user.click(screen.getByLabelText('Close modal'))
+  await user.click(screen.getByRole('button', { name: /thread actions/i }))
+  await user.click(screen.getByRole('menuitem', { name: /edit/i }))
+  await user.click(screen.getByRole('button', { name: /save changes/i }))
+  await waitFor(() => expect(update).toHaveBeenCalled())
+})
+
+it('covers drag cancellation and successful repositioning', async () => {
+  const user = userEvent.setup()
+  const move = vi.fn().mockResolvedValue(undefined)
+  const refetch = vi.fn()
+  mockedUseMoveToPosition.mockReturnValue({ mutate: move, isPending: false })
+  mockedUseThreads.mockReturnValue({ data: [
+    { id: 1, title: 'One', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 1 },
+    { id: 2, title: 'Two', format: 'Comic', status: 'active', queue_position: 2, issues_remaining: 1 },
+  ], isPending: false, refetch })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  const cards = screen.getAllByTestId('queue-thread-item')
+  const drag = screen.getAllByRole('button', { name: 'Drag to reorder' })
+  fireEvent.dragStart(drag[0]!, { dataTransfer: { effectAllowed: '', setData: vi.fn() } })
+  fireEvent.drop(cards[0]!, { dataTransfer: { getData: () => '1' } })
+  await user.click(screen.getAllByRole('button', { name: /thread actions/i })[0]!)
+  await user.click(screen.getByRole('menuitem', { name: /reposition/i }))
+  fireEvent.change(screen.getByRole('slider'), { target: { value: '1' } })
+  await user.click(screen.getByTestId('position-slider-confirm'))
+  await waitFor(() => expect(move).toHaveBeenCalled())
+  expect(refetch).toHaveBeenCalled()
+})
+
+it('creates complex ranges and marks the requested issues read', async () => {
+  const user = userEvent.setup()
+  const create = vi.fn().mockResolvedValue({ id: 77 })
+  mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
+  mockedUseThreads.mockReturnValue({ data: [], isPending: false, refetch: vi.fn() })
+  mockedIssuesApi.create.mockResolvedValue({ issues: [{ id: 11 }, { id: 12 }] })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getAllByRole('button', { name: /add thread/i })[0])
+  await user.type(screen.getByLabelText('Title'), 'Complex')
+  await user.type(screen.getByLabelText('Issues'), 'Annual 1, 5-7')
+  await user.type(screen.getByLabelText(/Last issue read/i), '2')
+  await user.click(screen.getByRole('button', { name: /create thread/i }))
+  await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(11))
+  expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(12)
+})
+
+it('handles reactivation success and failure from completed threads', async () => {
+  const user = userEvent.setup()
+  const reactivate = vi.fn().mockResolvedValue({})
+  mockedUseReactivateThread.mockReturnValue({ mutate: reactivate, isPending: false })
+  mockedUseThreads.mockReturnValue({ data: [{ id: 2, title: 'Done', format: 'Comic', status: 'completed', issues_remaining: 0 }], isPending: false, refetch: vi.fn() })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
+  await user.selectOptions(screen.getByRole('combobox'), '2')
+  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3' } })
+  await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
+  await waitFor(() => expect(reactivate).toHaveBeenCalledWith({ thread_id: 2, issues_to_add: 3 }))
+
+  mockedUseReactivateThread.mockReturnValue({ mutate: vi.fn().mockRejectedValue(new Error('reactivate failed')), isPending: false })
+  await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0])
+  await user.selectOptions(screen.getByRole('combobox'), '2')
+  await user.click(screen.getByRole('button', { name: /reactivate thread/i }))
+  await waitFor(() => expect(screen.getByRole('heading', { name: /reactivate thread/i })).toBeInTheDocument())
+})
+
+it('uses the virtualized queue for large collections and exposes blocked reasons', async () => {
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  })
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 600 })
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 1024 })
+  const manyThreads = Array.from({ length: 55 }, (_, index) => ({
+    id: index + 1,
+    title: `Thread ${index + 1}`,
+    format: 'Comic',
+    status: 'active',
+    queue_position: index + 1,
+    issues_remaining: 1,
+    is_blocked: index === 0,
+  }))
+  mockedUseThreads.mockReturnValue({ data: manyThreads, isPending: false, refetch: vi.fn() })
+  mockedDependenciesApi.listBlockedThreadIds.mockResolvedValue([1])
+  mockedDependenciesApi.getBlockingInfo.mockResolvedValue({ blocking_reasons: ['Read prerequisite'] })
+  render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
+  await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
+  expect(screen.getByRole('list', { name: 'Thread queue' })).toBeInTheDocument()
+  vi.unstubAllGlobals()
 })

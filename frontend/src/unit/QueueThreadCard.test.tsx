@@ -195,6 +195,7 @@ describe('QueueThreadCard', () => {
     fireEvent.keyDown(threadCard, { key: ' ' })
     expect(callbacks.onCardClick).toHaveBeenCalledTimes(2)
     const drag = screen.getByRole('button', { name: 'Drag to reorder' })
+    await user.click(drag)
     fireEvent.dragStart(drag)
     fireEvent.dragEnd(drag)
     fireEvent.dragOver(threadCard)

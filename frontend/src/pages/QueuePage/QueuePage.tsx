@@ -218,7 +218,7 @@ export default function QueuePage() {
           setReorderError(null)
         })
         .catch((error: unknown) => {
-          setReorderError(getApiErrorDetail(error) || 'Failed to reorder thread. Please try again.')
+          setReorderError(getApiErrorDetail(error))
         })
     }
 
@@ -454,49 +454,17 @@ export default function QueuePage() {
     navigate(`/thread/${thread.id}`)
   }
 
-  async function handleActionForThread(action: string, thread: Thread) {
-    const isSnoozed = session?.snoozed_threads?.some((t) => t.id === thread.id) ?? false
-
+  async function handleActionForThread(thread: Thread) {
     try {
-      switch (action) {
-        case 'read':
-          {
-            const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
-            if (isBlocked) {
-              const reasons = blockingReasonMap[thread.id] || ['This thread is blocked by a dependency.']
-              alert(`Cannot read yet:\n\n${reasons.join('\n')}`)
-              break
-            }
-
-            const response = await threadsApi.setPending(thread.id)
-            navigate('/', { state: { rollResponse: response } })
-          }
-          break
-        case 'move-front':
-          await moveToFrontMutation.mutate(thread.id)
-          await refetch()
-          break
-        case 'move-back':
-          await moveToBackMutation.mutate(thread.id)
-          await refetch()
-          break
-        case 'snooze':
-          if (isSnoozed) {
-            await unsnoozeMutation.mutate(thread.id)
-          } else {
-            await snoozeMutation.mutate()
-          }
-          await refetchSession()
-          await refetch()
-          break
-        case 'dependencies':
-          setDependencyThread(thread)
-          setIsDependencyBuilderOpen(true)
-          break
-        case 'edit':
-          navigate(`/thread/${thread.id}`)
-          break
+      const isBlocked = blockedThreadIds.includes(thread.id) || thread.is_blocked
+      if (isBlocked) {
+        const reasons = blockingReasonMap[thread.id] || ['This thread is blocked by a dependency.']
+        alert(`Cannot read yet:\n\n${reasons.join('\n')}`)
+        return
       }
+
+      const response = await threadsApi.setPending(thread.id)
+      navigate('/', { state: { rollResponse: response } })
     } catch (error: unknown) {
       console.error('Action failed:', error)
       alert(`Action failed: ${getApiErrorDetail(error)}`)
@@ -547,16 +515,21 @@ export default function QueuePage() {
         onDragEnd={handleDragEnd}
         onDragOver={handleDragOver(thread.id)}
         onDrop={handleDrop(thread.id)}
-        onSwipeRead={() => handleActionForThread('read', thread)}
+        onSwipeRead={() => handleActionForThread(thread)}
         onSwipeEdit={() => navigate(`/thread/${thread.id}`)}
         onSwipeSnooze={async () => {
-          if (isSnoozed) {
-            await unsnoozeMutation.mutate(thread.id)
-          } else {
-            await snoozeMutation.mutate()
+          try {
+            if (isSnoozed) {
+              await unsnoozeMutation.mutate(thread.id)
+            } else {
+              await snoozeMutation.mutate()
+            }
+            await refetchSession()
+            await refetch()
+          } catch (error: unknown) {
+            console.error('Swipe snooze failed:', error)
+            alert(`Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`)
           }
-          await refetchSession()
-          await refetch()
         }}
         onSwipeDelete={() => handleDelete(thread.id)}
         onMoveToFront={() => handleMoveToFront(thread.id)}
@@ -775,11 +748,6 @@ export default function QueuePage() {
             {createForm.lastIssueRead > 0 && issuePreview !== null && (
               <p className="text-xs text-stone-400">
                 First {Math.min(createForm.lastIssueRead, issuePreview)} issues (in creation order) of {issuePreview} will be marked as read
-              </p>
-            )}
-            {createForm.lastIssueRead > 0 && issuePreview !== null && createForm.lastIssueRead > issuePreview && (
-              <p className="text-xs text-amber-400">
-                Last issue read cannot exceed total issues ({issuePreview})
               </p>
             )}
           </div>

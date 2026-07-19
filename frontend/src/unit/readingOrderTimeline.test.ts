@@ -85,6 +85,20 @@ describe('buildReadingOrderTimelineEntries', () => {
     expect(entries[1].kind === 'gate' && entries[1].gate.status).toBe('satisfied')
   })
 
+  it('marks earlier gates satisfied and uses id matching when labels are unavailable', () => {
+    const earlier = buildReadingOrderTimelineEntries({
+      thread: makeThread({ total_issues: 20, next_unread_issue_number: '10', next_unread_issue_id: 1010 }),
+      dependencies: [makeDependency({ target_issue_id: 1005, target_label: 'Planetary #5' })],
+    })
+    expect(earlier.find((entry) => entry.kind === 'gate')?.kind === 'gate' && earlier.find((entry) => entry.kind === 'gate')?.gate.status).toBe('satisfied')
+
+    const idMatched = buildReadingOrderTimelineEntries({
+      thread: makeThread({ total_issues: null, next_unread_issue_number: 'Special', next_unread_issue_id: 1005 }),
+      dependencies: [makeDependency({ target_issue_id: 1005, target_label: 'Special' })],
+    })
+    expect(idMatched.find((entry) => entry.kind === 'gate')?.kind === 'gate' && idMatched.find((entry) => entry.kind === 'gate')?.gate.status).toBe('blocked')
+  })
+
   it('groups multiple gates at the same issue', () => {
     const thread = makeThread({ total_issues: 10, next_unread_issue_number: '6', next_unread_issue_id: 1006 })
     const dependencies: Dependency[] = [
@@ -167,5 +181,69 @@ describe('buildReadingOrderTimelineEntries', () => {
     const gate = entries.find((e) => e.kind === 'gate')
     expect(gate).toBeDefined()
     expect(gate?.kind === 'gate' && gate.gate.issueNumberValue).toBe(0)
+  })
+
+  it('handles non-numeric labels, id fallbacks, and dormant gates', () => {
+    const thread = makeThread({ total_issues: 3, next_unread_issue_number: null, next_unread_issue_id: 999 })
+    const entries = buildReadingOrderTimelineEntries({
+      thread,
+      dependencies: [
+        makeDependency({ id: 1, target_issue_id: 20, target_label: 'Special', source_label: null }),
+        makeDependency({ id: 2, target_issue_id: 21, target_label: 'Special', source_label: 'Other' }),
+        makeDependency({ id: 3, target_issue_thread_id: 88, target_issue_id: 22, target_label: 'Other #2', source_label: 'Ignored' }),
+      ],
+    })
+    const gates = entries.filter((entry) => entry.kind === 'gate')
+    expect(gates).toHaveLength(2)
+    expect(gates.every((entry) => entry.kind === 'gate' && entry.gate.status === 'dormant')).toBe(true)
+    expect(gates[0]?.kind === 'gate' && gates[0].gate.prerequisiteLabels).toEqual(['Stormwatch #11'])
+  })
+
+  it('uses safe labels when dependency metadata is absent', () => {
+    const thread = makeThread({ total_issues: 4, next_unread_issue_number: null, next_unread_issue_id: null })
+    const dependency = {
+      ...makeDependency({ target_issue_id: 20 }),
+      source_label: 'Source',
+      target_label: null,
+    }
+    const entries = buildReadingOrderTimelineEntries({ thread, dependencies: [dependency] })
+    const gate = entries.find((entry) => entry.kind === 'gate')
+    expect(gate?.kind === 'gate' && gate.gate.targetLabel).toBe('Issue gate')
+    expect(gate?.kind === 'gate' && gate.gate.prerequisiteLabels).toEqual(['Source'])
+  })
+
+  it('uses fallback issue ids to identify the current gate', () => {
+    const thread = makeThread({ total_issues: null, next_unread_issue_number: 'Special', next_unread_issue_id: 44 })
+    const entries = buildReadingOrderTimelineEntries({
+      thread,
+      dependencies: [makeDependency({ target_issue_id: 44, target_label: 'Special', source_label: 'Source' })],
+    })
+    const gate = entries.find((entry) => entry.kind === 'gate')
+    expect(gate?.kind === 'gate' && gate.gate.status).toBe('blocked')
+  })
+
+  it('orders labelled, unnumbered, and equal gates deterministically', () => {
+    const thread = makeThread({ total_issues: 2, next_unread_issue_number: '1', next_unread_issue_id: 999 })
+    const dependencies = [
+      makeDependency({ id: 1, target_issue_id: 1, target_label: 'Target #1', source_label: 'A' }),
+      makeDependency({ id: 2, target_issue_id: 2, target_label: 'Target', source_label: 'B' }),
+      makeDependency({ id: 3, target_issue_id: 3, target_label: 'Target', source_label: 'C' }),
+      makeDependency({ id: 4, target_issue_id: 4, target_label: 'Target #1', source_label: 'D' }),
+    ]
+    const entries = buildReadingOrderTimelineEntries({ thread, dependencies })
+    expect(entries.filter((entry) => entry.kind === 'gate')).toHaveLength(4)
+  })
+
+  it('handles filtered dependencies, current spans, and a trailing span with no remaining issues', () => {
+    const thread = makeThread({ total_issues: 1, next_unread_issue_number: '1', next_unread_issue_id: 10 })
+    const ignored = makeDependency({ target_issue_thread_id: 99 })
+    const missingSource = { ...makeDependency({ target_issue_id: 10 }), source_label: undefined }
+    const entries = buildReadingOrderTimelineEntries({
+      thread,
+      dependencies: [ignored, missingSource, makeDependency({ target_issue_id: 10, target_label: 'Issue #1' })],
+    })
+    expect(entries).toHaveLength(1)
+    expect(entries[0].kind).toBe('gate')
+    expect(entries[0].kind === 'gate' && entries[0].gate.isCurrent).toBe(true)
   })
 })

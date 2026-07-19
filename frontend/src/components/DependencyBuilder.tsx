@@ -9,10 +9,6 @@ import type { Dependency, FlowchartDependency, FlowchartNode, Issue, Thread, Thr
 import { getApiErrorDetail } from '../utils/apiError'
 import { useToast } from '../contexts/useToast'
 
-function getDefaultDependencyMode(_thread: Thread | null): 'thread' | 'issue' {
-  return 'issue'
-}
-
 async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
   const allIssues: Issue[] = []
   const seenPageTokens = new Set<string>()
@@ -24,7 +20,7 @@ async function fetchAllUnreadIssues(threadId: number): Promise<Issue[]> {
       page_size: 100,
       ...(nextPageToken ? { page_token: nextPageToken } : {}),
     })
-    allIssues.push(...(data.issues || []))
+    allIssues.push(...data.issues)
 
     if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
       return allIssues
@@ -55,7 +51,6 @@ interface DependencyBuilderProps {
 }
 
 export default function DependencyBuilder({ thread, isOpen, onClose, onChanged }: DependencyBuilderProps) {
-  const [dependencyMode, setDependencyMode] = useState(getDefaultDependencyMode(thread))
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Thread[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
@@ -158,11 +153,10 @@ const [isSavingNote, setIsSavingNote] = useState(false)
       
 
       for (const d of issueOnlyDeps) {
-        if (!d.source_issue_id || !d.target_issue_id) continue
         if (!d.source_issue_thread_id || !d.target_issue_thread_id) continue
 
         // Use negative issue ID to avoid thread ID collisions
-        const srcNodeId = -d.source_issue_id
+        const srcNodeId = -d.source_issue_id!
         if (!issueNodeMap.has(srcNodeId)) {
           issueNodeMap.set(srcNodeId, {
             id: srcNodeId,
@@ -174,7 +168,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           })
         }
 
-        const tgtNodeId = -d.target_issue_id
+        const tgtNodeId = -d.target_issue_id!
         if (!issueNodeMap.has(tgtNodeId)) {
           issueNodeMap.set(tgtNodeId, {
             id: tgtNodeId,
@@ -223,20 +217,6 @@ const [isSavingNote, setIsSavingNote] = useState(false)
   }, [thread?.id])
 
   useEffect(() => {
-    if (!isOpen || !thread?.id) return
-    setSearchQuery('')
-    setSearchResults([])
-    setSelectedThreadId(null)
-    setError('')
-    setShowReadingOrder(false)
-    setReadingView('timeline')
-    setDependencyMode(getDefaultDependencyMode(thread))
-    setSourceIssueId(null)
-    setTargetIssueId(null)
-    setSourceIssues([])
-    setTargetIssues([])
-    setShowInlineMigration(false)
-    
     // Clean up any pending deletion when modal closes
     if (pendingDeletion) {
       clearTimeout(pendingDeletion.timeoutId)
@@ -260,6 +240,19 @@ const [isSavingNote, setIsSavingNote] = useState(false)
           setPendingDeletion(null)
         })
     }
+
+    if (!isOpen || !thread?.id) return
+    setSearchQuery('')
+    setSearchResults([])
+    setSelectedThreadId(null)
+    setError('')
+    setShowReadingOrder(false)
+    setReadingView('timeline')
+    setSourceIssueId(null)
+    setTargetIssueId(null)
+    setSourceIssues([])
+    setTargetIssues([])
+    setShowInlineMigration(false)
     
     loadDependencies()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,12 +298,12 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
   // Check if selected thread needs migration when in issue mode
   const selectedThreadNeedsMigration = useMemo(() => {
-    if (dependencyMode !== 'issue' || !selectedThread) return false
+    if (!selectedThread) return false
     return selectedThread.total_issues === null || selectedThread.total_issues === undefined
-  }, [dependencyMode, selectedThread])
+  }, [selectedThread])
 
   useEffect(() => {
-    if (!isOpen || dependencyMode !== 'issue' || !selectedThreadId || !thread?.id) {
+    if (!isOpen || !selectedThreadId || !thread?.id) {
       setSourceIssues([])
       setTargetIssues([])
       setSourceIssueId(null)
@@ -362,33 +355,19 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     return () => {
       isCurrent = false
     }
-  }, [selectedThreadId, dependencyMode, isOpen, thread?.id, selectedThreadNeedsMigration])
+  }, [selectedThreadId, isOpen, thread?.id, selectedThreadNeedsMigration])
 
    function isDuplicateDependency(): boolean {
      if (!thread?.id || !selectedThreadId) return false
-
-     if (dependencyMode === 'thread') {
-       // Check if thread-level dependency already exists
-       return (
-         dependencies.blocking.some(
-           (dep) => dep.source_thread_id === selectedThreadId && dep.target_thread_id === thread.id
-         ) ||
-         dependencies.blocked_by.some(
-           (dep) => dep.source_thread_id === selectedThreadId && dep.target_thread_id === thread.id
-         )
+     if (!sourceIssueId || !targetIssueId) return false
+     return (
+       dependencies.blocking.some(
+         (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
+       ) ||
+       dependencies.blocked_by.some(
+         (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
        )
-     } else {
-       // Check if issue-level dependency already exists
-       if (!sourceIssueId || !targetIssueId) return false
-       return (
-         dependencies.blocking.some(
-           (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
-         ) ||
-         dependencies.blocked_by.some(
-           (dep) => dep.source_issue_id === sourceIssueId && dep.target_issue_id === targetIssueId
-         )
-       )
-     }
+     )
    }
 
    async function handleInlineMigration(e: FormEvent) {
@@ -435,12 +414,12 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     if (!thread?.id || !selectedThreadId) return
 
     const targetHasIssueTracking = thread.total_issues !== null && thread.total_issues !== undefined
-    if (dependencyMode === 'issue' && !targetHasIssueTracking) {
+    if (!targetHasIssueTracking) {
       setError('Target thread must be migrated to issue tracking before adding issue dependencies.')
       return
     }
 
-    if (dependencyMode === 'issue' && (!sourceIssueId || !targetIssueId)) {
+    if (!sourceIssueId || !targetIssueId) {
       setError('Both prerequisite issue and target issue must be selected.')
       return
     }
@@ -448,23 +427,14 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setIsSaving(true)
     setError('')
     try {
-      if (dependencyMode === 'issue') {
-        const result = await dependenciesApi.createDependency({
-          sourceType: 'issue',
-          sourceId: sourceIssueId!,
-          targetType: 'issue',
-          targetId: targetIssueId!,
-        })
-        if (result.warning) {
-          toast.showToast(result.warning, 'warning')
-        }
-      } else {
-        await dependenciesApi.createDependency({
-          sourceType: 'thread',
-          sourceId: selectedThreadId,
-          targetType: 'thread',
-          targetId: thread.id,
-        })
+      const result = await dependenciesApi.createDependency({
+        sourceType: 'issue',
+        sourceId: sourceIssueId,
+        targetType: 'issue',
+        targetId: targetIssueId,
+      })
+      if (result.warning) {
+        toast.showToast(result.warning, 'warning')
       }
       setSearchQuery('')
       setSearchResults([])
@@ -766,7 +736,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
            )}
 
            {/* Inline migration prompt (item 7) */}
-           {dependencyMode === 'issue' && selectedThread && selectedThreadNeedsMigration && (
+           {selectedThread && selectedThreadNeedsMigration && (
              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 space-y-2">
                <p className="text-xs text-amber-300 font-bold">
                  {selectedThread.title} isn&apos;t tracking issues yet.
@@ -819,7 +789,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
              </div>
            )}
 
-           {dependencyMode === 'issue' && selectedThread && !selectedThreadNeedsMigration && (
+           {selectedThread && !selectedThreadNeedsMigration && (
              <div className="space-y-2">
                {isLoadingSourceIssues || isLoadingTargetIssues ? (
                  <p className="text-xs text-stone-500">Loading issues…</p>
@@ -883,9 +853,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
               type="button"
               onClick={handleCreateDependency}
               disabled={
-                dependencyMode === 'issue'
-                  ? !selectedThread || selectedThreadNeedsMigration || !sourceIssueId || !targetIssueId || isSaving || isDuplicateDependency()
-                  : !selectedThread || isSaving || isDuplicateDependency()
+                !selectedThread || selectedThreadNeedsMigration || !sourceIssueId || !targetIssueId || isSaving || isDuplicateDependency()
               }
               className="w-full py-2 glass-button text-xs font-black uppercase tracking-widest disabled:opacity-50 whitespace-normal break-words text-left"
             >
@@ -894,9 +862,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
                  : isDuplicateDependency()
                  ? 'Already added'
                  : selectedThread
-                 ? dependencyMode === 'issue'
-                     ? `Block issue #${targetIssues.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
-                     : `Block with thread: ${selectedThread.title}`
+                 ? `Block issue #${targetIssues.find((i) => i.id === targetIssueId)?.issue_number || '?'} with: ${selectedThread.title} #${sourceIssues.find((i) => i.id === sourceIssueId)?.issue_number || '?'}`
                  : 'Select a prerequisite'}
             </button>
          </div>

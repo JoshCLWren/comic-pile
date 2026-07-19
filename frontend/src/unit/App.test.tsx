@@ -39,6 +39,8 @@ vi.mock('../pages/QueuePage', () => ({ default: () => <div data-testid="queue-pa
 vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="history-page">History</div> }))
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
 vi.mock('../pages/AnalyticsPage', () => ({ default: () => <div data-testid="analytics-page">Analytics</div> }))
+vi.mock('../pages/ThreadDetailView', () => ({ default: () => <div data-testid="thread-detail-page">Thread detail</div> }))
+vi.mock('../pages/HelpPage', () => ({ default: () => <div data-testid="help-page">Help</div> }))
 
 import App, { AuthProvider, AppRoutes, useAuth } from '../App'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
@@ -92,10 +94,57 @@ test('clears a token when login validation fails', async () => {
   expect(mockClearAccessToken).toHaveBeenCalled()
 })
 
+test('logs in successfully and logs out without BroadcastChannel support', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  const originalBroadcastChannel = globalThis.BroadcastChannel
+  vi.stubGlobal('BroadcastChannel', undefined)
+  renderWithAuth('/login')
+  await waitFor(() => expect(authContextValue).not.toBeNull())
+  await act(async () => authContextValue?.login('valid-token'))
+  expect(mockSetAccessToken).toHaveBeenCalledWith('valid-token')
+  act(() => authContextValue?.logout())
+  expect(mockClearAccessToken).toHaveBeenCalled()
+  if (originalBroadcastChannel) vi.stubGlobal('BroadcastChannel', originalBroadcastChannel)
+  else vi.unstubAllGlobals()
+})
+
 test('mounts the application shell', async () => {
   mockApiGet.mockRejectedValue(new Error('unauthenticated'))
   render(<App />)
   await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument())
+})
+
+test('loads each authenticated lazy route', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  for (const path of ['/queue', '/history', '/sessions/1', '/analytics', '/help', '/thread/1']) {
+    const { unmount } = renderWithAuth(path)
+    await waitFor(() => expect(screen.queryByTestId(/-page$/)).not.toBeNull())
+    unmount()
+  }
+})
+
+test('broadcasts logout events and closes the auth channel', async () => {
+  const postMessage = vi.fn()
+  const close = vi.fn()
+  let channel: TestBroadcastChannel | undefined
+  class TestBroadcastChannel {
+    onmessage: ((event: MessageEvent) => void) | null = null
+    postMessage = postMessage
+    close = close
+    constructor(public readonly name: string) { channel = this }
+  }
+  vi.stubGlobal('BroadcastChannel', TestBroadcastChannel)
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  renderWithAuth('/')
+  await waitFor(() => expect(authContextValue?.isAuthenticated).toBe(true))
+  act(() => channel?.onmessage?.({ data: { type: 'other' } } as MessageEvent))
+  expect(authContextValue?.isAuthenticated).toBe(true)
+  act(() => channel?.onmessage?.({ data: { type: 'logout' } } as MessageEvent))
+  expect(authContextValue?.isAuthenticated).toBe(false)
+  act(() => authContextValue?.logout())
+  expect(postMessage).toHaveBeenCalledWith({ type: 'logout' })
+  expect(close).toHaveBeenCalled()
+  vi.unstubAllGlobals()
 })
 
 describe('route guards', () => {
