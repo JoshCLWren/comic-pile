@@ -29,9 +29,18 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     if (!trigger) return
 
     const rect = trigger.getBoundingClientRect()
-    setMenuPosition({
+    const nextPosition = {
       top: rect.bottom + 4,
-      right: window.innerWidth - rect.right,
+      right: document.documentElement.clientWidth - rect.right,
+    }
+    setMenuPosition((currentPosition) => {
+      if (
+        currentPosition?.top === nextPosition.top &&
+        currentPosition.right === nextPosition.right
+      ) {
+        return currentPosition
+      }
+      return nextPosition
     })
   }, [])
 
@@ -105,13 +114,13 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
         !menuRef.current?.contains(target) &&
         !triggerContainerRef.current?.contains(target)
       ) {
-        closeMenu()
+        closeContextMenu()
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen, closeMenu])
+  }, [isOpen, closeContextMenu])
 
   const handleTriggerClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()
@@ -128,6 +137,9 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
       e.stopPropagation()
       clickFromKeyboardRef.current = true
       openMenu(thread.id)
+      window.setTimeout(() => {
+        clickFromKeyboardRef.current = false
+      }, 100)
       setTimeout(() => menuItemsRef.current[0]?.focus(), 0)
     }
   }
