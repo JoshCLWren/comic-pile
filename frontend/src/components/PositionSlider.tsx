@@ -35,7 +35,7 @@ export default function PositionSlider({
     return sortedThreads.findIndex((t) => t.id === currentThread.id)
   }, [sortedThreads, currentThread])
 
-  const [sliderValue, setSliderValue] = useState(currentIndex)
+  const [sliderValue, setSliderValue] = useState(Math.max(0, currentIndex))
 
   const maxPosition = sortedThreads.length - 1
 
@@ -74,10 +74,6 @@ export default function PositionSlider({
         return `Between "${truncate(threadAbove.title)}" and "${truncate(threadBelow.title)}"`
       }
       return `Before "${truncate(threadBelow.title)}"`
-    }
-
-    if (threadAbove && threadAbove.id !== currentThread.id) {
-      return `After "${truncate(threadAbove.title)}"`
     }
 
     return `Position ${sliderValue + 1}`

@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-03-17
 **Project Status:** Production Ready (Auth fully deployed, Snooze, Undo, Dependencies, Mobile UX features shipped)
-**Current Coverage:** 96% (configured in pyproject.toml)
+**Current Coverage:** 94% (configured in pyproject.toml)
 
 ---
 

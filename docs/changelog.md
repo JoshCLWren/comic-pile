@@ -5,7 +5,7 @@
 **Mobile modal usability and focus**
 - Mobile modals now use the available viewport height with an independently scrollable content area.
 - Non-autofocus modals keep keyboard focus inside the modal, with a safe close-control fallback.
-- Queue action menus remain visible above adjacent cards while swipe actions stay clipped to their cards.
+- Queue action menus now remain visible above neighboring cards while hidden swipe actions stay contained, and the oversized empty hover callout has been removed.
 - Browser verification covers Firefox, WebKit, and Chromium so desktop Firefox and mobile Safari behavior are release gates.
 
 ## 2026-07-15

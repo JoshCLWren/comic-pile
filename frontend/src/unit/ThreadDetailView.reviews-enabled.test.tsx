@@ -41,6 +41,16 @@ describe('ThreadDetailView with reviews enabled', () => {
     await user.click(screen.getByRole('button', { name: 'Save Changes' }))
   })
 
+  it('shows the reviews loading state and pending save label', async () => {
+    reviews.reviews = []
+    reviews.isPending = true
+    api.get.mockResolvedValue({ id: 1, title: 'Loading reviews', format: 'Comic', issues_remaining: 1, total_issues: null, queue_position: 1, status: 'active', notes: null, collection_id: null })
+    render(<ThreadDetailView />)
+    await waitFor(() => expect(screen.getByText('Loading reviews')).toBeInTheDocument())
+    expect(screen.getByText('Loading reviews...')).toBeInTheDocument()
+    reviews.isPending = false
+  })
+
   it('expands migrated issue details and submits the edit form', async () => {
     reviews.reviews = []
     reviews.getThreadReviews.mockResolvedValue(undefined)

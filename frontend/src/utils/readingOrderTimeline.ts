@@ -176,6 +176,8 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
    for (const gate of sortedGates) {
      const status = resolveGateStatus({
        isThreadComplete,
+       gateIssueId: gate.targetIssueId,
+       nextIssueId: thread.next_unread_issue_id,
        gateValue: gate.orderValue,
        nextValue: nextOrderValue,
      })
@@ -225,15 +227,23 @@ export function buildReadingOrderTimelineEntries({ thread, dependencies }: Build
 
 function resolveGateStatus({
   isThreadComplete,
+  gateIssueId,
+  nextIssueId,
   gateValue,
   nextValue,
 }: {
   isThreadComplete: boolean
+  gateIssueId: number
+  nextIssueId: number | null
   gateValue: number | null
   nextValue: number | null
 }): GateStatus {
   if (isThreadComplete) {
     return 'satisfied'
+  }
+
+  if (gateIssueId === nextIssueId) {
+    return 'blocked'
   }
 
   if (gateValue !== null && nextValue !== null) {
@@ -268,7 +278,7 @@ function createSpanEntry({
     ((end !== null && nextValue >= start && nextValue <= end) || (end === null && nextValue >= start))
 
   return {
-    id: `span-${start ?? 'unknown'}-${end ?? 'open'}`,
+    id: `span-${start}-${end ?? 'open'}`,
     startNumber: start,
     endNumber: end,
     isOpenEnded,

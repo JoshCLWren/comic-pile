@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const collectionsApi = vi.hoisted(() => ({
   list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn(),
@@ -32,6 +32,7 @@ function Consumer() {
 }
 
 describe('enabled collection provider', () => {
+  afterEach(() => vi.useRealTimers())
   const storage = new Map<string, string>()
   beforeEach(() => {
     vi.clearAllMocks()

@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import axios from 'axios'
 import { CacheProvider } from '../contexts/CacheContext'
+import type { Thread } from '../types'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   useCreateThread,
@@ -153,6 +154,38 @@ it('handles non-Error mutation failures and stale refetch failures', async () =>
   await expect(act(async () => result.current.refetch())).resolves.toBeUndefined()
 })
 
+it('ignores late detail and stale responses after unmount', async () => {
+  let resolveDetail!: (value: Thread) => void
+  let resolveStale!: (value: never[]) => void
+  mockedThreadsApi.get.mockReturnValueOnce(new Promise((resolve) => { resolveDetail = resolve }))
+  mockedThreadsApi.listStale.mockReturnValueOnce(new Promise((resolve) => { resolveStale = resolve }))
+  const detail = renderHook(() => useThread(10))
+  const stale = renderHook(() => useStaleThreads(10))
+  detail.unmount()
+  stale.unmount()
+  await act(async () => {
+    resolveDetail({ id: 10 } as Thread)
+    resolveStale([])
+    await Promise.resolve()
+  })
+})
+
+it('ignores late detail and stale failures after unmount', async () => {
+  let rejectDetail!: (reason?: unknown) => void
+  let rejectStale!: (reason?: unknown) => void
+  mockedThreadsApi.get.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectDetail = reject }))
+  mockedThreadsApi.listStale.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectStale = reject }))
+  const detail = renderHook(() => useThread(11))
+  const stale = renderHook(() => useStaleThreads(11))
+  detail.unmount()
+  stale.unmount()
+  await act(async () => {
+    rejectDetail(new Error('late detail failure'))
+    rejectStale(new Error('late stale failure'))
+    await Promise.resolve()
+  })
+})
+
 it('normalizes Axios mutation failures while preserving their details', async () => {
   const axiosError = new axios.AxiosError('request failed', 'ERR_BAD_REQUEST')
   axiosError.isAxiosError = true
@@ -193,4 +226,17 @@ it('ignores late stale-thread results after unmount', async () => {
   const pending = renderHook(() => useStaleThreads(14))
   pending.unmount()
   await act(async () => resolveStale([{ id: 14 }] as never))
+})
+
+it('ignores late paginated thread results after unmount and supports blank options', async () => {
+  let resolveThreads!: (value: never) => void
+  mockedThreadsApi.list.mockImplementationOnce(() => new Promise((resolve) => { resolveThreads = resolve }))
+  const pending = renderHook(() => useThreads({ searchTerm: '   ', collectionId: null }))
+  pending.unmount()
+  await act(async () => resolveThreads({ threads: [], next_page_token: null } as never))
+
+  mockedThreadsApi.list.mockResolvedValueOnce({ threads: [], next_page_token: null } as never)
+  const blank = renderHook(() => useThreads(''))
+  await waitFor(() => expect(blank.result.current.data).toEqual([]))
+  expect(mockedThreadsApi.list).toHaveBeenLastCalledWith({ page_size: 200 }, undefined)
 })

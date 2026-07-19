@@ -791,7 +791,7 @@ function buildNumberNormals(
   return normals
 }
 
-function getFaceRotation(value: number, normalMap: NumberNormals | null): FaceRotation {
+export function getFaceRotation(value: number, normalMap: NumberNormals | null): FaceRotation {
   const normal = normalMap?.get(value)
   if (!normal) {
     return { x: 0, y: 0, z: 0 }
@@ -803,7 +803,7 @@ function getFaceRotation(value: number, normalMap: NumberNormals | null): FaceRo
   return { x: euler.x, y: euler.y, z: euler.z }
 }
 
-function getProjectedCenterOffsetPx(
+export function getProjectedCenterOffsetPx(
   mesh: THREE.Mesh,
   camera: THREE.PerspectiveCamera,
   width: number,

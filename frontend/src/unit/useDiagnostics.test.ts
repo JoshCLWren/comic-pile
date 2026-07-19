@@ -134,4 +134,19 @@ describe('useDiagnostics', () => {
     unmount()
     vi.stubGlobal('performance', originalPerformance)
   })
+
+  it('collects safe server-side defaults when browser globals disappear', () => {
+    const { result, unmount } = renderHook(() => useDiagnostics())
+    vi.stubGlobal('window', undefined)
+    vi.stubGlobal('navigator', undefined)
+    const diagnostics = result.current.collectDiagnostics()
+    expect(diagnostics.url).toBe('')
+    expect(diagnostics.userAgent).toBe('')
+    expect(diagnostics.screen).toEqual({ width: 0, height: 0, pixelRatio: 1 })
+    expect(diagnostics.viewport).toEqual({ width: 0, height: 0 })
+    expect(diagnostics.scroll).toEqual({ x: 0, y: 0 })
+    vi.unstubAllGlobals()
+    unmount()
+  })
+
 })

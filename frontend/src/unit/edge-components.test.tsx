@@ -38,6 +38,13 @@ describe('edge component behavior', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps marquee usable when ResizeObserver is unavailable', () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    const { container } = render(<MarqueeTitle title="No observer" />)
+    expect(container).toHaveTextContent('No observer')
+    vi.unstubAllGlobals()
+  })
+
   it('supports horizontal and vertical swipes, reset clicks, and action buttons', async () => {
     const user = userEvent.setup()
     const cardClick = vi.fn(); const action = vi.fn()

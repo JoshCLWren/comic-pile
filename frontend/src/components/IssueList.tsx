@@ -44,9 +44,14 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
         response.issues.map(async (issue) => {
           try {
             const deps = await dependenciesApi.getIssueDependencies(issue.id)
-            if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
-              setDependencies((prev) => ({ ...prev, [issue.id]: deps }))
-            }
+            setDependencies((prev) => {
+              if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
+                return { ...prev, [issue.id]: deps }
+              }
+              const next = { ...prev }
+              delete next[issue.id]
+              return next
+            })
           } catch (error) {
             console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
           }

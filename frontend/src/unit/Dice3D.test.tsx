@@ -1,9 +1,22 @@
 import { render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import Dice3D from '../components/Dice3D'
+import * as THREE from 'three'
+import Dice3D, { getFaceRotation, getProjectedCenterOffsetPx } from '../components/Dice3D'
 import { DEFAULT_DICE_RENDER_CONFIG } from '../components/diceRenderConfig'
 
-const diceMock = vi.hoisted(() => ({ failRenderer: false, noIndex: false, emptyBox: false, noMap: false, noGeometry: false, noMaterial: false }))
+const diceMock = vi.hoisted(() => ({
+  failRenderer: false,
+  noIndex: false,
+  emptyBox: false,
+  noMap: false,
+  noGeometry: false,
+  noMaterial: false,
+  throwBox: false,
+  geometryCounts: [] as number[],
+  geometryDisposals: 0,
+  materialDisposals: 0,
+  lastMesh: null as { rotation: { x: number; y: number; z: number; set: ReturnType<typeof vi.fn> } } | null,
+}))
 
 vi.mock('three', () => {
   class BufferGeometry {
@@ -42,10 +55,18 @@ vi.mock('three', () => {
     getIndex() {
       return diceMock.noIndex ? null : this.index
     }
-    setAttribute() {}
+    setAttribute(name: string, attribute: BufferAttribute) {
+      this.attributes[name] = {
+        count: name === 'position' ? (attribute.array as Float32Array).length / attribute.itemSize : undefined,
+        getX: () => 0,
+        getY: () => 0,
+        getZ: () => 0,
+      }
+      if (name === 'position') diceMock.geometryCounts.push(this.attributes[name].count ?? 0)
+    }
     setIndex() {}
     computeVertexNormals() {}
-    dispose() {}
+    dispose() { diceMock.geometryDisposals += 1 }
   }
   class BufferAttribute {
     array: unknown
@@ -64,7 +85,7 @@ vi.mock('three', () => {
       this.canvas = canvas
       this.needsUpdate = false
     }
-    dispose() {}
+    dispose() { diceMock.materialDisposals += 1 }
   }
   class Scene {
     add() {}
@@ -104,7 +125,7 @@ vi.mock('three', () => {
     constructor({ map }: { map: unknown }) {
       this.map = diceMock.noMap ? undefined : map
     }
-    dispose() {}
+    dispose() { diceMock.materialDisposals += 1 }
   }
   class Mesh {
     geometry: unknown
@@ -117,6 +138,7 @@ vi.mock('three', () => {
       this.material = diceMock.noMaterial ? undefined : material
       this.castShadow = false
       this.rotation = { x: 0, y: 0, z: 0, set: vi.fn() }
+      diceMock.lastMesh = this
     }
   }
 
@@ -153,7 +175,7 @@ vi.mock('three', () => {
   class Box3 {
     min = new Vector3(-1, -1, -1)
     max = new Vector3(1, 1, 1)
-    setFromObject() { return this }
+    setFromObject() { if (diceMock.throwBox) throw new Error('projection failed'); return this }
     isEmpty() { return diceMock.emptyBox }
   }
 
@@ -195,6 +217,11 @@ vi.mock('three', () => {
 })
 
 beforeEach(() => {
+  diceMock.geometryCounts = []
+  diceMock.geometryDisposals = 0
+  diceMock.materialDisposals = 0
+  diceMock.lastMesh = null
+  diceMock.throwBox = false
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     fillStyle: '',
     strokeStyle: '',
@@ -231,11 +258,14 @@ it('builds each supported geometry and handles animation/value changes', () => {
   const { rerender } = render(<Dice3D sides={6} value={1} isRolling={false} />)
   rerender(<Dice3D sides={6} value={6} isRolling />)
   expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+  expect(diceMock.geometryCounts.length).toBeGreaterThanOrEqual(10)
 })
 
 it('falls back to a six-sided geometry for an unsupported side count', () => {
+  const before = diceMock.geometryCounts.length
   render(<Dice3D sides={7 as never} value={1} />)
   expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+  expect(diceMock.geometryCounts.length).toBeGreaterThan(before)
 })
 
 it('applies the d10 auto-centering render option', () => {
@@ -284,17 +314,22 @@ it('runs rolling, locked, frozen, and idle animation branches', () => {
   }))
   const onRollComplete = vi.fn()
   const { rerender, unmount } = render(
-    <Dice3D sides={6} value={2} isRolling lockMotion onRollComplete={onRollComplete} />,
+    <Dice3D sides={6} value={2} isRolling onRollComplete={onRollComplete} />,
   )
   nextFrame?.(0)
+  expect(diceMock.lastMesh?.rotation.x).toBeGreaterThan(0)
+  const rollingX = diceMock.lastMesh?.rotation.x
   rerender(<Dice3D sides={6} value={3} freeze />)
   for (let frame = 1; frame < 25; frame += 1) nextFrame?.(frame)
   rerender(<Dice3D sides={6} value={4} isRolling />)
   nextFrame?.(2)
+  expect(diceMock.lastMesh?.rotation.x).toBeGreaterThan(rollingX ?? 0)
   rerender(<Dice3D sides={6} value={5} />)
   nextFrame?.(3)
   expect(document.querySelector('.dice-3d')).toBeInTheDocument()
   unmount()
+  expect(diceMock.geometryDisposals).toBeGreaterThan(0)
+  expect(diceMock.materialDisposals).toBeGreaterThan(0)
 })
 
 it('falls back cleanly when canvas or WebGL initialization is unavailable', () => {
@@ -327,4 +362,37 @@ it('cleans up meshes that have no geometry or material', () => {
   unmount()
   diceMock.noGeometry = false
   diceMock.noMaterial = false
+})
+
+it('rebuilds and disposes the previous mesh when render inputs change', () => {
+  const { rerender, unmount } = render(<Dice3D sides={6} value={1} color={0xffffff} />)
+  rerender(<Dice3D sides={8} value={2} color={0xff0000} />)
+  expect(diceMock.geometryDisposals).toBeGreaterThan(0)
+  unmount()
+})
+
+it('returns safe projection and rotation fallbacks for malformed render state', () => {
+  diceMock.throwBox = true
+  expect(getProjectedCenterOffsetPx({} as THREE.Mesh, {} as THREE.PerspectiveCamera, 200, 200)).toEqual({ x: 0, y: 0 })
+  diceMock.throwBox = false
+  expect(getFaceRotation(1, null)).toEqual({ x: 0, y: 0, z: 0 })
+})
+
+it('projects a populated box and resolves a known face normal', () => {
+  const normal = new THREE.Vector3(0, 0, 1)
+  expect(getFaceRotation(1, new Map([[1, normal]]))).toEqual({ x: 0, y: 0, z: 0 })
+  expect(getProjectedCenterOffsetPx({} as THREE.Mesh, {} as THREE.PerspectiveCamera, 200, 100)).toEqual({ x: -0, y: 0 })
+})
+
+it('completes a settled face animation callback', () => {
+  let nextFrame: FrameRequestCallback | undefined
+  vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+    nextFrame = callback
+    return 1
+  }))
+  const onRollComplete = vi.fn()
+  const { rerender } = render(<Dice3D sides={6} value={1} onRollComplete={onRollComplete} />)
+  rerender(<Dice3D sides={6} value={2} onRollComplete={onRollComplete} />)
+  nextFrame?.(1)
+  expect(onRollComplete).toHaveBeenCalled()
 })

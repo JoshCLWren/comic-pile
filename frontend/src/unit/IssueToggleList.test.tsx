@@ -121,6 +121,33 @@ beforeEach(() => {
   }))
 })
 describe('IssueToggleList', () => {
+  it('uses the timeout focus fallback when animation frames are unavailable', async () => {
+    const original = window.requestAnimationFrame
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: undefined })
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(screen.getByTestId('issue-move-down-1')).toHaveFocus()
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: original })
+  })
+
+  it('keeps boundary move controls in place and ignores an empty add request', async () => {
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-move-up-1'))
+    fireEvent.click(screen.getByTestId('issue-move-down-3'))
+    fireEvent.keyDown(screen.getByTestId('issue-add-input'), { key: 'Enter' })
+    expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+  })
+
+  it('surfaces add-issue failures submitted with Enter', async () => {
+    mockedIssuesApi.create.mockRejectedValueOnce(new Error('add failed'))
+    await renderIssueToggleList()
+    const input = screen.getByTestId('issue-add-input')
+    fireEvent.change(input, { target: { value: '4-5' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(screen.getByText('add failed')).toBeInTheDocument())
+  })
   it('loads all issue pages before rendering the full list', async () => {
     mockedIssuesApi.list
       .mockResolvedValueOnce(buildListResponse(BASE_ISSUES.slice(0, 2), 'page-2'))
