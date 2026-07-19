@@ -9,7 +9,8 @@ import { getTopologicalPath } from '../utils/topologicalSort'
 import { buildD10Faces } from '../components/d10Geometry'
 import { DEFAULT_DICE_RENDER_CONFIG, getDiceRenderConfigForSides } from '../components/diceRenderConfig'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
-import type { Issue, Thread, FlowchartDependency } from '../types'
+import { buildReadingOrderTimelineEntries, issueStringToNumber } from '../utils/readingOrderTimeline'
+import type { Dependency, Issue, Thread, FlowchartDependency } from '../types'
 
 const issue = (id: number, status: 'read' | 'unread' = 'unread'): Issue => ({
   id, thread_id: 1, issue_number: String(id), status, read_at: status === 'read' ? '2024-01-01' : null, created_at: '2024-01-01',
@@ -180,6 +181,19 @@ describe('remaining pure branches', () => {
     expect(geometry.faceNumbers).toEqual([1, 10, 2, 9, 3, 8, 4, 7, 5, 6])
   })
 
+  it('falls back when dice configuration values are non-finite or non-boolean', () => {
+    // L53 `if (!Number.isFinite(numeric))` — tileSize NaN with no side override (sides=20)
+    const nanConfig = getDiceRenderConfigForSides(20, {
+      global: { ...DEFAULT_DICE_RENDER_CONFIG.global, tileSize: Number.NaN },
+    })
+    expect(nanConfig.tileSize).toBe(DEFAULT_DICE_RENDER_CONFIG.global.tileSize)
+    // L68 `typeof value === 'boolean' ? value : fallback` — non-boolean d10AutoCenter
+    const boolConfig = getDiceRenderConfigForSides(6, {
+      global: { ...DEFAULT_DICE_RENDER_CONFIG.global, d10AutoCenter: 'yes' as never },
+    })
+    expect(boolConfig.d10AutoCenter).toBe(false)
+  })
+
   it('formats API errors for axios-like, native, and unknown failures', () => {
     expect(getApiErrorDetail({ response: { status: 422, data: { detail: 'invalid' } } })).toBe('invalid')
     expect(getApiErrorStatus({ response: { status: 422 } })).toBe(422)
@@ -187,5 +201,73 @@ describe('remaining pure branches', () => {
     expect(getApiErrorDetail(new Error('Failed to fetch'))).toContain('Network error')
     expect(getApiErrorDetail(new Error('ordinary'))).toBe('ordinary')
     expect(getApiErrorDetail(null)).toBe('Unknown error')
+  })
+})
+
+describe('nullish operand branches', () => {
+  it('returns Unknown error for Axios errors with a nullish message and no detail', () => {
+    // L27 `error.message ?? ''` and L30 `error.message ?? 'Unknown error'`
+    expect(getApiErrorDetail({ isAxiosError: true, response: { status: 502, data: {} }, message: undefined })).toBe('Unknown error')
+    expect(getApiErrorDetail({ isAxiosError: true, response: {}, message: undefined } as never)).toBe('Unknown error')
+  })
+
+  it('rejects oversized cumulative ranges and oversized dashed literals', () => {
+    // L70 `if (result.length + rangeSize > MAX_ISSUES)`
+    expect(() => parseIssueRange('1-5000,2-6000')).toThrow('Total issues would exceed')
+    // L78 `if (trimmedPart.length > MAX_LITERAL_LENGTH)` inside the dashed-literal branch
+    expect(() => parseIssueRange('A-' + 'x'.repeat(100))).toThrow('too long')
+  })
+
+  it('skips a negative target id without a parent thread id in topological sort', () => {
+    // L32 `} else { return }` branch when target_id < 0 and no target_parent_thread_id
+    const threads = [thread(1), thread(2)]
+    const result = getTopologicalPath(threads, [
+      { id: 'orphan-target', source_id: 1, target_id: -7, is_issue_level: true, created_at: 'now' },
+      { id: 'real', source_id: 1, target_id: 2, created_at: 'now' },
+    ])
+    expect(result.map((t) => t.id)).toEqual([1, 2])
+  })
+
+  it('returns early when moving an issue id that is not present', () => {
+    // L35 `if (issueIndex === -1)` in moveIssueByStep
+    const issues = [issue(1), issue(2)]
+    expect(moveIssueByStep(issues, 99, 'up')).toBe(issues)
+  })
+
+  it('updates a node layer to a deeper candidate when reached via a longer path', () => {
+    // L97 `existingLayer === undefined || candidateLayer > existingLayer` — candidateLayer > existingLayer arm
+    const deep = layoutGraph([thread(1), thread(2), thread(3)], [
+      { id: 'first', source_id: 1, target_id: 3, created_at: 'now' },
+      { id: 'second', source_id: 1, target_id: 2, created_at: 'now' },
+      { id: 'deeper', source_id: 2, target_id: 3, created_at: 'now' },
+    ], new Set())
+    const node3 = deep.nodes.find((n) => n.id === 3)
+    const node2 = deep.nodes.find((n) => n.id === 2)
+    expect(node2).toBeDefined()
+    expect(node3).toBeDefined()
+    expect(node3!.y).toBeGreaterThan(node2!.y)
+  })
+
+  it('parses non-numeric issue strings and open-ended spans with null ends', () => {
+    // L54 `Number.isNaN(parsed) ? null : parsed` — the null arm
+    expect(issueStringToNumber('.')).toBeNull()
+    // L271 `end ?? 'open'` — open-ended thread with no gates
+    const openThread: Thread = { ...thread(1), total_issues: null }
+    const entries = buildReadingOrderTimelineEntries({ thread: openThread, dependencies: [] })
+    const span = entries.find((e) => e.kind === 'span')
+    expect(span?.kind === 'span' && span.span.id).toBe('span-1-open')
+    expect(span?.kind === 'span' && span.span.isOpenEnded).toBe(true)
+  })
+
+  it('falls back through nullish rating-thread metadata operands', () => {
+    // L31 `metadata.id ?? metadata.thread_id ?? Number(threadId)` — both metadata ids nullish
+    expect(buildRatingThread(7, null, { title: 'Meta', id: undefined, thread_id: undefined } as never)?.id).toBe(7)
+    // L33 `metadata.format ?? sessionThread?.format ?? ''` — metadata.format and sessionThread both nullish
+    expect(buildRatingThread(7, null, { title: 'Meta', format: undefined } as never)?.format).toBe('')
+    // L61 `issues_remaining || 0` — issues_remaining falsy (0)
+    expect(getProgressPercentage({ total_issues: 4, issues_remaining: 0 })).toBe(100)
+    // L67 `if (!layer) return` — explosion layer absent
+    document.getElementById('explosion-layer')?.remove()
+    expect(() => createExplosion()).not.toThrow()
   })
 })
