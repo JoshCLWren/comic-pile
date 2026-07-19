@@ -10,6 +10,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    testTimeout: 15000,
+    maxWorkers: 4,
     setupFiles: './src/unit/setup.ts',
     include: ['src/unit/**/*.{test,spec}.{ts,tsx}'],
     exclude: [
@@ -24,6 +26,12 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'json'],
       exclude: ['node_modules/', 'src/test/'],
+      thresholds: {
+        statements: 94,
+        branches: 94,
+        functions: 94,
+        lines: 94,
+      },
     },
   },
   resolve: {

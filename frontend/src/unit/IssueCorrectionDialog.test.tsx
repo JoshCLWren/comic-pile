@@ -176,6 +176,20 @@ describe('IssueCorrectionDialog', () => {
     expect(input).toHaveValue('1')
   })
 
+  it('paginates issue loading and leaves annual identifiers to text entry', async () => {
+    mockedIssuesApi.list
+      .mockResolvedValueOnce({ ...listResponse([issue({ id: 1, issue_number: '1' })]), next_page_token: 'next' })
+      .mockResolvedValueOnce(listResponse([issue({ id: 2, issue_number: 'Annual 1' })]))
+    renderDialog({ currentIssueNumber: null, totalIssues: null })
+    await screen.findByLabelText(/what issue are you currently on/i)
+    expect(mockedIssuesApi.list).toHaveBeenCalledTimes(2)
+    const input = screen.getByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Annual 1')
+    await userEvent.click(screen.getByRole('button', { name: 'Increase issue number' }))
+    expect(input).toHaveValue('Annual 1')
+  })
+
   it('reports a missing target after a successful create and stops propagation inside the dialog', async () => {
     const existing = [issue({ id: 1, issue_number: '1' })]
     mockedIssuesApi.list.mockResolvedValue(listResponse(existing))

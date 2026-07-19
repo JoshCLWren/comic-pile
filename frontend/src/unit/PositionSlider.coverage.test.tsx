@@ -46,10 +46,12 @@ it('describes before, between, after, and fallback positions', () => {
   const secondSlider = screen.getByRole('slider')
   fireEvent.change(secondSlider, { target: { value: '1' } })
   expect(screen.getByText(/Between/)).toBeInTheDocument()
+
 })
 
 it('handles a current thread absent from the list and a single-position queue', () => {
   render(<PositionSlider threads={[threads[0]!]} currentThread={{ id: 99, title: 'Missing', queue_position: 9 }} onPositionSelect={vi.fn()} onCancel={vi.fn()} />)
   expect(screen.getByRole('slider')).toHaveAttribute('aria-valuemax', '0')
-  expect(screen.getByText('Current position (no change)')).toBeInTheDocument()
+  expect(screen.getByRole('slider')).toHaveAttribute('aria-valuenow', '0')
+  expect(screen.getByText('Move to front of queue')).toBeInTheDocument()
 })

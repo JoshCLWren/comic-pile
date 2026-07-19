@@ -168,10 +168,15 @@ export default function RollPage() {
   }
 
   const enterRatingView = useCallback(async (threadId: number | null, result: number | null = null, threadMetadata: ThreadMetadata | null = null) => {
+    const ratingThread = buildRatingThread(threadId, result, threadMetadata, session?.active_thread)
+    if (!ratingThread) {
+      setErrorMessage('Unable to load the selected thread.')
+      setIsRatingView(false)
+      return
+    }
+
     setSelectedThreadId(threadId)
     if (result !== null) setRolledResult(result)
-
-    const ratingThread = buildRatingThread(threadId, result, threadMetadata, session?.active_thread)
     setActiveRatingThread(ratingThread)
 
     setRating(3.0)
@@ -424,6 +429,8 @@ useEffect(() => {
       ? { id: session.active_thread.id, title: session.active_thread.title, format: session.active_thread.format,
           issues_remaining: session.active_thread.issues_remaining ?? 0, queue_position: session.active_thread.queue_position ?? 0,
           total_issues: session.active_thread.total_issues ?? null, reading_progress: session.active_thread.reading_progress ?? null,
+          issue_id: session.active_thread.issue_id ?? null, issue_number: session.active_thread.issue_number ?? null,
+          next_issue_id: session.active_thread.next_issue_id ?? null, next_issue_number: session.active_thread.next_issue_number ?? null,
           last_rolled_result: session.last_rolled_result ?? session.active_thread.last_rolled_result ?? null }
       : null
 
@@ -653,10 +660,12 @@ useEffect(() => {
 
   async function handleSetDie(die: number) {
     try {
-      setCurrentDie(die)
       await setDieMutation.mutate(die)
+      setCurrentDie(die)
+      return true
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))
+      return false
     }
   }
 
@@ -960,7 +969,7 @@ useEffect(() => {
         <Modal isOpen={isDieModalOpen} title="Select Die" onClose={() => setIsDieModalOpen(false)}>
           <div className="grid grid-cols-3 gap-2">
             {DICE_LADDER.map((die) => (
-              <button key={die} onClick={async () => { await handleSetDie(die); setIsDieModalOpen(false) }}
+              <button key={die} onClick={async () => { if (await handleSetDie(die)) setIsDieModalOpen(false) }}
                 disabled={setDieMutation.isPending}
                 className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${die === currentDie ? 'bg-amber-600/20 border-amber-600 text-amber-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}>
                 d{die}

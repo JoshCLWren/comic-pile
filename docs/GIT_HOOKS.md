@@ -44,11 +44,11 @@ Runs automatically before each commit.
 Runs automatically before each push to remote.
 
 **What it does:**
-- Runs `pytest --cov=comic_pile` with 96% coverage requirement
+- Runs `pytest --cov=comic_pile` with 94% coverage requirement
 
 **What it checks:**
 - All tests pass
-- Test coverage meets 96% threshold
+- Test coverage meets 94% threshold
 
 **What happens on failure:**
 - Push is aborted

@@ -114,11 +114,27 @@ test('mounts the application shell', async () => {
   await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument())
 })
 
+test('ignores an auth response that arrives after the provider unmounts', async () => {
+  let resolveAuth!: (value: { username: string }) => void
+  mockApiGet.mockReturnValueOnce(new Promise((resolve) => { resolveAuth = resolve }))
+  const view = renderWithAuth('/')
+  view.unmount()
+  await act(async () => resolveAuth({ username: 'late-user' }))
+})
+
 test('loads each authenticated lazy route', async () => {
   mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
-  for (const path of ['/queue', '/history', '/sessions/1', '/analytics', '/help', '/thread/1']) {
+  const routes = {
+    '/queue': 'queue-page',
+    '/history': 'history-page',
+    '/sessions/1': 'session-page',
+    '/analytics': 'analytics-page',
+    '/help': 'help-page',
+    '/thread/1': 'thread-detail-page',
+  }
+  for (const [path, testId] of Object.entries(routes)) {
     const { unmount } = renderWithAuth(path)
-    await waitFor(() => expect(screen.queryByTestId(/-page$/)).not.toBeNull())
+    await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument())
     unmount()
   }
 })
