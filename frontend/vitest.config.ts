@@ -36,6 +36,12 @@ export default defineConfig({
         'src/dice-playground-main.tsx',
         '**/*.d.ts',
       ],
+      thresholds: {
+        statements: 94,
+        branches: 94,
+        functions: 94,
+        lines: 94,
+      },
     },
   },
   resolve: {
