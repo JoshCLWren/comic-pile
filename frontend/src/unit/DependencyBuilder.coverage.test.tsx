@@ -38,7 +38,7 @@ describe('DependencyBuilder', () => {
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Prerequisite', total_issues: 2 }] })
     api.issuesApi.list.mockResolvedValue({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread', read_at: null, created_at: 'now' }], next_page_token: null })
-    api.dependenciesApi.createDependency.mockResolvedValue({})
+    api.dependenciesApi.createDependency.mockResolvedValue({ warning: 'dependency warning' })
     const user = userEvent.setup(); const changed = vi.fn()
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} onChanged={changed} />)
     await waitFor(() => expect(screen.getByText('No prerequisites yet.')).toBeInTheDocument())
@@ -48,6 +48,7 @@ describe('DependencyBuilder', () => {
     await waitFor(() => expect(screen.getByLabelText('Prerequisite issue')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /Block issue/ }))
     await waitFor(() => expect(api.dependenciesApi.createDependency).toHaveBeenCalled())
+    expect(toast.showToast).toHaveBeenCalledWith('dependency warning', 'warning')
     expect(changed).toHaveBeenCalled()
   })
 
@@ -144,6 +145,30 @@ describe('DependencyBuilder', () => {
     await waitFor(() => expect(screen.getByText('save failed')).toBeInTheDocument())
   })
 
+  it('ignores stale search and issue responses after the builder is closed', async () => {
+    let resolveThreads!: (value: { threads: never[] }) => void
+    let resolveIssues!: (value: { issues: never[]; next_page_token: null }) => void
+    api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
+    api.threadsApi.list.mockReturnValue(new Promise((resolve) => { resolveThreads = resolve }))
+    const user = userEvent.setup()
+    const { rerender } = render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
+    await user.type(screen.getByLabelText('Search prerequisite thread'), 'late')
+    await waitFor(() => expect(api.threadsApi.list).toHaveBeenCalled())
+    rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} />)
+    resolveThreads({ threads: [] })
+    await Promise.resolve()
+
+    api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Source', total_issues: 2 }] })
+    api.issuesApi.list.mockReturnValue(new Promise((resolve) => { resolveIssues = resolve }))
+    rerender(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
+    await user.type(screen.getByLabelText('Search prerequisite thread'), 'Source')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Source/ })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Source/ }))
+    rerender(<DependencyBuilder thread={thread as never} isOpen={false} onClose={vi.fn()} />)
+    resolveIssues({ issues: [], next_page_token: null })
+    await Promise.resolve()
+  })
+
   it('handles note validation, cancellation, and update failures', async () => {
     const noted = { ...dependency, note: 'Existing note' }
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [noted], blocked_by: [] })
@@ -159,6 +184,7 @@ describe('DependencyBuilder', () => {
     await waitFor(() => expect(screen.getByText('note failed')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
   })
+
 
   it('builds issue graph nodes, handles duplicate dependencies, and reports graph failures', async () => {
     const issueDependency = {

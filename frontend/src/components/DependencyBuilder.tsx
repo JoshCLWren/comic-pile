@@ -96,11 +96,11 @@ const [isSavingNote, setIsSavingNote] = useState(false)
   )
 
   const loadDependencies = useCallback(async () => {
-    if (!thread?.id) return
+    const currentThreadId = thread?.id
     setIsLoadingDeps(true)
     setError('')
     try {
-      const data = await dependenciesApi.listThreadDependencies(thread.id)
+      const data = await dependenciesApi.listThreadDependencies(currentThreadId!)
       setDependencies(data)
     } catch (loadError: unknown) {
       setError(getApiErrorDetail(loadError))
@@ -115,14 +115,14 @@ const [isSavingNote, setIsSavingNote] = useState(false)
    * show as dashed connections in the flowchart.
    */
   const loadFlowchartData = useCallback(async () => {
-    if (!thread?.id) return
+    const currentThreadId = thread?.id
     try {
       const [depsData, allBlockedIds] = await Promise.all([
-        dependenciesApi.listThreadDependencies(thread.id),
+        dependenciesApi.listThreadDependencies(currentThreadId!),
         dependenciesApi.listBlockedThreadIds(),
       ])
 
-      const relatedIds = new Set([thread.id])
+      const relatedIds = new Set([currentThreadId!])
       const allDeps = [...depsData.blocking, ...depsData.blocked_by]
 
       
@@ -372,7 +372,6 @@ const [isSavingNote, setIsSavingNote] = useState(false)
 
    async function handleInlineMigration(e: FormEvent) {
     e.preventDefault()
-    if (!selectedThreadId) return
     if (!migrationLastRead.trim() || !migrationTotal.trim()) {
       setError('Both fields are required for migration.')
       return
@@ -395,7 +394,7 @@ const [isSavingNote, setIsSavingNote] = useState(false)
     setIsMigrating(true)
     setError('')
     try {
-      const updatedThread = await issuesApi.migrateThread(selectedThreadId, lastRead, total)
+      const updatedThread = await issuesApi.migrateThread(selectedThreadId!, lastRead, total)
       // Refresh search results with updated thread data
       setSearchResults((prev) =>
         prev.map((t) => (t.id === selectedThreadId ? updatedThread : t))

@@ -286,7 +286,7 @@ describe('RollPage parent handlers', () => {
   it('falls back to the standard die display for an unsupported session die', () => {
     sessionData.current_die = 7
     render(<RollPage />)
-    expect(screen.getByRole('button', { name: 'd6' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'd6' })[0]).toBeInTheDocument()
   })
 
   it('covers low ratings, finish-session ratings, unsnooze, and snooze failure', async () => {
@@ -610,5 +610,62 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'save rating' }))
     expect(vibrate).toHaveBeenCalledWith(8)
     expect(vibrate).toHaveBeenCalledWith(20)
+  })
+
+  it('reports pool, stale-read, and action failures without leaving the page stuck', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    spies.mutate.mockRejectedValue(new Error('pool failed'))
+    render(<RollPage />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'shuffle pool' }))
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Failed to shuffle pool: pool failed'))
+
+    cleanup()
+    staleData = [{ id: 7, title: 'Old', format: 'Comic', status: 'active', is_blocked: false, created_at: '2000-01-01' }] as never[]
+    spies.setPending.mockRejectedValueOnce(new Error('stale failed'))
+    render(<RollPage />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'read stale' }))
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Failed to set pending thread:', expect.any(Error)))
+
+    cleanup()
+    spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })
+    spies.mutate.mockRejectedValue(new Error('move failed'))
+    render(<RollPage />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'thread' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /move to front/i }))
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Action failed:', expect.any(Error)))
+    alertSpy.mockRestore()
+    errorSpy.mockRestore()
+    staleData = []
+  })
+
+  it('handles sparse roll metadata, recent stale activity, and pending-thread fallback selection', async () => {
+    const user = userEvent.setup()
+    sessionData.current_die = 0
+    sessionData.last_rolled_result = null
+    staleData = [{
+      id: 8, title: 'Recently active', format: 'Comic', status: 'active', is_blocked: false,
+      created_at: '2026-07-18T00:00:00Z', last_activity_at: '2026-07-18T00:00:00Z',
+    }] as never[]
+    spies.setPending.mockResolvedValueOnce({
+      thread_id: 1, title: 'Sparse', format: 'Comic', issues_remaining: 1,
+      queue_position: 1, total_issues: 2, result: undefined, last_rolled_result: 4,
+    })
+    render(<RollPage />)
+    expect(screen.getAllByRole('button', { name: 'd6' })[0]).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'thread' }))
+    await user.click(screen.getByRole('button', { name: /Read Now/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+
+    cleanup()
+    sessionHook.value = {
+      data: { current_die: 6, pending_thread_id: 1, last_rolled_result: null, active_thread: null, snoozed_threads: [] },
+      refetch: spies.refetch,
+    }
+    render(<RollPage />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
+    sessionHook.value = null
+    sessionData.current_die = 6
+    staleData = []
   })
 })

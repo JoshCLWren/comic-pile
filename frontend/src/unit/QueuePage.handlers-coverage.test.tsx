@@ -327,4 +327,20 @@ describe('QueuePage callback coverage', () => {
     expect(mocks.mutate).toHaveBeenCalled()
   })
 
+  it('renders pending mutation labels for create, edit, and reactivation', async () => {
+    const user = userEvent.setup()
+    vi.mocked(useCreateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
+    vi.mocked(useUpdateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
+    vi.mocked(useReactivateThread).mockReturnValue({ mutate: mocks.mutate, isPending: true } as never)
+    renderPage()
+    await user.click(screen.getAllByRole('button', { name: /add thread/i })[0]!)
+    expect(screen.getByRole('button', { name: 'Creating...' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'close modal' }))
+    await user.click(screen.getByText('edit modal callback'))
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'close modal' }))
+    await user.click(screen.getAllByRole('button', { name: /^reactivate$/i })[0]!)
+    expect(screen.getByRole('button', { name: 'Reactivating...' })).toBeDisabled()
+  })
+
 })
