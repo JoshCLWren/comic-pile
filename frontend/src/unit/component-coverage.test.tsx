@@ -116,4 +116,17 @@ describe('small and dialog components', () => {
     expect(screen.getByText('Issues 1–1')).toBeInTheDocument()
     expect(screen.getByText('Issues 6–12')).toBeInTheDocument()
   })
+
+  it('renders unknown reading position and a single prerequisite gate', () => {
+    render(<ReadingOrderTimeline
+      thread={{ ...thread, issues_remaining: 3, total_issues: 5, next_unread_issue_number: null, next_unread_issue_id: 100 } as never}
+      dependencies={[{
+        id: 9, source_thread_id: 2, target_thread_id: null, source_issue_id: 2, target_issue_id: 100,
+        source_label: 'Prerequisite #2', target_label: 'Target', target_issue_thread_id: 1,
+        source_issue_thread_id: 2, is_issue_level: true, created_at: 'now',
+      }] as never}
+    />)
+    expect(screen.getByText('Unknown')).toBeInTheDocument()
+    expect(screen.getByText('Prerequisite:')).toBeInTheDocument()
+  })
 })

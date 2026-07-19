@@ -103,3 +103,18 @@ test('shows loading and non-auth failure states and logs out gracefully', async 
   await waitFor(() => expect(mockClearAccessToken).toHaveBeenCalled())
 
 })
+
+test('clears authentication when the user lookup returns unauthorized', async () => {
+  mockApiGet.mockResolvedValueOnce({ username: 'user', email: 'user@example.com' })
+    .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } })
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <AuthProvider>
+        <BugReportRestoreProvider>
+          <Navigation onBugReportSubmit={vi.fn()} />
+        </BugReportRestoreProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+  await waitFor(() => expect(mockClearAccessToken).toHaveBeenCalled())
+})

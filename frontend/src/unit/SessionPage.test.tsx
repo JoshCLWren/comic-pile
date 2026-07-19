@@ -71,3 +71,35 @@ it('renders session details and triggers restore actions', async () => {
   await user.click(screen.getByRole('button', { name: /undo/i }))
   expect(undoSpy).toHaveBeenCalledWith({ sessionId: 12, snapshotId: 4 })
 })
+
+it('renders loading, missing, empty, and active session branches', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: undefined, isPending: true })
+  const { rerender } = render(<MemoryRouter><SessionPage /></MemoryRouter>)
+  expect(screen.getByRole('status')).toBeInTheDocument()
+  mockedUseSessionDetails.mockReturnValue({ data: undefined, isPending: false })
+  rerender(<MemoryRouter><SessionPage /></MemoryRouter>)
+  expect(screen.getByText('Session not found')).toBeInTheDocument()
+
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 13, started_at: '2024-01-01', ended_at: null, start_die: 4, current_die: 4,
+    ladder_path: 'd4', narrative_summary: { highlights: [], misses: [] }, events: [],
+  }, isPending: false })
+  mockedUseSessionSnapshots.mockReturnValue({ data: undefined })
+  rerender(<MemoryRouter><SessionPage /></MemoryRouter>)
+  expect(screen.getByText('Active')).toBeInTheDocument()
+  expect(screen.getByText('No snapshots available.')).toBeInTheDocument()
+  expect(screen.getByText('No events recorded.')).toBeInTheDocument()
+})
+
+it('renders fallback labels for sparse summaries and events', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 14, started_at: '2024-01-01', ended_at: null, start_die: 4, current_die: 4,
+    ladder_path: 'd4', narrative_summary: { highlights: [], misses: ['Missed'] },
+    events: [{ id: 2, timestamp: '2024-01-01', type: 'shuffle', thread_title: '', rating: 0, result: 0, die: 0, queue_move: '' }],
+  }, isPending: false })
+  mockedUseSessionSnapshots.mockReturnValue({ data: { snapshots: [{ id: 5, description: '', created_at: '2024-01-01' }] } })
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+  expect(screen.getAllByText('None').length).toBeGreaterThan(0)
+  expect(screen.getByText('Thread')).toBeInTheDocument()
+  expect(screen.getByText('Snapshot')).toBeInTheDocument()
+})

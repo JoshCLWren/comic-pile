@@ -1,4 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react'
+import axios from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({
@@ -111,6 +112,9 @@ describe('data hooks', () => {
     api.tasksApi.getMetrics.mockRejectedValueOnce(new Error('metrics failed'))
     const failedAnalytics = renderHook(() => useAnalytics())
     await waitFor(() => expect(failedAnalytics.result.current.error).toBeInstanceOf(Error))
+    api.tasksApi.getMetrics.mockRejectedValueOnce('metrics unavailable')
+    const stringAnalytics = renderHook(() => useAnalytics())
+    await waitFor(() => expect(stringAnalytics.result.current.error?.message).toBe('metrics unavailable'))
     api.undoApi.listSnapshots.mockRejectedValueOnce(new Error('snapshots failed'))
     const failedSnapshots = renderHook(() => useSnapshots(2))
     await waitFor(() => expect(failedSnapshots.result.current.isError).toBe(true))
@@ -172,5 +176,37 @@ describe('data hooks', () => {
       await expect(restore.result.current.mutate(9)).rejects.toBe('restore failed')
     })
     await waitFor(() => expect(restore.result.current.isError).toBe(true))
+  })
+
+  it('covers storage fallbacks, unchanged sessions, empty snapshots, and Axios restore errors', async () => {
+    const originalStorage = window.localStorage
+    const storageFailure = {
+      getItem: () => { throw new Error('storage unavailable') },
+      setItem: () => { throw new Error('storage unavailable') },
+    }
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: storageFailure })
+    api.sessionApi.getCurrent.mockResolvedValueOnce({ id: 8 })
+    const current = renderHook(() => useSession())
+    await waitFor(() => expect(current.result.current.data?.id).toBe(8))
+    expect(toast.showToast).not.toHaveBeenCalled()
+
+    const emptySnapshots = renderHook(() => useSessionSnapshots(null))
+    expect(emptySnapshots.result.current.isPending).toBe(false)
+    const axiosError = new axios.AxiosError('restore request failed', 'ERR_BAD_REQUEST')
+    axiosError.isAxiosError = true
+    axiosError.response = { status: 400, data: { detail: 'server rejected restore' } } as never
+    api.sessionApi.restoreSessionStart.mockRejectedValueOnce(axiosError)
+    const restore = renderHook(() => useRestoreSessionStart())
+    await act(async () => expect(restore.result.current.mutate(8)).rejects.toBe(axiosError))
+    expect(restore.result.current.error).toBe(axiosError)
+    Object.defineProperty(window, 'localStorage', { configurable: true, value: originalStorage })
+  })
+
+  it('ignores snapshots that resolve after unmount', async () => {
+    let resolveSnapshots!: (value: unknown) => void
+    api.undoApi.listSnapshots.mockImplementationOnce(() => new Promise((resolve) => { resolveSnapshots = resolve }))
+    const snapshots = renderHook(() => useSnapshots(44))
+    snapshots.unmount()
+    await act(async () => resolveSnapshots({ snapshots: [{ id: 44 }] }))
   })
 })

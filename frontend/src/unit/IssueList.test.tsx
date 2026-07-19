@@ -214,11 +214,43 @@ describe('IssueList', () => {
     render(<IssueList thread={{ ...mockThread, next_unread_issue_id: 3 }} onThreadUpdated={onThreadUpdated} />)
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
     expect(screen.getByTitle('Has dependencies')).toBeInTheDocument()
+    await userEvent.click(screen.getByTitle('Has dependencies'))
+    expect(mockedIssuesApi.markUnread).not.toHaveBeenCalled()
     const items = screen.getAllByText(/#\d/)
     await userEvent.click(items[0]!)
     expect(mockedIssuesApi.markUnread).toHaveBeenCalledWith(1)
     await waitFor(() => expect(onThreadUpdated).toHaveBeenCalledWith(99))
-    await userEvent.click(items[1]!)
+    await userEvent.click(screen.getByText('#2'))
     expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(3)
+  })
+
+  it('keeps the list usable when a status toggle fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse(BASE_ISSUES))
+    mockedIssuesApi.markRead.mockRejectedValueOnce(new Error('toggle failed'))
+    render(<IssueList thread={mockThread} />)
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    await userEvent.click(screen.getByText('#1'))
+    await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Failed to toggle issue status:', expect.any(Error)))
+    errorSpy.mockRestore()
+  })
+
+  it('handles zero-count progress, outgoing dependencies, and read dates without a callback', async () => {
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse([
+      { ...BASE_ISSUES[0], status: 'read', read_at: '2026-03-10T00:00:00Z' },
+    ], null, 0))
+    mockedDependenciesApi.getIssueDependencies.mockResolvedValue({
+      issue_id: 1,
+      incoming: [],
+      outgoing: [{ dependency_id: 3, source_issue_id: 4, source_issue_number: '4', source_thread_id: 5, source_thread_title: 'Next' }],
+    })
+
+    render(<IssueList thread={{ ...mockThread, next_unread_issue_id: 999 }} />)
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    expect(screen.getByText(/Read 1 of 0 \(0%\)/)).toBeInTheDocument()
+    expect(screen.getByTitle('Has dependencies')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('#1'))
+    expect(mockedIssuesApi.markUnread).toHaveBeenCalledWith(1)
   })
 })

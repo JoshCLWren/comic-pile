@@ -5,6 +5,10 @@ import { getDependencyTooltip } from '../utils/dependencyHelpers'
 import { layoutGraph } from '../utils/graphLayout'
 import { reorderIssuesForDrop, moveIssueByStep, normalizeIssueOrder, applyIssueMutation, applyIssueMutations, getPendingIssueIds } from '../pages/QueuePage/issueUtils'
 import { buildRatingThread, createExplosion, getProgressPercentage, mapSessionThreadToRatingThread } from '../pages/RollPage/utils'
+import { getTopologicalPath } from '../utils/topologicalSort'
+import { buildD10Faces } from '../components/d10Geometry'
+import { DEFAULT_DICE_RENDER_CONFIG, getDiceRenderConfigForSides } from '../components/diceRenderConfig'
+import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
 import type { Issue, Thread, FlowchartDependency } from '../types'
 
 const issue = (id: number, status: 'read' | 'unread' = 'unread'): Issue => ({
@@ -43,6 +47,10 @@ describe('date and issue utilities', () => {
     expect(parseIssueRange('-1-2')).toBe(1)
     expect(() => parseIssueRange('1-10001')).toThrow('too large')
     expect(() => parseIssueRange('x'.repeat(101))).toThrow('too long')
+    expect(parseIssueRange('1-2,1-2')).toBe(2)
+    expect(() => parseIssueRange('0-9999,10000')).toThrow('Cannot create more')
+    expect(() => parseIssueRange('2-1')).toThrow('cannot exceed')
+    expect(parseIssueRange('Annual-2024')).toBe(1)
   })
 })
 
@@ -69,6 +77,20 @@ describe('dependency and graph utilities', () => {
     expect(result.width).toBeGreaterThan(0)
     expect(result.height).toBeGreaterThan(0)
     expect(layoutGraph([thread(1), thread(2)], [{ id: 'x', source_id: 1, target_id: 2, created_at: 'now' }, { id: 'y', source_id: 2, target_id: 1, created_at: 'now' }], new Set()).nodes).toHaveLength(2)
+    const issueGraph = layoutGraph([thread(1)], [{ id: 'issue-edge', source_id: -10, target_id: 1, is_issue_level: true, created_at: 'now' }], new Set([1]), [
+      { id: -10, title: null, x: 0, y: 0, isBlocked: false, isIssueNode: true, parentThreadId: 1 } as never,
+    ])
+    expect(issueGraph.edges[0]?.isIssueLevel).toBe(true)
+    expect(issueGraph.edges[0]?.isBlocking).toBe(true)
+    const incomplete = layoutGraph([thread(1)], [
+      { id: 'missing-source', source_id: 99, target_id: 1, created_at: 'now' },
+      { id: 'missing-target', source_id: 1, target_id: 99, created_at: 'now' },
+    ], new Set())
+    expect(incomplete.edges).toHaveLength(0)
+    const issueOnly = layoutGraph([], [], new Set(), [
+      { id: -1, title: 'Issue', x: 0, y: 0, isBlocked: true, isIssueNode: true },
+    ])
+    expect(issueOnly.nodes[0]?.isIssueNode).toBe(true)
   })
 })
 
@@ -114,5 +136,56 @@ describe('roll utilities', () => {
     expect(layer.children).toHaveLength(0)
     random.mockRestore()
     vi.useRealTimers()
+  })
+})
+
+describe('remaining pure branches', () => {
+  it('orders dependency graphs including issue parents, unknown nodes, and cycles', () => {
+    const threads = [thread(1), thread(2), thread(3)]
+    expect(getTopologicalPath(threads, [
+      { id: 'issue-parent', source_id: -1, target_id: 2, source_parent_thread_id: 1, created_at: 'now' },
+      { id: 'target-parent', source_id: 2, target_id: -2, target_parent_thread_id: 3, created_at: 'now' },
+      { id: 'ignored', source_id: -3, target_id: 1, created_at: 'now' },
+      { id: 'self', source_id: 1, target_id: 1, created_at: 'now' },
+      { id: 'unknown', source_id: 99, target_id: 1, created_at: 'now' },
+    ])).toHaveLength(3)
+    expect(getTopologicalPath(threads.slice(0, 2), [
+      { id: 'cycle-a', source_id: 1, target_id: 2, created_at: 'now' },
+      { id: 'cycle-b', source_id: 2, target_id: 1, created_at: 'now' },
+    ])).toHaveLength(2)
+  })
+
+  it('normalizes dice configuration values and builds the d10 geometry', () => {
+    expect(DEFAULT_DICE_RENDER_CONFIG.global.tileSize).toBe(256)
+    const config = getDiceRenderConfigForSides(10, {
+      global: {
+        ...DEFAULT_DICE_RENDER_CONFIG.global,
+        tileSize: Number.NaN, uvInset: 2, fontScale: -1, d10AutoCenter: true,
+        textColor: '', fontWeight: 'normal',
+      },
+      perSides: { 10: { tileSize: 512, d10TopOffsetX: 9 } },
+    })
+    expect(config.tileSize).toBe(512)
+    expect(config.uvInset).toBe(0.25)
+    expect(config.fontScale).toBe(0.1)
+    expect(config.d10AutoCenter).toBe(true)
+    expect(config.d10TopOffsetX).toBe(0.5)
+    expect(config.textColor).toBe(DEFAULT_DICE_RENDER_CONFIG.global.textColor)
+    const defaults = getDiceRenderConfigForSides(20, {
+      global: { ...DEFAULT_DICE_RENDER_CONFIG.global, d10AutoCenter: false },
+    })
+    expect(defaults.d10AutoCenter).toBe(false)
+    const geometry = buildD10Faces()
+    expect(geometry.faces).toHaveLength(10)
+    expect(geometry.faceNumbers).toEqual([1, 10, 2, 9, 3, 8, 4, 7, 5, 6])
+  })
+
+  it('formats API errors for axios-like, native, and unknown failures', () => {
+    expect(getApiErrorDetail({ response: { status: 422, data: { detail: 'invalid' } } })).toBe('invalid')
+    expect(getApiErrorStatus({ response: { status: 422 } })).toBe(422)
+    expect(getApiErrorStatus({ response: {} })).toBeNull()
+    expect(getApiErrorDetail(new Error('Failed to fetch'))).toContain('Network error')
+    expect(getApiErrorDetail(new Error('ordinary'))).toBe('ordinary')
+    expect(getApiErrorDetail(null)).toBe('Unknown error')
   })
 })
