@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useContext } from 'react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PositionMenuProvider } from '../contexts/PositionMenuProvider'
 import { SessionProvider } from '../contexts/SessionContext'
 import { SessionContext } from '../contexts/SessionContextValue'
@@ -38,6 +38,7 @@ function CacheConsumer() {
 
 describe('context providers', () => {
   beforeEach(() => vi.useRealTimers())
+  afterEach(() => vi.useRealTimers())
 
   it('toggles and closes position menus', async () => {
     const user = userEvent.setup()

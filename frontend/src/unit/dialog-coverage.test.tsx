@@ -20,6 +20,7 @@ describe('bug report and issue correction dialogs', () => {
     await waitFor(() => expect(screen.getByText('failed')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onClose).toHaveBeenCalled()
+
   })
 
   it('loads issues and submits an existing issue correction', async () => {

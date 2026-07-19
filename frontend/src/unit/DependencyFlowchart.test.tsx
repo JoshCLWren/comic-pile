@@ -61,6 +61,8 @@ describe('DependencyFlowchart', () => {
     expect(view.getByTestId('flowchart-node--1')).toBeInTheDocument()
     expect(view.getByTestId('flowchart-node--2')).toBeInTheDocument()
     expect(view.queryByTestId('flowchart-node--3')).not.toBeInTheDocument()
+    expect(view.getByTestId('flowchart-edge--1--2')).toBeInTheDocument()
+    expect(view.queryByTestId('flowchart-edge-1-99')).not.toBeInTheDocument()
     const svg = view.getByTestId('flowchart-svg')
     fireEvent.mouseDown(svg, { clientX: 1, clientY: 1 })
     fireEvent.mouseMove(svg, { clientX: 10, clientY: 20 })
@@ -104,5 +106,30 @@ describe('DependencyFlowchart', () => {
     fireEvent.mouseDown(view.getByTestId('flowchart-node--1'), { clientX: 4, clientY: 5 })
     fireEvent.mouseLeave(view.getByTestId('flowchart-node--1'))
     expect(view.getByTestId('flowchart-edge--1--2')).toBeInTheDocument()
+  })
+
+  it('handles missing SVG geometry and stale dragged nodes safely', () => {
+    const view = render(<DependencyFlowchart
+      threads={[makeThread(1), makeThread(2)] as never}
+      dependencies={[]}
+      blockedIds={new Set()}
+    />)
+    const svg = view.getByTestId('flowchart-svg')
+    const node = view.getByTestId('flowchart-node-1')
+    Object.defineProperty(svg, 'getBoundingClientRect', { configurable: true, value: () => undefined })
+    fireEvent.mouseDown(node, { clientX: 1, clientY: 1 })
+    fireEvent.mouseMove(svg, { clientX: 4, clientY: 5 })
+    fireEvent.mouseEnter(node, { clientX: 4, clientY: 5 })
+    view.rerender(<DependencyFlowchart threads={[makeThread(2)] as never} dependencies={[]} blockedIds={new Set()} />)
+    fireEvent.mouseMove(view.getByTestId('flowchart-svg'), { clientX: 8, clientY: 9 })
+  })
+
+  it('renders a non-blocking thread edge without a blocking marker', () => {
+    const view = render(<DependencyFlowchart
+      threads={[makeThread(1), makeThread(2)] as never}
+      dependencies={[{ id: 'related', source_id: 1, target_id: 2, created_at: 'now', isBlocking: false } as never]}
+      blockedIds={new Set()}
+    />)
+    expect(view.getByTestId('flowchart-edge-1-2')).toHaveAttribute('marker-end', 'url(#arrowhead)')
   })
 })

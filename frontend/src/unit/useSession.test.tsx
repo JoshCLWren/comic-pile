@@ -146,3 +146,36 @@ it('continues when session storage cannot be read or written', async () => {
   await waitFor(() => expect(result.current.data).toEqual({ id: 12, user_id: 6 }))
   expect(result.current.isError).toBe(false)
 })
+
+it('normalizes Error failures for session list and restore operations', async () => {
+  mockedSessionApi.list.mockRejectedValueOnce(new Error('list unavailable'))
+  const list = renderWithProvider(() => useSessions())
+  await waitFor(() => expect(list.result.current.error?.message).toBe('list unavailable'))
+
+  mockedSessionApi.restoreSessionStart.mockRejectedValueOnce(new Error('restore unavailable'))
+  const restore = renderWithProvider(() => useRestoreSessionStart())
+  await expect(act(async () => restore.result.current.mutate(8))).rejects.toThrow('restore unavailable')
+})
+
+it('preserves Error instances from detail and snapshot requests', async () => {
+  mockedSessionApi.getDetails.mockRejectedValueOnce(new Error('detail unavailable'))
+  mockedSessionApi.getSnapshots.mockRejectedValueOnce(new Error('snapshot unavailable'))
+  const details = renderWithProvider(() => useSessionDetails(12))
+  const snapshots = renderWithProvider(() => useSessionSnapshots(12))
+  await waitFor(() => expect(details.result.current.error?.message).toBe('detail unavailable'))
+  await waitFor(() => expect(snapshots.result.current.error?.message).toBe('snapshot unavailable'))
+})
+
+it('reports current-session failures and tolerates a malformed current response', async () => {
+  mockedSessionApi.getCurrent.mockRejectedValueOnce(new Error('current unavailable'))
+  const failed = renderWithProvider(() => useSession())
+  await waitFor(() => expect(failed.result.current.error?.message).toBe('current unavailable'))
+
+  mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: null } as never)
+  const malformed = renderWithProvider(() => useSession())
+  await waitFor(() => expect(malformed.result.current.isPending).toBe(false))
+
+  mockedSessionApi.getCurrent.mockRejectedValueOnce('current string failure')
+  const stringFailure = renderWithProvider(() => useSession())
+  await waitFor(() => expect(stringFailure.result.current.error?.message).toBe('Failed to fetch current session'))
+})

@@ -15,13 +15,7 @@ export function reorderIssuesForDrop(
 
   const nextIssues = [...issues]
   const draggedIssue = nextIssues.splice(draggedIndex, 1)[0]
-  if (!draggedIssue) {
-    return issues
-  }
   const targetIndexAfterRemoval = nextIssues.findIndex((issue) => issue.id === targetIssueId)
-  if (targetIndexAfterRemoval === -1) {
-    return issues
-  }
   nextIssues.splice(targetIndexAfterRemoval + 1, 0, draggedIssue)
   return nextIssues
 }
@@ -43,9 +37,6 @@ export function moveIssueByStep(
 
   const nextIssues = [...issues]
   const movedIssue = nextIssues.splice(issueIndex, 1)[0]
-  if (!movedIssue) {
-    return issues
-  }
   nextIssues.splice(targetIndex, 0, movedIssue)
   return nextIssues
 }

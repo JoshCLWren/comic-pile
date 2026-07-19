@@ -432,6 +432,26 @@ describe('PositionMenu', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument()
   })
 
+  it('does not toggle twice when the keyboard activation also emits a click', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+    await user.click(trigger)
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+  })
+
   it('navigates menu items with arrow keys', async () => {
     const user = userEvent.setup()
     render(

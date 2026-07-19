@@ -1,6 +1,8 @@
 import { act, render, screen } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import Swipeable from '../components/Swipeable'
+
+afterEach(() => vi.useRealTimers())
 
 function renderSwipeable() {
   const onCardClick = vi.fn()
@@ -134,3 +136,18 @@ it('fires onCardClick when card is tapped without swiping', () => {
   expect(onCardClick).toHaveBeenCalledTimes(1)
 })
 
+it('closes an open card on click and clears the swipe timeout on repeated touch ends', async () => {
+  vi.useFakeTimers()
+  const { onCardClick, slidingCard } = renderSwipeable()
+  await act(async () => {
+    slidingCard.dispatchEvent(createTouchEvent('touchstart', { x: 200, y: 100 }))
+    slidingCard.dispatchEvent(createTouchEvent('touchmove', { x: 50, y: 105 }))
+    slidingCard.dispatchEvent(createTouchEvent('touchend', { x: 50, y: 105 }))
+    slidingCard.dispatchEvent(createTouchEvent('touchend', { x: 50, y: 105 }))
+  })
+  await act(async () => { await Promise.resolve() })
+  act(() => slidingCard.click())
+  expect(slidingCard.style.transform).toBe('translateX(0px)')
+  expect(onCardClick).not.toHaveBeenCalled()
+  act(() => vi.advanceTimersByTime(50))
+})

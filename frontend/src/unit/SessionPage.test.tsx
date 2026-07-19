@@ -103,3 +103,16 @@ it('renders fallback labels for sparse summaries and events', () => {
   expect(screen.getByText('Thread')).toBeInTheDocument()
   expect(screen.getByText('Snapshot')).toBeInTheDocument()
 })
+
+it('renders pending restore state and optional event metadata', () => {
+  mockedUseSessionDetails.mockReturnValue({ data: {
+    session_id: 15, started_at: '2024-01-01', ended_at: '2024-01-02', start_die: 4, current_die: 6,
+    ladder_path: 'd4 → d6', narrative_summary: undefined,
+    events: [{ id: 3, timestamp: '2024-01-01', type: 'move', thread_title: 'Saga', rating: 4, result: 5, die: 6, queue_move: 'front' }],
+  }, isPending: false })
+  mockedUseSessionSnapshots.mockReturnValue({ data: { snapshots: [{ id: 6, description: 'Snapshot', created_at: '2024-01-01' }] } })
+  mockedUseRestoreSessionStart.mockReturnValue({ mutate: restoreSpy, isPending: true })
+  render(<MemoryRouter><SessionPage /></MemoryRouter>)
+  expect(screen.getByRole('button', { name: 'Restoring...' })).toBeDisabled()
+  expect(screen.getByText('Queue move: front')).toBeInTheDocument()
+})
