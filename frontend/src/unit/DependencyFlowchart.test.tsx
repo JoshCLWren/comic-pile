@@ -80,4 +80,29 @@ describe('DependencyFlowchart', () => {
     fireEvent.mouseUp(svg)
     expect(view.queryByTestId('flowchart-edge--10--11')).not.toBeInTheDocument()
   })
+
+  it('covers zoom limits, issue-node geometry, and drag cancellation paths', () => {
+    const view = render(<DependencyFlowchart
+      threads={[makeThread(1), makeThread(2)] as never}
+      dependencies={[{
+        id: 'issue-blocking', source_id: -1, target_id: -2, created_at: 'now',
+        is_issue_level: true, isBlocking: true,
+      } as never]}
+      blockedIds={new Set([2])}
+      issueNodes={[
+        { id: -1, title: 'Prerequisite #1', x: 0, y: 0, isBlocked: false, isIssueNode: true, parentThreadId: 1 },
+        { id: -2, title: 'Target #2', x: 0, y: 0, isBlocked: true, isIssueNode: true, parentThreadId: 2 },
+      ] as never}
+    />)
+    const svg = view.getByTestId('flowchart-svg')
+    for (let i = 0; i < 20; i += 1) fireEvent.click(view.getByRole('button', { name: 'Zoom in' }))
+    for (let i = 0; i < 20; i += 1) fireEvent.click(view.getByRole('button', { name: 'Zoom out' }))
+    fireEvent.mouseEnter(view.getByTestId('flowchart-node--1'), { clientX: 4, clientY: 5 })
+    fireEvent.mouseDown(view.getByTestId('flowchart-node--1'), { clientX: 4, clientY: 5 })
+    fireEvent.mouseMove(svg, { clientX: 40, clientY: 50 })
+    fireEvent.mouseUp(svg)
+    fireEvent.mouseDown(view.getByTestId('flowchart-node--1'), { clientX: 4, clientY: 5 })
+    fireEvent.mouseLeave(view.getByTestId('flowchart-node--1'))
+    expect(view.getByTestId('flowchart-edge--1--2')).toBeInTheDocument()
+  })
 })
