@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import Dice3D from '../components/Dice3D'
 import { DEFAULT_DICE_RENDER_CONFIG } from '../components/diceRenderConfig'
 
-const diceMock = vi.hoisted(() => ({ failRenderer: false, noIndex: false, emptyBox: false, noMap: false }))
+const diceMock = vi.hoisted(() => ({ failRenderer: false, noIndex: false, emptyBox: false, noMap: false, noGeometry: false, noMaterial: false }))
 
 vi.mock('three', () => {
   class BufferGeometry {
@@ -113,8 +113,8 @@ vi.mock('three', () => {
     rotation: { x: number; y: number; z: number; set: ReturnType<typeof vi.fn> }
 
     constructor(geometry: unknown, material: unknown) {
-      this.geometry = geometry
-      this.material = material
+      this.geometry = diceMock.noGeometry ? undefined : geometry
+      this.material = diceMock.noMaterial ? undefined : material
       this.castShadow = false
       this.rotation = { x: 0, y: 0, z: 0, set: vi.fn() }
     }
@@ -317,4 +317,14 @@ it('disposes dice materials that do not have a texture map', () => {
   expect(document.querySelector('.dice-3d')).toBeInTheDocument()
   unmount()
   diceMock.noMap = false
+})
+
+it('cleans up meshes that have no geometry or material', () => {
+  diceMock.noGeometry = true
+  diceMock.noMaterial = true
+  const { unmount } = render(<Dice3D sides={6} value={1} />)
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+  unmount()
+  diceMock.noGeometry = false
+  diceMock.noMaterial = false
 })

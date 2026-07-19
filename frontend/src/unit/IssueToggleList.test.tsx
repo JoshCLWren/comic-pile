@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { dependenciesApi } from '../services/api'
@@ -599,6 +599,19 @@ describe('IssueToggleList', () => {
     fireEvent.click(screen.getByTestId('issue-add-button'))
     await waitFor(() => expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4'))
     errorSpy.mockRestore()
+  })
+
+  it('toggles both read states and tolerates an initial issue-load failure', async () => {
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+    await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(1))
+    fireEvent.click(screen.getByTestId('issue-toggle-3'))
+    await waitFor(() => expect(mockedIssuesApi.markUnread).toHaveBeenCalledWith(3))
+
+    cleanup()
+    mockedIssuesApi.list.mockRejectedValueOnce(new Error('initial load failed'))
+    render(<IssueToggleList threadId={99} />)
+    await waitFor(() => expect(screen.queryByText('Loading issues…')).not.toBeInTheDocument())
   })
 
   it('uses the timeout focus fallback and renders an empty dependency view', async () => {

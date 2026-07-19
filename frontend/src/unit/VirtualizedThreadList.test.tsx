@@ -84,6 +84,21 @@ it('reacts to resize measurements and auto-scrolls at both container edges', () 
   expect(mockScrollToIndex).toHaveBeenCalled()
 })
 
+it('ignores throttled and empty virtualized drag-over states', () => {
+  mockScrollToIndex.mockClear()
+  mockGetVirtualItems.mockReturnValue([])
+  render(<VirtualizedThreadList threads={createMockThreads(60)} renderItem={(thread) => <div>{thread.title}</div>} />)
+  const container = screen.getByLabelText('Thread queue')
+  Object.defineProperty(container, 'getBoundingClientRect', { value: () => ({ top: 0, height: 100 }) })
+  vi.spyOn(performance, 'now').mockReturnValue(100)
+  fireEvent.dragOver(container, { clientY: 1 })
+  fireEvent.dragOver(container, { clientY: 1 })
+  expect(mockScrollToIndex).not.toHaveBeenCalled()
+  mockGetVirtualItems.mockReturnValue(
+    Array.from({ length: 5 }, (_, i) => ({ key: i, index: i, start: i * 160, end: (i + 1) * 160, size: 160, lane: 0 })),
+  )
+})
+
 beforeAll(() => {
   // Default: virtualizer shows first 5 items of a list
   mockGetVirtualItems.mockReturnValue(
