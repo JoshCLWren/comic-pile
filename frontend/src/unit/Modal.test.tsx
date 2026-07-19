@@ -141,3 +141,21 @@ it('uses the close button as the autofocus fallback', () => {
 
   expect(screen.getByRole('button', { name: /close modal/i })).toHaveFocus()
 })
+
+it('does not wrap focus when tabbing from a middle focusable element', () => {
+  // Covers the false arms of the shift/non-shift focus-wrap guards in the keydown handler
+  const { container } = render(
+    <Modal isOpen title="Focus Wrap" onClose={() => {}}>
+      <input aria-label="First field" />
+      <input aria-label="Middle field" />
+      <button type="button">Last</button>
+    </Modal>,
+  )
+  const middle = container.querySelectorAll('input')[1] as HTMLElement
+  middle.focus()
+  // shift+tab from a non-first element: activeElement !== firstElement -> no wrap
+  fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+  // tab from a non-last element: activeElement !== lastElement -> no wrap
+  fireEvent.keyDown(document, { key: 'Tab', shiftKey: false })
+  expect(middle).toHaveFocus()
+})
