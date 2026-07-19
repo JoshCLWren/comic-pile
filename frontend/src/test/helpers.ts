@@ -57,9 +57,24 @@ export async function waitForEditThreadModal(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Edit Thread' })).toBeVisible()
 }
 
-export async function openThreadActions(threadItem: Locator): Promise<void> {
+/**
+ * Opens a thread's action menu and returns its portaled overlay.
+ *
+ * The menu renders under document.body so it can escape virtualized-card clipping.
+ * Callers must use the returned locator for menu actions rather than searching inside
+ * the thread card.
+ */
+export async function openThreadActions(threadItem: Locator): Promise<Locator> {
   await threadItem.locator('button[aria-label="Thread actions"]').click()
-  await threadItem.locator('[role="menu"]').waitFor({ state: 'visible' })
+  const menu = threadItem.page().getByRole('menu')
+  await expect(menu).toBeVisible()
+  return menu
+}
+
+/** Opens a thread's action menu and invokes a named menu item. */
+export async function clickThreadAction(threadItem: Locator, actionName: string): Promise<void> {
+  const menu = await openThreadActions(threadItem)
+  await menu.getByRole('menuitem', { name: actionName }).click()
 }
 
 function isAuthResponse(data: unknown): data is { access_token: string } {

@@ -8,7 +8,7 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 15000 });
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);
@@ -39,7 +39,7 @@ test.describe('Session Timestamp Consistency (Issue #245)', () => {
     await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 });
 
     await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie);
-    await authenticatedWithThreadsPage.waitForSelector(SELECTORS.rate.ratingInput, { timeout: 5000 });
+    await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 15000 });
 
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
     await authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton);

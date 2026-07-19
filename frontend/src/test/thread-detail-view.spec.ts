@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import {createThread, gotoQueue, openThreadActions} from './helpers';
+import {createThread, gotoQueue, clickThreadAction} from './helpers';
 
 test.describe('Thread Detail View', () => {
   test('should navigate to thread detail view when clicking a thread', async ({ authenticatedPage }) => {
@@ -123,8 +123,7 @@ test.describe('Thread Detail View', () => {
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: 'Notes Test' });
     await threadCard.waitFor({ state: 'visible', timeout: 5000 });
 
-    await openThreadActions(threadCard)
-    await threadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(threadCard, 'Edit thread')
     await authenticatedPage.waitForSelector('label:has-text("Notes") + textarea', { state: 'visible', timeout: 5000 });
 
     await authenticatedPage.fill('label:has-text("Notes") + textarea', 'These are test notes for the thread');

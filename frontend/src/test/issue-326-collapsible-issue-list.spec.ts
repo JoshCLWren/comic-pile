@@ -20,8 +20,8 @@ test.describe('Issue #326: Collapsible Issue List', () => {
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
     await threadItem.waitFor({ state: 'visible', timeout: 5000 });
-    await openThreadActions(threadItem)
-    await threadItem.locator('button[aria-label="Edit thread"]').click();
+    const menu = await openThreadActions(threadItem)
+    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
 
     // Wait for edit modal to open
     await waitForEditThreadModal(authenticatedPage);
@@ -58,8 +58,8 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
-    await openThreadActions(threadItem)
-    await threadItem.locator('button[aria-label="Edit thread"]').click();
+    const menu = await openThreadActions(threadItem)
+    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
 
     // Wait for edit modal to open
     await waitForEditThreadModal(authenticatedPage);
@@ -96,8 +96,8 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
-    await openThreadActions(threadItem)
-    await threadItem.locator('button[aria-label="Edit thread"]').click();
+    const menu = await openThreadActions(threadItem)
+    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
 
     // Wait for edit modal to open
     await waitForEditThreadModal(authenticatedPage);
@@ -140,8 +140,8 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
-    await openThreadActions(threadItem)
-    await threadItem.locator('button[aria-label="Edit thread"]').click();
+    const menu = await openThreadActions(threadItem)
+    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
 
     // Wait for edit modal to open
     await waitForEditThreadModal(authenticatedPage);
@@ -175,8 +175,8 @@ test.describe('Issue #326: Collapsible Issue List', () => {
 
     // Open the edit modal
     const threadItem = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: uniqueTitle });
-    await openThreadActions(threadItem)
-    await threadItem.locator('button[aria-label="Edit thread"]').click();
+    const menu = await openThreadActions(threadItem)
+    await menu.getByRole('menuitem', { name: 'Edit thread' }).click();
 
     await waitForEditThreadModal(authenticatedPage);
     const editModal = authenticatedPage.locator('.fixed.inset-0').filter({ hasText: 'Edit Thread' });

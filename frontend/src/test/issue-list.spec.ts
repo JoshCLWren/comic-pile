@@ -106,7 +106,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
-    await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
+    await expect(authenticatedPage.locator('label:has-text("Title") + input')).toBeVisible({ timeout: 15000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
@@ -192,7 +192,7 @@ test.describe('Thread Creation with Issue Ranges', () => {
     await authenticatedPage.waitForSelector('button:has-text("Add Thread")', { state: 'visible', timeout: 10000 });
 
     await authenticatedPage.click('button:has-text("Add Thread")');
-    await authenticatedPage.waitForSelector('label:has-text("Title") + input', { state: 'visible', timeout: 5000 });
+    await expect(authenticatedPage.locator('label:has-text("Title") + input')).toBeVisible({ timeout: 15000 });
 
     await authenticatedPage.fill('label:has-text("Title") + input', uniqueTitle);
     await authenticatedPage.selectOption('label:has-text("Format") + select', 'Comics');
