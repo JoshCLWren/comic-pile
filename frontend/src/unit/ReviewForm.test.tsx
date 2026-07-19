@@ -632,4 +632,53 @@ describe('ReviewForm', () => {
     // Skip button should be disabled during submission
     expect(skipButton).toBeDisabled()
   })
+
+  it('omits review_text when submitting an empty review while editing', async () => {
+    // L55 `review_text: reviewText.trim() || undefined` — empty text after trimming
+    mockOnSubmit.mockResolvedValue(undefined)
+    render(
+      <ReviewForm
+        isOpen={true}
+        onClose={mockOnClose}
+        onSubmit={mockOnSubmit}
+        threadId={42}
+        threadTitle="Test Thread"
+        rating={4.5}
+        existingReview={mockReview}
+      />,
+    )
+    const textarea = screen.getByPlaceholderText('Share your thoughts about this comic...')
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: '   ' } })
+    })
+    await act(async () => {
+      fireEvent.click(screen.getByText('Update Review'))
+    })
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledWith(expect.objectContaining({ review_text: undefined }))
+    })
+  })
+
+  it('includes the issue number when submitting with one provided', async () => {
+    // L76 `...(issueNumber && { issue_number: issueNumber })` — truthy issueNumber arm
+    mockOnSubmit.mockResolvedValue(undefined)
+    render(
+      <ReviewForm
+        isOpen={true}
+        onClose={mockOnClose}
+        onSubmit={mockOnSubmit}
+        threadId={42}
+        threadTitle="Test Thread"
+        issueNumber="7"
+        rating={4.5}
+        existingReview={mockReview}
+      />,
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByText('Skip'))
+    })
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledWith(expect.objectContaining({ issue_number: '7' }))
+    })
+  })
 })

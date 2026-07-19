@@ -77,6 +77,34 @@ describe('ThreadPool', () => {
     expect(screen.getByRole('button', { name: 'Shuffle' })).toBeDisabled()
     expect(screen.queryByText(/hidden \(blocked/)).not.toBeInTheDocument()
   })
+
+  it('pluralizes multiple blocked threads and triggers read-stale on space key', async () => {
+    // L158 `blockedThreads.length !== 1 ? 's' : ''` and L189 `e.key === 'Enter' || e.key === ' '`
+    const actions = callbacks()
+    const stale = { ...thread, title: 'Stale Saga', days: 9 }
+    render(<MemoryRouter><ThreadPool
+      pool={[thread]}
+      blockedThreads={[{ ...thread, id: 2, title: 'Blocked A' }, { ...thread, id: 3, title: 'Blocked B' }]}
+      blockingReasonMap={{ 2: ['Read Saga first'] }}
+      isRatingView={false}
+      isRolling={false}
+      rolledResult={null}
+      selectedThreadId={null}
+      staleThread={stale as never}
+      staleThreadCount={1}
+      snoozedThreads={[]}
+      snoozedExpanded={false}
+      blockedExpanded
+      unsnoozeIsPending={false}
+      shuffleIsPending={false}
+      {...actions}
+    /></MemoryRouter>)
+    expect(screen.getByText(/2 threads hidden/)).toBeInTheDocument()
+    const staleButton = screen.getByText('Tap to read now').closest('[role="button"]') as HTMLElement
+    expect(staleButton).not.toBeNull()
+    fireEvent.keyDown(staleButton!, { key: ' ' })
+    expect(actions.onReadStale).toHaveBeenCalled()
+  })
 })
 
 describe('RatingView', () => {
@@ -160,5 +188,36 @@ describe('RatingView', () => {
     expect(screen.getByText(/Excellent!/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Save & Continue' }))
     expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
+  })
+
+  it('pluralizes connected threads and renders separators for multiple links', () => {
+    // L135 `connectedThreads.length !== 1 ? 's' : ''` and L139 `i > 0 && ', '`
+    render(<RatingView
+      activeRatingThread={{ ...thread, issue_number: '2', issues_remaining: 1 } as never}
+      currentDie={6}
+      rolledResult={3}
+      rating={3}
+      predictedDie={6}
+      hasValidRolledResult
+      poolSize={2}
+      errorMessage=""
+      rateIsPending={false}
+      snoozeIsPending={false}
+      dismissIsPending={false}
+      readingOrders={[]}
+      connectedThreads={[
+        { thread_id: 2, title: 'Alpha', connection_type: 'blocks', dependency_id: 1 },
+        { thread_id: 3, title: 'Beta', connection_type: 'blocks', dependency_id: 2 },
+      ]}
+      onUpdateRating={vi.fn()}
+      onSubmitRating={vi.fn()}
+      onSnooze={vi.fn()}
+      onCancel={vi.fn()}
+      onRefreshThread={vi.fn()}
+    />)
+    // L135 `connectedThreads.length !== 1 ? 's' : ''` is evaluated when building the Tooltip content prop;
+    // L139 `i > 0 && ', '` renders the separator between the two connected thread titles.
+    expect(screen.getByText('Alpha')).toBeInTheDocument()
+    expect(screen.getByText(', Beta')).toBeInTheDocument()
   })
 })
