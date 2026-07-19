@@ -16,7 +16,6 @@ import { dependenciesApi, threadsApi } from '../../services/api'
 import { issuesApi } from '../../services/api-issues'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import { useCollections } from '../../contexts/CollectionContext'
-import { collectionsEnabled } from '../../config/featureFlags'
 import { PositionMenuProvider } from '../../contexts/PositionMenuContext'
 import type { Thread } from '../../types'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -31,7 +30,7 @@ export default function QueuePage() {
   const location = useLocation()
   const { activeCollectionId } = useCollections()
   const { setRestoreAction, clearRestoreAction } = useBugReportRestore()
-  const { data: threads, isPending, refetch } = useThreads('', collectionsEnabled ? activeCollectionId : null)
+  const { data: threads, isPending, refetch } = useThreads('', activeCollectionId)
   const { data: session, refetch: refetchSession } = useSession()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
@@ -576,7 +575,7 @@ export default function QueuePage() {
             </button>
           </div>
         </div>
-        {collectionsEnabled && <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />}
+        <CollectionToolbar onNewCollection={() => setIsCollectionDialogOpen(true)} />
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">
             {(['position', 'alphabetical', 'created'] as const).map((sort) => (
@@ -930,7 +929,7 @@ export default function QueuePage() {
         }}
       />
 
-      {collectionsEnabled && isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
+      {isCollectionDialogOpen && <CollectionDialog onClose={() => setIsCollectionDialogOpen(false)} />}
 
       {showMigrationDialog && threadToMigrate && (
         <MigrationDialog

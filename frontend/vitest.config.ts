@@ -25,7 +25,17 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json'],
-      exclude: ['node_modules/', 'src/test/'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'node_modules/',
+        'src/test/',
+        'src/unit/',
+        'src/devtools/',
+        'src/main.tsx',
+        'src/fallback-main.tsx',
+        'src/dice-playground-main.tsx',
+        '**/*.d.ts',
+      ],
       thresholds: {
         statements: 94,
         branches: 94,

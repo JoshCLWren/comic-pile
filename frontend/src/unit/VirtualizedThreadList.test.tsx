@@ -99,6 +99,21 @@ it('ignores throttled and empty virtualized drag-over states', () => {
   )
 })
 
+it('coalesces resize observer callbacks into one animation frame', () => {
+  const threads = createMockThreads(60)
+  render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} />)
+  act(() => {
+    resizeCallback?.([{ contentRect: { height: 400, width: 700 } }])
+    resizeCallback?.([{ contentRect: { height: 500, width: 900 } }])
+  })
+  expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
+})
+
+it('renders a standalone empty queue state', () => {
+  render(<VirtualizedThreadList threads={[]} renderItem={() => <div />} />)
+  expect(screen.getByText('No threads in queue')).toBeInTheDocument()
+})
+
 beforeAll(() => {
   // Default: virtualizer shows first 5 items of a list
   mockGetVirtualItems.mockReturnValue(

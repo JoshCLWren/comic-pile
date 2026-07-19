@@ -10,7 +10,7 @@ const spies = vi.hoisted(() => ({
   override: vi.fn().mockResolvedValue({}), snooze: vi.fn().mockResolvedValue({}),
   unsnooze: vi.fn().mockResolvedValue({}), moveFront: vi.fn().mockResolvedValue({}),
   moveBack: vi.fn().mockResolvedValue({}), shuffle: vi.fn().mockResolvedValue({}),
-  rate: vi.fn().mockResolvedValue({}), review: vi.fn().mockResolvedValue({}),
+  rate: vi.fn().mockResolvedValue({}),
   setPending: vi.fn().mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 }),
 }))
 const sessionHook = vi.hoisted(() => ({ value: null as unknown }))
@@ -21,7 +21,6 @@ let staleData: never[] = []
 let threadsValue: unknown = threadData
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => spies.navigate }))
-vi.mock('../config/featureFlags', () => ({ collectionsEnabled: true, isReviewsFeatureEnabled: () => false }))
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: () => ({ activeCollectionId: null, collections: [] }) }))
 vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({
@@ -41,7 +40,6 @@ vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.mov
 vi.mock('../hooks', () => ({ useRate: () => ({ mutate: spies.rate, isPending: false }) }))
 vi.mock('../services/api', () => ({ threadsApi: { setPending: spies.setPending }, dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
-vi.mock('../services/api-reviews', () => ({ reviewsApi: { createOrUpdateReview: spies.review } }))
 vi.mock('../components/LazyDice3D', () => ({
   default: ({ onRollComplete }: { onRollComplete?: () => void }) => (
     <div data-testid="dice"><button type="button" onClick={onRollComplete}>complete dice</button></div>
@@ -52,7 +50,6 @@ vi.mock('../components/Modal', () => ({ default: ({ isOpen, title, children, onC
 vi.mock('../components/CollectionDialog', () => ({ default: ({ collection }: { collection: { name?: string } | null }) => <div data-testid="collection-dialog">collection dialog {collection?.name ?? 'new'}</div> }))
 vi.mock('../components/MigrationDialog', () => ({ default: ({ onComplete, onSkip, onClose }: { onComplete: (thread: unknown) => void; onSkip: () => void; onClose: () => void }) => <div><button onClick={onSkip}>skip migration</button><button onClick={onClose}>close migration</button><button onClick={() => onComplete({ id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10 })}>complete migration</button></div> }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: ({ onComplete, onClose }: { onComplete: (issue: string) => void; onClose: () => void }) => <div><button onClick={() => onComplete('1')}>complete simple</button><button onClick={onClose}>close simple</button></div> }))
-vi.mock('../components/ReviewForm', () => ({ default: ({ onSubmit, onClose }: { onSubmit: (data: { review_text: string }) => void; onClose: () => void }) => <div><button onClick={() => onSubmit({ review_text: '' })}>submit review</button><button onClick={onClose}>close review</button></div> }))
 vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: Record<string, unknown>) => <div><button onClick={() => (props.onThreadClick as (thread: unknown) => void)({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle as () => void}>shuffle pool</button><button onClick={props.onReadStale as () => void}>read stale</button><button onClick={props.onUnsnooze as () => void}>unsnooze</button><button onClick={props.onToggleSnoozed as () => void}>toggle snoozed</button><button onClick={props.onToggleBlocked as () => void}>toggle blocked</button></div> }))
 vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: Record<string, unknown>) => {
   const thread = props.activeRatingThread as { title?: string; issue_number?: string | null } | null
@@ -79,7 +76,7 @@ describe('RollPage parent handlers', () => {
     sessionData.manual_die = undefined
     sessionData.last_rolled_result = undefined
     threadData.splice(1)
-    for (const mutation of [spies.setDie, spies.clearDie, spies.roll, spies.dismissPending, spies.override, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle, spies.rate, spies.review]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
+    for (const mutation of [spies.setDie, spies.clearDie, spies.roll, spies.dismissPending, spies.override, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle, spies.rate]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
     spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
   })
 

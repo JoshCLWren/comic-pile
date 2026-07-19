@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 const collections = vi.hoisted(() => ({ createCollection: vi.fn(), updateCollection: vi.fn() }))
 const toast = vi.hoisted(() => ({ showToast: vi.fn() }))
-vi.mock('../config/featureFlags', () => ({ collectionsEnabled: true }))
 vi.mock('../contexts/CollectionContext', () => ({ useCollections: () => collections }))
 vi.mock('../contexts/useToast', () => ({ useToast: () => toast }))
 import CollectionDialog from '../components/CollectionDialog'
@@ -35,5 +34,15 @@ describe('CollectionDialog', () => {
     fireEvent.keyDown(document, { key: 'Escape' }); expect(close).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('dialog'))
     expect(close).toHaveBeenCalled()
+  })
+
+  it('displays non-Error update failures', async () => {
+    collections.updateCollection.mockRejectedValueOnce('unexpected failure')
+    const user = userEvent.setup()
+    render(<CollectionDialog collection={collection} onClose={vi.fn()} />)
+    const name = screen.getByLabelText(/Collection Name/)
+    await user.type(name, 'New name')
+    await user.click(screen.getByRole('button', { name: 'Update' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('unexpected error'))
   })
 })
