@@ -52,6 +52,31 @@ describe('ThreadPool', () => {
     fireEvent.keyDown(staleCard, { key: 'Enter' })
     expect(actions.onReadStale).toHaveBeenCalled()
   })
+
+  it('handles rating-view pool layout and pending controls', async () => {
+    const actions = callbacks()
+    const second = { ...thread, id: 4, title: 'Second' }
+    render(<MemoryRouter><ThreadPool
+      pool={[thread, second]}
+      blockedThreads={[{ ...thread, id: 5, title: 'Blocked without a reason' }]}
+      blockingReasonMap={{}}
+      isRatingView
+      isRolling
+      rolledResult={4}
+      selectedThreadId={null}
+      staleThread={{ ...thread, days: 1 } as never}
+      staleThreadCount={1}
+      snoozedThreads={[{ id: 6, title: 'Snoozed', format: 'Comic' }]}
+      snoozedExpanded
+      blockedExpanded
+      unsnoozeIsPending
+      shuffleIsPending
+      {...actions}
+    /></MemoryRouter>)
+    expect(screen.getByText('Saga')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toBeDisabled()
+    expect(screen.queryByText(/hidden \(blocked/)).not.toBeInTheDocument()
+  })
 })
 
 describe('RatingView', () => {
@@ -84,5 +109,56 @@ describe('RatingView', () => {
     fireEvent.change(screen.getByRole('slider'), { target: { value: '2' } })
     await user.click(screen.getByRole('button', { name: 'Snoozing...' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  })
+
+  it('renders safe fallbacks for missing thread metadata and populated reading-order details', () => {
+    render(<RatingView
+      activeRatingThread={null}
+      currentDie={7 as never}
+      rolledResult={7}
+      rating={3}
+      predictedDie={7 as never}
+      hasValidRolledResult={false}
+      poolSize={0}
+      errorMessage=""
+      rateIsPending={false}
+      snoozeIsPending={false}
+      dismissIsPending={false}
+      readingOrders={[{ id: 2, name: 'Main order', description: 'A description', completed_items: 1, total_items: 2 } as never]}
+      connectedThreads={[]}
+      onUpdateRating={vi.fn()}
+      onSubmitRating={vi.fn()}
+      onSnooze={vi.fn()}
+      onCancel={vi.fn()}
+      onRefreshThread={vi.fn()}
+    />)
+    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    expect(screen.getByText('A description')).toBeInTheDocument()
+    expect(screen.getByText('0 issues left')).toBeInTheDocument()
+  })
+
+  it('renders alternate rating, progress, and order boundaries', async () => {
+    const callbacks = { onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onSnooze: vi.fn(), onCancel: vi.fn(), onRefreshThread: vi.fn() }
+    const user = userEvent.setup()
+    render(<RatingView
+      activeRatingThread={{ ...thread, issue_number: null, next_issue_number: null, total_issues: 0, issues_remaining: 2, reading_progress: null } as never}
+      currentDie={6}
+      rolledResult={2}
+      rating={5}
+      predictedDie={6}
+      hasValidRolledResult
+      poolSize={8}
+      errorMessage=""
+      rateIsPending={false}
+      snoozeIsPending={false}
+      dismissIsPending={false}
+      readingOrders={[{ id: 3, name: 'Empty order', description: '', completed_items: 0, total_items: 0 } as never]}
+      connectedThreads={[{ thread_id: 2, title: 'Only connection', connection_type: 'blocks', dependency_id: 2 }]}
+      {...callbacks}
+    />)
+    expect(screen.getByText('Comic')).toBeInTheDocument()
+    expect(screen.getByText(/Excellent!/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Save & Continue' }))
+    expect(callbacks.onSubmitRating).toHaveBeenCalledWith(false)
   })
 })

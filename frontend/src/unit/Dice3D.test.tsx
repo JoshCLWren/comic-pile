@@ -1,6 +1,9 @@
 import { render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import Dice3D from '../components/Dice3D'
+import { DEFAULT_DICE_RENDER_CONFIG } from '../components/diceRenderConfig'
+
+const diceMock = vi.hoisted(() => ({ failRenderer: false, noIndex: false, emptyBox: false, noMap: false }))
 
 vi.mock('three', () => {
   class BufferGeometry {
@@ -37,7 +40,7 @@ vi.mock('three', () => {
       return this.attributes[name]
     }
     getIndex() {
-      return this.index
+      return diceMock.noIndex ? null : this.index
     }
     setAttribute() {}
     setIndex() {}
@@ -78,6 +81,7 @@ vi.mock('three', () => {
     domElement: HTMLCanvasElement
 
     constructor() {
+      if (diceMock.failRenderer) throw new Error('WebGL unavailable')
       this.domElement = document.createElement('canvas')
     }
     setSize() {}
@@ -98,7 +102,7 @@ vi.mock('three', () => {
     map: unknown
 
     constructor({ map }: { map: unknown }) {
-      this.map = map
+      this.map = diceMock.noMap ? undefined : map
     }
     dispose() {}
   }
@@ -141,6 +145,16 @@ vi.mock('three', () => {
     clone() {
       return new Vector3(this.x, this.y, this.z)
     }
+    project() {
+      return this
+    }
+  }
+
+  class Box3 {
+    min = new Vector3(-1, -1, -1)
+    max = new Vector3(1, 1, 1)
+    setFromObject() { return this }
+    isEmpty() { return diceMock.emptyBox }
   }
 
   class Quaternion {
@@ -150,6 +164,10 @@ vi.mock('three', () => {
   }
 
   class Euler {
+    x = 0
+    y = 0
+    z = 0
+
     setFromQuaternion() {
       return this
     }
@@ -171,6 +189,8 @@ vi.mock('three', () => {
     Vector3,
     Quaternion,
     Euler,
+    Box3,
+    MathUtils: { clamp: (value: number, min: number, max: number) => Math.min(Math.max(value, min), max) },
   }
 })
 
@@ -211,4 +231,90 @@ it('builds each supported geometry and handles animation/value changes', () => {
   const { rerender } = render(<Dice3D sides={6} value={1} isRolling={false} />)
   rerender(<Dice3D sides={6} value={6} isRolling />)
   expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+})
+
+it('falls back to a six-sided geometry for an unsupported side count', () => {
+  render(<Dice3D sides={7 as never} value={1} />)
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+})
+
+it('applies the d10 auto-centering render option', () => {
+  render(
+    <Dice3D
+      sides={10}
+      value={5}
+      renderConfig={{
+        ...DEFAULT_DICE_RENDER_CONFIG,
+        global: { ...DEFAULT_DICE_RENDER_CONFIG.global, d10AutoCenter: true },
+      }}
+    />,
+  )
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+})
+
+it('renders safely when WebGL initialization fails', () => {
+  diceMock.failRenderer = true
+  expect(() => render(<Dice3D sides={6} value={1} />)).not.toThrow()
+  diceMock.failRenderer = false
+})
+
+it('handles non-indexed geometry and an empty projected bounding box', () => {
+  diceMock.noIndex = true
+  diceMock.emptyBox = true
+  const { unmount } = render(<Dice3D sides={6} value={2} lockMotion />)
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+  unmount()
+  diceMock.noIndex = false
+  diceMock.emptyBox = false
+})
+
+it('switches animation modes for rolling, frozen, and locked presentation', () => {
+  const { rerender, unmount } = render(<Dice3D sides={6} value={2} isRolling />)
+  rerender(<Dice3D sides={6} value={3} freeze />)
+  rerender(<Dice3D sides={6} value={4} lockMotion />)
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+  unmount()
+})
+
+it('runs rolling, locked, frozen, and idle animation branches', () => {
+  let nextFrame: FrameRequestCallback | undefined
+  vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+    nextFrame = callback
+    return 1
+  }))
+  const onRollComplete = vi.fn()
+  const { rerender, unmount } = render(
+    <Dice3D sides={6} value={2} isRolling lockMotion onRollComplete={onRollComplete} />,
+  )
+  nextFrame?.(0)
+  rerender(<Dice3D sides={6} value={3} freeze />)
+  for (let frame = 1; frame < 25; frame += 1) nextFrame?.(frame)
+  rerender(<Dice3D sides={6} value={4} isRolling />)
+  nextFrame?.(2)
+  rerender(<Dice3D sides={6} value={5} />)
+  nextFrame?.(3)
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+  unmount()
+})
+
+it('falls back cleanly when canvas or WebGL initialization is unavailable', () => {
+  const context = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+  expect(() => render(<Dice3D sides={6} value={1} />)).toThrow('Unable to create 2D canvas context')
+  context.mockRestore()
+
+  diceMock.failRenderer = true
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { container } = render(<Dice3D sides={6} value={1} />)
+  expect(container.querySelector('.dice-3d')).toBeInTheDocument()
+  expect(errorSpy).toHaveBeenCalledWith('WebGL initialization failed:', expect.any(Error))
+  errorSpy.mockRestore()
+  diceMock.failRenderer = false
+})
+
+it('disposes dice materials that do not have a texture map', () => {
+  diceMock.noMap = true
+  const { unmount } = render(<Dice3D sides={6} value={1} />)
+  expect(document.querySelector('.dice-3d')).toBeInTheDocument()
+  unmount()
+  diceMock.noMap = false
 })

@@ -5,10 +5,8 @@
 **Mobile modal usability and focus**
 - Mobile modals now use the available viewport height with an independently scrollable content area.
 - Non-autofocus modals keep keyboard focus inside the modal, with a safe close-control fallback.
-- Queue thread-action menus now appear above adjacent cards instead of being clipped in Safari.
-- Queue thread-action menus now also raise their virtualized row, keeping them visible and clickable above the next row in Firefox.
-- Browser verification now covers Firefox, WebKit, and Chromium so desktop Firefox and mobile Safari behavior are release gates.
 - Queue action menus remain visible above adjacent cards while swipe actions stay clipped to their cards.
+- Browser verification covers Firefox, WebKit, and Chromium so desktop Firefox and mobile Safari behavior are release gates.
 
 ## 2026-07-15
 

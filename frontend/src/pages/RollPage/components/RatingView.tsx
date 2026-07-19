@@ -52,6 +52,11 @@ export function RatingView({
 }: RatingViewProps) {
   const [isCorrectionDialogOpen, setIsCorrectionDialogOpen] = useState(false)
   const previewDie = isDiceSide(currentDie) ? currentDie : 6
+  const threadTitle = activeRatingThread?.title ?? 'Loading...'
+  const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
+  const totalIssues = activeRatingThread?.total_issues ?? null
+  const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
+  const readingProgress = activeRatingThread?.reading_progress ?? null
 
   return (
     <div className="p-3 md:p-4 space-y-5 md:space-y-8 relative z-10">
@@ -59,13 +64,13 @@ export function RatingView({
         <div className="space-y-2 md:space-y-3 text-center">
       <>
         <h2 className="text-xl md:text-2xl font-black text-stone-200 truncate">
-          {activeRatingThread?.title || 'Loading...'}
-          {activeRatingThread && (activeRatingThread.next_issue_number ?? activeRatingThread.issue_number) != null && (
-            <span className="text-stone-400"> #{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number}</span>
+          {threadTitle}
+          {issueNumber != null && (
+            <span className="text-stone-400"> #{issueNumber}</span>
           )}
         </h2>
         <div className="flex items-center justify-center gap-3 flex-wrap">
-          {(activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number) != null && (
+          {issueNumber != null && (
             <button
               type="button"
               onClick={() => setIsCorrectionDialogOpen(true)}
@@ -79,12 +84,12 @@ export function RatingView({
               </svg>
             </button>
           )}
-          {activeRatingThread?.total_issues && (activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number) != null && (
+          {totalIssues && issueNumber != null && (
             <span className="text-stone-400 text-xs font-bold">
-              (#{activeRatingThread.next_issue_number ?? activeRatingThread.issue_number} of {activeRatingThread.total_issues})
+              (#{issueNumber} of {totalIssues})
             </span>
           )}
-          {!(activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number) && (
+          {!issueNumber && (
             <span className="bg-red-800/20 text-red-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-red-800/20">
               {activeRatingThread?.format || '...'}
             </span>
@@ -95,7 +100,7 @@ export function RatingView({
             {getProgressPercentage(activeRatingThread)}% complete
           </span>
           <span className="text-stone-600">·</span>
-          <span className="text-stone-500 text-xs font-bold">{activeRatingThread?.issues_remaining ?? 0} issues left</span>
+          <span className="text-stone-500 text-xs font-bold">{issuesRemaining} issues left</span>
         </div>
         {hasValidRolledResult && (
           <div className="flex items-center justify-center">
@@ -105,7 +110,7 @@ export function RatingView({
           </div>
         )}
       </>
-          {activeRatingThread?.reading_progress && activeRatingThread?.total_issues && (
+          {readingProgress && totalIssues && (
             <div className="reading-progress max-w-md mx-auto">
               <div className="h-3 bg-white/10 rounded-full overflow-hidden">
                 <div
@@ -116,7 +121,7 @@ export function RatingView({
                 />
               </div>
               <span className="mt-1 block text-[10px] text-stone-400 font-bold uppercase tracking-wider">
-                {activeRatingThread.reading_progress === 'completed' ? 'Completed' : 'In Progress'}
+                {readingProgress === 'completed' ? 'Completed' : 'In Progress'}
               </span>
             </div>
           )}
@@ -222,7 +227,7 @@ export function RatingView({
             disabled={rateIsPending}
             className="w-full py-3.5 md:py-4 bg-amber-600/25 hover:bg-amber-600/35 border border-amber-600/50 rounded-xl text-xs font-black uppercase tracking-[0.15em] md:tracking-[0.2em] transition-all disabled:opacity-50 active:scale-[0.98]"
           >
-            {rateIsPending ? 'Saving...' : (activeRatingThread?.issues_remaining === 1 ? 'Save & Complete' : 'Save & Continue')}
+            {rateIsPending ? 'Saving...' : (issuesRemaining === 1 ? 'Save & Complete' : 'Save & Continue')}
           </button>
           <div className="flex gap-2">
             <button

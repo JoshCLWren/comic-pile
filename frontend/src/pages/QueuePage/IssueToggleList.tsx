@@ -49,10 +49,6 @@ export function IssueToggleList({ threadId }: {
     }
 
     const nextUnreadIndex = issueList.findIndex((issue) => issue.id === nextUnreadId)
-    if (nextUnreadIndex === -1) {
-      return { startIndex: issueList.length - 3, endIndex: issueList.length }
-    }
-
     const readBeforeCount = 3
     const unreadAfterCount = 3
     const startIndex = Math.max(0, nextUnreadIndex - readBeforeCount)
@@ -88,7 +84,7 @@ export function IssueToggleList({ threadId }: {
         page_size: 100,
         ...(nextPageToken ? { page_token: nextPageToken } : {}),
       })
-      allIssues.push(...(data.issues || []))
+      allIssues.push(...data.issues)
 
       if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
         return allIssues
@@ -158,10 +154,6 @@ export function IssueToggleList({ threadId }: {
     try {
       while (pendingMutationsRef.current.length > 0) {
         const currentMutation = pendingMutationsRef.current[0]
-        if (!currentMutation) {
-          break
-        }
-
         try {
           await runIssueMutation(currentMutation)
           baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
@@ -295,10 +287,6 @@ export function IssueToggleList({ threadId }: {
     const nextIssues = reorderIssuesForDrop(issues, draggedIssueId, targetIssueId)
     setDraggedIssueId(null)
     setDragOverIssueId(null)
-
-    if (nextIssues === issues) {
-      return
-    }
 
     enqueueIssueReorder(nextIssues)
   }

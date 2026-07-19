@@ -20,15 +20,10 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
    const [totalCount, setTotalCount] = useState<number>(0)
    const [dependencies, setDependencies] = useState<Record<number, IssueDependenciesResponse>>({})
    const abortControllerRef = useRef<AbortController | null>(null)
-   const issuesRef = useRef<Issue[]>([])
-   issuesRef.current = issues
-
   const filterRef = useRef<'all' | 'unread' | 'read'>('all')
   filterRef.current = filter
 
   const loadIssues = useCallback(async (append = false, pageToken?: string | null) => {
-    if (append && issuesRef.current.length === 0) return
-
     if (append) {
       setIsLoadingMore(true)
     } else {
@@ -45,22 +40,18 @@ export function IssueList({ thread, onThreadUpdated }: IssueListProps) {
       setTotalCount(response.total_count)
       setNextPageToken(response.next_page_token)
 
-      try {
-        await Promise.all(
-          response.issues.map(async (issue) => {
-            try {
-              const deps = await dependenciesApi.getIssueDependencies(issue.id)
-              if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
-                setDependencies((prev) => ({ ...prev, [issue.id]: deps }))
-              }
-            } catch (error) {
-              console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
+      await Promise.all(
+        response.issues.map(async (issue) => {
+          try {
+            const deps = await dependenciesApi.getIssueDependencies(issue.id)
+            if (deps.incoming.length > 0 || deps.outgoing.length > 0) {
+              setDependencies((prev) => ({ ...prev, [issue.id]: deps }))
             }
-          })
-        )
-      } catch (error) {
-        console.error('Failed to load dependencies:', error)
-      }
+          } catch (error) {
+            console.error(`Failed to load dependencies for issue ${issue.id}:`, error)
+          }
+        })
+      )
     } catch (error) {
       console.error('Failed to load issues:', error)
     } finally {

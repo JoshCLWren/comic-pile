@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { expect, it, vi } from 'vitest'
@@ -98,20 +98,19 @@ it('wraps focus in both tab directions and restores the trigger focus', async ()
   trigger.textContent = 'Trigger'
   document.body.append(trigger)
   trigger.focus()
-  const user = userEvent.setup()
   const { unmount } = render(
     <Modal isOpen title="Focus" onClose={() => {}}>
       <input aria-label="First" />
       <button type="button">Last</button>
     </Modal>,
   )
-  const first = screen.getByLabelText('First')
   const close = screen.getByRole('button', { name: /close modal/i })
+  const last = screen.getByRole('button', { name: 'Last' })
   close.focus()
-  await user.tab()
-  expect(first).toHaveFocus()
-  first.focus()
-  await user.tab({ shift: true })
+  fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+  expect(last).toHaveFocus()
+  last.focus()
+  fireEvent.keyDown(document, { key: 'Tab', shiftKey: false })
   expect(close).toHaveFocus()
   unmount()
   expect(trigger).toHaveFocus()
