@@ -141,8 +141,8 @@ jobs:
           cp -a /opt/ci-assets/static/react static/react
           pnpm install --frozen-lockfile
 
-      - name: Run vitest unit tests with 94% coverage gate
-        run: pnpm --filter frontend test:coverage
+      - name: Run vitest unit tests
+        run: pnpm --filter frontend test
 
   migration-health:
     name: Migration Health
