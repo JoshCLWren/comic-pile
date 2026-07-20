@@ -105,6 +105,61 @@ async def test_rate_low_rating(auth_client: AsyncClient, async_db: AsyncSession)
 
 
 @pytest.mark.asyncio
+async def test_low_rating_moves_thread_beyond_expanded_roll_pool(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A low rating moves the thread beyond the newly expanded die range."""
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+    session = SessionModel(start_die=6, user_id=user.id)
+    async_db.add(session)
+    await async_db.flush()
+
+    threads = [
+        Thread(
+            title=f"Thread {position}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=position,
+            status="active",
+            user_id=user.id,
+        )
+        for position in range(1, 13)
+    ]
+    async_db.add_all(threads)
+    await async_db.flush()
+
+    target = threads[0]
+    session.pending_thread_id = target.id
+    async_db.add(
+        Event(
+            type="roll",
+            die=6,
+            result=1,
+            selected_thread_id=target.id,
+            selection_method="random",
+            session_id=session.id,
+            thread_id=target.id,
+        )
+    )
+    await async_db.commit()
+
+    response = await auth_client.post("/api/rate/", json={"rating": 3.0, "issues_read": 1})
+    assert response.status_code == 200
+
+    await async_db.refresh(target)
+    assert target.queue_position == 9
+
+    result = await async_db.execute(
+        select(Event).where(Event.session_id == session.id).where(Event.type == "rate")
+    )
+    rate_event = result.scalar_one()
+    assert rate_event.die == 6
+    assert rate_event.die_after == 8
+
+
+@pytest.mark.asyncio
 async def test_rate_high_rating(auth_client: AsyncClient, async_db: AsyncSession) -> None:
     """Rating=4.0, die_size steps down."""
     from tests.conftest import get_or_create_user_async

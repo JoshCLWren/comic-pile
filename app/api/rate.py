@@ -370,6 +370,7 @@ async def rate_thread(
     elif rate_data.rating >= rating_threshold:
         await move_to_front(thread_id, user_id, db, commit=False)
     else:
+        # Use the expanded die so the thread is outside the next roll pool.
         await move_to_safe_position(thread_id, user_id, new_die, db)
 
     if rate_data.finish_session:
