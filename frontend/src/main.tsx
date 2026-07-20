@@ -5,7 +5,6 @@ import { CollectionProvider } from './contexts/CollectionContext'
 import { ToastProvider } from './contexts/ToastProvider'
 import './index.css'
 import App from './App'
-import { collectionsEnabled } from './config/featureFlags'
 
 const rootElement = document.getElementById('root')
 
@@ -26,4 +25,3 @@ createRoot(rootElement).render(
 )
 
 rootElement.classList.add('loaded')
-rootElement.dataset.collectionsEnabled = String(collectionsEnabled)

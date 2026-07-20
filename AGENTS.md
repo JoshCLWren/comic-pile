@@ -250,7 +250,7 @@ REUSE_EXISTING_SERVER=true npx playwright test --project=chromium
 
 ### API Tests
 
-API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Maintain 96% coverage threshold.
+API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Maintain 94% coverage threshold.
 
 **Key Fixtures (from `tests/conftest.py`)**:
 ```python

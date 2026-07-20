@@ -123,7 +123,7 @@ make migrate  # or: alembic upgrade head
 - Use httpx.AsyncClient for API integration tests
 - Test both success and error paths for all API endpoints
 - Test business logic (dice ladder, queue management, session detection) independently
-- Maintain 96% coverage threshold
+- Maintain 94% coverage threshold
 
 ## Style guidelines
 

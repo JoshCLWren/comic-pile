@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
 import { dependenciesApi } from '../services/api'
@@ -120,8 +120,34 @@ beforeEach(() => {
     outgoing: [],
   }))
 })
-
 describe('IssueToggleList', () => {
+  it('uses the timeout focus fallback when animation frames are unavailable', async () => {
+    const original = window.requestAnimationFrame
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: undefined })
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(screen.getByTestId('issue-move-down-1')).toHaveFocus()
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: original })
+  })
+
+  it('keeps boundary move controls in place and ignores an empty add request', async () => {
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-move-up-1'))
+    fireEvent.click(screen.getByTestId('issue-move-down-3'))
+    fireEvent.keyDown(screen.getByTestId('issue-add-input'), { key: 'Enter' })
+    expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+  })
+
+  it('surfaces add-issue failures submitted with Enter', async () => {
+    mockedIssuesApi.create.mockRejectedValueOnce(new Error('add failed'))
+    await renderIssueToggleList()
+    const input = screen.getByTestId('issue-add-input')
+    fireEvent.change(input, { target: { value: '4-5' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(screen.getByText('add failed')).toBeInTheDocument())
+  })
   it('loads all issue pages before rendering the full list', async () => {
     mockedIssuesApi.list
       .mockResolvedValueOnce(buildListResponse(BASE_ISSUES.slice(0, 2), 'page-2'))
@@ -549,5 +575,79 @@ describe('IssueToggleList', () => {
     const allVisibleIssues = getIssueOrder()
     expect(allVisibleIssues.length).toBe(20)
   })
+
+  it('shows dependency details and closes the dependency modal', async () => {
+    mockedDependenciesApi.getIssueDependencies.mockImplementation(async (issueId: number) => issueId === 1
+      ? { issue_id: issueId, incoming: [{ dependency_id: 10, source_issue_id: 2, source_thread_id: 20, source_thread_title: 'Before', source_issue_number: '2' }], outgoing: [{ dependency_id: 11, source_issue_id: 3, source_thread_id: 30, source_thread_title: 'After', source_issue_number: '3' }] }
+      : { issue_id: issueId, incoming: [], outgoing: [] })
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByRole('button', { name: 'View dependencies for issue #1' }))
+    expect(screen.getByText('Dependencies for Issue #1')).toBeInTheDocument()
+    expect(screen.getByText(/Before #2/)).toBeInTheDocument()
+    expect(screen.getByText(/After #3/)).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Close modal'))
+    expect(screen.queryByText('Dependencies for Issue #1')).not.toBeInTheDocument()
   })
+
+  it('handles empty and failed issue additions, including Enter submission', async () => {
+    await renderIssueToggleList()
+    const input = screen.getByTestId('issue-add-input')
+    expect(screen.getByTestId('issue-add-button')).toBeDisabled()
+    mockedIssuesApi.create.mockRejectedValueOnce(new Error('add failed'))
+    fireEvent.change(input, { target: { value: '4-5' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(screen.getByText('add failed')).toBeInTheDocument())
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5')
+  })
+
+  it('recovers after toggle and delete mutation failures', async () => {
+    mockedIssuesApi.markRead.mockRejectedValueOnce(new Error('toggle failed'))
+    mockedIssuesApi.list.mockResolvedValueOnce(buildListResponse()).mockResolvedValue(buildListResponse())
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+    await waitFor(() => expect(screen.getByText('toggle failed')).toBeInTheDocument())
+    vi.mocked(confirm).mockReturnValue(true)
+    mockedIssuesApi.delete.mockRejectedValueOnce(new Error('delete failed'))
+    fireEvent.click(screen.getByTestId('issue-delete-2'))
+    await waitFor(() => expect(screen.getByText('delete failed')).toBeInTheDocument())
+  })
+
+  it('handles dependency fetch errors, no-op moves, and successful additions', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockedDependenciesApi.getIssueDependencies.mockRejectedValue(new Error('dependency lookup failed'))
+    mockedIssuesApi.create.mockResolvedValue(buildListResponse(BASE_ISSUES))
+    await renderIssueToggleList()
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    fireEvent.click(screen.getByTestId('issue-move-up-1'))
+    fireEvent.click(screen.getByTestId('issue-move-down-3'))
+    fireEvent.dragStart(screen.getByTestId('issue-toggle-1'), { dataTransfer: createDataTransfer() })
+    fireEvent.drop(screen.getByTestId('issue-pill-1'), { dataTransfer: createDataTransfer() })
+    fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4'))
+    errorSpy.mockRestore()
+  })
+
+  it('toggles both read states and tolerates an initial issue-load failure', async () => {
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-toggle-1'))
+    await waitFor(() => expect(mockedIssuesApi.markRead).toHaveBeenCalledWith(1))
+    fireEvent.click(screen.getByTestId('issue-toggle-3'))
+    await waitFor(() => expect(mockedIssuesApi.markUnread).toHaveBeenCalledWith(3))
+
+    cleanup()
+    mockedIssuesApi.list.mockRejectedValueOnce(new Error('initial load failed'))
+    render(<IssueToggleList threadId={99} />)
+    await waitFor(() => expect(screen.queryByText('Loading issues…')).not.toBeInTheDocument())
+  })
+
+  it('uses the timeout focus fallback and renders an empty dependency view', async () => {
+    const originalRaf = window.requestAnimationFrame
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: undefined })
+    await renderIssueToggleList()
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+    await waitFor(() => expect(screen.getByTestId('issue-move-down-1')).toHaveFocus())
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: originalRaf })
+  })
+})
 })

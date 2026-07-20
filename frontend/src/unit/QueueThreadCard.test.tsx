@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
@@ -173,5 +173,38 @@ describe('QueueThreadCard', () => {
     const thread = createMockThread({ collection_id: 42 })
     renderCard(thread)
     expect(screen.getByTestId('mock-collection-badge')).toBeInTheDocument()
+  })
+
+  it('handles keyboard, drag, blocked dependency, and all position-menu callbacks', async () => {
+    const user = userEvent.setup()
+    const callbacks = Object.fromEntries([
+      'onCardClick', 'onDragStart', 'onDragEnd', 'onDragOver', 'onDrop', 'onDependencies',
+      'onMoveToFront', 'onMoveToBack', 'onReposition', 'onEdit', 'onDelete',
+    ].map((name) => [name, vi.fn()])) as Record<string, ReturnType<typeof vi.fn>>
+    renderCard(createMockThread({ total_issues: null, issues_remaining: 0, notes: null }), {
+      isBlocked: true,
+      blockingReasons: ['Read A first', 'Read B first'],
+      isDragOver: true,
+      ...callbacks,
+    })
+    const card = screen.getByRole('button', { name: /view dependencies/i })
+    await user.click(card)
+    expect(callbacks.onDependencies).toHaveBeenCalled()
+    const threadCard = screen.getByText('Comic').closest('[role="button"]') as HTMLElement
+    fireEvent.keyDown(threadCard, { key: 'Enter' })
+    fireEvent.keyDown(threadCard, { key: ' ' })
+    expect(callbacks.onCardClick).toHaveBeenCalledTimes(2)
+    const drag = screen.getByRole('button', { name: 'Drag to reorder' })
+    await user.click(drag)
+    fireEvent.dragStart(drag)
+    fireEvent.dragEnd(drag)
+    fireEvent.dragOver(threadCard)
+    fireEvent.drop(threadCard)
+    expect(callbacks.onDragStart).toHaveBeenCalled()
+    expect(callbacks.onDragEnd).toHaveBeenCalled()
+    expect(callbacks.onDragOver).toHaveBeenCalled()
+    expect(callbacks.onDrop).toHaveBeenCalled()
+    await user.click(screen.getByTestId('mock-position-menu'))
+    expect(callbacks.onDependencies).toHaveBeenCalledTimes(2)
   })
 })

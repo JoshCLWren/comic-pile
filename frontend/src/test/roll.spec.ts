@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { SELECTORS, submitRatingAndDismissReviewIfShown } from './helpers';
+import { SELECTORS, submitRatingAndWaitForRateResponse } from './helpers';
 
 test.describe('Roll Dice Feature', () => {
   test('should display die selector on home page', async ({ authenticatedPage }) => {
@@ -188,7 +188,7 @@ test.describe('Roll Dice Feature', () => {
 
     // Submit rating to return to roll view
     await authenticatedWithThreadsPage.fill(SELECTORS.rate.ratingInput, '5');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
 
@@ -736,7 +736,7 @@ test.describe('Roll Dice Feature', () => {
 
         // Submit rating to reset for next roll
         await authenticatedPage.fill(SELECTORS.rate.ratingInput, '4')
-        await submitRatingAndDismissReviewIfShown(authenticatedPage, () =>
+        await submitRatingAndWaitForRateResponse(authenticatedPage, () =>
           authenticatedPage.click(SELECTORS.rate.submitButton),
         )
         
@@ -1046,7 +1046,7 @@ test.describe('Roll Dice Feature', () => {
       await expect(authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)).toBeVisible({ timeout: 10000 });
 
       await authenticatedWithThreadsPage.fill(SELECTORS.rate.ratingInput, '5');
-      await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
         authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
       );
 

@@ -101,3 +101,81 @@ it('restores session start', async () => {
 
   expect(mockedSessionApi.restoreSessionStart).toHaveBeenCalledWith(11)
 })
+
+it('handles empty ids, non-Error failures, persisted session changes, and restore errors', async () => {
+  const emptyDetails = renderWithProvider(() => useSessionDetails(null))
+  const emptySnapshots = renderWithProvider(() => useSessionSnapshots(undefined))
+  expect(emptyDetails.result.current.isPending).toBe(false)
+  expect(emptySnapshots.result.current.isPending).toBe(false)
+
+  const storage = new Map<string, string>()
+  Object.defineProperty(window, 'localStorage', { configurable: true, value: {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key),
+  } })
+  mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: 8, user_id: 4 } as never)
+  window.localStorage.setItem('comic_pile_last_session_id_4', '7')
+  const current = renderWithProvider(() => useSession())
+  await waitFor(() => expect(current.result.current.data).toEqual({ id: 8, user_id: 4 }))
+
+  mockedSessionApi.getDetails.mockRejectedValueOnce('details failed')
+  const details = renderWithProvider(() => useSessionDetails(8))
+  await waitFor(() => expect(details.result.current.error?.message).toBe('Failed to fetch session details'))
+  mockedSessionApi.getSnapshots.mockRejectedValueOnce('snapshots failed')
+  const snapshots = renderWithProvider(() => useSessionSnapshots(8))
+  await waitFor(() => expect(snapshots.result.current.error?.message).toBe('Failed to fetch session snapshots'))
+
+  mockedSessionApi.restoreSessionStart.mockRejectedValueOnce('restore failed')
+  const restore = renderWithProvider(() => useRestoreSessionStart())
+  await act(async () => {
+    await expect(restore.result.current.mutate(8)).rejects.toBe('restore failed')
+  })
+  expect(restore.result.current.isError).toBe(true)
+  expect(restore.result.current.error?.message).toBe('Failed to restore session')
+})
+
+it('continues when session storage cannot be read or written', async () => {
+  Object.defineProperty(window, 'localStorage', { configurable: true, value: {
+    getItem: () => { throw new Error('storage read blocked') },
+    setItem: () => { throw new Error('storage write blocked') },
+    removeItem: () => { throw new Error('storage remove blocked') },
+  } })
+  mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: 12, user_id: 6 } as never)
+  const { result } = renderWithProvider(() => useSession())
+  await waitFor(() => expect(result.current.data).toEqual({ id: 12, user_id: 6 }))
+  expect(result.current.isError).toBe(false)
+})
+
+it('normalizes Error failures for session list and restore operations', async () => {
+  mockedSessionApi.list.mockRejectedValueOnce(new Error('list unavailable'))
+  const list = renderWithProvider(() => useSessions())
+  await waitFor(() => expect(list.result.current.error?.message).toBe('list unavailable'))
+
+  mockedSessionApi.restoreSessionStart.mockRejectedValueOnce(new Error('restore unavailable'))
+  const restore = renderWithProvider(() => useRestoreSessionStart())
+  await expect(act(async () => restore.result.current.mutate(8))).rejects.toThrow('restore unavailable')
+})
+
+it('preserves Error instances from detail and snapshot requests', async () => {
+  mockedSessionApi.getDetails.mockRejectedValueOnce(new Error('detail unavailable'))
+  mockedSessionApi.getSnapshots.mockRejectedValueOnce(new Error('snapshot unavailable'))
+  const details = renderWithProvider(() => useSessionDetails(12))
+  const snapshots = renderWithProvider(() => useSessionSnapshots(12))
+  await waitFor(() => expect(details.result.current.error?.message).toBe('detail unavailable'))
+  await waitFor(() => expect(snapshots.result.current.error?.message).toBe('snapshot unavailable'))
+})
+
+it('reports current-session failures and tolerates a malformed current response', async () => {
+  mockedSessionApi.getCurrent.mockRejectedValueOnce(new Error('current unavailable'))
+  const failed = renderWithProvider(() => useSession())
+  await waitFor(() => expect(failed.result.current.error?.message).toBe('current unavailable'))
+
+  mockedSessionApi.getCurrent.mockResolvedValueOnce({ id: null } as never)
+  const malformed = renderWithProvider(() => useSession())
+  await waitFor(() => expect(malformed.result.current.isPending).toBe(false))
+
+  mockedSessionApi.getCurrent.mockRejectedValueOnce('current string failure')
+  const stringFailure = renderWithProvider(() => useSession())
+  await waitFor(() => expect(stringFailure.result.current.error?.message).toBe('Failed to fetch current session'))
+})

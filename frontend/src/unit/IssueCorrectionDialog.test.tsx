@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import IssueCorrectionDialog from '../components/IssueCorrectionDialog'
@@ -114,5 +114,93 @@ describe('IssueCorrectionDialog', () => {
     })
     expect(mockedIssuesApi.move).not.toHaveBeenCalled()
     expect(onSuccess).toHaveBeenCalledOnce()
+  })
+
+  it('retries failed loads and reports update failures', async () => {
+    mockedIssuesApi.list.mockRejectedValue(new Error('load failed'))
+    const { onClose } = renderDialog({ currentIssueNumber: null })
+    await waitFor(() => expect(screen.getByText(/multiple attempts/i)).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(mockedIssuesApi.list).toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('inserts a numeric issue at the beginning and handles missing API results', async () => {
+    const existing = [issue({ id: 1, issue_number: '1', status: 'read' })]
+    mockedIssuesApi.list.mockResolvedValueOnce(listResponse(existing)).mockResolvedValueOnce(listResponse(existing))
+    mockedIssuesApi.create.mockResolvedValueOnce(listResponse([]))
+    const { onSuccess } = renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '2')
+    await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), 'start')
+    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await waitFor(() => expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument())
+    expect(onSuccess).not.toHaveBeenCalled()
+  })
+
+  it('moves a newly created issue to the beginning and marks prior unread issues read', async () => {
+    const existing = [issue({ id: 1, issue_number: '1', status: 'unread' })]
+    const created = issue({ id: 2, issue_number: '2', status: 'unread' })
+    let listCalls = 0
+    mockedIssuesApi.list.mockImplementation(async () => {
+      listCalls += 1
+      return listResponse(listCalls === 1 ? existing : [existing[0]!, created])
+    })
+    mockedIssuesApi.create.mockResolvedValueOnce(listResponse([created]))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '2')
+    await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), 'start')
+    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+
+    await waitFor(() => expect(mockedIssuesApi.move).toHaveBeenCalledWith(2, null))
+    expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument()
+  })
+
+  it('supports the numeric stepper boundaries and rejects blank submissions', async () => {
+    mockedIssuesApi.list.mockResolvedValue(listResponse([issue({ id: 1, issue_number: '1' })]))
+    renderDialog({ currentIssueNumber: null, totalIssues: 1 })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    expect(screen.getByText(/please enter an issue identifier/i)).toBeInTheDocument()
+
+    await userEvent.type(input, '1')
+    await userEvent.click(screen.getByRole('button', { name: 'Increase issue number' }))
+    expect(input).toHaveValue('1')
+    await userEvent.click(screen.getByRole('button', { name: 'Decrease issue number' }))
+    expect(input).toHaveValue('1')
+  })
+
+  it('paginates issue loading and leaves annual identifiers to text entry', async () => {
+    mockedIssuesApi.list
+      .mockResolvedValueOnce({ ...listResponse([issue({ id: 1, issue_number: '1' })]), next_page_token: 'next' })
+      .mockResolvedValueOnce(listResponse([issue({ id: 2, issue_number: 'Annual 1' })]))
+    renderDialog({ currentIssueNumber: null, totalIssues: null })
+    await screen.findByLabelText(/what issue are you currently on/i)
+    expect(mockedIssuesApi.list).toHaveBeenCalledTimes(2)
+    const input = screen.getByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Annual 1')
+    await userEvent.click(screen.getByRole('button', { name: 'Increase issue number' }))
+    expect(input).toHaveValue('Annual 1')
+  })
+
+  it('reports a missing target after a successful create and stops propagation inside the dialog', async () => {
+    const existing = [issue({ id: 1, issue_number: '1' })]
+    mockedIssuesApi.list.mockResolvedValue(listResponse(existing))
+    mockedIssuesApi.create.mockResolvedValue(listResponse([issue({ id: 2, issue_number: 'Other' })]))
+    const { onClose } = renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Missing')
+    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await waitFor(() => expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Correct Issue Number'))
+    expect(onClose).not.toHaveBeenCalled()
   })
 })

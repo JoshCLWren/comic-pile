@@ -1,4 +1,4 @@
-import { render as baseRender, screen } from '@testing-library/react'
+import { act, render as baseRender, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import PositionMenu from '../components/PositionMenu'
@@ -29,6 +29,10 @@ const mockThread = {
 describe('PositionMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: 1024,
+    })
   })
 
   it('renders the overflow menu trigger button', () => {
@@ -65,6 +69,87 @@ describe('PositionMenu', () => {
 
     expect(screen.getByRole('menu')).toBeInTheDocument()
     expect(screen.getAllByRole('menuitem')).toHaveLength(6)
+  })
+
+  it('renders the open menu in the document overlay layer', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /thread actions/i }))
+
+    expect(screen.getByRole('menu').parentElement).toBe(document.body)
+  })
+
+  it('repositions the portaled menu when the viewport changes', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+
+    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      bottom: 100,
+      right: 200,
+    } as DOMRect)
+    await user.click(trigger)
+
+    const menu = screen.getByRole('menu')
+    expect(menu).toHaveStyle({ top: '104px' })
+    expect(menu).toHaveStyle({ right: '812px' })
+
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      bottom: 160,
+      right: 300,
+    } as DOMRect)
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'))
+    })
+
+    expect(menu).toHaveStyle({ top: '164px' })
+    expect(menu).toHaveStyle({ right: '724px' })
+  })
+
+  it('clamps the menu to the right edge and flips it above a low trigger', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      top: 700,
+      bottom: 740,
+      right: 1020,
+    } as DOMRect)
+    await user.click(trigger)
+
+    const menu = screen.getByRole('menu')
+    expect(menu).toHaveStyle({ top: '396px', right: '4px' })
   })
 
   it('shows Move to Front, Reposition, and Move to Back options', async () => {
@@ -351,6 +436,26 @@ describe('PositionMenu', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument()
   })
 
+  it('does not toggle twice when the keyboard activation also emits a click', async () => {
+    const user = userEvent.setup()
+    render(
+      <PositionMenu
+        thread={mockThread}
+        onMoveToFront={vi.fn()}
+        onReposition={vi.fn()}
+        onMoveToBack={vi.fn()}
+        onEdit={vi.fn()}
+        onDependencies={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+    const trigger = screen.getByRole('button', { name: /thread actions/i })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+    await user.click(trigger)
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+  })
+
   it('navigates menu items with arrow keys', async () => {
     const user = userEvent.setup()
     render(
@@ -389,6 +494,31 @@ describe('PositionMenu', () => {
  
      await user.keyboard('{ArrowDown}')
      expect(document.activeElement).toBe(menuItems[0])
+   })
+
+   it('moves focus upward through portaled menu items and back to its trigger', async () => {
+     const user = userEvent.setup()
+     render(
+       <PositionMenu
+         thread={mockThread}
+         onMoveToFront={vi.fn()}
+         onReposition={vi.fn()}
+         onMoveToBack={vi.fn()}
+         onEdit={vi.fn()}
+         onDependencies={vi.fn()}
+         onDelete={vi.fn()}
+       />
+     )
+
+     const trigger = screen.getByRole('button', { name: /thread actions/i })
+     await user.click(trigger)
+     const menuItems = screen.getAllByRole('menuitem')
+     menuItems[1].focus()
+
+     await user.keyboard('{ArrowUp}')
+     expect(document.activeElement).toBe(menuItems[0])
+     await user.keyboard('{ArrowUp}')
+     expect(document.activeElement).toBe(trigger)
    })
 
    it('only one overflow menu can be open at a time', async () => {

@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode, useRef } from 'react'
-import { collectionsEnabled } from '../config/featureFlags'
 import { collectionsApi } from '../services/api'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 
@@ -44,14 +43,6 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   )
 
   const fetchCollections = useCallback(async () => {
-    if (!collectionsEnabled) {
-      setCollections([])
-      setActiveCollectionIdState(null)
-      setIsLoading(false)
-      setError(null)
-      return
-    }
-
     setIsLoading(true)
     setError(null)
     try {
@@ -77,31 +68,15 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   }, [])
 
   const retry = useCallback(() => {
-    if (!collectionsEnabled) {
-      return
-    }
-
     retryCountRef.current = 0
     fetchCollections()
   }, [fetchCollections])
 
   useEffect(() => {
-    if (!collectionsEnabled) {
-      setCollections([])
-      setActiveCollectionIdState(null)
-      setIsLoading(false)
-      setError(null)
-      return
-    }
-
     fetchCollections()
   }, [fetchCollections])
 
   useEffect(() => {
-    if (!collectionsEnabled) {
-      return
-    }
-
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const id = parseInt(stored, 10)
@@ -112,10 +87,6 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   }, [])
 
   const setActiveCollectionId = useCallback((id: number | null) => {
-    if (!collectionsEnabled) {
-      return
-    }
-
     console.log('[CollectionContext] setActiveCollectionId called:', id)
     setActiveCollectionIdState(id)
     if (id !== null) {
@@ -126,10 +97,6 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   }, [])
 
   const createCollection = useCallback(async (data: CollectionCreate) => {
-    if (!collectionsEnabled) {
-      return
-    }
-
     setIsLoading(true)
     try {
       await collectionsApi.create(data)
@@ -140,10 +107,6 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   }, [fetchCollections])
 
   const updateCollection = useCallback(async (id: number, data: CollectionUpdate) => {
-    if (!collectionsEnabled) {
-      return
-    }
-
     setIsLoading(true)
     try {
       await collectionsApi.update(id, data)
@@ -154,10 +117,6 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   }, [fetchCollections])
 
   const deleteCollection = useCallback(async (id: number) => {
-    if (!collectionsEnabled) {
-      return
-    }
-
     setIsLoading(true)
     try {
       await collectionsApi.delete(id)
@@ -171,10 +130,6 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
   }, [fetchCollections, activeCollectionId, setActiveCollectionId])
 
   const moveCollection = useCallback(async (id: number, newPosition: number) => {
-    if (!collectionsEnabled) {
-      return
-    }
-
     setIsLoading(true)
     try {
       await collectionsApi.update(id, { position: newPosition })
@@ -183,27 +138,6 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
       setIsLoading(false)
     }
   }, [fetchCollections])
-
-  if (!collectionsEnabled) {
-    return (
-      <CollectionContext.Provider
-        value={{
-          collections: [],
-          activeCollectionId: null,
-          setActiveCollectionId: () => {},
-          createCollection: async () => {},
-          updateCollection: async () => {},
-          deleteCollection: async () => {},
-          moveCollection: async () => {},
-          isLoading: false,
-          error: null,
-          retry: () => {},
-        }}
-      >
-        {children}
-      </CollectionContext.Provider>
-    )
-  }
 
   return (
     <CollectionContext.Provider

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi, beforeAll, beforeEach } from 'vitest'
 import { getColumnCount, getRowThreads } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
@@ -20,6 +20,7 @@ const mockGetVirtualItems = vi.fn()
 const mockGetTotalSize = vi.fn(() => 0)
 const mockMeasureElement = vi.fn()
 const mockScrollToIndex = vi.fn()
+let resizeCallback: ((entries: Array<{ contentRect: { height: number; width: number } }>) => void) | undefined
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: () => ({
@@ -61,13 +62,56 @@ beforeAll(() => {
   // Stub ResizeObserver (needed for the component's own ResizeObserver)
   vi.stubGlobal(
     'ResizeObserver',
-    vi.fn(function (this: any) {
+    vi.fn(function (this: any, callback: (entries: Array<{ contentRect: { height: number; width: number } }>) => void) {
+      resizeCallback = callback
       this.observe = vi.fn()
       this.unobserve = vi.fn()
       this.disconnect = vi.fn()
       return this
     }) as unknown as typeof ResizeObserver,
   )
+})
+
+it('reacts to resize measurements and auto-scrolls at both container edges', () => {
+  const threads = createMockThreads(60)
+  render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} />)
+  act(() => resizeCallback?.([{ contentRect: { height: 500, width: 1000 } }]))
+  const container = screen.getByLabelText('Thread queue')
+  Object.defineProperty(container, 'getBoundingClientRect', { value: () => ({ top: 0, height: 100 }) })
+  vi.spyOn(performance, 'now').mockReturnValueOnce(100).mockReturnValueOnce(200)
+  fireEvent.dragOver(container, { clientY: 1 })
+  fireEvent.dragOver(container, { clientY: 99 })
+  expect(mockScrollToIndex).toHaveBeenCalled()
+})
+
+it('ignores throttled and empty virtualized drag-over states', () => {
+  mockScrollToIndex.mockClear()
+  mockGetVirtualItems.mockReturnValue([])
+  render(<VirtualizedThreadList threads={createMockThreads(60)} renderItem={(thread) => <div>{thread.title}</div>} />)
+  const container = screen.getByLabelText('Thread queue')
+  Object.defineProperty(container, 'getBoundingClientRect', { value: () => ({ top: 0, height: 100 }) })
+  vi.spyOn(performance, 'now').mockReturnValue(100)
+  fireEvent.dragOver(container, { clientY: 1 })
+  fireEvent.dragOver(container, { clientY: 1 })
+  expect(mockScrollToIndex).not.toHaveBeenCalled()
+  mockGetVirtualItems.mockReturnValue(
+    Array.from({ length: 5 }, (_, i) => ({ key: i, index: i, start: i * 160, end: (i + 1) * 160, size: 160, lane: 0 })),
+  )
+})
+
+it('coalesces resize observer callbacks into one animation frame', () => {
+  const threads = createMockThreads(60)
+  render(<VirtualizedThreadList threads={threads} renderItem={(thread) => <div>{thread.title}</div>} />)
+  act(() => {
+    resizeCallback?.([{ contentRect: { height: 400, width: 700 } }])
+    resizeCallback?.([{ contentRect: { height: 500, width: 900 } }])
+  })
+  expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
+})
+
+it('renders a standalone empty queue state', () => {
+  render(<VirtualizedThreadList threads={[]} renderItem={() => <div />} />)
+  expect(screen.getByText('No threads in queue')).toBeInTheDocument()
 })
 
 beforeAll(() => {
@@ -123,6 +167,7 @@ it('preserves container selectors for E2E compatibility', () => {
   expect(container.querySelector('#queue-container')).toBeInTheDocument()
   expect(screen.getByRole('list')).toBeInTheDocument()
   expect(screen.getByLabelText('Thread queue')).toBeInTheDocument()
+  fireEvent.drop(screen.getByLabelText('Thread queue'))
 })
 
 it('renders the total-size spacer div', () => {
@@ -543,5 +588,39 @@ it('does not call scrollToIndex when dragging in the middle of the container', (
   })
   scrollEl.dispatchEvent(dragEvent3)
 
+  expect(mockScrollToIndex).not.toHaveBeenCalled()
+})
+
+it('reacts to ResizeObserver measurements and cleans up a pending frame', () => {
+  const frame = vi.fn((callback: FrameRequestCallback) => {
+    callback(1)
+    return 1
+  })
+  vi.stubGlobal('requestAnimationFrame', frame)
+  const { unmount } = render(
+    <VirtualizedThreadList
+      threads={createMockThreads(60)}
+      renderItem={(thread) => <div data-testid="queue-thread-item" key={thread.id}>{thread.title}</div>}
+    />,
+  )
+  const observerMock = vi.mocked(ResizeObserver)
+  const callback = observerMock.mock.calls.at(-1)?.[0] as ResizeObserverCallback
+  callback([{ contentRect: { width: 1200, height: 720 } } as ResizeObserverEntry], {} as ResizeObserver)
+  expect(frame).toHaveBeenCalled()
+  unmount()
+})
+
+it('ignores edge drags when no virtual items are visible', () => {
+  const { container } = render(
+    <VirtualizedThreadList
+      threads={createMockThreads(60)}
+      renderItem={(thread) => <div data-testid="queue-thread-item" key={thread.id}>{thread.title}</div>}
+    />,
+  )
+  const scrollEl = container.querySelector('#queue-container') as HTMLElement
+  mockScrollToIndex.mockClear()
+  mockGetVirtualItems.mockReturnValue([])
+  vi.spyOn(scrollEl, 'getBoundingClientRect').mockReturnValue({ top: 0, bottom: 600, height: 600, width: 800, left: 0, right: 800, x: 0, y: 0, toJSON: () => ({}) })
+  scrollEl.dispatchEvent(new DragEvent('dragover', { clientY: 10, bubbles: true, dataTransfer: new DataTransfer() }))
   expect(mockScrollToIndex).not.toHaveBeenCalled()
 })

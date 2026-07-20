@@ -61,7 +61,7 @@ function computeInDegrees(
     }
     for (const targets of adjacency.values()) {
         for (const target of targets) {
-            inDegree.set(target, (inDegree.get(target) ?? 0) + 1)
+            inDegree.set(target, inDegree.get(target)! + 1)
         }
     }
     return inDegree
@@ -88,9 +88,9 @@ function assignLayers(
     let head = 0
     while (head < queue.length) {
         const current = queue[head++]
-        const currentLayer = layers.get(current) ?? 0
-        for (const target of adjacency.get(current) ?? []) {
-            const newDegree = (inDegree.get(target) ?? 1) - 1
+        const currentLayer = layers.get(current)!
+        for (const target of adjacency.get(current)!) {
+            const newDegree = inDegree.get(target)! - 1
             inDegree.set(target, newDegree)
             const existingLayer = layers.get(target)
             const candidateLayer = currentLayer + 1
@@ -209,19 +209,18 @@ export function layoutGraph(
         for (let nodeIndex = 0; nodeIndex < group.length; nodeIndex++) {
             const nodeId = group[nodeIndex]
             const preNode = allPreNodes.get(nodeId)
-            if (!preNode) continue
-
-            const { w: nodeW, h: nodeH } = nodeDimensions(preNode)
+            const resolvedNode = preNode!
+            const { w: nodeW, h: nodeH } = nodeDimensions(resolvedNode)
             const thread = threadMap.get(nodeId)
 
             nodes.push({
                 id: nodeId,
-                title: preNode.title ?? thread?.title ?? `Node ${nodeId}`,
+                title: resolvedNode.title ?? thread?.title ?? `Node ${nodeId}`,
                 x: PADDING + offsetX + cursor,
                 y: PADDING + layerIndex * (NODE_HEIGHT + VERTICAL_GAP) + (NODE_HEIGHT - nodeH) / 2,
-                isBlocked: preNode.isBlocked,
-                isIssueNode: preNode.isIssueNode,
-                parentThreadId: preNode.parentThreadId,
+                isBlocked: resolvedNode.isBlocked,
+                isIssueNode: resolvedNode.isIssueNode,
+                parentThreadId: resolvedNode.parentThreadId,
             })
 
             cursor += nodeW + HORIZONTAL_GAP

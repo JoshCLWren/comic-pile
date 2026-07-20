@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown } from './helpers';
+import { SELECTORS, setRangeInput, submitRatingAndWaitForRateResponse } from './helpers';
 
 async function ensureRatingView(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/');
@@ -34,7 +34,7 @@ test.describe('Rate Thread Feature', () => {
 
   test('should submit rating and route to roll page after save and continue', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
@@ -44,7 +44,7 @@ test.describe('Rate Thread Feature', () => {
 
   test('should require rolling again before rating again after save and continue', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
@@ -97,7 +97,7 @@ test.describe('Rate Thread Feature', () => {
 
   test('should accept decimal ratings', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
   });
@@ -131,22 +131,17 @@ test.describe('Rate Thread Feature', () => {
     const unsnoozeButtons = authenticatedWithThreadsPage.locator('button[aria-label="Unsnooze this comic"]');
     await expect(unsnoozeButtons.first()).toBeVisible({ timeout: 5000 });
 
-    await Promise.all([
-      authenticatedWithThreadsPage.waitForResponse((response) =>
-        response.url().includes('/api/snooze/') && response.url().includes('/unsnooze')
-      ),
-      unsnoozeButtons.first().click(),
-    ]);
+    // The fixed bottom navigation can cover this control after a browser scrolls
+    // it into view. Force only the already-visible, enabled control's click, then
+    // assert the resulting state rather than coupling this test to response timing.
+    await unsnoozeButtons.first().click({ force: true });
 
-    await expect(async () => {
-      const count = await snoozedToggle.count();
-      expect(count).toBe(0);
-    }).toPass({ timeout: 5000 });
+    await expect(snoozedToggle).toHaveCount(0, { timeout: 10000 });
   });
 
   test('should update thread rating in database', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
 
@@ -171,7 +166,7 @@ test.describe('Rate Thread Feature', () => {
     if (hasFinishOption) {
       await finishCheckbox.check();
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-      await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+      await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
         authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
       );
 
@@ -238,11 +233,13 @@ test.describe('Rate Thread Feature', () => {
   test('should preserve form data on validation error', async ({ authenticatedWithThreadsPage }) => {
     const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
     await ratingInput.waitFor({ state: 'visible' });
-    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
+    // Start at the default 3.0 rating and use the browser's real range-input
+    // interaction so React receives the same event sequence as a user action.
+    await ratingInput.focus();
+    await ratingInput.press('ArrowRight');
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
-    const ratingValue = await ratingInput.inputValue();
-    expect(parseFloat(ratingValue)).toBe(3.5);
+    await expect(ratingInput).toHaveValue('3.5', { timeout: 5000 });
   });
 
   test('should show thread metadata (format, issues remaining)', async ({ authenticatedWithThreadsPage }) => {

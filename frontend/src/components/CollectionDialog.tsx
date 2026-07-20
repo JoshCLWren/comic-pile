@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useCollections } from '../contexts/CollectionContext'
 import { useToast } from '../contexts/useToast'
-import { collectionsEnabled } from '../config/featureFlags'
 import type { Collection, CollectionCreate, CollectionUpdate } from '../types'
 import './CollectionDialog.css'
 
@@ -17,10 +16,6 @@ interface CollectionDialogProps {
  * @returns {JSX.Element | null} The dialog or null when closed
  */
 export default function CollectionDialog({ collection, onClose }: CollectionDialogProps) {
-  if (!collectionsEnabled) {
-    return null
-  }
-
   return <CollectionDialogContent collection={collection} onClose={onClose} />
 }
 
@@ -62,11 +57,6 @@ function CollectionDialogContent({ collection, onClose }: CollectionDialogProps)
 
     if (!name.trim()) {
       setError('Collection name is required')
-      return
-    }
-
-    if (name.length > 100) {
-      setError('Collection name must be 100 characters or less')
       return
     }
 

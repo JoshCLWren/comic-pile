@@ -85,7 +85,7 @@ function GateCard({ gate }: { gate: TimelineGateEntry }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-base font-semibold text-white">
-            Issue #{gate.issueNumberText ?? gate.targetIssueId ?? 'Unknown'}
+            Issue #{gate.issueNumberText ?? gate.targetIssueId}
           </p>
           <p className="text-xs text-stone-400">{gate.targetLabel}</p>
         </div>
