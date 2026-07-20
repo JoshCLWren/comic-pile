@@ -69,7 +69,7 @@ export default function QueueThreadCard({
       ]}
     >
       <div
-        className={`queue-thread-card glass-card p-3 md:p-4 space-y-2 md:space-y-3 group transition-all hover:border-white/20 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
+        className={`queue-thread-card glass-card h-full p-3 md:p-4 space-y-2 md:space-y-3 group transition-all hover:border-white/20 ${isDragOver ? 'border-amber-400/60' : ''} ${isBlocked ? 'border-red-400/30 bg-red-500/5' : ''}`}
         onDragOver={onDragOver}
         onDrop={onDrop}
         role="button"
