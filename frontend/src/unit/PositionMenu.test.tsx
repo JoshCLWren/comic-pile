@@ -29,6 +29,10 @@ const mockThread = {
 describe('PositionMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      configurable: true,
+      value: 1024,
+    })
   })
 
   it('renders the overflow menu trigger button', () => {
