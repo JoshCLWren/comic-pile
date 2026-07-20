@@ -49,30 +49,10 @@ Fix the problem instead.
 
 ### Getting Started
 
-1. Install dependencies:
-   ```bash
-   uv sync --all-extras
-   source .venv/bin/activate
-   ```
-
-2. Set up the database:
-   ```bash
-   make migrate
-   ```
-
-3. Seed sample data (optional):
-   ```bash
-   make seed
-   ```
-
-4. Run the development server:
-   ```bash
-   make dev
-   ```
-
-5. View the app:
-   - App: http://localhost:8000
-   - API docs: http://localhost:8000/docs
+1. Copy `.env.example` to `.env`.
+2. Run `make setup` to install dependencies, start local PostgreSQL, run migrations, and seed demo data.
+3. Run `make dev` and open the app at `http://localhost:5173`.
+4. API docs are available at `http://localhost:8000/docs`.
 
 ### API Development
 
@@ -85,7 +65,7 @@ Fix the problem instead.
 ### Frontend Development
 
 - Install deps:    `pnpm install`
-- Dev server:      `pnpm --filter frontend run dev` (proxies `/api` to localhost:8000; backend must be running)
+- Dev server:      `make dev` (starts Vite and FastAPI together)
 - Build:           `pnpm --filter frontend run build` (outputs to `static/react/`)
 - Lint:            `pnpm --filter frontend run lint`
 - Unit tests:      `pnpm --filter frontend test` (vitest, no server needed)

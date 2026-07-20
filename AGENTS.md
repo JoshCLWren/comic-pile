@@ -53,10 +53,10 @@ CI is not a debugging tool. Every failed CI run wastes compute, blocks the pipel
 1. Run `cd frontend && pnpm run lint && pnpm run typecheck` - must be clean
 2. Run `cd frontend && pnpm run build` - must succeed
 3. Run `cd frontend && pnpm test` (vitest) - all must pass
-4. Run `cd frontend && pnpm run build && REUSE_EXISTING_SERVER=true npx playwright test` - all E2E must pass in Firefox, WebKit, and Chromium (requires backend running on port 9000). Firefox is the primary desktop acceptance browser and WebKit covers the mobile Safari rendering path.
+4. Run `make verify-e2e` against the local development API - all E2E must pass in Firefox, WebKit, and Chromium. Firefox is the primary desktop acceptance browser and WebKit covers the mobile Safari rendering path.
 5. Only after ALL of the above are green, you may push
 
-**If E2E tests need a backend:** Start one locally with `.venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 9000` and set `REUSE_EXISTING_SERVER=true`. Do not push to trigger CI to run them for you.
+**If E2E tests need a backend:** Run `make dev` first. The API runs on port 8000 and Vite runs on port 5173.
 
 **This is a hard rule.** Violating it is the same severity as skipping tests or bypassing hooks. If you cannot run E2E tests locally for some reason, say so explicitly and ask the user before pushing.
 
@@ -110,7 +110,7 @@ cd frontend && pnpm run typecheck                # Frontend TypeScript check
 ### E2E Tests (Playwright)
 **⚠️ MUST build frontend first:**
 ```bash
-cd frontend && pnpm run test:e2e        # Builds + runs tests
+make verify-e2e                         # Builds + runs TypeScript Playwright tests
 cd frontend && pnpm run test:e2e:quick  # Skip build (faster iteration)
 cd frontend && pnpm run build && npx playwright test --headed  # Run with browser visible
 ```
@@ -232,18 +232,9 @@ if not thread or thread.user_id != current_user.id:
 **Running E2E Tests Locally:**
 
 ```bash
-# Option 1: With Docker (recommended)
-docker compose -f docker-compose.test.yml up -d postgres-test
-cd frontend && pnpm run build && npx playwright test --project=chromium
-docker compose -f docker-compose.test.yml down
-
-# Option 2: Manual setup
-export DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5437/comic_pile_test
-export SECRET_KEY=test-secret-key
-.venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-# In another terminal:
-cd frontend && pnpm run build
-REUSE_EXISTING_SERVER=true npx playwright test --project=chromium
+make setup
+make dev
+make verify-e2e
 ```
 
 **Common Commands:** `npx playwright test --project=chromium` (all), `npx playwright test roll.spec.ts` (single file), `npx playwright test --ui` (interactive), `npx playwright test --headed` (browser visible), `npx playwright test --debug` (debug mode).
@@ -346,3 +337,23 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - Run `make lint` and `make pytest` before committing
 - Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
 - **Update `docs/changelog.md`** when deploying changes to production (add new dated entry, group by feature area, describe what changed not how)
+
+## GitHub Issue Workflow
+
+GitHub Issues are the backlog and status source of truth. Do not use
+`docs/ISSUE_KANBAN.md` to determine current status; it is retained only as a
+deprecated historical reference while the issue workflow is migrated.
+
+Before choosing work, run:
+
+```bash
+make next-task
+```
+
+For a complete copy-paste execution prompt, read
+[`prompts/agent-next-task.md`](prompts/agent-next-task.md).
+
+Agents with the `github-issue-kanban` skill should follow that skill. Other
+agents must read `docs/ISSUE_EXECUTION_PROTOCOL.md`, update the selected
+issue's `ralph-status:*` label before editing, and add a verification comment
+before closing the issue.

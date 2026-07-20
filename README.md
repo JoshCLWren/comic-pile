@@ -46,35 +46,35 @@ Skipped tests create technical debt and hide broken functionality. If a test is 
 git clone https://github.com/JoshCLWren/comic-pile.git
 cd comic-pile
 
-# Install dependencies
-uv sync --all-extras
+# Copy local configuration
+cp .env.example .env
 
-# Activate the virtual environment
-source .venv/bin/activate
+# Install dependencies, start PostgreSQL, migrate, and seed demo data
+make setup
 
-# Set up the database
-make migrate
-
-# Seed sample data (optional)
-make seed
-
-# Run the development server
+# Run the frontend and API development servers
 make dev
 ```
 
-Open http://localhost:8000 to view the app, or http://localhost:8000/docs for API documentation.
+Open http://localhost:5173 to use the app. The API and Swagger docs are at
+http://localhost:8000 and http://localhost:8000/docs.
 
 ## Development Workflow
 
 ### Daily Development
 
 ```bash
-# Run the development server
+# Run the development servers
 make dev
 
-# Run tests
-pytest
-make pytest
+# Run only the API server
+make dev-api
+
+# Run the complete local verification suite
+make verify
+
+# Run browser tests (requires the development API server)
+make verify-e2e
 
 # Run tests with coverage
 pytest --cov=comic_pile --cov-report=term-missing

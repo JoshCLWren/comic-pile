@@ -6,7 +6,9 @@ This document is the mandatory operating procedure for agents executing GitHub i
 
 - The GitHub issue is the source of truth for task scope and acceptance criteria.
 - When the kanban links a local plan file, that file is the source of truth for implementation details. GitHub contains a compact pointer to it.
-- `docs/ISSUE_KANBAN.md` is the source of truth for backlog priority, status, and dependencies.
+- GitHub Issues, labels, issue links, and issue bodies are the source of truth for backlog priority, status, and dependencies.
+- `make next-task` is the canonical local helper for selecting the next executable issue.
+- `docs/ISSUE_KANBAN.md` is deprecated historical material and must not be used to infer current status.
 - `AGENTS.md` is mandatory. Its test, async PostgreSQL, lint, and no-suppression rules override convenience.
 
 ## Before changing code
@@ -16,7 +18,7 @@ This document is the mandatory operating procedure for agents executing GitHub i
 3. If the issue is marked **Planning required**, do not edit application code. Create the local plan file first.
 4. Confirm every dependency listed on the issue and board is complete or explicitly marked non-blocking.
 5. Inspect the named files and existing tests before editing.
-6. Move the issue's row in `docs/ISSUE_KANBAN.md` from Ready/Planned/Queued to In progress. Do not claim work is in progress without making this edit.
+6. Replace `ralph-status:pending` with `ralph-status:in-progress` on the GitHub issue. Do not claim work is in progress without making this update.
 7. Do not broaden scope. If a discovered bug is required to complete the issue, add it to the issue and board before implementing it. If it is unrelated, leave it untouched and report it.
 
 ## Planning gate
@@ -85,4 +87,4 @@ Before closing the issue, add a concise comment containing:
 - Tests and commands run, including their result.
 - Any follow-up issue numbers.
 
-Then close the GitHub issue as completed and move its row to Done in `docs/ISSUE_KANBAN.md`. A local implementation without this handoff is incomplete.
+Then add `ralph-status:done`, close the GitHub issue as completed, and include the final verification comment. A local implementation without this handoff is incomplete.

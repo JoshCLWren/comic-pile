@@ -1,7 +1,7 @@
-.PHONY: help init lint pytest sync venv githook install-githook
+.PHONY: help init setup next-task lint verify verify-e2e pytest sync venv githook install-githook
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
-.PHONY: dev test seed migrate worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
+.PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
 .PHONY: test-e2e-prod-smoke check-prod-assets
 .PHONY: verify-reading-order
@@ -44,6 +44,36 @@ init:  ## Initialize project with new name (Usage: make init NAME=your-project)
 
 lint:  ## Run code linting
 	bash scripts/lint.sh
+
+setup:  ## Install dependencies, start PostgreSQL, migrate, and seed deterministic demo data
+	@uv sync --all-extras
+	@pnpm install --frozen-lockfile
+	@docker compose up -d db
+	@echo "Waiting for PostgreSQL..."
+	@until docker compose exec -T db pg_isready -U comicpile -d comicpile >/dev/null 2>&1; do sleep 1; done
+	@$(MAKE) migrate
+	@$(MAKE) seed-dev
+	@echo "Setup complete. Run 'make dev-all' and open http://localhost:5173."
+
+next-task:  ## Select the next executable GitHub issue for an agent
+	@$(PYTHON) scripts/next_task.py
+
+db-up:  ## Start local PostgreSQL without changing its data
+	@docker compose up -d db
+
+db-down:  ## Stop local PostgreSQL without deleting its data
+	@docker compose stop db
+
+verify:  ## Run backend and frontend lint, typecheck, build, and unit tests
+	@bash scripts/lint.sh
+	@$(MAKE) pytest
+	@pnpm --filter frontend run lint
+	@pnpm --filter frontend run typecheck
+	@pnpm --filter frontend run build
+	@pnpm --filter frontend test
+
+verify-e2e:  ## Run the TypeScript Playwright suite
+	@pnpm --filter frontend run test:e2e
 
 install-githook:  ## Install git hooks for new developers
 	@bash scripts/install-git-hooks.sh
@@ -162,13 +192,19 @@ merge-phase9:  ## Merge Phase 9 to main
 	ty check --error-on-warning && \
 	git push origin main
 
-dev:  ## Run development server with hot reload (uvicorn app.main:app --reload)
+dev:  ## Run the frontend and API development servers together
+	@$(MAKE) dev-all
+
+dev-api:  ## Run only the FastAPI development server
 	@echo "Starting FastAPI development server on http://0.0.0.0:${PORT}"
 	@uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --reload
 
 seed:  ## Seed database with sample data (python -m scripts.seed_data)
 	@echo "Seeding database with Faker data..."
 	@python -m scripts.seed_data
+
+seed-dev:  ## Reset the local demo user and queue with deterministic data
+	@python scripts/seed_dev_db.py
 
 migrate:  ## Run database migrations (alembic upgrade head)
 	@echo "Running database migrations..."
@@ -188,10 +224,7 @@ test-integration:  ## Run Playwright integration tests
 	@echo ""
 	@$(PYTEST) tests_e2e/test_api_workflows.py --no-cov -v
 
-test-e2e-browser:  ## Run Playwright browser tests (requires test database and web server)
-	@echo "Running Playwright browser tests..."
-	@echo "Note: Ensure test database is running: docker start comic-pile-test-001-db"
-	@bash -c 'set -a; source .env; set +a; $(PYTEST) tests_e2e/test_browser_ui.py -m integration -v'
+test-e2e-browser: verify-e2e  ## Backwards-compatible alias for TypeScript Playwright tests
 
 test-e2e-api:  ## Run e2e API tests (no browser/server needed)
 	@echo "Running e2e API tests..."
@@ -350,7 +383,7 @@ dev-frontend:  ## Run frontend dev server only (pnpm --filter frontend run dev)
 		pnpm --filter frontend run dev; \
 	fi
 
-# Docker test environment for Python Playwright tests
+# Docker test environment for API and TypeScript Playwright tests
 docker-test-up:  ## Start Docker test environment (PostgreSQL + API)
 	@echo "Starting Docker test environment..."
 	docker compose -f docker-compose.test.yml up -d --build
@@ -377,19 +410,19 @@ docker-test-health:  ## Check Docker test environment health
 	@echo "Checking Docker test environment..."
 	@docker compose -f docker-compose.test.yml ps
 
-# Python Playwright browser tests with Docker
-test-e2e-browser-docker:  ## Run Python Playwright tests with Docker (starts and stops Docker)
+# TypeScript Playwright browser tests with Docker
+test-e2e-browser-docker:  ## Run TypeScript Playwright tests with Docker (starts and stops Docker)
 	@echo "Starting Docker test environment..."
 	$(MAKE) docker-test-up
-	@echo "Running Python Playwright tests..."
-	@pytest tests_e2e/test_browser_ui.py -v --no-cov || ($(MAKE) docker-test-down && exit 1)
+	@echo "Running TypeScript Playwright tests..."
+	@$(MAKE) verify-e2e || ($(MAKE) docker-test-down && exit 1)
 	@echo "Stopping Docker test environment..."
 	$(MAKE) docker-test-down
 	@echo "✓ Tests completed"
 
-test-e2e-browser-quick:  ## Run Python Playwright tests (Docker must already be running)
-	@echo "Running Python Playwright tests (assumes Docker is running)..."
-	@pytest tests_e2e/test_browser_ui.py -v --no-cov
+test-e2e-browser-quick:  ## Run TypeScript Playwright tests (Docker must already be running)
+	@echo "Running TypeScript Playwright tests (assumes services are running)..."
+	@pnpm --filter frontend run test:e2e:quick
 
 verify-reading-order:  ## Verify Wildstorm reading order dependencies
 	@echo "Verifying Wildstorm reading order..."
