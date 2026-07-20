@@ -67,9 +67,13 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     await waitForQueueReady(page);
 
     const firstCard = page.locator('[data-index="0"] [data-testid="queue-thread-item"]').first();
-    await firstCard.getByLabel('Thread actions').click();
+    const threadActions = firstCard.getByLabel('Thread actions', { exact: true });
+    await threadActions.hover();
+    await expect(page.getByText('Thread actions', { exact: true })).toHaveCount(0);
+    await expect.poll(() => firstCard.evaluate((element) => getComputedStyle(element).overflow)).toBe('hidden');
+    await threadActions.click();
 
-    const menu = firstCard.getByRole('menu', { name: 'Thread actions' });
+    const menu = page.getByRole('menu', { name: 'Thread actions' });
     await expect(menu).toBeVisible();
 
     const menuBox = await menu.boundingBox();

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { openThreadActions } from './helpers';
+import { clickThreadAction } from './helpers';
 
 /**
  * Helper to create a thread without total_issues (old system) via API
@@ -569,8 +569,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button for old thread
     const oldThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: oldThreadTitle }).first();
-    await openThreadActions(oldThreadCard)
-    await oldThreadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(oldThreadCard, 'Edit thread')
 
     const oldEditModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(oldEditModal).toBeVisible();
@@ -583,8 +582,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button for migrated thread
     const migratedThreadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: migratedThreadTitle }).first();
-    await openThreadActions(migratedThreadCard)
-    await migratedThreadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(migratedThreadCard, 'Edit thread')
 
     const migratedEditModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(migratedEditModal).toBeVisible();
@@ -606,8 +604,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
-    await openThreadActions(threadCard)
-    await threadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(threadCard, 'Edit thread')
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -652,8 +649,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card itself
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
-    await openThreadActions(threadCard)
-    await threadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(threadCard, 'Edit thread')
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -685,8 +681,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card itself
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
-    await openThreadActions(threadCard)
-    await threadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(threadCard, 'Edit thread')
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -721,8 +716,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
-    await openThreadActions(threadCard)
-    await threadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(threadCard, 'Edit thread')
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -759,8 +753,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
-    await openThreadActions(threadCard)
-    await threadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(threadCard, 'Edit thread')
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();
@@ -791,8 +784,7 @@ test.describe('Migrating from Edit Modal', () => {
 
     // Click the Edit button, not the thread card
     const threadCard = authenticatedPage.locator('#queue-container .glass-card').filter({ hasText: threadTitle }).first();
-    await openThreadActions(threadCard)
-    await threadCard.locator('button[aria-label="Edit thread"]').click();
+    await clickThreadAction(threadCard, 'Edit thread')
 
     const editModal = authenticatedPage.locator('.edit-modal__overlay');
     await expect(editModal).toBeVisible();

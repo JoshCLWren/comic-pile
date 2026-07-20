@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import type { Thread } from '../types'
 import { usePositionMenu } from '../contexts/usePositionMenu'
 
@@ -17,9 +18,31 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
   const isOpen = openThreadId === thread.id
 
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const triggerContainerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const menuItemsRef = useRef<(HTMLButtonElement | null)[]>([])
   const clickFromKeyboardRef = useRef(false)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null)
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger) return
+
+    const rect = trigger.getBoundingClientRect()
+    const nextPosition = {
+      top: rect.bottom + 4,
+      right: document.documentElement.clientWidth - rect.right,
+    }
+    setMenuPosition((currentPosition) => {
+      if (
+        currentPosition?.top === nextPosition.top &&
+        currentPosition.right === nextPosition.right
+      ) {
+        return currentPosition
+      }
+      return nextPosition
+    })
+  }, [])
 
   const closeMenu = useCallback(() => {
     closeContextMenu()
@@ -72,15 +95,32 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
   useEffect(() => {
     if (!isOpen) return
 
+    updateMenuPosition()
+    window.addEventListener('resize', updateMenuPosition)
+    document.addEventListener('scroll', updateMenuPosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition)
+      document.removeEventListener('scroll', updateMenuPosition, true)
+    }
+  }, [isOpen, updateMenuPosition])
+
+  useEffect(() => {
+    if (!isOpen) return
+
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        closeMenu()
+      const target = e.target as Node
+      if (
+        !menuRef.current?.contains(target) &&
+        !triggerContainerRef.current?.contains(target)
+      ) {
+        closeContextMenu()
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen, closeMenu])
+  }, [isOpen, closeContextMenu])
 
   const handleTriggerClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()
@@ -97,6 +137,9 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
       e.stopPropagation()
       clickFromKeyboardRef.current = true
       openMenu(thread.id)
+      window.setTimeout(() => {
+        clickFromKeyboardRef.current = false
+      }, 100)
       setTimeout(() => menuItemsRef.current[0]?.focus(), 0)
     }
   }
@@ -146,7 +189,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     },
     {
       label: 'Dependencies',
-      icon: '\u26D3\uFE0F',
+      icon: '\u26D3\uFE0E',
       ariaLabel: 'Manage dependencies',
       action: () => {
         onDependencies(thread)
@@ -166,24 +209,24 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
   ]
 
   return (
-    <div className="relative" ref={menuRef}>
-      <Tooltip content="Thread actions">
-        <button
-          ref={triggerRef}
-          type="button"
-          onClick={handleTriggerClick}
-          onKeyDown={handleTriggerKeyDown}
-          className="flex items-center justify-center w-11 h-11 text-stone-500 hover:text-white transition-colors text-lg rounded-lg hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-          aria-label="Thread actions"
-          aria-haspopup="menu"
-          aria-expanded={isOpen}
-        >
-          &#x22EE;
-        </button>
-      </Tooltip>
-      {isOpen && (
+    <div className="relative" ref={triggerContainerRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={handleTriggerClick}
+        onKeyDown={handleTriggerKeyDown}
+        className="flex items-center justify-center w-11 h-11 text-stone-500 hover:text-white transition-colors text-lg rounded-lg hover:bg-white/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+        aria-label="Thread actions"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+      >
+        &#x22EE;
+      </button>
+      {isOpen && menuPosition && createPortal(
         <div
-          className="absolute right-0 top-full mt-1 w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-50 py-1 overflow-hidden"
+          ref={menuRef}
+          className="fixed w-52 bg-[#1a1410]/95 border border-white/10 rounded-xl shadow-2xl z-[1000] py-1 overflow-hidden"
+          style={menuPosition}
           role="menu"
           aria-label="Thread actions"
         >
@@ -208,29 +251,8 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
               <span className="font-medium">{item.label}</span>
             </button>
           ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Tooltip({ children, content }: { children: React.ReactNode; content: string }) {
-  const [isVisible, setIsVisible] = useState(false)
-
-  return (
-    <div
-      className="relative inline-flex"
-      onMouseEnter={() => setIsVisible(true)}
-      onMouseLeave={() => setIsVisible(false)}
-      onFocus={() => setIsVisible(true)}
-      onBlur={() => setIsVisible(false)}
-    >
-      {children}
-      {isVisible && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 bg-[#1a1410]/95 text-stone-300 text-[10px] rounded-lg shadow-xl border border-white/10 z-[60] pointer-events-none">
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-[#1a1410]/95 border-r border-b border-white/10"></div>
-          {content}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
