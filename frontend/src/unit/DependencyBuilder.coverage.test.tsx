@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({
   dependenciesApi: { listThreadDependencies: vi.fn(), listBlockedThreadIds: vi.fn(), createDependency: vi.fn(), deleteDependency: vi.fn(), updateDependency: vi.fn() },
@@ -19,6 +19,7 @@ const thread = { id: 1, title: 'Target', format: 'Comic', issues_remaining: 1, t
 const dependency = { id: 4, source_thread_id: 2, target_thread_id: 1, source_issue_id: null, target_issue_id: null, source_label: 'Source', target_label: 'Target', created_at: 'now' }
 
 describe('DependencyBuilder', () => {
+  afterEach(() => vi.useRealTimers())
   it('does not load or render content when closed or missing a thread', () => {
     const { container } = render(<DependencyBuilder thread={null} isOpen={false} onClose={vi.fn()} />)
     expect(container).toBeEmptyDOMElement()
@@ -183,6 +184,38 @@ describe('DependencyBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(screen.getByText('note failed')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  })
+
+  it('prevents duplicate issue dependencies and rejects an unmigrated target', async () => {
+    const issueDependency = {
+      ...dependency, source_issue_id: 8, target_issue_id: 9, is_issue_level: true,
+      source_label: 'Source #1', target_label: 'Target #1',
+    }
+    api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [issueDependency], blocked_by: [] })
+    api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Source', total_issues: 2 }] })
+    api.issuesApi.list
+      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread' }], next_page_token: null })
+      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '1', status: 'unread' }], next_page_token: null })
+    const user = userEvent.setup()
+    render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
+    await user.type(screen.getByLabelText('Search prerequisite thread'), 'Source')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Source/ })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Source/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Already added/ })).toBeDisabled())
+
+    cleanup()
+    api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [], blocked_by: [] })
+    api.issuesApi.list
+      .mockResolvedValueOnce({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread' }], next_page_token: null })
+      .mockResolvedValueOnce({ issues: [{ id: 9, thread_id: 1, issue_number: '1', status: 'unread' }], next_page_token: null })
+    render(<DependencyBuilder thread={{ ...thread, total_issues: null } as never} isOpen onClose={vi.fn()} />)
+    api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Unmigrated', total_issues: 2 }] })
+    await user.type(screen.getByLabelText('Search prerequisite thread'), 'Unm')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Unmigrated/ })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /Unmigrated/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Block issue/ })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: /Block issue/ }))
+    expect(screen.getByText(/Target thread must be migrated/)).toBeInTheDocument()
   })
 
 
@@ -418,7 +451,10 @@ describe('DependencyBuilder', () => {
     const issueDependency = { ...dependency, source_issue_id: 8, target_issue_id: 9, source_issue_thread_id: 2, target_issue_thread_id: 1, source_label: 'Prerequisite #1', target_label: 'Target #2', is_issue_level: true }
     api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [issueDependency], blocked_by: [] })
     api.threadsApi.list.mockResolvedValue({ threads: [{ ...thread, id: 2, title: 'Prerequisite', total_issues: 3 }] })
-    api.issuesApi.list.mockResolvedValue({ issues: [{ id: 8, thread_id: 2, issue_number: '1', status: 'unread' }], next_page_token: null })
+    api.issuesApi.list.mockResolvedValue({ issues: [
+      { id: 8, thread_id: 2, issue_number: '1', status: 'unread' },
+      { id: 9, thread_id: 1, issue_number: '2', status: 'unread' },
+    ], next_page_token: null })
     api.dependenciesApi.createDependency.mockResolvedValue({ warning: 'Dependency may create a cycle' })
     const user = userEvent.setup()
     render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
@@ -426,12 +462,37 @@ describe('DependencyBuilder', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Prerequisite/ })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /Prerequisite/ }))
     await waitFor(() => expect(screen.getByLabelText('Prerequisite issue')).toBeInTheDocument())
-    expect(screen.getByLabelText('Target issue')).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Prerequisite issue'), '8')
+    await user.selectOptions(screen.getByLabelText('Target issue'), '9')
+    expect(screen.getByRole('button', { name: 'Already added' })).toBeDisabled()
   })
 
   it('renders safely when opened without a thread', () => {
     render(<DependencyBuilder thread={null} isOpen onClose={vi.fn()} />)
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('renders issue-node fallback labels and tolerates a tablist event without focus', async () => {
+    const issueDependency = {
+      ...dependency,
+      source_issue_id: 8,
+      target_issue_id: 9,
+      source_issue_thread_id: 2,
+      target_issue_thread_id: 1,
+      source_label: null,
+      target_label: null,
+      is_issue_level: true,
+    }
+    api.dependenciesApi.listThreadDependencies.mockResolvedValue({ blocking: [issueDependency], blocked_by: [] })
+    api.dependenciesApi.listBlockedThreadIds.mockResolvedValue([1])
+    api.threadsApi.list.mockResolvedValue({ threads: [thread, { ...thread, id: 2, title: 'Source', total_issues: 3 }] })
+    const user = userEvent.setup()
+    render(<DependencyBuilder thread={thread as never} isOpen onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('button', { name: /view reading order/i })).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /view reading order/i }))
+    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+    await user.click(screen.getByRole('tab', { name: 'Flowchart' }))
+    expect(screen.getByTestId('mock-flowchart')).toBeInTheDocument()
   })
 
   it('handles malformed graph dependencies, keyboard tab navigation, empty issues, and blank notes', async () => {

@@ -238,7 +238,7 @@ describe('IssueList', () => {
   it('handles zero-count progress, outgoing dependencies, and read dates without a callback', async () => {
     mockedIssuesApi.list.mockResolvedValue(buildListResponse([
       { ...BASE_ISSUES[0], status: 'read', read_at: '2026-03-10T00:00:00Z' },
-    ], null, 0))
+    ], null, 1))
     mockedDependenciesApi.getIssueDependencies.mockResolvedValue({
       issue_id: 1,
       incoming: [],
@@ -248,9 +248,24 @@ describe('IssueList', () => {
     render(<IssueList thread={{ ...mockThread, next_unread_issue_id: 999 }} />)
 
     await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
-    expect(screen.getByText(/Read 1 of 0 \(0%\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Read 1 of 1 \(100%\)/)).toBeInTheDocument()
     expect(screen.getByTitle('Has dependencies')).toBeInTheDocument()
     await userEvent.click(screen.getByText('#1'))
     expect(mockedIssuesApi.markUnread).toHaveBeenCalledWith(1)
+  })
+
+  it('removes stale dependency indicators when a later response is empty', async () => {
+    const issue = BASE_ISSUES[0]
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse([issue]))
+    mockedDependenciesApi.getIssueDependencies.mockResolvedValueOnce({
+      issue_id: issue.id,
+      incoming: [{ dependency_id: 2, source_issue_id: 2, source_issue_number: '2', source_thread_id: 20, source_thread_title: 'Source' }],
+      outgoing: [],
+    }).mockResolvedValueOnce({ issue_id: issue.id, incoming: [], outgoing: [] })
+    const { rerender } = render(<IssueList thread={mockThread} />)
+    await waitFor(() => expect(screen.getByTitle('Has dependencies')).toBeInTheDocument())
+    rerender(<IssueList thread={{ ...mockThread, id: 100 }} />)
+    mockedIssuesApi.list.mockResolvedValue(buildListResponse([issue]))
+    await waitFor(() => expect(screen.queryByTitle('Has dependencies')).not.toBeInTheDocument())
   })
 })

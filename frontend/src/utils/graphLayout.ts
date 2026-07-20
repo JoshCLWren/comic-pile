@@ -61,7 +61,7 @@ function computeInDegrees(
     }
     for (const targets of adjacency.values()) {
         for (const target of targets) {
-            inDegree.set(target, (inDegree.get(target) ?? 0) + 1)
+            inDegree.set(target, inDegree.get(target)! + 1)
         }
     }
     return inDegree
@@ -88,9 +88,9 @@ function assignLayers(
     let head = 0
     while (head < queue.length) {
         const current = queue[head++]
-        const currentLayer = layers.get(current) ?? 0
-        for (const target of adjacency.get(current) ?? []) {
-            const newDegree = (inDegree.get(target) ?? 1) - 1
+        const currentLayer = layers.get(current)!
+        for (const target of adjacency.get(current)!) {
+            const newDegree = inDegree.get(target)! - 1
             inDegree.set(target, newDegree)
             const existingLayer = layers.get(target)
             const candidateLayer = currentLayer + 1

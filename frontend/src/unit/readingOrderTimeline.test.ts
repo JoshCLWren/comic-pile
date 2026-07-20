@@ -183,6 +183,15 @@ describe('buildReadingOrderTimelineEntries', () => {
     expect(gate?.kind === 'gate' && gate.gate.issueNumberValue).toBe(0)
   })
 
+  it('matches the current gate by issue id when labels cannot be parsed', () => {
+    const entries = buildReadingOrderTimelineEntries({
+      thread: makeThread({ total_issues: null, next_unread_issue_number: 'Special', next_unread_issue_id: 1005 }),
+      dependencies: [makeDependency({ target_issue_id: 1005, target_label: 'Special' })],
+    })
+    const gate = entries.find((entry) => entry.kind === 'gate')
+    expect(gate?.kind === 'gate' && gate.gate.status).toBe('blocked')
+  })
+
   it('handles non-numeric labels, id fallbacks, and dormant gates', () => {
     const thread = makeThread({ total_issues: 3, next_unread_issue_number: null, next_unread_issue_id: 999 })
     const entries = buildReadingOrderTimelineEntries({
@@ -203,13 +212,13 @@ describe('buildReadingOrderTimelineEntries', () => {
     const thread = makeThread({ total_issues: 4, next_unread_issue_number: null, next_unread_issue_id: null })
     const dependency = {
       ...makeDependency({ target_issue_id: 20 }),
-      source_label: 'Source',
+      source_label: 'Prerequisite',
       target_label: null,
     }
     const entries = buildReadingOrderTimelineEntries({ thread, dependencies: [dependency] })
     const gate = entries.find((entry) => entry.kind === 'gate')
     expect(gate?.kind === 'gate' && gate.gate.targetLabel).toBe('Issue gate')
-    expect(gate?.kind === 'gate' && gate.gate.prerequisiteLabels).toEqual(['Source'])
+    expect(gate?.kind === 'gate' && gate.gate.prerequisiteLabels).toEqual(['Prerequisite'])
   })
 
   it('uses fallback issue ids to identify the current gate', () => {

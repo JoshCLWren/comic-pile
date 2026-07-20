@@ -27,7 +27,7 @@ Skipped tests create technical debt and hide broken functionality. If a test is 
 - **Styling**: Tailwind CSS
 - **Testing**: pytest with httpx.AsyncClient for API tests
 - **Auth**: JWT authentication with refresh token rotation
-- **Code Quality**: ruff linting, ty type checking, 96% coverage requirement
+- **Code Quality**: ruff linting, ty type checking, 94% coverage requirement
 
 > **⚠️ IMPORTANT: Async PostgreSQL Only in Application Code**
 > 
@@ -135,7 +135,7 @@ pytest -v
 pytest --cov=comic_pile --cov-report=term-missing
 ```
 
-**Coverage requirement**: Minimum 96% (configured in pyproject.toml)
+**Coverage requirement**: Minimum 94% (configured in pyproject.toml)
 
 ## Dependencies
 

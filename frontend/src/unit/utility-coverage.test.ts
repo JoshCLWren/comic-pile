@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatDate, formatDateTime, formatTime, formatTime24 } from '../utils/dateFormat'
 import { parseIssueRange } from '../utils/issueParser'
 import { getDependencyTooltip } from '../utils/dependencyHelpers'
@@ -10,6 +10,8 @@ import { buildD10Faces } from '../components/d10Geometry'
 import { DEFAULT_DICE_RENDER_CONFIG, getDiceRenderConfigForSides } from '../components/diceRenderConfig'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
 import { buildReadingOrderTimelineEntries, issueStringToNumber } from '../utils/readingOrderTimeline'
+
+afterEach(() => vi.useRealTimers())
 import type { Dependency, Issue, Thread, FlowchartDependency } from '../types'
 
 const issue = (id: number, status: 'read' | 'unread' = 'unread'): Issue => ({

@@ -129,4 +129,24 @@ describe('small and dialog components', () => {
     expect(screen.getByText('Unknown')).toBeInTheDocument()
     expect(screen.getByText('Prerequisite:')).toBeInTheDocument()
   })
+
+  it('renders current spans and safe gate labels for sparse issue metadata', () => {
+    render(<ReadingOrderTimeline
+      thread={{ ...thread, id: 1, issues_remaining: 2, total_issues: 6, next_unread_issue_number: '4', next_unread_issue_id: 104 } as never}
+      dependencies={[{
+        id: 10, source_thread_id: 2, target_thread_id: null, source_issue_id: 2, target_issue_id: 104,
+        source_label: 'Prerequisite', target_label: null, target_issue_thread_id: 1,
+        source_issue_thread_id: 2, is_issue_level: true, created_at: 'now',
+      }, {
+        id: 11, source_thread_id: 3, target_thread_id: null, source_issue_id: 3, target_issue_id: 104,
+        source_label: 'Another prerequisite', target_label: null, target_issue_thread_id: 1,
+        source_issue_thread_id: 3, is_issue_level: true, created_at: 'now',
+      }] as never}
+    />)
+    expect(screen.getByText('Issue #104')).toBeInTheDocument()
+    expect(screen.getByText('Issue gate')).toBeInTheDocument()
+    expect(screen.getByText('Current position')).toBeInTheDocument()
+    expect(screen.getByText('You are here')).toBeInTheDocument()
+  })
+
 })
