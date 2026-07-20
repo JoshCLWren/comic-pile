@@ -140,15 +140,6 @@ test.describe('Smoke', () => {
     await setRangeInput(page, SELECTORS.rate.ratingInput, '4.0');
     await page.click(SELECTORS.rate.submitButton);
 
-    const reviewModal = page.locator('[data-testid="modal"]');
-    const modalShown = await reviewModal
-      .waitFor({ state: 'visible', timeout: 2000 })
-      .then(() => true)
-      .catch(() => false);
-    if (modalShown) {
-      await page.click('button:has-text("Skip")');
-    }
-
     await page.waitForURL('**/', { timeout: 15000 });
     await expect(page.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 10000 });
     await expect(page.locator(SELECTORS.rate.ratingInput)).toHaveCount(0);
@@ -245,15 +236,6 @@ test.describe('Smoke', () => {
 
     await setRangeInput(page, SELECTORS.rate.ratingInput, '4.0');
     await page.click(SELECTORS.rate.submitButton);
-
-    const reviewModal = page.locator('[data-testid="modal"]');
-    const modalShown = await reviewModal
-      .waitFor({ state: 'visible', timeout: 2000 })
-      .then(() => true)
-      .catch(() => false);
-    if (modalShown) {
-      await page.click('button:has-text("Skip")');
-    }
 
     await expect(mainDie).toBeVisible({ timeout: 15000 });
 

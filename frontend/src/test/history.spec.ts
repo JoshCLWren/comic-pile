@@ -1,11 +1,11 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
-import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown, navigateToRatePage } from './helpers';
+import { SELECTORS, setRangeInput, submitRatingAndWaitForRateResponse, navigateToRatePage } from './helpers';
 
 async function readThreadFromQueue(page: Page, rating: string): Promise<void> {
   await navigateToRatePage(page);
   await setRangeInput(page, SELECTORS.rate.ratingInput, rating);
-  await submitRatingAndDismissReviewIfShown(page, () => page.click('button:has-text("Save & Continue")'));
+  await submitRatingAndWaitForRateResponse(page, () => page.click('button:has-text("Save & Continue")'));
   await expect(page.locator('#root')).toBeVisible();
 }
 

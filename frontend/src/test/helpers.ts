@@ -18,11 +18,8 @@ type TestUser = {
 };
 
 export async function getCollectionsEnabled(page: Page): Promise<boolean> {
-  const runtimeFlag = await page.locator('#root').getAttribute('data-collections-enabled')
-  if (runtimeFlag !== null) {
-    return runtimeFlag === 'true'
-  }
-  return process.env.VITE_ENABLE_COLLECTIONS === 'true'
+  void page
+  return true
 }
 
 export async function waitForQueueReady(page: Page): Promise<void> {
@@ -197,7 +194,7 @@ async function getCsrfToken(page: Page, token: string | null): Promise<string> {
   return data.csrf_token;
 }
 
-export async function submitRatingAndDismissReviewIfShown(
+export async function submitRatingAndWaitForRateResponse(
   page: Page,
   submitAction: () => Promise<void>,
 ): Promise<void> {
@@ -206,20 +203,6 @@ export async function submitRatingAndDismissReviewIfShown(
   )
 
   await submitAction()
-
-  const reviewModal = page.locator('[data-testid="modal"]')
-  const reviewModalShown = await reviewModal
-    .waitFor({ state: 'visible', timeout: 1000 })
-    .then(() => true)
-    .catch(() => false)
-
-  if (reviewModalShown) {
-    await Promise.all([
-      rateResponse,
-      page.click('button:has-text("Skip")'),
-    ])
-    return
-  }
 
   await rateResponse
 }

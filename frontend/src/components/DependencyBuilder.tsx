@@ -521,10 +521,6 @@ const [isSavingNote, setIsSavingNote] = useState(false)
   }
 
   async function handleSaveNote(dependencyId: number) {
-    if (noteText.length > 255) {
-      setError('Note must be 255 characters or less.')
-      return
-    }
     setIsSavingNote(true)
     setError('')
     try {

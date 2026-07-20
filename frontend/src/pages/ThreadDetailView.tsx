@@ -8,8 +8,6 @@ import type { Thread, Issue } from '../types'
 import { CollectionBadge } from '../pages/QueuePage/CollectionBadge'
 import { FormatSelect } from '../pages/QueuePage/FormatSelect'
 import { useUpdateThread } from '../hooks/useThread'
-import { useThreadReviews } from '../hooks/useReview'
-import { isReviewsFeatureEnabled } from '../config/featureFlags'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { ChangeEvent, FormEvent } from 'react'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
@@ -19,8 +17,6 @@ export default function ThreadDetailView() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const updateMutation = useUpdateThread()
-  const { reviews, getThreadReviews, isPending: reviewsLoading } = useThreadReviews()
-  const reviewsEnabled = isReviewsFeatureEnabled()
 
   const [thread, setThread] = useState<Thread | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -32,7 +28,10 @@ export default function ThreadDetailView() {
 
   useEffect(() => {
     async function fetchThread() {
-      if (!id) return
+      if (!id) {
+        setIsLoading(false)
+        return
+      }
 
       try {
         setIsLoading(true)
@@ -43,15 +42,6 @@ export default function ThreadDetailView() {
           await fetchIssues(Number(id))
         }
 
-        if (reviewsEnabled) {
-          // Fetch reviews for this thread
-          try {
-            await getThreadReviews(Number(id))
-          } catch (reviewError: unknown) {
-            console.error('Failed to fetch reviews:', getApiErrorDetail(reviewError))
-            // Don't let review failures break the entire page
-          }
-        }
       } catch (err: unknown) {
         setError(getApiErrorDetail(err))
       } finally {
@@ -60,7 +50,7 @@ export default function ThreadDetailView() {
     }
 
     fetchThread()
-  }, [id, getThreadReviews, reviewsEnabled])
+  }, [id])
 
   async function fetchIssues(threadId: number) {
     try {
@@ -84,7 +74,7 @@ export default function ThreadDetailView() {
 
   const handleEditSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    if (!thread) return
+    const currentThread = thread!
 
     try {
       const updateData: { title: string; format: string; notes: string | null; issues_remaining?: number } = {
@@ -93,12 +83,12 @@ export default function ThreadDetailView() {
         notes: editForm.notes || null,
       }
 
-      if (thread.total_issues === null) {
+      if (currentThread.total_issues === null) {
         updateData.issues_remaining = Number(editForm.issuesRemaining)
       }
 
       const updatedThread = await updateMutation.mutate({
-        id: thread.id,
+        id: currentThread.id,
         data: updateData,
       })
 
@@ -114,13 +104,13 @@ export default function ThreadDetailView() {
   }
 
   const openEditModal = () => {
-    if (!thread) return
+    const currentThread = thread!
 
     setEditForm({
-      title: thread.title,
-      format: thread.format,
-      issuesRemaining: thread.issues_remaining,
-      notes: thread.notes || '',
+      title: currentThread.title,
+      format: currentThread.format,
+      issuesRemaining: currentThread.issues_remaining,
+      notes: currentThread.notes || '',
       issues: '',
       lastIssueRead: 0,
     })
@@ -276,52 +266,6 @@ export default function ThreadDetailView() {
           </div>
         )}
 
-        {reviewsEnabled && (
-          <div className="glass-card p-3 md:p-4 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-xs font-black uppercase tracking-widest text-stone-500">
-                Reviews {reviews.length > 0 && `(${reviews.length})`}
-              </span>
-            </div>
-
-            {reviewsLoading && (
-              <p className="text-xs text-stone-500">Loading reviews...</p>
-            )}
-
-            {!reviewsLoading && reviews.length === 0 && (
-              <p className="text-xs text-stone-500">No reviews yet.</p>
-            )}
-
-            {!reviewsLoading && reviews.length > 0 && (
-              <div className="space-y-3">
-                {reviews.map((review) => (
-                  <div key={review.id} className="p-3 bg-white/5 rounded-lg border border-white/10 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg font-black text-amber-400">
-                          {review.rating.toFixed(1)}
-                        </span>
-                        {review.issue_number && (
-                          <span className="text-xs text-stone-400">
-                            #{review.issue_number}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-stone-500">
-                        {new Date(review.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    {review.review_text && (
-                      <p className="text-sm text-stone-300 leading-relaxed">
-                        {review.review_text}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="glass-card p-3 md:p-4 space-y-2">
           <span className="text-xs font-black uppercase tracking-widest text-stone-500">Queue Position</span>

@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { SELECTORS, setRangeInput, submitRatingAndDismissReviewIfShown } from './helpers';
+import { SELECTORS, setRangeInput, submitRatingAndWaitForRateResponse } from './helpers';
 
 async function ensureRatingView(page: import('@playwright/test').Page): Promise<void> {
   await page.goto('/');
@@ -34,7 +34,7 @@ test.describe('Rate Thread Feature', () => {
 
   test('should submit rating and route to roll page after save and continue', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.5');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
@@ -44,7 +44,7 @@ test.describe('Rate Thread Feature', () => {
 
   test('should require rolling again before rating again after save and continue', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
@@ -97,7 +97,7 @@ test.describe('Rate Thread Feature', () => {
 
   test('should accept decimal ratings', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
   });
@@ -141,7 +141,7 @@ test.describe('Rate Thread Feature', () => {
 
   test('should update thread rating in database', async ({ authenticatedWithThreadsPage }) => {
     await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-    await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+    await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
       authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
     );
 
@@ -166,7 +166,7 @@ test.describe('Rate Thread Feature', () => {
     if (hasFinishOption) {
       await finishCheckbox.check();
       await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '4.0');
-      await submitRatingAndDismissReviewIfShown(authenticatedWithThreadsPage, () =>
+      await submitRatingAndWaitForRateResponse(authenticatedWithThreadsPage, () =>
         authenticatedWithThreadsPage.click(SELECTORS.rate.submitButton),
       );
 

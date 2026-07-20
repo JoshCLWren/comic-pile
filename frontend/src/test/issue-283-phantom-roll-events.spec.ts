@@ -3,7 +3,7 @@ import {
   createThread,
   setupAuthenticatedPage,
   getAuthToken,
-  submitRatingAndDismissReviewIfShown,
+  submitRatingAndWaitForRateResponse,
 } from './helpers';
 
 test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
@@ -50,7 +50,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
     // Rate the thread
     await page.fill('#rating-input', '4');
-    await submitRatingAndDismissReviewIfShown(page, () =>
+    await submitRatingAndWaitForRateResponse(page, () =>
       page.click('button:has-text("Save & Continue")'),
     );
 
@@ -136,7 +136,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
     // Rate the thread
     await page.fill('#rating-input', '5');
-    await submitRatingAndDismissReviewIfShown(page, () =>
+    await submitRatingAndWaitForRateResponse(page, () =>
       page.click('button:has-text("Save & Continue")'),
     );
 
@@ -238,7 +238,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
 
       // Rate
       await page.fill('#rating-input', '3');
-      await submitRatingAndDismissReviewIfShown(page, () =>
+      await submitRatingAndWaitForRateResponse(page, () =>
         page.click('button:has-text("Save & Continue")'),
       );
       
