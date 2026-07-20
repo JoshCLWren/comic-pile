@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-07-19
+
+**Queue card swipe action containment**
+- Queue cards now fill their grid row so hidden swipe actions remain fully contained when a neighboring blocked card is taller.
+
 ## 2026-07-18
 
 **Mobile modal usability and focus**

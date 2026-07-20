@@ -123,7 +123,7 @@ export default function Swipeable({
         ))}
       </div>
       <div
-        className="relative z-10 bg-[#1a1410] transition-transform"
+        className="relative z-10 h-full bg-[#1a1410] transition-transform"
         style={{
           transform: `translateX(${offset}px)`,
           transitionDuration: isSwiping ? '0ms' : '200ms',

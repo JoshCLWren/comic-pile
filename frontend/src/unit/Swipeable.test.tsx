@@ -45,6 +45,12 @@ function createTouchEvent(type: string, options: { x: number; y: number }) {
   return event
 }
 
+it('fills a stretched grid row so swipe actions stay behind the card', () => {
+  const { slidingCard } = renderSwipeable()
+
+  expect(slidingCard).toHaveClass('h-full')
+})
+
 it('does not reveal actions on vertical scroll when dx is locked by direction threshold', () => {
   const { slidingCard } = renderSwipeable()
 
