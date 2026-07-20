@@ -2,6 +2,43 @@ import { test, expect } from './fixtures';
 import { SELECTORS, submitRatingAndWaitForRateResponse } from './helpers';
 
 test.describe('Roll Dice Feature', () => {
+  test('issue #599: keeps rating actions clear of controls on a narrow viewport', async ({ authenticatedWithThreadsPage }) => {
+    const viewports = [{ width: 375, height: 667 }, { width: 667, height: 375 }]
+    for (const [viewportIndex, viewport] of viewports.entries()) {
+      await authenticatedWithThreadsPage.setViewportSize(viewport)
+      await authenticatedWithThreadsPage.goto('/')
+      await authenticatedWithThreadsPage.waitForSelector(SELECTORS.roll.mainDie, { timeout: 10000 })
+      await authenticatedWithThreadsPage.click(SELECTORS.roll.mainDie)
+
+      const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput)
+      const actions = authenticatedWithThreadsPage.getByTestId('rating-actions')
+      const saveButton = authenticatedWithThreadsPage.getByTestId('save-and-continue')
+      const reportButton = authenticatedWithThreadsPage.getByRole('button', { name: /report a bug/i }).last()
+
+      await expect(ratingInput).toBeVisible({ timeout: 5000 })
+      await expect(saveButton).toBeVisible()
+      await expect(reportButton).toBeVisible()
+      await ratingInput.fill('5')
+      await expect(authenticatedWithThreadsPage.locator('#rating-value')).toHaveText('5.0')
+      await actions.evaluate((element) => element.scrollIntoView({ block: 'center' }))
+
+      const geometry = await Promise.all([ratingInput.boundingBox(), actions.boundingBox(), saveButton.boundingBox(), reportButton.boundingBox()])
+      const [ratingBox, actionsBox, saveBox, reportBox] = geometry
+      expect(ratingBox).not.toBeNull()
+      expect(actionsBox).not.toBeNull()
+      expect(saveBox).not.toBeNull()
+      expect(reportBox).not.toBeNull()
+
+      expect(saveBox!.y).toBeGreaterThanOrEqual(ratingBox!.y + ratingBox!.height)
+      expect(saveBox!.y + saveBox!.height).toBeLessThanOrEqual(reportBox!.y)
+
+      if (viewportIndex === 0) {
+        await authenticatedWithThreadsPage.getByRole('button', { name: 'Cancel' }).click()
+        await expect(authenticatedWithThreadsPage.locator(SELECTORS.roll.mainDie)).toBeVisible({ timeout: 5000 })
+      }
+    }
+  })
+
   test('should display die selector on home page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/');
 

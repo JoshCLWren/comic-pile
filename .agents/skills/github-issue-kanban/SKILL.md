@@ -36,6 +36,11 @@ Before editing code:
 4. Make the smallest complete change within the issue scope.
 5. If required work is outside the issue, create a linked issue before expanding scope.
 
+Issue work is expected to produce a pull request. After local verification, commit the
+implementation, push the branch, and open a ready-for-review PR linked to the issue. Do not
+leave completed issue work only in the local working tree. Use a draft PR only when the user
+explicitly requests one.
+
 ## Keep status synchronized
 
 Use these labels:
@@ -59,7 +64,7 @@ gh issue comment ISSUE --body-file /path/to/verification-comment.md
 
 The verification comment must include changed files, acceptance criteria evidence, commands and results, and follow-up issue numbers.
 
-Only after all checks and acceptance criteria pass:
+After the PR is created and all checks and acceptance criteria pass:
 
 ```bash
 gh issue edit ISSUE --remove-label "ralph-status:in-review" --add-label "ralph-status:done"
