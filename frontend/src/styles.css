@@ -32,6 +32,22 @@ body {
   --text-primary: #e8d5b0;
   --text-muted: #a0937e;
   --text-dim: #6b5f50;
+  --mobile-nav-height: 3.5rem;
+  --desktop-nav-height: 5rem;
+}
+
+/* Keep the rating action bar's scroll target above the fixed navigation and iOS home indicator. */
+.rating-actions {
+  scroll-margin-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  margin-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .rating-actions {
+    scroll-margin-bottom: calc(var(--desktop-nav-height) + env(safe-area-inset-bottom));
+    margin-bottom: calc(var(--desktop-nav-height) + env(safe-area-inset-bottom));
+  }
 }
 
 body {

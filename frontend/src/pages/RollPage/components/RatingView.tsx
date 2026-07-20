@@ -220,11 +220,15 @@ export function RatingView({
           </div>
         )}
 
-        <div className="sticky bottom-0 -mx-3 md:-mx-4 px-3 md:px-4 pt-4 pb-3 bg-gradient-to-t from-[#1a1410] via-[#1a1410]/95 to-transparent z-20 space-y-2 md:space-y-3">
+        <div
+          className="rating-actions relative -mx-3 md:-mx-4 px-3 md:px-4 pt-4 pb-3 bg-gradient-to-t from-[#1a1410] via-[#1a1410]/95 to-transparent z-20 space-y-2 md:space-y-3"
+          data-testid="rating-actions"
+        >
           <button
             type="button"
             onClick={() => onSubmitRating(false)}
             disabled={rateIsPending}
+            data-testid="save-and-continue"
             className="w-full py-3.5 md:py-4 bg-amber-600/25 hover:bg-amber-600/35 border border-amber-600/50 rounded-xl text-xs font-black uppercase tracking-[0.15em] md:tracking-[0.2em] transition-all disabled:opacity-50 active:scale-[0.98]"
           >
             {rateIsPending ? 'Saving...' : (issuesRemaining === 1 ? 'Save & Complete' : 'Save & Continue')}

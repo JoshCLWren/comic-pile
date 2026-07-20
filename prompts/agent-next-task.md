@@ -27,7 +27,7 @@ Work on the next task in this repository.
 - Run all required local checks from `AGENTS.md` and the selected issue.
 - Move the issue to `ralph-status:in-review`.
 - Add a GitHub comment listing changed files, acceptance-criteria evidence, test commands, and results.
-- Only after everything passes, mark the issue `ralph-status:done` and close it.
-- Do not commit or push unless explicitly requested by the user.
+- Commit the implementation with a descriptive message, push the branch, and open a ready-for-review pull request linked to the issue. This is the default completion workflow for every selected issue; do not leave verified work only in the local working tree.
+- Only after the PR is created and everything passes, mark the issue `ralph-status:done` and close it. If the user explicitly asks for a draft PR, create a draft instead.
 
 Begin by running `make next-task`.
