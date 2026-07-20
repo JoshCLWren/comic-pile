@@ -55,9 +55,6 @@ export default function MigrationDialog({ thread, onComplete, onSkip, onClose }:
     if (lastRead === total && total > 0) {
       return '🎉 Completing the series! Thread will be marked as completed.'
     }
-    if (total > 0 && lastRead > total * 0.9 && lastRead < total) {
-      return 'Almost done! Just a few issues left.'
-    }
     return null
   }
 

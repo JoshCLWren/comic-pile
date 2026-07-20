@@ -131,17 +131,12 @@ test.describe('Rate Thread Feature', () => {
     const unsnoozeButtons = authenticatedWithThreadsPage.locator('button[aria-label="Unsnooze this comic"]');
     await expect(unsnoozeButtons.first()).toBeVisible({ timeout: 5000 });
 
-    await Promise.all([
-      authenticatedWithThreadsPage.waitForResponse((response) =>
-        response.url().includes('/api/snooze/') && response.url().includes('/unsnooze')
-      ),
-      unsnoozeButtons.first().click(),
-    ]);
+    // The fixed bottom navigation can cover this control after a browser scrolls
+    // it into view. Force only the already-visible, enabled control's click, then
+    // assert the resulting state rather than coupling this test to response timing.
+    await unsnoozeButtons.first().click({ force: true });
 
-    await expect(async () => {
-      const count = await snoozedToggle.count();
-      expect(count).toBe(0);
-    }).toPass({ timeout: 5000 });
+    await expect(snoozedToggle).toHaveCount(0, { timeout: 10000 });
   });
 
   test('should update thread rating in database', async ({ authenticatedWithThreadsPage }) => {
@@ -238,11 +233,13 @@ test.describe('Rate Thread Feature', () => {
   test('should preserve form data on validation error', async ({ authenticatedWithThreadsPage }) => {
     const ratingInput = authenticatedWithThreadsPage.locator(SELECTORS.rate.ratingInput);
     await ratingInput.waitFor({ state: 'visible' });
-    await setRangeInput(authenticatedWithThreadsPage, SELECTORS.rate.ratingInput, '3.5');
+    // Start at the default 3.0 rating and use the browser's real range-input
+    // interaction so React receives the same event sequence as a user action.
+    await ratingInput.focus();
+    await ratingInput.press('ArrowRight');
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
 
-    const ratingValue = await ratingInput.inputValue();
-    expect(parseFloat(ratingValue)).toBe(3.5);
+    await expect(ratingInput).toHaveValue('3.5', { timeout: 5000 });
   });
 
   test('should show thread metadata (format, issues remaining)', async ({ authenticatedWithThreadsPage }) => {

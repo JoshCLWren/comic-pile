@@ -29,9 +29,21 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     if (!trigger) return
 
     const rect = trigger.getBoundingClientRect()
+    const menuWidth = menuRef.current?.getBoundingClientRect().width || 208
+    const menuHeight = menuRef.current?.getBoundingClientRect().height || 300
+    const horizontalPadding = 4
+    const viewportWidth = document.documentElement.clientWidth
+    const left = Math.min(
+      Math.max(horizontalPadding, rect.right - menuWidth),
+      Math.max(horizontalPadding, viewportWidth - menuWidth - horizontalPadding),
+    )
+    const belowTop = rect.bottom + 4
+    const top = belowTop + menuHeight > window.innerHeight
+      ? Math.max(horizontalPadding, rect.top - menuHeight - 4)
+      : belowTop
     const nextPosition = {
-      top: rect.bottom + 4,
-      right: document.documentElement.clientWidth - rect.right,
+      top,
+      right: Math.max(horizontalPadding, viewportWidth - left - menuWidth),
     }
     setMenuPosition((currentPosition) => {
       if (
@@ -55,7 +67,7 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        closeMenu()
+        closeContextMenu()
         return
       }
 
@@ -90,16 +102,18 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, closeMenu])
+  }, [isOpen, closeContextMenu])
 
   useEffect(() => {
     if (!isOpen) return
 
     updateMenuPosition()
+    const frame = requestAnimationFrame(updateMenuPosition)
     window.addEventListener('resize', updateMenuPosition)
     document.addEventListener('scroll', updateMenuPosition, true)
 
     return () => {
+      cancelAnimationFrame(frame)
       window.removeEventListener('resize', updateMenuPosition)
       document.removeEventListener('scroll', updateMenuPosition, true)
     }
@@ -114,13 +128,13 @@ export default function PositionMenu({ thread, onMoveToFront, onReposition, onMo
         !menuRef.current?.contains(target) &&
         !triggerContainerRef.current?.contains(target)
       ) {
-        closeContextMenu()
+        closeMenu()
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen, closeContextMenu])
+  }, [isOpen, closeMenu])
 
   const handleTriggerClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()

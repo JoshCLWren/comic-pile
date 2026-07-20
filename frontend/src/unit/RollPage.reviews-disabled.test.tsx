@@ -186,3 +186,22 @@ it('submits the rating immediately without showing review UI when reviews are di
   expect(screen.queryByText('Write a Review?')).not.toBeInTheDocument()
   expect(reviewsApiMock.createOrUpdateReview).not.toHaveBeenCalled()
 })
+
+it('renders loading and retryable session error states', async () => {
+  mockedUseSession.mockReturnValue({ data: null, isPending: true, isError: false, refetch: vi.fn() })
+  const { rerender } = render(<BugReportRestoreProvider><RollPage /></BugReportRestoreProvider>)
+  expect(screen.getByText('Loading...')).toBeInTheDocument()
+
+  const retry = vi.fn()
+  mockedUseSession.mockReturnValue({ data: null, isPending: false, isError: true, error: new Error('offline'), refetch: retry })
+  rerender(<BugReportRestoreProvider><RollPage /></BugReportRestoreProvider>)
+  expect(screen.getByText('Session Error')).toBeInTheDocument()
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Retry' }))
+  expect(retry).toHaveBeenCalled()
+})
+
+it('navigates to login for an unauthorized session error', () => {
+  mockedUseSession.mockReturnValue({ data: null, isPending: false, isError: true, error: { response: { status: 401 } }, refetch: vi.fn() })
+  render(<BugReportRestoreProvider><RollPage /></BugReportRestoreProvider>)
+  expect(screen.getByRole('button', { name: 'Go to Login' })).toBeInTheDocument()
+})

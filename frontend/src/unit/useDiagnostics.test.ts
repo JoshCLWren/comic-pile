@@ -77,4 +77,61 @@ describe('useDiagnostics', () => {
 
     expect(diagnostics.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
   })
+
+  it('captures mixed console errors and keeps only the newest entries', () => {
+    const original = console.error
+    const passthrough = vi.fn()
+    console.error = passthrough
+    const { result, unmount } = renderHook(() => useDiagnostics())
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+
+    console.error('plain message')
+    console.error(new Error('boom'))
+    console.error({ detail: 'object' }, circular)
+    for (let index = 0; index < 21; index += 1) console.error(`later-${index}`)
+
+    const diagnostics = result.current.collectDiagnostics()
+    expect(diagnostics.errors).toHaveLength(20)
+    expect(diagnostics.errors.at(-1)?.message).toContain('later-20')
+    expect(passthrough).toHaveBeenCalled()
+    unmount()
+    console.error = original
+  })
+
+  it('uses navigation timing values and tolerates missing or broken performance APIs', () => {
+    const getEntriesByType = vi.spyOn(performance, 'getEntriesByType')
+      .mockReturnValueOnce([{ domContentLoadedEventEnd: 12, loadEventEnd: 34 }] as unknown as PerformanceEntry[])
+      .mockReturnValueOnce([])
+      .mockImplementationOnce(() => { throw new Error('performance unavailable') })
+    const { result, unmount } = renderHook(() => useDiagnostics())
+
+    expect(result.current.collectDiagnostics().performance).toEqual({ domContentLoaded: 12, loadComplete: 34 })
+    expect(result.current.collectDiagnostics().performance).toEqual({ domContentLoaded: null, loadComplete: null })
+    expect(result.current.collectDiagnostics().performance).toEqual({ domContentLoaded: null, loadComplete: null })
+    unmount()
+    getEntriesByType.mockRestore()
+  })
+
+  it('uses safe screen and device-pixel fallbacks when browser metrics are absent', () => {
+    const originalScreen = window.screen
+    const originalPixelRatio = window.devicePixelRatio
+    Object.defineProperty(window, 'screen', { configurable: true, value: undefined })
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 0 })
+    const { result, unmount } = renderHook(() => useDiagnostics())
+
+    expect(result.current.collectDiagnostics().screen).toEqual({ width: 0, height: 0, pixelRatio: 1 })
+    unmount()
+    Object.defineProperty(window, 'screen', { configurable: true, value: originalScreen })
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: originalPixelRatio })
+  })
+
+  it('falls back when performance timing is unavailable', () => {
+    const originalPerformance = globalThis.performance
+    vi.stubGlobal('performance', undefined)
+    const { result, unmount } = renderHook(() => useDiagnostics())
+    expect(result.current.collectDiagnostics().performance).toEqual({ domContentLoaded: null, loadComplete: null })
+    unmount()
+    vi.stubGlobal('performance', originalPerformance)
+  })
 })

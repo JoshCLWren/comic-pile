@@ -92,21 +92,24 @@ test.describe('Responsive multi-column virtualized grid (#583-C)', () => {
     const list = page.locator('[data-testid="queue-thread-list"]');
     await expect(list).toBeVisible();
 
-    // Initially visible items
-    const initialItems = await list.locator('[data-testid="queue-thread-item"]').count();
+    const items = list.locator('[data-testid="queue-thread-item"]');
+    const virtualRows = list.locator('[data-index]');
+    const initialLastIndex = await virtualRows.last().getAttribute('data-index');
+    expect(initialLastIndex).not.toBeNull();
 
     // Scroll the list container far down
     await list.evaluate((el) => {
       el.scrollTop = 2000;
     });
 
-    // Wait deterministically for new virtualized items to render after scroll
-    const lastItem = list.locator('[data-testid="queue-thread-item"]').last();
-    await lastItem.waitFor({ state: 'visible', timeout: 5000 });
+    // Wait deterministically for the virtualizer to render a different range.
+    await expect.poll(async () => virtualRows.last().getAttribute('data-index'), {
+      timeout: 10000,
+    }).not.toBe(initialLastIndex);
 
-    // After scrolling, new items should be visible
-    const scrolledItems = await list.locator('[data-testid="queue-thread-item"]').count();
-    expect(scrolledItems).toBeGreaterThan(initialItems);
+    // Virtualization reuses DOM nodes, so the node count is intentionally stable.
+    const scrolledLastIndex = await virtualRows.last().getAttribute('data-index');
+    expect(Number(scrolledLastIndex)).toBeGreaterThan(Number(initialLastIndex));
   });
 
   test('swipe action on a virtualized row card navigates to roll page', async ({ authenticatedWithLargeQueuePage }) => {

@@ -153,12 +153,12 @@ export default function DependencyFlowchart({
   const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault()
     const delta = e.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP
+    const rect = e.currentTarget.getBoundingClientRect()
+    const cx = e.clientX - rect.left
+    const cy = e.clientY - rect.top
     setTransform((prev) => {
       const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, prev.scale * delta))
       // Zoom toward cursor position
-      const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect()
-      const cx = e.clientX - rect.left
-      const cy = e.clientY - rect.top
       const scaleFactor = newScale / prev.scale
       return {
         x: cx - (cx - prev.x) * scaleFactor,

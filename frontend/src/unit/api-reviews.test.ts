@@ -29,12 +29,14 @@ beforeEach(() => {
   del.mockResolvedValue({})
 })
 
-it('calls list reviews endpoint with expected paths', () => {
-  reviewsApi.listReviews()
-  reviewsApi.listReviews({ page_size: 10, page_token: 'abc123' })
+it('calls list reviews endpoint with expected paths and pagination fallbacks', async () => {
+  await reviewsApi.listReviews()
+  await reviewsApi.listReviews({ page_size: 10, page_token: 'abc123' })
+  await reviewsApi.listReviews({ page_size: 0, page_token: null })
 
   expect(get).toHaveBeenCalledWith('/v1/reviews/', { params: { page_size: 20 } })
   expect(get).toHaveBeenCalledWith('/v1/reviews/', { params: { page_size: 10, page_token: 'abc123' } })
+  expect(get).toHaveBeenCalledWith('/v1/reviews/', { params: { page_size: 20 } })
 })
 
 it('calls get thread reviews endpoint with expected paths', () => {
