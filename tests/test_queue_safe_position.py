@@ -3,7 +3,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Thread
+from app.models import Dependency, Issue, Thread
+from comic_pile.dependencies import refresh_user_blocked_status
 from comic_pile.queue import get_roll_pool, move_to_safe_position
 
 
@@ -289,3 +290,68 @@ async def test_move_to_safe_position_excludes_snoozed_threads_from_roll_pool(
         and thread.queue_position < target.queue_position
     )
     assert eligible_before == 8
+
+
+@pytest.mark.asyncio
+async def test_move_to_safe_position_mixed_issues_dependencies_and_snoozes(
+    async_db: AsyncSession, default_user
+) -> None:
+    """Safe placement must match a mixed issue/dependency/snooze roll pool."""
+    user = default_user
+    threads = []
+    for position in range(1, 26):
+        thread = Thread(
+            title=f"Mixed pool thread {position}",
+            format="Comic",
+            issues_remaining=5,
+            total_issues=5,
+            queue_position=position,
+            status="active",
+            user_id=user.id,
+        )
+        async_db.add(thread)
+        threads.append(thread)
+    await async_db.flush()
+
+    issues = []
+    for thread in threads:
+        issue = Issue(
+            thread_id=thread.id,
+            issue_number="1",
+            position=1,
+            status="unread",
+        )
+        async_db.add(issue)
+        issues.append(issue)
+    await async_db.flush()
+    for thread, issue in zip(threads, issues, strict=True):
+        thread.next_unread_issue_id = issue.id
+
+    # Four issue-level dependencies make queue positions 4-7 unavailable.
+    # The source remains unread, so those target threads are genuinely blocked.
+    async_db.add_all(
+        [
+            Dependency(source_issue_id=issues[1].id, target_issue_id=issues[i].id)
+            for i in range(3, 7)
+        ]
+    )
+    await async_db.commit()
+    await refresh_user_blocked_status(user.id, async_db)
+    await async_db.commit()
+
+    target = threads[0]
+    snoozed_ids = {threads[7].id, threads[8].id, threads[9].id}
+    await move_to_safe_position(
+        target.id,
+        user.id,
+        8,
+        async_db,
+        excluded_thread_ids=snoozed_ids,
+    )
+    await async_db.refresh(target)
+
+    # Eligible threads before the target are positions 2-3 and 11-16:
+    # two ordinary + six after four blocked and three snoozed = eight.
+    assert target.queue_position == 16
+    pool = await get_roll_pool(user.id, async_db, list(snoozed_ids))
+    assert target.id not in {thread.id for thread in pool[:8]}
