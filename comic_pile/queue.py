@@ -1,5 +1,6 @@
 """Queue management functions."""
 
+from collections.abc import Collection
 import logging
 import random
 from datetime import UTC, datetime, timedelta
@@ -236,6 +237,7 @@ async def move_to_safe_position(
     user_id: int,
     die_size: int,
     db: AsyncSession,
+    excluded_thread_ids: Collection[int] | None = None,
 ) -> None:
     """Move thread to a position just beyond the current die range.
 
@@ -263,7 +265,11 @@ async def move_to_safe_position(
         user_id: Thread owner.
         die_size: Current die size from the dice ladder.
         db: Async database session (caller handles commit/rollback).
+        excluded_thread_ids: Thread IDs excluded from the current roll pool,
+            such as threads snoozed in the active session.
     """
+    excluded_ids = set(excluded_thread_ids or ())
+
     result = await db.execute(
         select(Thread)
         .where(Thread.user_id == user_id)
@@ -274,7 +280,7 @@ async def move_to_safe_position(
     all_active = list(result.scalars().all())
 
     # Build the rollable pool (same filter as get_roll_pool: non-blocked only)
-    rollable = [t for t in all_active if not t.is_blocked]
+    rollable = [t for t in all_active if not t.is_blocked and t.id not in excluded_ids]
 
     target_rollable_index = next(
         (i for i, t in enumerate(rollable) if t.id == thread_id), -1
@@ -300,7 +306,7 @@ async def move_to_safe_position(
     for i, t in enumerate(all_active):
         if t.id == thread_id:
             continue
-        if not t.is_blocked:
+        if not t.is_blocked and t.id not in excluded_ids:
             non_blocked_seen += 1
         if non_blocked_seen >= die_size:
             target_seq = i + 1  # 1-indexed position in all_active
