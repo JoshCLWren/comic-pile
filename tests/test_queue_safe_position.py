@@ -237,3 +237,55 @@ async def test_move_to_safe_position_many_blocked_before_target_bug_597(
         f"Only {non_blocked_before} non-blocked threads before target at "
         f"position {target_pos} — need >= 6 to be outside d6 pool!"
     )
+
+
+@pytest.mark.asyncio
+async def test_move_to_safe_position_excludes_snoozed_threads_from_roll_pool(
+    async_db: AsyncSession, default_user
+) -> None:
+    """Snoozed threads must not consume slots in the expanded roll pool."""
+    user = default_user
+    threads = []
+    for i in range(1, 15):
+        thread = Thread(
+            title=f"Snooze Thread {i}",
+            format="Comic",
+            issues_remaining=5,
+            queue_position=i,
+            status="active",
+            user_id=user.id,
+        )
+        async_db.add(thread)
+        threads.append(thread)
+    await async_db.flush()
+
+    target = threads[0]
+    snoozed_ids = {threads[1].id, threads[2].id}
+    await move_to_safe_position(
+        target.id,
+        user.id,
+        8,
+        async_db,
+        excluded_thread_ids=snoozed_ids,
+    )
+    await async_db.refresh(target)
+
+    # The target must follow eight eligible threads. Two snoozed threads occupy
+    # raw queue slots, so the target lands at raw position 11, not position 9.
+    assert target.queue_position == 11
+
+    result = await async_db.execute(
+        select(Thread)
+        .where(Thread.user_id == user.id)
+        .where(Thread.status == "active")
+        .order_by(Thread.queue_position)
+    )
+    all_active = result.scalars().all()
+    eligible_before = sum(
+        1
+        for thread in all_active
+        if thread.id != target.id
+        and thread.id not in snoozed_ids
+        and thread.queue_position < target.queue_position
+    )
+    assert eligible_before == 8

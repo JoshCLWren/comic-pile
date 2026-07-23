@@ -371,7 +371,13 @@ async def rate_thread(
         await move_to_front(thread_id, user_id, db, commit=False)
     else:
         # Use the expanded die so the thread is outside the next roll pool.
-        await move_to_safe_position(thread_id, user_id, new_die, db)
+        await move_to_safe_position(
+            thread_id,
+            user_id,
+            new_die,
+            db,
+            excluded_thread_ids=current_session.snoozed_thread_ids,
+        )
 
     if rate_data.finish_session:
         current_session.ended_at = datetime.now(UTC)
