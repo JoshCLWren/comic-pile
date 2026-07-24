@@ -28,13 +28,15 @@ import argparse
 import asyncio
 import json
 import os
+import stat
 import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
+from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import (
@@ -70,13 +72,191 @@ EXPORT_TABLES = [
 
 
 
+class ExportUserRecord(TypedDict, total=False):
+    """Serialized user record for export."""
+
+    id: int
+    username: str
+    email: str
+    is_admin: bool
+    created_at: str | None
+
+
+class ExportCollectionRecord(TypedDict, total=False):
+    """Serialized collection record for export."""
+
+    id: int
+    name: str
+    user_id: int
+    is_default: bool
+    position: int
+    created_at: str | None
+
+
+class ExportThreadRecord(TypedDict, total=False):
+    """Serialized thread record for export."""
+
+    id: int
+    title: str
+    format: str
+    issues_remaining: int
+    total_issues: int
+    next_unread_issue_id: int | None
+    reading_progress: float
+    queue_position: int
+    status: str
+    last_rating: float | None
+    last_activity_at: str | None
+    review_url: str | None
+    last_review_at: str | None
+    notes: str | None
+    is_test: bool
+    is_blocked: bool
+    created_at: str | None
+    user_id: int
+    collection_id: int | None
+
+
+class ExportIssueRecord(TypedDict, total=False):
+    """Serialized issue record for export."""
+
+    id: int
+    thread_id: int
+    issue_number: int
+    position: int
+    status: str
+    read_at: str | None
+    created_at: str | None
+
+
+class ExportDependencyRecord(TypedDict, total=False):
+    """Serialized dependency record for export."""
+
+    id: int
+    source_issue_id: int
+    target_issue_id: int
+    created_at: str | None
+    note: str | None
+
+
+class ExportReadingOrderRecord(TypedDict, total=False):
+    """Serialized reading order record for export."""
+
+    id: int
+    name: str
+    description: str | None
+    user_id: int
+
+
+class ExportReadingOrderItemRecord(TypedDict, total=False):
+    """Serialized reading order item record for export."""
+
+    id: int
+    reading_order_id: int
+    thread_id: int
+    position: int
+    issue_number: int
+
+
+class ExportSessionRecord(TypedDict, total=False):
+    """Serialized session record for export."""
+
+    id: int
+    started_at: str | None
+    ended_at: str | None
+    start_die: int
+    manual_die: int
+    user_id: int
+    pending_thread_id: int | None
+    pending_issue_id: int | None
+    pending_thread_updated_at: str | None
+    snoozed_thread_ids: list[int] | None
+
+
+class ExportEventRecord(TypedDict, total=False):
+    """Serialized event record for export."""
+
+    id: int
+    type: str
+    timestamp: str | None
+    die: int
+    result: str | None
+    selected_thread_id: int | None
+    selection_method: str | None
+    rating: float | None
+    issues_read: int | None
+    queue_move: int | None
+    die_after: bool | None
+    session_id: int
+    thread_id: int | None
+    issue_id: int | None
+    issue_number: int | None
+
+
+class ExportSnapshotRecord(TypedDict, total=False):
+    """Serialized snapshot record for export."""
+
+    id: int
+    session_id: int
+    event_id: int | None
+    thread_states: dict[str, Any]
+    session_state: dict[str, Any]
+    created_at: str | None
+    description: str | None
+
+
+class ExportReviewRecord(TypedDict, total=False):
+    """Serialized review record for export."""
+
+    id: int
+    user_id: int
+    thread_id: int
+    issue_id: int
+    rating: float | None
+    review_text: str | None
+    created_at: str | None
+    updated_at: str | None
+
+
+class ExportDocument(TypedDict):
+    """Top-level versioned export document."""
+
+    schema_version: str
+    exported_at: str
+    source_url: str
+    source_username: str
+    user: ExportUserRecord
+    collections: list[ExportCollectionRecord]
+    threads: list[ExportThreadRecord]
+    issues: list[ExportIssueRecord]
+    dependencies: list[ExportDependencyRecord]
+    reading_orders: list[ExportReadingOrderRecord]
+    reading_order_items: list[ExportReadingOrderItemRecord]
+    sessions: list[ExportSessionRecord]
+    events: list[ExportEventRecord]
+    snapshots: list[ExportSnapshotRecord]
+    reviews: list[ExportReviewRecord]
+
+
 class _DateTimeEncoder(json.JSONEncoder):
     """JSON encoder that handles datetime objects."""
 
-    def default(self, obj: object) -> object:
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        return super().default(obj)
+    def default(self, o: object) -> str | int | float | bool | list[object] | dict[str, object] | None:
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super().default(o)
+
+
+def _redact_db_url(db_url: str) -> str:
+    """Return a credential-free description of the database target."""
+    try:
+        parsed = urlparse(db_url)
+        host = parsed.hostname or "unknown"
+        port = parsed.port or 5432
+        database = parsed.path.lstrip("/") or "unknown"
+        return f"{host}:{port}/{database}"
+    except Exception:
+        return "(unable to parse database URL)"
 
 
 def _fetch_railway_db_url() -> str:
@@ -274,15 +454,19 @@ def _export_review(review: Review) -> dict[str, Any]:
 
 
 
-async def _export_via_db(db_url: str, username: str) -> dict[str, Any]:
+async def _export_via_db(db_url: str, username: str) -> ExportDocument:
     engine = create_async_engine(db_url, pool_pre_ping=True)
     async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session_factory() as db:
+        await db.execute(text("BEGIN"))
+        await db.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
+
         result = await db.execute(select(User).where(User.username == username))
         users = list(result.scalars().all())
 
         if not users:
+            await db.execute(text("ROLLBACK"))
             target = username or "any"
             print(f"Error: No user found matching {target!r}", file=sys.stderr)
             sys.exit(1)
@@ -290,12 +474,22 @@ async def _export_via_db(db_url: str, username: str) -> dict[str, Any]:
         source_user = users[0]
         user_id = source_user.id
 
-        export: dict[str, Any] = {
+        export: ExportDocument = {
             "schema_version": SCHEMA_VERSION,
             "exported_at": datetime.now(UTC).isoformat(),
-            "source": db_url.split("@")[-1] if "@" in db_url else db_url,
+            "source_url": _redact_db_url(db_url),
             "source_username": source_user.username,
             "user": _export_user(source_user),
+            "collections": [],
+            "threads": [],
+            "issues": [],
+            "dependencies": [],
+            "reading_orders": [],
+            "reading_order_items": [],
+            "sessions": [],
+            "events": [],
+            "snapshots": [],
+            "reviews": [],
         }
 
         result = await db.execute(
@@ -318,19 +512,19 @@ async def _export_via_db(db_url: str, username: str) -> dict[str, Any]:
             export["issues"] = [_export_issue(i) for i in issues]
         else:
             issues = []
-            export["issues"] = []
 
         issue_ids = {i.id for i in issues}
 
         if issue_ids:
             result = await db.execute(
                 select(Dependency)
-                .where(Dependency.source_issue_id.in_(issue_ids))
+                .where(
+                    Dependency.source_issue_id.in_(issue_ids),
+                    Dependency.target_issue_id.in_(issue_ids),
+                )
                 .order_by(Dependency.id)
             )
             export["dependencies"] = [_export_dependency(d) for d in result.scalars().all()]
-        else:
-            export["dependencies"] = []
 
         result = await db.execute(
             select(ReadingOrder).where(ReadingOrder.user_id == user_id).order_by(ReadingOrder.id)
@@ -348,8 +542,6 @@ async def _export_via_db(db_url: str, username: str) -> dict[str, Any]:
             export["reading_order_items"] = [
                 _export_reading_order_item(item) for item in result.scalars().all()
             ]
-        else:
-            export["reading_order_items"] = []
 
         result = await db.execute(
             select(Session).where(Session.user_id == user_id).order_by(Session.id)
@@ -362,24 +554,19 @@ async def _export_via_db(db_url: str, username: str) -> dict[str, Any]:
             result = await db.execute(
                 select(Event).where(Event.session_id.in_(session_ids)).order_by(Event.id)
             )
-            events = list(result.scalars().all())
-            export["events"] = [_export_event(e) for e in events]
-        else:
-            events = []
-            export["events"] = []
+            export["events"] = [_export_event(e) for e in result.scalars().all()]
 
-        if session_ids:
             result = await db.execute(
                 select(Snapshot).where(Snapshot.session_id.in_(session_ids)).order_by(Snapshot.id)
             )
             export["snapshots"] = [_export_snapshot(snap) for snap in result.scalars().all()]
-        else:
-            export["snapshots"] = []
 
         result = await db.execute(
             select(Review).where(Review.user_id == user_id).order_by(Review.id)
         )
         export["reviews"] = [_export_review(r) for r in result.scalars().all()]
+
+        await db.execute(text("COMMIT"))
 
     await engine.dispose()
     return export
@@ -461,7 +648,7 @@ def _print_summary(export: dict[str, Any]) -> None:
         label = key.replace("_", " ").title()
         print(f"  {label:18s} {counts[key]}")
     print(f"  Schema version:  {export.get('schema_version', 'unknown')}")
-    print(f"  Source:          {export.get('source', 'unknown')}")
+    print(f"  Source:          {export.get('source_url', 'unknown')}")
 
 
 async def _handle_export(args: argparse.Namespace) -> int:
@@ -484,13 +671,15 @@ async def _handle_export(args: argparse.Namespace) -> int:
         print("  Usage: python -m scripts.clone_prod_to_local export --username Josh", file=sys.stderr)
         return 1
 
+    target = _redact_db_url(db_url)
     if not args.yes:
-        host = db_url.split("@")[-1].split("?")[0] if "@" in db_url else db_url[:60]
         if not _prompt_confirmation(
-            f"This will READ all data from {host}. Continue?"
+            f"This will READ all data from {target}. Continue?"
         ):
             print("Cancelled.")
             return 0
+    else:
+        print(f"Target: {target}")
 
     print("Exporting...")
     export = await _export_via_db(db_url, username)
@@ -498,6 +687,7 @@ async def _handle_export(args: argparse.Namespace) -> int:
     output_path = Path(args.output)
     with open(output_path, "w") as f:
         json.dump(export, f, cls=_DateTimeEncoder, indent=2)
+    os.chmod(output_path, stat.S_IRUSR | stat.S_IWUSR)
 
     _print_summary(export)
     print(f"Wrote {output_path.resolve()}")
