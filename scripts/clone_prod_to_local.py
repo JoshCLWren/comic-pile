@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 from urllib.parse import urlparse
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import (
@@ -455,18 +455,26 @@ def _export_review(review: Review) -> dict[str, Any]:
 
 
 async def _export_via_db(db_url: str, username: str) -> ExportDocument:
-    engine = create_async_engine(db_url, pool_pre_ping=True)
-    async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    engine = create_async_engine(
+        db_url,
+        pool_pre_ping=True,
+        isolation_level="REPEATABLE READ",
+        connect_args={
+            "server_settings": {
+                "default_transaction_read_only": "on",
+            }
+        },
+    )
+    async_session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False,
+    )
 
     async with async_session_factory() as db:
-        await db.execute(text("BEGIN"))
-        await db.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
 
         result = await db.execute(select(User).where(User.username == username))
         users = list(result.scalars().all())
 
         if not users:
-            await db.execute(text("ROLLBACK"))
             target = username or "any"
             print(f"Error: No user found matching {target!r}", file=sys.stderr)
             sys.exit(1)
@@ -565,8 +573,6 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
             select(Review).where(Review.user_id == user_id).order_by(Review.id)
         )
         export["reviews"] = [_export_review(r) for r in result.scalars().all()]
-
-        await db.execute(text("COMMIT"))
 
     await engine.dispose()
     return export
