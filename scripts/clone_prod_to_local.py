@@ -442,6 +442,8 @@ def _prompt_confirmation(message: str) -> bool:
 def _print_summary(export: dict[str, Any]) -> None:
     counts: dict[str, int] = {}
     for key in EXPORT_TABLES:
+        if key == "user":
+            continue
         value = export.get(key, [])
         if isinstance(value, list):
             counts[key] = len(value)
@@ -454,6 +456,8 @@ def _print_summary(export: dict[str, Any]) -> None:
     print("Export summary:")
     print(f"  User:            {export.get('source_username', 'unknown')}")
     for key in EXPORT_TABLES:
+        if key == "user":
+            continue
         label = key.replace("_", " ").title()
         print(f"  {label:18s} {counts[key]}")
     print(f"  Schema version:  {export.get('schema_version', 'unknown')}")
