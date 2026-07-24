@@ -156,20 +156,19 @@ test.describe('History Page', () => {
     }).toPass({ timeout: 5000 });
   });
 
-  test('should load more sessions on scroll', async ({ authenticatedPage }) => {
+  test('should load more sessions with button', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/history');
 
-    const sessionsList = authenticatedPage.locator(SELECTORS.history.sessionsList);
+    const loadMoreButton = authenticatedPage.locator('button:has-text("Load More Sessions")');
     await expect(async () => {
-      const count = await sessionsList.count();
+      const count = await loadMoreButton.count();
       if (count > 0) {
-        const initialCount = await authenticatedPage.locator('.session-item').count();
-
-        await authenticatedPage.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await expect(loadMoreButton.first()).toBeVisible();
+        await loadMoreButton.first().click();
         await expect(authenticatedPage.locator('#root')).toBeVisible();
 
-        const newCount = await authenticatedPage.locator('.session-item').count();
-        expect(newCount).toBeGreaterThanOrEqual(initialCount);
+        const newCount = await authenticatedPage.locator('.session-item, [role="listitem"]').count();
+        expect(newCount).toBeGreaterThan(0);
       }
     }).toPass({ timeout: 5000 });
   });

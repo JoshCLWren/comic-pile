@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-24
+
+**Incremental session history (#608)**
+
+- History page now loads quickly with an initial page of sessions.
+- Users can load additional sessions on demand by clicking "Load More Sessions".
+- Loading states, errors, and retry options are displayed clearly during load-more operations.
+
 ## 2026-07-19
 
 **Queue card swipe action containment**

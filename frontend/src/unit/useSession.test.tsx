@@ -49,25 +49,59 @@ it('loads current session', async () => {
   expect(mockedSessionApi.getCurrent).toHaveBeenCalled()
 })
 
-it('loads session list', async () => {
+it('loads first page of sessions', async () => {
   const { result } = renderWithProvider(() => useSessions({ status: 'done' }))
 
   await waitFor(() => expect(result.current.data).toEqual([{ id: 2 }]))
-  expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done', page_size: 200 }, null)
+  expect(mockedSessionApi.list).toHaveBeenCalledWith({ status: 'done' }, null)
+  expect(result.current.hasMore).toBe(false)
 })
 
-it('paginates through all session pages without infinite loop', async () => {
+it('paginates with loadMore and deduplicates sessions', async () => {
   mockedSessionApi.list
     .mockReset()
     .mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: 'token2' } as never)
-    .mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: null } as never)
+    .mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: 'token3' } as never)
 
   const { result } = renderWithProvider(() => useSessions())
 
-  await waitFor(() => expect(result.current.data).toEqual([{ id: 1 }, { id: 2 }]))
+  await waitFor(() => {
+    expect(result.current.data).toEqual([{ id: 1 }])
+    expect(result.current.hasMore).toBe(true)
+  })
+
+  await act(async () => {
+    result.current.loadMore()
+  })
+
+  await waitFor(() => {
+    expect(result.current.data).toEqual([{ id: 1 }, { id: 2 }])
+  })
   expect(mockedSessionApi.list).toHaveBeenCalledTimes(2)
-  expect(mockedSessionApi.list).toHaveBeenNthCalledWith(1, { page_size: 200 }, null)
-  expect(mockedSessionApi.list).toHaveBeenNthCalledWith(2, { page_size: 200 }, 'token2')
+  expect(mockedSessionApi.list).toHaveBeenNthCalledWith(1, {}, null)
+  expect(mockedSessionApi.list).toHaveBeenNthCalledWith(2, {}, 'token2')
+})
+
+it('deduplicates sessions when loading more pages', async () => {
+  mockedSessionApi.list
+    .mockReset()
+    .mockResolvedValueOnce({ sessions: [{ id: 1 }, { id: 2 }], next_page_token: 'token2' } as never)
+    .mockResolvedValueOnce({ sessions: [{ id: 2 }, { id: 3 }], next_page_token: null } as never)
+
+  const { result } = renderWithProvider(() => useSessions())
+
+  await waitFor(() => {
+    expect(result.current.data).toEqual([{ id: 1 }, { id: 2 }])
+  })
+
+  await act(async () => {
+    result.current.loadMore()
+  })
+
+  await waitFor(() => {
+    // id: 2 appears in both pages but should not be duplicated
+    expect(result.current.data).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }])
+  })
 })
 
 it('handles list errors gracefully', async () => {

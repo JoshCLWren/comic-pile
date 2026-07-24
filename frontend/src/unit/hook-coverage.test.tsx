@@ -123,6 +123,9 @@ describe('data hooks', () => {
   it('loads sessions through pagination and details', async () => {
     api.sessionApi.list.mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: 'next' }).mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: null })
     const sessions = renderHook(() => useSessions())
+    await waitFor(() => expect(sessions.result.current.data).toHaveLength(1))
+    expect(sessions.result.current.hasMore).toBe(true)
+    await act(async () => { sessions.result.current.loadMore() })
     await waitFor(() => expect(sessions.result.current.data).toHaveLength(2))
     expect(cache.invalidateQueries).toHaveBeenCalledWith(['sessions'])
     api.sessionApi.getDetails.mockResolvedValue({ session_id: 1 })
