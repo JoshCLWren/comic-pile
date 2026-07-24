@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { sessionApi } from "../services/api";
 import type {
@@ -93,35 +93,34 @@ export function useSession() {
 
 export function useSessions(params = EMPTY_PARAMS) {
   const { invalidateQueries } = useCache();
-  const [data, setData] = useState<SessionSummary[] | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [isPending, setIsPending] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isError, setIsError] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
 
-  const effectiveParams = params ?? EMPTY_PARAMS;
+  const isLoadingMoreRef = useRef(false);
+  const paramsRef = useRef(params ?? EMPTY_PARAMS);
+  // Keep the ref current without causing re-renders
+  paramsRef.current = params ?? EMPTY_PARAMS;
 
-  const fetchSessions = useCallback(async () => {
+  const fetchFirstPage = useCallback(async () => {
     setIsPending(true);
     setIsError(false);
     setError(null);
+    setSessions([]);
+    setNextPageToken(null);
+    setHasMore(false);
     try {
-      // Fetch all pages with large page_size
-      const baseParams = { ...effectiveParams, page_size: 200 };
-      let allSessions: SessionSummary[] = [];
-      let nextToken: string | null = null;
-      let currentToken: string | undefined = undefined;
-      do {
-        const result: SessionListResponse = await sessionApi.list(
-          baseParams,
-          currentToken ?? null,
-        );
-        allSessions = allSessions.concat(result.sessions);
-        nextToken = result.next_page_token;
-        currentToken = nextToken ?? undefined;
-      } while (nextToken);
-
-      setData(allSessions);
-      // Invalidate any cached session queries after fetching fresh data
+      const result: SessionListResponse = await sessionApi.list(
+        paramsRef.current,
+        null,
+      );
+      setSessions(result.sessions);
+      setNextPageToken(result.next_page_token);
+      setHasMore(result.next_page_token !== null && result.sessions.length > 0);
       invalidateQueries(["sessions"]);
     } catch (err: unknown) {
       setIsError(true);
@@ -131,13 +130,59 @@ export function useSessions(params = EMPTY_PARAMS) {
     } finally {
       setIsPending(false);
     }
-  }, [effectiveParams, invalidateQueries]);
+  }, [invalidateQueries]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextPageToken || isLoadingMoreRef.current) return;
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    setError(null);
+    try {
+      const result: SessionListResponse = await sessionApi.list(
+        paramsRef.current,
+        nextPageToken,
+      );
+      setSessions((prev) => {
+        const existingIds = new Set(prev.map((s) => s.id));
+        const newSessions = result.sessions.filter(
+          (s) => !existingIds.has(s.id),
+        );
+        return [...prev, ...newSessions];
+      });
+      setNextPageToken(result.next_page_token);
+      setHasMore(result.next_page_token !== null && result.sessions.length > 0);
+    } catch (err: unknown) {
+      setIsError(true);
+      setError(
+        err instanceof Error
+          ? err
+          : new Error("Failed to load more sessions"),
+      );
+    } finally {
+      setIsLoadingMore(false);
+      isLoadingMoreRef.current = false;
+    }
+  }, [nextPageToken]);
 
   useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+    fetchFirstPage();
+  }, [fetchFirstPage]);
 
-  return { data, isPending, isError, error, refetch: fetchSessions };
+  const value = useMemo(
+    () => ({
+      data: sessions,
+      isPending,
+      isLoadingMore,
+      isError,
+      error,
+      hasMore,
+      loadMore,
+      refetch: fetchFirstPage,
+    }),
+    [sessions, isPending, isLoadingMore, isError, error, hasMore, loadMore, fetchFirstPage],
+  );
+
+  return value;
 }
 
 export function useSessionDetails(id: number | string | null | undefined) {

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import HistoryPage from '../pages/HistoryPage'
@@ -9,7 +9,7 @@ vi.mock('../hooks/useSession', () => ({ useSessions: vi.fn() }))
 const mockedUseSessions = vi.mocked(useSessions) as any
 
 beforeEach(() => {
-  mockedUseSessions.mockReturnValue({ data: [], isLoading: false })
+  mockedUseSessions.mockReturnValue({ data: [], isLoading: false, hasMore: false, loadMore: vi.fn(), isLoadingMore: false })
 })
 
 it('renders empty history state', () => {
@@ -44,10 +44,58 @@ it('renders session cards with optional metadata and duration formats', () => {
 })
 
 it('renders loading and error states', () => {
-  mockedUseSessions.mockReturnValue({ data: null, isPending: true })
+  mockedUseSessions.mockReturnValue({ data: null, isPending: true, isLoadingMore: false, hasMore: false, loadMore: vi.fn() })
   const { rerender } = render(<MemoryRouter><HistoryPage /></MemoryRouter>)
   expect(screen.getByText('Loading...')).toBeInTheDocument()
-  mockedUseSessions.mockReturnValue({ data: null, isPending: false, error: new Error('no') })
+  mockedUseSessions.mockReturnValue({ data: null, isPending: false, isLoadingMore: false, hasMore: false, loadMore: vi.fn(), error: new Error('no') })
   rerender(<MemoryRouter><HistoryPage /></MemoryRouter>)
   expect(screen.getByText('Failed to load sessions')).toBeInTheDocument()
+})
+
+it('shows Load More button when hasMore is true', () => {
+  const loadMore = vi.fn()
+  mockedUseSessions.mockReturnValue({
+    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null }],
+    isPending: false,
+    isLoadingMore: false,
+    hasMore: true,
+    loadMore,
+    error: null,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  const button = screen.getByText('Load More Sessions')
+  expect(button).toBeInTheDocument()
+  fireEvent.click(button)
+  expect(loadMore).toHaveBeenCalledTimes(1)
+})
+
+it('shows loading state when loading more', () => {
+  mockedUseSessions.mockReturnValue({
+    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null }],
+    isPending: false,
+    isLoadingMore: true,
+    hasMore: false,
+    loadMore: vi.fn(),
+    error: null,
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  expect(screen.getByText('Loading more...')).toBeInTheDocument()
+})
+
+it('shows retry button on load more error', () => {
+  const loadMore = vi.fn()
+  mockedUseSessions.mockReturnValue({
+    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null }],
+    isPending: false,
+    isLoadingMore: true,
+    hasMore: false,
+    loadMore,
+    error: new Error('load more failed'),
+  })
+  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  expect(screen.getByText('Failed to load more sessions')).toBeInTheDocument()
+  const retryButton = screen.getByText('Retry')
+  expect(retryButton).toBeInTheDocument()
+  fireEvent.click(retryButton)
+  expect(loadMore).toHaveBeenCalledTimes(1)
 })

@@ -2,13 +2,13 @@ import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
 
 export default function HistoryPage() {
-  const { data: sessions, isPending, error } = useSessions()
+  const { data: sessions, isPending, isLoadingMore, hasMore, loadMore, error } = useSessions()
 
   if (isPending) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
-  if (error) {
+  if (error && !isLoadingMore) {
     return <div className="error-message">Failed to load sessions</div>
   }
 
@@ -144,6 +144,39 @@ export default function HistoryPage() {
           )
         })}
       </div>
+
+      {isLoadingMore && (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-sm font-bold text-stone-400 uppercase tracking-widest animate-pulse">
+            Loading more...
+          </div>
+        </div>
+      )}
+
+      {error && isLoadingMore && (
+        <div className="text-center py-4">
+          <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-3">
+            Failed to load more sessions
+          </p>
+          <button
+            onClick={loadMore}
+            className="h-9 px-4 glass-button text-[10px] font-black uppercase tracking-widest shadow-xl"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {hasMore && !isLoadingMore && (
+        <div className="flex justify-center pt-4 pb-8">
+          <button
+            onClick={loadMore}
+            className="h-10 md:h-12 px-6 md:px-8 glass-button text-[10px] md:text-xs font-black uppercase tracking-widest shadow-xl"
+          >
+            Load More Sessions
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-24
+
+**Incremental session history (#608)**
+
+- Changed `useSessions` hook from eagerly loading all pages to incremental loading: first page only on mount, "Load More" button for subsequent pages
+- Added `hasMore`, `loadMore`, and `isLoadingMore` to `useSessions` return value
+- Added deduplication by session ID when loading more pages (overlapping cursor boundaries)
+- Added "Load More Sessions" button with "Loading more..." spinner and error+retry states to HistoryPage
+- Fixed pre-existing infinite re-render bug in `useSessions` caused by unstable params object reference
+- Updated E2E test from scroll-based to button-triggered load-more interaction
+
 ## 2026-07-19
 
 **Queue card swipe action containment**
