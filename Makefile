@@ -3,7 +3,7 @@
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
-.PHONY: test-e2e-prod-smoke check-prod-assets
+.PHONY: test-e2e-prod-smoke check-prod-assets clone-prod-export clone-prod-import
 .PHONY: verify-reading-order
 
 # Configuration
@@ -427,3 +427,9 @@ test-e2e-browser-quick:  ## Run TypeScript Playwright tests (Docker must already
 verify-reading-order:  ## Verify Wildstorm reading order dependencies
 	@echo "Verifying Wildstorm reading order..."
 	@cd scripts && python verify_wildstorm_reading_order.py
+
+clone-prod-export:  ## Backup production user data (ex: make clone-prod-export ARGS='--username Josh')
+	@python -m scripts.clone_prod_to_local export $(ARGS)
+
+clone-prod-import:  ## Restore backup into local dev database
+	@python -m scripts.clone_prod_to_local import $(ARGS)
