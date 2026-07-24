@@ -87,7 +87,7 @@ it('shows retry button on load more error', () => {
   mockedUseSessions.mockReturnValue({
     data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: null }],
     isPending: false,
-    isLoadingMore: true,
+    isLoadingMore: false,
     hasMore: false,
     loadMore,
     error: new Error('load more failed'),

@@ -8,7 +8,7 @@ export default function HistoryPage() {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
-  if (error && !isLoadingMore) {
+  if (error && !isLoadingMore && (!sessions || sessions.length === 0)) {
     return <div className="error-message">Failed to load sessions</div>
   }
 
@@ -153,7 +153,7 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {error && isLoadingMore && (
+      {error && !isLoadingMore && (
         <div className="text-center py-4">
           <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-3">
             Failed to load more sessions
