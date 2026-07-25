@@ -1,6 +1,6 @@
 """Tests for GitHub issue selection."""
 
-from scripts.next_task import select_next
+from scripts.next_task import _issue_context, select_next
 
 
 def _issue(number: int, title: str, labels: list[str], body: str = "") -> dict:
@@ -72,3 +72,27 @@ def test_select_next_allows_closed_dependency() -> None:
 
     assert candidate is not None
     assert candidate.issue["number"] == 20
+
+
+def test_issue_context_reports_scope_dependencies_and_files() -> None:
+    """The selector output should provide enough bounded context to begin work."""
+    issue = _issue(
+        42,
+        "Document workflow",
+        ["ralph-task", "ralph-status:pending", "ralph-priority:high"],
+        """## Goal
+
+Make agents productive.
+
+Depends on #41.
+
+Update `scripts/next_task.py` and `docs/ISSUE_EXECUTION_PROTOCOL.md`.
+""",
+    )
+
+    context = _issue_context(issue, {41})
+
+    assert "Make agents productive." in context
+    assert "Dependencies: #41 (closed)" in context
+    assert "scripts/next_task.py" in context
+    assert "Required verification:" in context

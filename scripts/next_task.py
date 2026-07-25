@@ -7,8 +7,9 @@ import json
 import re
 import subprocess
 import sys
+from argparse import ArgumentParser
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TypedDict, cast
 
 
 class IssueLabel(TypedDict):
@@ -98,18 +99,145 @@ def _gh_issue_list(state: str) -> list[IssuePayload]:
         "--json",
         "number,title,body,labels,url",
     ]
+    payload = _run_gh_json(command, "GitHub issue query failed")
+    if not isinstance(payload, list):
+        raise RuntimeError("GitHub issue query failed: unexpected response")
+    return cast(list[IssuePayload], payload)
+
+
+def _run_gh(command: list[str], failure_message: str) -> str:
+    """Run a GitHub CLI command and return its standard output."""
     try:
         result = subprocess.run(command, check=True, capture_output=True, text=True)
     except FileNotFoundError as error:
         raise RuntimeError("gh CLI is required; install it and authenticate first") from error
     except subprocess.CalledProcessError as error:
-        detail = error.stderr.strip() or "GitHub issue query failed"
+        detail = error.stderr.strip() or failure_message
         raise RuntimeError(detail) from error
-    return json.loads(result.stdout)
+    return result.stdout
+
+
+def _run_gh_json(command: list[str], failure_message: str) -> object:
+    """Run a GitHub CLI command and decode its JSON output."""
+    try:
+        payload = json.loads(_run_gh(command, failure_message))
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"{failure_message}: invalid JSON response") from error
+    return payload
+
+
+def _issue_context(issue: IssuePayload, closed_numbers: set[int]) -> str:
+    """Render the bounded context an agent needs before starting an issue."""
+    body = issue.get("body") or "No issue body was provided."
+    dependencies = sorted(
+        {
+            int(number)
+            for number in re.findall(r"(?:Depends on|depends on) #([0-9]+)", body)
+        }
+    )
+    required_files = sorted(
+        {
+            reference
+            for reference in re.findall(r"`([^`]+)`", body)
+            if "/" in reference
+            or reference.endswith((".md", ".py", ".js", ".jsx", ".ts", ".tsx"))
+        }
+    )
+    dependency_text = "none"
+    if dependencies:
+        dependency_text = ", ".join(
+            f"#{number} ({'closed' if number in closed_numbers else 'open'})"
+            for number in dependencies
+        )
+    files_text = ", ".join(required_files) if required_files else "none explicitly named"
+    return "\n".join(
+        [
+            "Scope:",
+            body.strip(),
+            f"Dependencies: {dependency_text}",
+            f"Required files named by issue: {files_text}",
+            "Required verification: follow AGENTS.md and the issue acceptance criteria.",
+        ]
+    )
+
+
+def _gh_issue(issue_number: int) -> IssuePayload:
+    """Load one issue from GitHub."""
+    command = [
+        "gh",
+        "issue",
+        "view",
+        str(issue_number),
+        "--json",
+        "number,title,body,labels,url",
+    ]
+    payload = _run_gh_json(command, "GitHub issue query failed")
+    if not isinstance(payload, dict):
+        raise RuntimeError("GitHub issue query failed: unexpected response")
+    issues = [cast(IssuePayload, payload)]
+    if len(issues) != 1:
+        raise RuntimeError(f"GitHub returned no unique issue for #{issue_number}")
+    return issues[0]
+
+
+def _start_task(issue_number: int) -> int:
+    """Validate an issue and move it from pending to in-progress."""
+    issue = _gh_issue(issue_number)
+    labels = _labels(issue)
+    if "ralph-status:pending" not in labels:
+        raise RuntimeError(f"#{issue_number} is not pending; no status change made")
+    if "ralph-task" not in labels:
+        raise RuntimeError(f"#{issue_number} is not an executable ralph-task")
+
+    closed_numbers = {
+        closed_issue["number"] for closed_issue in _gh_issue_list("closed")
+    }
+    if _has_unresolved_dependency(issue, closed_numbers):
+        raise RuntimeError(f"#{issue_number} has an unresolved dependency; no status change made")
+
+    _run_gh(
+        [
+            "gh",
+            "issue",
+            "edit",
+            str(issue_number),
+            "--remove-label",
+            "ralph-status:pending",
+            "--add-label",
+            "ralph-status:in-progress",
+        ],
+        "GitHub issue status update failed",
+    )
+    _run_gh(
+        [
+            "gh",
+            "issue",
+            "comment",
+            str(issue_number),
+            "--body",
+            "Starting implementation from the repository issue workflow.",
+        ],
+        "GitHub issue comment failed",
+    )
+    print(f"Started #{issue_number}: {issue['title']}")
+    return 0
 
 
 def main() -> int:
-    """Print the next issue in an agent-readable format."""
+    """Select the next issue or start a validated issue."""
+    parser = ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command")
+    start_parser = subparsers.add_parser("start", help="validate and start an issue")
+    start_parser.add_argument("issue", type=int)
+    args = parser.parse_args()
+
+    if args.command == "start":
+        try:
+            return _start_task(args.issue)
+        except RuntimeError as error:
+            print(f"start-task: {error}", file=sys.stderr)
+            return 1
+
     try:
         open_issues = _gh_issue_list("open")
         closed_issues = _gh_issue_list("closed")
@@ -130,8 +258,8 @@ def main() -> int:
     print(f"Priority rank: {candidate.priority}")
     print(f"Labels: {labels}")
     print()
-    print("Agent instruction:")
-    print(f"Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, and issue #{issue['number']}.")
+    print(_issue_context(issue, closed_numbers))
+    print("Agent context: read AGENTS.md and docs/ISSUE_EXECUTION_PROTOCOL.md.")
     print("If the issue has a linked local plan, read that plan before editing.")
     return 0
 

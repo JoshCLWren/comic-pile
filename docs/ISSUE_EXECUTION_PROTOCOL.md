@@ -8,13 +8,12 @@ This document is the mandatory operating procedure for agents executing GitHub i
 - When the kanban links a local plan file, that file is the source of truth for implementation details. GitHub contains a compact pointer to it.
 - GitHub Issues, labels, issue links, and issue bodies are the source of truth for backlog priority, status, and dependencies.
 - `make next-task` is the canonical local helper for selecting the next executable issue.
-- `docs/ISSUE_KANBAN.md` is deprecated historical material and must not be used to infer current status.
 - `AGENTS.md` is mandatory. Its test, async PostgreSQL, lint, and no-suppression rules override convenience.
 
 ## Before changing code
 
-1. Read the selected GitHub issue body, `AGENTS.md`, this protocol, and `docs/ISSUE_KANBAN.md`. Do not dump every GitHub comment into the model context.
-2. If the kanban row links a local plan file, read that file in bounded chunks and treat it as authoritative. Do not use `gh issue view --comments` for the full issue conversation.
+1. Read the selected GitHub issue body, `AGENTS.md`, and this protocol. Do not dump every GitHub comment into the model context.
+2. If the issue links a local plan file, read that file in bounded chunks and treat it as authoritative. Do not use `gh issue view --comments` for the full issue conversation.
 3. If the issue is marked **Planning required**, do not edit application code. Create the local plan file first.
 4. Confirm every dependency listed on the issue and board is complete or explicitly marked non-blocking.
 5. Inspect the named files and existing tests before editing.

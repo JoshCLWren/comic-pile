@@ -19,7 +19,7 @@ Work on the next task in this repository.
 - Fix failures; never skip tests or use CI as a debugger.
 - If required work is outside the issue, create a linked GitHub issue before expanding scope.
 - If blocked, mark the issue `ralph-status:blocked`, explain the exact blocker, and stop.
-- Do not use `docs/ISSUE_KANBAN.md` as a status source.
+- Do not use the archived Markdown kanban as a status source.
 - Do not discard, reset, or overwrite unrelated working-tree changes.
 
 ## Before finishing

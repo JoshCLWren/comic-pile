@@ -340,9 +340,8 @@ make migrate  # Run migrations (or: alembic upgrade head)
 
 ## GitHub Issue Workflow
 
-GitHub Issues are the backlog and status source of truth. Do not use
-`docs/ISSUE_KANBAN.md` to determine current status; it is retained only as a
-deprecated historical reference while the issue workflow is migrated.
+GitHub Issues are the backlog and status source of truth. The former Markdown
+kanban is archived and must not be used to determine current status.
 
 Before choosing work, run:
 
