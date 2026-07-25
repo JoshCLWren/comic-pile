@@ -228,6 +228,34 @@ it('handles response success, network errors, validation errors, and auth errors
   await expect(responseInterceptor({ config: { url: '/x', _retry: true } as never, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
 })
 
+it('refreshes when FastAPI rejects a request without a bearer header', async () => {
+  post.mockResolvedValue({ access_token: 'refreshed-token' })
+  apiMock.request.mockResolvedValue({ authenticated: true })
+
+  const result = responseInterceptor({
+    config: { url: '/auth/me', headers: {} },
+    response: { status: 403, data: { detail: 'Not authenticated' } },
+  } as never)
+
+  await expect(result).resolves.toEqual({ authenticated: true })
+  expect(post).toHaveBeenCalledWith('/auth/refresh')
+  expect(apiMock.request).toHaveBeenCalledWith(expect.objectContaining({
+    url: '/auth/me',
+    _retry: true,
+    headers: { Authorization: 'Bearer refreshed-token' },
+  }))
+})
+
+it('does not refresh for unrelated forbidden responses', async () => {
+  await expect(responseInterceptor({
+    config: { url: '/threads/1' },
+    response: { status: 403, data: { detail: 'Forbidden' } },
+  } as never)).rejects.toEqual(expect.objectContaining({
+    response: expect.objectContaining({ status: 403 }),
+  }))
+  expect(post).not.toHaveBeenCalled()
+})
+
 it('rejects a failed token refresh without retrying the original request', async () => {
   post.mockRejectedValueOnce(new Error('refresh failed'))
   await expect(responseInterceptor({ config: { url: '/threads/1' }, response: { status: 401 } })).rejects.toThrow('refresh failed')

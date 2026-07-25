@@ -148,6 +148,19 @@ function redirectToLogin(): void {
   window.location.href = '/login'
 }
 
+function isAuthenticationFailure(error: AxiosError): boolean {
+  if (error.response?.status === 401) {
+    return true
+  }
+
+  if (error.response?.status !== 403) {
+    return false
+  }
+
+  const responseData = error.response.data as { detail?: unknown } | undefined
+  return responseData?.detail === 'Not authenticated'
+}
+
 rawApi.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     const token = getAccessToken()
@@ -199,7 +212,7 @@ rawApi.interceptors.response.use(
       })
     }
 
-    if (error.response.status === 401 && !originalRequest._retry) {
+    if (isAuthenticationFailure(error) && !originalRequest._retry) {
       const requestUrl = originalRequest.url ?? ''
       const isAuthEndpoint =
         requestUrl.includes('/auth/login') ||

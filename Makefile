@@ -328,6 +328,8 @@ deploy-prod:  ## Deploy to Railway production
 		echo "Rebase/merge and push before deploy to ensure deterministic release."; \
 		exit 1; \
 	fi
+	@echo "Installing locked frontend dependencies..."
+	@pnpm install --frozen-lockfile
 	@echo "Running frontend TypeScript typecheck..."
 	@pnpm --filter frontend run typecheck
 	@echo "Deploying to Railway project $(RAILWAY_PROJECT_ID) service $(RAILWAY_APP_SERVICE) in $(RAILWAY_PROD_ENV)..."
