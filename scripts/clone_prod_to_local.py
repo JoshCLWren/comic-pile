@@ -33,10 +33,10 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict, cast
 from urllib.parse import urlparse
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import (
@@ -69,6 +69,8 @@ EXPORT_TABLES = [
     "snapshots",
     "reviews",
 ]
+
+type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
 
 
 def _async_database_url(db_url: str) -> str:
@@ -130,7 +132,7 @@ class ExportIssueRecord(TypedDict, total=False):
 
     id: int
     thread_id: int
-    issue_number: int
+    issue_number: str
     position: int
     status: str
     read_at: str | None
@@ -163,7 +165,7 @@ class ExportReadingOrderItemRecord(TypedDict, total=False):
     reading_order_id: int
     thread_id: int
     position: int
-    issue_number: int
+    issue_number: str
 
 
 class ExportSessionRecord(TypedDict, total=False):
@@ -188,12 +190,12 @@ class ExportEventRecord(TypedDict, total=False):
     type: str
     timestamp: str | None
     die: int
-    result: str | None
+    result: int | None
     selected_thread_id: int | None
     selection_method: str | None
     rating: float | None
     issues_read: int | None
-    queue_move: int | None
+    queue_move: str | None
     die_after: bool | None
     session_id: int
     thread_id: int | None
@@ -207,8 +209,8 @@ class ExportSnapshotRecord(TypedDict, total=False):
     id: int
     session_id: int
     event_id: int | None
-    thread_states: dict[str, Any]
-    session_state: dict[str, Any]
+    thread_states: dict[str, JsonValue]
+    session_state: dict[str, JsonValue] | None
     created_at: str | None
     description: str | None
 
@@ -244,6 +246,20 @@ class ExportDocument(TypedDict):
     events: list[ExportEventRecord]
     snapshots: list[ExportSnapshotRecord]
     reviews: list[ExportReviewRecord]
+
+
+type ExportRecord = (
+    ExportCollectionRecord
+    | ExportThreadRecord
+    | ExportIssueRecord
+    | ExportDependencyRecord
+    | ExportReadingOrderRecord
+    | ExportReadingOrderItemRecord
+    | ExportSessionRecord
+    | ExportEventRecord
+    | ExportSnapshotRecord
+    | ExportReviewRecord
+)
 
 
 class _DateTimeEncoder(json.JSONEncoder):
@@ -315,29 +331,29 @@ def _datetime_to_iso(obj: object) -> str | None:
 
 
 
-def _export_user(user: User) -> dict[str, Any]:
-    return {
+def _export_user(user: User) -> ExportUserRecord:
+    return ExportUserRecord(**{
         "id": user.id,
         "username": user.username,
         "email": user.email,
         "is_admin": user.is_admin,
         "created_at": _datetime_to_iso(user.created_at),
-    }
+    })
 
 
-def _export_collection(collection: Collection) -> dict[str, Any]:
-    return {
+def _export_collection(collection: Collection) -> ExportCollectionRecord:
+    return ExportCollectionRecord(**{
         "id": collection.id,
         "name": collection.name,
         "user_id": collection.user_id,
         "is_default": collection.is_default,
         "position": collection.position,
         "created_at": _datetime_to_iso(collection.created_at),
-    }
+    })
 
 
-def _export_thread(thread: Thread) -> dict[str, Any]:
-    return {
+def _export_thread(thread: Thread) -> ExportThreadRecord:
+    return ExportThreadRecord(**{
         "id": thread.id,
         "title": thread.title,
         "format": thread.format,
@@ -357,11 +373,11 @@ def _export_thread(thread: Thread) -> dict[str, Any]:
         "created_at": _datetime_to_iso(thread.created_at),
         "user_id": thread.user_id,
         "collection_id": thread.collection_id,
-    }
+    })
 
 
-def _export_issue(issue: Issue) -> dict[str, Any]:
-    return {
+def _export_issue(issue: Issue) -> ExportIssueRecord:
+    return ExportIssueRecord(**{
         "id": issue.id,
         "thread_id": issue.thread_id,
         "issue_number": issue.issue_number,
@@ -369,40 +385,40 @@ def _export_issue(issue: Issue) -> dict[str, Any]:
         "status": issue.status,
         "read_at": _datetime_to_iso(issue.read_at),
         "created_at": _datetime_to_iso(issue.created_at),
-    }
+    })
 
 
-def _export_dependency(dependency: Dependency) -> dict[str, Any]:
-    return {
+def _export_dependency(dependency: Dependency) -> ExportDependencyRecord:
+    return ExportDependencyRecord(**{
         "id": dependency.id,
         "source_issue_id": dependency.source_issue_id,
         "target_issue_id": dependency.target_issue_id,
         "created_at": _datetime_to_iso(dependency.created_at),
         "note": dependency.note,
-    }
+    })
 
 
-def _export_reading_order(ro: ReadingOrder) -> dict[str, Any]:
-    return {
+def _export_reading_order(ro: ReadingOrder) -> ExportReadingOrderRecord:
+    return ExportReadingOrderRecord(**{
         "id": ro.id,
         "name": ro.name,
         "description": ro.description,
         "user_id": ro.user_id,
-    }
+    })
 
 
-def _export_reading_order_item(item: ReadingOrderItem) -> dict[str, Any]:
-    return {
+def _export_reading_order_item(item: ReadingOrderItem) -> ExportReadingOrderItemRecord:
+    return ExportReadingOrderItemRecord(**{
         "id": item.id,
         "reading_order_id": item.reading_order_id,
         "thread_id": item.thread_id,
         "position": item.position,
         "issue_number": item.issue_number,
-    }
+    })
 
 
-def _export_session(session: Session) -> dict[str, Any]:
-    return {
+def _export_session(session: Session) -> ExportSessionRecord:
+    return ExportSessionRecord(**{
         "id": session.id,
         "started_at": _datetime_to_iso(session.started_at),
         "ended_at": _datetime_to_iso(session.ended_at),
@@ -413,11 +429,11 @@ def _export_session(session: Session) -> dict[str, Any]:
         "pending_issue_id": session.pending_issue_id,
         "pending_thread_updated_at": _datetime_to_iso(session.pending_thread_updated_at),
         "snoozed_thread_ids": session.snoozed_thread_ids,
-    }
+    })
 
 
-def _export_event(event: Event) -> dict[str, Any]:
-    return {
+def _export_event(event: Event) -> ExportEventRecord:
+    return ExportEventRecord(**{
         "id": event.id,
         "type": event.type,
         "timestamp": _datetime_to_iso(event.timestamp),
@@ -433,23 +449,23 @@ def _export_event(event: Event) -> dict[str, Any]:
         "thread_id": event.thread_id,
         "issue_id": event.issue_id,
         "issue_number": event.issue_number,
-    }
+    })
 
 
-def _export_snapshot(snapshot: Snapshot) -> dict[str, Any]:
-    return {
+def _export_snapshot(snapshot: Snapshot) -> ExportSnapshotRecord:
+    return ExportSnapshotRecord(**{
         "id": snapshot.id,
         "session_id": snapshot.session_id,
         "event_id": snapshot.event_id,
-        "thread_states": snapshot.thread_states,
-        "session_state": snapshot.session_state,
+        "thread_states": cast(dict[str, JsonValue], snapshot.thread_states),
+        "session_state": cast(dict[str, JsonValue] | None, snapshot.session_state),
         "created_at": _datetime_to_iso(snapshot.created_at),
         "description": snapshot.description,
-    }
+    })
 
 
-def _export_review(review: Review) -> dict[str, Any]:
-    return {
+def _export_review(review: Review) -> ExportReviewRecord:
+    return ExportReviewRecord(**{
         "id": review.id,
         "user_id": review.user_id,
         "thread_id": review.thread_id,
@@ -458,7 +474,36 @@ def _export_review(review: Review) -> dict[str, Any]:
         "review_text": review.review_text,
         "created_at": _datetime_to_iso(review.created_at),
         "updated_at": _datetime_to_iso(review.updated_at),
-    }
+    })
+
+
+def _records_for_table(export: ExportDocument, table: str) -> list[ExportRecord]:
+    """Return typed records for a non-user export table."""
+    records: object
+    match table:
+        case "collections":
+            records = export["collections"]
+        case "threads":
+            records = export["threads"]
+        case "issues":
+            records = export["issues"]
+        case "dependencies":
+            records = export["dependencies"]
+        case "reading_orders":
+            records = export["reading_orders"]
+        case "reading_order_items":
+            records = export["reading_order_items"]
+        case "sessions":
+            records = export["sessions"]
+        case "events":
+            records = export["events"]
+        case "snapshots":
+            records = export["snapshots"]
+        case "reviews":
+            records = export["reviews"]
+        case _:
+            raise ValueError(f"Unsupported export table {table!r}")
+    return cast(list[ExportRecord], records)
 
 
 
@@ -591,7 +636,7 @@ def _parse_datetime(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
 
 
-def _validate_export(export: dict[str, Any]) -> None:
+def _validate_export(export: ExportDocument) -> None:
     """Validate schema version and all exported foreign-key references."""
     if export.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(
@@ -613,7 +658,7 @@ def _validate_export(export: dict[str, Any]) -> None:
 
     ids: dict[str, set[int]] = {key: set() for key in list_keys}
     for key in list_keys:
-        for record in export[key]:
+        for record in _records_for_table(export, key):
             if not isinstance(record, dict) or not isinstance(record.get("id"), int):
                 raise ValueError(f"Every {key} record must have an integer id")
             record_id = record["id"]
@@ -653,7 +698,7 @@ def _validate_export(export: dict[str, Any]) -> None:
         ],
     }
     for table, fields in checks.items():
-        for record in export[table]:
+        for record in _records_for_table(export, table):
             for field, target in fields:
                 value = record.get(field)
                 if value is None and field.endswith("_id"):
@@ -698,9 +743,35 @@ async def _delete_local_user_data(db: AsyncSession, user_id: int) -> None:
     await db.execute(delete(Collection).where(Collection.user_id == user_id))
 
 
+async def _sync_id_sequences(db: AsyncSession) -> None:
+    """Advance PostgreSQL identity sequences after importing explicit record IDs."""
+    tables = (
+        "users",
+        "collections",
+        "threads",
+        "issues",
+        "dependencies",
+        "reading_orders",
+        "reading_order_items",
+        "sessions",
+        "events",
+        "snapshots",
+        "reviews",
+    )
+    for table in tables:
+        await db.execute(
+            text(
+                "SELECT setval("
+                f"pg_get_serial_sequence('{table}', 'id'), "
+                f"COALESCE((SELECT MAX(id) FROM {table}), 1), "
+                f"(SELECT MAX(id) IS NOT NULL FROM {table}))"
+            )
+        )
+
+
 async def _import_document(
     db_url: str,
-    export: dict[str, Any],
+    export: ExportDocument,
     backup_path: Path | None,
     dry_run: bool,
 ) -> dict[str, int]:
@@ -715,7 +786,11 @@ async def _import_document(
             existing_user_id = existing_user.id if existing_user is not None else None
             if dry_run:
                 print("Dry run: validated export; no database changes made.")
-                return {key: len(export[key]) for key in EXPORT_TABLES if key != "user"}
+                return {
+                    key: len(_records_for_table(export, key))
+                    for key in EXPORT_TABLES
+                    if key != "user"
+                }
 
             if backup_path is not None:
                 if existing_user is None:
@@ -733,6 +808,8 @@ async def _import_document(
                 print(f"Pre-import backup: {backup_path.resolve()}")
 
             await db.rollback()
+            await _sync_id_sequences(db)
+            await db.commit()
             async with db.begin():
                 if existing_user_id is None:
                     local_user = User(
@@ -832,9 +909,15 @@ async def _import_document(
                     session_map[record["id"]] = item.id
                 event_map: dict[int, int] = {}
                 for record in export["events"]:
+                    selected_thread_id = record.get("selected_thread_id")
                     item = Event(
                         type=record["type"], timestamp=_parse_datetime(record.get("timestamp")) or datetime.now(UTC), die=record.get("die"),
-                        result=record.get("result"), selected_thread_id=thread_map.get(record.get("selected_thread_id"), record.get("selected_thread_id")),
+                        result=record.get("result"),
+                        selected_thread_id=(
+                            thread_map.get(selected_thread_id)
+                            if selected_thread_id is not None
+                            else None
+                        ),
                         selection_method=record.get("selection_method"), rating=record.get("rating"), issues_read=record.get("issues_read"),
                         queue_move=record.get("queue_move"), die_after=record.get("die_after"), session_id=_remap(record.get("session_id"), session_map),
                         thread_id=_remap(record.get("thread_id"), thread_map), issue_id=_remap(record.get("issue_id"), issue_map), issue_number=record.get("issue_number"),
@@ -856,7 +939,14 @@ async def _import_document(
                     ))
                 await db.flush()
 
-            counts = {key: len(export[key]) for key in EXPORT_TABLES if key != "user"}
+            await _sync_id_sequences(db)
+            await db.commit()
+
+            counts = {
+                key: len(_records_for_table(export, key))
+                for key in EXPORT_TABLES
+                if key != "user"
+            }
             return counts
     finally:
         await engine.dispose()
@@ -923,7 +1013,7 @@ def _prompt_confirmation(message: str) -> bool:
     return response == "yes"
 
 
-def _print_summary(export: dict[str, Any]) -> None:
+def _print_summary(export: ExportDocument) -> None:
     counts: dict[str, int] = {}
     for key in EXPORT_TABLES:
         if key == "user":
@@ -995,13 +1085,14 @@ async def _handle_import(args: argparse.Namespace) -> int:
     input_path = Path(args.file)
     try:
         with input_path.open() as source:
-            export = json.load(source)
+            parsed: object = json.load(source)
     except (OSError, json.JSONDecodeError) as error:
         print(f"Error: unable to read export file {input_path}: {error}", file=sys.stderr)
         return 1
-    if not isinstance(export, dict):
+    if not isinstance(parsed, dict):
         print("Error: export file must contain a JSON object.", file=sys.stderr)
         return 1
+    export = cast(ExportDocument, parsed)
 
     db_url = args.local_db_url
     if not db_url:
