@@ -1,4 +1,4 @@
-.PHONY: help init setup next-task lint verify verify-e2e pytest sync venv githook install-githook
+.PHONY: help init setup next-task start-task lint verify verify-e2e pytest sync venv githook install-githook
 .PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
 .PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
@@ -57,6 +57,10 @@ setup:  ## Install dependencies, start PostgreSQL, migrate, and seed determinist
 
 next-task:  ## Select the next executable GitHub issue for an agent
 	@$(PYTHON) scripts/next_task.py
+
+start-task:  ## Validate and start a GitHub issue (Usage: make start-task ISSUE=644)
+	@if [ -z "$(ISSUE)" ]; then echo "Usage: make start-task ISSUE=644"; exit 1; fi
+	@$(PYTHON) scripts/next_task.py start $(ISSUE)
 
 db-up:  ## Start local PostgreSQL without changing its data
 	@docker compose up -d db

@@ -1,11 +1,11 @@
-# Deprecated Issue Kanban Snapshot
+# Historical Issue Kanban Snapshot
 
-> This file is no longer a live board. GitHub Issues, labels, issue links, and
-> `make next-task` are now authoritative. Do not update this file for status
-> changes. It remains temporarily as historical context while issue workflow
-> migration is completed in [#644](https://github.com/JoshCLWren/comic-pile/issues/644).
+> This file is an archived snapshot, not a live board. GitHub Issues, labels,
+> issue links, and `make next-task` are authoritative. Do not update this file
+> for status changes.
 
-This board is the repo-level view of the active GitHub backlog. GitHub issues remain the source of truth for discussion, implementation plans, and completion. Update this file when an issue changes column, priority, or dependency. Agents must follow [ISSUE_EXECUTION_PROTOCOL.md](ISSUE_EXECUTION_PROTOCOL.md).
+This is retained only for historical context. Agents must follow the current
+[issue execution protocol](../../docs/ISSUE_EXECUTION_PROTOCOL.md).
 
 Last reviewed: 2026-07-17 (planning complete for #603, #609, and #613)
 

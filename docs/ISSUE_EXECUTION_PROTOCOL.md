@@ -5,16 +5,15 @@ This document is the mandatory operating procedure for agents executing GitHub i
 ## Source of truth
 
 - The GitHub issue is the source of truth for task scope and acceptance criteria.
-- When the kanban links a local plan file, that file is the source of truth for implementation details. GitHub contains a compact pointer to it.
+- When an issue links a local plan file, that file is the source of truth for implementation details. GitHub contains a compact pointer to it.
 - GitHub Issues, labels, issue links, and issue bodies are the source of truth for backlog priority, status, and dependencies.
 - `make next-task` is the canonical local helper for selecting the next executable issue.
-- `docs/ISSUE_KANBAN.md` is deprecated historical material and must not be used to infer current status.
 - `AGENTS.md` is mandatory. Its test, async PostgreSQL, lint, and no-suppression rules override convenience.
 
 ## Before changing code
 
-1. Read the selected GitHub issue body, `AGENTS.md`, this protocol, and `docs/ISSUE_KANBAN.md`. Do not dump every GitHub comment into the model context.
-2. If the kanban row links a local plan file, read that file in bounded chunks and treat it as authoritative. Do not use `gh issue view --comments` for the full issue conversation.
+1. Read the selected GitHub issue body, `AGENTS.md`, and this protocol. Do not dump every GitHub comment into the model context.
+2. If the issue links a local plan file, read that file in bounded chunks and treat it as authoritative. Do not use `gh issue view --comments` for the full issue conversation.
 3. If the issue is marked **Planning required**, do not edit application code. Create the local plan file first.
 4. Confirm every dependency listed on the issue and board is complete or explicitly marked non-blocking.
 5. Inspect the named files and existing tests before editing.
@@ -23,14 +22,14 @@ This document is the mandatory operating procedure for agents executing GitHub i
 
 ## Planning gate
 
-For issues marked **Planning required** on the kanban:
+For issues marked **Planning required** in the issue workflow:
 
 1. The planning agent must create a local plan file at `docs/issue-plans/<issue-number>.md` before implementation begins.
 2. The plan must name files to inspect/change, explain the current data flow, identify likely failure or design risks, describe implementation steps, list regression tests, and provide exact local verification commands.
 3. The plan must explicitly state whether database migrations, API schema changes, authorization checks, or frontend/backend contract changes are required.
 4. The plan must include a rollback or containment strategy for risky schema or behavior changes.
 5. Add a compact GitHub comment pointing to the local plan file; do not paste a large duplicate plan into the issue thread.
-6. Only after the plan file exists and is linked from the kanban may the issue move to its execution column and DeepSeek begin code changes.
+6. Only after the plan file exists and is linked from the issue may implementation begin.
 
 ## While implementing
 
@@ -70,13 +69,13 @@ pytest
 
 Do not move an issue to Validation while any required command is failing or has not been run.
 
-## Kanban handoff states
+## Issue handoff states
 
 1. **In progress**: code changes are actively being made.
 2. **Validation**: implementation is complete and all required local checks are running or complete; no further design work remains.
 3. **Done**: only after all checks pass, acceptance criteria are verified, documentation is updated, and the GitHub issue is closed with a completion comment.
 
-When moving a row, preserve its issue link, priority, dependency, and done criteria. Do not silently change priority or dependencies.
+When updating an issue, preserve its priority, dependencies, and acceptance criteria. Do not silently change priority or dependencies.
 
 ## Required final comment on the GitHub issue
 
