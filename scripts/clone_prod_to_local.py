@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import (
@@ -69,6 +69,14 @@ EXPORT_TABLES = [
     "snapshots",
     "reviews",
 ]
+
+
+def _async_database_url(db_url: str) -> str:
+    """Return a PostgreSQL URL using the asyncpg driver."""
+    for source in ("postgresql://", "postgres://", "postgresql+psycopg://"):
+        if db_url.startswith(source):
+            return db_url.replace(source, "postgresql+asyncpg://", 1)
+    return db_url
 
 
 
@@ -578,6 +586,289 @@ async def _export_via_db(db_url: str, username: str) -> ExportDocument:
     return export
 
 
+def _parse_datetime(value: str | None) -> datetime | None:
+    """Parse an exported ISO timestamp, preserving null values."""
+    return datetime.fromisoformat(value) if value else None
+
+
+def _validate_export(export: dict[str, Any]) -> None:
+    """Validate schema version and all exported foreign-key references."""
+    if export.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported schema version {export.get('schema_version')!r}; expected {SCHEMA_VERSION!r}"
+        )
+    user = export.get("user")
+    if (
+        not isinstance(user, dict)
+        or not isinstance(user.get("id"), int)
+        or not isinstance(user.get("username"), str)
+        or not user["username"].strip()
+    ):
+        raise ValueError("Export must contain a user with an integer id and username")
+
+    list_keys = [key for key in EXPORT_TABLES if key != "user"]
+    for key in list_keys:
+        if not isinstance(export.get(key), list):
+            raise ValueError(f"Export field {key!r} must be a list")
+
+    ids: dict[str, set[int]] = {key: set() for key in list_keys}
+    for key in list_keys:
+        for record in export[key]:
+            if not isinstance(record, dict) or not isinstance(record.get("id"), int):
+                raise ValueError(f"Every {key} record must have an integer id")
+            record_id = record["id"]
+            if record_id in ids[key]:
+                raise ValueError(f"Duplicate {key} id {record_id}")
+            ids[key].add(record_id)
+
+    user_id = user["id"]
+    checks = {
+        "collections": [("user_id", "user")],
+        "threads": [("user_id", "user"), ("collection_id", "collections")],
+        "issues": [("thread_id", "threads")],
+        "dependencies": [
+            ("source_issue_id", "issues"),
+            ("target_issue_id", "issues"),
+        ],
+        "reading_orders": [("user_id", "user")],
+        "reading_order_items": [
+            ("reading_order_id", "reading_orders"),
+            ("thread_id", "threads"),
+        ],
+        "sessions": [
+            ("user_id", "user"),
+            ("pending_thread_id", "threads"),
+            ("pending_issue_id", "issues"),
+        ],
+        "events": [
+            ("session_id", "sessions"),
+            ("thread_id", "threads"),
+            ("issue_id", "issues"),
+        ],
+        "snapshots": [("session_id", "sessions"), ("event_id", "events")],
+        "reviews": [
+            ("user_id", "user"),
+            ("thread_id", "threads"),
+            ("issue_id", "issues"),
+        ],
+    }
+    for table, fields in checks.items():
+        for record in export[table]:
+            for field, target in fields:
+                value = record.get(field)
+                if value is None and field.endswith("_id"):
+                    continue
+                target_ids = {user_id} if target == "user" else ids[target]
+                if not isinstance(value, int) or value not in target_ids:
+                    raise ValueError(f"{table}.{field} references missing {target} id {value!r}")
+    issue_ids = ids["issues"]
+    thread_ids = ids["threads"]
+    for record in export["threads"]:
+        value = record.get("next_unread_issue_id")
+        if value is not None and value not in issue_ids:
+            raise ValueError(f"threads.next_unread_issue_id references missing issue id {value!r}")
+    for record in export["sessions"]:
+        values = record.get("snoozed_thread_ids") or []
+        if any(value not in thread_ids for value in values):
+            raise ValueError("sessions.snoozed_thread_ids references a missing thread")
+
+
+def _remap(value: int | None, mapping: dict[int, int]) -> int | None:
+    """Remap a nullable exported identifier."""
+    return mapping.get(value) if value is not None else None
+
+
+async def _delete_local_user_data(db: AsyncSession, user_id: int) -> None:
+    """Delete the local user's imported data in foreign-key-safe order."""
+    thread_ids = select(Thread.id).where(Thread.user_id == user_id)
+    issue_ids = select(Issue.id).where(Issue.thread_id.in_(thread_ids))
+    session_ids = select(Session.id).where(Session.user_id == user_id)
+    order_ids = select(ReadingOrder.id).where(ReadingOrder.user_id == user_id)
+    await db.execute(delete(Snapshot).where(Snapshot.session_id.in_(session_ids)))
+    await db.execute(delete(Event).where(Event.session_id.in_(session_ids)))
+    await db.execute(delete(Review).where(Review.user_id == user_id))
+    await db.execute(delete(ReadingOrderItem).where(ReadingOrderItem.reading_order_id.in_(order_ids)))
+    await db.execute(delete(ReadingOrder).where(ReadingOrder.user_id == user_id))
+    await db.execute(delete(Dependency).where(
+        Dependency.source_issue_id.in_(issue_ids) | Dependency.target_issue_id.in_(issue_ids)
+    ))
+    await db.execute(delete(Session).where(Session.user_id == user_id))
+    await db.execute(delete(Issue).where(Issue.thread_id.in_(thread_ids)))
+    await db.execute(delete(Thread).where(Thread.user_id == user_id))
+    await db.execute(delete(Collection).where(Collection.user_id == user_id))
+
+
+async def _import_document(
+    db_url: str,
+    export: dict[str, Any],
+    backup_path: Path | None,
+    dry_run: bool,
+) -> dict[str, int]:
+    """Validate and import an export document, returning post-import counts."""
+    _validate_export(export)
+    engine = create_async_engine(_async_database_url(db_url), pool_pre_ping=True)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with factory() as db:
+            result = await db.execute(select(User).where(User.username == export["user"]["username"]))
+            existing_user = result.scalar_one_or_none()
+            existing_user_id = existing_user.id if existing_user is not None else None
+            if dry_run:
+                print("Dry run: validated export; no database changes made.")
+                return {key: len(export[key]) for key in EXPORT_TABLES if key != "user"}
+
+            if backup_path is not None:
+                if existing_user is None:
+                    backup = {
+                        "schema_version": SCHEMA_VERSION,
+                        "exported_at": datetime.now(UTC).isoformat(),
+                        "source_url": _redact_db_url(db_url),
+                        "source_username": export["user"]["username"],
+                        "user": {},
+                        **{key: [] for key in EXPORT_TABLES if key != "user"},
+                    }
+                else:
+                    backup = await _export_via_db(_async_database_url(db_url), export["user"]["username"])
+                _write_json(backup_path, backup)
+                print(f"Pre-import backup: {backup_path.resolve()}")
+
+            await db.rollback()
+            async with db.begin():
+                if existing_user_id is None:
+                    local_user = User(
+                        username=export["user"]["username"],
+                        email=export["user"].get("email"),
+                        is_admin=export["user"].get("is_admin", False),
+                        created_at=_parse_datetime(export["user"].get("created_at")) or datetime.now(UTC),
+                    )
+                    db.add(local_user)
+                    await db.flush()
+                else:
+                    local_user = await db.get(User, existing_user_id)
+                    if local_user is None:
+                        raise ValueError(f"Local user {existing_user_id} disappeared before import")
+                    await _delete_local_user_data(db, local_user.id)
+                    local_user.email = export["user"].get("email")
+                    local_user.is_admin = export["user"].get("is_admin", False)
+                    local_user.created_at = (
+                        _parse_datetime(export["user"].get("created_at")) or local_user.created_at
+                    )
+
+                collection_map: dict[int, int] = {}
+                for record in export["collections"]:
+                    item = Collection(
+                        name=record["name"], user_id=local_user.id, is_default=record.get("is_default", False),
+                        position=record.get("position", 0), created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
+                    )
+                    db.add(item)
+                    await db.flush()
+                    collection_map[record["id"]] = item.id
+
+                thread_map: dict[int, int] = {}
+                thread_models: dict[int, Thread] = {}
+                for record in export["threads"]:
+                    item = Thread(
+                        title=record["title"], format=record["format"], issues_remaining=record.get("issues_remaining", 0),
+                        total_issues=record.get("total_issues"), next_unread_issue_id=None,
+                        reading_progress=record.get("reading_progress"), queue_position=record.get("queue_position", 0),
+                        status=record.get("status", "active"), last_rating=record.get("last_rating"),
+                        last_activity_at=_parse_datetime(record.get("last_activity_at")), review_url=record.get("review_url"),
+                        last_review_at=_parse_datetime(record.get("last_review_at")), notes=record.get("notes"),
+                        is_test=record.get("is_test", False), is_blocked=record.get("is_blocked", False),
+                        created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
+                        user_id=local_user.id, collection_id=_remap(record.get("collection_id"), collection_map),
+                    )
+                    db.add(item)
+                    await db.flush()
+                    thread_map[record["id"]] = item.id
+                    thread_models[record["id"]] = item
+
+                issue_map: dict[int, int] = {}
+                for record in export["issues"]:
+                    item = Issue(
+                        thread_id=thread_map[record["thread_id"]], issue_number=str(record["issue_number"]),
+                        position=record.get("position", 0), status=record.get("status", "unread"),
+                        read_at=_parse_datetime(record.get("read_at")), created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
+                    )
+                    db.add(item)
+                    await db.flush()
+                    issue_map[record["id"]] = item.id
+
+                for record in export["threads"]:
+                    thread_models[record["id"]].next_unread_issue_id = _remap(record.get("next_unread_issue_id"), issue_map)
+                await db.flush()
+
+                for record in export["dependencies"]:
+                    db.add(Dependency(
+                        source_issue_id=issue_map[record["source_issue_id"]], target_issue_id=issue_map[record["target_issue_id"]],
+                        created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC), note=record.get("note"),
+                    ))
+                await db.flush()
+
+                order_map: dict[int, int] = {}
+                for record in export["reading_orders"]:
+                    item = ReadingOrder(name=record["name"], description=record.get("description"), user_id=local_user.id)
+                    db.add(item)
+                    await db.flush()
+                    order_map[record["id"]] = item.id
+                for record in export["reading_order_items"]:
+                    db.add(ReadingOrderItem(
+                        reading_order_id=order_map[record["reading_order_id"]], thread_id=thread_map[record["thread_id"]],
+                        position=record["position"], issue_number=record.get("issue_number"),
+                    ))
+
+                session_map: dict[int, int] = {}
+                for record in export["sessions"]:
+                    snoozed = record.get("snoozed_thread_ids")
+                    item = Session(
+                        started_at=_parse_datetime(record.get("started_at")) or datetime.now(UTC), ended_at=_parse_datetime(record.get("ended_at")),
+                        start_die=record.get("start_die", 6), manual_die=record.get("manual_die"), user_id=local_user.id,
+                        pending_thread_id=_remap(record.get("pending_thread_id"), thread_map), pending_issue_id=_remap(record.get("pending_issue_id"), issue_map),
+                        pending_thread_updated_at=_parse_datetime(record.get("pending_thread_updated_at")),
+                        snoozed_thread_ids=[thread_map.get(value, value) for value in snoozed] if snoozed else snoozed,
+                    )
+                    db.add(item)
+                    await db.flush()
+                    session_map[record["id"]] = item.id
+                event_map: dict[int, int] = {}
+                for record in export["events"]:
+                    item = Event(
+                        type=record["type"], timestamp=_parse_datetime(record.get("timestamp")) or datetime.now(UTC), die=record.get("die"),
+                        result=record.get("result"), selected_thread_id=thread_map.get(record.get("selected_thread_id"), record.get("selected_thread_id")),
+                        selection_method=record.get("selection_method"), rating=record.get("rating"), issues_read=record.get("issues_read"),
+                        queue_move=record.get("queue_move"), die_after=record.get("die_after"), session_id=_remap(record.get("session_id"), session_map),
+                        thread_id=_remap(record.get("thread_id"), thread_map), issue_id=_remap(record.get("issue_id"), issue_map), issue_number=record.get("issue_number"),
+                    )
+                    db.add(item)
+                    await db.flush()
+                    event_map[record["id"]] = item.id
+                for record in export["snapshots"]:
+                    db.add(Snapshot(
+                        session_id=session_map[record["session_id"]], event_id=_remap(record.get("event_id"), event_map),
+                        thread_states=record.get("thread_states", {}), session_state=record.get("session_state"),
+                        created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC), description=record.get("description"),
+                    ))
+                for record in export["reviews"]:
+                    db.add(Review(
+                        user_id=local_user.id, thread_id=thread_map[record["thread_id"]], issue_id=_remap(record.get("issue_id"), issue_map),
+                        rating=record["rating"], review_text=record.get("review_text"), created_at=_parse_datetime(record.get("created_at")) or datetime.now(UTC),
+                        updated_at=_parse_datetime(record.get("updated_at")) or datetime.now(UTC),
+                    ))
+                await db.flush()
+
+            counts = {key: len(export[key]) for key in EXPORT_TABLES if key != "user"}
+            return counts
+    finally:
+        await engine.dispose()
+
+
+def _write_json(path: Path, document: ExportDocument) -> None:
+    """Write a private JSON export file."""
+    with path.open("w") as output:
+        json.dump(document, output, cls=_DateTimeEncoder, indent=2)
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -701,8 +992,52 @@ async def _handle_export(args: argparse.Namespace) -> int:
 
 
 async def _handle_import(args: argparse.Namespace) -> int:
-    print("Import not yet implemented.", file=sys.stderr)
-    return 1
+    input_path = Path(args.file)
+    try:
+        with input_path.open() as source:
+            export = json.load(source)
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"Error: unable to read export file {input_path}: {error}", file=sys.stderr)
+        return 1
+    if not isinstance(export, dict):
+        print("Error: export file must contain a JSON object.", file=sys.stderr)
+        return 1
+
+    db_url = args.local_db_url
+    if not db_url:
+        from app.config import get_database_settings
+
+        db_url = get_database_settings().async_url
+    db_url = _async_database_url(db_url)
+    try:
+        _validate_export(export)
+    except ValueError as error:
+        print(f"Error: invalid export: {error}", file=sys.stderr)
+        return 1
+
+    _print_summary(export)
+    if args.dry_run:
+        counts = await _import_document(db_url, export, None, dry_run=True)
+        print(f"Validated counts: {counts}")
+        return 0
+
+    backup_path = Path(args.backup) if args.backup else Path(
+        f"local_backup_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.json"
+    )
+    if not args.yes and not _prompt_confirmation(
+        f"This will replace data for user {export['user']['username']!r} in {_redact_db_url(db_url)}. Continue?"
+    ):
+        print("Cancelled.")
+        return 0
+    try:
+        counts = await _import_document(db_url, export, backup_path, dry_run=False)
+    except Exception as error:
+        print(f"Error: import failed and was rolled back: {error}", file=sys.stderr)
+        return 1
+    print("Import completed. Post-import counts:")
+    for key, count in counts.items():
+        print(f"  {key.replace('_', ' ').title():18s} {count}")
+    return 0
 
 
 async def _async_main(args: argparse.Namespace) -> int:

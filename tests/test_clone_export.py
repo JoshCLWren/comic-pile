@@ -421,6 +421,39 @@ async def test_export_via_db_no_credential_leakage(test_db_url, export_user, exp
     assert "asyncpg" not in source_url
 
 
+@pytest.mark.asyncio
+async def test_import_remaps_relationships_and_writes_backup(
+    test_db_url, db_engine, export_user, export_data, tmp_path,
+):
+    """Import replaces a user safely while assigning new IDs to related rows."""
+    from scripts.clone_prod_to_local import _export_via_db, _import_document
+
+    export = await _export_via_db(test_db_url, "clone_export_test_user")
+    backup_path = tmp_path / "before-import.json"
+    counts = await _import_document(test_db_url, export, backup_path, dry_run=False)
+
+    assert backup_path.exists()
+    assert counts["threads"] == 1
+    assert counts["issues"] == 2
+
+    async_session = async_sessionmaker(
+        db_engine, class_=AsyncSession, expire_on_commit=False,
+    )
+    async with async_session() as session:
+        result = await session.execute(
+            text("SELECT id, collection_id FROM threads WHERE title = 'Export Test Thread'")
+        )
+        thread_id, collection_id = result.one()
+        result = await session.execute(
+            text("SELECT thread_id FROM issues WHERE thread_id = :thread_id ORDER BY id"),
+            {"thread_id": thread_id},
+        )
+        assert result.fetchall()
+        assert collection_id is not None
+        assert thread_id != export_data["thread_id"]
+        assert collection_id != export_data["collection_id"]
+
+
 def test_export_file_permissions():
     """Export file should be created with owner-only permissions (0o600)."""
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
@@ -466,3 +499,35 @@ def test_redact_db_url_unparseable():
 
     result = _redact_db_url("not-a-url")
     assert "unable to parse" in result.lower() or "not-a-url" in result
+
+
+def test_validate_export_rejects_broken_foreign_key():
+    """Import validation rejects an export whose relationship cannot be remapped."""
+    from scripts.clone_prod_to_local import _validate_export
+
+    document = {
+        "schema_version": "1.0",
+        "user": {"id": 10, "username": "import-user"},
+        "collections": [],
+        "threads": [{"id": 20, "user_id": 10, "title": "Thread", "collection_id": None}],
+        "issues": [],
+        "dependencies": [],
+        "reading_orders": [],
+        "reading_order_items": [],
+        "sessions": [],
+        "events": [],
+        "snapshots": [],
+        "reviews": [],
+    }
+
+    with pytest.raises(ValueError, match="missing user id 999"):
+        document["threads"][0]["user_id"] = 999
+        _validate_export(document)
+
+
+def test_remap_preserves_null_and_maps_ids():
+    """Foreign-key remapping handles nullable references without inventing IDs."""
+    from scripts.clone_prod_to_local import _remap
+
+    assert _remap(12, {12: 42}) == 42
+    assert _remap(None, {12: 42}) is None
