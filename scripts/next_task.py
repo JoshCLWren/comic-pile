@@ -62,13 +62,18 @@ def _priority(issue: IssuePayload) -> int:
     return min((PRIORITY_RANKS.get(label, 99) for label in _labels(issue)), default=99)
 
 
-def _has_unresolved_dependency(issue: IssuePayload, closed_numbers: set[int]) -> bool:
-    """Return whether a referenced issue number is not known to be closed."""
-    body = issue.get("body") or ""
-    references = {
+def _dependency_numbers(body: str) -> set[int]:
+    """Return issue numbers referenced as dependencies in an issue body."""
+    return {
         int(number)
         for number in re.findall(r"(?:Depends on|depends on) #([0-9]+)", body)
     }
+
+
+def _has_unresolved_dependency(issue: IssuePayload, closed_numbers: set[int]) -> bool:
+    """Return whether a referenced issue number is not known to be closed."""
+    body = issue.get("body") or ""
+    references = _dependency_numbers(body)
     return bool(references - closed_numbers)
 
 
@@ -129,12 +134,7 @@ def _run_gh_json(command: list[str], failure_message: str) -> object:
 def _issue_context(issue: IssuePayload, closed_numbers: set[int]) -> str:
     """Render the bounded context an agent needs before starting an issue."""
     body = issue.get("body") or "No issue body was provided."
-    dependencies = sorted(
-        {
-            int(number)
-            for number in re.findall(r"(?:Depends on|depends on) #([0-9]+)", body)
-        }
-    )
+    dependencies = sorted(_dependency_numbers(body))
     required_files = sorted(
         {
             reference
@@ -174,10 +174,7 @@ def _gh_issue(issue_number: int) -> IssuePayload:
     payload = _run_gh_json(command, "GitHub issue query failed")
     if not isinstance(payload, dict):
         raise RuntimeError("GitHub issue query failed: unexpected response")
-    issues = [cast(IssuePayload, payload)]
-    if len(issues) != 1:
-        raise RuntimeError(f"GitHub returned no unique issue for #{issue_number}")
-    return issues[0]
+    return cast(IssuePayload, payload)
 
 
 def _start_task(issue_number: int) -> int:
@@ -208,17 +205,20 @@ def _start_task(issue_number: int) -> int:
         ],
         "GitHub issue status update failed",
     )
-    _run_gh(
-        [
-            "gh",
-            "issue",
-            "comment",
-            str(issue_number),
-            "--body",
-            "Starting implementation from the repository issue workflow.",
-        ],
-        "GitHub issue comment failed",
-    )
+    try:
+        _run_gh(
+            [
+                "gh",
+                "issue",
+                "comment",
+                str(issue_number),
+                "--body",
+                "Starting implementation from the repository issue workflow.",
+            ],
+            "GitHub issue comment failed",
+        )
+    except RuntimeError as error:
+        print(f"start-task: label updated, but comment failed: {error}", file=sys.stderr)
     print(f"Started #{issue_number}: {issue['title']}")
     return 0
 
