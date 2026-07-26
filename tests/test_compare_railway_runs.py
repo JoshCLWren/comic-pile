@@ -183,7 +183,9 @@ def test_compare_reports_failures_by_route_and_exception() -> None:
     results = cast(list[dict[str, object]], second["results"])
     results[0]["failure_diagnostics"] = {
         "schema_version": 1,
-        "failures": [failure],
+        "warmup_failures": [{**failure, "request_id": "warmup-request"}],
+        "measurement_failures": [failure],
+        "failures": [{**failure, "request_id": "combined-request"}],
     }
     _mapping(results[0]["summary"])["error_requests"] = 1
 
@@ -199,6 +201,20 @@ def test_compare_reports_failures_by_route_and_exception() -> None:
     assert group["timeout_count"] == 1
     assert group["failure_timestamps"] == ["2026-07-25T19:35:00.123Z"]
     assert group["failure_request_ids"] == ["request-1"]
+
+
+def test_compare_handles_missing_latency_measurements() -> None:
+    """Groups with no measured latency values report no data instead of crashing."""
+    first = _document()
+    second = _document()
+    for document in (first, second):
+        for result in cast(list[dict[str, object]], document["results"]):
+            summary = _mapping(result["summary"])
+            _mapping(summary["latency_ms"]).update({"p50": None, "p95": None, "p99": None, "max": None})
+
+    report = compare_documents([first, second])
+    group = next(item for item in _groups(report) if item["scenario"] == "combined")
+    assert _mapping(group["p95_ms"])["median"] is None
 
 
 def test_diagnostic_run_set_filter_rejects_control_files() -> None:

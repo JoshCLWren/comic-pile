@@ -4,8 +4,8 @@ import { getCollectionsEnabled } from './helpers';
 type TestFixtures = {
   page: Page;
   allowExpectedBrowserFailures: {
-    allow: () => void;
-    isAllowed: () => boolean;
+    allow: (...expectedFailures: ExpectedBrowserFailure[]) => void;
+    isAllowed: (failure: BrowserFailure) => boolean;
   };
   freshUserPage: Page;
   authenticatedPage: Page;
@@ -17,6 +17,18 @@ type TestFixtures = {
     username: string;
     accessToken?: string;
   };
+};
+
+type BrowserFailureCategory = 'console' | 'pageerror' | 'requestfailed';
+
+type BrowserFailure = {
+  category: BrowserFailureCategory;
+  message: string;
+};
+
+type ExpectedBrowserFailure = {
+  category: BrowserFailureCategory;
+  message: string;
 };
 
 type TestUser = {
@@ -224,7 +236,6 @@ function isExpectedBrowserNoise(message: string): boolean {
   return (
     (message.includes('GPU stall due to ReadPixels') && message.includes('GL Driver Message'))
     || message.includes("Couldn't load preload assets")
-    || message.includes('Failed to load resource: the server responded with a status of 401 (Unauthorized)')
     || (message.includes('Network Error') && message.includes('/assets/'))
     || message.includes('Failed to fetch collections: Error: Network error. Please check your connection and try again.')
     || message.includes('Failed to snooze thread: Network error. Please check your connection and try again.')
@@ -240,7 +251,7 @@ async function assertBrowserHealth(
   consoleMessages: string[],
   pageErrors: string[],
   failedRequests: string[],
-  allowExpectedBrowserFailures: boolean,
+  allowExpectedBrowserFailures: { isAllowed: (failure: BrowserFailure) => boolean },
 ): Promise<void> {
   const unexpectedConsoleMessages = consoleMessages.filter(
     (message) => !isExpectedAnonymousAuthProbe(message) && !isExpectedBrowserNoise(message),
@@ -248,15 +259,14 @@ async function assertBrowserHealth(
   const unexpectedPageErrors = pageErrors.filter(
     (message) => !isExpectedAnonymousAuthProbe(message) && !isExpectedBrowserNoise(message),
   );
-  const failures = [
-    ...(allowExpectedBrowserFailures
-      ? []
-      : unexpectedConsoleMessages.map((message) => `console: ${message}`)),
-    ...unexpectedPageErrors.map((message) => `pageerror: ${message}`),
-    ...(allowExpectedBrowserFailures
-      ? []
-      : failedRequests.map((message) => `requestfailed: ${message}`)),
+  const browserFailures: BrowserFailure[] = [
+    ...unexpectedConsoleMessages.map((message) => ({ category: 'console' as const, message })),
+    ...unexpectedPageErrors.map((message) => ({ category: 'pageerror' as const, message })),
+    ...failedRequests.map((message) => ({ category: 'requestfailed' as const, message })),
   ];
+  const failures = browserFailures
+    .filter((failure) => !allowExpectedBrowserFailures.isAllowed(failure))
+    .map((failure) => `${failure.category}: ${failure.message}`);
 
   if (failures.length === 0) {
     return;
@@ -271,12 +281,14 @@ async function assertBrowserHealth(
 
 export const test = base.extend<TestFixtures>({
   allowExpectedBrowserFailures: async ({}, use) => {
-    let expectedBrowserFailures = false;
+    const expectedBrowserFailures: ExpectedBrowserFailure[] = [];
     await use({
-      allow: () => {
-        expectedBrowserFailures = true;
+      allow: (...failures: ExpectedBrowserFailure[]) => {
+        expectedBrowserFailures.push(...failures);
       },
-      isAllowed: () => expectedBrowserFailures,
+      isAllowed: (failure: BrowserFailure) => expectedBrowserFailures.some(
+        (expected) => expected.category === failure.category && failure.message.includes(expected.message),
+      ),
     });
   },
 
@@ -312,7 +324,7 @@ export const test = base.extend<TestFixtures>({
       consoleMessages,
       pageErrors,
       failedRequests,
-      allowExpectedBrowserFailures.isAllowed(),
+      allowExpectedBrowserFailures,
     );
   },
 

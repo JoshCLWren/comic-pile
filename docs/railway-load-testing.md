@@ -81,7 +81,8 @@ make railway-control-results
 ```
 
 The result embeds the same redacted metadata object. Database identity is a SHA-256 digest of
-the configured database URL; credentials, tokens, cookies, and complete URLs are never saved.
+the configured database URL; database URLs, credentials, tokens, and cookies are never saved. The
+deployment URL is recorded in `run.base_url`.
 
 ### Request-level failure diagnostics
 
@@ -194,8 +195,7 @@ include credentials or database URLs in them.
 After at least two compatible `control-results` runs exist:
 
 ```bash
-uv run python scripts/compare_railway_runs.py \
-  benchmarks/results/control-results-*.json
+make railway-control-compare
 ```
 
 The comparison groups combined and route-level results by route, concurrency, scheduling

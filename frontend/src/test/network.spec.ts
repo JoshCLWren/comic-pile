@@ -52,7 +52,7 @@ test.describe('Network & API Tests', () => {
   });
 
   test('should retry failed requests', async ({ authenticatedPage, allowExpectedBrowserFailures }) => {
-    allowExpectedBrowserFailures.allow();
+    allowExpectedBrowserFailures.allow({ category: 'requestfailed', message: '/api/threads/' });
     let attemptCount = 0;
     await authenticatedPage.route('**/api/threads/**', async route => {
       attemptCount++;

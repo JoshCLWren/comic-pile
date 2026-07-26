@@ -43,6 +43,11 @@ def _as_list(value: object) -> list[object]:
     return list(value) if isinstance(value, list) else []
 
 
+def _optional_float(value: object) -> float | None:
+    """Convert numeric JSON values while preserving missing measurements."""
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
 def _stats(values: list[float]) -> dict[str, float | None]:
     """Calculate summary statistics over per-run values."""
     if not values:
@@ -128,7 +133,7 @@ def _rows(
 def _failures(result: dict[str, object], scenario: str) -> list[dict[str, object]]:
     """Return diagnostic failures for one result and scenario."""
     diagnostics = _as_dict(result.get("failure_diagnostics", {}))
-    failures = _as_list(diagnostics.get("failures", []))
+    failures = _as_list(diagnostics.get("measurement_failures", diagnostics.get("failures", [])))
     return [
         _as_dict(failure)
         for failure in failures
@@ -179,12 +184,16 @@ def compare_documents(
         summaries = [_as_dict(item["summary"]) for item in observations]
         latencies = [_as_dict(summary["latency_ms"]) for summary in summaries]
         rps = [float(summary["requests_per_second"]) for summary in summaries]
-        p50 = [float(latency["p50"]) for latency in latencies]
-        p95 = [float(latency["p95"]) for latency in latencies]
-        p99 = [float(latency["p99"]) for latency in latencies]
-        maximum_latency = [
-            float(latency.get("max", latency["p99"])) for latency in latencies
-        ]
+        p50 = [value for latency in latencies if (value := _optional_float(latency.get("p50"))) is not None]
+        p95 = [value for latency in latencies if (value := _optional_float(latency.get("p95"))) is not None]
+        p99 = [value for latency in latencies if (value := _optional_float(latency.get("p99"))) is not None]
+        maximum_latency: list[float] = []
+        for latency in latencies:
+            maximum = _optional_float(latency.get("max"))
+            if maximum is None:
+                maximum = _optional_float(latency.get("p99"))
+            if maximum is not None:
+                maximum_latency.append(maximum)
         total_requests = sum(int(summary["requests"]) for summary in summaries)
         total_errors = sum(int(summary["error_requests"]) for summary in summaries)
         failures = [
@@ -206,8 +215,8 @@ def compare_documents(
             for failure in failures
             if failure.get("http_status") is not None
         )
-        p95_range = max(p95) - min(p95)
-        p95_median = statistics.median(p95)
+        p95_range = max(p95) - min(p95) if p95 else None
+        p95_median = statistics.median(p95) if p95 else None
         warnings: list[str] = []
         rps_stats = _stats(rps)
         if total_errors:
@@ -215,7 +224,7 @@ def compare_documents(
         cv = rps_stats["coefficient_of_variation"]
         if cv is not None and cv > 0.10:
             warnings.append(f"RPS coefficient of variation is {cv:.1%}")
-        if p95_median and p95_range > p95_median * 0.15:
+        if p95_median is not None and p95_range is not None and p95_range > p95_median * 0.15:
             warnings.append(f"p95 range is {p95_range:.2f} ms ({p95_range / p95_median:.1%})")
         if len(observations) != len(documents):
             warnings.append(f"missing from {len(documents) - len(observations)} run(s)")
@@ -302,13 +311,17 @@ def _print_report(report: dict[str, object]) -> None:
         group = _as_dict(group_value)
         rps = _as_dict(group["rps"])
         p95 = _as_dict(group["p95_ms"])
+        rps_median = rps.get("median")
+        rps_cv = rps.get("coefficient_of_variation")
+        p95_median = p95.get("median")
         group_warnings = _as_list(group["warnings"])
         warning_text = f" warnings={group_warnings}" if group_warnings else ""
         print(
             f"scenario={group['scenario']} c={group['concurrency']} "
             f"runs={group['run_count']} "
-            f"rps={rps['median']:.2f} median (cv={rps['coefficient_of_variation'] or 0:.1%}) "
-            f"p95={p95['median']:.2f} ms median{warning_text}"
+            f"rps={'n/a' if rps_median is None else f'{rps_median:.2f}'} median "
+            f"(cv={'n/a' if rps_cv is None else f'{rps_cv:.1%}'}) "
+            f"p95={'n/a' if p95_median is None else f'{p95_median:.2f}'} ms median{warning_text}"
         )
 
 

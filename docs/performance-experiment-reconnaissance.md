@@ -298,7 +298,7 @@ migration state, traffic volume, and availability of an isolated benchmark envir
     {"workload": "large paginated list", "method": "GET", "path": "/api/v1/threads/{thread_id}/issues?page_size=100", "handler": "app.api.issue.list_issues", "auth_required": true, "read_only": true, "safe_for_production_load_test": false, "notes": "Requires a large fixture thread."},
     {"workload": "CPU-heavy read candidate", "method": "GET", "path": "/api/v1/threads/{thread_id}/connected", "handler": "app.api.dependency.get_thread_connected_threads", "auth_required": true, "read_only": true, "safe_for_production_load_test": false, "notes": "Profile before treating as CPU-heavy."},
     {"workload": "database-heavy read", "method": "GET", "path": "/api/sessions/{session_id}/details", "handler": "app.api.session.get_session_details", "auth_required": true, "read_only": true, "safe_for_production_load_test": false, "notes": "Multiple queries."},
-    {"workload": "validation-error path", "method": "POST", "path": "/api/threads/", "handler": "app.api.thread.create_thread", "auth_required": true, "read_only": true, "safe_for_production_load_test": true, "notes": "Malformed payload must fail before mutation."},
+    {"workload": "validation-error path", "method": "POST", "path": "/api/threads/", "handler": "app.api.thread.create_thread", "auth_required": true, "read_only": false, "safe_for_production_load_test": false, "notes": "Malformed payload must fail before mutation."},
     {"workload": "safe write", "method": "POST", "path": "/api/v1/collections/", "handler": "app.api.collection.create_collection", "auth_required": true, "read_only": false, "safe_for_production_load_test": false, "notes": "Only isolated benchmark DB."}
   ],
   "runtime_candidates": [

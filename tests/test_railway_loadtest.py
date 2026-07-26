@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import cast
 
 import httpx
@@ -141,7 +142,7 @@ async def test_transport_exception_records_correlation_fields() -> None:
     assert sample.failure["request_id"]
 
 
-def test_failure_log_is_ndjson(tmp_path) -> None:
+def test_failure_log_is_ndjson(tmp_path: Path) -> None:
     """Failure logs contain one JSON object per line."""
     path = tmp_path / "failures.ndjson"
     failures = [{"request_id": "abc", "timestamp": "2026-01-01T00:00:00.000Z"}]

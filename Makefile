@@ -4,7 +4,7 @@
 .PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
 .PHONY: test-e2e-prod-smoke check-prod-assets clone-prod-export clone-prod-import
-.PHONY: verify-reading-order railway-control-baseline
+.PHONY: verify-reading-order railway-control-baseline railway-control-compare
 .PHONY: railway-control-results railway-control-c32-diagnostic railway-control-c32-compare
 
 # Configuration

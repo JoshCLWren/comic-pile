@@ -1,9 +1,10 @@
 {
   "schema_version": 1,
-  "created_at": "2026-07-25T19:59:31.951821+00:00",
+  "created_at": "2026-07-26T16:35:09.698943+00:00",
   "run_count": 3,
   "compatibility_warnings": [],
   "warnings": [],
+  "run_set_warnings": [],
   "groups": [
     {
       "scenario": "/api/auth/csrf",
@@ -44,6 +45,50 @@
         "standard_deviation": 29.309866562602746,
         "coefficient_of_variation": 0.22153282925405818
       },
+      "maximum_latency_ms": {
+        "mean": 304.0392886614427,
+        "median": 293.531859992072,
+        "minimum": 286.05242299090605,
+        "maximum": 332.53358300135005,
+        "standard_deviation": 24.958547672301762,
+        "coefficient_of_variation": 0.0820898765491255
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 1.7143925581783104,
+          "p50_ms": 85.43395700689871,
+          "p95_ms": 89.07459300826304,
+          "p99_ms": 163.05016599653754,
+          "maximum_latency_ms": 286.05242299090605,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 1.7308422048625096,
+          "p50_ms": 83.74572500179056,
+          "p95_ms": 88.05589900293853,
+          "p99_ms": 104.68015600054059,
+          "maximum_latency_ms": 293.531859992072,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 1.7213936479137975,
+          "p50_ms": 85.02407000923995,
+          "p95_ms": 90.14279099937994,
+          "p99_ms": 129.18421199719887,
+          "maximum_latency_ms": 332.53358300135005,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -85,6 +130,50 @@
         "standard_deviation": 12.757894993186499,
         "coefficient_of_variation": 0.08288970813644113
       },
+      "maximum_latency_ms": {
+        "mean": 287.39593399708,
+        "median": 270.28924199112225,
+        "minimum": 261.57813699683174,
+        "maximum": 330.3204230032861,
+        "standard_deviation": 37.427992931605594,
+        "coefficient_of_variation": 0.13023146295446847
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 3.4317081030098047,
+          "p50_ms": 83.6224679951556,
+          "p95_ms": 89.8321830027271,
+          "p99_ms": 168.54818200226873,
+          "maximum_latency_ms": 270.28924199112225,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 3.4431665737130004,
+          "p50_ms": 82.88571500452235,
+          "p95_ms": 91.07247699284926,
+          "p99_ms": 145.13191299920436,
+          "maximum_latency_ms": 261.57813699683174,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 3.439763906291913,
+          "p50_ms": 83.18646899715532,
+          "p95_ms": 88.5228839906631,
+          "p99_ms": 148.06221101025585,
+          "maximum_latency_ms": 330.3204230032861,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -126,6 +215,50 @@
         "standard_deviation": 5.48889252050617,
         "coefficient_of_variation": 0.02747905433591981
       },
+      "maximum_latency_ms": {
+        "mean": 358.50709599617403,
+        "median": 364.23723099869676,
+        "minimum": 335.9225539898034,
+        "maximum": 375.3615030000219,
+        "standard_deviation": 20.334293941959373,
+        "coefficient_of_variation": 0.05671936251486743
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 6.8232048072031795,
+          "p50_ms": 83.47944900742732,
+          "p95_ms": 93.80557300755754,
+          "p99_ms": 204.951893989346,
+          "maximum_latency_ms": 375.3615030000219,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 6.873149088316373,
+          "p50_ms": 82.62711900169961,
+          "p95_ms": 90.27093500480987,
+          "p99_ms": 194.01281399768777,
+          "maximum_latency_ms": 364.23723099869676,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 6.863528571201789,
+          "p50_ms": 83.05462700081989,
+          "p95_ms": 91.37457099859603,
+          "p99_ms": 200.27998799923807,
+          "maximum_latency_ms": 335.9225539898034,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -167,6 +300,50 @@
         "standard_deviation": 22.213586613625765,
         "coefficient_of_variation": 0.14488546842283087
       },
+      "maximum_latency_ms": {
+        "mean": 432.89919733069837,
+        "median": 483.4131859970512,
+        "minimum": 309.8412209947128,
+        "maximum": 505.44318500033114,
+        "standard_deviation": 107.13906555944997,
+        "coefficient_of_variation": 0.24749194782545367
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 13.614190575997785,
+          "p50_ms": 83.3471319929231,
+          "p95_ms": 95.73888398881536,
+          "p99_ms": 144.31730700016487,
+          "maximum_latency_ms": 483.4131859970512,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 13.715217517870304,
+          "p50_ms": 82.9675979912281,
+          "p95_ms": 92.21438399981707,
+          "p99_ms": 137.0177450007759,
+          "maximum_latency_ms": 505.44318500033114,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 13.668924274062663,
+          "p50_ms": 82.76101900264621,
+          "p95_ms": 95.18128199852072,
+          "p99_ms": 178.61970099329483,
+          "maximum_latency_ms": 309.8412209947128,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -208,6 +385,50 @@
         "standard_deviation": 27.5130721922715,
         "coefficient_of_variation": 0.1452992452999293
       },
+      "maximum_latency_ms": {
+        "mean": 453.3965696609812,
+        "median": 468.6703059996944,
+        "minimum": 374.76606998825446,
+        "maximum": 516.7533329949947,
+        "standard_deviation": 72.21537911237954,
+        "coefficient_of_variation": 0.15927641262565626
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 26.230982151297894,
+          "p50_ms": 85.64691699575633,
+          "p95_ms": 126.62579699826892,
+          "p99_ms": 197.70180199702736,
+          "maximum_latency_ms": 516.7533329949947,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 26.358523075182926,
+          "p50_ms": 85.4830820026109,
+          "p95_ms": 120.77424899325706,
+          "p99_ms": 158.63450900360476,
+          "maximum_latency_ms": 374.76606998825446,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 26.403679879146868,
+          "p50_ms": 85.19062500272412,
+          "p95_ms": 122.74645500292536,
+          "p99_ms": 211.727318004705,
+          "maximum_latency_ms": 468.6703059996944,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -249,6 +470,50 @@
         "standard_deviation": 37.51088243863248,
         "coefficient_of_variation": 0.11510408441683986
       },
+      "maximum_latency_ms": {
+        "mean": 548.3282686618622,
+        "median": 546.678623999469,
+        "minimum": 498.1321300001582,
+        "maximum": 600.1740519859595,
+        "standard_deviation": 51.04095861436394,
+        "coefficient_of_variation": 0.09308467487719364
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 47.506508246863845,
+          "p50_ms": 105.05375699722208,
+          "p95_ms": 199.2560950020561,
+          "p99_ms": 295.38243600109126,
+          "maximum_latency_ms": 498.1321300001582,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 44.9579876127329,
+          "p50_ms": 114.72293401311617,
+          "p95_ms": 260.02886300557293,
+          "p99_ms": 367.76929200277664,
+          "maximum_latency_ms": 600.1740519859595,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 47.221816649112284,
+          "p50_ms": 104.61108099843841,
+          "p95_ms": 211.13203499407973,
+          "p99_ms": 314.50816900178324,
+          "maximum_latency_ms": 546.678623999469,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": [
         "p95 range is 60.77 ms (28.8%)"
       ]
@@ -292,6 +557,50 @@
         "standard_deviation": 5.279714545595251,
         "coefficient_of_variation": 0.044570435374550035
       },
+      "maximum_latency_ms": {
+        "mean": 259.5755499981654,
+        "median": 249.8789639939787,
+        "minimum": 215.28103300079238,
+        "maximum": 313.5666529997252,
+        "standard_deviation": 49.85512621332031,
+        "coefficient_of_variation": 0.1920640299661223
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 1.7199407541594698,
+          "p50_ms": 91.53597000113223,
+          "p95_ms": 100.7863420090871,
+          "p99_ms": 124.55422199855093,
+          "maximum_latency_ms": 313.5666529997252,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 1.7308422048625096,
+          "p50_ms": 90.19898100814316,
+          "p95_ms": 97.84892099560238,
+          "p99_ms": 115.42888698750176,
+          "maximum_latency_ms": 249.8789639939787,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 1.7269465306490033,
+          "p50_ms": 90.87645499676,
+          "p95_ms": 100.06503399927169,
+          "p99_ms": 115.39021199860144,
+          "maximum_latency_ms": 215.28103300079238,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -333,6 +642,50 @@
         "standard_deviation": 20.341918284517867,
         "coefficient_of_variation": 0.11285198599082928
       },
+      "maximum_latency_ms": {
+        "mean": 351.63338533311617,
+        "median": 368.56429500039667,
+        "minimum": 290.802399002132,
+        "maximum": 395.5334619968198,
+        "standard_deviation": 54.37959788027607,
+        "coefficient_of_variation": 0.15464856338586888
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 3.4372610287428302,
+          "p50_ms": 90.87641700170934,
+          "p95_ms": 105.77095599728636,
+          "p99_ms": 202.89328099170234,
+          "maximum_latency_ms": 290.802399002132,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 3.448720068186731,
+          "p50_ms": 89.99518401105888,
+          "p95_ms": 103.55020100541878,
+          "p99_ms": 163.51452500384767,
+          "maximum_latency_ms": 368.56429500039667,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 3.439763906291913,
+          "p50_ms": 89.20350500557106,
+          "p95_ms": 105.31433600408491,
+          "p99_ms": 174.3514400004642,
+          "maximum_latency_ms": 395.5334619968198,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -374,6 +727,50 @@
         "standard_deviation": 34.21483119989673,
         "coefficient_of_variation": 0.1417849782348238
       },
+      "maximum_latency_ms": {
+        "mean": 434.03057734152145,
+        "median": 463.60157401068136,
+        "minimum": 368.57273800706025,
+        "maximum": 469.9174200068228,
+        "standard_deviation": 56.776042706531136,
+        "coefficient_of_variation": 0.13081115863838394
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 6.828752128184646,
+          "p50_ms": 90.52750399860088,
+          "p95_ms": 125.6851549987914,
+          "p99_ms": 271.92128699971363,
+          "maximum_latency_ms": 463.60157401068136,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 6.889791095794137,
+          "p50_ms": 89.16274199145846,
+          "p95_ms": 103.47094900498632,
+          "p99_ms": 247.64718899677973,
+          "maximum_latency_ms": 469.9174200068228,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 6.874625626288615,
+          "p50_ms": 89.38065699476283,
+          "p95_ms": 101.52228899823967,
+          "p99_ms": 204.37629500520416,
+          "maximum_latency_ms": 368.57273800706025,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": [
         "p95 range is 24.16 ms (23.4%)"
       ]
@@ -417,6 +814,50 @@
         "standard_deviation": 24.490126838514094,
         "coefficient_of_variation": 0.10649676244716398
       },
+      "maximum_latency_ms": {
+        "mean": 444.53842799703125,
+        "median": 470.12104200257454,
+        "minimum": 371.99733199668117,
+        "maximum": 491.49690999183804,
+        "standard_deviation": 63.72511192436314,
+        "coefficient_of_variation": 0.14335118835843078
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 13.647477105523453,
+          "p50_ms": 90.0353519973578,
+          "p95_ms": 149.20841999992263,
+          "p99_ms": 239.32213200896513,
+          "maximum_latency_ms": 491.49690999183804,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 13.73186219932403,
+          "p50_ms": 89.54061500844546,
+          "p95_ms": 132.35594901198056,
+          "p99_ms": 202.17133799451403,
+          "maximum_latency_ms": 470.12104200257454,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 13.691114086195881,
+          "p50_ms": 89.19008600059897,
+          "p95_ms": 141.9775019894587,
+          "p99_ms": 248.3902300009504,
+          "maximum_latency_ms": 371.99733199668117,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -458,6 +899,50 @@
         "standard_deviation": 12.934678816034419,
         "coefficient_of_variation": 0.05589321243367912
       },
+      "maximum_latency_ms": {
+        "mean": 485.56797499380383,
+        "median": 503.3825739956228,
+        "minimum": 432.4070629954804,
+        "maximum": 520.9142879903084,
+        "standard_deviation": 46.865788932525,
+        "coefficient_of_variation": 0.0965174627365469
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 26.286450500105882,
+          "p50_ms": 94.87828701094259,
+          "p95_ms": 179.9738090048777,
+          "p99_ms": 234.25860599672887,
+          "maximum_latency_ms": 503.3825739956228,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 26.402888357026278,
+          "p50_ms": 95.24734500155319,
+          "p95_ms": 177.48005100293085,
+          "p99_ms": 217.29871300340164,
+          "maximum_latency_ms": 432.4070629954804,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 26.448009247254564,
+          "p50_ms": 92.93059700576123,
+          "p95_ms": 175.2535980049288,
+          "p99_ms": 242.69578899838962,
+          "maximum_latency_ms": 520.9142879903084,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -499,6 +984,50 @@
         "standard_deviation": 42.12740643085397,
         "coefficient_of_variation": 0.11212150084849692
       },
+      "maximum_latency_ms": {
+        "mean": 3750.005333664982,
+        "median": 640.649624998332,
+        "minimum": 512.9623289976735,
+        "maximum": 10096.404046998941,
+        "standard_deviation": 5496.5133023440585,
+        "coefficient_of_variation": 1.4657347958948546
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 47.60634679309193,
+          "p50_ms": 133.33439201232977,
+          "p95_ms": 232.70180899999104,
+          "p99_ms": 347.76274500472937,
+          "maximum_latency_ms": 512.9623289976735,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 45.074459083232206,
+          "p50_ms": 146.41149900853634,
+          "p95_ms": 296.1395650054328,
+          "p99_ms": 424.1823099873727,
+          "maximum_latency_ms": 10096.404046998941,
+          "errors": 1
+        },
+        {
+          "run": 3,
+          "rps": 47.33271805035491,
+          "p50_ms": 134.42717998987064,
+          "p95_ms": 252.3881840024842,
+          "p99_ms": 355.2448090049438,
+          "maximum_latency_ms": 640.649624998332,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": [
         "nonzero error rate",
         "p95 range is 63.44 ms (25.1%)"
@@ -543,6 +1072,50 @@
         "standard_deviation": 26.433593187334544,
         "coefficient_of_variation": 0.19933092972485786
       },
+      "maximum_latency_ms": {
+        "mean": 313.2106986643824,
+        "median": 313.5666529997252,
+        "minimum": 293.531859992072,
+        "maximum": 332.53358300135005,
+        "standard_deviation": 19.503297850357246,
+        "coefficient_of_variation": 0.062268938875730415
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 3.43433331233778,
+          "p50_ms": 88.25819399498869,
+          "p95_ms": 97.99725799530279,
+          "p99_ms": 163.05016599653754,
+          "maximum_latency_ms": 313.5666529997252,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 3.4616844097250192,
+          "p50_ms": 86.83726799790747,
+          "p95_ms": 95.30178501154296,
+          "p99_ms": 115.42888698750176,
+          "maximum_latency_ms": 293.531859992072,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 3.4483401785628005,
+          "p50_ms": 88.17592599370982,
+          "p95_ms": 97.45509400090668,
+          "p99_ms": 119.3557420047,
+          "maximum_latency_ms": 332.53358300135005,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -584,6 +1157,50 @@
         "standard_deviation": 22.66916564310197,
         "coefficient_of_variation": 0.12741756644766725
       },
+      "maximum_latency_ms": {
+        "mean": 351.63338533311617,
+        "median": 368.56429500039667,
+        "minimum": 290.802399002132,
+        "maximum": 395.5334619968198,
+        "standard_deviation": 54.37959788027607,
+        "coefficient_of_variation": 0.15464856338586888
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 6.868969131752635,
+          "p50_ms": 87.50136400340125,
+          "p95_ms": 99.33620800438803,
+          "p99_ms": 202.15130900032818,
+          "maximum_latency_ms": 290.802399002132,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 6.891886641899732,
+          "p50_ms": 86.70276300108526,
+          "p95_ms": 98.74390799086541,
+          "p99_ms": 157.23446499032434,
+          "maximum_latency_ms": 368.56429500039667,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 6.879527812583826,
+          "p50_ms": 86.5386780060362,
+          "p95_ms": 97.53328599617817,
+          "p99_ms": 174.3514400004642,
+          "maximum_latency_ms": 395.5334619968198,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -625,6 +1242,50 @@
         "standard_deviation": 18.16506225220026,
         "coefficient_of_variation": 0.08256404347679179
       },
+      "maximum_latency_ms": {
+        "mean": 434.03057734152145,
+        "median": 463.60157401068136,
+        "minimum": 368.57273800706025,
+        "maximum": 469.9174200068228,
+        "standard_deviation": 56.776042706531136,
+        "coefficient_of_variation": 0.13081115863838394
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 13.651956935387824,
+          "p50_ms": 87.40477501123678,
+          "p95_ms": 105.7271280005807,
+          "p99_ms": 239.9381230061408,
+          "maximum_latency_ms": 463.60157401068136,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 13.76294018411051,
+          "p50_ms": 86.21067499916535,
+          "p95_ms": 97.32041099050548,
+          "p99_ms": 215.72092499991413,
+          "maximum_latency_ms": 469.9174200068228,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 13.738154197490402,
+          "p50_ms": 86.81206000619568,
+          "p95_ms": 97.0768769911956,
+          "p99_ms": 204.37629500520416,
+          "maximum_latency_ms": 368.57273800706025,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -666,6 +1327,50 @@
         "standard_deviation": 16.536309170708076,
         "coefficient_of_variation": 0.08573691899955435
       },
+      "maximum_latency_ms": {
+        "mean": 456.31247566295013,
+        "median": 491.49690999183804,
+        "minimum": 371.99733199668117,
+        "maximum": 505.44318500033114,
+        "standard_deviation": 73.35125926152058,
+        "coefficient_of_variation": 0.16074787163106324
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 27.26166768152124,
+          "p50_ms": 87.1875979937613,
+          "p95_ms": 124.39962300413754,
+          "p99_ms": 194.40896000014618,
+          "maximum_latency_ms": 491.49690999183804,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 27.447079717194335,
+          "p50_ms": 86.83176699560136,
+          "p95_ms": 106.14426400570665,
+          "p99_ms": 175.62183699919842,
+          "maximum_latency_ms": 505.44318500033114,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 27.360038360258542,
+          "p50_ms": 86.54439699603245,
+          "p95_ms": 124.3365379923489,
+          "p99_ms": 208.58723699348047,
+          "maximum_latency_ms": 371.99733199668117,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -707,6 +1412,50 @@
         "standard_deviation": 12.587337196716414,
         "coefficient_of_variation": 0.058656763828840816
       },
+      "maximum_latency_ms": {
+        "mean": 490.02489466026117,
+        "median": 516.7533329949947,
+        "minimum": 432.4070629954804,
+        "maximum": 520.9142879903084,
+        "standard_deviation": 49.94185900556283,
+        "coefficient_of_variation": 0.10191698329977295
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 52.51743265140378,
+          "p50_ms": 90.19705200626049,
+          "p95_ms": 167.19081599148922,
+          "p99_ms": 217.02661499148235,
+          "maximum_latency_ms": 516.7533329949947,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 52.7614114322092,
+          "p50_ms": 90.03125000162981,
+          "p95_ms": 162.9097599943634,
+          "p99_ms": 200.96669600752648,
+          "maximum_latency_ms": 432.4070629954804,
+          "errors": 0
+        },
+        {
+          "run": 3,
+          "rps": 52.85168912640143,
+          "p50_ms": 89.38688100897707,
+          "p95_ms": 160.7504040002823,
+          "p99_ms": 225.78601000714116,
+          "maximum_latency_ms": 520.9142879903084,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": []
     },
     {
@@ -748,6 +1497,50 @@
         "standard_deviation": 38.274852954035815,
         "coefficient_of_variation": 0.10842887464195829
       },
+      "maximum_latency_ms": {
+        "mean": 3750.005333664982,
+        "median": 640.649624998332,
+        "minimum": 512.9623289976735,
+        "maximum": 10096.404046998941,
+        "standard_deviation": 5496.5133023440585,
+        "coefficient_of_variation": 1.4657347958948546
+      },
+      "observations": [
+        {
+          "run": 1,
+          "rps": 95.11285503995578,
+          "p50_ms": 116.63275700993836,
+          "p95_ms": 219.52793998934794,
+          "p99_ms": 323.69706200552173,
+          "maximum_latency_ms": 512.9623289976735,
+          "errors": 0
+        },
+        {
+          "run": 2,
+          "rps": 90.0324466959651,
+          "p50_ms": 128.56567899871152,
+          "p95_ms": 277.82719500828534,
+          "p99_ms": 396.3003539975034,
+          "maximum_latency_ms": 10096.404046998941,
+          "errors": 1
+        },
+        {
+          "run": 3,
+          "rps": 94.5545346994672,
+          "p50_ms": 116.94582398922648,
+          "p95_ms": 233.90867600392085,
+          "p99_ms": 338.98764901096,
+          "maximum_latency_ms": 640.649624998332,
+          "errors": 0
+        }
+      ],
+      "errors_by_route": {},
+      "errors_by_exception_type": {},
+      "failure_timestamps": [],
+      "failure_request_ids": [],
+      "timeout_count": 0,
+      "non_2xx_status_distribution": {},
+      "failures": [],
       "warnings": [
         "nonzero error rate",
         "p95 range is 58.30 ms (24.9%)"
