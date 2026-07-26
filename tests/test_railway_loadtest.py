@@ -50,6 +50,16 @@ def test_summarize_reports_percentiles_statuses_and_bytes() -> None:
     assert result["status_counts"] == {"200": 2, "503": 1, "transport_error": 1}
 
 
+def test_summarize_counts_redirects_as_errors() -> None:
+    """Summary success accounting matches request-level 2xx handling."""
+    samples = [RequestSample("/health", 10.0, 302, 0, "HTTPStatus302")]
+
+    result = summarize(samples, 1.0)
+
+    assert result["successful_requests"] == 0
+    assert result["error_requests"] == 1
+
+
 def test_summarize_by_route_keeps_route_results_separate() -> None:
     """Combined scenarios expose independent statistics for every route."""
     samples = [

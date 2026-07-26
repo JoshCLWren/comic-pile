@@ -85,7 +85,8 @@ test.describe('CollectionDialog Success Feedback', () => {
     await expect(toast).not.toBeVisible();
   });
 
-  test('should not show success toast on network error', async ({ authenticatedWithThreadsPage, context }) => {
+  test('should not show success toast on network error', async ({ authenticatedWithThreadsPage, context, allowExpectedBrowserFailures }) => {
+    allowExpectedBrowserFailures.allow();
     await authenticatedWithThreadsPage.goto('/');
     await expect(authenticatedWithThreadsPage.locator('#root')).toBeVisible();
     const collectionsEnabled = await getCollectionsEnabled(authenticatedWithThreadsPage);

@@ -51,7 +51,8 @@ test.describe('Network & API Tests', () => {
     expect(authHeader).toMatch(/Bearer .+/);
   });
 
-  test('should retry failed requests', async ({ authenticatedPage }) => {
+  test('should retry failed requests', async ({ authenticatedPage, allowExpectedBrowserFailures }) => {
+    allowExpectedBrowserFailures.allow();
     let attemptCount = 0;
     await authenticatedPage.route('**/api/threads/**', async route => {
       attemptCount++;

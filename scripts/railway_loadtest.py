@@ -154,7 +154,7 @@ def summarize(samples: list[RequestSample], elapsed_s: float) -> dict[str, objec
         str(sample.status_code) if sample.status_code is not None else "transport_error"
         for sample in samples
     )
-    successful = sum(200 <= (sample.status_code or 0) < 400 for sample in samples)
+    successful = sum(200 <= (sample.status_code or 0) < 300 for sample in samples)
     return {
         "requests": len(samples),
         "successful_requests": successful,
