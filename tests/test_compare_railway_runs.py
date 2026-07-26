@@ -150,7 +150,8 @@ def test_every_error_group_has_failure_or_route_diagnostic() -> None:
     report = compare_documents([first, second])
 
     for group in _groups(report):
-        if group["total_errors"] > 0:
+        total_errors = group["total_errors"]
+        if isinstance(total_errors, int) and total_errors > 0:
             assert group["failures"] or group["errors_by_route"]
 
 
