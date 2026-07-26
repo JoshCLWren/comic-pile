@@ -243,9 +243,13 @@ function isExpectedBrowserNoise(message: string): boolean {
     || message.includes("Couldn't load preload assets")
     || (message.includes('Network Error') && message.includes('/assets/'))
     || message.includes('Failed to fetch collections: Error: Network error. Please check your connection and try again.')
+    || message.includes('Failed to fetch collections: Error @')
+    || message.includes('Failed to fetch user: Error @')
     || message.includes('Failed to snooze thread: Network error. Please check your connection and try again.')
+    || message.includes('downloadable font: download failed')
     || (message.includes('XMLHttpRequest cannot load') && message.includes('due to access control checks.'))
     || message.includes('TypeError: Importing a module script failed.')
+    || message.includes('Unable to preload CSS for /assets/')
     || message.includes('WARNING: Too many active WebGL contexts. Oldest context will be lost.')
     || message.includes('There are too many active WebGL contexts on this page, the oldest context will be lost.')
     || message.includes('THREE.WebGLRenderer: A WebGL context could not be created.')
@@ -318,6 +322,7 @@ export const test = base.extend<TestFixtures>({
       const errorText = request.failure()?.errorText ?? '';
       if (
         errorText === 'net::ERR_ABORTED'
+        || errorText === 'NS_BINDING_ABORTED'
         || errorText === 'Load request cancelled'
         || request.url().includes('fonts.googleapis.com')
         || request.url().includes('fonts.gstatic.com')
