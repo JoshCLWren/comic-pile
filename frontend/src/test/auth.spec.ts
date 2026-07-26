@@ -72,7 +72,8 @@ test.describe('Authentication Flow', () => {
     });
   });
 
-  test('should show error for invalid credentials', async ({ page }) => {
+  test('should show error for invalid credentials', async ({ page, allowExpectedBrowserFailures }) => {
+    allowExpectedBrowserFailures.allow();
     const user = generateTestUser();
 
     await page.goto('/login');
