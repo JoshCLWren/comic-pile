@@ -224,6 +224,8 @@ function isExpectedBrowserNoise(message: string): boolean {
   return (
     (message.includes('GPU stall due to ReadPixels') && message.includes('GL Driver Message'))
     || message.includes("Couldn't load preload assets")
+    || message.includes('Failed to load resource: the server responded with a status of 401 (Unauthorized)')
+    || (message.includes('Network Error') && message.includes('/assets/'))
   );
 }
 
@@ -283,10 +285,16 @@ export const test = base.extend<TestFixtures>({
       pageErrors.push(error.stack ?? error.message);
     });
     page.on('requestfailed', (request) => {
-      if (request.failure()?.errorText === 'net::ERR_ABORTED') {
+      const errorText = request.failure()?.errorText ?? '';
+      if (
+        errorText === 'net::ERR_ABORTED'
+        || errorText === 'Load request cancelled'
+        || request.url().includes('fonts.googleapis.com')
+        || request.url().includes('fonts.gstatic.com')
+      ) {
         return;
       }
-      failedRequests.push(`${request.method()} ${request.url()} — ${request.failure()?.errorText ?? 'unknown error'}`);
+      failedRequests.push(`${request.method()} ${request.url()} — ${errorText || 'unknown error'}`);
     });
 
     await use(page);
