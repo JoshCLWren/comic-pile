@@ -248,6 +248,10 @@ function isExpectedBrowserNoise(message: string): boolean {
     || message.includes('TypeError: Importing a module script failed.')
     || message.includes('WARNING: Too many active WebGL contexts. Oldest context will be lost.')
     || message.includes('There are too many active WebGL contexts on this page, the oldest context will be lost.')
+    || message.includes('THREE.WebGLRenderer: A WebGL context could not be created.')
+    || message.includes('THREE.WebGLRenderer: Error creating WebGL context.')
+    || message.includes('WebGL initialization failed: Error')
+    || message.includes('Failed to create WebGL context: WebGL creation failed:')
   );
 }
 
