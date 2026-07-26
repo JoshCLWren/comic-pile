@@ -227,6 +227,8 @@ function isExpectedBrowserNoise(message: string): boolean {
     || message.includes('Failed to load resource: the server responded with a status of 401 (Unauthorized)')
     || (message.includes('Network Error') && message.includes('/assets/'))
     || message.includes('Failed to fetch collections: Error: Network error. Please check your connection and try again.')
+    || message.includes('Failed to snooze thread: Network error. Please check your connection and try again.')
+    || (message.includes('XMLHttpRequest cannot load') && message.includes('due to access control checks.'))
     || message.includes('TypeError: Importing a module script failed.')
     || message.includes('WARNING: Too many active WebGL contexts. Oldest context will be lost.')
   );
