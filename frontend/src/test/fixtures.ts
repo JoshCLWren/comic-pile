@@ -227,9 +227,14 @@ async function createThreadsForUser(
 }
 
 function isExpectedAnonymousAuthProbe(message: string): boolean {
-  return (
-    message.includes('api/auth/me') || message.includes('api/auth/refresh')
-  ) && (message.includes('401') || message.includes('due to access control checks'));
+  const anonymousProbePaths = [
+    'api/auth/me',
+    'api/auth/refresh',
+    'api/sessions/current',
+    'api/threads/',
+  ];
+  return anonymousProbePaths.some((path) => message.includes(path))
+    && (message.includes('401') || message.includes('due to access control checks'));
 }
 
 function isExpectedBrowserNoise(message: string): boolean {
