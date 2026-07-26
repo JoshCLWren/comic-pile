@@ -231,6 +231,7 @@ function isExpectedBrowserNoise(message: string): boolean {
     || (message.includes('XMLHttpRequest cannot load') && message.includes('due to access control checks.'))
     || message.includes('TypeError: Importing a module script failed.')
     || message.includes('WARNING: Too many active WebGL contexts. Oldest context will be lost.')
+    || message.includes('There are too many active WebGL contexts on this page, the oldest context will be lost.')
   );
 }
 
