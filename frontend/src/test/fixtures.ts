@@ -1,4 +1,4 @@
-import { test as base, type APIRequestContext, type Page } from '@playwright/test';
+import { test as base, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
 import { getCollectionsEnabled } from './helpers';
 
 type TestFixtures = {
@@ -210,9 +210,58 @@ async function createThreadsForUser(
   }
 }
 
+function isExpectedAnonymousAuthProbe(message: string): boolean {
+  return (
+    message.includes('api/auth/me') || message.includes('api/auth/refresh')
+  ) && message.includes('401');
+}
+
+async function assertBrowserHealth(
+  testInfo: TestInfo,
+  consoleMessages: string[],
+  pageErrors: string[],
+  failedRequests: string[],
+): Promise<void> {
+  const unexpectedConsoleMessages = consoleMessages.filter(
+    (message) => !isExpectedAnonymousAuthProbe(message),
+  );
+  const failures = [
+    ...unexpectedConsoleMessages.map((message) => `console: ${message}`),
+    ...pageErrors.map((message) => `pageerror: ${message}`),
+    ...failedRequests.map((message) => `requestfailed: ${message}`),
+  ];
+
+  if (failures.length === 0) {
+    return;
+  }
+
+  await testInfo.attach('browser-health-failures', {
+    body: failures.join('\n'),
+    contentType: 'text/plain',
+  });
+  throw new Error(`Browser health checks failed:\n${failures.join('\n')}`);
+}
+
 export const test = base.extend<TestFixtures>({
-  page: async ({ page }, use) => {
+  page: async ({ page }, use, testInfo) => {
+    const consoleMessages: string[] = [];
+    const pageErrors: string[] = [];
+    const failedRequests: string[] = [];
+
+    page.on('console', (message) => {
+      if (message.type() === 'error' || message.type() === 'warning') {
+        consoleMessages.push(`${message.type()}: ${message.text()} @ ${message.location().url}`);
+      }
+    });
+    page.on('pageerror', (error) => {
+      pageErrors.push(error.stack ?? error.message);
+    });
+    page.on('requestfailed', (request) => {
+      failedRequests.push(`${request.method()} ${request.url()} — ${request.failure()?.errorText ?? 'unknown error'}`);
+    });
+
     await use(page);
+    await assertBrowserHealth(testInfo, consoleMessages, pageErrors, failedRequests);
   },
 
   freshUserPage: async ({ page, request }, use) => {

@@ -68,6 +68,7 @@ describe('enabled collection provider', () => {
   })
 
   it('loads a stored active collection and reports errors', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     window.localStorage.setItem('comic_pile_active_collection_id', '2')
     collectionsApi.list.mockRejectedValueOnce({ response: { status: 401, data: { detail: 'Nope' } } })
     render(<CollectionProvider><Consumer /></CollectionProvider>)
@@ -75,6 +76,8 @@ describe('enabled collection provider', () => {
     expect(screen.getByTestId('active')).toHaveTextContent('2')
     fireEvent.click(screen.getByRole('button', { name: 'retry' }))
     await waitFor(() => expect(collectionsApi.list).toHaveBeenCalledTimes(2))
+    expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining('Failed to fetch collections:'), expect.anything())
+    consoleError.mockRestore()
   })
 
   it('clears the active selection when the selected collection is deleted', async () => {

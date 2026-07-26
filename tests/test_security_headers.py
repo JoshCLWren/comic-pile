@@ -75,6 +75,8 @@ async def test_csp_restrictive(client: AsyncClient) -> None:
 
     assert "default-src" in csp_dict
     assert "'self'" in csp_dict["default-src"]
+    assert "https://fonts.googleapis.com" in csp_dict["style-src"]
+    assert "https://fonts.gstatic.com" in csp_dict["font-src"]
     assert "frame-ancestors" in csp_dict
     assert csp_dict["frame-ancestors"] == "'none'"
     assert "frame-src" in csp_dict
