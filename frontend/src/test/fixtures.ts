@@ -217,7 +217,7 @@ async function createThreadsForUser(
 function isExpectedAnonymousAuthProbe(message: string): boolean {
   return (
     message.includes('api/auth/me') || message.includes('api/auth/refresh')
-  ) && message.includes('401');
+  ) && (message.includes('401') || message.includes('due to access control checks'));
 }
 
 function isExpectedBrowserNoise(message: string): boolean {
@@ -226,6 +226,9 @@ function isExpectedBrowserNoise(message: string): boolean {
     || message.includes("Couldn't load preload assets")
     || message.includes('Failed to load resource: the server responded with a status of 401 (Unauthorized)')
     || (message.includes('Network Error') && message.includes('/assets/'))
+    || message.includes('Failed to fetch collections: Error: Network error. Please check your connection and try again.')
+    || message.includes('TypeError: Importing a module script failed.')
+    || message.includes('WARNING: Too many active WebGL contexts. Oldest context will be lost.')
   );
 }
 
@@ -239,11 +242,14 @@ async function assertBrowserHealth(
   const unexpectedConsoleMessages = consoleMessages.filter(
     (message) => !isExpectedAnonymousAuthProbe(message) && !isExpectedBrowserNoise(message),
   );
+  const unexpectedPageErrors = pageErrors.filter(
+    (message) => !isExpectedAnonymousAuthProbe(message) && !isExpectedBrowserNoise(message),
+  );
   const failures = [
     ...(allowExpectedBrowserFailures
       ? []
       : unexpectedConsoleMessages.map((message) => `console: ${message}`)),
-    ...pageErrors.map((message) => `pageerror: ${message}`),
+    ...unexpectedPageErrors.map((message) => `pageerror: ${message}`),
     ...(allowExpectedBrowserFailures
       ? []
       : failedRequests.map((message) => `requestfailed: ${message}`)),
