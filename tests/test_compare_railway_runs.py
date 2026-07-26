@@ -142,6 +142,18 @@ def test_compare_flags_errors_high_variance_and_p95_range() -> None:
     assert any("p95 range" in warning for warning in warnings)
 
 
+def test_every_error_group_has_failure_or_route_diagnostic() -> None:
+    """Every nonzero-error group retains either detailed or route-level diagnostics."""
+    first = _document(errors=1)
+    second = _document(errors=0)
+
+    report = compare_documents([first, second])
+
+    for group in _groups(report):
+        if group["total_errors"] > 0:
+            assert group["failures"] or group["errors_by_route"]
+
+
 def test_compare_flags_missing_route_and_concurrency() -> None:
     """Missing route and concurrency observations are global warnings."""
     first = _document()

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "created_at": "2026-07-26T16:35:09.698943+00:00",
+  "created_at": "2026-07-26T20:33:13.601274+00:00",
   "run_count": 3,
   "compatibility_warnings": [],
   "warnings": [],
@@ -1021,7 +1021,9 @@
           "errors": 0
         }
       ],
-      "errors_by_route": {},
+      "errors_by_route": {
+        "/health": 1
+      },
       "errors_by_exception_type": {},
       "failure_timestamps": [],
       "failure_request_ids": [],
@@ -1534,7 +1536,9 @@
           "errors": 0
         }
       ],
-      "errors_by_route": {},
+      "errors_by_route": {
+        "/health": 1
+      },
       "errors_by_exception_type": {},
       "failure_timestamps": [],
       "failure_request_ids": [],

@@ -142,6 +142,22 @@ def _failures(result: dict[str, object], scenario: str) -> list[dict[str, object
     ]
 
 
+def _route_error_diagnostics(summary: dict[str, object], scenario: str) -> Counter[str]:
+    """Return route-level error counts when detailed failures are unavailable."""
+    if scenario != "combined":
+        error_count = summary.get("error_requests")
+        if isinstance(error_count, int) and error_count:
+            return Counter({scenario: error_count})
+        return Counter()
+    diagnostics: Counter[str] = Counter()
+    for route, route_summary_value in _as_dict(summary.get("route_summaries", {})).items():
+        route_summary = _as_dict(route_summary_value)
+        error_count = route_summary.get("error_requests")
+        if isinstance(error_count, int) and error_count:
+            diagnostics[route] = error_count
+    return diagnostics
+
+
 def compare_documents(
     documents: list[dict[str, object]],
     *,
@@ -202,6 +218,9 @@ def compare_documents(
             for failure in _failures(_as_dict(item["result"]), scenario)
         ]
         errors_by_route = Counter(str(failure.get("route")) for failure in failures)
+        if not failures:
+            for summary in summaries:
+                errors_by_route.update(_route_error_diagnostics(summary, scenario))
         errors_by_exception = Counter(
             str(failure.get("exception_type") or "non_2xx") for failure in failures
         )
