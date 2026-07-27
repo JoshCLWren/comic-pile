@@ -232,6 +232,7 @@ function isExpectedAnonymousAuthProbe(message: string): boolean {
     'api/auth/refresh',
     'api/sessions/current',
     'api/threads/',
+    'api/v1/dependencies/blocked',
   ];
   return anonymousProbePaths.some((path) => message.includes(path))
     && (message.includes('401') || message.includes('due to access control checks'));

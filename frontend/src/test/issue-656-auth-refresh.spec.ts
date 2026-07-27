@@ -2,7 +2,10 @@ import { expect, test } from './fixtures'
 import { generateTestUser } from './helpers'
 
 test('recovers authentication when /auth/me initially returns missing-bearer 403', async ({ page, allowExpectedBrowserFailures }) => {
-  allowExpectedBrowserFailures.allow({ category: 'console', message: '403' })
+  allowExpectedBrowserFailures.allow(
+    { category: 'console', message: '403' },
+    { category: 'console', message: 'Failed to fetch user: Error: Network error' },
+  )
   const user = generateTestUser()
   const registerResponse = await page.request.post('/api/auth/register', {
     data: {
