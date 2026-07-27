@@ -4,7 +4,8 @@
 .PHONY: dev dev-api test seed seed-dev migrate db-up db-down worktrees status test-integration deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
 .PHONY: test-e2e-prod-smoke check-prod-assets clone-prod-export clone-prod-import
-.PHONY: verify-reading-order
+.PHONY: verify-reading-order railway-control-baseline railway-control-compare
+.PHONY: railway-control-results railway-control-c32-diagnostic railway-control-c32-compare
 
 # Configuration
 PREFIX ?= /usr/local
@@ -17,6 +18,8 @@ RAILWAY_PROJECT_ID ?= 8222a6ae-6873-443e-a367-a240536dc213
 RAILWAY_PROD_ENV ?= production
 RAILWAY_APP_SERVICE ?= app
 PROD_MIGRATE_CMD ?= /app/.venv/bin/alembic upgrade head
+RAILWAY_CONTROL_RESULTS ?= $(filter-out benchmarks/results/control-results-comparison.json,$(wildcard benchmarks/results/control-results-*.json))
+RAILWAY_CONTROL_C32_RESULTS ?= $(filter-out benchmarks/results/control-c32-diagnostic-comparison.json,$(wildcard benchmarks/results/control-c32-diagnostic-*.json))
 
 # Port configuration - Port allocation rules:
 # - Main repo (task API source of truth): 8000
@@ -375,6 +378,47 @@ check-prod-assets:  ## Validate deployed frontend assets (make check-prod-assets
 		exit 1; \
 	fi
 	@bash scripts/check_frontend_assets.sh "$(PROD_BASE_URL)"
+
+railway-control-baseline:  ## Run the safe read-only Railway control baseline
+	@uv run python scripts/railway_loadtest.py \
+		--profile control-safe \
+		--concurrency 1 --concurrency 2 --concurrency 4 --concurrency 8 \
+		--warmup-seconds 10 --duration-seconds 30 --interval-ms 200 \
+		--run-set control-smoke
+
+railway-control-results:  ## Run the longer safe control matrix through concurrency 32
+	@uv run python scripts/railway_loadtest.py \
+		--profile control-safe --preset results \
+		--run-set control-results \
+		--metadata-output benchmarks/control-environment.json
+
+railway-control-c32-diagnostic:  ## Run one isolated concurrency-32 control diagnostic
+	@uv run python scripts/railway_loadtest.py \
+		--profile control-safe --preset c32-diagnostic \
+		--run-set control-c32-diagnostic \
+		--failure-log benchmarks/results/control-c32-diagnostic-failures-$$(date -u +%Y%m%dT%H%M%SZ).ndjson \
+		--metadata-output benchmarks/control-environment-c32-diagnostic.json
+
+railway-control-compare:  ## Compare only timestamped control-results runs
+	@if [ -z "$(RAILWAY_CONTROL_RESULTS)" ]; then \
+		echo "No control-results files found under benchmarks/results/" >&2; \
+		exit 1; \
+	fi
+	@uv run python scripts/compare_railway_runs.py \
+		$(RAILWAY_CONTROL_RESULTS) \
+		--output benchmarks/results/control-results-comparison.json \
+		--csv benchmarks/results/control-results-comparison.csv
+
+railway-control-c32-compare:  ## Compare only isolated concurrency-32 diagnostic runs
+	@if [ -z "$(RAILWAY_CONTROL_C32_RESULTS)" ]; then \
+		echo "No control-c32-diagnostic files found under benchmarks/results/" >&2; \
+		exit 1; \
+	fi
+	@uv run python scripts/compare_railway_runs.py \
+		$(RAILWAY_CONTROL_C32_RESULTS) \
+		--run-set control-c32-diagnostic \
+		--output benchmarks/results/control-c32-diagnostic-comparison.json \
+		--csv benchmarks/results/control-c32-diagnostic-comparison.csv
 
 dev-all:  ## Run both frontend and backend dev servers (Vite proxies /api to backend)
 	@bash scripts/dev-all.sh

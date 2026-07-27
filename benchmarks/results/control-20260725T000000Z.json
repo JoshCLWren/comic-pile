@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "run": {
+    "started_at": "2026-07-25T18:21:13.945353+00:00",
+    "base_url": "https://app-production-72b9.up.railway.app",
+    "profile": "control-safe",
+    "routes": [
+      "/health",
+      "/api/auth/csrf"
+    ],
+    "concurrency": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "warmup_seconds": 10.0,
+    "duration_seconds": 30.0,
+    "timeout_seconds": 10.0,
+    "interval_ms": 200.0,
+    "http2": false,
+    "token_supplied": false,
+    "token_env": null,
+    "user_agent": "comicpile-railway-control/1.0",
+    "generator": {
+      "python": "3.14.2 (main, Dec  9 2025, 19:03:28) [Clang 21.1.4 ]",
+      "implementation": "CPython",
+      "platform": "Linux-6.12.57+deb13-amd64-x86_64-with-glibc2.41"
+    }
+  },
+  "results": [
+    {
+      "concurrency": 1,
+      "summary": {
+        "requests": 101,
+        "successful_requests": 101,
+        "error_requests": 0,
+        "requests_per_second": 3.355406789524631,
+        "latency_ms": {
+          "min": 78.93168801092543,
+          "mean": 97.56248756478965,
+          "p50": 88.4760280023329,
+          "p95": 127.33534599829,
+          "p99": 283.5124929988524,
+          "max": 288.5540870047407
+        },
+        "response_bytes": 5193,
+        "status_counts": {
+          "200": 101
+        }
+      },
+      "transport_errors": {}
+    },
+    {
+      "concurrency": 2,
+      "summary": {
+        "requests": 205,
+        "successful_requests": 205,
+        "error_requests": 0,
+        "requests_per_second": 6.774846443731346,
+        "latency_ms": {
+          "min": 77.37745800113771,
+          "mean": 93.38810154167288,
+          "p50": 86.691525997594,
+          "p95": 112.23433700797614,
+          "p99": 320.12826000573114,
+          "max": 409.7729019995313
+        },
+        "response_bytes": 10549,
+        "status_counts": {
+          "200": 205
+        }
+      },
+      "transport_errors": {}
+    },
+    {
+      "concurrency": 4,
+      "summary": {
+        "requests": 411,
+        "successful_requests": 411,
+        "error_requests": 0,
+        "requests_per_second": 13.59108153153208,
+        "latency_ms": {
+          "min": 77.81701399653684,
+          "mean": 92.59966749111882,
+          "p50": 86.03914100967813,
+          "p95": 106.81599100644235,
+          "p99": 275.21746199636254,
+          "max": 486.0618419916136
+        },
+        "response_bytes": 21141,
+        "status_counts": {
+          "200": 411
+        }
+      },
+      "transport_errors": {}
+    },
+    {
+      "concurrency": 8,
+      "summary": {
+        "requests": 823,
+        "successful_requests": 823,
+        "error_requests": 0,
+        "requests_per_second": 27.17919062049894,
+        "latency_ms": {
+          "min": 77.89908199629281,
+          "mean": 92.23486336311925,
+          "p50": 86.70198199979495,
+          "p95": 110.4201260022819,
+          "p99": 291.08711100707296,
+          "max": 333.9665629900992
+        },
+        "response_bytes": 42342,
+        "status_counts": {
+          "200": 823
+        }
+      },
+      "transport_errors": {}
+    }
+  ]
+}

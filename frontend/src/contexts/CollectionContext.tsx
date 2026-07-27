@@ -55,7 +55,9 @@ export const CollectionProvider = ({ children }: CollectionProviderProps) => {
       const status = axiosError.response?.status
       const message = axiosError.response?.data?.detail || axiosError.message || 'Failed to load collections'
       setError({ message, status })
-      console.error('Failed to fetch collections:', err)
+      if (status !== 401) {
+        console.error('Failed to fetch collections:', err)
+      }
       if (status !== 401 && retryCountRef.current < MAX_RETRIES) {
         retryCountRef.current += 1
         setTimeout(() => {

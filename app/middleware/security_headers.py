@@ -31,10 +31,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         csp_header = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "img-src 'self' data: https:; "
-            "font-src 'self'; "
-            "connect-src 'self'; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "connect-src 'self' https://fonts.googleapis.com; "
             "frame-ancestors 'none'; "
             "form-action 'self'; "
             "base-uri 'self'; "

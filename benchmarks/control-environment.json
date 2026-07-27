@@ -1,0 +1,49 @@
+{
+  "experiment_name": "ComicPile Railway control baseline",
+  "run_set": "control-results",
+  "harness_version": "railway-loadtest-v2",
+  "result_schema_version": 2,
+  "git_commit_sha": "39ed8333ffff22ad924f3d353d58a2178c12fa4c",
+  "branch": "main",
+  "python_implementation": "CPython",
+  "python_version": "3.14.2",
+  "docker_base_image": "python:3.14-slim",
+  "uv_version": "0.11.28",
+  "uvicorn_version": "0.44.0",
+  "workers": 2,
+  "scheduling_mode": "paced_closed_loop",
+  "interval_ms": 200.0,
+  "warmup_seconds": 45.0,
+  "measurement_seconds": 180.0,
+  "concurrency_levels": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+  ],
+  "routes": [
+    "/health",
+    "/api/auth/csrf"
+  ],
+  "railway_service_name": "app",
+  "railway_deployment_id": "61af114e-d47c-4285-b2c6-966fcadd837c",
+  "railway_region": "US West",
+  "railway_cpu_allocation": "8 vCPU",
+  "railway_memory_allocation": "8192 MB",
+  "replica_count": null,
+  "autoscaling_status": null,
+  "database_region": null,
+  "database_plan": null,
+  "database_identity": null,
+  "database_pool": {
+    "pool_size": 1,
+    "max_overflow": 2,
+    "pool_timeout": 30,
+    "pool_recycle": 3600,
+    "pool_pre_ping": true
+  },
+  "captured_at": "2026-07-25T19:36:53.747329+00:00",
+  "notes": "Railway-only fields remain null unless supplied through environment variables."
+}

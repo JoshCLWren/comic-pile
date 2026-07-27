@@ -624,6 +624,7 @@ test.describe('Migrating from Edit Modal', () => {
     await expect(authenticatedPage.locator('.migration-dialog__overlay')).toHaveCount(0, { timeout: 15000 });
 
     await expect(editModal).toBeVisible();
+    await expect(editModal.getByText('Issues', { exact: true })).toBeVisible({ timeout: 15000 });
 
     const threadData = await request.get(`/api/threads/${thread.id}`, {
       headers: {

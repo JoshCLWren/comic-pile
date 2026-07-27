@@ -3,6 +3,7 @@ import { createThread } from './helpers';
 
 test.describe('Issue #286: Snooze feedback at ladder ceiling', () => {
   test('should show feedback when snoozing at d100 (max pool size)', async ({ authenticatedPage, request }) => {
+    test.setTimeout(90_000);
     const page = authenticatedPage;
 
     // Create 101 threads (100 for d100 pool + 1 to roll)

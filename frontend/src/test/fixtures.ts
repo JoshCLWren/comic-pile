@@ -1,8 +1,12 @@
-import { test as base, type APIRequestContext, type Page } from '@playwright/test';
+import { test as base, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
 import { getCollectionsEnabled } from './helpers';
 
 type TestFixtures = {
   page: Page;
+  allowExpectedBrowserFailures: {
+    allow: (...expectedFailures: ExpectedBrowserFailure[]) => void;
+    isAllowed: (failure: BrowserFailure) => boolean;
+  };
   freshUserPage: Page;
   authenticatedPage: Page;
   authenticatedWithThreadsPage: Page;
@@ -13,6 +17,18 @@ type TestFixtures = {
     username: string;
     accessToken?: string;
   };
+};
+
+type BrowserFailureCategory = 'console' | 'pageerror' | 'requestfailed';
+
+type BrowserFailure = {
+  category: BrowserFailureCategory;
+  message: string;
+};
+
+type ExpectedBrowserFailure = {
+  category: BrowserFailureCategory;
+  message: string;
 };
 
 type TestUser = {
@@ -210,9 +226,123 @@ async function createThreadsForUser(
   }
 }
 
+function isExpectedAnonymousAuthProbe(message: string): boolean {
+  const anonymousProbePaths = [
+    'api/auth/me',
+    'api/auth/refresh',
+    'api/sessions/current',
+    'api/threads/',
+    'api/v1/dependencies/blocked',
+  ];
+  return anonymousProbePaths.some((path) => message.includes(path))
+    && (message.includes('401') || message.includes('due to access control checks'));
+}
+
+function isExpectedBrowserNoise(message: string): boolean {
+  return (
+    (message.includes('GPU stall due to ReadPixels') && message.includes('GL Driver Message'))
+    || message.includes("Couldn't load preload assets")
+    || (message.includes('Network Error') && message.includes('/assets/'))
+    || message.includes('Failed to fetch collections: Error: Network error. Please check your connection and try again.')
+    || message.includes('Failed to fetch collections: Error @')
+    || message.includes('Failed to fetch user: Error @')
+    || message.includes('Failed to rate thread: Network error. Please check your connection and try again.')
+    || message.includes('Failed to snooze thread: Network error. Please check your connection and try again.')
+    || message.includes('downloadable font: download failed')
+    || message.includes('This site appears to use a scroll-linked positioning effect.')
+    || (message.includes('XMLHttpRequest cannot load') && message.includes('due to access control checks.'))
+    || message.includes('TypeError: Importing a module script failed.')
+    || message.includes('Unable to preload CSS for /assets/')
+    || message.includes('WARNING: Too many active WebGL contexts. Oldest context will be lost.')
+    || message.includes('There are too many active WebGL contexts on this page, the oldest context will be lost.')
+    || message.includes('THREE.WebGLRenderer: A WebGL context could not be created.')
+    || message.includes('THREE.WebGLRenderer: Error creating WebGL context.')
+    || message.includes('WebGL initialization failed: Error')
+    || message.includes('Failed to create WebGL context: WebGL creation failed:')
+  );
+}
+
+async function assertBrowserHealth(
+  testInfo: TestInfo,
+  consoleMessages: string[],
+  pageErrors: string[],
+  failedRequests: string[],
+  allowExpectedBrowserFailures: { isAllowed: (failure: BrowserFailure) => boolean },
+): Promise<void> {
+  const unexpectedConsoleMessages = consoleMessages.filter(
+    (message) => !isExpectedAnonymousAuthProbe(message) && !isExpectedBrowserNoise(message),
+  );
+  const unexpectedPageErrors = pageErrors.filter(
+    (message) => !isExpectedAnonymousAuthProbe(message) && !isExpectedBrowserNoise(message),
+  );
+  const browserFailures: BrowserFailure[] = [
+    ...unexpectedConsoleMessages.map((message) => ({ category: 'console' as const, message })),
+    ...unexpectedPageErrors.map((message) => ({ category: 'pageerror' as const, message })),
+    ...failedRequests.map((message) => ({ category: 'requestfailed' as const, message })),
+  ];
+  const failures = browserFailures
+    .filter((failure) => !allowExpectedBrowserFailures.isAllowed(failure))
+    .map((failure) => `${failure.category}: ${failure.message}`);
+
+  if (failures.length === 0) {
+    return;
+  }
+
+  await testInfo.attach('browser-health-failures', {
+    body: failures.join('\n'),
+    contentType: 'text/plain',
+  });
+  throw new Error(`Browser health checks failed:\n${failures.join('\n')}`);
+}
+
 export const test = base.extend<TestFixtures>({
-  page: async ({ page }, use) => {
+  allowExpectedBrowserFailures: async ({}, use) => {
+    const expectedBrowserFailures: ExpectedBrowserFailure[] = [];
+    await use({
+      allow: (...failures: ExpectedBrowserFailure[]) => {
+        expectedBrowserFailures.push(...failures);
+      },
+      isAllowed: (failure: BrowserFailure) => expectedBrowserFailures.some(
+        (expected) => expected.category === failure.category && failure.message.includes(expected.message),
+      ),
+    });
+  },
+
+  page: async ({ page, allowExpectedBrowserFailures }, use, testInfo) => {
+    const consoleMessages: string[] = [];
+    const pageErrors: string[] = [];
+    const failedRequests: string[] = [];
+
+    page.on('console', (message) => {
+      if (message.type() === 'error' || message.type() === 'warning') {
+        consoleMessages.push(`${message.type()}: ${message.text()} @ ${message.location().url}`);
+      }
+    });
+    page.on('pageerror', (error) => {
+      pageErrors.push(error.stack ?? error.message);
+    });
+    page.on('requestfailed', (request) => {
+      const errorText = request.failure()?.errorText ?? '';
+      if (
+        errorText === 'net::ERR_ABORTED'
+        || errorText === 'NS_BINDING_ABORTED'
+        || errorText === 'Load request cancelled'
+        || request.url().includes('fonts.googleapis.com')
+        || request.url().includes('fonts.gstatic.com')
+      ) {
+        return;
+      }
+      failedRequests.push(`${request.method()} ${request.url()} — ${errorText || 'unknown error'}`);
+    });
+
     await use(page);
+    await assertBrowserHealth(
+      testInfo,
+      consoleMessages,
+      pageErrors,
+      failedRequests,
+      allowExpectedBrowserFailures,
+    );
   },
 
   freshUserPage: async ({ page, request }, use) => {

@@ -72,7 +72,8 @@ test.describe('Authentication Flow', () => {
     });
   });
 
-  test('should show error for invalid credentials', async ({ page }) => {
+  test('should show error for invalid credentials', async ({ page, allowExpectedBrowserFailures }) => {
+    allowExpectedBrowserFailures.allow({ category: 'console', message: '401' });
     const user = generateTestUser();
 
     await page.goto('/login');
@@ -109,7 +110,11 @@ test.describe('Authentication Flow', () => {
     expect(meResponse.ok()).toBeTruthy();
   });
 
-  test('should clear auth token and redirect to login on logout', async ({ page }) => {
+  test('should clear auth token and redirect to login on logout', async ({ page, allowExpectedBrowserFailures }) => {
+    allowExpectedBrowserFailures.allow({
+      category: 'console',
+      message: 'Failed to fetch user: AxiosError: Request failed with status code 401',
+    });
     const user = generateTestUser();
     await registerUser(page, user);
 

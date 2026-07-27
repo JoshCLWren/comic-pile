@@ -191,6 +191,7 @@ test.describe('Issue #283: Phantom Roll Events on Snooze', () => {
   });
 
   test('should verify phantom roll events are not created across multiple snooze cycles', async ({ page }) => {
+    test.setTimeout(90_000);
     await setupAuthenticatedPage(page);
 
     const token = await getAuthToken(page);

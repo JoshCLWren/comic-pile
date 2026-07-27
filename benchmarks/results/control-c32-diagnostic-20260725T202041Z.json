@@ -1,0 +1,152 @@
+{
+  "schema_version": 2,
+  "metadata": {
+    "experiment_name": "ComicPile Railway control baseline",
+    "run_set": "control-c32-diagnostic",
+    "harness_version": "railway-loadtest-v2",
+    "result_schema_version": 2,
+    "git_commit_sha": "39ed8333ffff22ad924f3d353d58a2178c12fa4c",
+    "branch": "main",
+    "python_implementation": "CPython",
+    "python_version": "3.14.2",
+    "docker_base_image": "python:3.14-slim",
+    "uv_version": "0.11.28",
+    "uvicorn_version": "0.44.0",
+    "workers": 2,
+    "scheduling_mode": "paced_closed_loop",
+    "interval_ms": 200.0,
+    "warmup_seconds": 45.0,
+    "measurement_seconds": 180.0,
+    "concurrency_levels": [
+      32
+    ],
+    "routes": [
+      "/health",
+      "/api/auth/csrf"
+    ],
+    "railway_service_name": "app",
+    "railway_deployment_id": "61af114e-d47c-4285-b2c6-966fcadd837c",
+    "railway_region": "US West",
+    "railway_cpu_allocation": "8 vCPU",
+    "railway_memory_allocation": "8192 MB",
+    "replica_count": null,
+    "autoscaling_status": null,
+    "database_region": null,
+    "database_plan": null,
+    "database_identity": null,
+    "database_pool": {
+      "pool_size": 1,
+      "max_overflow": 2,
+      "pool_timeout": 30,
+      "pool_recycle": 3600,
+      "pool_pre_ping": true
+    },
+    "captured_at": "2026-07-25T20:16:55.534006+00:00",
+    "notes": "Railway-only fields remain null unless supplied through environment variables."
+  },
+  "run": {
+    "started_at": "2026-07-25T20:16:55.526481+00:00",
+    "base_url": "https://app-production-72b9.up.railway.app",
+    "profile": "control-safe",
+    "preset": "c32-diagnostic",
+    "run_set": "control-c32-diagnostic",
+    "ended_at": "2026-07-25T20:20:41.359951+00:00",
+    "routes": [
+      "/health",
+      "/api/auth/csrf"
+    ],
+    "concurrency": [
+      32
+    ],
+    "warmup_seconds": 45.0,
+    "duration_seconds": 180.0,
+    "timeout_seconds": 10.0,
+    "interval_ms": 200.0,
+    "schedule": "paced: each client issues one request, then sleeps interval_ms",
+    "http2": false,
+    "token_supplied": false,
+    "token_env": null,
+    "user_agent": "comicpile-railway-control/1.0",
+    "generator": {
+      "python": "3.14.2 (main, Dec  9 2025, 19:03:28) [Clang 21.1.4 ]",
+      "implementation": "CPython",
+      "platform": "Linux-6.12.57+deb13-amd64-x86_64-with-glibc2.41"
+    }
+  },
+  "results": [
+    {
+      "concurrency": 32,
+      "summary": {
+        "requests": 16842,
+        "successful_requests": 16842,
+        "error_requests": 0,
+        "requests_per_second": 93.41218146654772,
+        "latency_ms": {
+          "min": 77.2638609923888,
+          "mean": 135.98705103709418,
+          "p50": 119.6835610026028,
+          "p95": 238.75224699440878,
+          "p99": 352.70045200013556,
+          "max": 1180.2413709956454
+        },
+        "response_bytes": 867159,
+        "status_counts": {
+          "200": 16842
+        },
+        "route_summaries": {
+          "/api/auth/csrf": {
+            "requests": 8409,
+            "successful_requests": 8409,
+            "error_requests": 0,
+            "requests_per_second": 46.63953413800022,
+            "latency_ms": {
+              "min": 77.2638609923888,
+              "mean": 123.73585576687171,
+              "p50": 107.84491700178478,
+              "p95": 224.2770620068768,
+              "p99": 319.8838530079229,
+              "max": 482.2447829938028
+            },
+            "response_bytes": 504540,
+            "status_counts": {
+              "200": 8409
+            }
+          },
+          "/health": {
+            "requests": 8433,
+            "successful_requests": 8433,
+            "error_requests": 0,
+            "requests_per_second": 46.7726473285475,
+            "latency_ms": {
+              "min": 82.74504099972546,
+              "mean": 148.20337986755794,
+              "p50": 135.7428220071597,
+              "p95": 255.8283779944759,
+              "p99": 387.74526699853595,
+              "max": 1180.2413709956454
+            },
+            "response_bytes": 362619,
+            "status_counts": {
+              "200": 8433
+            }
+          }
+        }
+      },
+      "transport_errors": {},
+      "measurement_window": {
+        "start_at": "2026-07-25T20:17:40.944Z",
+        "end_at": "2026-07-25T20:20:41.242Z"
+      },
+      "warmup_window": {
+        "start_at": "2026-07-25T20:16:55.588Z",
+        "end_at": "2026-07-25T20:17:40.944Z"
+      },
+      "failure_diagnostics": {
+        "schema_version": 1,
+        "failures": [],
+        "warmup_failures": [],
+        "measurement_failures": []
+      }
+    }
+  ]
+}

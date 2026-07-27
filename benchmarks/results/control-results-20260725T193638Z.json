@@ -1,0 +1,452 @@
+{
+  "schema_version": 2,
+  "metadata": {
+    "experiment_name": "ComicPile Railway control baseline",
+    "run_set": "control-results",
+    "harness_version": "railway-loadtest-v2",
+    "result_schema_version": 2,
+    "git_commit_sha": "39ed8333ffff22ad924f3d353d58a2178c12fa4c",
+    "branch": "main",
+    "python_implementation": "CPython",
+    "python_version": "3.14.2",
+    "docker_base_image": "python:3.14-slim",
+    "uv_version": "0.11.28",
+    "uvicorn_version": "0.44.0",
+    "workers": 2,
+    "scheduling_mode": "paced_closed_loop",
+    "interval_ms": 200.0,
+    "warmup_seconds": 45.0,
+    "measurement_seconds": 180.0,
+    "concurrency_levels": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
+    "routes": [
+      "/health",
+      "/api/auth/csrf"
+    ],
+    "railway_service_name": "app",
+    "railway_deployment_id": "61af114e-d47c-4285-b2c6-966fcadd837c",
+    "railway_region": "US West",
+    "railway_cpu_allocation": "8 vCPU",
+    "railway_memory_allocation": "8192 MB",
+    "replica_count": null,
+    "autoscaling_status": null,
+    "database_region": null,
+    "database_plan": null,
+    "database_identity": null,
+    "database_pool": {
+      "pool_size": 1,
+      "max_overflow": 2,
+      "pool_timeout": 30,
+      "pool_recycle": 3600,
+      "pool_pre_ping": true
+    },
+    "captured_at": "2026-07-25T19:14:04.987821+00:00",
+    "notes": "Railway-only fields remain null unless supplied through environment variables."
+  },
+  "run": {
+    "started_at": "2026-07-25T19:14:04.980754+00:00",
+    "base_url": "https://app-production-72b9.up.railway.app",
+    "profile": "control-safe",
+    "preset": "results",
+    "run_set": "control-results",
+    "ended_at": "2026-07-25T19:36:38.504747+00:00",
+    "routes": [
+      "/health",
+      "/api/auth/csrf"
+    ],
+    "concurrency": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
+    "warmup_seconds": 45.0,
+    "duration_seconds": 180.0,
+    "timeout_seconds": 10.0,
+    "interval_ms": 200.0,
+    "schedule": "paced: each client issues one request, then sleeps interval_ms",
+    "http2": false,
+    "token_supplied": false,
+    "token_env": null,
+    "user_agent": "comicpile-railway-control/1.0",
+    "generator": {
+      "python": "3.14.2 (main, Dec  9 2025, 19:03:28) [Clang 21.1.4 ]",
+      "implementation": "CPython",
+      "platform": "Linux-6.12.57+deb13-amd64-x86_64-with-glibc2.41"
+    }
+  },
+  "results": [
+    {
+      "concurrency": 1,
+      "summary": {
+        "requests": 624,
+        "successful_requests": 624,
+        "error_requests": 0,
+        "requests_per_second": 3.4616844097250192,
+        "latency_ms": {
+          "min": 79.84780700644478,
+          "mean": 88.4312749452268,
+          "p50": 86.83726799790747,
+          "p95": 95.30178501154296,
+          "p99": 115.42888698750176,
+          "max": 293.531859992072
+        },
+        "response_bytes": 32136,
+        "status_counts": {
+          "200": 624
+        },
+        "route_summaries": {
+          "/api/auth/csrf": {
+            "requests": 312,
+            "successful_requests": 312,
+            "error_requests": 0,
+            "requests_per_second": 1.7308422048625096,
+            "latency_ms": {
+              "min": 79.84780700644478,
+              "mean": 85.32423087135845,
+              "p50": 83.74572500179056,
+              "p95": 88.05589900293853,
+              "p99": 104.68015600054059,
+              "max": 293.531859992072
+            },
+            "response_bytes": 18720,
+            "status_counts": {
+              "200": 312
+            }
+          },
+          "/health": {
+            "requests": 312,
+            "successful_requests": 312,
+            "error_requests": 0,
+            "requests_per_second": 1.7308422048625096,
+            "latency_ms": {
+              "min": 84.1327550006099,
+              "mean": 91.53831901909517,
+              "p50": 90.19898100814316,
+              "p95": 97.84892099560238,
+              "p99": 115.42888698750176,
+              "max": 249.8789639939787
+            },
+            "response_bytes": 13416,
+            "status_counts": {
+              "200": 312
+            }
+          }
+        }
+      },
+      "transport_errors": {}
+    },
+    {
+      "concurrency": 2,
+      "summary": {
+        "requests": 1241,
+        "successful_requests": 1241,
+        "error_requests": 0,
+        "requests_per_second": 6.891886641899732,
+        "latency_ms": {
+          "min": 77.33553100842983,
+          "mean": 89.3012573135327,
+          "p50": 86.70276300108526,
+          "p95": 98.74390799086541,
+          "p99": 157.23446499032434,
+          "max": 368.56429500039667
+        },
+        "response_bytes": 63903,
+        "status_counts": {
+          "200": 1241
+        },
+        "route_summaries": {
+          "/api/auth/csrf": {
+            "requests": 620,
+            "successful_requests": 620,
+            "error_requests": 0,
+            "requests_per_second": 3.4431665737130004,
+            "latency_ms": {
+              "min": 77.33553100842983,
+              "mean": 85.1348870180382,
+              "p50": 82.88571500452235,
+              "p95": 91.07247699284926,
+              "p99": 145.13191299920436,
+              "max": 261.57813699683174
+            },
+            "response_bytes": 37200,
+            "status_counts": {
+              "200": 620
+            }
+          },
+          "/health": {
+            "requests": 621,
+            "successful_requests": 621,
+            "error_requests": 0,
+            "requests_per_second": 3.448720068186731,
+            "latency_ms": {
+              "min": 82.49540498945862,
+              "mean": 93.4609184781166,
+              "p50": 89.99518401105888,
+              "p95": 103.55020100541878,
+              "p99": 163.51452500384767,
+              "max": 368.56429500039667
+            },
+            "response_bytes": 26703,
+            "status_counts": {
+              "200": 621
+            }
+          }
+        }
+      },
+      "transport_errors": {}
+    },
+    {
+      "concurrency": 4,
+      "summary": {
+        "requests": 2481,
+        "successful_requests": 2481,
+        "error_requests": 0,
+        "requests_per_second": 13.76294018411051,
+        "latency_ms": {
+          "min": 77.52099599747453,
+          "mean": 89.61220396339169,
+          "p50": 86.21067499916535,
+          "p95": 97.32041099050548,
+          "p99": 215.72092499991413,
+          "max": 469.9174200068228
+        },
+        "response_bytes": 127746,
+        "status_counts": {
+          "200": 2481
+        },
+        "route_summaries": {
+          "/api/auth/csrf": {
+            "requests": 1239,
+            "successful_requests": 1239,
+            "error_requests": 0,
+            "requests_per_second": 6.873149088316373,
+            "latency_ms": {
+              "min": 77.52099599747453,
+              "mean": 85.50795084347534,
+              "p50": 82.62711900169961,
+              "p95": 90.27093500480987,
+              "p99": 194.01281399768777,
+              "max": 364.23723099869676
+            },
+            "response_bytes": 74340,
+            "status_counts": {
+              "200": 1239
+            }
+          },
+          "/health": {
+            "requests": 1242,
+            "successful_requests": 1242,
+            "error_requests": 0,
+            "requests_per_second": 6.889791095794137,
+            "latency_ms": {
+              "min": 82.44058300624602,
+              "mean": 93.70654342842901,
+              "p50": 89.16274199145846,
+              "p95": 103.47094900498632,
+              "p99": 247.64718899677973,
+              "max": 469.9174200068228
+            },
+            "response_bytes": 53406,
+            "status_counts": {
+              "200": 1242
+            }
+          }
+        }
+      },
+      "transport_errors": {}
+    },
+    {
+      "concurrency": 8,
+      "summary": {
+        "requests": 4947,
+        "successful_requests": 4947,
+        "error_requests": 0,
+        "requests_per_second": 27.447079717194335,
+        "latency_ms": {
+          "min": 77.83302399911918,
+          "mean": 90.25843399229326,
+          "p50": 86.83176699560136,
+          "p95": 106.14426400570665,
+          "p99": 175.62183699919842,
+          "max": 505.44318500033114
+        },
+        "response_bytes": 254745,
+        "status_counts": {
+          "200": 4947
+        },
+        "route_summaries": {
+          "/api/auth/csrf": {
+            "requests": 2472,
+            "successful_requests": 2472,
+            "error_requests": 0,
+            "requests_per_second": 13.715217517870304,
+            "latency_ms": {
+              "min": 77.83302399911918,
+              "mean": 85.51704268609853,
+              "p50": 82.9675979912281,
+              "p95": 92.21438399981707,
+              "p99": 137.0177450007759,
+              "max": 505.44318500033114
+            },
+            "response_bytes": 148320,
+            "status_counts": {
+              "200": 2472
+            }
+          },
+          "/health": {
+            "requests": 2475,
+            "successful_requests": 2475,
+            "error_requests": 0,
+            "requests_per_second": 13.73186219932403,
+            "latency_ms": {
+              "min": 83.34081200882792,
+              "mean": 94.99407815751078,
+              "p50": 89.54061500844546,
+              "p95": 132.35594901198056,
+              "p99": 202.17133799451403,
+              "max": 470.12104200257454
+            },
+            "response_bytes": 106425,
+            "status_counts": {
+              "200": 2475
+            }
+          }
+        }
+      },
+      "transport_errors": {}
+    },
+    {
+      "concurrency": 16,
+      "summary": {
+        "requests": 9514,
+        "successful_requests": 9514,
+        "error_requests": 0,
+        "requests_per_second": 52.7614114322092,
+        "latency_ms": {
+          "min": 77.4377240013564,
+          "mean": 101.50873170660223,
+          "p50": 90.03125000162981,
+          "p95": 162.9097599943634,
+          "p99": 200.96669600752648,
+          "max": 432.4070629954804
+        },
+        "response_bytes": 489903,
+        "status_counts": {
+          "200": 9514
+        },
+        "route_summaries": {
+          "/api/auth/csrf": {
+            "requests": 4753,
+            "successful_requests": 4753,
+            "error_requests": 0,
+            "requests_per_second": 26.358523075182926,
+            "latency_ms": {
+              "min": 77.4377240013564,
+              "mean": 90.71088075637353,
+              "p50": 85.4830820026109,
+              "p95": 120.77424899325706,
+              "p99": 158.63450900360476,
+              "max": 374.76606998825446
+            },
+            "response_bytes": 285180,
+            "status_counts": {
+              "200": 4753
+            }
+          },
+          "/health": {
+            "requests": 4761,
+            "successful_requests": 4761,
+            "error_requests": 0,
+            "requests_per_second": 26.402888357026278,
+            "latency_ms": {
+              "min": 81.90640500106383,
+              "mean": 112.28843881990555,
+              "p50": 95.24734500155319,
+              "p95": 177.48005100293085,
+              "p99": 217.29871300340164,
+              "max": 432.4070629954804
+            },
+            "response_bytes": 204723,
+            "status_counts": {
+              "200": 4761
+            }
+          }
+        }
+      },
+      "transport_errors": {}
+    },
+    {
+      "concurrency": 32,
+      "summary": {
+        "requests": 16233,
+        "successful_requests": 16232,
+        "error_requests": 1,
+        "requests_per_second": 90.0324466959651,
+        "latency_ms": {
+          "min": 78.35292399977334,
+          "mean": 148.26611117839673,
+          "p50": 128.56567899871152,
+          "p95": 277.82719500828534,
+          "p99": 396.3003539975034,
+          "max": 10096.404046998941
+        },
+        "response_bytes": 835778,
+        "status_counts": {
+          "200": 16232,
+          "transport_error": 1
+        },
+        "route_summaries": {
+          "/api/auth/csrf": {
+            "requests": 8106,
+            "successful_requests": 8106,
+            "error_requests": 0,
+            "requests_per_second": 44.9579876127329,
+            "latency_ms": {
+              "min": 78.35292399977334,
+              "mean": 133.88289722675626,
+              "p50": 114.72293401311617,
+              "p95": 260.02886300557293,
+              "p99": 367.76929200277664,
+              "max": 600.1740519859595
+            },
+            "response_bytes": 486360,
+            "status_counts": {
+              "200": 8106
+            }
+          },
+          "/health": {
+            "requests": 8127,
+            "successful_requests": 8126,
+            "error_requests": 1,
+            "requests_per_second": 45.074459083232206,
+            "latency_ms": {
+              "min": 82.60363200679421,
+              "mean": 162.61215920251362,
+              "p50": 146.41149900853634,
+              "p95": 296.1395650054328,
+              "p99": 424.1823099873727,
+              "max": 10096.404046998941
+            },
+            "response_bytes": 349418,
+            "status_counts": {
+              "200": 8126,
+              "transport_error": 1
+            }
+          }
+        }
+      },
+      "transport_errors": {
+        "ConnectTimeout": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "run": {
+    "started_at": "2026-07-25T18:31:05.248686+00:00",
+    "base_url": "https://app-production-72b9.up.railway.app",
+    "profile": "control-safe",
+    "preset": "smoke",
+    "routes": [
+      "/health",
+      "/api/auth/csrf"
+    ],
+    "concurrency": [
+      4
+    ],
+    "warmup_seconds": 5.0,
+    "duration_seconds": 15.0,
+    "timeout_seconds": 10.0,
+    "interval_ms": 200.0,
+    "schedule": "paced: each client issues one request, then sleeps interval_ms",
+    "http2": false,
+    "token_supplied": false,
+    "token_env": null,
+    "user_agent": "comicpile-railway-control/1.0",
+    "generator": {
+      "python": "3.14.2 (main, Dec  9 2025, 19:03:28) [Clang 21.1.4 ]",
+      "implementation": "CPython",
+      "platform": "Linux-6.12.57+deb13-amd64-x86_64-with-glibc2.41"
+    }
+  },
+  "results": [
+    {
+      "concurrency": 4,
+      "summary": {
+        "requests": 209,
+        "successful_requests": 209,
+        "error_requests": 0,
+        "requests_per_second": 13.697630209984643,
+        "latency_ms": {
+          "min": 78.66425400425214,
+          "mean": 90.23455414860052,
+          "p50": 86.58746599394362,
+          "p95": 101.57864999200683,
+          "p99": 196.49453900638036,
+          "max": 271.1067570053274
+        },
+        "response_bytes": 10755,
+        "status_counts": {
+          "200": 209
+        },
+        "route_summaries": {
+          "/api/auth/csrf": {
+            "requests": 104,
+            "successful_requests": 104,
+            "error_requests": 0,
+            "requests_per_second": 6.8160456547292005,
+            "latency_ms": {
+              "min": 78.66425400425214,
+              "mean": 87.43021282708258,
+              "p50": 82.77513399661984,
+              "p95": 89.02301199850626,
+              "p99": 203.17273899854627,
+              "max": 271.1067570053274
+            },
+            "response_bytes": 6240,
+            "status_counts": {
+              "200": 104
+            }
+          },
+          "/health": {
+            "requests": 105,
+            "successful_requests": 105,
+            "error_requests": 0,
+            "requests_per_second": 6.881584555255443,
+            "latency_ms": {
+              "min": 84.930112992879,
+              "mean": 93.01218745753258,
+              "p50": 89.06090600066818,
+              "p95": 102.44995800894685,
+              "p99": 196.04799899389036,
+              "max": 196.49453900638036
+            },
+            "response_bytes": 4515,
+            "status_counts": {
+              "200": 105
+            }
+          }
+        }
+      },
+      "transport_errors": {}
+    }
+  ]
+}
