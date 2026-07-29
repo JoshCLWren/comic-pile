@@ -1,0 +1,37 @@
+name: Apply PR 665 follow-up on ready
+
+on:
+  pull_request:
+    types:
+      - ready_for_review
+
+permissions:
+  contents: write
+
+jobs:
+  apply-followup:
+    if: github.event.pull_request.number == 665
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: add-upstash-cache
+          fetch-depth: 0
+
+      - name: Apply reviewed follow-up
+        run: python scripts/apply_pr665_followup.py
+
+      - name: Validate Python and patch shape
+        run: |
+          python -m compileall -q comic_pile/dependencies.py tests/test_cache.py
+          git diff --check
+
+      - name: Commit source fixes and remove temporary files
+        run: |
+          rm .github/workflows/apply-pr665-followup-on-ready.yml
+          rm scripts/apply_pr665_followup.py
+          git config user.name "ChatGPT"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add comic_pile/dependencies.py tests/test_cache.py .github/workflows/apply-pr665-followup-on-ready.yml scripts/apply_pr665_followup.py
+          git commit -m "Avoid caching uncommitted dependency state"
+          git push origin HEAD:add-upstash-cache
