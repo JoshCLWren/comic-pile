@@ -1,0 +1,35 @@
+# Local Python environments and caches
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Frontend dependencies and build artifacts
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
+# Local environment and editor files
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+
+# Test, benchmark, and generated artifacts
+test-results/
+playwright-report/
+benchmarks/results/
+coverage/
+*.log
+
+# Database backups and exports
+*.dump
+*.sql
+*_backup_*.json
+prod_backup*
