@@ -261,6 +261,51 @@ class GitHubSettings(BaseSettings):
         )
 
 
+class RedisSettings(BaseSettings):
+    """Redis/Upstash caching configuration settings."""
+
+    model_config = SettingsConfigDict(env_file=[".env.test", ".env", ".envrc"], extra="ignore")
+
+    upstash_redis_rest_url: str | None = Field(
+        default=None,
+        description="Upstash Redis REST URL (cloud)",
+        json_schema_extra={"env": "UPSTASH_REDIS_REST_URL"},
+    )
+    upstash_redis_rest_token: str | None = Field(
+        default=None,
+        description="Upstash Redis REST token",
+        json_schema_extra={"env": "UPSTASH_REDIS_REST_TOKEN"},
+    )
+    redis_url: str | None = Field(
+        default=None,
+        description="Local Redis URL (e.g., redis://localhost:6379/0)",
+        json_schema_extra={"env": "REDIS_URL"},
+    )
+    # Cache TTL tiers (in seconds)
+    cache_ttl_short: int = Field(
+        default=30,
+        description="Short TTL for high-frequency queries",
+        json_schema_extra={"env": "CACHE_TTL_SHORT"},
+    )
+    cache_ttl_medium: int = Field(
+        default=60,
+        description="Medium TTL for moderate-frequency queries",
+        json_schema_extra={"env": "CACHE_TTL_MEDIUM"},
+    )
+    cache_ttl_long: int = Field(
+        default=120,
+        description="Long TTL for low-frequency queries",
+        json_schema_extra={"env": "CACHE_TTL_LONG"},
+    )
+
+    @property
+    def is_configured(self) -> bool:
+        """Return True if either Upstash or local Redis is configured."""
+        return bool(
+            (self.upstash_redis_rest_url and self.upstash_redis_rest_token) or self.redis_url
+        )
+
+
 class Settings(BaseSettings):
     """Main settings class that aggregates all configuration groups."""
 
@@ -296,6 +341,11 @@ class Settings(BaseSettings):
     def github(self) -> GitHubSettings:
         """Get GitHub settings."""
         return get_github_settings()
+
+    @property
+    def redis(self) -> RedisSettings:
+        """Get Redis settings."""
+        return get_redis_settings()
 
 
 # Cached settings instances to avoid re-reading environment on every access
@@ -336,6 +386,12 @@ def get_github_settings() -> GitHubSettings:
 
 
 @lru_cache
+def get_redis_settings() -> RedisSettings:
+    """Get cached Redis settings instance."""
+    return RedisSettings()
+
+
+@lru_cache
 def get_settings() -> Settings:
     """Get cached main settings instance."""
     return Settings()
@@ -349,4 +405,5 @@ def clear_settings_cache() -> None:
     get_session_settings.cache_clear()
     get_rating_settings.cache_clear()
     get_github_settings.cache_clear()
+    get_redis_settings.cache_clear()
     get_settings.cache_clear()

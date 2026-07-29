@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.review import _create_or_update_review_response
 from app.auth import get_current_user
+from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Issue, Review, Thread
@@ -37,6 +38,14 @@ from comic_pile.session import get_current_die, get_or_create
 router = APIRouter(tags=["threads"])
 
 logger = logging.getLogger(__name__)
+
+
+async def _invalidate_thread_caches(user_id: int, thread_id: int | None = None) -> None:
+    """Invalidate thread cache entries for a specific user."""
+    coros = [invalidate_cache(f"cache:list_threads:User:{user_id}:*")]
+    if thread_id is not None:
+        coros.append(invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}"))
+    await asyncio.gather(*coros)
 
 
 async def thread_to_response(
@@ -140,6 +149,7 @@ async def list_stale_threads(
 
 @router.get("/", response_model=ThreadListResponse)
 @limiter.limit("100/minute")
+@cached(ttl=TTL.SHORT)
 async def list_threads(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -346,6 +356,7 @@ async def create_thread(
             await db.commit()
             await db.refresh(new_thread)
 
+            await _invalidate_thread_caches(current_user.id)
             return await thread_to_response(new_thread, db)
         except OperationalError as e:
             if "deadlock" in str(e).lower():
@@ -362,6 +373,7 @@ async def create_thread(
 
 
 @router.get("/{thread_id}", response_model=ThreadResponse)
+@cached(ttl=TTL.MEDIUM)
 async def get_thread(
     thread_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -430,6 +442,7 @@ async def update_thread(
     await db.commit()
     await db.refresh(thread)
 
+    await _invalidate_thread_caches(current_user.id, thread.id)
     return await thread_to_response(thread, db)
 
 
@@ -468,6 +481,7 @@ async def delete_thread(
     try:
         await db.delete(thread)
         await db.commit()
+        await _invalidate_thread_caches(current_user.id, thread_id)
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
@@ -570,6 +584,7 @@ async def reactivate_thread(
     await db.commit()
     await db.refresh(thread)
 
+    await _invalidate_thread_caches(current_user.id, thread.id)
     return await thread_to_response(thread, db)
 
 
@@ -711,6 +726,7 @@ async def move_thread_to_collection(
     response = await thread_to_response(thread, db)
 
     await db.commit()
+    await _invalidate_thread_caches(current_user.id, thread_id)
 
     return response
 
@@ -780,6 +796,7 @@ async def backdate_thread_for_testing(
 
     thread.last_activity_at = datetime.now(UTC) - timedelta(days=days_ago)
     await db.commit()
+    await _invalidate_thread_caches(current_user.id, thread_id)
 
     return await thread_to_response(thread, db)
 
@@ -828,6 +845,7 @@ async def migrate_thread_to_issues(
     response = await thread_to_response(thread, db)
 
     await db.commit()
+    await _invalidate_thread_caches(current_user.id, thread_id)
 
     return response
 
@@ -940,5 +958,6 @@ async def migrate_thread_to_issues_simple(
     response = await thread_to_response(thread, db)
 
     await db.commit()
+    await _invalidate_thread_caches(current_user.id, thread_id)
 
     return response

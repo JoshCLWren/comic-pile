@@ -40,7 +40,8 @@ from app.api import (
     undo,
 )
 from app.api.review import router
-from app.config import get_app_settings, get_database_settings
+from app.cache import cache
+from app.config import get_app_settings, get_database_settings, get_redis_settings
 from app.csrf import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, is_csrf_protected_request
 from app.database import get_db
 from app.exception_handlers import register_exception_handlers
@@ -366,8 +367,26 @@ def create_app(*, serve_frontend: bool = True) -> FastAPI:
 
     @app.on_event("startup")
     async def startup_event():
-        """Initialize database on application startup."""
+        """Initialize database and cache on application startup."""
         await init_database(app_settings.environment)
+
+        # Initialize Redis cache if configured
+        redis_settings = get_redis_settings()
+        if redis_settings.is_configured:
+            if redis_settings.upstash_redis_rest_url and redis_settings.upstash_redis_rest_token:
+                await cache.initialize(
+                    url=redis_settings.upstash_redis_rest_url,
+                    token=redis_settings.upstash_redis_rest_token,
+                )
+            elif redis_settings.redis_url:
+                await cache.initialize(local_url=redis_settings.redis_url)
+        else:
+            logger.info("Redis cache not configured - caching disabled")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        """Close cache connection on application shutdown."""
+        await cache.close()
 
     return app
 

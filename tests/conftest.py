@@ -307,6 +307,35 @@ def test_username() -> str:
     return _default_test_username()
 
 
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def initialize_test_cache() -> AsyncIterator[None]:
+    """Initialize Redis cache if REDIS_URL is configured.
+
+    Session-scoped so cache is available across all tests.
+    Cache is flushed between each test via clear_test_cache.
+    """
+    from app.cache import cache
+    from app.config import get_redis_settings
+
+    settings = get_redis_settings()
+    if settings.redis_url and not cache.is_initialized:
+        await cache.initialize(local_url=settings.redis_url)
+    yield
+    if cache.is_initialized:
+        await cache.close()
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def clear_test_cache() -> AsyncIterator[None]:
+    """Flush all Redis keys after each test to prevent cross-test pollution."""
+    from app.cache import cache
+
+    yield
+    if cache.is_initialized:
+        from app.cache import invalidate_cache
+        await invalidate_cache("cache:*")
+
+
 def get_test_database_url() -> str:
     """Get test database URL from environment (PostgreSQL only)."""
     test_db_url = os.getenv("TEST_DATABASE_URL")

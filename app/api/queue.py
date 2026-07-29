@@ -1,5 +1,6 @@
 """Queue API routes."""
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Annotated
@@ -10,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
+from app.cache import invalidate_cache
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread, User
@@ -21,8 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
-
-clear_cache = None
 
 
 class PositionRequest(BaseModel):
@@ -102,8 +102,10 @@ async def move_thread_position(
         await db.commit()
         await db.refresh(thread)
 
-    if clear_cache:
-        clear_cache()
+    await asyncio.gather(
+        invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}"),
+    )
 
     return await thread_to_response(thread, db)
 
@@ -154,8 +156,10 @@ async def move_thread_front(
         await db.commit()
         await db.refresh(thread)
 
-    if clear_cache:
-        clear_cache()
+    await asyncio.gather(
+        invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}"),
+    )
 
     return await thread_to_response(thread, db)
 
@@ -206,8 +210,10 @@ async def move_thread_back(
         await db.commit()
         await db.refresh(thread)
 
-    if clear_cache:
-        clear_cache()
+    await asyncio.gather(
+        invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}"),
+    )
 
     return await thread_to_response(thread, db)
 
@@ -236,8 +242,6 @@ async def shuffle_threads(
     )
 
     await shuffle_queue(current_user.id, db)
-
-    if clear_cache:
-        clear_cache()
+    await invalidate_cache(f"cache:list_threads:User:{current_user.id}:*")
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

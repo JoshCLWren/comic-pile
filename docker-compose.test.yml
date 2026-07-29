@@ -16,6 +16,19 @@ services:
     networks:
       - test-network
 
+  redis-test:
+    image: redis:7-alpine
+    container_name: comic-pile-e2e-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - test-network
+
   api-test:
     build:
       context: .
@@ -27,12 +40,15 @@ services:
     container_name: comic-pile-e2e-api
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres-test:5432/comic_pile_test
+      REDIS_URL: redis://redis-test:6379/0
       SECRET_KEY: test-secret-key-for-testing-only
       TEST_ENVIRONMENT: "true"
     ports:
       - "8002:8000"
     depends_on:
       postgres-test:
+        condition: service_healthy
+      redis-test:
         condition: service_healthy
     networks:
       - test-network

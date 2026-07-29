@@ -5,11 +5,13 @@ from collections import defaultdict, deque
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import TTL, cached, invalidate_cache
 from app.models.dependency import Dependency
 from app.models.issue import Issue
 from app.models.thread import Thread
 
 
+@cached(ttl=TTL.SHORT)
 async def get_blocked_thread_ids(user_id: int, db: AsyncSession) -> set[int]:
     """Return thread IDs blocked by unsatisfied issue-level dependencies for a user."""
     source_issue = Issue.__table__.alias("source_issue")
@@ -226,6 +228,7 @@ async def update_thread_blocked_status(thread_id: int, user_id: int, db: AsyncSe
 
 async def refresh_user_blocked_status(user_id: int, db: AsyncSession) -> None:
     """Recalculate blocked flags for all threads of a user."""
+    await invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}")
     blocked_ids = await get_blocked_thread_ids(user_id, db)
 
     await db.execute(update(Thread).where(Thread.user_id == user_id).values(is_blocked=False))

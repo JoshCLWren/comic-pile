@@ -24,6 +24,8 @@ dependencies = [
     "PyGithub>=2.0.0",
     "pytest-xdist>=3.0.0",
     "pyyaml>=6.0.0",
+    "upstash-redis>=1.7.0",
+    "redis>=5.0.0",
 ]
 
 [dependency-groups]
@@ -102,7 +104,7 @@ exclude = [".venv", "__pycache__", "*.pyc", ".git", "node_modules", "alembic/ver
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "D", "ANN401"]
 ignore = ["D203", "D213", "E501", "B008", "I001"]
-per-file-ignores = { "alembic/env.py" = ["F401"], "alembic/versions/*.py" = ["D415"] }
+per-file-ignores = { "alembic/env.py" = ["F401"], "alembic/versions/*.py" = ["D415"], "app/cache.py" = ["D102", "D107", "ANN401"] }
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
