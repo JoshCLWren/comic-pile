@@ -35,11 +35,11 @@ jobs:
           issue_text = issue_text.replace(old_import, new_import, 1)
 
           old_coros = '''    coros = [
-              invalidate_cache(f"cache:list_issues:{thread_id}:*"),
+                  invalidate_cache(f"cache:list_issues:{thread_id}:*"),
           '''
           new_coros = '''    coros = [
-              _invalidate_session_caches(user_id),
-              invalidate_cache(f"cache:list_issues:{thread_id}:*"),
+                  _invalidate_session_caches(user_id),
+                  invalidate_cache(f"cache:list_issues:{thread_id}:*"),
           '''
           if issue_text.count(old_coros) != 1:
               raise RuntimeError("Unexpected issue cache coroutine match count")
