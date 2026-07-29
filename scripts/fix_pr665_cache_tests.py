@@ -69,8 +69,20 @@ replace_once(
 )
 
 replace_once(
-    '        user_id=sample_data["user"].id,\n',
-    "        user_id=user_id,\n",
+    '''        title="Rate Session Test",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=sample_data["user"].id,
+''',
+    '''        title="Rate Session Test",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user_id,
+''',
 )
 
 replace_once(
@@ -103,8 +115,20 @@ replace_once(
 )
 
 replace_once(
-    '        user_id=sample_data["user"].id,\n',
-    "        user_id=user_id,\n",
+    '''        title="Snap Session Test",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=sample_data["user"].id,
+''',
+    '''        title="Snap Session Test",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user_id,
+''',
 )
 
 path.write_text(text)
