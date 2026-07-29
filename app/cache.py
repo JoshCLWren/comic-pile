@@ -25,6 +25,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import enum
 import functools
 import hashlib
@@ -44,6 +45,7 @@ T = TypeVar("T")
 
 # Types to skip when generating cache keys (request objects, db sessions)
 _SKIP_TYPES = frozenset({"AsyncSession", "Session", "Engine", "Request"})
+_CONNECT_TIMEOUT_SECONDS = 5.0
 
 
 class TTL(enum.Enum):
@@ -121,12 +123,17 @@ class CircuitBreaker:
 
         return True
 
+    def reset(self) -> None:
+        """Reset the circuit after a confirmed healthy connection."""
+        self._state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._opened_at = None
+
     def record_success(self) -> None:
         """Record successful request."""
         if self._state == CircuitState.HALF_OPEN:
             logger.info("Circuit '%s': HALF_OPEN -> CLOSED", self.name)
-            self._state = CircuitState.CLOSED
-            self._failure_count = 0
+            self.reset()
         elif self._state == CircuitState.CLOSED:
             self._failure_count = 0
 
@@ -193,23 +200,38 @@ class UpstashCache:
             return
 
         if local_url:
+            client = aioredis.Redis.from_url(
+                local_url,
+                decode_responses=True,
+                socket_connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+                socket_timeout=_CONNECT_TIMEOUT_SECONDS,
+            )
             try:
-                self._client = aioredis.Redis.from_url(local_url, decode_responses=True)
-                await self._client.ping()
+                async with asyncio.timeout(_CONNECT_TIMEOUT_SECONDS):
+                    await client.ping()
+                self._client = client
+                self._circuit_breaker.reset()
                 self._initialized = True
                 self._is_upstash = False
                 logger.info("Local Redis cache initialized: %s", local_url)
                 return
             except Exception as e:
                 logger.error("Failed to initialize local Redis: %s", e)
+                try:
+                    await client.aclose()
+                except Exception:
+                    logger.debug("Failed to close unsuccessful Redis client", exc_info=True)
                 self._client = None
                 self._initialized = False
                 return
 
         if url and token:
+            client = UpstashRedis(url=url, token=token)
             try:
-                self._client = UpstashRedis(url=url, token=token)
-                await self._client.ping()
+                async with asyncio.timeout(_CONNECT_TIMEOUT_SECONDS):
+                    await client.ping()
+                self._client = client
+                self._circuit_breaker.reset()
                 self._initialized = True
                 self._is_upstash = True
                 logger.info("Upstash Redis cache initialized")
@@ -321,7 +343,9 @@ class UpstashCache:
                 prepared,
                 default=str,
             )
-            if ttl:
+            if ttl is not None and ttl <= 0:
+                await self._client.delete(key)
+            elif ttl is not None:
                 await self._client.set(key, data, ex=ttl)
             else:
                 await self._client.set(key, data)

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.review import _create_or_update_review_response
+from app.api.session import _invalidate_session_caches
 from app.auth import get_current_user
 from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
@@ -40,10 +41,17 @@ router = APIRouter(tags=["threads"])
 logger = logging.getLogger(__name__)
 
 
-async def _invalidate_thread_caches(user_id: int, thread_id: int | None = None) -> None:
+async def _invalidate_thread_caches(
+    user_id: int,
+    thread_id: int | None = None,
+    *,
+    all_details: bool = False,
+) -> None:
     """Invalidate thread cache entries for a specific user."""
     coros = [invalidate_cache(f"cache:list_threads:User:{user_id}:*")]
-    if thread_id is not None:
+    if all_details:
+        coros.append(invalidate_cache(f"cache:get_thread:*:User:{user_id}:"))
+    elif thread_id is not None:
         coros.append(invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}:"))
     await asyncio.gather(*coros)
 
@@ -481,7 +489,10 @@ async def delete_thread(
     try:
         await db.delete(thread)
         await db.commit()
-        await _invalidate_thread_caches(current_user.id, thread_id)
+        await asyncio.gather(
+            _invalidate_thread_caches(current_user.id, all_details=True),
+            _invalidate_session_caches(current_user.id),
+        )
     except IntegrityError as exc:
         await db.rollback()
         raise HTTPException(
@@ -584,7 +595,10 @@ async def reactivate_thread(
     await db.commit()
     await db.refresh(thread)
 
-    await _invalidate_thread_caches(current_user.id, thread.id)
+    await asyncio.gather(
+        _invalidate_thread_caches(current_user.id, all_details=True),
+        _invalidate_session_caches(current_user.id),
+    )
     return await thread_to_response(thread, db)
 
 
@@ -675,6 +689,7 @@ async def set_pending_thread(
         snoozed_count = len(snoozed_ids)
 
     await db.commit()
+    await _invalidate_session_caches(current_user.id)
 
     return RollResponse(
         thread_id=thread_id_int,

@@ -320,6 +320,8 @@ async def initialize_test_cache() -> AsyncIterator[None]:
     settings = get_redis_settings()
     if settings.redis_url and not cache.is_initialized:
         await cache.initialize(local_url=settings.redis_url)
+    if settings.redis_url and not cache.is_initialized:
+        pytest.fail("REDIS_URL is configured but the cache failed to initialize")
     yield
     if cache.is_initialized:
         await cache.close()

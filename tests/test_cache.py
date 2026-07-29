@@ -32,8 +32,10 @@ async def _reinitialize_cache() -> AsyncIterator[None]:
             cache._client = None
             cache._initialized = False
     settings = get_redis_settings()
-    if settings.redis_url:
-        await cache.initialize(local_url=settings.redis_url)
+    if not settings.redis_url:
+        pytest.skip("REDIS_URL is required for cache regression tests")
+    await cache.initialize(local_url=settings.redis_url)
+    assert cache.is_initialized, "Cache failed to initialize for cache regression tests"
     yield
 
 
@@ -342,12 +344,12 @@ async def test_cache_falsy_ttl_caches_empty_result(
     cached_val = await cache.get("cache:test_falsy:never_set:")
     assert cached_val is None
 
-    await cache.set("cache:test_falsy:empty_list:", [], ttl=30)
+    assert await cache.set("cache:test_falsy:empty_list:", [], ttl=30)
     result = await cache.get("cache:test_falsy:empty_list:")
     assert result is not None, "Empty list should be cacheable with falsy_ttl"
     assert result == []
 
-    await cache.set("cache:test_falsy:zero:", 0, ttl=30)
+    assert await cache.set("cache:test_falsy:zero:", 0, ttl=30)
     result = await cache.get("cache:test_falsy:zero:")
     assert result is not None, "Zero should be cacheable with falsy_ttl"
     assert result == 0
@@ -361,16 +363,68 @@ async def test_cache_set_type_preservation(
     await cache.clear_pattern("cache:*")
 
     test_set = {1, 2, 3}
-    await cache.set("cache:test_set_preservation:", test_set, ttl=30)
+    assert await cache.set("cache:test_set_preservation:", test_set, ttl=30)
     result = await cache.get("cache:test_set_preservation:")
     assert isinstance(result, set), f"Expected set, got {type(result)}"
     assert result == {1, 2, 3}
 
     test_dict = {"a": {1, 2}, "b": {3, 4}}
-    await cache.set("cache:test_nested_set:", test_dict, ttl=30)
+    assert await cache.set("cache:test_nested_set:", test_dict, ttl=30)
     result = await cache.get("cache:test_nested_set:")
     assert isinstance(result, dict)
     assert isinstance(result["a"], set)
     assert isinstance(result["b"], set)
     assert result["a"] == {1, 2}
     assert result["b"] == {3, 4}
+
+
+@pytest.mark.asyncio
+async def test_cache_current_session_warm_then_set_pending(
+    auth_client: AsyncClient,
+    sample_data: dict,
+) -> None:
+    """Manual selection invalidates a previously warmed current-session response."""
+    thread = sample_data["threads"][0]
+
+    before = await auth_client.get("/api/sessions/current/")
+    assert before.status_code == 200
+
+    pending = await auth_client.post(f"/api/threads/{thread.id}/set-pending")
+    assert pending.status_code == 200
+
+    after = await auth_client.get("/api/sessions/current/")
+    assert after.status_code == 200
+    assert after.json()["active_thread"]["id"] == thread.id
+
+
+@pytest.mark.asyncio
+async def test_cache_reinitialize_resets_open_circuit() -> None:
+    """A successful reconnect closes an earlier open circuit."""
+    from app.cache import CircuitState
+    from app.config import get_redis_settings
+
+    settings = get_redis_settings()
+    assert settings.redis_url is not None
+
+    for _ in range(cache._circuit_breaker.failure_threshold):
+        cache._circuit_breaker.record_failure()
+    assert cache._circuit_breaker.state == CircuitState.OPEN
+
+    await cache.close()
+    await cache.initialize(local_url=settings.redis_url)
+
+    assert cache.is_initialized
+    assert cache._circuit_breaker.state == CircuitState.CLOSED
+    assert await cache.set("cache:test_reconnect:", "healthy", ttl=30)
+    assert await cache.get("cache:test_reconnect:") == "healthy"
+
+
+@pytest.mark.asyncio
+async def test_cache_zero_ttl_does_not_persist() -> None:
+    """An explicit zero TTL removes the key instead of caching forever."""
+    key = "cache:test_zero_ttl:"
+    assert await cache.set(key, "value", ttl=30)
+    assert await cache.get(key) == "value"
+
+    assert await cache.set(key, "replacement", ttl=0)
+    assert await cache.get(key) is None
