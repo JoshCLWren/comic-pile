@@ -16,8 +16,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache import cache
-from app.models import Dependency, Issue, Thread
+from app.models import Dependency, Issue, Thread, User
 from comic_pile.dependencies import get_blocked_thread_ids
+
+
+async def _authenticated_user_id(async_db: AsyncSession, test_username: str) -> int:
+    """Return the user ID created by the authenticated client fixture."""
+    result = await async_db.execute(select(User.id).where(User.username == test_username))
+    return result.scalar_one()
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -33,7 +39,7 @@ async def _reinitialize_cache() -> AsyncIterator[None]:
             cache._initialized = False
     settings = get_redis_settings()
     if not settings.redis_url:
-        pytest.skip("REDIS_URL is required for cache regression tests")
+        pytest.skip(reason="REDIS_URL is required for cache regression tests")
     await cache.initialize(local_url=settings.redis_url)
     assert cache.is_initialized, "Cache failed to initialize for cache regression tests"
     yield
@@ -97,20 +103,21 @@ async def test_cache_thread_detail_warm_then_update(
 async def test_cache_session_details_warm_then_rate(
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    sample_data: dict,
+    test_username: str,
 ) -> None:
     """Warm session details, rate a thread, verify new event appears."""
     await cache.clear_pattern("cache:*")
 
     from app.models import Thread as ThreadModel
 
+    user_id = await _authenticated_user_id(async_db, test_username)
     thread = ThreadModel(
         title="Rate Session Test",
         format="Comic",
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=sample_data["user"].id,
+        user_id=user_id,
     )
     async_db.add(thread)
     await async_db.commit()
@@ -149,20 +156,21 @@ async def test_cache_session_details_warm_then_rate(
 async def test_cache_session_snapshots_warm_then_rate(
     auth_client: AsyncClient,
     async_db: AsyncSession,
-    sample_data: dict,
+    test_username: str,
 ) -> None:
     """Warm snapshot list, rate a thread, verify new snapshot appears."""
     await cache.clear_pattern("cache:*")
 
     from app.models import Thread as ThreadModel
 
+    user_id = await _authenticated_user_id(async_db, test_username)
     thread = ThreadModel(
         title="Snap Session Test",
         format="Comic",
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=sample_data["user"].id,
+        user_id=user_id,
     )
     async_db.add(thread)
     await async_db.commit()
