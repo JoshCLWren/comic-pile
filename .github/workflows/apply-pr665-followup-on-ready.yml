@@ -18,6 +18,39 @@ jobs:
           ref: add-upstash-cache
           fetch-depth: 0
 
+      - name: Tighten staged test matcher
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/apply_pr665_followup.py")
+          text = path.read_text()
+          old_prefix = "    '''        status=\"active\",\n        user_id=1,\n"
+          old_replacement = (
+              "    '''        title=\"Rate Session Test\",\n"
+              "        format=\"Comic\",\n"
+              "        issues_remaining=5,\n"
+              "        queue_position=1,\n"
+              "        status=\"active\",\n"
+              "        user_id=1,\n"
+          )
+          new_prefix = "    '''        status=\"active\",\n        user_id=sample_data[\"user\"].id,\n"
+          new_replacement = (
+              "    '''        title=\"Rate Session Test\",\n"
+              "        format=\"Comic\",\n"
+              "        issues_remaining=5,\n"
+              "        queue_position=1,\n"
+              "        status=\"active\",\n"
+              "        user_id=sample_data[\"user\"].id,\n"
+          )
+          if text.count(old_prefix) != 1 or text.count(new_prefix) != 1:
+              raise RuntimeError("Staged follow-up matcher no longer has the expected shape")
+          path.write_text(
+              text.replace(old_prefix, old_replacement, 1)
+              .replace(new_prefix, new_replacement, 1)
+          )
+          PY
+
       - name: Apply reviewed follow-up
         run: python scripts/apply_pr665_followup.py
 
