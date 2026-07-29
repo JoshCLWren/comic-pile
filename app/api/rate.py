@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
+from app.api.session import _invalidate_session_caches
 from app.auth import get_current_user
 from app.cache import invalidate_cache
 from app.config import get_rating_settings
@@ -391,14 +392,11 @@ async def rate_thread(
     await db.commit()
 
     await asyncio.gather(
-        invalidate_cache(f"cache:get_current_session:User:{user_id}"),
-        invalidate_cache(f"cache:get_session:*:User:{user_id}"),
-        invalidate_cache(f"cache:list_sessions:User:{user_id}:*"),
+        _invalidate_session_caches(user_id),
         invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
-        invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}:"),
         invalidate_cache(f"cache:list_issues:{thread_id}:*"),
-        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}"),
-        invalidate_cache(f"cache:get_all_blocked_thread_ids:User:{user_id}"),
+        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
     )
 
     result = await db.execute(

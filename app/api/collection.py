@@ -27,7 +27,7 @@ router = APIRouter(tags=["collections"])
 async def _invalidate_collection_caches(user_id: int, collection_id: int | None = None) -> None:
     coros = [invalidate_cache(f"cache:list_collections:User:{user_id}:*")]
     if collection_id is not None:
-        coros.append(invalidate_cache(f"cache:get_collection:{collection_id}:User:{user_id}"))
+        coros.append(invalidate_cache(f"cache:get_collection:{collection_id}:User:{user_id}:"))
     await asyncio.gather(*coros)
 
 
@@ -335,5 +335,5 @@ async def delete_collection(
     await asyncio.gather(
         _invalidate_collection_caches(current_user.id, collection_id),
         invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-        invalidate_cache(f"cache:get_thread:*:User:{current_user.id}"),
+        invalidate_cache(f"cache:get_thread:*:User:{current_user.id}:"),
     )

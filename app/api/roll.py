@@ -10,8 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 
+from app.api.session import _invalidate_session_caches
 from app.auth import get_current_user
-from app.cache import invalidate_cache
+
 from app.database import get_db
 from app.middleware import limiter
 from app.models import Event, Thread
@@ -124,7 +125,7 @@ async def roll_dice(
         current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await invalidate_cache(f"cache:get_current_session:User:{current_user.id}")
+    await _invalidate_session_caches(current_user.id)
 
     return RollResponse(
         thread_id=selected_thread_id,
@@ -161,7 +162,7 @@ async def dismiss_pending_roll(
     current_session.pending_thread_updated_at = None
     await db.commit()
 
-    await invalidate_cache(f"cache:get_current_session:User:{current_user.id}")
+    await _invalidate_session_caches(current_user.id)
 
 
 @router.post("/override", response_model=RollResponse)
@@ -262,7 +263,7 @@ async def override_roll(
     current_session.pending_thread_updated_at = datetime.now(UTC)
 
     await db.commit()
-    await invalidate_cache(f"cache:get_current_session:User:{current_user.id}")
+    await _invalidate_session_caches(current_user.id)
 
     return RollResponse(
         thread_id=override_thread_id,
@@ -313,7 +314,7 @@ async def set_manual_die(
     current_session.manual_die = die
     await db.commit()
 
-    await invalidate_cache(f"cache:get_current_session:User:{current_user.id}")
+    await _invalidate_session_caches(current_user.id)
     return f"d{die}"
 
 
@@ -336,7 +337,7 @@ async def clear_manual_die(
     current_session.manual_die = None
     await db.commit()
 
-    await invalidate_cache(f"cache:get_current_session:User:{current_user.id}")
+    await _invalidate_session_caches(current_user.id)
 
     await db.refresh(current_session)
     current_die = await get_current_die(current_session.id, db)

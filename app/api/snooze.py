@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.session import build_ladder_path
+from app.api.session import _invalidate_session_caches, build_ladder_path
 from app.auth import get_current_user
 from app.cache import invalidate_cache
 from app.database import get_db
@@ -191,17 +191,12 @@ async def snooze_thread(
     await db.commit()
 
     await asyncio.gather(
-        invalidate_cache(f"cache:get_current_session:User:{current_user.id}"),
-        invalidate_cache(f"cache:get_session:*:User:{current_user.id}"),
-        invalidate_cache(f"cache:list_sessions:User:{current_user.id}:*"),
+        _invalidate_session_caches(current_user.id),
         invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-        invalidate_cache(f"cache:get_thread:{pending_thread_id}:User:{current_user.id}"),
+        invalidate_cache(f"cache:get_thread:{pending_thread_id}:User:{current_user.id}:"),
     )
 
     await db.refresh(current_session)
-    logger.info(
-        f"Snooze: after commit and refresh, snoozed_thread_ids={current_session.snoozed_thread_ids}"
-    )
 
     return await build_session_response(current_session, db)
 
@@ -214,20 +209,7 @@ async def unsnooze_thread(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
 ) -> SessionResponse:
-    """Remove thread from snoozed list.
-
-    Args:
-        thread_id: The thread ID to remove from snoozed list.
-        request: FastAPI request object for rate limiting.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        SessionResponse containing the updated session with snoozed_thread_ids.
-
-    Raises:
-        HTTPException: If no active session exists.
-    """
+    """Remove thread from snoozed list."""
     _ = request
     result = await db.execute(
         select(SessionModel)
@@ -263,7 +245,10 @@ async def unsnooze_thread(
 
     await db.commit()
 
-    await invalidate_cache(f"cache:get_current_session:User:{current_user.id}")
+    await asyncio.gather(
+        _invalidate_session_caches(current_user.id),
+        invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
+    )
 
     await db.refresh(current_session)
     return await build_session_response(current_session, db)

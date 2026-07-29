@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.session import _invalidate_session_caches
 from app.auth import get_current_user
 from app.cache import invalidate_cache
 from app.database import get_db
@@ -225,15 +226,12 @@ async def undo_to_snapshot(
             await db.refresh(session)
 
             await asyncio.gather(
-                invalidate_cache(f"cache:get_current_session:User:{current_user.id}"),
-                invalidate_cache(f"cache:get_session:*:User:{current_user.id}"),
-                invalidate_cache(f"cache:list_sessions:User:{current_user.id}:*"),
+                _invalidate_session_caches(current_user.id),
                 invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-                invalidate_cache(f"cache:get_thread:*:User:{current_user.id}"),
+                invalidate_cache(f"cache:get_thread:*:User:{current_user.id}:"),
                 invalidate_cache(f"cache:list_issues:*:User:{current_user.id}:*"),
-                invalidate_cache(f"cache:get_issue:*:User:{current_user.id}"),
-                invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}"),
-                invalidate_cache(f"cache:get_all_blocked_thread_ids:User:{current_user.id}"),
+                invalidate_cache(f"cache:get_issue:*:User:{current_user.id}:"),
+                invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:"),
             )
 
             result = await db.execute(

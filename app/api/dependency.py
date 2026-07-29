@@ -50,16 +50,15 @@ router = APIRouter(tags=["dependencies"])
 
 async def _invalidate_dependency_caches(user_id: int, dependency_id: int | None = None) -> None:
     coros = [
-        invalidate_cache(f"cache:get_all_blocked_thread_ids:User:{user_id}"),
-        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}"),
-        invalidate_cache(f"cache:list_thread_dependencies:*:User:{user_id}"),
-        invalidate_cache(f"cache:list_issue_dependencies:*:User:{user_id}"),
-        invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}"),
-        invalidate_cache(f"cache:check_thread_dependency_order:*:User:{user_id}"),
-        invalidate_cache(f"cache:get_thread_connected_threads:*:User:{user_id}"),
+        invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:"),
+        invalidate_cache(f"cache:list_thread_dependencies:*:User:{user_id}:"),
+        invalidate_cache(f"cache:list_issue_dependencies:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_thread_blocking_info:*:User:{user_id}:"),
+        invalidate_cache(f"cache:check_thread_dependency_order:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_thread_connected_threads:*:User:{user_id}:"),
     ]
     if dependency_id is not None:
-        coros.append(invalidate_cache(f"cache:get_dependency:{dependency_id}:User:{user_id}"))
+        coros.append(invalidate_cache(f"cache:get_dependency:{dependency_id}:User:{user_id}:"))
     await asyncio.gather(*coros)
 
 
@@ -410,7 +409,7 @@ async def create_dependency(
     db.add(dependency)
 
     # Invalidate before refresh so blocked-status recalc reads fresh data
-    await invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}")
+    await invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:")
     await refresh_user_blocked_status(current_user.id, db)
 
     try:
@@ -503,7 +502,7 @@ async def delete_dependency(
 
     await db.delete(dependency)
     # Invalidate before refresh so blocked-status recalc reads fresh data
-    await invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}")
+    await invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:")
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
     await _invalidate_dependency_caches(current_user.id)

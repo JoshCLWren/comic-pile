@@ -28,6 +28,7 @@ from __future__ import annotations
 import enum
 import functools
 import hashlib
+import inspect
 import json
 import logging
 import time
@@ -125,6 +126,8 @@ class CircuitBreaker:
         if self._state == CircuitState.HALF_OPEN:
             logger.info("Circuit '%s': HALF_OPEN -> CLOSED", self.name)
             self._state = CircuitState.CLOSED
+            self._failure_count = 0
+        elif self._state == CircuitState.CLOSED:
             self._failure_count = 0
 
     def record_failure(self) -> None:
@@ -229,6 +232,19 @@ class UpstashCache:
                 await client.aclose()
             logger.info("Redis cache closed")
 
+    @staticmethod
+    def _reconstruct_value(value: Any) -> Any:
+        """Reconstruct a value from deserialized JSON, restoring tagged types."""
+        if isinstance(value, dict) and "__type__" in value:
+            type_tag = value["__type__"]
+            if type_tag == "set":
+                return {UpstashCache._reconstruct_value(v) for v in value["values"]}
+        if isinstance(value, dict):
+            return {k: UpstashCache._reconstruct_value(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [UpstashCache._reconstruct_value(v) for v in value]
+        return value
+
     async def get(self, key: str) -> Any | None:
         """Get a value from cache."""
         if not self.is_initialized or not self._circuit_breaker.can_attempt():
@@ -242,7 +258,7 @@ class UpstashCache:
             self._circuit_breaker.record_success()
             if result is None:
                 return None
-            return json.loads(result)
+            return UpstashCache._reconstruct_value(json.loads(result))
         except Exception as e:
             self._circuit_breaker.record_failure()
             logger.warning("Cache get failed: %s", e)
@@ -261,7 +277,7 @@ class UpstashCache:
             return value
 
         if isinstance(value, set):
-            return [UpstashCache._prepare_value(v) for v in value]
+            return {"__type__": "set", "values": [UpstashCache._prepare_value(v) for v in value]}
 
         if isinstance(value, dict):
             return {k: UpstashCache._prepare_value(v) for k, v in value.items()}
@@ -334,7 +350,7 @@ class UpstashCache:
             return False
 
     async def clear_pattern(self, pattern: str) -> int:
-        """Clear all keys matching a pattern."""
+        """Clear all keys matching a pattern using SCAN (non-blocking)."""
         if not self.is_initialized or not self._circuit_breaker.can_attempt():
             return 0
 
@@ -342,12 +358,22 @@ class UpstashCache:
             return 0
 
         try:
-            keys = await self._client.keys(pattern)
-            if keys:
-                deleted = await self._client.delete(*keys)
-                self._circuit_breaker.record_success()
-                return deleted
-            return 0
+            deleted = 0
+            cursor = 0
+            batch_size = 100
+
+            while True:
+                cursor, keys = await self._client.scan(
+                    cursor=cursor, match=pattern, count=batch_size
+                )
+                if keys:
+                    await self._client.delete(*keys)
+                    deleted += len(keys)
+                if cursor == 0:
+                    break
+
+            self._circuit_breaker.record_success()
+            return deleted
         except Exception as e:
             self._circuit_breaker.record_failure()
             logger.warning("Cache clear_pattern failed: %s", e)
@@ -380,24 +406,44 @@ def _arg_to_cache_string(value: Any) -> str | None:
     return str(value)
 
 
-def _generate_cache_key(func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
-    """Generate a cache key from function name and arguments."""
+def _generate_cache_key(
+    func_name: str,
+    func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> str:
+    """Generate a cache key from function name and arguments.
+
+    Uses inspect.signature to bind arguments in declaration order,
+    producing stable keys regardless of whether callers use positional
+    or keyword arguments.
+    """
     key_parts: list[str] = [func_name]
 
-    for arg in args:
-        s = _arg_to_cache_string(arg)
-        if s is not None:
-            key_parts.append(s)
+    try:
+        sig = inspect.signature(func)
+        bound = sig.bind_partial(*args, **kwargs)
+        bound.apply_defaults()
 
-    for k, v in sorted(kwargs.items()):
-        s = _arg_to_cache_string(v)
-        if s is not None:
-            key_parts.append(f"{k}={s}")
+        for _, value in bound.arguments.items():
+            s = _arg_to_cache_string(value)
+            if s is not None:
+                key_parts.append(s)
+    except (TypeError, ValueError):
+        # Fallback: process args positionally, then kwargs sorted
+        for arg in args:
+            s = _arg_to_cache_string(arg)
+            if s is not None:
+                key_parts.append(s)
+        for k, v in sorted(kwargs.items()):
+            s = _arg_to_cache_string(v)
+            if s is not None:
+                key_parts.append(f"{k}={v}")
 
-    key_str = ":".join(key_parts)
+    key_str = ":".join(key_parts) + ":"
     if len(key_str) > 200:
         key_hash = hashlib.md5(key_str.encode()).hexdigest()
-        return f"cache:{func_name}:{key_hash}"
+        return f"cache:{func_name}:{key_hash}:"
     return f"cache:{key_str}"
 
 
@@ -428,7 +474,8 @@ def cached(
             if not cache.is_initialized:
                 return await func(*args, **kwargs)
 
-            cache_key = _generate_cache_key(getattr(func, "__name__", func.__class__.__name__), args, kwargs)
+            func_name = getattr(func, "__name__", func.__class__.__name__)
+            cache_key = _generate_cache_key(func_name, func, args, kwargs)
 
             # Try to get from cache
             cached_value = await cache.get(cache_key)
@@ -441,11 +488,9 @@ def cached(
             result = await func(*args, **kwargs)
 
             # Determine TTL for this result
-            effective_ttl = actual_ttl
-            if not result and falsy_ttl:
-                effective_ttl = falsy_ttl
+            effective_ttl = falsy_ttl if falsy_ttl is not None and not result else actual_ttl
 
-            if result:
+            if result or falsy_ttl is not None:
                 await cache.set(cache_key, result, ttl=effective_ttl)
 
             return result

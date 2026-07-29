@@ -44,7 +44,7 @@ async def _invalidate_thread_caches(user_id: int, thread_id: int | None = None) 
     """Invalidate thread cache entries for a specific user."""
     coros = [invalidate_cache(f"cache:list_threads:User:{user_id}:*")]
     if thread_id is not None:
-        coros.append(invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}"))
+        coros.append(invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}:"))
     await asyncio.gather(*coros)
 
 

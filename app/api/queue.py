@@ -104,7 +104,7 @@ async def move_thread_position(
 
     await asyncio.gather(
         invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}:"),
     )
 
     return await thread_to_response(thread, db)
@@ -158,7 +158,7 @@ async def move_thread_front(
 
     await asyncio.gather(
         invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}:"),
     )
 
     return await thread_to_response(thread, db)
@@ -212,7 +212,7 @@ async def move_thread_back(
 
     await asyncio.gather(
         invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{current_user.id}:"),
     )
 
     return await thread_to_response(thread, db)

@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependency import _invalidate_dependency_caches
 from app.auth import get_current_user
 from app.cache import TTL, cached, invalidate_cache
 from app.database import get_db
@@ -42,12 +43,12 @@ async def _invalidate_issue_caches(
 ) -> None:
     coros = [
         invalidate_cache(f"cache:list_issues:{thread_id}:*"),
-        invalidate_cache(f"cache:validate_issue_order:{thread_id}:User:{user_id}"),
-        invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}"),
+        invalidate_cache(f"cache:validate_issue_order:{thread_id}:User:{user_id}:"),
+        invalidate_cache(f"cache:get_thread:{thread_id}:User:{user_id}:"),
         invalidate_cache(f"cache:list_threads:User:{user_id}:*"),
     ]
     if issue_id is not None:
-        coros.append(invalidate_cache(f"cache:get_issue:{issue_id}:User:{user_id}"))
+        coros.append(invalidate_cache(f"cache:get_issue:{issue_id}:User:{user_id}:"))
     await asyncio.gather(*coros)
 
 
@@ -504,7 +505,10 @@ async def create_issues(
     await refresh_user_blocked_status(current_user.id, db)
     try:
         await db.commit()
-        await _invalidate_issue_caches(current_user.id, thread_id)
+        await asyncio.gather(
+            _invalidate_issue_caches(current_user.id, thread_id),
+            _invalidate_dependency_caches(current_user.id),
+        )
     except IntegrityError as e:
         await db.rollback()
         if _is_issue_thread_number_conflict(e):
@@ -594,7 +598,10 @@ async def move_issue(
         _recalculate_next_unread_issue_id(thread, thread_issues)
         await refresh_user_blocked_status(current_user.id, db)
         await db.commit()
-        await _invalidate_issue_caches(current_user.id, thread_id, issue_id)
+        await asyncio.gather(
+            _invalidate_issue_caches(current_user.id, thread_id, issue_id),
+            _invalidate_dependency_caches(current_user.id),
+        )
         return
 
     reordered_issues = [
@@ -625,7 +632,10 @@ async def move_issue(
 
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id, thread_id, issue_id)
+    await asyncio.gather(
+        _invalidate_issue_caches(current_user.id, thread_id, issue_id),
+        _invalidate_dependency_caches(current_user.id),
+    )
 
 
 @router.post("/threads/{thread_id}/issues:reorder", status_code=status.HTTP_204_NO_CONTENT)
@@ -671,7 +681,10 @@ async def reorder_issues(
 
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id, thread_id)
+    await asyncio.gather(
+        _invalidate_issue_caches(current_user.id, thread_id),
+        _invalidate_dependency_caches(current_user.id),
+    )
 
 
 @router.delete("/issues/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -729,7 +742,10 @@ async def delete_issue(
 
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id, thread_id, issue_id)
+    await asyncio.gather(
+        _invalidate_issue_caches(current_user.id, thread_id, issue_id),
+        _invalidate_dependency_caches(current_user.id),
+    )
 
 
 @router.post("/issues/{issue_id}:markRead", status_code=status.HTTP_204_NO_CONTENT)
@@ -794,7 +810,10 @@ async def mark_issue_read(
 
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id, thread_id, issue_id)
+    await asyncio.gather(
+        _invalidate_issue_caches(current_user.id, thread_id, issue_id),
+        _invalidate_dependency_caches(current_user.id),
+    )
 
 
 @router.post("/issues/{issue_id}:markUnread", status_code=status.HTTP_204_NO_CONTENT)
@@ -852,7 +871,10 @@ async def mark_issue_unread(
 
     await refresh_user_blocked_status(current_user.id, db)
     await db.commit()
-    await _invalidate_issue_caches(current_user.id, thread_id, issue_id)
+    await asyncio.gather(
+        _invalidate_issue_caches(current_user.id, thread_id, issue_id),
+        _invalidate_dependency_caches(current_user.id),
+    )
 
 
 async def should_update_next_unread(

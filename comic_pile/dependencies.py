@@ -228,7 +228,7 @@ async def update_thread_blocked_status(thread_id: int, user_id: int, db: AsyncSe
 
 async def refresh_user_blocked_status(user_id: int, db: AsyncSession) -> None:
     """Recalculate blocked flags for all threads of a user."""
-    await invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}")
+    await invalidate_cache(f"cache:get_blocked_thread_ids:{user_id}:")
     blocked_ids = await get_blocked_thread_ids(user_id, db)
 
     await db.execute(update(Thread).where(Thread.user_id == user_id).values(is_blocked=False))

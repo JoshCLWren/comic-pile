@@ -32,11 +32,11 @@ router = APIRouter(tags=["sessions"])
 
 async def _invalidate_session_caches(user_id: int) -> None:
     await asyncio.gather(
-        invalidate_cache(f"cache:get_current_session:User:{user_id}"),
+        invalidate_cache(f"cache:get_current_session:User:{user_id}:"),
         invalidate_cache(f"cache:list_sessions:User:{user_id}:*"),
-        invalidate_cache(f"cache:get_session:*:User:{user_id}"),
-        invalidate_cache(f"cache:get_session_details:*:User:{user_id}"),
-        invalidate_cache(f"cache:get_session_snapshots:*:User:{user_id}"),
+        invalidate_cache(f"cache:get_session:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_session_details:*:User:{user_id}:"),
+        invalidate_cache(f"cache:get_session_snapshots:*:User:{user_id}:"),
     )
 
 
@@ -969,11 +969,10 @@ async def restore_session_start(
             await asyncio.gather(
                 _invalidate_session_caches(current_user.id),
                 invalidate_cache(f"cache:list_threads:User:{current_user.id}:*"),
-                invalidate_cache(f"cache:get_thread:*:User:{current_user.id}"),
+                invalidate_cache(f"cache:get_thread:*:User:{current_user.id}:"),
                 invalidate_cache(f"cache:list_issues:*:User:{current_user.id}:*"),
-                invalidate_cache(f"cache:get_issue:*:User:{current_user.id}"),
-                invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}"),
-                invalidate_cache(f"cache:get_all_blocked_thread_ids:User:{current_user.id}"),
+                invalidate_cache(f"cache:get_issue:*:User:{current_user.id}:"),
+                invalidate_cache(f"cache:get_blocked_thread_ids:{current_user.id}:"),
             )
 
             from sqlalchemy import func
