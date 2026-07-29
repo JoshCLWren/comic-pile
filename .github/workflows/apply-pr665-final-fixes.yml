@@ -48,14 +48,16 @@ jobs:
 
           test_path = Path("tests/test_cache.py")
           test_text = test_path.read_text()
-          old_skip = '        pytest.skip(reason="REDIS_URL is required for cache regression tests")\n'
-          new_assert = (
-              '        assert settings.redis_url is not None, '
-              '"REDIS_URL is required for cache regression tests"\n'
-          )
-          if test_text.count(old_skip) != 1:
+          old_requirement = '''    if not settings.redis_url:
+                  pytest.skip(reason="REDIS_URL is required for cache regression tests")
+          '''
+          new_requirement = '''    assert settings.redis_url is not None, (
+                  "REDIS_URL is required for cache regression tests"
+              )
+          '''
+          if test_text.count(old_requirement) != 1:
               raise RuntimeError("Unexpected Redis requirement match count")
-          test_text = test_text.replace(old_skip, new_assert, 1)
+          test_text = test_text.replace(old_requirement, new_requirement, 1)
           test_path.write_text(test_text)
           PY
 
