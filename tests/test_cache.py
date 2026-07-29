@@ -97,6 +97,7 @@ async def test_cache_thread_detail_warm_then_update(
 async def test_cache_session_details_warm_then_rate(
     auth_client: AsyncClient,
     async_db: AsyncSession,
+    sample_data: dict,
 ) -> None:
     """Warm session details, rate a thread, verify new event appears."""
     await cache.clear_pattern("cache:*")
@@ -109,7 +110,7 @@ async def test_cache_session_details_warm_then_rate(
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=sample_data["user"].id,
     )
     async_db.add(thread)
     await async_db.commit()
@@ -148,6 +149,7 @@ async def test_cache_session_details_warm_then_rate(
 async def test_cache_session_snapshots_warm_then_rate(
     auth_client: AsyncClient,
     async_db: AsyncSession,
+    sample_data: dict,
 ) -> None:
     """Warm snapshot list, rate a thread, verify new snapshot appears."""
     await cache.clear_pattern("cache:*")
@@ -160,7 +162,7 @@ async def test_cache_session_snapshots_warm_then_rate(
         issues_remaining=5,
         queue_position=1,
         status="active",
-        user_id=1,
+        user_id=sample_data["user"].id,
     )
     async_db.add(thread)
     await async_db.commit()
@@ -428,3 +430,31 @@ async def test_cache_zero_ttl_does_not_persist() -> None:
 
     assert await cache.set(key, "replacement", ttl=0)
     assert await cache.get(key) is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_blocked_status_does_not_populate_cache_before_commit(
+    async_db: AsyncSession,
+    sample_data: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Transactional blocked-status refresh bypasses the cache-backed read."""
+    import comic_pile.dependencies as dependencies_module
+
+    user = sample_data["user"]
+    cache_key = f"cache:get_blocked_thread_ids:{user.id}:"
+    await cache.delete(cache_key)
+
+    async def fail_if_cached_read_is_used(user_id: int, db: AsyncSession) -> set[int]:
+        raise AssertionError(f"cached blocked-thread read used for user {user_id}")
+
+    monkeypatch.setattr(
+        dependencies_module,
+        "get_blocked_thread_ids",
+        fail_if_cached_read_is_used,
+    )
+
+    await dependencies_module.refresh_user_blocked_status(user.id, async_db)
+
+    assert await cache.get(cache_key) is None
+    await async_db.rollback()
